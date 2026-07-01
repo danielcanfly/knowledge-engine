@@ -1,0 +1,94 @@
+name: Deploy Oracle VM
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_sha:
+        description: Commit SHA, branch, or tag to deploy
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-oracle
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha }}
+      - name: Require deployment configuration
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
+          JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
+          JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
+          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
+        run: |
+          set -euo pipefail
+          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL R2_BUCKET AUTH_MODE JWT_ISSUER JWT_JWKS_URL JWT_AUDIENCE; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
+      - name: Prepare repository and production environment
+        env:
+          AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
+          JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
+          JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
+          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
+          umask 077
+          cat > /tmp/knowledge-engine.env <<EOF_ENV
+          APP_ENV=production
+          AUTH_MODE=$AUTH_MODE
+          JWT_ISSUER=$JWT_ISSUER
+          JWT_JWKS_URL=$JWT_JWKS_URL
+          JWT_AUDIENCE=$JWT_AUDIENCE
+          JWT_DEFAULT_AUDIENCES=public,internal
+          OBJECT_STORE_BACKEND=r2
+          R2_ENDPOINT_URL=$R2_ENDPOINT_URL
+          R2_BUCKET=$R2_BUCKET
+          R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
+          R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
+          R2_REGION=auto
+          KNOWLEDGE_CHANNEL=production
+          CACHE_DIR=/var/lib/knowledge-engine/cache
+          LOG_LEVEL=INFO
+          EOF_ENV
+          scp /tmp/knowledge-engine.env "$ORACLE_VM_USER@$ORACLE_VM_HOST:$ORACLE_VM_DEPLOY_PATH/.env.next"
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "chmod 600 '$ORACLE_VM_DEPLOY_PATH/.env.next' && mv '$ORACLE_VM_DEPLOY_PATH/.env.next' '$ORACLE_VM_DEPLOY_PATH/.env'"
+          rm -f /tmp/knowledge-engine.env
+      - name: Deploy exact requested revision
+        env:
+          RELEASE_SHA: ${{ inputs.git_sha }}
+        run: |
+          set -euo pipefail
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RELEASE_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'"

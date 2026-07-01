@@ -1,0 +1,19 @@
+services:
+  knowledge-engine:
+    build: .
+    image: knowledge-engine:0.2.0
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - knowledge-engine-cache:/var/lib/knowledge-engine/cache
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  knowledge-engine-cache:
