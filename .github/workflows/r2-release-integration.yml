@@ -8,6 +8,13 @@ on:
       - '.github/workflows/r2-release-integration.yml'
       - 'src/knowledge_engine/**'
       - 'examples/okf-bundle/**'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/r2_release_integration.py'
+      - '.github/workflows/r2-release-integration.yml'
+      - 'src/knowledge_engine/**'
+      - 'examples/okf-bundle/**'
 
 permissions:
   contents: read
