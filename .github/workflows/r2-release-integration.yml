@@ -29,7 +29,7 @@ jobs:
   production-config-gate:
     runs-on: ubuntu-latest
     steps:
-      - name: Validate required values and safe formats
+      - name: Validate required values
         env:
           AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
           JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
@@ -70,14 +70,12 @@ jobs:
           R2_BUCKET_N="$(normalize R2_BUCKET "${R2_BUCKET:-}")"
           R2_ENDPOINT_URL_N="$(normalize R2_ENDPOINT_URL "${R2_ENDPOINT_URL:-}")"
           JWT_JWKS_URL_N="${JWT_JWKS_URL_N%/}"
-          R2_ENDPOINT_URL_N="${R2_ENDPOINT_URL_N%/}"
           for name in AUTH_MODE_N JWT_JWKS_URL_N JWT_AUDIENCE_N R2_ACCESS_KEY_ID_N R2_SECRET_ACCESS_KEY_N R2_BUCKET_N R2_ENDPOINT_URL_N; do
             test -n "${!name:-}" || { echo "MISSING_${name%_N}"; exit 2; }
           done
           test "$AUTH_MODE_N" = "supabase_jwt" || { echo "INVALID_AUTH_MODE_EXPECTED_SUPABASE_JWT"; exit 3; }
           [[ "$JWT_JWKS_URL_N" == https://*/auth/v1/.well-known/jwks.json ]] || { echo "INVALID_JWT_JWKS_URL_FORMAT"; exit 5; }
           test "$JWT_AUDIENCE_N" = "authenticated" || { echo "INVALID_JWT_AUDIENCE_EXPECTED_AUTHENTICATED"; exit 6; }
-          [[ "$R2_ENDPOINT_URL_N" == https://*.r2.cloudflarestorage.com ]] || { echo "INVALID_R2_ENDPOINT_EXPECTED_S3_API_ENDPOINT"; exit 7; }
           echo "PRODUCTION_CONFIG_GATE_PASSED"
 
   release-lifecycle:
@@ -91,6 +89,19 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e .
+      - name: Validate production settings with application parser
+        env:
+          APP_ENV: production
+          AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
+          JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
+          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
+          OBJECT_STORE_BACKEND: r2
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+          R2_REGION: auto
+        run: python -c 'from knowledge_engine.config import Settings; Settings.from_env(); print("APPLICATION_CONFIG_PASSED")'
       - name: Exercise release promotion, query, ACL, and rollback
         env:
           APP_ENV: test
