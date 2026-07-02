@@ -20,8 +20,6 @@ jobs:
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: 8b521b2ff23b5750a4ddf91772600700176883c0
 
       - name: Require proof configuration
         env:
