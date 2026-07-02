@@ -43,6 +43,7 @@ def main() -> int:
         + "\n"
     ).encode()
     digest = sha256_bytes(payload)
+    created = False
     try:
         store.put(
             key,
@@ -51,6 +52,7 @@ def main() -> int:
             sha256=digest,
             only_if_absent=True,
         )
+        created = True
         downloaded = store.get(key)
         if downloaded != payload or sha256_bytes(downloaded) != digest:
             raise RuntimeError("R2 canary round-trip mismatch")
@@ -60,7 +62,8 @@ def main() -> int:
         print("R2_CANARY_PASSED")
         return 0
     finally:
-        store.delete(key)
+        if created:
+            store.delete(key)
 
 
 if __name__ == "__main__":
