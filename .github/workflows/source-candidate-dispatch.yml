@@ -1,0 +1,71 @@
+name: Source Candidate Dispatch
+
+on:
+  repository_dispatch:
+    types: [knowledge-source-candidate]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-candidate-${{ github.event.client_payload.source_sha }}
+  cancel-in-progress: false
+
+jobs:
+  validate-dispatch:
+    runs-on: ubuntu-latest
+    outputs:
+      builder_ref: ${{ steps.payload.outputs.builder_ref }}
+      source_repository: ${{ steps.payload.outputs.source_repository }}
+      source_sha: ${{ steps.payload.outputs.source_sha }}
+      validation_run_id: ${{ steps.payload.outputs.validation_run_id }}
+      foundation_sha: ${{ steps.payload.outputs.foundation_sha }}
+      candidate_channel: ${{ steps.payload.outputs.candidate_channel }}
+      acceptance_query: ${{ steps.payload.outputs.acceptance_query }}
+    steps:
+      - name: Validate dispatch payload
+        id: payload
+        env:
+          BUILDER_REF: ${{ github.event.client_payload.builder_ref }}
+          SOURCE_REPOSITORY: ${{ github.event.client_payload.source_repository }}
+          SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
+          VALIDATION_RUN_ID: ${{ github.event.client_payload.validation_run_id }}
+          FOUNDATION_SHA: ${{ github.event.client_payload.foundation_sha }}
+          CANDIDATE_CHANNEL: ${{ github.event.client_payload.candidate_channel }}
+          ACCEPTANCE_QUERY: ${{ github.event.client_payload.acceptance_query }}
+          ENGINE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BUILDER_REF" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$VALIDATION_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$FOUNDATION_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$BUILDER_REF" = "$ENGINE_SHA"
+          test "$SOURCE_REPOSITORY" = 'danielcanfly/knowledge-source'
+          test "$FOUNDATION_SHA" = 'd12c7c416c950d743d4cd5e7964fd3c3bc0d9062'
+          test "$CANDIDATE_CHANNEL" = "candidate-source-$SOURCE_SHA"
+          test -n "$ACCEPTANCE_QUERY"
+          {
+            echo "builder_ref=$BUILDER_REF"
+            echo "source_repository=$SOURCE_REPOSITORY"
+            echo "source_sha=$SOURCE_SHA"
+            echo "validation_run_id=$VALIDATION_RUN_ID"
+            echo "foundation_sha=$FOUNDATION_SHA"
+            echo "candidate_channel=$CANDIDATE_CHANNEL"
+            echo "acceptance_query=$ACCEPTANCE_QUERY"
+          } >> "$GITHUB_OUTPUT"
+
+  publish-candidate:
+    needs: validate-dispatch
+    uses: ./.github/workflows/source-candidate-gate.yml
+    with:
+      builder_ref: ${{ needs.validate-dispatch.outputs.builder_ref }}
+      source_repository: ${{ needs.validate-dispatch.outputs.source_repository }}
+      source_sha: ${{ needs.validate-dispatch.outputs.source_sha }}
+      validation_run_id: ${{ needs.validate-dispatch.outputs.validation_run_id }}
+      foundation_sha: ${{ needs.validate-dispatch.outputs.foundation_sha }}
+      candidate_channel: ${{ needs.validate-dispatch.outputs.candidate_channel }}
+      acceptance_query: ${{ needs.validate-dispatch.outputs.acceptance_query }}
+    secrets:
+      source_read_token: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN }}
