@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from .errors import ConfigurationError
 
@@ -23,6 +23,18 @@ def _optional_env(name: str, *, strip_trailing_slash: bool = False) -> str | Non
     if strip_trailing_slash:
         value = value.rstrip("/")
     return value or None
+
+
+def _issuer_from_jwks(jwks_url: str | None) -> str | None:
+    if not jwks_url:
+        return None
+    parsed = urlparse(jwks_url)
+    suffix = "/.well-known/jwks.json"
+    path = parsed.path.rstrip("/")
+    if not path.endswith(suffix):
+        return None
+    issuer_path = path[: -len(suffix)]
+    return urlunparse((parsed.scheme, parsed.netloc, issuer_path, "", "", ""))
 
 
 def _csv(value: str) -> tuple[str, ...]:
@@ -56,11 +68,12 @@ class Settings:
         default_audiences = _csv(
             os.getenv("JWT_DEFAULT_AUDIENCES", "public,internal")
         )
+        jwt_jwks_url = _optional_env("JWT_JWKS_URL", strip_trailing_slash=True)
         settings = cls(
             app_env=app_env,
             auth_mode=auth_mode,
-            jwt_issuer=_optional_env("JWT_ISSUER", strip_trailing_slash=True),
-            jwt_jwks_url=_optional_env("JWT_JWKS_URL", strip_trailing_slash=True),
+            jwt_issuer=_issuer_from_jwks(jwt_jwks_url),
+            jwt_jwks_url=jwt_jwks_url,
             jwt_audience=_optional_env("JWT_AUDIENCE"),
             jwt_default_audiences=default_audiences,
             object_store_backend=backend,
@@ -92,22 +105,20 @@ class Settings:
             raise ConfigurationError("AUTH_MODE=disabled is forbidden in production")
         if self.auth_mode == "supabase_jwt":
             for name, value in {
-                "JWT_ISSUER": self.jwt_issuer,
                 "JWT_JWKS_URL": self.jwt_jwks_url,
                 "JWT_AUDIENCE": self.jwt_audience,
             }.items():
                 if not value:
                     raise ConfigurationError(f"{name} is required for supabase_jwt")
-            issuer = urlparse(self.jwt_issuer or "")
             jwks = urlparse(self.jwt_jwks_url or "")
-            if issuer.scheme != "https" or jwks.scheme != "https":
-                raise ConfigurationError("JWT issuer and JWKS URL must use HTTPS")
-            if issuer.path.rstrip("/") != "/auth/v1":
-                raise ConfigurationError("JWT_ISSUER must end with /auth/v1")
+            if jwks.scheme != "https":
+                raise ConfigurationError("JWT JWKS URL must use HTTPS")
             if jwks.path.rstrip("/") != "/auth/v1/.well-known/jwks.json":
                 raise ConfigurationError(
                     "JWT_JWKS_URL must end with /auth/v1/.well-known/jwks.json"
                 )
+            if not self.jwt_issuer:
+                raise ConfigurationError("JWT issuer could not be derived from JWT_JWKS_URL")
         if self.object_store_backend not in {"filesystem", "r2"}:
             raise ConfigurationError(
                 f"unsupported OBJECT_STORE_BACKEND: {self.object_store_backend}"
