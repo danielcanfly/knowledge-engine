@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import tempfile
 from datetime import UTC, datetime, timedelta
@@ -20,6 +21,12 @@ def _timestamp(value: datetime) -> str:
     return value.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _run_base_time(run_id: str) -> datetime:
+    """Map each integration run to a stable, collision-resistant release timestamp."""
+    offset_seconds = int(hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:8], 16)
+    return datetime(2000, 1, 1, tzinfo=UTC) + timedelta(seconds=offset_seconds)
+
+
 def _release_keys(release_id: str, release_root: Path) -> list[str]:
     prefix = f"releases/{release_id}/"
     return [
@@ -34,9 +41,10 @@ def run_integration(settings: Settings, run_id: str) -> dict:
     channel = f"ci-{run_id.lower().replace('_', '-')[:80]}"
     pointer_key = f"channels/{channel}.json"
     cleanup_keys: list[str] = []
+    primary_error: BaseException | None = None
     with tempfile.TemporaryDirectory(prefix="knowledge-engine-r2-") as temp:
         temp_root = Path(temp)
-        base_time = datetime.now(UTC).replace(microsecond=0)
+        base_time = _run_base_time(run_id)
         try:
             first = compile_release(
                 bundle_root=ROOT / "examples/okf-bundle",
@@ -103,10 +111,23 @@ def run_integration(settings: Settings, run_id: str) -> dict:
                 "authorized_query": internal["status"],
                 "public_query": public["status"],
             }
+        except BaseException as exc:
+            primary_error = exc
+            raise
         finally:
-            store.delete(pointer_key)
-            for key in reversed(cleanup_keys):
-                store.delete(key)
+            cleanup_errors: list[str] = []
+            for key in [pointer_key, *reversed(cleanup_keys)]:
+                try:
+                    store.delete(key)
+                except Exception as exc:
+                    cleanup_errors.append(f"{key}: {type(exc).__name__}")
+            if cleanup_errors:
+                print(
+                    "R2_INTEGRATION_CLEANUP_ERRORS " + "; ".join(cleanup_errors),
+                    flush=True,
+                )
+                if primary_error is None:
+                    raise RuntimeError("R2 integration cleanup failed")
 
 
 def main() -> int:
