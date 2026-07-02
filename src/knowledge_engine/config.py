@@ -15,11 +15,21 @@ def _required(name: str) -> str:
     return value
 
 
+def _normalize_env_value(name: str, raw: str) -> str:
+    value = raw.strip()
+    prefix = f"{name}="
+    if value.startswith(prefix):
+        value = value[len(prefix) :].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1].strip()
+    return value
+
+
 def _optional_env(name: str, *, strip_trailing_slash: bool = False) -> str | None:
     raw = os.getenv(name)
     if raw is None:
         return None
-    value = raw.strip()
+    value = _normalize_env_value(name, raw)
     if strip_trailing_slash:
         value = value.rstrip("/")
     return value or None
