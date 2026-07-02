@@ -15,6 +15,16 @@ def _required(name: str) -> str:
     return value
 
 
+def _optional_env(name: str, *, strip_trailing_slash: bool = False) -> str | None:
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    value = raw.strip()
+    if strip_trailing_slash:
+        value = value.rstrip("/")
+    return value or None
+
+
 def _csv(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
 
@@ -49,22 +59,26 @@ class Settings:
         settings = cls(
             app_env=app_env,
             auth_mode=auth_mode,
-            jwt_issuer=os.getenv("JWT_ISSUER") or None,
-            jwt_jwks_url=os.getenv("JWT_JWKS_URL") or None,
-            jwt_audience=os.getenv("JWT_AUDIENCE") or None,
+            jwt_issuer=_optional_env("JWT_ISSUER", strip_trailing_slash=True),
+            jwt_jwks_url=_optional_env("JWT_JWKS_URL", strip_trailing_slash=True),
+            jwt_audience=_optional_env("JWT_AUDIENCE"),
             jwt_default_audiences=default_audiences,
             object_store_backend=backend,
             filesystem_store_root=Path(
-                os.getenv("FILESYSTEM_STORE_ROOT", ".artifacts/store")
+                os.getenv("FILESYSTEM_STORE_ROOT", ".artifacts/store").strip()
             ).expanduser(),
-            r2_endpoint_url=os.getenv("R2_ENDPOINT_URL") or None,
-            r2_bucket=os.getenv("R2_BUCKET") or None,
-            r2_access_key_id=os.getenv("R2_ACCESS_KEY_ID") or None,
-            r2_secret_access_key=os.getenv("R2_SECRET_ACCESS_KEY") or None,
-            r2_region=os.getenv("R2_REGION", "auto"),
-            channel=os.getenv("KNOWLEDGE_CHANNEL", "production"),
-            cache_dir=Path(os.getenv("CACHE_DIR", ".artifacts/cache")).expanduser(),
-            log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
+            r2_endpoint_url=_optional_env(
+                "R2_ENDPOINT_URL", strip_trailing_slash=True
+            ),
+            r2_bucket=_optional_env("R2_BUCKET"),
+            r2_access_key_id=_optional_env("R2_ACCESS_KEY_ID"),
+            r2_secret_access_key=_optional_env("R2_SECRET_ACCESS_KEY"),
+            r2_region=os.getenv("R2_REGION", "auto").strip(),
+            channel=os.getenv("KNOWLEDGE_CHANNEL", "production").strip(),
+            cache_dir=Path(
+                os.getenv("CACHE_DIR", ".artifacts/cache").strip()
+            ).expanduser(),
+            log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper(),
         )
         settings.validate()
         return settings
@@ -88,6 +102,12 @@ class Settings:
             jwks = urlparse(self.jwt_jwks_url or "")
             if issuer.scheme != "https" or jwks.scheme != "https":
                 raise ConfigurationError("JWT issuer and JWKS URL must use HTTPS")
+            if issuer.path.rstrip("/") != "/auth/v1":
+                raise ConfigurationError("JWT_ISSUER must end with /auth/v1")
+            if jwks.path.rstrip("/") != "/auth/v1/.well-known/jwks.json":
+                raise ConfigurationError(
+                    "JWT_JWKS_URL must end with /auth/v1/.well-known/jwks.json"
+                )
         if self.object_store_backend not in {"filesystem", "r2"}:
             raise ConfigurationError(
                 f"unsupported OBJECT_STORE_BACKEND: {self.object_store_backend}"
