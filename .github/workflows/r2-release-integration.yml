@@ -5,7 +5,6 @@ on:
   pull_request:
     paths:
       - 'scripts/r2_release_integration.py'
-      - 'scripts/r2_request_probe.py'
       - '.github/workflows/r2-release-integration.yml'
       - 'src/knowledge_engine/**'
       - 'examples/okf-bundle/**'
@@ -13,7 +12,6 @@ on:
     branches: [main]
     paths:
       - 'scripts/r2_release_integration.py'
-      - 'scripts/r2_request_probe.py'
       - '.github/workflows/r2-release-integration.yml'
       - 'src/knowledge_engine/**'
       - 'examples/okf-bundle/**'
@@ -91,27 +89,16 @@ jobs:
           R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
           R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
           R2_REGION: auto
-        run: python scripts/r2_canary.py --run-id 'lifecycle-${{ github.run_id }}-${{ github.run_attempt }}'
-      - name: Explicit payload probe
-        env:
-          APP_ENV: test
-          AUTH_MODE: disabled
-          OBJECT_STORE_BACKEND: r2
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID }}
-          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
-          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
-          R2_REGION: auto
         shell: bash
         run: |
-          python scripts/r2_request_probe.py \
+          set -o pipefail
+          python scripts/r2_canary.py \
             --run-id 'lifecycle-${{ github.run_id }}-${{ github.run_attempt }}' \
-            > /tmp/r2-request-probe.log 2>&1 || {
-              cat /tmp/r2-request-probe.log
+            > /tmp/r2-canary.log 2>&1 || {
+              cat /tmp/r2-canary.log
               exit 1
             }
-          cat /tmp/r2-request-probe.log
+          cat /tmp/r2-canary.log
       - name: Exercise release promotion, query, ACL, and rollback
         env:
           APP_ENV: test
