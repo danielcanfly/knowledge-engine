@@ -1,0 +1,39 @@
+name: R2 Debug
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/r2-debug.yml'
+      - 'scripts/r2_release_integration.py'
+      - 'src/knowledge_engine/**'
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run concise integration diagnostic
+        env:
+          APP_ENV: test
+          AUTH_MODE: disabled
+          OBJECT_STORE_BACKEND: r2
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+          R2_REGION: auto
+        run: |
+          set +e
+          python -m pip install -q . >/tmp/pip.log 2>&1
+          pip_rc=$?
+          if [ "$pip_rc" -ne 0 ]; then
+            cat /tmp/pip.log
+            exit "$pip_rc"
+          fi
+          python scripts/r2_release_integration.py --run-id 'debug-${{ github.run_id }}' >/tmp/integration.log 2>&1
+          rc=$?
+          tail -n 80 /tmp/integration.log
+          exit "$rc"
