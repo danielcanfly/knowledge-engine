@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import argparse
-import json
+import secrets
+from datetime import UTC, datetime
 
 from knowledge_engine.config import Settings
 from knowledge_engine.storage import create_object_store, sha256_bytes
@@ -13,30 +14,33 @@ def main() -> int:
     parser.add_argument("--run-id", required=True)
     args = parser.parse_args()
     store = create_object_store(Settings.from_env())
-
-    report = (json.dumps({"schema_version": "1.0", "status": "passed"}, indent=2) + "\n").encode()
+    payload = (
+        "knowledge-engine-r2-canary\n"
+        + datetime.now(UTC).isoformat()
+        + "\n"
+    ).encode()
+    random_name = secrets.token_hex(8)
     cases = [
-        ("text_small", b"knowledge-engine-r2-canary\n", "text/plain; charset=utf-8"),
-        ("text_250", b"x" * 250, "text/plain; charset=utf-8"),
-        ("json_small", b'{"status":"passed"}\n', "application/json"),
-        ("json_report", report, "application/json"),
+        ("github_exact", f"_canary/github/{args.run_id}/{random_name}.txt"),
+        ("github_no_ext", f"_canary/github/{args.run_id}/{random_name}"),
+        ("request_shape_txt", f"_canary/request-shape/{args.run_id}/{random_name}.txt"),
+        ("release_txt", f"releases/_probe-{args.run_id}/{random_name}.txt"),
     ]
     failures: list[str] = []
-    for label, payload, content_type in cases:
-        key = f"_canary/request-shape/{args.run_id}/{label}"
+    for label, key in cases:
         try:
             store.put(
                 key,
                 payload,
-                content_type=content_type,
+                content_type="text/plain; charset=utf-8",
                 sha256=sha256_bytes(payload),
                 only_if_absent=True,
             )
             assert store.get(key) == payload
-            print(f"PROBE_OK {label} bytes={len(payload)} type={content_type}")
+            print(f"PROBE_OK {label} key={key}")
         except Exception as exc:
             failures.append(f"{label}:{type(exc).__name__}:{exc}")
-            print(f"PROBE_FAIL {label} bytes={len(payload)} type={content_type} error={type(exc).__name__}:{exc}")
+            print(f"PROBE_FAIL {label} key={key} error={type(exc).__name__}:{exc}")
         finally:
             try:
                 store.delete(key)
