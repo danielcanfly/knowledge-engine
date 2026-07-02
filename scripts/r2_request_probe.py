@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import secrets
 from datetime import UTC, datetime
 
@@ -9,11 +10,29 @@ from knowledge_engine.config import Settings
 from knowledge_engine.storage import R2ObjectStore, sha256_bytes
 
 
+def _fingerprint(label: str, value: str | None) -> str:
+    raw = (value or "").encode()
+    digest = hashlib.sha256(raw).hexdigest()[:12]
+    return f"{label}:len={len(raw)}:sha256={digest}"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-id", required=True)
     args = parser.parse_args()
-    store = R2ObjectStore(Settings.from_env())
+    settings = Settings.from_env()
+    print(
+        "R2_CONFIG_FINGERPRINT "
+        + " ".join(
+            [
+                _fingerprint("endpoint", settings.r2_endpoint_url),
+                _fingerprint("bucket", settings.r2_bucket),
+                _fingerprint("access", settings.r2_access_key_id),
+                _fingerprint("secret", settings.r2_secret_access_key),
+            ]
+        )
+    )
+    store = R2ObjectStore(settings)
     payload = (
         "knowledge-engine-r2-canary\n"
         + datetime.now(UTC).isoformat()
@@ -23,7 +42,10 @@ def main() -> int:
     cases = [
         ("github_exact", f"_canary/github/{args.run_id}/{random_name}.txt"),
         ("github_no_ext", f"_canary/github/{args.run_id}/{random_name}"),
-        ("request_shape_txt", f"_canary/request-shape/{args.run_id}/{random_name}.txt"),
+        (
+            "request_shape_txt",
+            f"_canary/request-shape/{args.run_id}/{random_name}.txt",
+        ),
         ("release_txt", f"releases/_probe-{args.run_id}/{random_name}.txt"),
     ]
     failures: list[str] = []
@@ -40,7 +62,10 @@ def main() -> int:
             print(f"PROBE_OK {label} key={key}")
         except Exception as exc:
             failures.append(f"{label}:{type(exc).__name__}:{exc}")
-            print(f"PROBE_FAIL {label} key={key} error={type(exc).__name__}:{exc}")
+            print(
+                f"PROBE_FAIL {label} key={key} "
+                f"error={type(exc).__name__}:{exc}"
+            )
         finally:
             try:
                 store.delete(key)
