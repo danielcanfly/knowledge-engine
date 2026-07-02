@@ -32,7 +32,6 @@ jobs:
       - name: Validate required values and safe formats
         env:
           AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
-          JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
           JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
           JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -51,21 +50,18 @@ jobs:
             printf '%s' "$value"
           }
           AUTH_MODE_N="$(trim "${AUTH_MODE:-}")"
-          JWT_ISSUER_N="$(trim "${JWT_ISSUER:-}")"
           JWT_JWKS_URL_N="$(trim "${JWT_JWKS_URL:-}")"
           JWT_AUDIENCE_N="$(trim "${JWT_AUDIENCE:-}")"
           R2_ACCESS_KEY_ID_N="$(trim "${R2_ACCESS_KEY_ID:-}")"
           R2_SECRET_ACCESS_KEY_N="$(trim "${R2_SECRET_ACCESS_KEY:-}")"
           R2_BUCKET_N="$(trim "${R2_BUCKET:-}")"
           R2_ENDPOINT_URL_N="$(trim "${R2_ENDPOINT_URL:-}")"
-          JWT_ISSUER_N="${JWT_ISSUER_N%/}"
           JWT_JWKS_URL_N="${JWT_JWKS_URL_N%/}"
           R2_ENDPOINT_URL_N="${R2_ENDPOINT_URL_N%/}"
-          for name in AUTH_MODE_N JWT_ISSUER_N JWT_JWKS_URL_N JWT_AUDIENCE_N R2_ACCESS_KEY_ID_N R2_SECRET_ACCESS_KEY_N R2_BUCKET_N R2_ENDPOINT_URL_N; do
+          for name in AUTH_MODE_N JWT_JWKS_URL_N JWT_AUDIENCE_N R2_ACCESS_KEY_ID_N R2_SECRET_ACCESS_KEY_N R2_BUCKET_N R2_ENDPOINT_URL_N; do
             test -n "${!name:-}" || { echo "MISSING_${name%_N}"; exit 2; }
           done
           test "$AUTH_MODE_N" = "supabase_jwt" || { echo "INVALID_AUTH_MODE_EXPECTED_SUPABASE_JWT"; exit 3; }
-          [[ "$JWT_ISSUER_N" == https://*/auth/v1 ]] || { echo "INVALID_JWT_ISSUER_FORMAT"; exit 4; }
           [[ "$JWT_JWKS_URL_N" == https://*/auth/v1/.well-known/jwks.json ]] || { echo "INVALID_JWT_JWKS_URL_FORMAT"; exit 5; }
           test "$JWT_AUDIENCE_N" = "authenticated" || { echo "INVALID_JWT_AUDIENCE_EXPECTED_AUTHENTICATED"; exit 6; }
           [[ "$R2_ENDPOINT_URL_N" == https://*.r2.cloudflarestorage.com ]] || { echo "INVALID_R2_ENDPOINT_EXPECTED_S3_API_ENDPOINT"; exit 7; }
