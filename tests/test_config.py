@@ -26,6 +26,31 @@ def test_r2_rejects_public_url(monkeypatch: pytest.MonkeyPatch) -> None:
         Settings.from_env()
 
 
+def test_assignment_style_r2_values_are_normalized(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "APP_ENV=test")
+    monkeypatch.setenv("AUTH_MODE", "AUTH_MODE=disabled")
+    monkeypatch.setenv("OBJECT_STORE_BACKEND", "OBJECT_STORE_BACKEND=r2")
+    monkeypatch.setenv(
+        "R2_ENDPOINT_URL",
+        'R2_ENDPOINT_URL="https://abc.r2.cloudflarestorage.com"',
+    )
+    monkeypatch.setenv("R2_BUCKET", "R2_BUCKET=llm-wiki-bucket")
+    monkeypatch.setenv("R2_ACCESS_KEY_ID", "R2_ACCESS_KEY_ID=access-value")
+    monkeypatch.setenv(
+        "R2_SECRET_ACCESS_KEY",
+        "R2_SECRET_ACCESS_KEY='secret-value'",
+    )
+
+    settings = Settings.from_env()
+
+    assert settings.r2_endpoint_url == "https://abc.r2.cloudflarestorage.com"
+    assert settings.r2_bucket == "llm-wiki-bucket"
+    assert settings.r2_access_key_id == "access-value"
+    assert settings.r2_secret_access_key == "secret-value"
+
+
 def test_supabase_settings_accept_https(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("AUTH_MODE", "supabase_jwt")
