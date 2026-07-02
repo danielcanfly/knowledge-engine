@@ -50,7 +50,11 @@ def _put_immutable(
 
     remote = store.get(key)
     if len(remote) != len(data) or sha256_bytes(remote) != digest:
-        reason = "post-upload verification failed" if created else "immutable object collision"
+        reason = (
+            "post-upload verification failed"
+            if created
+            else "immutable object collision"
+        )
         raise IntegrityError(f"{reason}: {key}")
 
 
@@ -70,12 +74,12 @@ def _promote_channel(
             only_if_absent=True,
         )
         return
-    except ReleaseConflictError:
+    except ReleaseConflictError as conflict:
         current = store.head(pointer_key)
         if current is None:
             raise ReleaseConflictError(
                 f"channel pointer disappeared during promotion: {pointer_key}"
-            )
+            ) from conflict
 
     store.put(
         pointer_key,
