@@ -47,7 +47,30 @@ jobs:
           R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
           R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
           R2_REGION: auto
-        run: python -c 'from knowledge_engine.config import Settings; Settings.from_env(); print("PRODUCTION_CONFIG_PASSED")'
+        run: |
+          python - <<'PY'
+          import os
+          from knowledge_engine.config import Settings
+
+          names = (
+              "AUTH_MODE",
+              "JWT_ISSUER",
+              "JWT_JWKS_URL",
+              "JWT_AUDIENCE",
+              "R2_ACCESS_KEY_ID",
+              "R2_SECRET_ACCESS_KEY",
+              "R2_BUCKET",
+              "R2_ENDPOINT_URL",
+          )
+          for name in names:
+              print(f"{name}: {'present' if os.getenv(name, '').strip() else 'missing'}")
+          try:
+              Settings.from_env()
+          except Exception as exc:
+              print(f"CONFIG_DIAGNOSTIC: {type(exc).__name__}: {exc}")
+              raise
+          print("PRODUCTION_CONFIG_PASSED")
+          PY
       - name: Exercise release promotion, query, ACL, and rollback
         env:
           APP_ENV: test
