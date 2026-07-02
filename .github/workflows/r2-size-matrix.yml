@@ -1,0 +1,61 @@
+name: R2 Size Matrix
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/r2-size-matrix.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: bytes-${{ matrix.size }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        size: [20, 116, 250, 1024]
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      SIZE: ${{ matrix.size }}
+      RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -q .
+      - name: Round trip
+        run: |
+          python - <<'PY'
+          import os
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import R2ObjectStore, sha256_bytes
+
+          size = int(os.environ["SIZE"])
+          data = b"x" * size
+          key = f"_size-matrix/{os.environ['RUN_ID']}/{size}.bin"
+          store = R2ObjectStore(Settings.from_env())
+          try:
+              store.put(
+                  key,
+                  data,
+                  content_type="application/octet-stream",
+                  sha256=sha256_bytes(data),
+                  only_if_absent=True,
+              )
+              assert store.get(key) == data
+          finally:
+              try:
+                  store.delete(key)
+              except Exception:
+                  pass
+          PY
