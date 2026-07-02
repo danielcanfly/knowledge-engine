@@ -68,10 +68,18 @@ app = FastAPI(title="Knowledge Engine", version="0.2.0")
 @app.get("/v1/health")
 def health() -> dict:
     runtime = get_runtime()
-    active = runtime.active
+    try:
+        active = runtime.ensure_loaded()
+    except (KnowledgeEngineError, FileNotFoundError) as exc:
+        logger.warning("active release is not ready: %s", exc)
+        return {
+            "status": "starting",
+            "release_id": None,
+            "channel": runtime.channel,
+        }
     return {
-        "status": "healthy" if active is not None else "starting",
-        "release_id": active.release_id if active else None,
+        "status": "healthy",
+        "release_id": active.release_id,
         "channel": runtime.channel,
     }
 
