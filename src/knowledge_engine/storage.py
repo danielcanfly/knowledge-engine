@@ -156,6 +156,8 @@ class R2ObjectStore:
                 retries={"max_attempts": 4, "mode": "adaptive"},
                 connect_timeout=10,
                 read_timeout=30,
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
             ),
         )
 
