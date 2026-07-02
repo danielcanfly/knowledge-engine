@@ -1,0 +1,73 @@
+name: Oracle Query Proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/oracle-query-proof.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  query-proof:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+    steps:
+      - name: Require verification configuration
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
+      - name: Prove production health, internal query, and public denial
+        run: |
+          set -euo pipefail
+          cat > /tmp/oracle-query-proof.sh <<'SCRIPT'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+
+          HEALTH_JSON="$(curl --fail --silent http://127.0.0.1:8080/v1/health)"
+          echo "HEALTH_JSON=$HEALTH_JSON"
+          python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert p["status"]=="healthy",p; assert p["release_id"]==sys.argv[2],p; assert p["channel"]=="production",p' "$HEALTH_JSON" "$EXPECTED_RELEASE"
+          echo "ORACLE_HEALTH_PROOF_PASSED"
+
+          INTERNAL_JSON="$(docker compose exec -T knowledge-engine python -m knowledge_engine.cli query --channel production --query 'knowledge compiler' --audiences public,internal </dev/null)"
+          echo "INTERNAL_QUERY_JSON=$INTERNAL_JSON"
+          python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert p["status"]=="answered",p; assert p["release"]["release_id"]==sys.argv[2],p; assert p["results"],p; assert p["results"][0]["citations"],p' "$INTERNAL_JSON" "$EXPECTED_RELEASE"
+          echo "ORACLE_INTERNAL_QUERY_CITATION_PROOF_PASSED"
+
+          PUBLIC_JSON="$(docker compose exec -T knowledge-engine python -m knowledge_engine.cli query --channel production --query 'knowledge compiler' --audiences public </dev/null)"
+          echo "PUBLIC_QUERY_JSON=$PUBLIC_JSON"
+          python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert p["status"]=="not_found",p; assert p["release"]["release_id"]==sys.argv[2],p; assert p["results"]==[],p; assert p["retrieval"]["acl_filtered_count"]>=1,p' "$PUBLIC_JSON" "$EXPECTED_RELEASE"
+          echo "ORACLE_PUBLIC_ACL_DENIAL_PROOF_PASSED"
+          SCRIPT
+          chmod 700 /tmp/oracle-query-proof.sh
+          scp /tmp/oracle-query-proof.sh "$ORACLE_VM_USER@$ORACLE_VM_HOST:/tmp/oracle-query-proof.sh"
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_RELEASE='20260702T072000Z-a78daaefcf49' bash /tmp/oracle-query-proof.sh" \
+            | tee /tmp/oracle-query-proof.log
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "rm -f /tmp/oracle-query-proof.sh"
+      - name: Upload query proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-query-proof
+          path: /tmp/oracle-query-proof.log
+          if-no-files-found: error
+          retention-days: 30
