@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .compiler import CompiledRelease
-from .errors import IntegrityError
+from .errors import IntegrityError, ReleaseConflictError
 from .storage import ObjectStore, sha256_bytes
 
 
@@ -27,6 +27,69 @@ def _content_type(path: Path) -> str:
     return "application/octet-stream"
 
 
+def _put_immutable(
+    *,
+    store: ObjectStore,
+    key: str,
+    data: bytes,
+    content_type: str,
+    digest: str,
+) -> None:
+    created = False
+    try:
+        store.put(
+            key,
+            data,
+            content_type=content_type,
+            sha256=digest,
+            only_if_absent=True,
+        )
+        created = True
+    except ReleaseConflictError:
+        pass
+
+    remote = store.get(key)
+    if len(remote) != len(data) or sha256_bytes(remote) != digest:
+        reason = (
+            "post-upload verification failed"
+            if created
+            else "immutable object collision"
+        )
+        raise IntegrityError(f"{reason}: {key}")
+
+
+def _promote_channel(
+    *,
+    store: ObjectStore,
+    pointer_key: str,
+    pointer_data: bytes,
+) -> None:
+    digest = sha256_bytes(pointer_data)
+    try:
+        store.put(
+            pointer_key,
+            pointer_data,
+            content_type="application/json",
+            sha256=digest,
+            only_if_absent=True,
+        )
+        return
+    except ReleaseConflictError as conflict:
+        current = store.head(pointer_key)
+        if current is None:
+            raise ReleaseConflictError(
+                f"channel pointer disappeared during promotion: {pointer_key}"
+            ) from conflict
+
+    store.put(
+        pointer_key,
+        pointer_data,
+        content_type="application/json",
+        sha256=digest,
+        expected_etag=current.etag,
+    )
+
+
 def publish_release(
     *,
     store: ObjectStore,
@@ -45,45 +108,26 @@ def publish_release(
         relative = path.relative_to(compiled.release_root).as_posix()
         key = release_prefix + relative
         data = path.read_bytes()
-        digest = sha256_bytes(data)
-        current = store.head(key)
-        if current is not None:
-            if current.bytes != len(data) or current.sha256 not in {None, digest}:
-                raise IntegrityError(f"immutable object collision: {key}")
-            remote = store.get(key)
-            if sha256_bytes(remote) != digest:
-                raise IntegrityError(f"immutable object collision: {key}")
-            continue
-        store.put(
-            key,
-            data,
+        _put_immutable(
+            store=store,
+            key=key,
+            data=data,
             content_type=_content_type(path),
-            sha256=digest,
-            only_if_absent=True,
+            digest=sha256_bytes(data),
         )
-        remote = store.get(key)
-        if len(remote) != len(data) or sha256_bytes(remote) != digest:
-            raise IntegrityError(f"post-upload verification failed: {key}")
 
     manifest_data = manifest_path.read_bytes()
     manifest_key = release_prefix + "manifest.json"
     manifest_digest = sha256_bytes(manifest_data)
-    current_manifest = store.head(manifest_key)
-    if current_manifest is None:
-        store.put(
-            manifest_key,
-            manifest_data,
-            content_type="application/json",
-            sha256=manifest_digest,
-            only_if_absent=True,
-        )
-    elif sha256_bytes(store.get(manifest_key)) != manifest_digest:
-        raise IntegrityError(f"immutable manifest collision: {manifest_key}")
-    if sha256_bytes(store.get(manifest_key)) != manifest_digest:
-        raise IntegrityError("manifest verification failed after upload")
+    _put_immutable(
+        store=store,
+        key=manifest_key,
+        data=manifest_data,
+        content_type="application/json",
+        digest=manifest_digest,
+    )
 
     pointer_key = f"channels/{channel}.json"
-    current_pointer = store.head(pointer_key)
     pointer = {
         "schema_version": "1.0",
         "channel": channel,
@@ -95,13 +139,10 @@ def publish_release(
     pointer_data = (
         json.dumps(pointer, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     ).encode("utf-8")
-    store.put(
-        pointer_key,
-        pointer_data,
-        content_type="application/json",
-        sha256=sha256_bytes(pointer_data),
-        expected_etag=current_pointer.etag if current_pointer else None,
-        only_if_absent=current_pointer is None,
+    _promote_channel(
+        store=store,
+        pointer_key=pointer_key,
+        pointer_data=pointer_data,
     )
     return PublishResult(
         release_id=compiled.release_id,
