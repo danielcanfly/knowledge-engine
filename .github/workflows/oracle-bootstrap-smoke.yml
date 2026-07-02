@@ -1,0 +1,292 @@
+name: Oracle Bootstrap Production Smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/oracle-bootstrap-smoke.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-oracle
+  cancel-in-progress: false
+
+jobs:
+  bootstrap-smoke:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 8b521b2ff23b5750a4ddf91772600700176883c0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e .
+
+      - name: Require production smoke configuration
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+          JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
+          JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
+          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
+          PRODUCTION_AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
+        run: |
+          set -euo pipefail
+          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT_URL JWT_ISSUER JWT_JWKS_URL JWT_AUDIENCE PRODUCTION_AUTH_MODE; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+
+      - name: Publish two immutable bootstrap releases
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+
+          from knowledge_engine.compiler import compile_release
+          from knowledge_engine.config import Settings
+          from knowledge_engine.publisher import publish_release
+          from knowledge_engine.storage import create_object_store
+
+          root = Path.cwd()
+          store = create_object_store(Settings.from_env())
+          source_sha = "8b521b2ff23b5750a4ddf91772600700176883c0"
+          foundation_sha = "d12c7c416c950d743d4cd5e7964fd3c3bc0d9062"
+
+          first = compile_release(
+              bundle_root=root / "examples/okf-bundle",
+              work_root=Path("/tmp/oracle-bootstrap-first"),
+              release_time=datetime(2026, 7, 2, 7, 20, 0, tzinfo=UTC),
+              source_repository="danielcanfly/knowledge-engine",
+              source_commit_sha=source_sha,
+              foundation_commit_sha=foundation_sha,
+          )
+          publish_release(
+              store=store,
+              compiled=first,
+              channel="production",
+              promoted_at="2026-07-02T07:20:00Z",
+          )
+          Path("/tmp/production-first-pointer.json").write_bytes(
+              store.get("channels/production.json")
+          )
+
+          second = compile_release(
+              bundle_root=root / "examples/okf-bundle",
+              work_root=Path("/tmp/oracle-bootstrap-second"),
+              release_time=datetime(2026, 7, 2, 7, 20, 1, tzinfo=UTC),
+              source_repository="danielcanfly/knowledge-engine",
+              source_commit_sha=source_sha,
+              foundation_commit_sha=foundation_sha,
+          )
+          publish_release(
+              store=store,
+              compiled=second,
+              channel="production",
+              promoted_at="2026-07-02T07:20:01Z",
+          )
+
+          evidence = {
+              "first_release_id": first.release_id,
+              "second_release_id": second.release_id,
+              "source_sha": source_sha,
+              "foundation_sha": foundation_sha,
+          }
+          Path("/tmp/oracle-bootstrap-evidence.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
+              handle.write(f"FIRST_RELEASE_ID={first.release_id}\n")
+              handle.write(f"SECOND_RELEASE_ID={second.release_id}\n")
+          print(json.dumps(evidence, indent=2, sort_keys=True))
+          print("BOOTSTRAP_RELEASES_PUBLISHED")
+          PY
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
+
+      - name: Refresh VM production environment
+        env:
+          PRODUCTION_AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
+          JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
+          JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
+          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          cat > /tmp/knowledge-engine.env <<EOF_ENV
+          APP_ENV=production
+          AUTH_MODE=$PRODUCTION_AUTH_MODE
+          JWT_ISSUER=$JWT_ISSUER
+          JWT_JWKS_URL=$JWT_JWKS_URL
+          JWT_AUDIENCE=$JWT_AUDIENCE
+          JWT_DEFAULT_AUDIENCES=public,internal
+          OBJECT_STORE_BACKEND=r2
+          R2_ENDPOINT_URL=$R2_ENDPOINT_URL
+          R2_BUCKET=$R2_BUCKET
+          R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
+          R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
+          R2_REGION=auto
+          KNOWLEDGE_CHANNEL=production
+          CACHE_DIR=/var/lib/knowledge-engine/cache
+          LOG_LEVEL=INFO
+          EOF_ENV
+          scp /tmp/knowledge-engine.env "$ORACLE_VM_USER@$ORACLE_VM_HOST:$ORACLE_VM_DEPLOY_PATH/.env.next"
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "chmod 600 '$ORACLE_VM_DEPLOY_PATH/.env.next' && mv '$ORACLE_VM_DEPLOY_PATH/.env.next' '$ORACLE_VM_DEPLOY_PATH/.env'"
+          rm -f /tmp/knowledge-engine.env
+
+      - name: Deploy health-loading revision
+        run: |
+          set -euo pipefail
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='8b521b2ff23b5750a4ddf91772600700176883c0' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" \
+            | tee /tmp/oracle-deploy.log
+
+      - name: Verify second release, internal query, and public ACL denial
+        run: |
+          set -euo pipefail
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_SHA='8b521b2ff23b5750a4ddf91772600700176883c0' EXPECTED_RELEASE='$SECOND_RELEASE_ID' bash -s" \
+            <<'REMOTE' | tee /tmp/oracle-second-release.log
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+          HEALTH_JSON="$(curl --fail --silent http://127.0.0.1:8080/v1/health)"
+          echo "HEALTH_JSON=$HEALTH_JSON"
+          python3 - "$HEALTH_JSON" "$EXPECTED_RELEASE" <<'PY'
+          import json
+          import sys
+          payload = json.loads(sys.argv[1])
+          assert payload["status"] == "healthy", payload
+          assert payload["release_id"] == sys.argv[2], payload
+          assert payload["channel"] == "production", payload
+          print("ORACLE_HEALTH_SECOND_RELEASE_PASSED")
+          PY
+
+          INTERNAL_JSON="$(docker compose exec -T knowledge-engine python -m knowledge_engine.cli query --channel production --query 'knowledge compiler' --audiences public,internal)"
+          echo "INTERNAL_QUERY_JSON=$INTERNAL_JSON"
+          python3 - "$INTERNAL_JSON" "$EXPECTED_RELEASE" <<'PY'
+          import json
+          import sys
+          payload = json.loads(sys.argv[1])
+          assert payload["status"] == "answered", payload
+          assert payload["release"]["release_id"] == sys.argv[2], payload
+          assert payload["results"], payload
+          assert payload["results"][0]["citations"], payload
+          print("ORACLE_INTERNAL_QUERY_PASSED")
+          PY
+
+          PUBLIC_JSON="$(docker compose exec -T knowledge-engine python -m knowledge_engine.cli query --channel production --query 'knowledge compiler' --audiences public)"
+          echo "PUBLIC_QUERY_JSON=$PUBLIC_JSON"
+          python3 - "$PUBLIC_JSON" "$EXPECTED_RELEASE" <<'PY'
+          import json
+          import sys
+          payload = json.loads(sys.argv[1])
+          assert payload["status"] == "not_found", payload
+          assert payload["release"]["release_id"] == sys.argv[2], payload
+          assert payload["results"] == [], payload
+          assert payload["retrieval"]["acl_filtered_count"] >= 1, payload
+          print("ORACLE_PUBLIC_ACL_DENIAL_PASSED")
+          PY
+          REMOTE
+
+      - name: Roll production channel back to first release
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store, sha256_bytes
+
+          store = create_object_store(Settings.from_env())
+          pointer_key = "channels/production.json"
+          first_pointer = Path("/tmp/production-first-pointer.json").read_bytes()
+          current = store.head(pointer_key)
+          if current is None:
+              raise RuntimeError("production channel pointer disappeared before rollback")
+          store.put(
+              pointer_key,
+              first_pointer,
+              content_type="application/json",
+              sha256=sha256_bytes(first_pointer),
+              expected_etag=current.etag,
+          )
+          print("PRODUCTION_POINTER_ROLLBACK_PASSED")
+          PY
+
+      - name: Restart VM and verify rolled-back release
+        run: |
+          set -euo pipefail
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_RELEASE='$FIRST_RELEASE_ID' bash -s" \
+            <<'REMOTE' | tee /tmp/oracle-rollback.log
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          docker compose restart knowledge-engine
+          for attempt in $(seq 1 30); do
+            HEALTH_JSON="$(curl --silent http://127.0.0.1:8080/v1/health || true)"
+            if python3 - "$HEALTH_JSON" "$EXPECTED_RELEASE" <<'PY'
+          import json
+          import sys
+          try:
+              payload = json.loads(sys.argv[1])
+          except json.JSONDecodeError:
+              raise SystemExit(1)
+          if payload.get("status") != "healthy":
+              raise SystemExit(1)
+          if payload.get("release_id") != sys.argv[2]:
+              raise SystemExit(1)
+          if payload.get("channel") != "production":
+              raise SystemExit(1)
+          PY
+            then
+              echo "HEALTH_JSON=$HEALTH_JSON"
+              echo "ORACLE_ROLLBACK_RELEASE_PASSED"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs --tail=200 knowledge-engine
+          exit 1
+          REMOTE
+
+      - name: Upload Oracle smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-bootstrap-production-smoke
+          path: |
+            /tmp/oracle-bootstrap-evidence.json
+            /tmp/oracle-deploy.log
+            /tmp/oracle-second-release.log
+            /tmp/oracle-rollback.log
+          if-no-files-found: warn
+          retention-days: 30
