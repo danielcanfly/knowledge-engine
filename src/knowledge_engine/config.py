@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from .errors import ConfigurationError
 
@@ -44,6 +44,16 @@ def _csv(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
+def _normalize_r2_endpoint(endpoint: str | None, bucket: str | None) -> str | None:
+    if not endpoint:
+        return None
+    parsed = urlparse(endpoint)
+    path = parsed.path.rstrip("/")
+    if bucket and path == f"/{bucket}":
+        return urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
+    return endpoint.rstrip("/")
+
+
 @dataclass(frozen=True)
 class Settings:
     app_env: str
@@ -71,6 +81,11 @@ class Settings:
         default_audiences = _csv(
             _env("JWT_DEFAULT_AUDIENCES", "public,internal") or "public,internal"
         )
+        r2_bucket = _env("R2_BUCKET")
+        r2_endpoint_url = _normalize_r2_endpoint(
+            _env("R2_ENDPOINT_URL"),
+            r2_bucket,
+        )
         settings = cls(
             app_env=app_env,
             auth_mode=auth_mode,
@@ -83,8 +98,8 @@ class Settings:
                 _env("FILESYSTEM_STORE_ROOT", ".artifacts/store")
                 or ".artifacts/store"
             ).expanduser(),
-            r2_endpoint_url=_env("R2_ENDPOINT_URL"),
-            r2_bucket=_env("R2_BUCKET"),
+            r2_endpoint_url=r2_endpoint_url,
+            r2_bucket=r2_bucket,
             r2_access_key_id=_env("R2_ACCESS_KEY_ID"),
             r2_secret_access_key=_env("R2_SECRET_ACCESS_KEY"),
             r2_region=_env("R2_REGION", "auto") or "auto",
@@ -135,6 +150,10 @@ class Settings:
             ):
                 raise ConfigurationError(
                     "R2_ENDPOINT_URL must be the S3 API endpoint, not r2.dev or a custom domain"
+                )
+            if endpoint.path not in {"", "/"} or endpoint.query or endpoint.fragment:
+                raise ConfigurationError(
+                    "R2_ENDPOINT_URL must not include a bucket path, query, or fragment"
                 )
         allowed = {"public", "internal", "confidential", "restricted"}
         if not self.jwt_default_audiences or not set(
