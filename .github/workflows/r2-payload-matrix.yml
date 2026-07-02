@@ -1,0 +1,86 @@
+name: R2 Payload Matrix
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/r2-payload-matrix.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: probe-${{ matrix.case }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - small_full
+          - report_full
+          - report_no_metadata
+          - report_no_condition
+    env:
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      PROBE_CASE: ${{ matrix.case }}
+      RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -q boto3
+      - name: Probe request
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import boto3
+          from botocore.config import Config
+
+          case = os.environ["PROBE_CASE"]
+          report = {
+              "schema_version": "1.0",
+              "status": "passed",
+              "release_id": "20680421T171242Z-a78daaefcf49",
+              "counts": {
+                  "concepts": 1,
+                  "sections": 1,
+                  "edges": 0,
+                  "provenance_records": 1,
+                  "source_snapshots": 1,
+                  "tombstones": 0,
+              },
+          }
+          body = b'{"status":"passed"}\n' if case == "small_full" else (json.dumps(report, indent=2, sort_keys=True) + "\n").encode()
+          client = boto3.client(
+              "s3",
+              endpoint_url=os.environ["R2_ENDPOINT_URL"].strip().rstrip("/"),
+              aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"].strip(),
+              aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"].strip(),
+              region_name="auto",
+              config=Config(
+                  signature_version="s3v4",
+                  request_checksum_calculation="when_required",
+                  response_checksum_validation="when_required",
+              ),
+          )
+          bucket = os.environ["R2_BUCKET"].strip()
+          key = f"_payload-matrix/{os.environ['RUN_ID']}/{case}.json"
+          kwargs = {"Bucket": bucket, "Key": key, "Body": body, "ContentType": "application/json"}
+          if case != "report_no_metadata":
+              kwargs["Metadata"] = {"sha256": hashlib.sha256(body).hexdigest()}
+          if case != "report_no_condition":
+              kwargs["IfNoneMatch"] = "*"
+          try:
+              client.put_object(**kwargs)
+              assert client.get_object(Bucket=bucket, Key=key)["Body"].read() == body
+          finally:
+              try:
+                  client.delete_object(Bucket=bucket, Key=key)
+              except Exception:
+                  pass
+          PY
