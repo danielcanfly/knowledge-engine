@@ -41,6 +41,15 @@ jobs:
           import boto3
           from botocore.config import Config
 
+          def value(name):
+              result = os.environ[name].strip()
+              prefix = f"{name}="
+              if result.startswith(prefix):
+                  result = result[len(prefix):].strip()
+              if len(result) >= 2 and result[0] == result[-1] and result[0] in {"'", '"'}:
+                  result = result[1:-1].strip()
+              return result
+
           case = os.environ["PROBE_CASE"]
           report = {
               "schema_version": "1.0",
@@ -58,9 +67,9 @@ jobs:
           body = b'{"status":"passed"}\n' if case == "small_full" else (json.dumps(report, indent=2, sort_keys=True) + "\n").encode()
           client = boto3.client(
               "s3",
-              endpoint_url=os.environ["R2_ENDPOINT_URL"].strip().rstrip("/"),
-              aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"].strip(),
-              aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"].strip(),
+              endpoint_url=value("R2_ENDPOINT_URL").rstrip("/"),
+              aws_access_key_id=value("R2_ACCESS_KEY_ID"),
+              aws_secret_access_key=value("R2_SECRET_ACCESS_KEY"),
               region_name="auto",
               config=Config(
                   signature_version="s3v4",
@@ -68,7 +77,7 @@ jobs:
                   response_checksum_validation="when_required",
               ),
           )
-          bucket = os.environ["R2_BUCKET"].strip()
+          bucket = value("R2_BUCKET")
           key = f"_payload-matrix/{os.environ['RUN_ID']}/{case}.json"
           kwargs = {"Bucket": bucket, "Key": key, "Body": body, "ContentType": "application/json"}
           if case != "report_no_metadata":
