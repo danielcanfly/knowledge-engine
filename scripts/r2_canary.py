@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import secrets
 from datetime import UTC, datetime
@@ -18,10 +19,17 @@ def main() -> int:
     if settings.object_store_backend != "r2":
         raise SystemExit("OBJECT_STORE_BACKEND must be r2")
     store = R2ObjectStore(settings)
-    key = f"_canary/github/{args.run_id}/{secrets.token_hex(8)}.txt"
+    suffix = secrets.token_hex(8)
+    key = f"releases/_canary-{args.run_id}-{suffix}/artifacts/build-report.json"
     payload = (
-        "knowledge-engine-r2-canary\n"
-        + datetime.now(UTC).isoformat()
+        json.dumps(
+            {
+                "status": "passed",
+                "generated_at": datetime.now(UTC).isoformat(),
+                "counts": {"concepts": 1, "artifacts": 5},
+            },
+            sort_keys=True,
+        )
         + "\n"
     ).encode()
     digest = sha256_bytes(payload)
@@ -29,7 +37,7 @@ def main() -> int:
         store.put(
             key,
             payload,
-            content_type="text/plain; charset=utf-8",
+            content_type="application/json",
             sha256=digest,
             only_if_absent=True,
         )
