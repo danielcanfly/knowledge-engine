@@ -15,6 +15,10 @@ on:
         description: Exact source commit SHA
         required: true
         type: string
+      validation_run_id:
+        description: Successful source validation workflow run ID
+        required: true
+        type: string
       foundation_sha:
         description: Exact foundation commit SHA
         required: true
@@ -27,6 +31,10 @@ on:
         description: Internal-only phrase used for ACL acceptance
         required: true
         type: string
+    secrets:
+      source_read_token:
+        description: Read-only token for source contents and Actions metadata
+        required: true
     outputs:
       release_id:
         description: Candidate release ID
@@ -59,16 +67,20 @@ jobs:
       R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
       R2_REGION: auto
     steps:
-      - name: Validate immutable inputs
+      - name: Validate immutable inputs and secret boundaries
         shell: bash
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.source_read_token }}
         run: |
           set -euo pipefail
           [[ '${{ inputs.builder_ref }}' =~ ^[0-9a-f]{40}$ ]]
           [[ '${{ inputs.source_sha }}' =~ ^[0-9a-f]{40}$ ]]
+          [[ '${{ inputs.validation_run_id }}' =~ ^[0-9]+$ ]]
           [[ '${{ inputs.foundation_sha }}' =~ ^[0-9a-f]{40}$ ]]
           [[ '${{ inputs.candidate_channel }}' == candidate-source-* ]]
           test '${{ inputs.candidate_channel }}' != production
           test -n '${{ inputs.acceptance_query }}'
+          test -n "$SOURCE_READ_TOKEN"
           test -n "$R2_ACCESS_KEY_ID"
           test -n "$R2_SECRET_ACCESS_KEY"
           test -n "$R2_BUCKET"
@@ -80,16 +92,6 @@ jobs:
           repository: danielcanfly/knowledge-engine
           ref: ${{ inputs.builder_ref }}
           path: engine
-          persist-credentials: false
-
-      - name: Check out exact private source revision
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.source_repository }}
-          ref: ${{ inputs.source_sha }}
-          path: source
-          fetch-depth: 0
-          token: ${{ github.token }}
           persist-credentials: false
 
       - uses: actions/setup-python@v5
@@ -104,8 +106,74 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e engine
           test "$(git -C engine rev-parse HEAD)" = '${{ inputs.builder_ref }}'
+
+      - name: Verify successful source validation run
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.source_read_token }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          VALIDATION_RUN_ID: ${{ inputs.validation_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $SOURCE_READ_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$SOURCE_REPOSITORY/actions/runs/$VALIDATION_RUN_ID" \
+            > /tmp/source-validation-run.json
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from knowledge_engine.delivery import verify_source_validation_run
+
+          verify_source_validation_run(
+              json.loads(Path('/tmp/source-validation-run.json').read_text()),
+              source_repository=os.environ['SOURCE_REPOSITORY'],
+              source_sha=os.environ['SOURCE_SHA'],
+              validation_run_id=os.environ['VALIDATION_RUN_ID'],
+          )
+          print('SOURCE_VALIDATION_RUN_VERIFIED')
+          PY
+
+      - name: Check out exact private source revision
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.source_repository }}
+          ref: ${{ inputs.source_sha }}
+          path: source
+          fetch-depth: 0
+          token: ${{ secrets.source_read_token }}
+          persist-credentials: false
+
+      - name: Verify source checkout and pinned delivery policy
+        env:
+          BUILDER_REF: ${{ inputs.builder_ref }}
+          FOUNDATION_REF: ${{ inputs.foundation_sha }}
+          CANDIDATE_CHANNEL: ${{ inputs.candidate_channel }}
+          ACCEPTANCE_QUERY: ${{ inputs.acceptance_query }}
+        shell: bash
+        run: |
+          set -euo pipefail
           test "$(git -C source rev-parse HEAD)" = '${{ inputs.source_sha }}'
           test -z "$(git -C source status --porcelain)"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          from knowledge_engine.delivery import verify_source_delivery_policy
+
+          verify_source_delivery_policy(
+              Path('source/policy/promotion-policy.json'),
+              builder_ref=os.environ['BUILDER_REF'],
+              foundation_ref=os.environ['FOUNDATION_REF'],
+              candidate_channel=os.environ['CANDIDATE_CHANNEL'],
+              acceptance_query=os.environ['ACCEPTANCE_QUERY'],
+          )
+          print('SOURCE_DELIVERY_POLICY_VERIFIED')
+          PY
 
       - name: Build, publish, and gate candidate
         id: result
@@ -155,15 +223,26 @@ jobs:
           print('SOURCE_CANDIDATE_GATE_PASSED')
           PY
 
+      - name: Collect candidate evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf evidence
+          mkdir -p evidence
+          test -f /tmp/source-validation-run.json && cp /tmp/source-validation-run.json evidence/source-validation-run.json
+          test -f /tmp/source-candidate-gate.json && cp /tmp/source-candidate-gate.json evidence/source-candidate-gate.json
+          manifest="$(find .artifacts/candidate-gate -name manifest.json -type f -print -quit 2>/dev/null || true)"
+          snapshot="$(find .artifacts/candidate-gate -path '*/artifacts/source-snapshot.json' -type f -print -quit 2>/dev/null || true)"
+          test -n "$manifest" && cp "$manifest" evidence/manifest.json
+          test -n "$snapshot" && cp "$snapshot" evidence/source-snapshot.json
+          find evidence -maxdepth 1 -type f -print -exec sha256sum {} \;
+
       - name: Upload candidate evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: source-candidate-${{ inputs.source_sha }}
-          path: |
-            /tmp/source-candidate-gate.json
-            .artifacts/candidate-gate/**/manifest.json
-            .artifacts/candidate-gate/**/artifacts/source-snapshot.json
-          if-no-files-found: warn
-          include-hidden-files: true
+          path: evidence/
+          if-no-files-found: error
           retention-days: 30
