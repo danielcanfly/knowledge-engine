@@ -36,6 +36,36 @@ def _release_keys(release_id: str, release_root: Path) -> list[str]:
     ]
 
 
+def _probe_compiled_artifact(
+    store: ObjectStore,
+    release_root: Path,
+    run_id: str,
+) -> None:
+    manifest_path = release_root / "manifest.json"
+    artifact = sorted(
+        path
+        for path in release_root.rglob("*")
+        if path.is_file() and path != manifest_path
+    )[0]
+    relative = artifact.relative_to(release_root).as_posix()
+    key = f"_canary/lifecycle/{run_id}/{relative}"
+    data = artifact.read_bytes()
+    digest = sha256_bytes(data)
+    try:
+        store.put(
+            key,
+            data,
+            content_type="application/json",
+            sha256=digest,
+            only_if_absent=True,
+        )
+        if store.get(key) != data:
+            raise RuntimeError("compiled artifact probe round-trip mismatch")
+        print(f"COMPILED_ARTIFACT_PROBE_PASSED path={relative} bytes={len(data)}")
+    finally:
+        store.delete(key)
+
+
 def run_integration(settings: Settings, run_id: str) -> dict:
     store: ObjectStore = create_object_store(settings)
     channel = f"ci-{run_id.lower().replace('_', '-')[:80]}"
@@ -55,6 +85,7 @@ def run_integration(settings: Settings, run_id: str) -> dict:
                 foundation_commit_sha="d" * 40,
             )
             cleanup_keys.extend(_release_keys(first.release_id, first.release_root))
+            _probe_compiled_artifact(store, first.release_root, run_id)
             publish_release(
                 store=store,
                 compiled=first,
