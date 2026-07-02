@@ -7,6 +7,10 @@ on:
         description: Commit SHA, branch, or tag to deploy
         required: true
         default: main
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-oracle.yml'
 
 permissions:
   contents: read
@@ -26,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_sha }}
+          ref: ${{ inputs.git_sha || 'a4cc2f170e9075c9fb7ca6384caf5c77d9368a05' }}
       - name: Require deployment configuration
         env:
           SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
@@ -88,7 +92,7 @@ jobs:
           rm -f /tmp/knowledge-engine.env
       - name: Deploy exact requested revision
         env:
-          RELEASE_SHA: ${{ inputs.git_sha }}
+          RELEASE_SHA: ${{ inputs.git_sha || 'a4cc2f170e9075c9fb7ca6384caf5c77d9368a05' }}
         run: |
           set -euo pipefail
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RELEASE_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'"
