@@ -8,8 +8,26 @@ from urllib.parse import urlparse
 from .errors import ConfigurationError
 
 
+def _normalize_env_value(name: str, raw: str) -> str:
+    value = raw.strip()
+    prefix = f"{name}="
+    if value.startswith(prefix):
+        value = value[len(prefix) :].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1].strip()
+    return value
+
+
+def _env(name: str, default: str | None = None) -> str | None:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    value = _normalize_env_value(name, raw)
+    return value or default
+
+
 def _required(name: str) -> str:
-    value = os.getenv(name, "").strip()
+    value = _env(name)
     if not value:
         raise ConfigurationError(f"missing required environment variable: {name}")
     return value
@@ -40,31 +58,34 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> Settings:
-        app_env = os.getenv("APP_ENV", "development").strip().lower()
-        auth_mode = os.getenv("AUTH_MODE", "disabled").strip().lower()
-        backend = os.getenv("OBJECT_STORE_BACKEND", "r2").strip().lower()
+        app_env = (_env("APP_ENV", "development") or "development").lower()
+        auth_mode = (_env("AUTH_MODE", "disabled") or "disabled").lower()
+        backend = (_env("OBJECT_STORE_BACKEND", "r2") or "r2").lower()
         default_audiences = _csv(
-            os.getenv("JWT_DEFAULT_AUDIENCES", "public,internal")
+            _env("JWT_DEFAULT_AUDIENCES", "public,internal") or "public,internal"
         )
         settings = cls(
             app_env=app_env,
             auth_mode=auth_mode,
-            jwt_issuer=os.getenv("JWT_ISSUER") or None,
-            jwt_jwks_url=os.getenv("JWT_JWKS_URL") or None,
-            jwt_audience=os.getenv("JWT_AUDIENCE") or None,
+            jwt_issuer=_env("JWT_ISSUER"),
+            jwt_jwks_url=_env("JWT_JWKS_URL"),
+            jwt_audience=_env("JWT_AUDIENCE"),
             jwt_default_audiences=default_audiences,
             object_store_backend=backend,
             filesystem_store_root=Path(
-                os.getenv("FILESYSTEM_STORE_ROOT", ".artifacts/store")
+                _env("FILESYSTEM_STORE_ROOT", ".artifacts/store")
+                or ".artifacts/store"
             ).expanduser(),
-            r2_endpoint_url=os.getenv("R2_ENDPOINT_URL") or None,
-            r2_bucket=os.getenv("R2_BUCKET") or None,
-            r2_access_key_id=os.getenv("R2_ACCESS_KEY_ID") or None,
-            r2_secret_access_key=os.getenv("R2_SECRET_ACCESS_KEY") or None,
-            r2_region=os.getenv("R2_REGION", "auto"),
-            channel=os.getenv("KNOWLEDGE_CHANNEL", "production"),
-            cache_dir=Path(os.getenv("CACHE_DIR", ".artifacts/cache")).expanduser(),
-            log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
+            r2_endpoint_url=_env("R2_ENDPOINT_URL"),
+            r2_bucket=_env("R2_BUCKET"),
+            r2_access_key_id=_env("R2_ACCESS_KEY_ID"),
+            r2_secret_access_key=_env("R2_SECRET_ACCESS_KEY"),
+            r2_region=_env("R2_REGION", "auto") or "auto",
+            channel=_env("KNOWLEDGE_CHANNEL", "production") or "production",
+            cache_dir=Path(
+                _env("CACHE_DIR", ".artifacts/cache") or ".artifacts/cache"
+            ).expanduser(),
+            log_level=(_env("LOG_LEVEL", "INFO") or "INFO").upper(),
         )
         settings.validate()
         return settings
