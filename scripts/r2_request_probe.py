@@ -6,14 +6,14 @@ import secrets
 from datetime import UTC, datetime
 
 from knowledge_engine.config import Settings
-from knowledge_engine.storage import create_object_store, sha256_bytes
+from knowledge_engine.storage import R2ObjectStore, sha256_bytes
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-id", required=True)
     args = parser.parse_args()
-    store = create_object_store(Settings.from_env())
+    store = R2ObjectStore(Settings.from_env())
     payload = (
         "knowledge-engine-r2-canary\n"
         + datetime.now(UTC).isoformat()
