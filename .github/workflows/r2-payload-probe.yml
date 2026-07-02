@@ -1,0 +1,98 @@
+name: R2 Payload Probe
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/r2-payload-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -q boto3
+      - name: Run payload matrix
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import boto3
+          from botocore.config import Config
+          from botocore.exceptions import ClientError
+
+          client = boto3.client(
+              "s3",
+              endpoint_url=os.environ["R2_ENDPOINT_URL"].strip().rstrip("/"),
+              aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"].strip(),
+              aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"].strip(),
+              region_name="auto",
+              config=Config(
+                  signature_version="s3v4",
+                  request_checksum_calculation="when_required",
+                  response_checksum_validation="when_required",
+              ),
+          )
+          bucket = os.environ["R2_BUCKET"].strip()
+          report = {
+              "schema_version": "1.0",
+              "status": "passed",
+              "release_id": "20680421T171242Z-a78daaefcf49",
+              "counts": {
+                  "concepts": 1,
+                  "sections": 1,
+                  "edges": 0,
+                  "provenance_records": 1,
+                  "source_snapshots": 1,
+                  "tombstones": 0,
+              },
+          }
+          report_body = (json.dumps(report, indent=2, sort_keys=True) + "\n").encode()
+          small_body = b'{"status":"passed"}\n'
+          cases = (
+              ("small_full", small_body, True, True),
+              ("report_full", report_body, True, True),
+              ("report_no_metadata", report_body, False, True),
+              ("report_no_condition", report_body, True, False),
+          )
+          failed = False
+          for name, body, use_metadata, use_condition in cases:
+              key = f"_payload-probe/{os.environ['RUN_ID']}/{name}.json"
+              kwargs = {
+                  "Bucket": bucket,
+                  "Key": key,
+                  "Body": body,
+                  "ContentType": "application/json",
+              }
+              if use_metadata:
+                  kwargs["Metadata"] = {"sha256": hashlib.sha256(body).hexdigest()}
+              if use_condition:
+                  kwargs["IfNoneMatch"] = "*"
+              created = False
+              try:
+                  client.put_object(**kwargs)
+                  created = True
+                  assert client.get_object(Bucket=bucket, Key=key)["Body"].read() == body
+                  print(f"PAYLOAD_PROBE_PASS {name} bytes={len(body)}")
+              except ClientError as exc:
+                  failed = True
+                  code = exc.response.get("Error", {}).get("Code")
+                  status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+                  print(f"PAYLOAD_PROBE_FAIL {name} status={status} code={code}")
+              finally:
+                  if created:
+                      client.delete_object(Bucket=bucket, Key=key)
+          raise SystemExit(1 if failed else 0)
+          PY
