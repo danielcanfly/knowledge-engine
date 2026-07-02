@@ -18,6 +18,15 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _etag_for_if_match(etag: str) -> str:
+    value = etag.strip()
+    if value.startswith("W/"):
+        value = value[2:].strip()
+    if not (value.startswith('"') and value.endswith('"')):
+        value = f'"{value.strip(chr(34))}"'
+    return value
+
+
 @dataclass(frozen=True)
 class ObjectMetadata:
     key: str
@@ -163,7 +172,7 @@ class R2ObjectStore:
         return ObjectMetadata(
             key=key,
             bytes=int(response.get("ContentLength", 0)),
-            etag=str(response.get("ETag", "")).strip('"'),
+            etag=str(response.get("ETag", "")).strip(),
             sha256=metadata.get("sha256"),
             content_type=response.get("ContentType"),
         )
@@ -186,7 +195,7 @@ class R2ObjectStore:
             "Metadata": {"sha256": sha256 or sha256_bytes(data)},
         }
         if expected_etag is not None:
-            kwargs["IfMatch"] = expected_etag
+            kwargs["IfMatch"] = _etag_for_if_match(expected_etag)
         if only_if_absent:
             kwargs["IfNoneMatch"] = "*"
         try:
