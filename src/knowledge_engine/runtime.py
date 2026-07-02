@@ -25,6 +25,15 @@ class ActiveRelease:
     provenance: dict[str, Any]
 
 
+def _citation_uri(source: dict[str, Any]) -> str:
+    uri = source.get("uri") or source.get("locator")
+    if not uri:
+        raise IntegrityError(
+            f"provenance source is missing uri: {source.get('source_id', 'unknown')}"
+        )
+    return str(uri)
+
+
 class Runtime:
     def __init__(self, store: ObjectStore, cache_dir: Path, channel: str) -> None:
         self.store = store
@@ -140,7 +149,7 @@ class Runtime:
                     "citations": [
                         {
                             "source_id": source["source_id"],
-                            "uri": source["uri"],
+                            "uri": _citation_uri(source),
                             "retrieved_at": source["retrieved_at"],
                         }
                         for source in record.get("sources", [])

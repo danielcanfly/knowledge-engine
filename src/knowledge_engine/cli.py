@@ -5,6 +5,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .candidate import run_source_candidate_gate
 from .compiler import compile_release
 from .config import Settings
 from .publisher import publish_release
@@ -51,6 +52,20 @@ def main() -> int:
     build_source.add_argument("--release-time")
     build_source.add_argument(
         "--work-dir", type=Path, default=Path(".artifacts/source-builds")
+    )
+
+    gate_source = commands.add_parser("gate-source-candidate")
+    gate_source.add_argument("--source-url", required=True)
+    gate_source.add_argument(
+        "--source-repository", default="danielcanfly/knowledge-source"
+    )
+    gate_source.add_argument("--source-sha", required=True)
+    gate_source.add_argument("--foundation-sha", required=True)
+    gate_source.add_argument("--channel", required=True)
+    gate_source.add_argument("--release-time", required=True)
+    gate_source.add_argument("--query", required=True)
+    gate_source.add_argument(
+        "--work-dir", type=Path, default=Path(".artifacts/candidate-gates")
     )
 
     query = commands.add_parser("query")
@@ -116,6 +131,21 @@ def main() -> int:
                 sort_keys=True,
             )
         )
+        return 0
+
+    if args.command == "gate-source-candidate":
+        result = run_source_candidate_gate(
+            store=store,
+            repository_url=args.source_url,
+            repository=args.source_repository,
+            source_commit_sha=args.source_sha,
+            foundation_commit_sha=args.foundation_sha,
+            channel=args.channel,
+            release_time=_utc(args.release_time),
+            query=args.query,
+            work_root=args.work_dir,
+        )
+        print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
         return 0
 
     runtime = Runtime(

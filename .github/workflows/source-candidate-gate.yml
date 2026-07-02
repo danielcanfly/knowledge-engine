@@ -1,0 +1,169 @@
+name: Source Candidate Gate
+
+on:
+  workflow_call:
+    inputs:
+      builder_ref:
+        description: Exact Knowledge Engine commit SHA
+        required: true
+        type: string
+      source_repository:
+        description: Private source repository in owner/name form
+        required: true
+        type: string
+      source_sha:
+        description: Exact source commit SHA
+        required: true
+        type: string
+      foundation_sha:
+        description: Exact foundation commit SHA
+        required: true
+        type: string
+      candidate_channel:
+        description: Isolated candidate channel
+        required: true
+        type: string
+      acceptance_query:
+        description: Internal-only phrase used for ACL acceptance
+        required: true
+        type: string
+    outputs:
+      release_id:
+        description: Candidate release ID
+        value: ${{ jobs.candidate.outputs.release_id }}
+      manifest_sha256:
+        description: Candidate manifest SHA-256
+        value: ${{ jobs.candidate.outputs.manifest_sha256 }}
+      source_snapshot_sha256:
+        description: Source snapshot SHA-256
+        value: ${{ jobs.candidate.outputs.source_snapshot_sha256 }}
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      release_id: ${{ steps.result.outputs.release_id }}
+      manifest_sha256: ${{ steps.result.outputs.manifest_sha256 }}
+      source_snapshot_sha256: ${{ steps.result.outputs.source_snapshot_sha256 }}
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+    steps:
+      - name: Validate immutable inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ '${{ inputs.builder_ref }}' =~ ^[0-9a-f]{40}$ ]]
+          [[ '${{ inputs.source_sha }}' =~ ^[0-9a-f]{40}$ ]]
+          [[ '${{ inputs.foundation_sha }}' =~ ^[0-9a-f]{40}$ ]]
+          [[ '${{ inputs.candidate_channel }}' == candidate-source-* ]]
+          test '${{ inputs.candidate_channel }}' != production
+          test -n '${{ inputs.acceptance_query }}'
+          test -n "$R2_ACCESS_KEY_ID"
+          test -n "$R2_SECRET_ACCESS_KEY"
+          test -n "$R2_BUCKET"
+          test -n "$R2_ENDPOINT_URL"
+
+      - name: Check out pinned Knowledge Engine
+        uses: actions/checkout@v4
+        with:
+          repository: danielcanfly/knowledge-engine
+          ref: ${{ inputs.builder_ref }}
+          path: engine
+          persist-credentials: false
+
+      - name: Check out exact private source revision
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.source_repository }}
+          ref: ${{ inputs.source_sha }}
+          path: source
+          fetch-depth: 0
+          token: ${{ github.token }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: engine/pyproject.toml
+
+      - name: Install pinned Builder
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e engine
+          test "$(git -C engine rev-parse HEAD)" = '${{ inputs.builder_ref }}'
+          test "$(git -C source rev-parse HEAD)" = '${{ inputs.source_sha }}'
+          test -z "$(git -C source status --porcelain)"
+
+      - name: Build, publish, and gate candidate
+        id: result
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_EPOCH="$(git -C source show -s --format=%ct '${{ inputs.source_sha }}')"
+          RELEASE_TIME="$(date -u -d "@$SOURCE_EPOCH" +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p .artifacts/candidate-gate
+          knowledge-engine gate-source-candidate \
+            --source-url "file://$GITHUB_WORKSPACE/source" \
+            --source-repository '${{ inputs.source_repository }}' \
+            --source-sha '${{ inputs.source_sha }}' \
+            --foundation-sha '${{ inputs.foundation_sha }}' \
+            --channel '${{ inputs.candidate_channel }}' \
+            --release-time "$RELEASE_TIME" \
+            --query '${{ inputs.acceptance_query }}' \
+            --work-dir .artifacts/candidate-gate \
+            | tee /tmp/source-candidate-gate.json
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path('/tmp/source-candidate-gate.json').read_text())
+          required = {
+              'reproducibility_passed': True,
+              'production_pointer_unchanged': True,
+              'internal_status': 'answered',
+              'public_status': 'not_found',
+              'public_result_count': 0,
+          }
+          for key, expected in required.items():
+              if payload.get(key) != expected:
+                  raise SystemExit(f'{key}={payload.get(key)!r}, expected {expected!r}')
+          if int(payload.get('internal_citation_count', 0)) < 1:
+              raise SystemExit('candidate returned no citations')
+          if int(payload.get('public_acl_filtered_count', 0)) < 1:
+              raise SystemExit('candidate did not prove ACL filtering')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
+              handle.write(f"release_id={payload['release_id']}\n")
+              handle.write(f"manifest_sha256={payload['manifest_sha256']}\n")
+              handle.write(
+                  f"source_snapshot_sha256={payload['source_snapshot_sha256']}\n"
+              )
+          print('SOURCE_CANDIDATE_GATE_PASSED')
+          PY
+
+      - name: Upload candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-candidate-${{ inputs.source_sha }}
+          path: |
+            /tmp/source-candidate-gate.json
+            .artifacts/candidate-gate/**/manifest.json
+            .artifacts/candidate-gate/**/artifacts/source-snapshot.json
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 30
