@@ -10,15 +10,16 @@ from .errors import ConfigurationError
 
 def _normalize_env_value(name: str, raw: str) -> str:
     value = raw.strip()
-    prefix = f"{name}="
-    for _ in range(3):
+    for _ in range(4):
         changed = False
         if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
             value = value[1:-1].strip()
             changed = True
-        if value.startswith(prefix):
-            value = value[len(prefix) :].strip()
-            changed = True
+        if value.startswith(name):
+            suffix = value[len(name) :]
+            if suffix and (suffix[0] in "=:" or suffix[0].isspace()):
+                value = suffix.lstrip(" \t=:")
+                changed = True
         if not changed:
             break
     return value
