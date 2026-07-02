@@ -34,16 +34,12 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e .
-      - name: Normalize repository configuration
+      - name: Normalize authentication configuration
         env:
           RAW_AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
           RAW_JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
           RAW_JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
           RAW_JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
-          RAW_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          RAW_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          RAW_R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
-          RAW_R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -71,22 +67,27 @@ jobs:
             echo "JWT_ISSUER=$(normalize JWT_ISSUER "${RAW_JWT_ISSUER:-}")"
             echo "JWT_JWKS_URL=$(normalize JWT_JWKS_URL "${RAW_JWT_JWKS_URL:-}")"
             echo "JWT_AUDIENCE=$(normalize JWT_AUDIENCE "${RAW_JWT_AUDIENCE:-}")"
-            echo "R2_ACCESS_KEY_ID=$(normalize R2_ACCESS_KEY_ID "${RAW_R2_ACCESS_KEY_ID:-}")"
-            echo "R2_SECRET_ACCESS_KEY=$(normalize R2_SECRET_ACCESS_KEY "${RAW_R2_SECRET_ACCESS_KEY:-}")"
-            echo "R2_BUCKET=$(normalize R2_BUCKET "${RAW_R2_BUCKET:-}")"
-            echo "R2_ENDPOINT_URL=$(normalize R2_ENDPOINT_URL "${RAW_R2_ENDPOINT_URL:-}")"
-            echo "R2_REGION=auto"
           } >> "$GITHUB_ENV"
       - name: Validate production configuration
         env:
           APP_ENV: production
           OBJECT_STORE_BACKEND: r2
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+          R2_REGION: auto
         run: python -c 'from knowledge_engine.config import Settings; Settings.from_env(); print("PRODUCTION_CONFIG_PASSED")'
       - name: Exercise release promotion, query, ACL, and rollback
         env:
           APP_ENV: test
           AUTH_MODE: disabled
           OBJECT_STORE_BACKEND: r2
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+          R2_REGION: auto
         shell: bash
         run: |
           set -o pipefail
