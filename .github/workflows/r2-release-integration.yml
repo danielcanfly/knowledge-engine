@@ -87,4 +87,21 @@ jobs:
           APP_ENV: test
           AUTH_MODE: disabled
           OBJECT_STORE_BACKEND: r2
-        run: python scripts/r2_release_integration.py --run-id '${{ github.run_id }}-${{ github.run_attempt }}'
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/r2_release_integration.py \
+            --run-id '${{ github.run_id }}-${{ github.run_attempt }}' \
+            > /tmp/r2-release-integration.log 2>&1 || {
+              tail -n 160 /tmp/r2-release-integration.log
+              exit 1
+            }
+          cat /tmp/r2-release-integration.log
+      - name: Upload lifecycle failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r2-release-integration-log
+          path: /tmp/r2-release-integration.log
+          if-no-files-found: error
+          retention-days: 7
