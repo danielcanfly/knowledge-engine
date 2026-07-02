@@ -35,16 +35,57 @@ def _release_keys(release_id: str, release_root: Path) -> list[str]:
     ]
 
 
+def _probe_matrix(store: ObjectStore, run_id: str) -> None:
+    text = b"knowledge-engine-r2-probe\n"
+    report = (json.dumps({"schema_version": "1.0", "status": "passed"}) + "\n").encode()
+    cases = [
+        ("canary_text", f"_canary/lifecycle/{run_id}/probe.txt", text, "text/plain"),
+        ("release_text", f"releases/_probe-{run_id}/probe.txt", text, "text/plain"),
+        ("canary_json", f"_canary/lifecycle/{run_id}/probe.json", report, "application/json"),
+        (
+            "release_json",
+            f"releases/_probe-{run_id}/artifacts/build-report.json",
+            report,
+            "application/json",
+        ),
+    ]
+    failures: list[str] = []
+    for label, key, data, content_type in cases:
+        try:
+            store.put(
+                key,
+                data,
+                content_type=content_type,
+                sha256=sha256_bytes(data),
+                only_if_absent=True,
+            )
+            if store.get(key) != data:
+                raise RuntimeError("round-trip mismatch")
+            print(f"R2_PROBE_PASSED label={label} bytes={len(data)}")
+        except Exception as exc:
+            failures.append(f"{label}:{type(exc).__name__}:{exc}")
+            print(f"R2_PROBE_FAILED label={label} type={type(exc).__name__} message={exc}")
+        finally:
+            try:
+                store.delete(key)
+            except Exception as exc:
+                print(f"R2_PROBE_CLEANUP_FAILED label={label} type={type(exc).__name__}")
+    if failures:
+        raise RuntimeError("R2 probe matrix failed: " + " | ".join(failures))
+
+
 def run_integration(settings: Settings, run_id: str) -> dict:
     store: ObjectStore = create_object_store(settings)
     channel = f"ci-{run_id.lower().replace('_', '-')[:80]}"
     pointer_key = f"channels/{channel}.json"
     cleanup_keys: list[str] = []
+    primary_error: BaseException | None = None
 
     with tempfile.TemporaryDirectory(prefix="knowledge-engine-r2-") as temp:
         temp_root = Path(temp)
         first_time = _base_time(run_id)
         try:
+            _probe_matrix(store, run_id)
             first = compile_release(
                 bundle_root=ROOT / "examples/okf-bundle",
                 work_root=temp_root / "build-a",
@@ -112,10 +153,20 @@ def run_integration(settings: Settings, run_id: str) -> dict:
                 "authorized_query": internal["status"],
                 "public_query": public["status"],
             }
+        except BaseException as exc:
+            primary_error = exc
+            raise
         finally:
-            store.delete(pointer_key)
-            for key in reversed(cleanup_keys):
-                store.delete(key)
+            cleanup_errors: list[str] = []
+            for key in [pointer_key, *reversed(cleanup_keys)]:
+                try:
+                    store.delete(key)
+                except Exception as exc:
+                    cleanup_errors.append(f"{key}:{type(exc).__name__}")
+            if cleanup_errors:
+                print("R2_CLEANUP_ERRORS " + " | ".join(cleanup_errors))
+                if primary_error is None:
+                    raise RuntimeError("R2 integration cleanup failed")
 
 
 def main() -> int:
