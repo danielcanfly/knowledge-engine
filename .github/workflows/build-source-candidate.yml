@@ -1,0 +1,85 @@
+name: Build Source Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repository:
+        description: Source repository in owner/name form
+        required: true
+        default: danielcanfly/knowledge-source
+      source_url:
+        description: HTTPS clone URL for the source repository
+        required: true
+        default: https://github.com/danielcanfly/knowledge-source.git
+      source_sha:
+        description: Exact 40-character source commit SHA
+        required: true
+      foundation_sha:
+        description: Exact foundation commit SHA
+        required: true
+      candidate_channel:
+        description: Non-production candidate channel
+        required: true
+        default: candidate
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-candidate-${{ inputs.candidate_channel }}
+  cancel-in-progress: false
+
+jobs:
+  build-candidate:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e .
+      - name: Validate dispatch inputs
+        run: |
+          set -euo pipefail
+          [[ '${{ inputs.source_sha }}' =~ ^[0-9a-f]{40}$ ]]
+          [[ '${{ inputs.foundation_sha }}' =~ ^[0-9a-f]{40}$ ]]
+          test '${{ inputs.candidate_channel }}' != production
+          test -n "$R2_ACCESS_KEY_ID"
+          test -n "$R2_SECRET_ACCESS_KEY"
+          test -n "$R2_BUCKET"
+          test -n "$R2_ENDPOINT_URL"
+      - name: Build and publish exact source candidate
+        run: |
+          set -euo pipefail
+          RELEASE_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          knowledge-engine build-source \
+            --source-url '${{ inputs.source_url }}' \
+            --source-repository '${{ inputs.source_repository }}' \
+            --source-sha '${{ inputs.source_sha }}' \
+            --foundation-sha '${{ inputs.foundation_sha }}' \
+            --channel '${{ inputs.candidate_channel }}' \
+            --release-time "$RELEASE_TIME" \
+            | tee /tmp/source-candidate-result.json
+      - name: Upload candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-candidate-${{ inputs.source_sha }}
+          path: |
+            /tmp/source-candidate-result.json
+            .artifacts/source-builds/**/manifest.json
+            .artifacts/source-builds/**/artifacts/source-snapshot.json
+          if-no-files-found: warn
+          retention-days: 30

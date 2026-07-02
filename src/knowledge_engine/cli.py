@@ -9,6 +9,7 @@ from .compiler import compile_release
 from .config import Settings
 from .publisher import publish_release
 from .runtime import Runtime
+from .source import build_source_release
 from .storage import create_object_store
 
 
@@ -18,6 +19,12 @@ def _utc(value: str | None) -> datetime:
     if not value.endswith("Z"):
         raise argparse.ArgumentTypeError("release time must end in Z")
     return datetime.fromisoformat(value[:-1] + "+00:00")
+
+
+def _promoted_at(value: datetime) -> str:
+    return value.astimezone(UTC).replace(microsecond=0).isoformat().replace(
+        "+00:00", "Z"
+    )
 
 
 def main() -> int:
@@ -32,6 +39,19 @@ def main() -> int:
     build.add_argument("--source-sha", default="a" * 40)
     build.add_argument("--foundation-sha", default="d" * 40)
     build.add_argument("--work-dir", type=Path, default=Path(".artifacts/builds"))
+
+    build_source = commands.add_parser("build-source")
+    build_source.add_argument("--source-url", required=True)
+    build_source.add_argument(
+        "--source-repository", default="danielcanfly/knowledge-source"
+    )
+    build_source.add_argument("--source-sha", required=True)
+    build_source.add_argument("--foundation-sha", required=True)
+    build_source.add_argument("--channel", default="candidate")
+    build_source.add_argument("--release-time")
+    build_source.add_argument(
+        "--work-dir", type=Path, default=Path(".artifacts/source-builds")
+    )
 
     query = commands.add_parser("query")
     query.add_argument("--channel", default=None)
@@ -56,16 +76,46 @@ def main() -> int:
             source_commit_sha=args.source_sha,
             foundation_commit_sha=args.foundation_sha,
         )
-        promoted_at = release_time.astimezone(UTC).replace(
-            microsecond=0
-        ).isoformat().replace("+00:00", "Z")
         result = publish_release(
             store=store,
             compiled=compiled,
             channel=args.channel or settings.channel,
-            promoted_at=promoted_at,
+            promoted_at=_promoted_at(release_time),
         )
         print(json.dumps(result.__dict__, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "build-source":
+        if args.channel == "production":
+            parser.error("build-source cannot promote production directly")
+        release_time = _utc(args.release_time)
+        compiled, snapshot = build_source_release(
+            repository_url=args.source_url,
+            repository=args.source_repository,
+            source_commit_sha=args.source_sha,
+            foundation_commit_sha=args.foundation_sha,
+            work_root=args.work_dir,
+            release_time=release_time,
+        )
+        result = publish_release(
+            store=store,
+            compiled=compiled,
+            channel=args.channel,
+            promoted_at=_promoted_at(release_time),
+        )
+        print(
+            json.dumps(
+                {
+                    **result.__dict__,
+                    "source_repository": args.source_repository,
+                    "source_sha": args.source_sha,
+                    "foundation_sha": args.foundation_sha,
+                    "source_snapshot_sha256": snapshot["content_sha256"],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
         return 0
 
     runtime = Runtime(
