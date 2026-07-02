@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'scripts/r2_release_integration.py'
+      - 'scripts/validate_env_shape.py'
       - '.github/workflows/r2-release-integration.yml'
       - 'src/knowledge_engine/**'
       - 'examples/okf-bundle/**'
@@ -12,6 +13,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/r2_release_integration.py'
+      - 'scripts/validate_env_shape.py'
       - '.github/workflows/r2-release-integration.yml'
       - 'src/knowledge_engine/**'
       - 'examples/okf-bundle/**'
@@ -26,29 +28,19 @@ concurrency:
 jobs:
   production-config-gate:
     runs-on: ubuntu-latest
-    env:
-      AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
-      JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
-      JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
-      JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
-      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
     steps:
+      - uses: actions/checkout@v4
       - name: Validate required values and safe formats
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in AUTH_MODE JWT_ISSUER JWT_JWKS_URL JWT_AUDIENCE R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT_URL; do
-            test -n "${!name:-}" || { echo "MISSING_${name}"; exit 2; }
-          done
-          test "$AUTH_MODE" = "supabase_jwt" || { echo "INVALID_AUTH_MODE_EXPECTED_SUPABASE_JWT"; exit 3; }
-          [[ "$JWT_ISSUER" == https://*/auth/v1 ]] || { echo "INVALID_JWT_ISSUER_FORMAT"; exit 4; }
-          [[ "$JWT_JWKS_URL" == https://*/auth/v1/.well-known/jwks.json ]] || { echo "INVALID_JWT_JWKS_URL_FORMAT"; exit 5; }
-          test "$JWT_AUDIENCE" = "authenticated" || { echo "INVALID_JWT_AUDIENCE_EXPECTED_AUTHENTICATED"; exit 6; }
-          [[ "$R2_ENDPOINT_URL" == https://*.r2.cloudflarestorage.com ]] || { echo "INVALID_R2_ENDPOINT_EXPECTED_S3_API_ENDPOINT"; exit 7; }
-          echo "PRODUCTION_CONFIG_GATE_PASSED"
+        env:
+          AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
+          JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
+          JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
+          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+        run: python scripts/validate_env_shape.py
 
   release-lifecycle:
     needs: production-config-gate
