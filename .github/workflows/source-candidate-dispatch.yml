@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: source-candidate-${{ github.event.client_payload.source_sha }}
@@ -69,3 +70,49 @@ jobs:
       acceptance_query: ${{ needs.validate-dispatch.outputs.acceptance_query }}
     secrets:
       source_read_token: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN }}
+
+  record-evidence:
+    if: always()
+    needs: [validate-dispatch, publish-candidate]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Append evidence to issue 13
+        uses: actions/github-script@v7
+        env:
+          ENGINE_SHA: ${{ github.sha }}
+          SOURCE_REPOSITORY: ${{ github.event.client_payload.source_repository }}
+          SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
+          VALIDATION_RUN_ID: ${{ github.event.client_payload.validation_run_id }}
+          CANDIDATE_CHANNEL: ${{ github.event.client_payload.candidate_channel }}
+          VALIDATE_RESULT: ${{ needs.validate-dispatch.result }}
+          CANDIDATE_RESULT: ${{ needs.publish-candidate.result }}
+          RELEASE_ID: ${{ needs.publish-candidate.outputs.release_id }}
+          MANIFEST_SHA256: ${{ needs.publish-candidate.outputs.manifest_sha256 }}
+          SOURCE_SNAPSHOT_SHA256: ${{ needs.publish-candidate.outputs.source_snapshot_sha256 }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const passed = process.env.VALIDATE_RESULT === 'success' && process.env.CANDIDATE_RESULT === 'success';
+            const body = [
+              `## Source candidate dispatch: ${passed ? 'passed' : 'failed'}`,
+              '',
+              `- Engine SHA: \`${process.env.ENGINE_SHA}\``,
+              `- Source repository: \`${process.env.SOURCE_REPOSITORY}\``,
+              `- Source SHA: \`${process.env.SOURCE_SHA}\``,
+              `- Source validation run ID: \`${process.env.VALIDATION_RUN_ID}\``,
+              `- Candidate channel: \`${process.env.CANDIDATE_CHANNEL}\``,
+              `- Dispatch validation: \`${process.env.VALIDATE_RESULT}\``,
+              `- Candidate gate: \`${process.env.CANDIDATE_RESULT}\``,
+              `- Release ID: \`${process.env.RELEASE_ID || 'n/a'}\``,
+              `- Manifest SHA-256: \`${process.env.MANIFEST_SHA256 || 'n/a'}\``,
+              `- Source snapshot SHA-256: \`${process.env.SOURCE_SNAPSHOT_SHA256 || 'n/a'}\``,
+              `- Actions run: ${process.env.RUN_URL}`,
+              '',
+              'A successful candidate gate proves deterministic rebuild, immutable R2 publication, Runtime integrity loading, authorized internal retrieval with citations, public ACL denial, and an unchanged production pointer.'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 13,
+              body
+            });
