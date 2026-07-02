@@ -13,7 +13,8 @@ from knowledge_engine.storage import R2ObjectStore, sha256_bytes
 
 def _fingerprint(label: str, value: str | None) -> str:
     raw = (value or "").encode()
-    return f"{label}:len={len(raw)}:sha256={hashlib.sha256(raw).hexdigest()[:12]}"
+    digest = hashlib.sha256(raw).hexdigest()[:12]
+    return f"{label}:len={len(raw)}:sha256={digest}"
 
 
 def main() -> int:
@@ -60,3 +61,7 @@ def main() -> int:
         return 0
     finally:
         store.delete(key)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
