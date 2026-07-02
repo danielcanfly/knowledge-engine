@@ -5,7 +5,6 @@ on:
   pull_request:
     paths:
       - 'scripts/r2_release_integration.py'
-      - 'scripts/r2_request_probe.py'
       - '.github/workflows/r2-release-integration.yml'
       - 'src/knowledge_engine/**'
       - 'examples/okf-bundle/**'
@@ -13,7 +12,6 @@ on:
     branches: [main]
     paths:
       - 'scripts/r2_release_integration.py'
-      - 'scripts/r2_request_probe.py'
       - '.github/workflows/r2-release-integration.yml'
       - 'src/knowledge_engine/**'
       - 'examples/okf-bundle/**'
@@ -81,7 +79,7 @@ jobs:
           R2_REGION: auto
         run: python -c 'from knowledge_engine.config import Settings; Settings.from_env(); print("PRODUCTION_CONFIG_PASSED")'
       - name: Exact canary preflight in lifecycle job
-        env: &r2_env
+        env:
           APP_ENV: test
           AUTH_MODE: disabled
           OBJECT_STORE_BACKEND: r2
@@ -92,19 +90,16 @@ jobs:
           R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
           R2_REGION: auto
         run: python scripts/r2_canary.py --run-id 'lifecycle-${{ github.run_id }}-${{ github.run_attempt }}'
-      - name: Focused request-shape probe
-        env: *r2_env
-        shell: bash
-        run: |
-          python scripts/r2_request_probe.py \
-            --run-id '${{ github.run_id }}-${{ github.run_attempt }}' \
-            > /tmp/r2-request-probe.log 2>&1 || {
-              cat /tmp/r2-request-probe.log
-              exit 1
-            }
-          cat /tmp/r2-request-probe.log
       - name: Exercise release promotion, query, ACL, and rollback
-        env: *r2_env
+        env:
+          APP_ENV: test
+          AUTH_MODE: disabled
+          OBJECT_STORE_BACKEND: r2
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+          R2_REGION: auto
         shell: bash
         run: |
           set -o pipefail
@@ -115,11 +110,11 @@ jobs:
               exit 1
             }
           cat /tmp/r2-release-integration.log
-      - name: Upload lifecycle failure logs
+      - name: Upload lifecycle failure log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: r2-release-integration-log
-          path: /tmp/r2-*.log
+          path: /tmp/r2-release-integration.log
           if-no-files-found: ignore
           retention-days: 7
