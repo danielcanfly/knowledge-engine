@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import secrets
 from datetime import UTC, datetime
@@ -10,11 +11,27 @@ from knowledge_engine.config import Settings
 from knowledge_engine.storage import R2ObjectStore, sha256_bytes
 
 
+def _fingerprint(label: str, value: str | None) -> str:
+    raw = (value or "").encode()
+    return f"{label}:len={len(raw)}:sha256={hashlib.sha256(raw).hexdigest()[:12]}"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-id", default=os.getenv("GITHUB_RUN_ID", "local"))
     args = parser.parse_args()
     settings = Settings.from_env()
+    print(
+        "R2_CONFIG_FINGERPRINT "
+        + " ".join(
+            [
+                _fingerprint("endpoint", settings.r2_endpoint_url),
+                _fingerprint("bucket", settings.r2_bucket),
+                _fingerprint("access", settings.r2_access_key_id),
+                _fingerprint("secret", settings.r2_secret_access_key),
+            ]
+        )
+    )
     if settings.object_store_backend != "r2":
         raise SystemExit("OBJECT_STORE_BACKEND must be r2")
     store = R2ObjectStore(settings)
