@@ -14,7 +14,7 @@ jobs:
   debug:
     runs-on: ubuntu-latest
     steps:
-      - name: Clone and run concise integration diagnostic
+      - name: Probe R2 request shapes
         env:
           APP_ENV: test
           AUTH_MODE: disabled
@@ -26,22 +26,54 @@ jobs:
           R2_REGION: auto
           HEAD_REF: ${{ github.head_ref }}
           REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
         run: |
-          set +e
+          set -euo pipefail
           git clone -q --depth 1 --branch "$HEAD_REF" "https://github.com/$REPOSITORY.git" source
-          rc=$?
-          if [ "$rc" -ne 0 ]; then
-            echo "CLONE_FAILED"
-            exit "$rc"
-          fi
           cd source
           python -m pip install -q . >/tmp/pip.log 2>&1
-          rc=$?
-          if [ "$rc" -ne 0 ]; then
-            cat /tmp/pip.log
-            exit "$rc"
-          fi
-          python scripts/r2_release_integration.py --run-id "debug-${{ github.run_id }}" >/tmp/integration.log 2>&1
-          rc=$?
-          cat /tmp/integration.log
-          exit "$rc"
+          python - <<'PY'
+          import json
+          import os
+          import secrets
+          from botocore.exceptions import ClientError
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import R2ObjectStore, sha256_bytes
+
+          store = R2ObjectStore(Settings.from_env())
+          suffix = secrets.token_hex(6)
+          run_id = os.environ["RUN_ID"]
+          payload_json = (json.dumps({"items": list(range(64))}) + "\n").encode()
+          probes = (
+              ("baseline", f"_probe/{run_id}/{suffix}.txt", b"probe\n", "text/plain; charset=utf-8"),
+              ("release_key_text", f"releases/probe-{run_id}-{suffix}/artifact.txt", b"probe\n", "text/plain; charset=utf-8"),
+              ("release_key_json", f"releases/probe-{run_id}-{suffix}/artifact.json", b"{}\n", "application/json"),
+              ("release_key_json_body", f"releases/probe-{run_id}-{suffix}/full.json", payload_json, "application/json"),
+          )
+          failed = False
+          for name, key, payload, content_type in probes:
+              created = False
+              try:
+                  store.put(
+                      key,
+                      payload,
+                      content_type=content_type,
+                      sha256=sha256_bytes(payload),
+                      only_if_absent=True,
+                  )
+                  created = True
+                  assert store.get(key) == payload
+                  print(f"PROBE_PASS {name}")
+              except ClientError as exc:
+                  failed = True
+                  status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+                  code = exc.response.get("Error", {}).get("Code")
+                  print(f"PROBE_FAIL {name} status={status} code={code}")
+              except Exception as exc:
+                  failed = True
+                  print(f"PROBE_FAIL {name} type={type(exc).__name__}")
+              finally:
+                  if created:
+                      store.delete(key)
+          raise SystemExit(1 if failed else 0)
+          PY
