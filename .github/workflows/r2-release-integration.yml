@@ -41,21 +41,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          trim() {
-            local value="$1"
+          normalize() {
+            local name="$1"
+            local value="$2"
             value="${value//$'\r'/}"
             value="${value//$'\n'/}"
             value="${value#${value%%[![:space:]]*}}"
             value="${value%${value##*[![:space:]]}}"
+            if [[ "$value" == "$name="* ]]; then
+              value="${value#*=}"
+              value="${value#${value%%[![:space:]]*}}"
+              value="${value%${value##*[![:space:]]}}"
+            fi
+            if [[ ${#value} -ge 2 ]]; then
+              if [[ "${value:0:1}" == '"' && "${value: -1}" == '"' ]]; then
+                value="${value:1:${#value}-2}"
+              elif [[ "${value:0:1}" == "'" && "${value: -1}" == "'" ]]; then
+                value="${value:1:${#value}-2}"
+              fi
+            fi
             printf '%s' "$value"
           }
-          AUTH_MODE_N="$(trim "${AUTH_MODE:-}")"
-          JWT_JWKS_URL_N="$(trim "${JWT_JWKS_URL:-}")"
-          JWT_AUDIENCE_N="$(trim "${JWT_AUDIENCE:-}")"
-          R2_ACCESS_KEY_ID_N="$(trim "${R2_ACCESS_KEY_ID:-}")"
-          R2_SECRET_ACCESS_KEY_N="$(trim "${R2_SECRET_ACCESS_KEY:-}")"
-          R2_BUCKET_N="$(trim "${R2_BUCKET:-}")"
-          R2_ENDPOINT_URL_N="$(trim "${R2_ENDPOINT_URL:-}")"
+          AUTH_MODE_N="$(normalize AUTH_MODE "${AUTH_MODE:-}")"
+          JWT_JWKS_URL_N="$(normalize JWT_JWKS_URL "${JWT_JWKS_URL:-}")"
+          JWT_AUDIENCE_N="$(normalize JWT_AUDIENCE "${JWT_AUDIENCE:-}")"
+          R2_ACCESS_KEY_ID_N="$(normalize R2_ACCESS_KEY_ID "${R2_ACCESS_KEY_ID:-}")"
+          R2_SECRET_ACCESS_KEY_N="$(normalize R2_SECRET_ACCESS_KEY "${R2_SECRET_ACCESS_KEY:-}")"
+          R2_BUCKET_N="$(normalize R2_BUCKET "${R2_BUCKET:-}")"
+          R2_ENDPOINT_URL_N="$(normalize R2_ENDPOINT_URL "${R2_ENDPOINT_URL:-}")"
           JWT_JWKS_URL_N="${JWT_JWKS_URL_N%/}"
           R2_ENDPOINT_URL_N="${R2_ENDPOINT_URL_N%/}"
           for name in AUTH_MODE_N JWT_JWKS_URL_N JWT_AUDIENCE_N R2_ACCESS_KEY_ID_N R2_SECRET_ACCESS_KEY_N R2_BUCKET_N R2_ENDPOINT_URL_N; do
