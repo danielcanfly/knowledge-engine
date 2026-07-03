@@ -14,8 +14,11 @@ from knowledge_engine.promotion import (
 from knowledge_engine.storage import FileObjectStore, sha256_bytes
 
 SOURCE_SHA = "a" * 40
+BUILDER_SHA = "b" * 40
 FOUNDATION_SHA = "d" * 40
 CONTROL_PLANE_SHA = "f" * 40
+OLD_RELEASE_ID = "20260702T072000Z-a78daaefcf49"
+OLD_MANIFEST_SHA = "1" * 64
 RELEASE_ID = "20260703T030000Z-123456789abc"
 CHANNEL = f"candidate-source-{SOURCE_SHA}"
 
@@ -40,6 +43,11 @@ def _store(tmp_path: Path) -> tuple[FileObjectStore, bytes, str]:
         "release_id": RELEASE_ID,
         "release_ready": True,
         "quality": {"overall": "passed"},
+        "builder": {
+            "name": "knowledge-engine",
+            "version": "0.3.0",
+            "git_sha": BUILDER_SHA,
+        },
         "source": {
             "repository": "danielcanfly/knowledge-source",
             "commit_sha": SOURCE_SHA,
@@ -61,24 +69,25 @@ def _store(tmp_path: Path) -> tuple[FileObjectStore, bytes, str]:
             "promoted_at": "2026-07-03T03:00:00Z",
         },
     )
-    production_bytes = (
-        b'{\n  "schema_version": "1.0",\n  "channel": "production",\n'
-        b'  "release_id": "stable-release",\n'
-        b'  "manifest_key": "releases/stable-release/manifest.json",\n'
-        b'  "manifest_sha256": "stable-manifest",\n'
-        b'  "promoted_at": "2026-07-02T07:20:00Z"\n}\n'
-    )
-    store.put(
+    production_bytes = _put_json(
+        store,
         "channels/production.json",
-        production_bytes,
-        content_type="application/json",
-        sha256=sha256_bytes(production_bytes),
-        only_if_absent=True,
+        {
+            "schema_version": "1.0",
+            "channel": "production",
+            "release_id": OLD_RELEASE_ID,
+            "manifest_key": f"releases/{OLD_RELEASE_ID}/manifest.json",
+            "manifest_sha256": OLD_MANIFEST_SHA,
+            "promoted_at": "2026-07-02T07:20:00Z",
+        },
     )
     return store, production_bytes, manifest_sha
 
 
-def _request(manifest_sha: str, operation_id: str = "promote-m4-test-001") -> PromotionRequest:
+def _request(
+    manifest_sha: str,
+    operation_id: str = "promote-m4-test-001",
+) -> PromotionRequest:
     return PromotionRequest(
         operation_id=operation_id,
         candidate_channel=CHANNEL,
@@ -86,7 +95,10 @@ def _request(manifest_sha: str, operation_id: str = "promote-m4-test-001") -> Pr
         expected_manifest_sha256=manifest_sha,
         expected_source_repository="danielcanfly/knowledge-source",
         expected_source_sha=SOURCE_SHA,
+        expected_builder_sha=BUILDER_SHA,
         expected_foundation_sha=FOUNDATION_SHA,
+        expected_previous_release_id=OLD_RELEASE_ID,
+        expected_previous_manifest_sha256=OLD_MANIFEST_SHA,
         control_plane_sha=CONTROL_PLANE_SHA,
         reason="M4 acceptance",
         actor="github-actions",
@@ -110,6 +122,9 @@ def test_promotion_is_idempotent_and_creates_immutable_evidence(tmp_path: Path) 
 
     assert first.status == "promoted"
     assert first.idempotent is False
+    assert first.previous_release_id == OLD_RELEASE_ID
+    assert first.previous_manifest_sha256 == OLD_MANIFEST_SHA
+    assert first.builder_sha == BUILDER_SHA
     assert second.status == "promoted"
     assert second.idempotent is True
     assert second.release_id == RELEASE_ID
@@ -140,30 +155,42 @@ def test_rollback_restores_exact_previous_pointer_bytes(tmp_path: Path) -> None:
 
     assert first.idempotent is False
     assert second.idempotent is True
-    assert first.restored_release_id == "stable-release"
+    assert first.restored_release_id == OLD_RELEASE_ID
+    assert first.restored_manifest_sha256 == OLD_MANIFEST_SHA
     assert store.get("channels/production.json") == original
 
 
-def test_second_operation_cannot_overwrite_newer_production(tmp_path: Path) -> None:
+def test_stale_second_operation_cannot_overwrite_production(tmp_path: Path) -> None:
     store, _, manifest_sha = _store(tmp_path)
     first = _request(manifest_sha, "promote-m4-first")
     second = _request(manifest_sha, "promote-m4-second")
 
     promote_release(store=store, request=first, promoted_at="2026-07-03T03:10:00Z")
-    result = promote_release(
-        store=store,
-        request=second,
-        promoted_at="2026-07-03T03:11:00Z",
+
+    with pytest.raises(ReleaseConflictError, match="release precondition"):
+        promote_release(
+            store=store,
+            request=second,
+            promoted_at="2026-07-03T03:11:00Z",
+        )
+
+    assert store.head("operations/promotions/promote-m4-second/intent.json") is None
+
+
+def test_stale_previous_manifest_is_rejected_before_intent(tmp_path: Path) -> None:
+    store, original, manifest_sha = _store(tmp_path)
+    request = PromotionRequest(
+        **{
+            **_request(manifest_sha).to_dict(),
+            "expected_previous_manifest_sha256": "2" * 64,
+        }
     )
 
-    assert result.idempotent is False
-    with pytest.raises(ReleaseConflictError, match="no longer matches"):
-        rollback_release(
-            store=store,
-            operation_id=first.operation_id,
-            reason="stale rollback",
-            actor="github-actions",
-        )
+    with pytest.raises(ReleaseConflictError, match="manifest precondition"):
+        promote_release(store=store, request=request)
+
+    assert store.get("channels/production.json") == original
+    assert store.head(f"operations/promotions/{request.operation_id}/intent.json") is None
 
 
 def test_operation_id_collision_is_rejected(tmp_path: Path) -> None:
@@ -190,11 +217,24 @@ def test_candidate_source_mismatch_is_rejected(tmp_path: Path) -> None:
     request = PromotionRequest(
         **{
             **_request(manifest_sha).to_dict(),
-            "expected_source_sha": "b" * 40,
+            "expected_source_sha": "c" * 40,
         }
     )
 
     with pytest.raises(IntegrityError, match="commit_sha mismatch"):
+        promote_release(store=store, request=request)
+
+
+def test_candidate_builder_mismatch_is_rejected(tmp_path: Path) -> None:
+    store, _, manifest_sha = _store(tmp_path)
+    request = PromotionRequest(
+        **{
+            **_request(manifest_sha).to_dict(),
+            "expected_builder_sha": "c" * 40,
+        }
+    )
+
+    with pytest.raises(IntegrityError, match="builder git_sha mismatch"):
         promote_release(store=store, request=request)
 
 

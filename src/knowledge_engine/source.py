@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -43,6 +44,23 @@ def _canonical_json(value: Any) -> bytes:
     return (
         json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     ).encode("utf-8")
+
+
+def _discover_builder_sha() -> str:
+    configured = os.environ.get("KNOWLEDGE_ENGINE_BUILDER_SHA", "").strip().lower()
+    if configured:
+        return configured
+    repository_root = Path(__file__).resolve().parents[2]
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repository_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode == 0:
+        return completed.stdout.strip().lower()
+    return "0" * 40
 
 
 def _safe_tracked_path(raw: str) -> PurePosixPath:
@@ -171,7 +189,13 @@ def build_source_release(
     foundation_commit_sha: str,
     work_root: Path,
     release_time: datetime,
+    builder_commit_sha: str | None = None,
 ) -> tuple[CompiledRelease, dict[str, Any]]:
+    raw_builder_sha = builder_commit_sha or _discover_builder_sha()
+    normalized_builder_sha = raw_builder_sha.strip().lower()
+    if not SHA_RE.fullmatch(normalized_builder_sha):
+        raise IntegrityError("builder SHA must be an exact 40-character lowercase commit SHA")
+
     checkout = checkout_source(
         repository_url=repository_url,
         repository=repository,
@@ -194,6 +218,7 @@ def build_source_release(
     snapshot_data = _canonical_json(checkout.snapshot)
     snapshot_artifact = compiled.release_root / "artifacts/source-snapshot.json"
     snapshot_artifact.write_bytes(snapshot_data)
+    compiled.manifest["builder"]["git_sha"] = normalized_builder_sha
     compiled.manifest["source"]["snapshot_sha256"] = checkout.snapshot[
         "content_sha256"
     ]
