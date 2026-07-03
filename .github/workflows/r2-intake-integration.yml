@@ -1,0 +1,60 @@
+name: R2 Intake Integration
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/r2_intake_integration.py'
+      - '.github/workflows/r2-intake-integration.yml'
+      - 'src/knowledge_engine/intake.py'
+      - 'src/knowledge_engine/intake_cli.py'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/r2_intake_integration.py'
+      - '.github/workflows/r2-intake-integration.yml'
+      - 'src/knowledge_engine/intake.py'
+      - 'src/knowledge_engine/intake_cli.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r2-intake-integration
+  cancel-in-progress: false
+
+jobs:
+  intake-lifecycle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e .
+      - name: Exercise immutable intake, replay, and cross-source dedupe
+        env:
+          APP_ENV: test
+          AUTH_MODE: disabled
+          OBJECT_STORE_BACKEND: r2
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+          R2_REGION: auto
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/r2_intake_integration.py \
+            --run-id 'intake-${{ github.run_id }}-${{ github.run_attempt }}' \
+            | tee /tmp/r2-intake-integration.log
+      - name: Upload R2 intake failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r2-intake-integration-log
+          path: /tmp/r2-intake-integration.log
+          if-no-files-found: ignore
+          retention-days: 7
