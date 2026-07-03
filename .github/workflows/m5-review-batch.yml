@@ -16,6 +16,15 @@ on:
       - 'src/knowledge_engine/intake.py'
       - 'src/knowledge_engine/synthesis.py'
       - 'src/knowledge_engine/resolution.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m5-review-batch.yml'
+      - 'review_batches/**'
+      - 'scripts/run_m5_review_batch.py'
+      - 'src/knowledge_engine/intake.py'
+      - 'src/knowledge_engine/synthesis.py'
+      - 'src/knowledge_engine/resolution.py'
 
 permissions:
   contents: read
@@ -25,7 +34,54 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-spec:
+    runs-on: ubuntu-latest
+    env:
+      BATCH_SPEC: ${{ inputs.batch_spec || 'review_batches/agent-architecture-six-dimensions-v1.json' }}
+    steps:
+      - name: Check out exact Engine revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate immutable batch specification
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$BATCH_SPEC"
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          payload = json.loads(Path(os.environ['BATCH_SPEC']).read_text(encoding='utf-8'))
+          if payload.get('schema_version') != '1.0':
+              raise SystemExit('batch schema_version must be 1.0')
+          for section in ('content_source', 'knowledge_source', 'synthesis', 'resolution'):
+              if not isinstance(payload.get(section), dict):
+                  raise SystemExit(f'batch section is missing: {section}')
+          for section, key in (
+              ('content_source', 'commit_sha'),
+              ('knowledge_source', 'commit_sha'),
+          ):
+              value = payload[section].get(key)
+              if not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{40}', value):
+                  raise SystemExit(f'{section}.{key} must be an exact SHA')
+          claims = payload['synthesis'].get('claims')
+          if not isinstance(claims, list) or not claims:
+              raise SystemExit('batch must contain supported claims')
+          for claim in claims:
+              for key in ('claim_id', 'text', 'evidence_quote'):
+                  if not isinstance(claim.get(key), str) or not claim[key].strip():
+                      raise SystemExit(f'claim field is missing: {key}')
+          if payload['resolution'].get('expected_status') != 'pending_human_review':
+              raise SystemExit('real-content batch must stop at human approval')
+          print(json.dumps({'status': 'valid', 'batch_id': payload['batch_id']}))
+          PY
+
   review-batch:
+    if: github.event_name != 'pull_request'
+    needs: validate-spec
     runs-on: ubuntu-latest
     env:
       APP_ENV: test
@@ -44,16 +100,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Validate review-only secret boundary
+      - name: Validate trusted review-run boundary
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p evidence
+          printf '%s\n' 'M5 review batch started' > evidence/job-status.txt
           for name in SOURCE_READ_TOKEN R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT_URL; do
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
           test -f "$BATCH_SPEC"
-          mkdir -p evidence
-          printf '%s\n' 'M5 review batch started' > evidence/job-status.txt
 
       - name: Read immutable batch identities
         id: spec
@@ -107,7 +163,7 @@ jobs:
           set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install -e .
-          test "$(git rev-parse HEAD)" = '${{ github.event.pull_request.head.sha || github.sha }}'
+          test "$(git rev-parse HEAD)" = '${{ github.sha }}'
 
       - name: Run intake, synthesis, and resolution review pipeline
         shell: bash
