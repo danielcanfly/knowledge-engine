@@ -16,15 +16,27 @@ on:
         required: true
         type: string
       manifest_sha256:
-        description: Exact manifest SHA-256
+        description: Exact candidate manifest SHA-256
         required: true
         type: string
       source_sha:
         description: Exact reviewed Source commit SHA
         required: true
         type: string
+      builder_sha:
+        description: Exact Engine commit that built the candidate
+        required: true
+        type: string
       foundation_sha:
         description: Exact Foundation commit SHA
+        required: true
+        type: string
+      expected_previous_release_id:
+        description: Production release expected before promotion
+        required: true
+        type: string
+      expected_previous_manifest_sha256:
+        description: Production manifest expected before promotion
         required: true
         type: string
       reason:
@@ -66,7 +78,10 @@ jobs:
       EXPECTED_RELEASE_ID: ${{ inputs.release_id }}
       EXPECTED_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
       EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+      EXPECTED_BUILDER_SHA: ${{ inputs.builder_sha }}
       EXPECTED_FOUNDATION_SHA: ${{ inputs.foundation_sha }}
+      EXPECTED_PREVIOUS_RELEASE_ID: ${{ inputs.expected_previous_release_id }}
+      EXPECTED_PREVIOUS_MANIFEST_SHA256: ${{ inputs.expected_previous_manifest_sha256 }}
       PROMOTION_REASON: ${{ inputs.reason }}
       ACCEPTANCE_QUERY: ${{ inputs.acceptance_query }}
       CONTROL_PLANE_SHA: ${{ github.sha }}
@@ -99,9 +114,13 @@ jobs:
           for name in ORACLE_VM_SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL R2_BUCKET; do
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
+          [[ "$EXPECTED_RELEASE_ID" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$ ]]
+          [[ "$EXPECTED_PREVIOUS_RELEASE_ID" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$ ]]
           [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_BUILDER_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$EXPECTED_FOUNDATION_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$EXPECTED_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_PREVIOUS_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
           [[ "$CANDIDATE_CHANNEL" == candidate-source-* ]]
           bash scripts/configure_oracle_ssh.sh
           ssh oracle-knowledge "test -d '$ORACLE_VM_DEPLOY_PATH'"
@@ -116,7 +135,10 @@ jobs:
             --release-id "$EXPECTED_RELEASE_ID" \
             --manifest-sha256 "$EXPECTED_MANIFEST_SHA256" \
             --source-sha "$EXPECTED_SOURCE_SHA" \
+            --builder-sha "$EXPECTED_BUILDER_SHA" \
             --foundation-sha "$EXPECTED_FOUNDATION_SHA" \
+            --expected-previous-release-id "$EXPECTED_PREVIOUS_RELEASE_ID" \
+            --expected-previous-manifest-sha256 "$EXPECTED_PREVIOUS_MANIFEST_SHA256" \
             --control-plane-sha "$CONTROL_PLANE_SHA" \
             --reason "$PROMOTION_REASON" \
             --actor "$ACTOR" \
@@ -125,9 +147,13 @@ jobs:
           import json
           import os
           from pathlib import Path
+
           payload = json.loads(Path('evidence/promotion-result.json').read_text())
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
               handle.write(f"previous_release_id={payload['previous_release_id']}\n")
+              handle.write(
+                  f"previous_manifest_sha256={payload['previous_manifest_sha256']}\n"
+              )
               handle.write(f"idempotent={str(payload['idempotent']).lower()}\n")
           PY
 
@@ -138,6 +164,7 @@ jobs:
         if: failure() && steps.promote.outcome == 'success'
         env:
           EXPECTED_RELEASE_ID: ${{ steps.promote.outputs.previous_release_id }}
+          EXPECTED_MANIFEST_SHA256: ${{ steps.promote.outputs.previous_manifest_sha256 }}
           EVIDENCE_DIR: evidence/automatic-rollback
         run: |
           set -euo pipefail
@@ -153,21 +180,27 @@ jobs:
         if: always()
         env:
           PREVIOUS_RELEASE_ID: ${{ steps.promote.outputs.previous_release_id }}
+          PREVIOUS_MANIFEST_SHA256: ${{ steps.promote.outputs.previous_manifest_sha256 }}
           IDEMPOTENT: ${{ steps.promote.outputs.idempotent }}
         run: |
           python - <<'PY'
           import json
           import os
           from pathlib import Path
+
           payload = {
               'operation_id': os.environ['OPERATION_ID'],
               'actor': os.environ['ACTOR'],
               'reason': os.environ['PROMOTION_REASON'],
               'control_plane_sha': os.environ['CONTROL_PLANE_SHA'],
               'source_sha': os.environ['EXPECTED_SOURCE_SHA'],
+              'builder_sha': os.environ['EXPECTED_BUILDER_SHA'],
               'foundation_sha': os.environ['EXPECTED_FOUNDATION_SHA'],
               'candidate_channel': os.environ['CANDIDATE_CHANNEL'],
               'previous_release_id': os.environ.get('PREVIOUS_RELEASE_ID'),
+              'previous_manifest_sha256': os.environ.get(
+                  'PREVIOUS_MANIFEST_SHA256'
+              ),
               'release_id': os.environ['EXPECTED_RELEASE_ID'],
               'manifest_sha256': os.environ['EXPECTED_MANIFEST_SHA256'],
               'idempotent': os.environ.get('IDEMPOTENT'),
