@@ -28,6 +28,7 @@ dev = [
 knowledge-engine = "knowledge_engine.cli:main"
 knowledge-intake = "knowledge_engine.intake_cli:main"
 knowledge-synthesis = "knowledge_engine.synthesis_cli:main"
+knowledge-resolution = "knowledge_engine.resolution_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]
