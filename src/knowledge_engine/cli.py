@@ -78,7 +78,10 @@ def main() -> int:
         "--source-repository", default="danielcanfly/knowledge-source"
     )
     promote.add_argument("--source-sha", required=True)
+    promote.add_argument("--builder-sha", required=True)
     promote.add_argument("--foundation-sha", required=True)
+    promote.add_argument("--expected-previous-release-id", required=True)
+    promote.add_argument("--expected-previous-manifest-sha256", required=True)
     promote.add_argument("--control-plane-sha", required=True)
     promote.add_argument("--reason", required=True)
     promote.add_argument("--actor", required=True)
@@ -179,7 +182,12 @@ def main() -> int:
                 expected_manifest_sha256=args.manifest_sha256,
                 expected_source_repository=args.source_repository,
                 expected_source_sha=args.source_sha,
+                expected_builder_sha=args.builder_sha,
                 expected_foundation_sha=args.foundation_sha,
+                expected_previous_release_id=args.expected_previous_release_id,
+                expected_previous_manifest_sha256=(
+                    args.expected_previous_manifest_sha256
+                ),
                 control_plane_sha=args.control_plane_sha,
                 reason=args.reason,
                 actor=args.actor,
