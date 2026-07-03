@@ -1,0 +1,106 @@
+name: Roll Back Knowledge Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation_id:
+        description: Promotion operation ID to reverse
+        required: true
+        type: string
+      reason:
+        description: Human-readable rollback reason
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: knowledge-production-control-plane
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      OPERATION_ID: ${{ inputs.operation_id }}
+      ROLLBACK_REASON: ${{ inputs.reason }}
+      CONTROL_PLANE_SHA: ${{ github.sha }}
+      ACTOR: ${{ github.actor }}
+      EVIDENCE_DIR: evidence
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install exact control plane
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          test "$(git rev-parse HEAD)" = "$CONTROL_PLANE_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+
+      - name: Validate production boundary and Oracle access
+        env:
+          ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in ORACLE_VM_SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL R2_BUCKET; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+          ssh oracle-knowledge "test -d '$ORACLE_VM_DEPLOY_PATH'"
+
+      - name: Restore previous pointer with CAS
+        id: rollback
+        run: |
+          set -euo pipefail
+          knowledge-engine rollback-release \
+            --operation-id "$OPERATION_ID" \
+            --reason "$ROLLBACK_REASON" \
+            --actor "$ACTOR" \
+            | tee "$EVIDENCE_DIR/rollback-result.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          payload = json.loads(Path('evidence/rollback-result.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
+              handle.write(f"restored_release_id={payload['restored_release_id']}\n")
+              handle.write(f"replaced_release_id={payload['replaced_release_id']}\n")
+              handle.write(f"idempotent={str(payload['idempotent']).lower()}\n")
+          PY
+
+      - name: Restart Oracle and verify restored release
+        env:
+          EXPECTED_RELEASE_ID: ${{ steps.rollback.outputs.restored_release_id }}
+        run: bash scripts/oracle_restart_verify.sh
+
+      - name: Upload rollback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-rollback-${{ inputs.operation_id }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
