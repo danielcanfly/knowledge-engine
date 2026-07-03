@@ -1,6 +1,7 @@
 {
   "schema_version": "1.0",
   "batch_id": "batch_agent_architecture_six_dimensions_v1",
+  "ledger_issue_number": 30,
   "content_source": {
     "repository": "huaihsuanbusiness/daniel-blog",
     "commit_sha": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
