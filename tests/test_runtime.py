@@ -101,13 +101,13 @@ def test_expected_release_identity_must_match_before_download(
     tmp_path: Path,
     built_store,
 ) -> None:
-    store, compiled, _ = built_store
+    store, _, published = built_store
     runtime = Runtime(store, tmp_path / "cache", "staging")
 
     with pytest.raises(IntegrityError, match="expected release"):
         runtime.refresh(
             expected_release_id="20260703T000000Z-cccccccccccc",
-            expected_manifest_sha256=compiled.manifest_sha256,
+            expected_manifest_sha256=published.manifest_sha256,
         )
 
     assert runtime.active is None
@@ -134,7 +134,7 @@ def test_pointer_change_during_refresh_preserves_last_known_good(
     tmp_path: Path,
     built_store,
 ) -> None:
-    store, compiled, _ = built_store
+    store, compiled, published = built_store
     stable = Runtime(store, tmp_path / "stable-cache", "staging")
     active = stable.refresh()
 
@@ -145,7 +145,7 @@ def test_pointer_change_during_refresh_preserves_last_known_good(
     with pytest.raises(IntegrityError, match="changed during refresh"):
         runtime.refresh(
             expected_release_id=compiled.release_id,
-            expected_manifest_sha256=compiled.manifest_sha256,
+            expected_manifest_sha256=published.manifest_sha256,
         )
 
     assert runtime.active is active
