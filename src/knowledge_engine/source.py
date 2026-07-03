@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -168,12 +169,16 @@ def build_source_release(
     repository_url: str,
     repository: str,
     source_commit_sha: str,
-    builder_commit_sha: str,
     foundation_commit_sha: str,
     work_root: Path,
     release_time: datetime,
+    builder_commit_sha: str | None = None,
 ) -> tuple[CompiledRelease, dict[str, Any]]:
-    normalized_builder_sha = builder_commit_sha.strip().lower()
+    raw_builder_sha = builder_commit_sha or os.environ.get(
+        "KNOWLEDGE_ENGINE_BUILDER_SHA",
+        "0" * 40,
+    )
+    normalized_builder_sha = raw_builder_sha.strip().lower()
     if not SHA_RE.fullmatch(normalized_builder_sha):
         raise IntegrityError("builder SHA must be an exact 40-character lowercase commit SHA")
 
