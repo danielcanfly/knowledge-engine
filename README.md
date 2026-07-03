@@ -1,11 +1,13 @@
 # Knowledge Engine
 
-Production-shaped Builder, Runtime, release controller, and governed intake plane for Daniel's Knowledge OS.
+Production-shaped Builder, Runtime, release controller, and governed knowledge-production plane for Daniel's Knowledge OS.
 
 ```text
 raw evidence
-  -> immutable capture and review packet
-  -> human-approved OKF source
+  -> immutable capture
+  -> evidence-bound synthesis draft
+  -> human review
+  -> approved OKF source
   -> deterministic compiler
   -> immutable release artifacts
   -> Cloudflare R2
@@ -29,6 +31,7 @@ The normative contracts live in `danielcanfly/knowledge-os-foundation`. This rep
 - Provides permanent approval-gated promotion and rollback workflows.
 - Captures Markdown evidence as immutable content-addressed raw objects.
 - Produces isolated normalized evidence and human-review packets.
+- Validates model synthesis output against exact evidence spans.
 
 ## Local development
 
@@ -76,20 +79,61 @@ knowledge-intake \
   --output-dir .artifacts/review-packet
 ```
 
-The output contains:
+Every generated intake draft is marked `draft` and `pending`, and every packet has `canonical_write_permitted: false`. Secret-like content is rejected before storage. Prompt-injection-like text is preserved as evidence but blocks downstream synthesis pending security review.
 
-```text
-raw-capture.json
-normalized.md
-draft/concept.md
-draft/provenance.json
-draft/source-record.json
-review-checklist.json
-review-packet.json
-intake-result.json
+## Evidence-bound synthesis
+
+Synthesis is deliberately split into two operations. The prepare operation creates a closed, provider-neutral prompt envelope. The validate operation accepts strict JSON and verifies every supported claim against exact normalized-source character spans.
+
+```bash
+knowledge-synthesis prepare \
+  --capture-id capture_0123456789abcdef0123456789abcdef \
+  --provider fixture-provider \
+  --model fixture-model \
+  --model-version fixture-v1 \
+  --prompt-version m5-prompt-v1 \
+  --harness-version m5-harness-v1 \
+  --seed 17 \
+  --temperature 0 \
+  --requested-at 2026-07-03T10:00:00Z \
+  --actor danielcanfly \
+  --output-dir .artifacts/synthesis-request
 ```
 
-Every generated draft is marked `draft` and `pending`, and every packet has `canonical_write_permitted: false`. Secret-like content is rejected before storage. Prompt-injection-like text is preserved as evidence but blocks downstream synthesis pending security review.
+A provider returns JSON matching this shape:
+
+```json
+{
+  "schema_version": "1.0",
+  "title": "Evidence separation",
+  "summary": "A summary limited to supported evidence.",
+  "claims": [
+    {
+      "claim_id": "claim_evidence_separation",
+      "text": "Immutable evidence remains separate from canonical knowledge.",
+      "evidence": [
+        {
+          "start_char": 0,
+          "end_char": 64,
+          "quote": "Immutable evidence remains separate from canonical knowledge."
+        }
+      ]
+    }
+  ],
+  "unsupported_claims": []
+}
+```
+
+Validate it with:
+
+```bash
+knowledge-synthesis validate \
+  --request-id sreq_0123456789abcdef0123456789abcdef \
+  --model-output model-output.json \
+  --output-dir .artifacts/synthesis-review
+```
+
+The harness rejects incorrect spans, mismatched quotes, duplicate claim IDs, unknown fields, unresolved intake security findings, and outputs without supported claims. Unsupported claims are stored separately and never rendered into the synthesized draft. All synthesis artifacts remain below `review/`, with GitHub, production, and canonical writes denied.
 
 Run the API:
 
