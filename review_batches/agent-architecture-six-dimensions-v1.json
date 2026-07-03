@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "batch_agent_architecture_six_dimensions_v1",
+  "content_source": {
+    "repository": "huaihsuanbusiness/daniel-blog",
+    "commit_sha": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
+    "path": "src/content/blog/the-atlas-of-agent-design-patterns-part-1/en.md",
+    "git_blob_sha": "963b8be7595c604dfc6ff6436e4079148984b9ab",
+    "canonical_uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/",
+    "source_id": "source_blog_agent_architecture_6d",
+    "title": "Six-dimensional map of LLM agent architectures",
+    "kind": "markdown",
+    "audience": "public",
+    "retrieved_at": "2026-07-03T10:40:00Z",
+    "owner": "Daniel Huang",
+    "license": "owner-provided"
+  },
+  "knowledge_source": {
+    "repository": "danielcanfly/knowledge-source",
+    "commit_sha": "cbe9d95df65ab43c26ae97ddb1162be1ffcd3b93"
+  },
+  "synthesis": {
+    "provider": "openai",
+    "model": "gpt-5.5-thinking",
+    "model_version": "chatgpt-session-20260703",
+    "prompt_version": "m5-real-batch-prompt-v1",
+    "harness_version": "m5-harness-v1",
+    "seed": 31,
+    "temperature": 0.0,
+    "requested_at": "2026-07-03T10:41:00Z",
+    "actor": "openai-chatgpt",
+    "title": "Six-dimensional map of LLM agent architectures",
+    "summary": "LLM agent architectures should be reviewed across separate engineering dimensions because multiple patterns can coexist at different layers of one production system.",
+    "claims": [
+      {
+        "claim_id": "claim_patterns_coexist_across_layers",
+        "text": "Agent architecture patterns can coexist because they operate at different architectural layers rather than competing for one role.",
+        "evidence_quote": "A production agent may use ReAct inside a tool-execution node, a state machine to control the overall flow, a verifier to accept or reject results, memory to preserve progress, and a supervisor to coordinate specialised workers. These mechanisms do not compete for the same job. They operate at different architectural layers."
+      },
+      {
+        "claim_id": "claim_six_design_lenses",
+        "text": "A practical agent architecture review can be organized across six lenses: execution path, decision and planning, reasoning and search, verification and recovery, agent organization, and state and memory.",
+        "evidence_quote": "This article introduces six practical design lenses:\n\n1. **Execution path**: how the task moves from start to finish\n2. **Decision and planning**: how the next action is selected\n3. **Reasoning and search**: how candidate solutions are explored\n4. **Verification and recovery**: how errors are detected and handled\n5. **Agent organisation**: how responsibility is divided\n6. **State and memory**: what information is preserved, where, and for how long"
+      },
+      {
+        "claim_id": "claim_engineering_not_universal_taxonomy",
+        "text": "The six-dimensional map is an engineering model optimized for design and production work, not a universal academic taxonomy.",
+        "evidence_quote": "These six dimensions are a **working engineering model**, not a universal academic taxonomy. They are intentionally optimised for system design, product decisions, implementation reviews, and production operations."
+      }
+    ],
+    "unsupported_claims": []
+  },
+  "resolution": {
+    "requested_audience": "public",
+    "resolver_version": "resolver-v1",
+    "actor": "m5-batch-resolver",
+    "resolved_at": "2026-07-03T10:42:00Z",
+    "expected_action": "create",
+    "expected_status": "pending_human_review"
+  }
+}
