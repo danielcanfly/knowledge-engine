@@ -3,10 +3,29 @@ set -euo pipefail
 
 : "${ORACLE_VM_DEPLOY_PATH:?ORACLE_VM_DEPLOY_PATH is required}"
 : "${EXPECTED_RELEASE_ID:?EXPECTED_RELEASE_ID is required}"
-: "${EXPECTED_MANIFEST_SHA256:?EXPECTED_MANIFEST_SHA256 is required}"
 
 EVIDENCE_DIR="${EVIDENCE_DIR:-evidence}"
 mkdir -p "$EVIDENCE_DIR"
+
+if [[ -z "${EXPECTED_MANIFEST_SHA256:-}" ]]; then
+  rollback_result="$EVIDENCE_DIR/rollback-result.json"
+  test -f "$rollback_result" || {
+    echo "EXPECTED_MANIFEST_SHA256 or rollback-result.json is required"
+    exit 2
+  }
+  EXPECTED_MANIFEST_SHA256="$({
+    python - "$rollback_result" <<'PY'
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+print(payload["restored_manifest_sha256"])
+PY
+  })"
+  export EXPECTED_MANIFEST_SHA256
+fi
+
+[[ "$EXPECTED_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
 
 ssh oracle-knowledge \
   "cd '$ORACLE_VM_DEPLOY_PATH' && docker compose restart knowledge-engine"
