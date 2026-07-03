@@ -25,6 +25,7 @@ def main() -> int:
     parser.add_argument("--internal", type=Path, required=True)
     parser.add_argument("--public", type=Path, required=True)
     parser.add_argument("--expected-release-id", required=True)
+    parser.add_argument("--expected-manifest-sha256", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     result = validate_runtime_evidence(
@@ -32,6 +33,7 @@ def main() -> int:
         internal=_load(args.internal),
         public=_load(args.public),
         expected_release_id=args.expected_release_id,
+        expected_manifest_sha256=args.expected_manifest_sha256,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
