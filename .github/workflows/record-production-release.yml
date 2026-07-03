@@ -1,0 +1,110 @@
+name: Record Production Release
+
+on:
+  workflow_run:
+    workflows:
+      - Promote Knowledge Release
+      - Roll Back Knowledge Release
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download operation evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: evidence-download
+
+      - name: Append issue ledger entry
+        uses: actions/github-script@v7
+        env:
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CONTROL_PLANE_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            function findFile(root, target) {
+              if (!fs.existsSync(root)) return null;
+              for (const entry of fs.readdirSync(root, {withFileTypes: true})) {
+                const full = path.join(root, entry.name);
+                if (entry.isDirectory()) {
+                  const found = findFile(full, target);
+                  if (found) return found;
+                } else if (entry.name === target) {
+                  return full;
+                }
+              }
+              return null;
+            }
+
+            function readJson(name) {
+              const found = findFile('evidence-download', name);
+              if (!found) return {};
+              try { return JSON.parse(fs.readFileSync(found, 'utf8')); }
+              catch { return {}; }
+            }
+
+            function first(...values) {
+              return values.find(value => value !== undefined && value !== null && value !== '') ?? 'n/a';
+            }
+
+            const summary = readJson('operation-summary.json');
+            const promotion = readJson('promotion-result.json');
+            const rollback = readJson('rollback-result.json');
+            const automatic = readJson('automatic-rollback.json');
+            const acceptance = readJson('runtime-acceptance.json');
+            const health = readJson('oracle-health.json');
+            const artifacts = await github.paginate(
+              github.rest.actions.listWorkflowRunArtifacts,
+              {owner: context.repo.owner, repo: context.repo.repo, run_id: Number(process.env.RUN_ID), per_page: 100}
+            );
+            const artifactEvidence = artifacts.map(item =>
+              `\`${item.name}\` (${item.digest || 'digest unavailable'})`
+            ).join(', ') || 'n/a';
+
+            const operationId = first(summary.operation_id, promotion.operation_id, rollback.operation_id, automatic.operation_id);
+            const restored = first(rollback.restored_release_id, automatic.restored_release_id, summary.previous_release_id, promotion.previous_release_id);
+            const target = first(summary.release_id, promotion.release_id, rollback.replaced_release_id, automatic.replaced_release_id, health.release_id);
+            const body = [
+              `## ${process.env.WORKFLOW_NAME}: ${process.env.WORKFLOW_CONCLUSION}`,
+              '',
+              `- Operation ID: \`${operationId}\``,
+              `- Actor: \`${first(summary.actor, rollback.actor, automatic.actor)}\``,
+              `- Reason: ${first(summary.reason, rollback.reason, automatic.reason)}`,
+              `- Control plane SHA: \`${process.env.CONTROL_PLANE_SHA}\``,
+              `- Source SHA: \`${first(summary.source_sha, promotion.source_sha)}\``,
+              `- Foundation SHA: \`${first(summary.foundation_sha, promotion.foundation_sha)}\``,
+              `- Candidate channel: \`${first(summary.candidate_channel)}\``,
+              `- Previous/restored release: \`${restored}\``,
+              `- Target/replaced release: \`${target}\``,
+              `- Manifest SHA-256: \`${first(summary.manifest_sha256, promotion.manifest_sha256)}\``,
+              `- Idempotent retry: \`${first(summary.idempotent, promotion.idempotent, rollback.idempotent, automatic.idempotent)}\``,
+              `- Runtime acceptance: \`${first(acceptance.status)}\``,
+              `- Internal citations: \`${first(acceptance.internal_citation_count)}\``,
+              `- Public ACL filtered: \`${first(acceptance.public_acl_filtered_count)}\``,
+              `- Oracle release: \`${first(health.release_id)}\``,
+              `- Evidence artifact: ${artifactEvidence}`,
+              `- Actions run: ${process.env.RUN_URL}`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 18,
+              body,
+            });

@@ -8,6 +8,7 @@ from pathlib import Path
 from .candidate import run_source_candidate_gate
 from .compiler import compile_release
 from .config import Settings
+from .promotion import PromotionRequest, promote_release, rollback_release
 from .publisher import publish_release
 from .runtime import Runtime
 from .source import build_source_release
@@ -67,6 +68,26 @@ def main() -> int:
     gate_source.add_argument(
         "--work-dir", type=Path, default=Path(".artifacts/candidate-gates")
     )
+
+    promote = commands.add_parser("promote-release")
+    promote.add_argument("--operation-id", required=True)
+    promote.add_argument("--candidate-channel", required=True)
+    promote.add_argument("--release-id", required=True)
+    promote.add_argument("--manifest-sha256", required=True)
+    promote.add_argument(
+        "--source-repository", default="danielcanfly/knowledge-source"
+    )
+    promote.add_argument("--source-sha", required=True)
+    promote.add_argument("--foundation-sha", required=True)
+    promote.add_argument("--control-plane-sha", required=True)
+    promote.add_argument("--reason", required=True)
+    promote.add_argument("--actor", required=True)
+    promote.add_argument("--promoted-at")
+
+    rollback = commands.add_parser("rollback-release")
+    rollback.add_argument("--operation-id", required=True)
+    rollback.add_argument("--reason", required=True)
+    rollback.add_argument("--actor", required=True)
 
     query = commands.add_parser("query")
     query.add_argument("--channel", default=None)
@@ -144,6 +165,40 @@ def main() -> int:
             release_time=_utc(args.release_time),
             query=args.query,
             work_root=args.work_dir,
+        )
+        print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "promote-release":
+        result = promote_release(
+            store=store,
+            request=PromotionRequest(
+                operation_id=args.operation_id,
+                candidate_channel=args.candidate_channel,
+                expected_release_id=args.release_id,
+                expected_manifest_sha256=args.manifest_sha256,
+                expected_source_repository=args.source_repository,
+                expected_source_sha=args.source_sha,
+                expected_foundation_sha=args.foundation_sha,
+                control_plane_sha=args.control_plane_sha,
+                reason=args.reason,
+                actor=args.actor,
+            ),
+            promoted_at=(
+                _promoted_at(_utc(args.promoted_at))
+                if args.promoted_at is not None
+                else None
+            ),
+        )
+        print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "rollback-release":
+        result = rollback_release(
+            store=store,
+            operation_id=args.operation_id,
+            reason=args.reason,
+            actor=args.actor,
         )
         print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
         return 0
