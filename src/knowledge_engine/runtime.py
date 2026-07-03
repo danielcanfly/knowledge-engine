@@ -67,7 +67,8 @@ class Runtime:
         release_id = pointer.get("release_id")
         manifest_key = pointer.get("manifest_key")
         manifest_sha256 = pointer.get("manifest_sha256")
-        if not all(isinstance(item, str) and item for item in (release_id, manifest_key, manifest_sha256)):
+        identity = (release_id, manifest_key, manifest_sha256)
+        if not all(isinstance(item, str) and item for item in identity):
             raise IntegrityError("channel pointer is missing release identity")
         if expected_release_id is not None and release_id != expected_release_id:
             raise IntegrityError(
