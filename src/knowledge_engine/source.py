@@ -168,10 +168,15 @@ def build_source_release(
     repository_url: str,
     repository: str,
     source_commit_sha: str,
+    builder_commit_sha: str,
     foundation_commit_sha: str,
     work_root: Path,
     release_time: datetime,
 ) -> tuple[CompiledRelease, dict[str, Any]]:
+    normalized_builder_sha = builder_commit_sha.strip().lower()
+    if not SHA_RE.fullmatch(normalized_builder_sha):
+        raise IntegrityError("builder SHA must be an exact 40-character lowercase commit SHA")
+
     checkout = checkout_source(
         repository_url=repository_url,
         repository=repository,
@@ -194,6 +199,7 @@ def build_source_release(
     snapshot_data = _canonical_json(checkout.snapshot)
     snapshot_artifact = compiled.release_root / "artifacts/source-snapshot.json"
     snapshot_artifact.write_bytes(snapshot_data)
+    compiled.manifest["builder"]["git_sha"] = normalized_builder_sha
     compiled.manifest["source"]["snapshot_sha256"] = checkout.snapshot[
         "content_sha256"
     ]
