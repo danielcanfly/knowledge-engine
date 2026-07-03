@@ -1,0 +1,130 @@
+name: M5 Governed Review Batch
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_spec:
+        description: Reviewed batch specification path
+        required: true
+        default: review_batches/agent-architecture-six-dimensions-v1.json
+        type: string
+  pull_request:
+    paths:
+      - '.github/workflows/m5-review-batch.yml'
+      - 'review_batches/**'
+      - 'scripts/run_m5_review_batch.py'
+      - 'src/knowledge_engine/intake.py'
+      - 'src/knowledge_engine/synthesis.py'
+      - 'src/knowledge_engine/resolution.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m5-governed-review-batch-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  review-batch:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+      BATCH_SPEC: ${{ inputs.batch_spec || 'review_batches/agent-architecture-six-dimensions-v1.json' }}
+    steps:
+      - name: Check out exact Engine revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate review-only secret boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in SOURCE_READ_TOKEN R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT_URL; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          test -f "$BATCH_SPEC"
+          mkdir -p evidence
+          printf '%s\n' 'M5 review batch started' > evidence/job-status.txt
+
+      - name: Read immutable batch identities
+        id: spec
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(os.environ['BATCH_SPEC']).read_text(encoding='utf-8'))
+          content = payload['content_source']
+          source = payload['knowledge_source']
+          outputs = {
+              'batch_id': payload['batch_id'],
+              'content_repository': content['repository'],
+              'content_sha': content['commit_sha'],
+              'source_repository': source['repository'],
+              'source_sha': source['commit_sha'],
+          }
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
+              for key, value in outputs.items():
+                  handle.write(f'{key}={value}\n')
+          PY
+
+      - name: Check out exact public content revision
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.spec.outputs.content_repository }}
+          ref: ${{ steps.spec.outputs.content_sha }}
+          path: content-source
+          persist-credentials: false
+
+      - name: Check out exact private Source revision
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.spec.outputs.source_repository }}
+          ref: ${{ steps.spec.outputs.source_sha }}
+          token: ${{ secrets.SOURCE_READ_TOKEN }}
+          path: knowledge-source
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install exact Engine review harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          test "$(git rev-parse HEAD)" = '${{ github.event.pull_request.head.sha || github.sha }}'
+
+      - name: Run intake, synthesis, and resolution review pipeline
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/run_m5_review_batch.py \
+            --batch-spec "$BATCH_SPEC" \
+            --content-root content-source \
+            --source-root knowledge-source \
+            --evidence-dir evidence/review-batch \
+            | tee evidence/review-batch.log
+
+      - name: Upload governed review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m5-review-${{ steps.spec.outputs.batch_id }}-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
