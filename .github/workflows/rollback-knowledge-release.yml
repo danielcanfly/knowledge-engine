@@ -96,6 +96,33 @@ jobs:
           EXPECTED_RELEASE_ID: ${{ steps.rollback.outputs.restored_release_id }}
         run: bash scripts/oracle_restart_verify.sh
 
+      - name: Write rollback summary
+        if: always()
+        env:
+          RESTORED_RELEASE_ID: ${{ steps.rollback.outputs.restored_release_id }}
+          REPLACED_RELEASE_ID: ${{ steps.rollback.outputs.replaced_release_id }}
+          IDEMPOTENT: ${{ steps.rollback.outputs.idempotent }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          payload = {
+              'operation_id': os.environ['OPERATION_ID'],
+              'actor': os.environ['ACTOR'],
+              'reason': os.environ['ROLLBACK_REASON'],
+              'control_plane_sha': os.environ['CONTROL_PLANE_SHA'],
+              'restored_release_id': os.environ.get('RESTORED_RELEASE_ID'),
+              'replaced_release_id': os.environ.get('REPLACED_RELEASE_ID'),
+              'idempotent': os.environ.get('IDEMPOTENT'),
+              'run_url': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }
+          Path('evidence/operation-summary.json').write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
       - name: Upload rollback evidence
         if: always()
         uses: actions/upload-artifact@v4
