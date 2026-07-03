@@ -11,11 +11,13 @@ def validate_runtime_evidence(
     internal: dict[str, Any],
     public: dict[str, Any],
     expected_release_id: str,
+    expected_manifest_sha256: str,
 ) -> dict[str, Any]:
     expected_health = {
         "status": "healthy",
         "channel": "production",
         "release_id": expected_release_id,
+        "manifest_sha256": expected_manifest_sha256,
     }
     for key, expected in expected_health.items():
         if health.get(key) != expected:
@@ -26,10 +28,12 @@ def validate_runtime_evidence(
     if internal.get("status") != "answered":
         raise IntegrityError("internal query did not answer")
     internal_release = internal.get("release")
-    if not isinstance(internal_release, dict) or internal_release.get(
-        "release_id"
-    ) != expected_release_id:
+    if not isinstance(internal_release, dict):
+        raise IntegrityError("internal query omitted release identity")
+    if internal_release.get("release_id") != expected_release_id:
         raise IntegrityError("internal query returned the wrong release")
+    if internal_release.get("manifest_sha256") != expected_manifest_sha256:
+        raise IntegrityError("internal query returned the wrong manifest")
     internal_results = internal.get("results")
     if not isinstance(internal_results, list) or not internal_results:
         raise IntegrityError("internal query returned no results")
@@ -43,10 +47,12 @@ def validate_runtime_evidence(
     if public.get("status") != "not_found":
         raise IntegrityError("public query unexpectedly answered")
     public_release = public.get("release")
-    if not isinstance(public_release, dict) or public_release.get(
-        "release_id"
-    ) != expected_release_id:
+    if not isinstance(public_release, dict):
+        raise IntegrityError("public query omitted release identity")
+    if public_release.get("release_id") != expected_release_id:
         raise IntegrityError("public query returned the wrong release")
+    if public_release.get("manifest_sha256") != expected_manifest_sha256:
+        raise IntegrityError("public query returned the wrong manifest")
     if public.get("results") != []:
         raise IntegrityError("public query exposed restricted results")
     retrieval = public.get("retrieval")
@@ -62,6 +68,7 @@ def validate_runtime_evidence(
         "schema_version": "1.0",
         "status": "passed",
         "release_id": expected_release_id,
+        "manifest_sha256": expected_manifest_sha256,
         "internal_result_count": len(internal_results),
         "internal_citation_count": citation_count,
         "public_result_count": 0,
