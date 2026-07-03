@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import pytest
-from scripts.validate_runtime_evidence import validate_runtime_evidence
 
 from knowledge_engine.errors import IntegrityError
+from knowledge_engine.release_checks import validate_runtime_evidence
 
 RELEASE_ID = "20260703T030000Z-123456789abc"
 
