@@ -46,6 +46,23 @@ def _canonical_json(value: Any) -> bytes:
     ).encode("utf-8")
 
 
+def _discover_builder_sha() -> str:
+    configured = os.environ.get("KNOWLEDGE_ENGINE_BUILDER_SHA", "").strip().lower()
+    if configured:
+        return configured
+    repository_root = Path(__file__).resolve().parents[2]
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repository_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode == 0:
+        return completed.stdout.strip().lower()
+    return "0" * 40
+
+
 def _safe_tracked_path(raw: str) -> PurePosixPath:
     path = PurePosixPath(raw)
     if path.is_absolute() or ".." in path.parts or not path.parts:
@@ -174,10 +191,7 @@ def build_source_release(
     release_time: datetime,
     builder_commit_sha: str | None = None,
 ) -> tuple[CompiledRelease, dict[str, Any]]:
-    raw_builder_sha = builder_commit_sha or os.environ.get(
-        "KNOWLEDGE_ENGINE_BUILDER_SHA",
-        "0" * 40,
-    )
+    raw_builder_sha = builder_commit_sha or _discover_builder_sha()
     normalized_builder_sha = raw_builder_sha.strip().lower()
     if not SHA_RE.fullmatch(normalized_builder_sha):
         raise IntegrityError("builder SHA must be an exact 40-character lowercase commit SHA")
