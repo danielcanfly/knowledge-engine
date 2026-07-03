@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-import hashlib
+import binascii
 import json
 import re
 from dataclasses import asdict, dataclass
@@ -41,36 +41,57 @@ def _read_json(store: ObjectStore, key: str) -> tuple[bytes, dict[str, Any]]:
     return data, payload
 
 
-def _put_immutable_json(store: ObjectStore, key: str, payload: dict[str, Any]) -> None:
-    data = _json_bytes(payload)
-    try:
-        store.put(
-            key,
-            data,
-            content_type="application/json",
-            sha256=sha256_bytes(data),
-            only_if_absent=True,
-        )
-        return
-    except ReleaseConflictError:
-        existing = store.get(key)
-        if existing != data:
-            raise ReleaseConflictError(f"immutable operation collision: {key}")
-
-
 def _decode_pointer(intent: dict[str, Any], field: str) -> bytes:
     encoded = intent.get(field)
     if not isinstance(encoded, str):
         raise IntegrityError(f"promotion intent is missing {field}")
     try:
         return base64.b64decode(encoded, validate=True)
-    except ValueError as exc:
+    except (ValueError, binascii.Error) as exc:
         raise IntegrityError(f"promotion intent contains invalid {field}") from exc
 
 
 def _validate_sha(value: str, label: str) -> None:
     if not SHA_RE.fullmatch(value):
         raise IntegrityError(f"{label} must be an exact lowercase 40-character SHA")
+
+
+def _validate_fields(
+    payload: dict[str, Any],
+    expected: dict[str, Any],
+    *,
+    label: str,
+) -> None:
+    for key, value in expected.items():
+        if payload.get(key) != value:
+            raise ReleaseConflictError(
+                f"{label} {key} mismatch: expected {value!r}, got {payload.get(key)!r}"
+            )
+
+
+def _write_or_load_record(
+    *,
+    store: ObjectStore,
+    key: str,
+    payload: dict[str, Any],
+    identity: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    if store.head(key) is None:
+        data = _json_bytes(payload)
+        try:
+            store.put(
+                key,
+                data,
+                content_type="application/json",
+                sha256=sha256_bytes(data),
+                only_if_absent=True,
+            )
+            return payload, False
+        except ReleaseConflictError:
+            pass
+    _, existing = _read_json(store, key)
+    _validate_fields(existing, identity, label=key)
+    return existing, True
 
 
 @dataclass(frozen=True)
@@ -151,9 +172,9 @@ def _operation_prefix(operation_id: str) -> str:
 def _validate_candidate(
     store: ObjectStore,
     request: PromotionRequest,
-) -> tuple[bytes, dict[str, Any], bytes, dict[str, Any]]:
+) -> dict[str, Any]:
     candidate_key = f"channels/{request.candidate_channel}.json"
-    candidate_bytes, candidate = _read_json(store, candidate_key)
+    _, candidate = _read_json(store, candidate_key)
     expected_pointer = {
         "channel": request.candidate_channel,
         "release_id": request.expected_release_id,
@@ -181,19 +202,19 @@ def _validate_candidate(
     source = manifest.get("source")
     if not isinstance(source, dict):
         raise IntegrityError("candidate manifest source metadata is missing")
-    source_expectations = {
+    expectations = {
         "repository": request.expected_source_repository,
         "commit_sha": request.expected_source_sha,
         "foundation_commit_sha": request.expected_foundation_sha,
         "dirty": False,
     }
-    for key, expected in source_expectations.items():
+    for key, expected in expectations.items():
         if source.get(key) != expected:
             raise IntegrityError(
                 f"candidate source {key} mismatch: "
                 f"expected {expected!r}, got {source.get(key)!r}"
             )
-    return candidate_bytes, candidate, manifest_bytes, manifest
+    return candidate
 
 
 def _load_or_create_intent(
@@ -218,6 +239,7 @@ def _load_or_create_intent(
         "promoted_at": promoted_at,
         "promotion_id": request.operation_id,
     }
+    target_bytes = _json_bytes(target)
     proposed = {
         "schema_version": "1.0",
         "operation_id": request.operation_id,
@@ -227,20 +249,20 @@ def _load_or_create_intent(
         "previous_pointer_b64": base64.b64encode(production_bytes).decode("ascii"),
         "previous_pointer_sha256": sha256_bytes(production_bytes),
         "previous_release_id": production.get("release_id"),
-        "target_pointer_b64": base64.b64encode(_json_bytes(target)).decode("ascii"),
-        "target_pointer_sha256": sha256_bytes(_json_bytes(target)),
+        "target_pointer_b64": base64.b64encode(target_bytes).decode("ascii"),
+        "target_pointer_sha256": sha256_bytes(target_bytes),
         "target_release_id": target["release_id"],
     }
-    metadata = store.head(key)
-    if metadata is None:
-        _put_immutable_json(store, key, proposed)
-        return key, proposed, False
-    _, existing = _read_json(store, key)
-    if existing.get("request_sha256") != request_hash:
-        raise ReleaseConflictError(
-            f"operation ID already belongs to a different request: {request.operation_id}"
-        )
-    return key, existing, True
+    intent, reused = _write_or_load_record(
+        store=store,
+        key=key,
+        payload=proposed,
+        identity={
+            "operation_id": request.operation_id,
+            "request_sha256": request_hash,
+        },
+    )
+    return key, intent, reused
 
 
 def promote_release(
@@ -250,8 +272,7 @@ def promote_release(
     promoted_at: str | None = None,
 ) -> PromotionResult:
     request.validate()
-    candidate_bytes, candidate, _, _ = _validate_candidate(store, request)
-    del candidate_bytes
+    candidate = _validate_candidate(store, request)
     production_key = "channels/production.json"
     production_head = store.head(production_key)
     if production_head is None:
@@ -296,32 +317,41 @@ def promote_release(
         raise IntegrityError("production pointer verification failed after promotion")
 
     receipt_key = f"{_operation_prefix(request.operation_id)}/promotion-receipt.json"
-    receipt = {
-        "schema_version": "1.0",
-        "operation_id": request.operation_id,
-        "status": "promoted",
-        "intent_key": intent_key,
-        "previous_release_id": intent["previous_release_id"],
-        "release_id": intent["target_release_id"],
-        "manifest_sha256": request.expected_manifest_sha256,
-        "source_sha": request.expected_source_sha,
-        "foundation_sha": request.expected_foundation_sha,
-        "control_plane_sha": request.control_plane_sha,
-        "production_pointer_sha256": sha256_bytes(target_bytes),
-        "completed_at": _utc_now(),
-    }
-    _put_immutable_json(store, receipt_key, receipt)
+    receipt, reused_receipt = _write_or_load_record(
+        store=store,
+        key=receipt_key,
+        payload={
+            "schema_version": "1.0",
+            "operation_id": request.operation_id,
+            "status": "promoted",
+            "intent_key": intent_key,
+            "previous_release_id": intent["previous_release_id"],
+            "release_id": intent["target_release_id"],
+            "manifest_sha256": request.expected_manifest_sha256,
+            "source_sha": request.expected_source_sha,
+            "foundation_sha": request.expected_foundation_sha,
+            "control_plane_sha": request.control_plane_sha,
+            "production_pointer_sha256": sha256_bytes(target_bytes),
+            "completed_at": _utc_now(),
+        },
+        identity={
+            "operation_id": request.operation_id,
+            "status": "promoted",
+            "release_id": intent["target_release_id"],
+            "production_pointer_sha256": sha256_bytes(target_bytes),
+        },
+    )
     return PromotionResult(
         operation_id=request.operation_id,
         status="promoted",
-        idempotent=idempotent,
-        previous_release_id=str(intent["previous_release_id"]),
-        release_id=str(intent["target_release_id"]),
-        manifest_sha256=request.expected_manifest_sha256,
-        source_sha=request.expected_source_sha,
-        foundation_sha=request.expected_foundation_sha,
-        control_plane_sha=request.control_plane_sha,
-        production_pointer_sha256=sha256_bytes(target_bytes),
+        idempotent=idempotent or reused_receipt,
+        previous_release_id=str(receipt["previous_release_id"]),
+        release_id=str(receipt["release_id"]),
+        manifest_sha256=str(receipt["manifest_sha256"]),
+        source_sha=str(receipt["source_sha"]),
+        foundation_sha=str(receipt["foundation_sha"]),
+        control_plane_sha=str(receipt["control_plane_sha"]),
+        production_pointer_sha256=str(receipt["production_pointer_sha256"]),
         intent_key=intent_key,
         receipt_key=receipt_key,
     )
@@ -371,24 +401,34 @@ def rollback_release(
         raise IntegrityError("production pointer verification failed after rollback")
 
     receipt_key = f"{prefix}/rollback-receipt.json"
-    receipt = {
-        "schema_version": "1.0",
-        "operation_id": operation_id,
-        "status": "rolled_back",
-        "reason": reason,
-        "actor": actor,
-        "restored_release_id": intent["previous_release_id"],
-        "replaced_release_id": intent["target_release_id"],
-        "production_pointer_sha256": sha256_bytes(previous_bytes),
-        "completed_at": _utc_now(),
-    }
-    _put_immutable_json(store, receipt_key, receipt)
+    receipt, reused_receipt = _write_or_load_record(
+        store=store,
+        key=receipt_key,
+        payload={
+            "schema_version": "1.0",
+            "operation_id": operation_id,
+            "status": "rolled_back",
+            "reason": reason,
+            "actor": actor,
+            "restored_release_id": intent["previous_release_id"],
+            "replaced_release_id": intent["target_release_id"],
+            "production_pointer_sha256": sha256_bytes(previous_bytes),
+            "completed_at": _utc_now(),
+        },
+        identity={
+            "operation_id": operation_id,
+            "status": "rolled_back",
+            "restored_release_id": intent["previous_release_id"],
+            "replaced_release_id": intent["target_release_id"],
+            "production_pointer_sha256": sha256_bytes(previous_bytes),
+        },
+    )
     return RollbackResult(
         operation_id=operation_id,
         status="rolled_back",
-        idempotent=idempotent,
-        restored_release_id=str(intent["previous_release_id"]),
-        replaced_release_id=str(intent["target_release_id"]),
-        production_pointer_sha256=sha256_bytes(previous_bytes),
+        idempotent=idempotent or reused_receipt,
+        restored_release_id=str(receipt["restored_release_id"]),
+        replaced_release_id=str(receipt["replaced_release_id"]),
+        production_pointer_sha256=str(receipt["production_pointer_sha256"]),
         receipt_key=receipt_key,
     )
