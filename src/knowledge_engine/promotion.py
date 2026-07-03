@@ -64,6 +64,10 @@ def _validate_fields(
 ) -> None:
     for key, value in expected.items():
         if payload.get(key) != value:
+            if key == "request_sha256":
+                raise ReleaseConflictError(
+                    "operation ID already belongs to a different request"
+                )
             raise ReleaseConflictError(
                 f"{label} {key} mismatch: expected {value!r}, got {payload.get(key)!r}"
             )
