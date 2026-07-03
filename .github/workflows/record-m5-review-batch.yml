@@ -1,0 +1,114 @@
+name: Record M5 Review Batch
+
+on:
+  workflow_run:
+    workflows: ["M5 Governed Review Batch"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  record:
+    if: github.event.workflow_run.event != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download review evidence
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: m5-review-*
+          path: downloaded
+          merge-multiple: true
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Build ledger entry
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+          ENGINE_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary_path = Path('downloaded/review-batch/batch-summary.json')
+          summary = None
+          if summary_path.is_file():
+              summary = json.loads(summary_path.read_text(encoding='utf-8'))
+
+          lines = [
+              '## M5 governed review batch',
+              '',
+              f"- Workflow conclusion: `{os.environ['RUN_CONCLUSION']}`",
+              f"- Workflow event: `{os.environ['RUN_EVENT']}`",
+              f"- Engine SHA: `{os.environ['ENGINE_SHA']}`",
+              f"- Actions run: {os.environ['RUN_URL']}",
+          ]
+          if summary is None:
+              lines.extend(
+                  [
+                      '- Review summary: `unavailable`',
+                      '- Human approval status: `not eligible`',
+                      '',
+                      'The trusted batch run did not produce a complete review summary. '
+                      'No approval, Source package, Source PR, candidate, or production '
+                      'operation is implied.',
+                  ]
+              )
+          else:
+              content = summary['content_source']
+              source = summary['knowledge_source']
+              lines.extend(
+                  [
+                      f"- Batch ID: `{summary['batch_id']}`",
+                      f"- Batch status: `{summary['status']}`",
+                      f"- Content repository: `{content['repository']}`",
+                      f"- Content SHA: `{content['commit_sha']}`",
+                      f"- Content path: `{content['path']}`",
+                      f"- Content blob SHA: `{content['git_blob_sha']}`",
+                      f"- Raw SHA-256: `{content['raw_sha256']}`",
+                      f"- Normalized SHA-256: `{content['normalized_sha256']}`",
+                      f"- Canonical Source SHA: `{source['commit_sha']}`",
+                      f"- Source snapshot SHA-256: `{source['snapshot_sha256']}`",
+                      f"- Capture ID: `{summary['capture_id']}`",
+                      f"- Synthesis request ID: `{summary['synthesis_request_id']}`",
+                      f"- Synthesis ID: `{summary['synthesis_id']}`",
+                      f"- Resolution ID: `{summary['resolution_id']}`",
+                      f"- Resolution action: `{summary['resolution_action']}`",
+                      f"- Resolution status: `{summary['resolution_status']}`",
+                      f"- Supported claims: `{summary['supported_claim_count']}`",
+                      f"- Unsupported claims: `{summary['unsupported_claim_count']}`",
+                      f"- Effective audience: `{summary['effective_audience']}`",
+                      f"- Production pointer unchanged: `{str(summary['production_pointer_unchanged']).lower()}`",
+                      f"- Production pointer SHA-256: `{summary['production_pointer_sha256']}`",
+                      '- Canonical write permitted: `false`',
+                      '- GitHub write permitted: `false`',
+                      '- Production write permitted: `false`',
+                      '- Human approval status: `awaiting explicit decision`',
+                      '',
+                      'This ledger entry is evidence only. It is not a human approval '
+                      'decision and does not authorize a Source package or production release.',
+                  ]
+              )
+          Path('/tmp/m5-ledger.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
+      - name: Append to M5 content ledger
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/issues/30/comments" \
+            --raw-field "body=$(cat /tmp/m5-ledger.md)"
