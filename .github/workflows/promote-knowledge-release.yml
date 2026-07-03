@@ -1,0 +1,189 @@
+name: Promote Knowledge Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation_id:
+        description: Unique idempotency key
+        required: true
+        type: string
+      candidate_channel:
+        description: Verified candidate-source channel
+        required: true
+        type: string
+      release_id:
+        description: Exact immutable release ID
+        required: true
+        type: string
+      manifest_sha256:
+        description: Exact manifest SHA-256
+        required: true
+        type: string
+      source_sha:
+        description: Exact reviewed Source commit SHA
+        required: true
+        type: string
+      foundation_sha:
+        description: Exact Foundation commit SHA
+        required: true
+        type: string
+      reason:
+        description: Human-readable promotion reason
+        required: true
+        type: string
+      acceptance_query:
+        description: Internal-only runtime acceptance query
+        required: true
+        default: quartz lantern protocol
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: knowledge-production-control-plane
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      OPERATION_ID: ${{ inputs.operation_id }}
+      CANDIDATE_CHANNEL: ${{ inputs.candidate_channel }}
+      EXPECTED_RELEASE_ID: ${{ inputs.release_id }}
+      EXPECTED_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+      EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+      EXPECTED_FOUNDATION_SHA: ${{ inputs.foundation_sha }}
+      PROMOTION_REASON: ${{ inputs.reason }}
+      ACCEPTANCE_QUERY: ${{ inputs.acceptance_query }}
+      CONTROL_PLANE_SHA: ${{ github.sha }}
+      ACTOR: ${{ github.actor }}
+      EVIDENCE_DIR: evidence
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install exact control plane
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          test "$(git rev-parse HEAD)" = "$CONTROL_PLANE_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+
+      - name: Validate production boundary and Oracle access
+        env:
+          ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in ORACLE_VM_SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL R2_BUCKET; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_FOUNDATION_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$CANDIDATE_CHANNEL" == candidate-source-* ]]
+          bash scripts/configure_oracle_ssh.sh
+          ssh oracle-knowledge "test -d '$ORACLE_VM_DEPLOY_PATH'"
+
+      - name: Promote verified candidate with CAS
+        id: promote
+        run: |
+          set -euo pipefail
+          knowledge-engine promote-release \
+            --operation-id "$OPERATION_ID" \
+            --candidate-channel "$CANDIDATE_CHANNEL" \
+            --release-id "$EXPECTED_RELEASE_ID" \
+            --manifest-sha256 "$EXPECTED_MANIFEST_SHA256" \
+            --source-sha "$EXPECTED_SOURCE_SHA" \
+            --foundation-sha "$EXPECTED_FOUNDATION_SHA" \
+            --control-plane-sha "$CONTROL_PLANE_SHA" \
+            --reason "$PROMOTION_REASON" \
+            --actor "$ACTOR" \
+            | tee "$EVIDENCE_DIR/promotion-result.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          payload = json.loads(Path('evidence/promotion-result.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
+              handle.write(f"previous_release_id={payload['previous_release_id']}\n")
+              handle.write(f"idempotent={str(payload['idempotent']).lower()}\n")
+          PY
+
+      - name: Refresh and verify promoted Oracle runtime
+        run: bash scripts/oracle_refresh_smoke.sh
+
+      - name: Automatically restore previous release after failed smoke
+        if: failure() && steps.promote.outcome == 'success'
+        env:
+          EXPECTED_RELEASE_ID: ${{ steps.promote.outputs.previous_release_id }}
+          EVIDENCE_DIR: evidence/automatic-rollback
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          knowledge-engine rollback-release \
+            --operation-id "$OPERATION_ID" \
+            --reason "automatic rollback after failed production smoke" \
+            --actor "$ACTOR" \
+            | tee "$EVIDENCE_DIR/rollback-result.json"
+          bash scripts/oracle_refresh_smoke.sh
+
+      - name: Write operation summary
+        if: always()
+        env:
+          PREVIOUS_RELEASE_ID: ${{ steps.promote.outputs.previous_release_id }}
+          IDEMPOTENT: ${{ steps.promote.outputs.idempotent }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          payload = {
+              'operation_id': os.environ['OPERATION_ID'],
+              'actor': os.environ['ACTOR'],
+              'reason': os.environ['PROMOTION_REASON'],
+              'control_plane_sha': os.environ['CONTROL_PLANE_SHA'],
+              'source_sha': os.environ['EXPECTED_SOURCE_SHA'],
+              'foundation_sha': os.environ['EXPECTED_FOUNDATION_SHA'],
+              'candidate_channel': os.environ['CANDIDATE_CHANNEL'],
+              'previous_release_id': os.environ.get('PREVIOUS_RELEASE_ID'),
+              'release_id': os.environ['EXPECTED_RELEASE_ID'],
+              'manifest_sha256': os.environ['EXPECTED_MANIFEST_SHA256'],
+              'idempotent': os.environ.get('IDEMPOTENT'),
+              'run_url': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }
+          Path('evidence/operation-summary.json').write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Upload promotion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-promotion-${{ inputs.operation_id }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
