@@ -26,6 +26,7 @@ dev = [
 
 [project.scripts]
 knowledge-engine = "knowledge_engine.cli:main"
+knowledge-intake = "knowledge_engine.intake_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]
