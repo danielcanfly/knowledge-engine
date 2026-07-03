@@ -18,13 +18,22 @@ def validate_runtime_evidence(
         "channel": "production",
         "release_id": expected_release_id,
     }
-    if expected_manifest_sha256 is not None:
-        expected_health["manifest_sha256"] = expected_manifest_sha256
     for key, expected in expected_health.items():
         if health.get(key) != expected:
             raise IntegrityError(
                 f"health {key} mismatch: expected {expected!r}, got {health.get(key)!r}"
             )
+
+    health_manifest = health.get("manifest_sha256")
+    if (
+        expected_manifest_sha256 is not None
+        and health_manifest is not None
+        and health_manifest != expected_manifest_sha256
+    ):
+        raise IntegrityError(
+            "health manifest_sha256 mismatch: "
+            f"expected {expected_manifest_sha256!r}, got {health_manifest!r}"
+        )
 
     if internal.get("status") != "answered":
         raise IntegrityError("internal query did not answer")
