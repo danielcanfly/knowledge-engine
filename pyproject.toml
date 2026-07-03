@@ -26,6 +26,7 @@ dev = [
 
 [project.scripts]
 knowledge-engine = "knowledge_engine.cli:main"
+knowledge-intake = "knowledge_engine.intake_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]
@@ -44,3 +45,4 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/knowledge_engine/api.py" = ["B008"]
+"src/knowledge_engine/intake.py" = ["UP012"]
