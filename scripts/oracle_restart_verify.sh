@@ -3,6 +3,7 @@ set -euo pipefail
 
 : "${ORACLE_VM_DEPLOY_PATH:?ORACLE_VM_DEPLOY_PATH is required}"
 : "${EXPECTED_RELEASE_ID:?EXPECTED_RELEASE_ID is required}"
+: "${EXPECTED_MANIFEST_SHA256:?EXPECTED_MANIFEST_SHA256 is required}"
 
 EVIDENCE_DIR="${EVIDENCE_DIR:-evidence}"
 mkdir -p "$EVIDENCE_DIR"
@@ -14,7 +15,10 @@ for attempt in $(seq 1 30); do
   if ssh oracle-knowledge \
     "curl --fail --silent http://127.0.0.1:8080/v1/health" \
     > "$EVIDENCE_DIR/oracle-health.json"; then
-    if python - "$EVIDENCE_DIR/oracle-health.json" "$EXPECTED_RELEASE_ID" <<'PY'
+    if python - \
+      "$EVIDENCE_DIR/oracle-health.json" \
+      "$EXPECTED_RELEASE_ID" \
+      "$EXPECTED_MANIFEST_SHA256" <<'PY'
 import json
 import sys
 
@@ -23,6 +27,7 @@ expected = {
     "status": "healthy",
     "channel": "production",
     "release_id": sys.argv[2],
+    "manifest_sha256": sys.argv[3],
 }
 raise SystemExit(0 if all(payload.get(k) == v for k, v in expected.items()) else 1)
 PY
