@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -48,55 +49,110 @@ class Runtime:
         with self._lock:
             return self._active
 
-    def refresh(self) -> ActiveRelease:
+    def refresh(
+        self,
+        *,
+        expected_release_id: str | None = None,
+        expected_manifest_sha256: str | None = None,
+    ) -> ActiveRelease:
         pointer_key = f"channels/{self.channel}.json"
         pointer_data = self.store.get(pointer_key)
-        pointer = json.loads(pointer_data)
-        manifest_data = self.store.get(pointer["manifest_key"])
-        actual_manifest_sha = sha256_bytes(manifest_data)
-        if actual_manifest_sha != pointer["manifest_sha256"]:
-            raise IntegrityError("channel manifest hash mismatch")
-        manifest = json.loads(manifest_data)
-        if manifest.get("release_id") != pointer.get("release_id"):
-            raise IntegrityError("channel and manifest release IDs differ")
-        release_cache = self.cache_dir / manifest["release_id"]
-        staging_cache = self.cache_dir / f".{manifest['release_id']}.staging"
-        if staging_cache.exists():
-            import shutil
+        try:
+            pointer = json.loads(pointer_data)
+        except json.JSONDecodeError as exc:
+            raise IntegrityError("channel pointer is invalid JSON") from exc
+        if not isinstance(pointer, dict):
+            raise IntegrityError("channel pointer must be a JSON object")
 
+        release_id = pointer.get("release_id")
+        manifest_key = pointer.get("manifest_key")
+        manifest_sha256 = pointer.get("manifest_sha256")
+        identity = (release_id, manifest_key, manifest_sha256)
+        if not all(isinstance(item, str) and item for item in identity):
+            raise IntegrityError("channel pointer is missing release identity")
+        if expected_release_id is not None and release_id != expected_release_id:
+            raise IntegrityError(
+                f"expected release {expected_release_id}, channel points to {release_id}"
+            )
+        if (
+            expected_manifest_sha256 is not None
+            and manifest_sha256 != expected_manifest_sha256
+        ):
+            raise IntegrityError("channel manifest hash does not match expected identity")
+
+        manifest_data = self.store.get(manifest_key)
+        actual_manifest_sha = sha256_bytes(manifest_data)
+        if actual_manifest_sha != manifest_sha256:
+            raise IntegrityError("channel manifest hash mismatch")
+        try:
+            manifest = json.loads(manifest_data)
+        except json.JSONDecodeError as exc:
+            raise IntegrityError("release manifest is invalid JSON") from exc
+        if manifest.get("release_id") != release_id:
+            raise IntegrityError("channel and manifest release IDs differ")
+
+        release_cache = self.cache_dir / release_id
+        staging_cache = self.cache_dir / f".{release_id}.staging"
+        if staging_cache.exists():
             shutil.rmtree(staging_cache)
         staging_cache.mkdir(parents=True)
-        for artifact in manifest["artifacts"]:
-            data = self.store.get(artifact["key"])
-            if len(data) != artifact["bytes"] or sha256_bytes(data) != artifact["sha256"]:
-                raise IntegrityError(f"artifact integrity failure: {artifact['key']}")
-            relative = artifact["key"].split(
-                f"releases/{manifest['release_id']}/", 1
-            )[1]
-            destination = staging_cache / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(data)
-        if release_cache.exists():
-            import shutil
+        try:
+            artifacts = manifest.get("artifacts")
+            if not isinstance(artifacts, list):
+                raise IntegrityError("release manifest artifacts must be a list")
+            for artifact in artifacts:
+                if not isinstance(artifact, dict):
+                    raise IntegrityError("release artifact entry must be an object")
+                key = artifact.get("key")
+                if not isinstance(key, str) or not key:
+                    raise IntegrityError("release artifact key is missing")
+                data = self.store.get(key)
+                if len(data) != artifact.get("bytes") or sha256_bytes(data) != artifact.get(
+                    "sha256"
+                ):
+                    raise IntegrityError(f"artifact integrity failure: {key}")
+                prefix = f"releases/{release_id}/"
+                if not key.startswith(prefix):
+                    raise IntegrityError(f"artifact key escapes release prefix: {key}")
+                relative = key[len(prefix) :]
+                destination = (staging_cache / relative).resolve()
+                try:
+                    destination.relative_to(staging_cache.resolve())
+                except ValueError as exc:
+                    raise IntegrityError(f"unsafe artifact path: {key}") from exc
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(data)
 
-            shutil.rmtree(release_cache)
-        staging_cache.replace(release_cache)
-        lexical_path = release_cache / "artifacts/lexical-index.json"
-        provenance_path = release_cache / "artifacts/provenance.json"
-        active = ActiveRelease(
-            release_id=manifest["release_id"],
-            manifest_sha256=actual_manifest_sha,
-            loaded_at=datetime.now(UTC)
-            .replace(microsecond=0)
-            .isoformat()
-            .replace("+00:00", "Z"),
-            manifest=manifest,
-            lexical_index=json.loads(lexical_path.read_text(encoding="utf-8")),
-            provenance=json.loads(provenance_path.read_text(encoding="utf-8")),
-        )
-        with self._lock:
-            self._active = active
-        return active
+            pointer_after = self.store.get(pointer_key)
+            if pointer_after != pointer_data:
+                raise IntegrityError("channel pointer changed during refresh")
+
+            lexical_path = staging_cache / "artifacts/lexical-index.json"
+            provenance_path = staging_cache / "artifacts/provenance.json"
+            lexical_index = json.loads(lexical_path.read_text(encoding="utf-8"))
+            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+
+            if release_cache.exists():
+                shutil.rmtree(release_cache)
+            staging_cache.replace(release_cache)
+            active = ActiveRelease(
+                release_id=release_id,
+                manifest_sha256=actual_manifest_sha,
+                loaded_at=datetime.now(UTC)
+                .replace(microsecond=0)
+                .isoformat()
+                .replace("+00:00", "Z"),
+                manifest=manifest,
+                lexical_index=lexical_index,
+                provenance=provenance,
+            )
+            with self._lock:
+                self._active = active
+            return active
+        except Exception:
+            if staging_cache.exists():
+                shutil.rmtree(staging_cache)
+            raise
 
     def ensure_loaded(self) -> ActiveRelease:
         active = self.active
