@@ -1,0 +1,226 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from knowledge_engine.errors import IntegrityError, ReleaseConflictError
+from knowledge_engine.promotion import (
+    PromotionRequest,
+    promote_release,
+    rollback_release,
+)
+from knowledge_engine.storage import FileObjectStore, sha256_bytes
+
+SOURCE_SHA = "a" * 40
+FOUNDATION_SHA = "d" * 40
+CONTROL_PLANE_SHA = "f" * 40
+RELEASE_ID = "20260703T030000Z-123456789abc"
+CHANNEL = f"candidate-source-{SOURCE_SHA}"
+
+
+def _put_json(store: FileObjectStore, key: str, payload: dict) -> bytes:
+    data = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode()
+    store.put(
+        key,
+        data,
+        content_type="application/json",
+        sha256=sha256_bytes(data),
+        only_if_absent=True,
+    )
+    return data
+
+
+def _store(tmp_path: Path) -> tuple[FileObjectStore, bytes, str]:
+    store = FileObjectStore(tmp_path / "store")
+    manifest_key = f"releases/{RELEASE_ID}/manifest.json"
+    manifest = {
+        "schema_version": "1.0",
+        "release_id": RELEASE_ID,
+        "release_ready": True,
+        "quality": {"overall": "passed"},
+        "source": {
+            "repository": "danielcanfly/knowledge-source",
+            "commit_sha": SOURCE_SHA,
+            "foundation_commit_sha": FOUNDATION_SHA,
+            "dirty": False,
+        },
+    }
+    manifest_bytes = _put_json(store, manifest_key, manifest)
+    manifest_sha = sha256_bytes(manifest_bytes)
+    _put_json(
+        store,
+        f"channels/{CHANNEL}.json",
+        {
+            "schema_version": "1.0",
+            "channel": CHANNEL,
+            "release_id": RELEASE_ID,
+            "manifest_key": manifest_key,
+            "manifest_sha256": manifest_sha,
+            "promoted_at": "2026-07-03T03:00:00Z",
+        },
+    )
+    production_bytes = (
+        b'{\n  "schema_version": "1.0",\n  "channel": "production",\n'
+        b'  "release_id": "stable-release",\n'
+        b'  "manifest_key": "releases/stable-release/manifest.json",\n'
+        b'  "manifest_sha256": "stable-manifest",\n'
+        b'  "promoted_at": "2026-07-02T07:20:00Z"\n}\n'
+    )
+    store.put(
+        "channels/production.json",
+        production_bytes,
+        content_type="application/json",
+        sha256=sha256_bytes(production_bytes),
+        only_if_absent=True,
+    )
+    return store, production_bytes, manifest_sha
+
+
+def _request(manifest_sha: str, operation_id: str = "promote-m4-test-001") -> PromotionRequest:
+    return PromotionRequest(
+        operation_id=operation_id,
+        candidate_channel=CHANNEL,
+        expected_release_id=RELEASE_ID,
+        expected_manifest_sha256=manifest_sha,
+        expected_source_repository="danielcanfly/knowledge-source",
+        expected_source_sha=SOURCE_SHA,
+        expected_foundation_sha=FOUNDATION_SHA,
+        control_plane_sha=CONTROL_PLANE_SHA,
+        reason="M4 acceptance",
+        actor="github-actions",
+    )
+
+
+def test_promotion_is_idempotent_and_creates_immutable_evidence(tmp_path: Path) -> None:
+    store, _, manifest_sha = _store(tmp_path)
+    request = _request(manifest_sha)
+
+    first = promote_release(
+        store=store,
+        request=request,
+        promoted_at="2026-07-03T03:10:00Z",
+    )
+    second = promote_release(
+        store=store,
+        request=request,
+        promoted_at="2026-07-03T03:11:00Z",
+    )
+
+    assert first.status == "promoted"
+    assert first.idempotent is False
+    assert second.status == "promoted"
+    assert second.idempotent is True
+    assert second.release_id == RELEASE_ID
+    current = json.loads(store.get("channels/production.json"))
+    assert current["release_id"] == RELEASE_ID
+    assert current["promotion_id"] == request.operation_id
+    assert store.head(first.intent_key) is not None
+    assert store.head(first.receipt_key) is not None
+
+
+def test_rollback_restores_exact_previous_pointer_bytes(tmp_path: Path) -> None:
+    store, original, manifest_sha = _store(tmp_path)
+    request = _request(manifest_sha)
+    promote_release(store=store, request=request, promoted_at="2026-07-03T03:10:00Z")
+
+    first = rollback_release(
+        store=store,
+        operation_id=request.operation_id,
+        reason="smoke check failed",
+        actor="github-actions",
+    )
+    second = rollback_release(
+        store=store,
+        operation_id=request.operation_id,
+        reason="smoke check failed",
+        actor="github-actions",
+    )
+
+    assert first.idempotent is False
+    assert second.idempotent is True
+    assert first.restored_release_id == "stable-release"
+    assert store.get("channels/production.json") == original
+
+
+def test_second_operation_cannot_overwrite_newer_production(tmp_path: Path) -> None:
+    store, _, manifest_sha = _store(tmp_path)
+    first = _request(manifest_sha, "promote-m4-first")
+    second = _request(manifest_sha, "promote-m4-second")
+
+    promote_release(store=store, request=first, promoted_at="2026-07-03T03:10:00Z")
+    result = promote_release(
+        store=store,
+        request=second,
+        promoted_at="2026-07-03T03:11:00Z",
+    )
+
+    assert result.idempotent is False
+    with pytest.raises(ReleaseConflictError, match="no longer matches"):
+        rollback_release(
+            store=store,
+            operation_id=first.operation_id,
+            reason="stale rollback",
+            actor="github-actions",
+        )
+
+
+def test_operation_id_collision_is_rejected(tmp_path: Path) -> None:
+    store, _, manifest_sha = _store(tmp_path)
+    first = _request(manifest_sha)
+    promote_release(store=store, request=first, promoted_at="2026-07-03T03:10:00Z")
+    changed = PromotionRequest(
+        **{
+            **first.to_dict(),
+            "reason": "different request",
+        }
+    )
+
+    with pytest.raises(ReleaseConflictError, match="different request"):
+        promote_release(
+            store=store,
+            request=changed,
+            promoted_at="2026-07-03T03:12:00Z",
+        )
+
+
+def test_candidate_source_mismatch_is_rejected(tmp_path: Path) -> None:
+    store, _, manifest_sha = _store(tmp_path)
+    request = PromotionRequest(
+        **{
+            **_request(manifest_sha).to_dict(),
+            "expected_source_sha": "b" * 40,
+        }
+    )
+
+    with pytest.raises(IntegrityError, match="commit_sha mismatch"):
+        promote_release(store=store, request=request)
+
+
+def test_rollback_refuses_unrelated_current_pointer(tmp_path: Path) -> None:
+    store, _, manifest_sha = _store(tmp_path)
+    request = _request(manifest_sha)
+    promote_release(store=store, request=request, promoted_at="2026-07-03T03:10:00Z")
+    current = store.head("channels/production.json")
+    assert current is not None
+    unrelated = _put_json(
+        FileObjectStore(tmp_path / "unrelated"),
+        "pointer.json",
+        {"channel": "production", "release_id": "unrelated"},
+    )
+    store.put(
+        "channels/production.json",
+        unrelated,
+        content_type="application/json",
+        sha256=sha256_bytes(unrelated),
+        expected_etag=current.etag,
+    )
+
+    with pytest.raises(ReleaseConflictError, match="no longer matches"):
+        rollback_release(
+            store=store,
+            operation_id=request.operation_id,
+            reason="unsafe",
+            actor="github-actions",
+        )
