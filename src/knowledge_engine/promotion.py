@@ -12,6 +12,8 @@ from .errors import IntegrityError, ReleaseConflictError
 from .storage import ObjectStore, sha256_bytes
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+RELEASE_ID_RE = re.compile(r"^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$")
 OPERATION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{7,119}$")
 
 
@@ -54,6 +56,16 @@ def _decode_pointer(intent: dict[str, Any], field: str) -> bytes:
 def _validate_sha(value: str, label: str) -> None:
     if not SHA_RE.fullmatch(value):
         raise IntegrityError(f"{label} must be an exact lowercase 40-character SHA")
+
+
+def _validate_sha256(value: str, label: str) -> None:
+    if not SHA256_RE.fullmatch(value):
+        raise IntegrityError(f"{label} must be lowercase SHA-256")
+
+
+def _validate_release_id(value: str, label: str) -> None:
+    if not RELEASE_ID_RE.fullmatch(value):
+        raise IntegrityError(f"{label} must be an immutable release ID")
 
 
 def _validate_fields(
@@ -106,7 +118,10 @@ class PromotionRequest:
     expected_manifest_sha256: str
     expected_source_repository: str
     expected_source_sha: str
+    expected_builder_sha: str
     expected_foundation_sha: str
+    expected_previous_release_id: str
+    expected_previous_manifest_sha256: str
     control_plane_sha: str
     reason: str
     actor: str
@@ -118,17 +133,27 @@ class PromotionRequest:
             raise IntegrityError("candidate channel must start with candidate-source-")
         if self.candidate_channel == "production":
             raise IntegrityError("candidate channel cannot be production")
-        if not self.expected_release_id:
-            raise IntegrityError("expected_release_id is required")
-        if not re.fullmatch(r"[0-9a-f]{64}", self.expected_manifest_sha256):
-            raise IntegrityError("expected_manifest_sha256 must be lowercase SHA-256")
+        _validate_release_id(self.expected_release_id, "expected_release_id")
+        _validate_sha256(
+            self.expected_manifest_sha256,
+            "expected_manifest_sha256",
+        )
         if self.expected_source_repository != "danielcanfly/knowledge-source":
             raise IntegrityError("unexpected source repository")
         _validate_sha(self.expected_source_sha, "expected_source_sha")
+        _validate_sha(self.expected_builder_sha, "expected_builder_sha")
         _validate_sha(self.expected_foundation_sha, "expected_foundation_sha")
+        _validate_release_id(
+            self.expected_previous_release_id,
+            "expected_previous_release_id",
+        )
+        _validate_sha256(
+            self.expected_previous_manifest_sha256,
+            "expected_previous_manifest_sha256",
+        )
         _validate_sha(self.control_plane_sha, "control_plane_sha")
-        if not self.reason.strip():
-            raise IntegrityError("promotion reason is required")
+        if len(self.reason.strip()) < 8:
+            raise IntegrityError("promotion reason must contain at least 8 characters")
         if not self.actor.strip():
             raise IntegrityError("promotion actor is required")
 
@@ -142,9 +167,11 @@ class PromotionResult:
     status: str
     idempotent: bool
     previous_release_id: str
+    previous_manifest_sha256: str
     release_id: str
     manifest_sha256: str
     source_sha: str
+    builder_sha: str
     foundation_sha: str
     control_plane_sha: str
     production_pointer_sha256: str
@@ -161,6 +188,7 @@ class RollbackResult:
     status: str
     idempotent: bool
     restored_release_id: str
+    restored_manifest_sha256: str
     replaced_release_id: str
     production_pointer_sha256: str
     receipt_key: str
@@ -218,6 +246,15 @@ def _validate_candidate(
                 f"candidate source {key} mismatch: "
                 f"expected {expected!r}, got {source.get(key)!r}"
             )
+    builder = manifest.get("builder")
+    if not isinstance(builder, dict):
+        raise IntegrityError("candidate manifest builder metadata is missing")
+    if builder.get("git_sha") != request.expected_builder_sha:
+        raise IntegrityError(
+            "candidate builder git_sha mismatch: "
+            f"expected {request.expected_builder_sha!r}, "
+            f"got {builder.get('git_sha')!r}"
+        )
     return candidate
 
 
@@ -253,6 +290,7 @@ def _load_or_create_intent(
         "previous_pointer_b64": base64.b64encode(production_bytes).decode("ascii"),
         "previous_pointer_sha256": sha256_bytes(production_bytes),
         "previous_release_id": production.get("release_id"),
+        "previous_manifest_sha256": production.get("manifest_sha256"),
         "target_pointer_b64": base64.b64encode(target_bytes).decode("ascii"),
         "target_pointer_sha256": sha256_bytes(target_bytes),
         "target_release_id": target["release_id"],
@@ -283,6 +321,17 @@ def promote_release(
         raise IntegrityError("production pointer does not exist")
     production_bytes, production = _read_json(store, production_key)
 
+    intent_key = f"{_operation_prefix(request.operation_id)}/intent.json"
+    intent_exists = store.head(intent_key) is not None
+    if not intent_exists:
+        if production.get("release_id") != request.expected_previous_release_id:
+            raise ReleaseConflictError("production release precondition failed")
+        if (
+            production.get("manifest_sha256")
+            != request.expected_previous_manifest_sha256
+        ):
+            raise ReleaseConflictError("production manifest precondition failed")
+
     intent_key, intent, reused_intent = _load_or_create_intent(
         store=store,
         request=request,
@@ -291,6 +340,14 @@ def promote_release(
         candidate=candidate,
         promoted_at=promoted_at or _utc_now(),
     )
+    if intent.get("previous_release_id") != request.expected_previous_release_id:
+        raise ReleaseConflictError("promotion intent previous release mismatch")
+    if (
+        intent.get("previous_manifest_sha256")
+        != request.expected_previous_manifest_sha256
+    ):
+        raise ReleaseConflictError("promotion intent previous manifest mismatch")
+
     previous_bytes = _decode_pointer(intent, "previous_pointer_b64")
     target_bytes = _decode_pointer(intent, "target_pointer_b64")
     if sha256_bytes(previous_bytes) != intent.get("previous_pointer_sha256"):
@@ -330,9 +387,11 @@ def promote_release(
             "status": "promoted",
             "intent_key": intent_key,
             "previous_release_id": intent["previous_release_id"],
+            "previous_manifest_sha256": intent["previous_manifest_sha256"],
             "release_id": intent["target_release_id"],
             "manifest_sha256": request.expected_manifest_sha256,
             "source_sha": request.expected_source_sha,
+            "builder_sha": request.expected_builder_sha,
             "foundation_sha": request.expected_foundation_sha,
             "control_plane_sha": request.control_plane_sha,
             "production_pointer_sha256": sha256_bytes(target_bytes),
@@ -350,9 +409,11 @@ def promote_release(
         status="promoted",
         idempotent=idempotent or reused_receipt,
         previous_release_id=str(receipt["previous_release_id"]),
+        previous_manifest_sha256=str(receipt["previous_manifest_sha256"]),
         release_id=str(receipt["release_id"]),
         manifest_sha256=str(receipt["manifest_sha256"]),
         source_sha=str(receipt["source_sha"]),
+        builder_sha=str(receipt["builder_sha"]),
         foundation_sha=str(receipt["foundation_sha"]),
         control_plane_sha=str(receipt["control_plane_sha"]),
         production_pointer_sha256=str(receipt["production_pointer_sha256"]),
@@ -404,6 +465,16 @@ def rollback_release(
     if store.get(key) != previous_bytes:
         raise IntegrityError("production pointer verification failed after rollback")
 
+    try:
+        previous_pointer = json.loads(previous_bytes)
+    except json.JSONDecodeError as exc:
+        raise IntegrityError("promotion intent previous pointer is invalid JSON") from exc
+    if not isinstance(previous_pointer, dict):
+        raise IntegrityError("promotion intent previous pointer must be an object")
+    restored_manifest_sha256 = previous_pointer.get("manifest_sha256")
+    if not isinstance(restored_manifest_sha256, str):
+        raise IntegrityError("previous pointer is missing manifest_sha256")
+
     receipt_key = f"{prefix}/rollback-receipt.json"
     receipt, reused_receipt = _write_or_load_record(
         store=store,
@@ -415,6 +486,7 @@ def rollback_release(
             "reason": reason,
             "actor": actor,
             "restored_release_id": intent["previous_release_id"],
+            "restored_manifest_sha256": restored_manifest_sha256,
             "replaced_release_id": intent["target_release_id"],
             "production_pointer_sha256": sha256_bytes(previous_bytes),
             "completed_at": _utc_now(),
@@ -423,6 +495,7 @@ def rollback_release(
             "operation_id": operation_id,
             "status": "rolled_back",
             "restored_release_id": intent["previous_release_id"],
+            "restored_manifest_sha256": restored_manifest_sha256,
             "replaced_release_id": intent["target_release_id"],
             "production_pointer_sha256": sha256_bytes(previous_bytes),
         },
@@ -432,6 +505,7 @@ def rollback_release(
         status="rolled_back",
         idempotent=idempotent or reused_receipt,
         restored_release_id=str(receipt["restored_release_id"]),
+        restored_manifest_sha256=str(receipt["restored_manifest_sha256"]),
         replaced_release_id=str(receipt["replaced_release_id"]),
         production_pointer_sha256=str(receipt["production_pointer_sha256"]),
         receipt_key=receipt_key,
