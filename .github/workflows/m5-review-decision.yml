@@ -1,0 +1,217 @@
+name: M5 Review Decision Package
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m5-review-decision.yml'
+      - 'review_decisions/**'
+      - 'src/knowledge_engine/review.py'
+      - 'src/knowledge_engine/review_cli.py'
+  workflow_dispatch:
+    inputs:
+      decision_spec:
+        description: Immutable review decision specification path
+        required: true
+        default: review_decisions/batch_agent_architecture_six_dimensions_v1.approved.json
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m5-review-decision-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+      DECISION_SPEC: ${{ inputs.decision_spec || 'review_decisions/batch_agent_architecture_six_dimensions_v1.approved.json' }}
+    steps:
+      - name: Check out exact Engine revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate decision boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          printf '%s\n' 'M5 review decision package started' > evidence/job-status.txt
+          for name in SOURCE_READ_TOKEN R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT_URL; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          test -f "$DECISION_SPEC"
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          payload = json.loads(Path(os.environ['DECISION_SPEC']).read_text(encoding='utf-8'))
+          if payload.get('schema_version') != '1.0':
+              raise SystemExit('decision schema_version must be 1.0')
+          required_text = [
+              'batch_id',
+              'resolution_id',
+              'decision',
+              'reviewer',
+              'reviewed_at',
+              'notes',
+              'approved_audience',
+              'source_repository',
+              'source_commit_sha',
+              'package_version',
+              'package_actor',
+              'packaged_at',
+          ]
+          for key in required_text:
+              value = payload.get(key)
+              if not isinstance(value, str) or not value.strip():
+                  raise SystemExit(f'missing decision field: {key}')
+          if payload['decision'] != 'approved':
+              raise SystemExit('this workflow only packages approved decisions')
+          if payload['source_repository'] != 'danielcanfly/knowledge-source':
+              raise SystemExit('unexpected source repository')
+          if not re.fullmatch(r'[0-9a-f]{40}', payload['source_commit_sha']):
+              raise SystemExit('source_commit_sha must be exact lowercase SHA')
+          if payload['approved_audience'] not in {'public', 'internal', 'confidential', 'restricted'}:
+              raise SystemExit('approved_audience is invalid')
+          print(json.dumps({'status': 'valid', 'batch_id': payload['batch_id']}))
+          PY
+
+      - name: Read decision identities
+        id: decision
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(os.environ['DECISION_SPEC']).read_text(encoding='utf-8'))
+          outputs = {
+              'batch_id': payload['batch_id'],
+              'resolution_id': payload['resolution_id'],
+              'source_repository': payload['source_repository'],
+              'source_sha': payload['source_commit_sha'],
+          }
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
+              for key, value in outputs.items():
+                  handle.write(f'{key}={value}\n')
+          PY
+
+      - name: Check out exact private Source revision
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.decision.outputs.source_repository }}
+          ref: ${{ steps.decision.outputs.source_sha }}
+          token: ${{ secrets.SOURCE_READ_TOKEN }}
+          path: knowledge-source
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install exact Engine review harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          test "$(git rev-parse HEAD)" = '${{ github.sha }}'
+
+      - name: Record immutable approval and materialize Source package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          spec = json.loads(Path(os.environ['DECISION_SPEC']).read_text(encoding='utf-8'))
+          out = Path('evidence/review-decision')
+          out.mkdir(parents=True, exist_ok=True)
+          subprocess.run([
+              'knowledge-review', 'decide',
+              '--resolution-id', spec['resolution_id'],
+              '--decision', spec['decision'],
+              '--reviewer', spec['reviewer'],
+              '--reviewed-at', spec['reviewed_at'],
+              '--notes', spec['notes'],
+              '--approved-audience', spec['approved_audience'],
+              '--output-dir', str(out),
+          ], check=True)
+          decision = json.loads((out / 'decision-result.json').read_text(encoding='utf-8'))
+          pkg = Path('evidence/source-package')
+          pkg.mkdir(parents=True, exist_ok=True)
+          subprocess.run([
+              'knowledge-review', 'package',
+              '--decision-id', decision['decision_id'],
+              '--source-root', 'knowledge-source',
+              '--source-sha', spec['source_commit_sha'],
+              '--source-repository', spec['source_repository'],
+              '--package-version', spec['package_version'],
+              '--actor', spec['package_actor'],
+              '--packaged-at', spec['packaged_at'],
+              '--output-dir', str(pkg),
+          ], check=True)
+          summary = {
+              'schema_version': '1.0',
+              'batch_id': spec['batch_id'],
+              'status': 'source_package_ready',
+              'review_artifact_id': spec.get('review_artifact_id'),
+              'review_artifact_digest': spec.get('review_artifact_digest'),
+              'resolution_id': spec['resolution_id'],
+              'decision_id': decision['decision_id'],
+              'decision': decision['decision'],
+              'decision_idempotent': decision['idempotent'],
+              'source_package_permitted': decision['source_package_permitted'],
+              'source_repository': spec['source_repository'],
+              'source_commit_sha': spec['source_commit_sha'],
+          }
+          package = json.loads((pkg / 'package-result.json').read_text(encoding='utf-8'))
+          summary.update({
+              'package_id': package['package_id'],
+              'package_status': package['status'],
+              'package_action': package['action'],
+              'package_idempotent': package['idempotent'],
+              'source_file_count': package['source_file_count'],
+              'package_manifest_sha256': package['package_manifest_sha256'],
+              'direct_apply_permitted': package['direct_apply_permitted'],
+              'canonical_write_permitted': package['canonical_write_permitted'],
+              'github_write_permitted': False,
+              'production_write_permitted': False,
+          })
+          Path('evidence/package-summary.json').write_text(
+              json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+          PY
+          git -C knowledge-source status --porcelain | tee evidence/source-status.txt
+          test ! -s evidence/source-status.txt
+
+      - name: Upload approval and package evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m5-approved-package-${{ steps.decision.outputs.batch_id }}-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
