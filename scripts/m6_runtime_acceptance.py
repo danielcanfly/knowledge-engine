@@ -6,13 +6,20 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-
 PUBLIC_QUERY_1 = "What is the Knowledge Source governance boundary in Knowledge OS?"
-PUBLIC_QUERY_2 = "How should LLM agent architectures be reviewed across six engineering dimensions?"
-BOUNDARY_QUERY = "What candidate delivery controls are available for public users in Knowledge OS?"
-EXPECTED_CITATION_2 = "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/"
+PUBLIC_QUERY_2 = (
+    "How should LLM agent architectures be reviewed across six engineering dimensions?"
+)
+BOUNDARY_QUERY = (
+    "What candidate delivery controls are available for public users in Knowledge OS?"
+)
+EXPECTED_CITATION_2 = (
+    "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/"
+)
 EXPECTED_RELEASE_ID = "20260706T061437Z-bc48bf4810c0"
-EXPECTED_MANIFEST_SHA256 = "8eefb904d1eea0f6ca87b074c60edfe94c725bd76adb77961919b8d2bd4c8f96"
+EXPECTED_MANIFEST_SHA256 = (
+    "8eefb904d1eea0f6ca87b074c60edfe94c725bd76adb77961919b8d2bd4c8f96"
+)
 
 
 def _run_query(channel: str, query: str, audiences: str) -> dict[str, Any]:
@@ -38,7 +45,13 @@ def _run_query(channel: str, query: str, audiences: str) -> dict[str, Any]:
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    formatted = json.dumps(
+        payload,
+        indent=2,
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    path.write_text(formatted, encoding="utf-8")
 
 
 def _raw_fallback_used(payload: dict[str, Any]) -> bool:
@@ -65,6 +78,16 @@ def _require(condition: bool, message: str) -> None:
         raise SystemExit(message)
 
 
+def _verify_release_identity(name: str, payload: dict[str, Any]) -> None:
+    release_id, manifest_sha = _release_identity(payload)
+    _require(release_id == EXPECTED_RELEASE_ID, f"{name} release_id={release_id!r}")
+    _require(
+        manifest_sha == EXPECTED_MANIFEST_SHA256,
+        f"{name} manifest_sha256={manifest_sha!r}",
+    )
+    _require(not _raw_fallback_used(payload), f"{name} used raw fallback")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--channel", required=True)
@@ -84,16 +107,16 @@ def main() -> int:
     q2 = outputs["public_query_2"]
     boundary = outputs["boundary_query"]
 
-    for name, payload in [("public_query_1", q1), ("public_query_2", q2), ("boundary_query", boundary)]:
-        release_id, manifest_sha = _release_identity(payload)
-        _require(release_id == EXPECTED_RELEASE_ID, f"{name} release_id={release_id!r}")
-        _require(manifest_sha == EXPECTED_MANIFEST_SHA256, f"{name} manifest_sha256={manifest_sha!r}")
-        _require(not _raw_fallback_used(payload), f"{name} used raw fallback")
+    for name, payload in outputs.items():
+        _verify_release_identity(name, payload)
 
     q1_citations = _citations(q1)
     q2_citations = _citations(q2)
 
-    _require(q1.get("status") == "answered", f"public_query_1 status={q1.get('status')!r}")
+    _require(
+        q1.get("status") == "answered",
+        f"public_query_1 status={q1.get('status')!r}",
+    )
     _require(q1.get("results"), "public_query_1 returned no results")
     _require(q1_citations, "public_query_1 returned no citations")
     _require(
@@ -101,11 +124,20 @@ def main() -> int:
         f"public_query_1 citations did not include source-governance: {q1_citations!r}",
     )
 
-    _require(q2.get("status") == "answered", f"public_query_2 status={q2.get('status')!r}")
+    _require(
+        q2.get("status") == "answered",
+        f"public_query_2 status={q2.get('status')!r}",
+    )
     _require(q2.get("results"), "public_query_2 returned no results")
-    _require(EXPECTED_CITATION_2 in q2_citations, f"public_query_2 citations={q2_citations!r}")
+    _require(
+        EXPECTED_CITATION_2 in q2_citations,
+        f"public_query_2 citations={q2_citations!r}",
+    )
 
-    _require(boundary.get("status") == "not_found", f"boundary_query status={boundary.get('status')!r}")
+    _require(
+        boundary.get("status") == "not_found",
+        f"boundary_query status={boundary.get('status')!r}",
+    )
     _require(not boundary.get("results"), "boundary_query returned public results")
     _require(
         int(boundary.get("retrieval", {}).get("acl_filtered_count", 0)) >= 1,
@@ -130,7 +162,10 @@ def main() -> int:
             },
             "boundary_query": {
                 "status": boundary.get("status"),
-                "acl_filtered_count": boundary.get("retrieval", {}).get("acl_filtered_count"),
+                "acl_filtered_count": boundary.get(
+                    "retrieval",
+                    {},
+                ).get("acl_filtered_count"),
                 "raw_fallback_used": _raw_fallback_used(boundary),
             },
         },
