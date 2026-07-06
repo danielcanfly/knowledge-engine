@@ -1,9 +1,34 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 
-from scripts.replay_rollback_proof import run_replay_rollback_proof
+
+def _load_run_replay_rollback_proof() -> Callable[[Path, str], dict[str, Any]]:
+    module_path = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "replay_rollback_proof.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "replay_rollback_proof",
+        module_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load proof script: {module_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return cast(
+        Callable[[Path, str], dict[str, Any]],
+        module.run_replay_rollback_proof,
+    )
+
+
+run_replay_rollback_proof = _load_run_replay_rollback_proof()
 
 
 def test_replay_rollback_proof_writes_governed_evidence(tmp_path: Path) -> None:
