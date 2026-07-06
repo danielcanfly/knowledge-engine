@@ -1,12 +1,12 @@
 # M6-001 Batch Spec: LLM Wiki Foundation
 
-Status: `candidate planning complete / candidate build pending`
+Status: `candidate build evidence collected / runtime acceptance required`
 
 Parent tracker: `#42`
 
-Child slices: `#45`, `#56`, `#57`, `#59`
+Child slices: `#45`, `#56`, `#57`, `#59`, `#60`
 
-This is the first named M6 batch spec. It references reviewed Source paths, Source validation evidence, and candidate evidence planning. It does not edit Source, does not create a production request spec, and does not authorize production promotion.
+This is the first named M6 batch spec. It references reviewed Source paths, Source validation evidence, candidate evidence planning, and candidate build evidence. It does not edit Source, does not create a production request spec, and does not authorize production promotion.
 
 ## 1. Batch identity
 
@@ -19,8 +19,9 @@ This is the first named M6 batch spec. It references reviewed Source paths, Sour
 - Batch spec update issue: `#56`
 - Source validation evidence issue: `#57`
 - Candidate evidence planning issue: `#59`
+- Candidate build evidence issue: `#60`
 - Source PR: `not required yet / selected content already exists on Source main`
-- Related Engine PRs: `#54`, `#55`, `#56`, `#58`, `pending #59`
+- Related Engine PRs: `#54`, `#55`, `#56`, `#58`, `#59`, `pending #60`
 
 ## 2. Scope
 
@@ -59,7 +60,8 @@ This batch covers the first reviewed Source-backed slice for LLM Wiki / Knowledg
 - Source paths have been reviewed.
 - Source validation evidence has been recorded for the reviewed Source SHA.
 - Candidate evidence planning has locked query strings, citation mapping, boundary query, Builder / Foundation identity, and dispatch plan.
-- Candidate build evidence is still pending.
+- Candidate build evidence has been collected and passed.
+- Final runtime acceptance for M6.10 queries is still pending.
 - The batch must not rely on chat memory as evidence.
 
 ## 3. Source identity
@@ -107,12 +109,16 @@ If Builder or Foundation SHA changes before candidate build, M6.10 must be repea
 ## 5. Candidate identity
 
 - Candidate channel: `candidate-source-6a35f9f35e4c6c599a266710344f760c399d914d`
-- Candidate workflow run ID: `pending`
-- Candidate artifact ID: `pending`
-- Candidate artifact digest: `pending`
-- Candidate release ID: `pending`
-- Candidate manifest SHA-256: `pending`
-- Candidate quality overall: `pending`
+- Candidate workflow run ID: `28771769531`
+- Candidate artifact ID: `8101061363`
+- Candidate artifact digest: `sha256:ab824a8284a78f6e5c38d547aa89ba119beb2c53084640a40512f9bf0c13ca52`
+- Candidate release ID: `20260706T061437Z-bc48bf4810c0`
+- Candidate manifest SHA-256: `8eefb904d1eea0f6ca87b074c60edfe94c725bd76adb77961919b8d2bd4c8f96`
+- Candidate source snapshot SHA-256: `40fa745903096660150c75ca7fe0d272e90367428e72d9d8e6245bb2ab0cc4d8`
+- Candidate release tree SHA-256: `7b7cb7dabbc499df1228d6e2624ea998978cb3ecc618d025fa9b8694e528c261`
+- Candidate quality overall: `passed`
+- Reproducibility passed: `true`
+- Production pointer unchanged: `true`
 
 Candidate channel must be derived from the validated Source SHA.
 
@@ -176,7 +182,36 @@ Expected dispatch payload identity:
 - source_sha: `6a35f9f35e4c6c599a266710344f760c399d914d`
 - foundation_sha: `d12c7c416c950d743d4cd5e7964fd3c3bc0d9062`
 
-## 9. Production request spec plan
+## 9. Candidate build evidence
+
+Source dispatch:
+
+- Source dispatch run ID: 28771761112
+- Source dispatch job ID: 85306738884
+- Source dispatch conclusion: success
+- Source dispatch artifact ID: 8101049916
+- Source dispatch artifact digest: sha256:9b1af24f8d8e6e0378d8d4ed4fe25942e6bdac03b06ec684fdf19570a1abf91d
+- Source dispatch HTTP status: 204
+
+Engine candidate workflow:
+
+- Engine candidate run ID: 28771769531
+- Engine candidate conclusion: success
+- Candidate artifact ID: 8101061363
+- Candidate artifact digest: sha256:ab824a8284a78f6e5c38d547aa89ba119beb2c53084640a40512f9bf0c13ca52
+
+Built-in candidate gate:
+
+- internal status: answered
+- internal citation count: 1
+- public status: not_found
+- public ACL filtered count: 1
+
+Important limitation:
+
+- Built-in candidate gate evidence does not replace final runtime acceptance for the M6.10 public query set.
+
+## 10. Production request spec plan
 
 No production request spec exists yet.
 
@@ -193,7 +228,7 @@ Forbidden field:
 
 - `control_plane_sha` must not be committed in the request spec.
 
-## 10. Rollout assumptions
+## 11. Rollout assumptions
 
 - Current production release before promotion: `20260706T024200Z-19b86982de27`
 - Current production manifest before promotion: `8697f5ab6258d8545328fd32cea60b09c2c80aef4599611b0571a0553ea24a7e`
@@ -201,13 +236,13 @@ Forbidden field:
 - Rollback expected previous release: `20260706T024200Z-19b86982de27` unless production changes before M6-001
 - Rollback evidence required: `yes`
 
-## 11. Governance checklist
+## 12. Governance checklist
 
 - [x] Source paths are reviewed in Engine planning evidence.
 - [x] Source validation passed.
 - [x] Builder / Foundation rotation decision recorded.
-- [ ] Candidate identity is verified from candidate channel and manifest.
-- [ ] Candidate quality is `passed`.
+- [x] Candidate identity is verified from candidate channel and manifest.
+- [x] Candidate quality is `passed`.
 - [ ] Public query expected citation target is present.
 - [ ] Public raw fallback is `false`.
 - [ ] Boundary query passes if configured.
@@ -217,21 +252,22 @@ Forbidden field:
 - [ ] Automated ledger comment to `#30` is expected after production workflow success.
 - [ ] Replay / rollback proof remains green on `main`.
 
-## 12. Decision
+## 13. Decision
 
-- Batch spec status: `candidate planning complete / candidate build pending`
+- Batch spec status: `candidate build evidence collected / runtime acceptance required`
 - Reviewer: `pending`
 - Decision date: `pending`
-- Notes: `This spec records candidate planning inputs. It does not approve request-spec creation or production promotion.`
+- Notes: `This spec records candidate build evidence. It does not approve request-spec creation or production promotion.`
 
-## 13. Next required action
+## 14. Next required action
 
-Collect candidate build evidence:
+Collect runtime acceptance evidence:
 
-- Engine candidate workflow run ID
-- candidate artifact ID and digest
-- candidate release ID
-- candidate manifest SHA-256
-- candidate quality result
-- runtime acceptance artifacts for both public queries
-- boundary result artifact
+- final public query 1 result artifact
+- final public query 1 citation evidence
+- final public query 1 raw fallback flag
+- final public query 2 result artifact
+- final public query 2 citation evidence
+- final public query 2 raw fallback flag
+- final boundary query result artifact
+- final boundary raw fallback flag
