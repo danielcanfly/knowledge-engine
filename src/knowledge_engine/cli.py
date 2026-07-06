@@ -9,6 +9,11 @@ from .candidate import run_source_candidate_gate
 from .compiler import compile_release
 from .config import Settings
 from .promotion import PromotionRequest, promote_release, rollback_release
+from .promotion_request import (
+    load_promotion_request_spec,
+    write_github_env,
+    write_request_evidence,
+)
 from .publisher import publish_release
 from .runtime import Runtime
 from .source import build_source_release
@@ -87,6 +92,16 @@ def main() -> int:
     promote.add_argument("--actor", required=True)
     promote.add_argument("--promoted-at")
 
+    validate_promotion = commands.add_parser("validate-promotion-request")
+    validate_promotion.add_argument("--request-path", type=Path, required=True)
+    validate_promotion.add_argument("--control-plane-sha", required=True)
+    validate_promotion.add_argument("--github-env", type=Path)
+    validate_promotion.add_argument(
+        "--evidence-dir",
+        type=Path,
+        default=Path("evidence"),
+    )
+
     rollback = commands.add_parser("rollback-release")
     rollback.add_argument("--operation-id", required=True)
     rollback.add_argument("--reason", required=True)
@@ -102,6 +117,18 @@ def main() -> int:
     refresh.add_argument("--channel", default=None)
 
     args = parser.parse_args()
+
+    if args.command == "validate-promotion-request":
+        spec = load_promotion_request_spec(
+            request_path=args.request_path,
+            control_plane_sha=args.control_plane_sha,
+        )
+        result = write_request_evidence(spec=spec, evidence_dir=args.evidence_dir)
+        if args.github_env is not None:
+            write_github_env(args.github_env, spec.env())
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
     settings = Settings.from_env()
     store = create_object_store(settings)
 
