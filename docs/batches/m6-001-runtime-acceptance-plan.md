@@ -28,10 +28,12 @@ What is the Knowledge Source governance boundary in Knowledge OS?
 Expected:
 
 - status: `answered`
-- at least one citation
-- citation set includes the Source governance concept
+- result set includes concept ID `concepts/source-governance`
+- at least one citation is present
 - raw fallback: `false`
 - release identity matches candidate release ID and manifest SHA-256
+
+Rationale: Source provenance for `concepts/source-governance` cites `https://github.com/danielcanfly/knowledge-os-foundation`, so Q1 must not require the citation URI itself to contain the string `source-governance`.
 
 Public query 2:
 
