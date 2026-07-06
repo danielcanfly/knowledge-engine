@@ -10,6 +10,8 @@ from knowledge_engine.promotion import (
     PromotionRequest,
     promote_release,
     rollback_release,
+    verify_already_promoted,
+    verify_promotion_candidate,
 )
 from knowledge_engine.storage import FileObjectStore, sha256_bytes
 
@@ -134,6 +136,72 @@ def test_promotion_is_idempotent_and_creates_immutable_evidence(tmp_path: Path) 
     assert store.head(first.intent_key) is not None
     assert store.head(first.receipt_key) is not None
 
+
+
+def test_verify_promotion_candidate_checks_identity_without_writing(
+    tmp_path: Path,
+) -> None:
+    store, _, manifest_sha = _store(tmp_path)
+    request = _request(manifest_sha)
+
+    result = verify_promotion_candidate(store=store, request=request)
+
+    assert result.status == "candidate_verified"
+    assert result.candidate_channel == CHANNEL
+    assert result.release_id == RELEASE_ID
+    assert result.manifest_sha256 == manifest_sha
+    assert result.source_sha == SOURCE_SHA
+    assert result.builder_sha == BUILDER_SHA
+    assert result.foundation_sha == FOUNDATION_SHA
+    assert result.control_plane_sha == CONTROL_PLANE_SHA
+    assert store.head(f"operations/promotions/{request.operation_id}/intent.json") is None
+
+
+def test_verify_already_promoted_accepts_exact_target_with_new_runtime_request(
+    tmp_path: Path,
+) -> None:
+    store, _, manifest_sha = _store(tmp_path)
+    request = _request(manifest_sha)
+    promote_release(store=store, request=request, promoted_at="2026-07-03T03:10:00Z")
+    replay_request = PromotionRequest(
+        **{
+            **request.to_dict(),
+            "reason": "Reusable workflow replay after promotion is already target",
+            "control_plane_sha": "e" * 40,
+        }
+    )
+
+    result = verify_already_promoted(store=store, request=replay_request)
+
+    assert result.status == "already_promoted"
+    assert result.idempotent is True
+    assert result.release_id == RELEASE_ID
+    assert result.manifest_sha256 == manifest_sha
+    assert result.source_sha == SOURCE_SHA
+    assert result.builder_sha == BUILDER_SHA
+    assert result.foundation_sha == FOUNDATION_SHA
+    assert result.control_plane_sha == "e" * 40
+    assert result.production_pointer_sha256 == sha256_bytes(
+        store.get("channels/production.json")
+    )
+    assert result.intent_key == "not_written_for_already_promoted_replay"
+
+
+def test_verify_already_promoted_rejects_wrong_candidate_identity(
+    tmp_path: Path,
+) -> None:
+    store, _, manifest_sha = _store(tmp_path)
+    request = _request(manifest_sha)
+    promote_release(store=store, request=request, promoted_at="2026-07-03T03:10:00Z")
+    replay_request = PromotionRequest(
+        **{
+            **request.to_dict(),
+            "expected_builder_sha": "c" * 40,
+        }
+    )
+
+    with pytest.raises(IntegrityError, match="builder git_sha mismatch"):
+        verify_already_promoted(store=store, request=replay_request)
 
 def test_rollback_restores_exact_previous_pointer_bytes(tmp_path: Path) -> None:
     store, original, manifest_sha = _store(tmp_path)
