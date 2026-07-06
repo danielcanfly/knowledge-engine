@@ -1,0 +1,167 @@
+name: M5 Production Promotion
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m5-production-promotion.yml'
+      - 'production_promotions/m5-agent-architecture-6d-6254725c.json'
+  workflow_dispatch:
+    inputs:
+      request_spec:
+        description: Promotion request spec path
+        required: true
+        default: production_promotions/m5-agent-architecture-6d-6254725c.json
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m5-production-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      REQUEST_SPEC: ${{ inputs.request_spec || 'production_promotions/m5-agent-architecture-6d-6254725c.json' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact Engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Validate request and export fields
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test -f "$REQUEST_SPEC"
+          for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT_URL; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          spec_path = Path(os.environ['REQUEST_SPEC'])
+          payload = json.loads(spec_path.read_text(encoding='utf-8'))
+          expected = {
+              'schema_version': '1.0',
+              'operation_id': 'm5-agent-architecture-6d-6254725c-001',
+              'candidate_channel': 'candidate-source-6254725c38969e46e65aadcba13a8803b0d8a6a9',
+              'release_id': '20260706T024200Z-19b86982de27',
+              'manifest_sha256': '8697f5ab6258d8545328fd32cea60b09c2c80aef4599611b0571a0553ea24a7e',
+              'source_repository': 'danielcanfly/knowledge-source',
+              'source_sha': '6254725c38969e46e65aadcba13a8803b0d8a6a9',
+              'builder_sha': '1b55c68a441def01a5277c94b350efab1437459d',
+              'foundation_sha': 'd12c7c416c950d743d4cd5e7964fd3c3bc0d9062',
+              'expected_previous_release_id': '20260703T074814Z-1b18538bfbac',
+              'expected_previous_manifest_sha256': 'eab8d4191cba77e06e594d09bb48450635efd36e55e8accc14cec88e78e7de95',
+              'actor': 'danielcanfly',
+          }
+          for key, value in expected.items():
+              if payload.get(key) != value:
+                  raise SystemExit(f'{key} mismatch: expected {value!r}, got {payload.get(key)!r}')
+          if len(str(payload.get('reason', '')).strip()) < 8:
+              raise SystemExit('reason is required')
+          if not str(payload.get('post_promote_public_query', '')).strip():
+              raise SystemExit('post_promote_public_query is required')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              for key in [
+                  'operation_id', 'candidate_channel', 'release_id', 'manifest_sha256',
+                  'source_repository', 'source_sha', 'builder_sha', 'foundation_sha',
+                  'expected_previous_release_id', 'expected_previous_manifest_sha256',
+                  'reason', 'actor', 'post_promote_public_query'
+              ]:
+                  name = key.upper()
+                  value = str(payload[key]).replace('\n', ' ')
+                  env.write(f'{name}={value}\n')
+          Path('evidence/promotion-request.json').write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+      - name: Verify current production pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          knowledge-engine refresh --channel production | tee evidence/before-refresh.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          payload = json.loads(Path('evidence/before-refresh.json').read_text())
+          if payload['release_id'] != os.environ['EXPECTED_PREVIOUS_RELEASE_ID']:
+              raise SystemExit('previous release precondition failed')
+          if payload['manifest_sha256'] != os.environ['EXPECTED_PREVIOUS_MANIFEST_SHA256']:
+              raise SystemExit('previous manifest precondition failed')
+          PY
+      - name: Promote candidate to production
+        shell: bash
+        run: |
+          set -euo pipefail
+          knowledge-engine promote-release \
+            --operation-id "$OPERATION_ID" \
+            --candidate-channel "$CANDIDATE_CHANNEL" \
+            --release-id "$RELEASE_ID" \
+            --manifest-sha256 "$MANIFEST_SHA256" \
+            --source-repository "$SOURCE_REPOSITORY" \
+            --source-sha "$SOURCE_SHA" \
+            --builder-sha "$BUILDER_SHA" \
+            --foundation-sha "$FOUNDATION_SHA" \
+            --expected-previous-release-id "$EXPECTED_PREVIOUS_RELEASE_ID" \
+            --expected-previous-manifest-sha256 "$EXPECTED_PREVIOUS_MANIFEST_SHA256" \
+            --control-plane-sha "$GITHUB_SHA" \
+            --reason "$REASON" \
+            --actor "$ACTOR" \
+            | tee evidence/promotion-result.json
+      - name: Verify production runtime after promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          knowledge-engine refresh --channel production | tee evidence/after-refresh.json
+          knowledge-engine query \
+            --channel production \
+            --query "$POST_PROMOTE_PUBLIC_QUERY" \
+            --audiences public \
+            --limit 5 \
+            | tee evidence/post-promote-public-query.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          after = json.loads(Path('evidence/after-refresh.json').read_text())
+          if after['release_id'] != os.environ['RELEASE_ID']:
+              raise SystemExit('production release did not update')
+          if after['manifest_sha256'] != os.environ['MANIFEST_SHA256']:
+              raise SystemExit('production manifest did not update')
+          query = json.loads(Path('evidence/post-promote-public-query.json').read_text())
+          if query.get('status') != 'answered':
+              raise SystemExit('post promotion public query was not answered')
+          if len(query.get('results', [])) < 1:
+              raise SystemExit('post promotion public query returned no results')
+          if not query['results'][0].get('citations'):
+              raise SystemExit('post promotion query returned no citations')
+          print('M5_PRODUCTION_PROMOTION_PASSED')
+          PY
+      - name: Upload promotion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m5-production-promotion-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90

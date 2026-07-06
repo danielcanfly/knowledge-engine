@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "operation_id": "m5-agent-architecture-6d-6254725c-001",
+  "candidate_channel": "candidate-source-6254725c38969e46e65aadcba13a8803b0d8a6a9",
+  "release_id": "20260706T024200Z-19b86982de27",
+  "manifest_sha256": "8697f5ab6258d8545328fd32cea60b09c2c80aef4599611b0571a0553ea24a7e",
+  "source_repository": "danielcanfly/knowledge-source",
+  "source_sha": "6254725c38969e46e65aadcba13a8803b0d8a6a9",
+  "builder_sha": "1b55c68a441def01a5277c94b350efab1437459d",
+  "foundation_sha": "d12c7c416c950d743d4cd5e7964fd3c3bc0d9062",
+  "expected_previous_release_id": "20260703T074814Z-1b18538bfbac",
+  "expected_previous_manifest_sha256": "eab8d4191cba77e06e594d09bb48450635efd36e55e8accc14cec88e78e7de95",
+  "control_plane_sha": "1b55c68a441def01a5277c94b350efab1437459d",
+  "reason": "Promote the approved M5 six-dimensional agent architecture Source batch after successful candidate gate 28764515030.",
+  "actor": "danielcanfly",
+  "post_promote_public_query": "six-dimensional map of LLM agent architectures"
+}
