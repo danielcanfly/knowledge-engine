@@ -1,10 +1,10 @@
 # M6-001 Batch Spec: LLM Wiki Foundation
 
-Status: `candidate build evidence collected / runtime acceptance required`
+Status: `runtime acceptance workflow pending`
 
 Parent tracker: `#42`
 
-Child slices: `#45`, `#56`, `#57`, `#59`, `#60`
+Child slices: `#45`, `#56`, `#57`, `#59`, `#60`, `#62`
 
 This is the first named M6 batch spec. It references reviewed Source paths, Source validation evidence, candidate evidence planning, and candidate build evidence. It does not edit Source, does not create a production request spec, and does not authorize production promotion.
 
@@ -20,8 +20,9 @@ This is the first named M6 batch spec. It references reviewed Source paths, Sour
 - Source validation evidence issue: `#57`
 - Candidate evidence planning issue: `#59`
 - Candidate build evidence issue: `#60`
+- Runtime acceptance issue: `#62`
 - Source PR: `not required yet / selected content already exists on Source main`
-- Related Engine PRs: `#54`, `#55`, `#56`, `#58`, `#59`, `pending #60`
+- Related Engine PRs: `#54`, `#55`, `#56`, `#58`, `#59`, `#61`, `pending #62`
 
 ## 2. Scope
 
@@ -61,7 +62,7 @@ This batch covers the first reviewed Source-backed slice for LLM Wiki / Knowledg
 - Source validation evidence has been recorded for the reviewed Source SHA.
 - Candidate evidence planning has locked query strings, citation mapping, boundary query, Builder / Foundation identity, and dispatch plan.
 - Candidate build evidence has been collected and passed.
-- Final runtime acceptance for M6.10 queries is still pending.
+- Runtime acceptance workflow is prepared; final runtime artifacts are still pending.
 - The batch must not rely on chat memory as evidence.
 
 ## 3. Source identity
@@ -254,10 +255,10 @@ Forbidden field:
 
 ## 13. Decision
 
-- Batch spec status: `candidate build evidence collected / runtime acceptance required`
+- Batch spec status: `runtime acceptance workflow pending`
 - Reviewer: `pending`
 - Decision date: `pending`
-- Notes: `This spec records candidate build evidence. It does not approve request-spec creation or production promotion.`
+- Notes: `This spec records candidate build evidence and M6.12 runtime acceptance workflow planning. It does not approve request-spec creation or production promotion.`
 
 ## 14. Next required action
 

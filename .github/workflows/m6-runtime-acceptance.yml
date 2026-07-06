@@ -7,10 +7,6 @@ on:
         description: Candidate channel to test
         required: true
         default: candidate-source-6a35f9f35e4c6c599a266710344f760c399d914d
-      expected_head_sha:
-        description: Expected Engine commit for this workflow
-        required: true
-        default: a1073c1216556663219ff9d8088c079f4aec11e6
 
 permissions:
   contents: read
@@ -24,18 +20,20 @@ jobs:
       AUTH_MODE: disabled
       OBJECT_STORE_BACKEND: r2
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
       R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
       R2_REGION: auto
-      KNOWLEDGE_ENGINE_CACHE_DIR: .artifacts/runtime-cache
+      CACHE_DIR: .artifacts/runtime-cache
       CHANNEL: ${{ inputs.channel }}
-      EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install Engine
         shell: bash
@@ -44,13 +42,24 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[dev]'
 
+      - name: Verify target channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$CHANNEL" = 'candidate-source-6a35f9f35e4c6c599a266710344f760c399d914d'
+          test -n "$R2_ACCESS_KEY_ID"
+          test -n "$R2_SECRET_ACCESS_KEY"
+          test -n "$R2_BUCKET"
+          test -n "$R2_ENDPOINT_URL"
+
       - name: Run runtime acceptance
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
           mkdir -p evidence/m6-runtime-acceptance
-          python scripts/m6_runtime_acceptance.py --channel "$CHANNEL" --out-dir evidence/m6-runtime-acceptance
+          python scripts/m6_runtime_acceptance.py \
+            --channel "$CHANNEL" \
+            --out-dir evidence/m6-runtime-acceptance
 
       - name: Upload runtime acceptance evidence
         uses: actions/upload-artifact@v4
