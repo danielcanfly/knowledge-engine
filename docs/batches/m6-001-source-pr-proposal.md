@@ -1,22 +1,31 @@
 # M6-001 Source PR Proposal Draft
 
-Status: `proposal / no Source edit`
+Status: `proposal / reviewed paths available / no Source edit`
 
 Parent tracker: `#42`
 
-Child slice: `#49`
+Child slices: `#49`, `#55`
 
 Batch spec: `docs/batches/m6-001-llm-wiki-foundation-batch.md`
 
 Source selection plan: `docs/batches/m6-001-source-selection-plan.md`
 
-This proposal defines the intended future Source PR review surface for `m6-001-llm-wiki-foundation`. It does not edit `danielcanfly/knowledge-source`, does not approve Source content, does not run a candidate build, does not create a production request spec, and does not authorize production promotion.
+Candidate path review: `docs/batches/m6-001-candidate-source-paths-review.md`
 
-## 1. Repository inventory note
+This proposal defines the intended future Source PR review surface for `m6-001-llm-wiki-foundation`. It now includes reviewed Source paths from M6.6. It does not edit `danielcanfly/knowledge-source`, does not approve new Source content, does not run a candidate build, does not create a production request spec, and does not authorize production promotion.
 
-Engine-side GitHub search did not return concrete `danielcanfly/knowledge-source` file matches for the broad M6-001 keywords at proposal time. Therefore this proposal must not invent Source file paths.
+## 1. Inventory and path review status
 
-Exact Source file paths remain required before a real Source PR can be opened.
+M6.4 found no concrete Source paths through GitHub search, so M6.5 required local inventory. M6.6 then reviewed the inventory result.
+
+Reviewed Source identity:
+
+- Source repository: `danielcanfly/knowledge-source`
+- Source HEAD reviewed: `6a35f9f35e4c6c599a266710344f760c399d914d`
+- Inventory timestamp: `20260706T152049Z`
+- Inventory checksum: `375dfe63eaeae00e1aa5a350d98e60f43412f6bc19f15689279fd44ceca9eb57`
+- Path review PR: `#54`
+- Path review merge commit: `48410e213132dbbd062afb21b2cb4c95e4b399fb`
 
 ## 2. Proposed future Source PR title
 
@@ -24,7 +33,7 @@ Exact Source file paths remain required before a real Source PR can be opened.
 source: propose M6-001 LLM Wiki foundation source files
 ```
 
-The future Source PR must be opened in:
+The future Source PR, if needed, must be opened in:
 
 ```text
 danielcanfly/knowledge-source
@@ -32,41 +41,45 @@ danielcanfly/knowledge-source
 
 ## 3. Review surface
 
-The future Source PR must be the only review surface for canonical Source changes. This Engine proposal is only a planning artifact.
+The future Source PR remains the review surface for canonical Source changes. This Engine proposal is planning evidence and does not modify Source.
 
 A future Source PR must include:
 
 - exact file paths added or modified;
 - why each file belongs in M6-001;
-- whether each file is public, internal, or ACL-sensitive;
+- public / non-public classification for each file;
 - citation target for each public acceptance query;
-- ACL negative query if the content creates a boundary risk;
+- boundary-check plan when relevant;
 - confirmation that sensitive private material and raw chat transcripts are excluded;
 - expected Source validation workflow result.
 
 ## 4. Candidate Source families
 
-Candidate families for future review:
-
 | Candidate family | Proposal status | Notes |
 | --- | --- | --- |
-| LLM Wiki foundation notes | `candidate family only` | Requires exact Source file paths before review. |
-| Knowledge OS governance notes | `candidate family only` | Must avoid private operator-only implementation details. |
-| Production-RAG / agent architecture notes | `candidate family only` | Must map to citation-backed public Q&A. |
-| Operator glossary entries | `candidate family only` | Only include terms needed for public or governed runtime questions. |
-| Safe closeout-derived operational explanations | `candidate family only` | Must be curated, not raw chat transcript copy. |
+| LLM Wiki foundation notes | `reviewed paths available` | M6.6 reviewed exact paths from Source inventory. |
+| Knowledge OS governance notes | `reviewed paths available` | M6.6 identified public governance concept content. |
+| Production-RAG / agent architecture notes | `reviewed paths available` | M6.6 identified public six-dimensional agent architecture concept content. |
+| Operator glossary entries | `support only` | No primary glossary content selected yet. |
+| Safe closeout-derived operational explanations | `not selected` | No new curated Source file selected in this proposal. |
 
-No family above is approved Source content.
+No new Source content is approved by this proposal.
 
-## 5. Required candidate file table for future Source PR
+## 5. Reviewed candidate file table
 
-The future Source PR must fill this table. Until then, approved Source files remain `none`.
-
-| Source path | Change type | Candidate family | Inclusion rationale | Citation target | ACL risk | Decision |
+| Source path | Change type | Candidate family | Inclusion rationale | Citation target | Boundary risk | Decision |
 | --- | --- | --- | --- | --- | --- | --- |
-| `pending` | `pending` | `pending` | `pending` | `pending` | `pending` | `not approved` |
+| `bundle/concepts/six-dimensional-map-of-llm-agent-architectures.md` | existing | production-RAG / agent architecture notes | Public reviewed concept supporting six-dimensional review of LLM agent architectures. | `https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/` | low | include |
+| `bundle/concepts/source-governance.md` | existing | Knowledge OS governance notes | Public reviewed concept describing the Source boundary and candidate / production gate separation. | Source-backed target pending runtime mapping. | low | include |
+| `bundle/concepts/candidate-delivery-controls.md` | existing | Knowledge OS governance notes | Reviewed non-public concept useful as a fixture, not public content. | n/a for public acceptance | high if exposed publicly | fixture only |
+| `bundle/index.md` | existing | index support | Links reviewed bundle concepts. | Source-backed target pending runtime mapping. | low | support only |
+| `registry/sources.json` | existing | metadata | Confirms source metadata and public URL for the six-dimensional map concept. | metadata only | low | support only |
+| `registry/reviews.json` | existing | metadata | Confirms review decisions and audience classification. | metadata only | low | support only |
+| `provenance/six-dimensional-map-of-llm-agent-architectures.json` | existing | metadata | Supports provenance chain for the six-dimensional map concept. | metadata only | low | support only |
+| `provenance/source-governance.json` | existing | metadata | Supports provenance chain for the source governance concept. | metadata only | low | support only |
+| `README.md` | existing | repository guidance | Useful context but not primary concept content for M6-001. | n/a | low | support only |
 
-## 6. Inclusion rationale format
+## 6. Inclusion rationale format for any future Source PR
 
 For every proposed Source file, the Source PR must answer:
 
@@ -74,7 +87,7 @@ For every proposed Source file, the Source PR must answer:
 2. What stable fact or concept does this file provide?
 3. What citation target should appear in runtime results?
 4. What content was excluded and why?
-5. Does this file introduce any ACL-sensitive boundary?
+5. Does this file require a boundary check?
 
 ## 7. Exclusion checklist
 
@@ -83,71 +96,90 @@ Every proposed Source file must pass these checks:
 - [ ] No sensitive private material.
 - [ ] No private personal data or private account identifiers.
 - [ ] No raw chat transcript copied directly into canonical Source.
-- [ ] No operator-only runbook detail that should be hidden from public retrieval.
+- [ ] No operator-only runbook detail selected as public content.
 - [ ] No content that requires raw fallback to answer.
-- [ ] No content without a viable citation target.
-- [ ] No content that requires weakening Source review, candidate gate, production request spec, citation checks, ACL checks, replay, or rollback gates.
+- [ ] No content without a viable citation target or explicit blocker.
+- [ ] No content that requires weakening review, candidate, request-spec, citation, boundary, replay, rollback, or ledger gates.
 
 ## 8. Proposed public acceptance query refinement
 
-Current provisional query from the batch spec:
+Primary public query family:
 
 ```text
-what is the LLM Wiki foundation for Knowledge OS?
+what is the Knowledge Source governance boundary in Knowledge OS?
 ```
 
-The future Source PR may refine this query only after exact Source files are listed.
-
-The final public query must have:
+Expected result:
 
 - expected status: `answered`;
-- expected citation URL or Source-backed citation target: `required`;
+- expected citation target: `bundle/concepts/source-governance.md` or Source-backed runtime citation target;
 - raw fallback used: `false`.
 
-## 9. Proposed ACL negative query refinement
-
-Current provisional ACL negative query:
+Secondary public query family:
 
 ```text
-operator-only deployment phrase for LLM Wiki production pipeline
+how should LLM agent architectures be reviewed across six engineering dimensions?
 ```
 
-The future Source PR may refine this query if the selected Source files create a better boundary test.
+Expected result:
 
-The final ACL negative query must have:
+- expected status: `answered`;
+- expected citation target: `https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/`;
+- raw fallback used: `false`.
 
-- expected status: `not_found`;
+Final query strings should be locked in the candidate evidence step.
+
+## 9. Boundary-check refinement
+
+The reviewed non-public fixture path is:
+
+```text
+bundle/concepts/candidate-delivery-controls.md
+```
+
+Future candidate acceptance should include a public-audience negative check derived from this fixture. The exact query should be finalized in the candidate evidence step.
+
+Expected result:
+
+- expected status: `not_found` or equivalent negative result;
 - raw fallback used: `false`;
-- unauthorized content returned: `none`.
+- non-public fixture content is not returned to public audience.
 
-If no ACL risk exists, the Source PR must explicitly justify `n/a`.
+## 10. Evidence now available before batch-spec update
 
-## 10. Required evidence before updating batch spec
+The following evidence is now available:
 
-Before `docs/batches/m6-001-llm-wiki-foundation-batch.md` may move from `draft / not approved` to `ready for Source PR`, this proposal or a successor must record:
+- exact Source paths;
+- inventory timestamp;
+- inventory checksum;
+- reviewed Source HEAD;
+- include / support / fixture classifications;
+- provisional public query families;
+- provisional boundary-check fixture;
+- citation target for the six-dimensional map concept;
+- pending Source-backed citation target for source governance.
 
-- exact Source file paths;
-- inclusion rationale for each file;
-- exclusion checklist result for each file;
-- final public acceptance query;
-- expected citation URL or citation target;
-- final ACL negative query or `n/a` rationale;
+Still required before candidate build:
+
+- Source validation workflow evidence;
+- final public query strings;
+- final citation target mapping;
+- final boundary-check query;
 - Builder SHA / Foundation SHA rotation decision;
-- reviewer decision.
+- candidate channel derived from Source SHA.
 
-## 11. Required evidence after future Source PR merge
+## 11. Required evidence after future Source PR or Source validation
 
-After a future Source PR is merged, update the M6-001 batch spec and candidate evidence summary with:
+After Source validation is available, update the M6-001 batch spec and candidate evidence summary with:
 
-- Source PR URL;
 - Source branch;
-- merged Source SHA;
+- Source SHA;
 - Source validation workflow run ID;
 - Source validation conclusion;
 - candidate channel derived from Source SHA;
-- final public acceptance query;
+- final public acceptance queries;
 - expected citation URL or citation target;
-- final ACL negative query or `n/a` rationale;
+- final boundary-check query or explicit `n/a` rationale;
 - Builder / Foundation rotation decision.
 
 Do not run a candidate build until this evidence exists.
@@ -157,16 +189,19 @@ Do not run a candidate build until this evidence exists.
 This proposal does not authorize any of the following:
 
 - editing `danielcanfly/knowledge-source`;
-- approving Source content;
+- approving new Source content;
 - opening a production request spec;
 - running a candidate build;
 - promoting production;
-- weakening citation, ACL, raw fallback, replay, rollback, or ledger requirements.
+- weakening citation, boundary, raw fallback, replay, rollback, or ledger requirements.
 
 ## 13. Current decision
 
-- Proposal status: `proposal / no Source edit`
-- Approved Source files: `none`
+- Proposal status: `reviewed paths available / no Source edit`
+- Reviewed Source HEAD: `6a35f9f35e4c6c599a266710344f760c399d914d`
+- Primary include paths: `2`
+- Supporting paths: `6`
+- Fixture-only paths: `1`
 - Reviewer: `pending`
 - Decision date: `pending`
-- Next required action: identify exact Source file paths through a future Source PR planning pass.
+- Next required action: update the M6-001 batch spec and collect Source validation evidence.
