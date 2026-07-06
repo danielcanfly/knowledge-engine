@@ -13,6 +13,7 @@ PUBLIC_QUERY_2 = (
 BOUNDARY_QUERY = (
     "What candidate delivery controls are available for public users in Knowledge OS?"
 )
+EXPECTED_Q1_CONCEPT_ID = "concepts/source-governance"
 EXPECTED_CITATION_2 = (
     "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/"
 )
@@ -68,6 +69,15 @@ def _citations(payload: dict[str, Any]) -> list[str]:
     return uris
 
 
+def _concept_ids(payload: dict[str, Any]) -> list[str]:
+    ids: list[str] = []
+    for result in payload.get("results", []):
+        concept_id = result.get("concept_id")
+        if isinstance(concept_id, str):
+            ids.append(concept_id)
+    return ids
+
+
 def _release_identity(payload: dict[str, Any]) -> tuple[str | None, str | None]:
     release = payload.get("release", {})
     return release.get("release_id"), release.get("manifest_sha256")
@@ -112,6 +122,7 @@ def main() -> int:
 
     q1_citations = _citations(q1)
     q2_citations = _citations(q2)
+    q1_concept_ids = _concept_ids(q1)
 
     _require(
         q1.get("status") == "answered",
@@ -120,8 +131,8 @@ def main() -> int:
     _require(q1.get("results"), "public_query_1 returned no results")
     _require(q1_citations, "public_query_1 returned no citations")
     _require(
-        any("source-governance" in uri for uri in q1_citations),
-        f"public_query_1 citations did not include source-governance: {q1_citations!r}",
+        EXPECTED_Q1_CONCEPT_ID in q1_concept_ids,
+        f"public_query_1 concept_ids={q1_concept_ids!r}",
     )
 
     _require(
@@ -152,6 +163,8 @@ def main() -> int:
         "checks": {
             "public_query_1": {
                 "status": q1.get("status"),
+                "concept_ids": q1_concept_ids,
+                "expected_concept_id": EXPECTED_Q1_CONCEPT_ID,
                 "citation_count": len(q1_citations),
                 "raw_fallback_used": _raw_fallback_used(q1),
             },
