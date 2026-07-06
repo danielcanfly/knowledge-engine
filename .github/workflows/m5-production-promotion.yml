@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: m5-production-promotion
@@ -275,6 +276,27 @@ jobs:
           )
           print("M5_PRODUCTION_PROMOTION_PASSED")
           PY
+
+      - name: Record production ledger
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          knowledge-engine render-production-ledger \
+            --evidence-dir evidence \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --workflow-name "$GITHUB_WORKFLOW" \
+            --event-name "$GITHUB_EVENT_NAME" \
+            --head-sha "$GITHUB_SHA" \
+            --output evidence/production-ledger-comment.md
+
+          gh issue comment 30 \
+            --repo "$GITHUB_REPOSITORY" \
+            --body-file evidence/production-ledger-comment.md \
+            > evidence/production-ledger-response.txt
 
       - name: Upload promotion evidence
         if: always()
