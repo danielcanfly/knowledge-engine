@@ -23,6 +23,7 @@ jobs:
       foundation_sha: ${{ steps.payload.outputs.foundation_sha }}
       candidate_channel: ${{ steps.payload.outputs.candidate_channel }}
       acceptance_query: ${{ steps.payload.outputs.acceptance_query }}
+      dispatch_control_plane_sha: ${{ steps.payload.outputs.dispatch_control_plane_sha }}
     steps:
       - name: Validate dispatch payload
         id: payload
@@ -34,7 +35,7 @@ jobs:
           FOUNDATION_SHA: ${{ github.event.client_payload.foundation_sha }}
           CANDIDATE_CHANNEL: ${{ github.event.client_payload.candidate_channel }}
           ACCEPTANCE_QUERY: ${{ github.event.client_payload.acceptance_query }}
-          ENGINE_SHA: ${{ github.sha }}
+          DISPATCH_CONTROL_PLANE_SHA: ${{ github.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -42,7 +43,6 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$VALIDATION_RUN_ID" =~ ^[0-9]+$ ]]
           [[ "$FOUNDATION_SHA" =~ ^[0-9a-f]{40}$ ]]
-          test "$BUILDER_REF" = "$ENGINE_SHA"
           test "$SOURCE_REPOSITORY" = 'danielcanfly/knowledge-source'
           test "$FOUNDATION_SHA" = 'd12c7c416c950d743d4cd5e7964fd3c3bc0d9062'
           test "$CANDIDATE_CHANNEL" = "candidate-source-$SOURCE_SHA"
@@ -55,6 +55,7 @@ jobs:
             echo "foundation_sha=$FOUNDATION_SHA"
             echo "candidate_channel=$CANDIDATE_CHANNEL"
             echo "acceptance_query=$ACCEPTANCE_QUERY"
+            echo "dispatch_control_plane_sha=$DISPATCH_CONTROL_PLANE_SHA"
           } >> "$GITHUB_OUTPUT"
 
   publish-candidate:
@@ -261,7 +262,8 @@ jobs:
       - name: Append evidence to issue 13
         uses: actions/github-script@v7
         env:
-          ENGINE_SHA: ${{ github.sha }}
+          DISPATCH_CONTROL_PLANE_SHA: ${{ github.sha }}
+          BUILDER_REF: ${{ github.event.client_payload.builder_ref }}
           SOURCE_REPOSITORY: ${{ github.event.client_payload.source_repository }}
           SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
           VALIDATION_RUN_ID: ${{ github.event.client_payload.validation_run_id }}
@@ -278,7 +280,8 @@ jobs:
             const body = [
               `## Source candidate dispatch: ${passed ? 'passed' : 'failed'}`,
               '',
-              `- Engine SHA: \`${process.env.ENGINE_SHA}\``,
+              `- Dispatch workflow SHA: \`${process.env.DISPATCH_CONTROL_PLANE_SHA}\``,
+              `- Builder SHA: \`${process.env.BUILDER_REF}\``,
               `- Source repository: \`${process.env.SOURCE_REPOSITORY}\``,
               `- Source SHA: \`${process.env.SOURCE_SHA}\``,
               `- Source validation run ID: \`${process.env.VALIDATION_RUN_ID}\``,
