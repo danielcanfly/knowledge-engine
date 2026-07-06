@@ -1,12 +1,12 @@
 # M6-001 Batch Spec: LLM Wiki Foundation
 
-Status: `source validation passed / candidate planning required`
+Status: `candidate planning complete / candidate build pending`
 
 Parent tracker: `#42`
 
-Child slices: `#45`, `#56`, `#57`
+Child slices: `#45`, `#56`, `#57`, `#59`
 
-This is the first named M6 batch spec. It references reviewed Source paths from the M6.6 path review, the M6.7 proposal update, and M6.9 Source validation evidence. It does not edit Source, does not authorize a candidate build, does not create a production request spec, and does not authorize production promotion.
+This is the first named M6 batch spec. It references reviewed Source paths, Source validation evidence, and candidate evidence planning. It does not edit Source, does not create a production request spec, and does not authorize production promotion.
 
 ## 1. Batch identity
 
@@ -18,8 +18,9 @@ This is the first named M6 batch spec. It references reviewed Source paths from 
 - Initial batch spec issue: `#45`
 - Batch spec update issue: `#56`
 - Source validation evidence issue: `#57`
+- Candidate evidence planning issue: `#59`
 - Source PR: `not required yet / selected content already exists on Source main`
-- Related Engine PRs: `#54`, `#55`, `#56`, `pending #57`
+- Related Engine PRs: `#54`, `#55`, `#56`, `#58`, `pending #59`
 
 ## 2. Scope
 
@@ -51,13 +52,14 @@ This batch covers the first reviewed Source-backed slice for LLM Wiki / Knowledg
 - Raw chat logs copied directly into canonical Source
 - Any unreviewed Source path not represented in M6.6 / M6.7 planning evidence
 - Any production request spec
-- Any content expansion before candidate evidence planning is completed
+- Any content expansion before candidate evidence is collected
 
 ### Risk notes
 
 - Source paths have been reviewed.
 - Source validation evidence has been recorded for the reviewed Source SHA.
-- Candidate build remains blocked until candidate planning locks final query strings, citation mapping, boundary query, and Builder / Foundation rotation decision.
+- Candidate evidence planning has locked query strings, citation mapping, boundary query, Builder / Foundation identity, and dispatch plan.
+- Candidate build evidence is still pending.
 - The batch must not rely on chat memory as evidence.
 
 ## 3. Source identity
@@ -80,26 +82,27 @@ This batch covers the first reviewed Source-backed slice for LLM Wiki / Knowledg
 - Proposal update merge commit: `1e342a6a6b36b379a7e4b18e33717e95144843e5`
 - Batch spec update PR: `#56`
 - Batch spec update merge commit: `f51fca2edd15af9473af0cb0cec6f47a5cdeb36c`
+- Source validation evidence PR: `#58`
+- Source validation evidence merge commit: `3c29abe08e7e46fb1f8446a8dc7753f5c4c24af6`
 
 Required before candidate build:
 
-- final Source path table retained
-- final query strings recorded
-- final citation target mapping recorded
-- final boundary query recorded
-- Builder / Foundation rotation decision recorded
+- Engine-side candidate workflow target confirmed
+- candidate build dispatched by governed Source automation or explicitly reviewed manual fallback
 
 ## 4. Builder and Foundation identity
 
-Current baseline from M5 closeout:
+Builder / Foundation rotation decision: `no rotation required for M6-001`
+
+Current policy-pinned identity:
 
 - Builder repository: `danielcanfly/knowledge-engine`
 - Expected Builder SHA: `1b55c68a441def01a5277c94b350efab1437459d`
+- Expected Automation SHA: `1b55c68a441def01a5277c94b350efab1437459d`
 - Expected Foundation SHA: `d12c7c416c950d743d4cd5e7964fd3c3bc0d9062`
-- Builder / Foundation rotation required: `pending`
-- Rotation PR: `pending / n/a`
+- Rotation PR: `n/a`
 
-If Builder or Foundation SHA changes, the rotation must be reviewable and must fail loudly if Source policy and Engine expectations diverge.
+If Builder or Foundation SHA changes before candidate build, M6.10 must be repeated.
 
 ## 5. Candidate identity
 
@@ -115,42 +118,65 @@ Candidate channel must be derived from the validated Source SHA.
 
 ## 6. Public acceptance
 
-Primary public query family:
+Final public query 1:
 
-- Public query family: `Knowledge Source governance boundary in Knowledge OS`
+```text
+What is the Knowledge Source governance boundary in Knowledge OS?
+```
+
+Expected result:
+
 - Expected public status: `answered`
-- Expected citation target: `bundle/concepts/source-governance.md` or Source-backed runtime citation target
-- Citation count: `pending`
+- Expected citation target: `bundle/concepts/source-governance.md` or Source-backed runtime citation target for the same concept
 - Raw fallback used: `must be false`
 - Acceptance result artifact: `pending`
 
-Secondary public query family:
+Final public query 2:
 
-- Public query family: `six-dimensional review of LLM agent architectures`
+```text
+How should LLM agent architectures be reviewed across six engineering dimensions?
+```
+
+Expected result:
+
 - Expected public status: `answered`
 - Expected citation target: `https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/`
-- Citation count: `pending`
 - Raw fallback used: `must be false`
 - Acceptance result artifact: `pending`
-
-Final query strings must be locked during the candidate evidence step.
 
 ## 7. Boundary acceptance
 
-Reviewed fixture-only path:
+Final boundary query:
 
-- `bundle/concepts/candidate-delivery-controls.md`
+```text
+What candidate delivery controls are available for public users in Knowledge OS?
+```
 
-Expected boundary behavior:
+Expected result:
 
-- Public-audience query should return `not_found` or equivalent negative result.
+- Expected status: `not_found` or equivalent negative result.
+- Fixture-only path not returned as public content: `bundle/concepts/candidate-delivery-controls.md`.
 - Raw fallback used: `must be false`.
-- Fixture-only content must not be returned as public content.
 - Boundary result artifact: `pending`.
 
-The exact query string must be locked during the candidate evidence step.
+## 8. Candidate dispatch plan
 
-## 8. Production request spec plan
+Expected dispatch source:
+
+- Source workflow: `danielcanfly/knowledge-source/.github/workflows/publish-candidate.yml`
+- Trigger: successful `Validate Knowledge Source` workflow run on `main`
+- Event type: `knowledge-source-candidate`
+- Validation run ID: `28771739838`
+- Candidate channel: `candidate-source-6a35f9f35e4c6c599a266710344f760c399d914d`
+
+Expected dispatch payload identity:
+
+- builder_ref: `1b55c68a441def01a5277c94b350efab1437459d`
+- source_repository: `danielcanfly/knowledge-source`
+- source_sha: `6a35f9f35e4c6c599a266710344f760c399d914d`
+- foundation_sha: `d12c7c416c950d743d4cd5e7964fd3c3bc0d9062`
+
+## 9. Production request spec plan
 
 No production request spec exists yet.
 
@@ -167,7 +193,7 @@ Forbidden field:
 
 - `control_plane_sha` must not be committed in the request spec.
 
-## 9. Rollout assumptions
+## 10. Rollout assumptions
 
 - Current production release before promotion: `20260706T024200Z-19b86982de27`
 - Current production manifest before promotion: `8697f5ab6258d8545328fd32cea60b09c2c80aef4599611b0571a0553ea24a7e`
@@ -175,11 +201,11 @@ Forbidden field:
 - Rollback expected previous release: `20260706T024200Z-19b86982de27` unless production changes before M6-001
 - Rollback evidence required: `yes`
 
-## 10. Governance checklist
+## 11. Governance checklist
 
 - [x] Source paths are reviewed in Engine planning evidence.
 - [x] Source validation passed.
-- [ ] Builder / Foundation rotation decision recorded.
+- [x] Builder / Foundation rotation decision recorded.
 - [ ] Candidate identity is verified from candidate channel and manifest.
 - [ ] Candidate quality is `passed`.
 - [ ] Public query expected citation target is present.
@@ -191,19 +217,21 @@ Forbidden field:
 - [ ] Automated ledger comment to `#30` is expected after production workflow success.
 - [ ] Replay / rollback proof remains green on `main`.
 
-## 11. Decision
+## 12. Decision
 
-- Batch spec status: `source validation passed / candidate planning required`
+- Batch spec status: `candidate planning complete / candidate build pending`
 - Reviewer: `pending`
 - Decision date: `pending`
-- Notes: `This spec records Source validation evidence. It does not approve candidate build, request-spec creation, or production promotion.`
+- Notes: `This spec records candidate planning inputs. It does not approve request-spec creation or production promotion.`
 
-## 12. Next required action
+## 13. Next required action
 
-Create candidate evidence planning that records:
+Collect candidate build evidence:
 
-- final public acceptance query strings
-- final citation target mapping
-- final boundary query string
-- Builder / Foundation rotation decision
-- candidate build dispatch plan
+- Engine candidate workflow run ID
+- candidate artifact ID and digest
+- candidate release ID
+- candidate manifest SHA-256
+- candidate quality result
+- runtime acceptance artifacts for both public queries
+- boundary result artifact
