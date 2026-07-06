@@ -8,7 +8,13 @@ from pathlib import Path
 from .candidate import run_source_candidate_gate
 from .compiler import compile_release
 from .config import Settings
-from .promotion import PromotionRequest, promote_release, rollback_release
+from .promotion import (
+    PromotionRequest,
+    promote_release,
+    rollback_release,
+    verify_already_promoted,
+    verify_promotion_candidate,
+)
 from .promotion_request import (
     load_promotion_request_spec,
     write_github_env,
@@ -31,6 +37,44 @@ def _utc(value: str | None) -> datetime:
 def _promoted_at(value: datetime) -> str:
     return value.astimezone(UTC).replace(microsecond=0).isoformat().replace(
         "+00:00", "Z"
+    )
+
+
+def _add_promotion_request_args(command: argparse.ArgumentParser) -> None:
+    command.add_argument("--operation-id", required=True)
+    command.add_argument("--candidate-channel", required=True)
+    command.add_argument("--release-id", required=True)
+    command.add_argument("--manifest-sha256", required=True)
+    command.add_argument(
+        "--source-repository", default="danielcanfly/knowledge-source"
+    )
+    command.add_argument("--source-sha", required=True)
+    command.add_argument("--builder-sha", required=True)
+    command.add_argument("--foundation-sha", required=True)
+    command.add_argument("--expected-previous-release-id", required=True)
+    command.add_argument("--expected-previous-manifest-sha256", required=True)
+    command.add_argument("--control-plane-sha", required=True)
+    command.add_argument("--reason", required=True)
+    command.add_argument("--actor", required=True)
+
+
+def _promotion_request_from_args(args: argparse.Namespace) -> PromotionRequest:
+    return PromotionRequest(
+        operation_id=args.operation_id,
+        candidate_channel=args.candidate_channel,
+        expected_release_id=args.release_id,
+        expected_manifest_sha256=args.manifest_sha256,
+        expected_source_repository=args.source_repository,
+        expected_source_sha=args.source_sha,
+        expected_builder_sha=args.builder_sha,
+        expected_foundation_sha=args.foundation_sha,
+        expected_previous_release_id=args.expected_previous_release_id,
+        expected_previous_manifest_sha256=(
+            args.expected_previous_manifest_sha256
+        ),
+        control_plane_sha=args.control_plane_sha,
+        reason=args.reason,
+        actor=args.actor,
     )
 
 
@@ -75,22 +119,14 @@ def main() -> int:
     )
 
     promote = commands.add_parser("promote-release")
-    promote.add_argument("--operation-id", required=True)
-    promote.add_argument("--candidate-channel", required=True)
-    promote.add_argument("--release-id", required=True)
-    promote.add_argument("--manifest-sha256", required=True)
-    promote.add_argument(
-        "--source-repository", default="danielcanfly/knowledge-source"
-    )
-    promote.add_argument("--source-sha", required=True)
-    promote.add_argument("--builder-sha", required=True)
-    promote.add_argument("--foundation-sha", required=True)
-    promote.add_argument("--expected-previous-release-id", required=True)
-    promote.add_argument("--expected-previous-manifest-sha256", required=True)
-    promote.add_argument("--control-plane-sha", required=True)
-    promote.add_argument("--reason", required=True)
-    promote.add_argument("--actor", required=True)
+    _add_promotion_request_args(promote)
     promote.add_argument("--promoted-at")
+
+    verify_candidate = commands.add_parser("verify-promotion-candidate")
+    _add_promotion_request_args(verify_candidate)
+
+    verify_replay = commands.add_parser("verify-already-promoted")
+    _add_promotion_request_args(verify_replay)
 
     validate_promotion = commands.add_parser("validate-promotion-request")
     validate_promotion.add_argument("--request-path", type=Path, required=True)
@@ -202,28 +238,28 @@ def main() -> int:
     if args.command == "promote-release":
         result = promote_release(
             store=store,
-            request=PromotionRequest(
-                operation_id=args.operation_id,
-                candidate_channel=args.candidate_channel,
-                expected_release_id=args.release_id,
-                expected_manifest_sha256=args.manifest_sha256,
-                expected_source_repository=args.source_repository,
-                expected_source_sha=args.source_sha,
-                expected_builder_sha=args.builder_sha,
-                expected_foundation_sha=args.foundation_sha,
-                expected_previous_release_id=args.expected_previous_release_id,
-                expected_previous_manifest_sha256=(
-                    args.expected_previous_manifest_sha256
-                ),
-                control_plane_sha=args.control_plane_sha,
-                reason=args.reason,
-                actor=args.actor,
-            ),
+            request=_promotion_request_from_args(args),
             promoted_at=(
                 _promoted_at(_utc(args.promoted_at))
                 if args.promoted_at is not None
                 else None
             ),
+        )
+        print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "verify-promotion-candidate":
+        result = verify_promotion_candidate(
+            store=store,
+            request=_promotion_request_from_args(args),
+        )
+        print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "verify-already-promoted":
+        result = verify_already_promoted(
+            store=store,
+            request=_promotion_request_from_args(args),
         )
         print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
         return 0
