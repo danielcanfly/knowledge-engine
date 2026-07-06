@@ -332,3 +332,53 @@ def test_rollback_refuses_unrelated_current_pointer(tmp_path: Path) -> None:
             reason="unsafe",
             actor="github-actions",
         )
+
+
+def test_old_promotion_operation_cannot_revive_target_after_rollback(
+    tmp_path: Path,
+) -> None:
+    store, original, manifest_sha = _store(tmp_path)
+    request = _request(manifest_sha)
+
+    promote_release(store=store, request=request, promoted_at="2026-07-03T03:10:00Z")
+    rollback_release(
+        store=store,
+        operation_id=request.operation_id,
+        reason="rollback proof",
+        actor="github-actions",
+    )
+
+    with pytest.raises(ReleaseConflictError, match="rolled back"):
+        promote_release(
+            store=store,
+            request=request,
+            promoted_at="2026-07-03T03:12:00Z",
+        )
+
+    assert store.get("channels/production.json") == original
+
+
+def test_new_promotion_operation_can_promote_after_rollback(
+    tmp_path: Path,
+) -> None:
+    store, _, manifest_sha = _store(tmp_path)
+    request = _request(manifest_sha)
+
+    promote_release(store=store, request=request, promoted_at="2026-07-03T03:10:00Z")
+    rollback_release(
+        store=store,
+        operation_id=request.operation_id,
+        reason="rollback proof",
+        actor="github-actions",
+    )
+
+    new_request = _request(manifest_sha, "promote-m4-after-rollback")
+    result = promote_release(
+        store=store,
+        request=new_request,
+        promoted_at="2026-07-03T03:13:00Z",
+    )
+
+    assert result.status == "promoted"
+    assert result.release_id == RELEASE_ID
+    assert result.operation_id == "promote-m4-after-rollback"
