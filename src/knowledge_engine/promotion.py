@@ -183,6 +183,24 @@ class PromotionResult:
 
 
 @dataclass(frozen=True)
+class CandidateVerificationResult:
+    operation_id: str
+    status: str
+    candidate_channel: str
+    release_id: str
+    manifest_sha256: str
+    source_repository: str
+    source_sha: str
+    builder_sha: str
+    foundation_sha: str
+    control_plane_sha: str
+    manifest_key: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class RollbackResult:
     operation_id: str
     status: str
@@ -256,6 +274,63 @@ def _validate_candidate(
             f"got {builder.get('git_sha')!r}"
         )
     return candidate
+
+
+def verify_promotion_candidate(
+    *,
+    store: ObjectStore,
+    request: PromotionRequest,
+) -> CandidateVerificationResult:
+    request.validate()
+    candidate = _validate_candidate(store, request)
+    return CandidateVerificationResult(
+        operation_id=request.operation_id,
+        status="candidate_verified",
+        candidate_channel=request.candidate_channel,
+        release_id=request.expected_release_id,
+        manifest_sha256=request.expected_manifest_sha256,
+        source_repository=request.expected_source_repository,
+        source_sha=request.expected_source_sha,
+        builder_sha=request.expected_builder_sha,
+        foundation_sha=request.expected_foundation_sha,
+        control_plane_sha=request.control_plane_sha,
+        manifest_key=str(candidate["manifest_key"]),
+    )
+
+
+def verify_already_promoted(
+    *,
+    store: ObjectStore,
+    request: PromotionRequest,
+) -> PromotionResult:
+    request.validate()
+    candidate = _validate_candidate(store, request)
+    production_key = "channels/production.json"
+    if store.head(production_key) is None:
+        raise IntegrityError("production pointer does not exist")
+    production_bytes, production = _read_json(store, production_key)
+    if production.get("release_id") != request.expected_release_id:
+        raise ReleaseConflictError("production release is not already target")
+    if production.get("manifest_sha256") != request.expected_manifest_sha256:
+        raise ReleaseConflictError("production manifest is not already target")
+    if production.get("manifest_key") != candidate.get("manifest_key"):
+        raise ReleaseConflictError("production manifest key does not match candidate")
+    return PromotionResult(
+        operation_id=request.operation_id,
+        status="already_promoted",
+        idempotent=True,
+        previous_release_id=request.expected_previous_release_id,
+        previous_manifest_sha256=request.expected_previous_manifest_sha256,
+        release_id=request.expected_release_id,
+        manifest_sha256=request.expected_manifest_sha256,
+        source_sha=request.expected_source_sha,
+        builder_sha=request.expected_builder_sha,
+        foundation_sha=request.expected_foundation_sha,
+        control_plane_sha=request.control_plane_sha,
+        production_pointer_sha256=sha256_bytes(production_bytes),
+        intent_key="not_written_for_already_promoted_replay",
+        receipt_key="not_written_for_already_promoted_replay",
+    )
 
 
 def _load_or_create_intent(
