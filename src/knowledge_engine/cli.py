@@ -8,6 +8,7 @@ from pathlib import Path
 from .candidate import run_source_candidate_gate
 from .compiler import compile_release
 from .config import Settings
+from .ledger import build_production_ledger_comment
 from .promotion import (
     PromotionRequest,
     promote_release,
@@ -128,6 +129,15 @@ def main() -> int:
     verify_replay = commands.add_parser("verify-already-promoted")
     _add_promotion_request_args(verify_replay)
 
+    render_ledger = commands.add_parser("render-production-ledger")
+    render_ledger.add_argument("--evidence-dir", type=Path, required=True)
+    render_ledger.add_argument("--run-id", required=True)
+    render_ledger.add_argument("--run-url", required=True)
+    render_ledger.add_argument("--workflow-name", required=True)
+    render_ledger.add_argument("--event-name", required=True)
+    render_ledger.add_argument("--head-sha", required=True)
+    render_ledger.add_argument("--output", type=Path, required=True)
+
     validate_promotion = commands.add_parser("validate-promotion-request")
     validate_promotion.add_argument("--request-path", type=Path, required=True)
     validate_promotion.add_argument("--control-plane-sha", required=True)
@@ -153,6 +163,29 @@ def main() -> int:
     refresh.add_argument("--channel", default=None)
 
     args = parser.parse_args()
+
+    if args.command == "render-production-ledger":
+        comment = build_production_ledger_comment(
+            evidence_dir=args.evidence_dir,
+            run_id=args.run_id,
+            run_url=args.run_url,
+            workflow_name=args.workflow_name,
+            event_name=args.event_name,
+            head_sha=args.head_sha,
+        )
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(comment, encoding="utf-8")
+        print(
+            json.dumps(
+                {
+                    "status": "rendered",
+                    "output": str(args.output),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
 
     if args.command == "validate-promotion-request":
         spec = load_promotion_request_spec(
