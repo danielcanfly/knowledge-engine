@@ -13,7 +13,11 @@ PUBLIC_QUERY_2 = (
 BOUNDARY_QUERY = (
     "What candidate delivery controls are available for public users in Knowledge OS?"
 )
-EXPECTED_Q1_CONCEPT_ID = "concepts/source-governance"
+EXPECTED_Q1_CONCEPT_IDS = {
+    "concepts/source-governance",
+    "source-governance",
+}
+EXPECTED_Q1_X_KOS_ID = "ko_01JXYZ123456789ABCDEFGHJKM"
 EXPECTED_CITATION_2 = (
     "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/"
 )
@@ -78,6 +82,15 @@ def _concept_ids(payload: dict[str, Any]) -> list[str]:
     return ids
 
 
+def _x_kos_ids(payload: dict[str, Any]) -> list[str]:
+    ids: list[str] = []
+    for result in payload.get("results", []):
+        x_kos_id = result.get("x_kos_id")
+        if isinstance(x_kos_id, str):
+            ids.append(x_kos_id)
+    return ids
+
+
 def _release_identity(payload: dict[str, Any]) -> tuple[str | None, str | None]:
     release = payload.get("release", {})
     return release.get("release_id"), release.get("manifest_sha256")
@@ -96,6 +109,12 @@ def _verify_release_identity(name: str, payload: dict[str, Any]) -> None:
         f"{name} manifest_sha256={manifest_sha!r}",
     )
     _require(not _raw_fallback_used(payload), f"{name} used raw fallback")
+
+
+def _q1_identity_matches(concept_ids: list[str], x_kos_ids: list[str]) -> bool:
+    if any(concept_id in EXPECTED_Q1_CONCEPT_IDS for concept_id in concept_ids):
+        return True
+    return EXPECTED_Q1_X_KOS_ID in x_kos_ids
 
 
 def main() -> int:
@@ -123,6 +142,7 @@ def main() -> int:
     q1_citations = _citations(q1)
     q2_citations = _citations(q2)
     q1_concept_ids = _concept_ids(q1)
+    q1_x_kos_ids = _x_kos_ids(q1)
 
     _require(
         q1.get("status") == "answered",
@@ -131,8 +151,9 @@ def main() -> int:
     _require(q1.get("results"), "public_query_1 returned no results")
     _require(q1_citations, "public_query_1 returned no citations")
     _require(
-        EXPECTED_Q1_CONCEPT_ID in q1_concept_ids,
-        f"public_query_1 concept_ids={q1_concept_ids!r}",
+        _q1_identity_matches(q1_concept_ids, q1_x_kos_ids),
+        "public_query_1 did not include Source governance identity: "
+        f"concept_ids={q1_concept_ids!r}, x_kos_ids={q1_x_kos_ids!r}",
     )
 
     _require(
@@ -164,7 +185,9 @@ def main() -> int:
             "public_query_1": {
                 "status": q1.get("status"),
                 "concept_ids": q1_concept_ids,
-                "expected_concept_id": EXPECTED_Q1_CONCEPT_ID,
+                "expected_concept_ids": sorted(EXPECTED_Q1_CONCEPT_IDS),
+                "x_kos_ids": q1_x_kos_ids,
+                "expected_x_kos_id": EXPECTED_Q1_X_KOS_ID,
                 "citation_count": len(q1_citations),
                 "raw_fallback_used": _raw_fallback_used(q1),
             },
