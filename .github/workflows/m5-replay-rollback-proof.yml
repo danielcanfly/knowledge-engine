@@ -1,0 +1,63 @@
+name: M5 Replay Rollback Proof
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/m5-replay-rollback-proof.yml'
+      - 'scripts/replay_rollback_proof.py'
+      - 'src/knowledge_engine/promotion.py'
+      - 'tests/test_promotion.py'
+      - 'tests/test_replay_rollback_proof.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m5-replay-rollback-proof.yml'
+      - 'scripts/replay_rollback_proof.py'
+      - 'src/knowledge_engine/promotion.py'
+      - 'tests/test_promotion.py'
+      - 'tests/test_replay_rollback_proof.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m5-replay-rollback-proof
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install exact Engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+
+      - name: Run replay / rollback proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python scripts/replay_rollback_proof.py \
+            --evidence-dir evidence \
+            --run-id "$GITHUB_RUN_ID" \
+            | tee evidence/proof.log
+
+      - name: Upload replay rollback proof evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m5-replay-rollback-proof-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90

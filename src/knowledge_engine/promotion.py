@@ -434,6 +434,9 @@ def promote_release(
     if current_head is None:
         raise IntegrityError("production pointer disappeared")
     current_bytes = store.get(production_key)
+    rollback_receipt_key = f"{_operation_prefix(request.operation_id)}/rollback-receipt.json"
+    if store.head(rollback_receipt_key) is not None:
+        raise ReleaseConflictError("promotion operation has been rolled back")
     idempotent = reused_intent
     if current_bytes == target_bytes:
         idempotent = True
