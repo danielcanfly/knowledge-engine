@@ -1,0 +1,10 @@
+{
+  "schema_version": "governed-batch-registry/v1",
+  "batches": [
+    {
+      "batch_id": "m8-001-agent-execution-paths",
+      "spec_path": "governed_batches/m8-001-agent-execution-paths.json",
+      "lifecycle_state": "planned"
+    }
+  ]
+}

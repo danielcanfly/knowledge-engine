@@ -1,0 +1,30 @@
+{
+  "schema_version": "governed-batch-spec/v2",
+  "batch_id": "m8-001-agent-execution-paths",
+  "title": "Agent Execution Paths",
+  "lifecycle_state": "planned",
+  "source": {
+    "repository": "danielcanfly/knowledge-source",
+    "paths": ["bundle/concepts/agent-execution-paths.md"],
+    "sha": null
+  },
+  "builder_sha": "1b55c68a441def01a5277c94b350efab1437459d",
+  "foundation_sha": "d12c7c416c950d743d4cd5e7964fd3c3bc0d9062",
+  "candidate": {
+    "channel": null,
+    "release_id": null,
+    "manifest_sha256": null
+  },
+  "production_request": {
+    "operation_id": null,
+    "request_path": null
+  },
+  "acceptance": {
+    "public_query": "How do direct calls, pipelines, routers, state machines, and DAGs differ?",
+    "expected_public_status": "answered",
+    "expected_citation_url": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-2/",
+    "acl_query": "amber route boundary",
+    "expected_acl_status": "not_found",
+    "raw_fallback_allowed": false
+  }
+}
