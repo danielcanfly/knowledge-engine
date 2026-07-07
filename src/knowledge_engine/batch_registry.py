@@ -5,7 +5,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .batch_spec import REGISTRY_PATH, REGISTRY_SCHEMA, STATES, load_batch_spec
+from .batch_spec import (
+    REGISTRY_PATH,
+    REGISTRY_SCHEMA,
+    SPEC_ROOT,
+    STATES,
+    load_batch_spec,
+)
 from .errors import IntegrityError
 
 
@@ -46,8 +52,10 @@ def load_batch_registry(
     registry_path: str | Path = REGISTRY_PATH,
 ) -> BatchRegistry:
     path = Path(registry_path)
-    if path != REGISTRY_PATH:
-        raise IntegrityError(f"batch registry path must be {str(REGISTRY_PATH)!r}")
+    if path.is_absolute() or path.parent != SPEC_ROOT:
+        raise IntegrityError("batch registry path must be under governed_batches")
+    if not path.name.startswith("registry") or path.suffix != ".json":
+        raise IntegrityError("batch registry filename must match registry*.json")
     if not path.is_file():
         raise IntegrityError(f"batch registry does not exist: {path}")
     try:
