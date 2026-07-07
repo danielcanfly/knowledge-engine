@@ -1,0 +1,112 @@
+name: M8 Request Spec Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "production_promotions/m8-001-agent-execution-paths.json"
+      - "governed_batches/m8-001-agent-execution-paths.json"
+      - "governed_batches/registry-v2.json"
+      - "governed_batches/evidence/m8-001-lifecycle-history.json"
+      - "tests/test_m8_request_spec.py"
+      - "tests/test_m8_lifecycle_history.py"
+      - "scripts/m8_validate_lifecycle_history.py"
+      - ".github/workflows/m8-request-spec-validation.yml"
+      - ".github/workflows/m8-lifecycle-reconciliation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install exact Engine
+        run: python -m pip install -e '.[dev]'
+
+      - name: Run operator preflight on clean checkout
+        run: |
+          python -m knowledge_engine.batch_cli preflight \
+            --spec-path governed_batches/m8-001-agent-execution-paths.json \
+            --registry-path governed_batches/registry-v2.json \
+            --production-pointer-path governed_batches/evidence/m8-001-production-pointer.json \
+            --output evidence/m8-001/request-spec-preflight.json
+
+      - name: Validate request and lifecycle
+        run: |
+          python -m pytest \
+            tests/test_m8_request_spec.py \
+            tests/test_m8_lifecycle_history.py
+
+      - name: Write request validation summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from knowledge_engine.batch_spec import load_batch_spec
+          from knowledge_engine.promotion_request import load_promotion_request_spec
+
+          request_path = Path(
+              "production_promotions/m8-001-agent-execution-paths.json"
+          )
+          request = load_promotion_request_spec(
+              request_path=request_path,
+              control_plane_sha="0" * 40,
+          )
+          spec = load_batch_spec(
+              "governed_batches/m8-001-agent-execution-paths.json"
+          )
+          preflight = json.loads(
+              Path("evidence/m8-001/request-spec-preflight.json").read_text()
+          )
+
+          assert preflight["status"] == "ready"
+          assert preflight["lifecycle_state"] == "request_spec_committed"
+          assert preflight["next_action"] == "review_production_promotion"
+          assert preflight["mutations_performed"] == []
+          assert spec.lifecycle_state == "request_spec_committed"
+
+          normalized = request.normalized()
+          summary = {
+              "status": "passed",
+              "batch_id": spec.batch_id,
+              "lifecycle_state": spec.lifecycle_state,
+              "operation_id": normalized["operation_id"],
+              "request_path": str(request_path),
+              "candidate_channel": normalized["candidate_channel"],
+              "release_id": normalized["release_id"],
+              "manifest_sha256": normalized["manifest_sha256"],
+              "expected_previous_release_id": normalized[
+                  "expected_previous_release_id"
+              ],
+              "expected_previous_manifest_sha256": normalized[
+                  "expected_previous_manifest_sha256"
+              ],
+              "next_action": "review_production_promotion",
+              "production_mutated": False,
+              "mutations_performed": [],
+          }
+          output = Path("evidence/m8-001/request-spec-summary.json")
+          output.write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print("M8_REQUEST_SPEC_VALIDATION_PASSED")
+          PY
+
+      - name: Upload request evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m8-request-spec-${{ github.sha }}
+          path: evidence/m8-001/
+          if-no-files-found: error
+          retention-days: 90

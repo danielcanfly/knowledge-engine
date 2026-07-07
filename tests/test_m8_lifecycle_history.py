@@ -25,12 +25,12 @@ def _validate(history: Path = HISTORY) -> dict:
     )
 
 
-def test_m8_lifecycle_history_reconciles_to_runtime_accepted() -> None:
+def test_m8_lifecycle_history_reconciles_to_request_spec_committed() -> None:
     result = _validate()
     assert result["status"] == "passed"
-    assert result["lifecycle_state"] == "runtime_accepted"
-    assert result["transition_count"] == 4
-    assert result["next_action"] == "commit_production_request_spec"
+    assert result["lifecycle_state"] == "request_spec_committed"
+    assert result["transition_count"] == 5
+    assert result["next_action"] == "review_production_promotion"
     assert result["production_mutated"] is False
 
 

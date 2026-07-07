@@ -2,10 +2,12 @@
   "schema_version": "governed-batch-spec/v2",
   "batch_id": "m8-001-agent-execution-paths",
   "title": "Agent Execution Paths",
-  "lifecycle_state": "runtime_accepted",
+  "lifecycle_state": "request_spec_committed",
   "source": {
     "repository": "danielcanfly/knowledge-source",
-    "paths": ["bundle/concepts/agent-execution-paths.md"],
+    "paths": [
+      "bundle/concepts/agent-execution-paths.md"
+    ],
     "sha": "97979c1c07d6208055d2937c68e500ba49a6ed57"
   },
   "builder_sha": "1b55c68a441def01a5277c94b350efab1437459d",
@@ -16,8 +18,8 @@
     "manifest_sha256": "1a2f2014073e9e97f9e1fdd5df4e43bf19cb2b2679532b6e52ea38480ec4d2ec"
   },
   "production_request": {
-    "operation_id": null,
-    "request_path": null
+    "operation_id": "m8-001-agent-execution-paths-001",
+    "request_path": "production_promotions/m8-001-agent-execution-paths.json"
   },
   "acceptance": {
     "public_query": "How do direct calls, pipelines, routers, state machines, and DAGs differ?",

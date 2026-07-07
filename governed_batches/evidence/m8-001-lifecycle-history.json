@@ -47,9 +47,21 @@
         "runtime_acceptance_digest": "sha256:8dbc2e63b3be7be005c8a858f05149fafd6d8b9a947c56fbb20dade59416a7ef",
         "status": "passed"
       }
+    },
+    {
+      "from": "runtime_accepted",
+      "to": "request_spec_committed",
+      "evidence": {
+        "operation_id": "m8-001-agent-execution-paths-001",
+        "request_path": "production_promotions/m8-001-agent-execution-paths.json",
+        "candidate_release_id": "20260707T111252Z-aebf06593f89",
+        "candidate_manifest_sha256": "1a2f2014073e9e97f9e1fdd5df4e43bf19cb2b2679532b6e52ea38480ec4d2ec",
+        "expected_previous_release_id": "20260706T061437Z-bc48bf4810c0",
+        "expected_previous_manifest_sha256": "8eefb904d1eea0f6ca87b074c60edfe94c725bd76adb77961919b8d2bd4c8f96"
+      }
     }
   ],
-  "final_state": "runtime_accepted",
+  "final_state": "request_spec_committed",
   "source_identity": {
     "sha": "97979c1c07d6208055d2937c68e500ba49a6ed57"
   },

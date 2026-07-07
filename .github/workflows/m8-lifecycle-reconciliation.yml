@@ -60,12 +60,12 @@ jobs:
           preflight = json.loads((root / "operator-preflight.json").read_text())
 
           assert lifecycle["status"] == "passed"
-          assert lifecycle["lifecycle_state"] == "runtime_accepted"
-          assert lifecycle["next_action"] == "commit_production_request_spec"
+          assert lifecycle["lifecycle_state"] == "request_spec_committed"
+          assert lifecycle["next_action"] == "review_production_promotion"
           assert lifecycle["production_mutated"] is False
           assert preflight["status"] == "ready"
-          assert preflight["lifecycle_state"] == "runtime_accepted"
-          assert preflight["next_action"] == "commit_production_request_spec"
+          assert preflight["lifecycle_state"] == "request_spec_committed"
+          assert preflight["next_action"] == "review_production_promotion"
           assert preflight["mutations_performed"] == []
 
           summary = {
