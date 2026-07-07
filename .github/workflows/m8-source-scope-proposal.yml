@@ -1,4 +1,4 @@
-name: M8 Source Scope Proposal
+name: M8 Source Scope Regression
 
 on:
   workflow_dispatch:
@@ -70,7 +70,7 @@ jobs:
             --attestation governed_batches/evidence/m8-001-source-baseline-attestation.json \
             --output evidence/m8-001/source-scope-verification.json
 
-      - name: Verify proposal boundary
+      - name: Verify scope regression boundary
         run: |
           python - <<'PY'
           import json
@@ -82,9 +82,21 @@ jobs:
           readiness = json.loads((root / "scale-readiness.json").read_text())
           scope = json.loads((root / "source-scope-verification.json").read_text())
 
+          expected_actions = {
+              "planned": "open_source_review",
+              "source_reviewed": "run_source_validation",
+              "source_validated": "build_candidate",
+              "candidate_built": "run_runtime_acceptance",
+              "runtime_accepted": "commit_production_request_spec",
+              "request_spec_committed": "review_production_promotion",
+              "production_promoted": "run_idempotent_replay_and_close",
+              "closed": "start_next_batch",
+          }
+
+          state = preflight["lifecycle_state"]
           assert preflight["status"] == "ready"
-          assert preflight["lifecycle_state"] == "planned"
-          assert preflight["next_action"] == "open_source_review"
+          assert state in expected_actions
+          assert preflight["next_action"] == expected_actions[state]
           assert preflight["mutations_performed"] == []
           assert registry["status"] == "valid"
           assert registry["batch_count"] == 1
@@ -98,30 +110,26 @@ jobs:
           summary = {
               "status": "passed",
               "batch_id": preflight["batch_id"],
-              "lifecycle_state": preflight["lifecycle_state"],
+              "lifecycle_state": state,
               "next_action": preflight["next_action"],
               "source_scope_verified": True,
               "origin_blob_verified": True,
-              "source_path_overlap": False,
+              "planning_baseline_path_absent": True,
               "source_verification_method": scope["source_verification_method"],
               "mutations_performed": [],
-              "source_mutated": False,
-              "candidate_built": False,
-              "request_created": False,
-              "production_mutated": False,
           }
           (root / "summary.json").write_text(
               json.dumps(summary, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
-          print("M8_SOURCE_SCOPE_PROPOSAL_PASSED")
+          print("M8_SOURCE_SCOPE_REGRESSION_PASSED")
           PY
 
       - name: Upload proposal evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m8-source-scope-proposal-${{ github.sha }}
+          name: m8-source-scope-regression-${{ github.sha }}
           path: evidence/m8-001
           if-no-files-found: error
           retention-days: 90

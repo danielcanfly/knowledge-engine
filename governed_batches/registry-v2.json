@@ -4,7 +4,8 @@
     {
       "batch_id": "m8-001-agent-execution-paths",
       "spec_path": "governed_batches/m8-001-agent-execution-paths.json",
-      "lifecycle_state": "planned"
+      "lifecycle_state": "runtime_accepted",
+      "candidate_channel": "candidate-source-97979c1c07d6208055d2937c68e500ba49a6ed57"
     }
   ]
 }

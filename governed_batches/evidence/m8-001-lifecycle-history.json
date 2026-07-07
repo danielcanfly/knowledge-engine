@@ -1,0 +1,67 @@
+{
+  "schema_version": "m8-lifecycle-history/v1",
+  "batch_id": "m8-001-agent-execution-paths",
+  "initial_state": "planned",
+  "transitions": [
+    {
+      "from": "planned",
+      "to": "source_reviewed",
+      "evidence": {
+        "review_issue": 90,
+        "review_package_pr": 91,
+        "review_artifact": 8134843776,
+        "review_decision": "approve",
+        "reviewer": "danielcanfly",
+        "reviewed_at": "2026-07-07T10:32:36Z"
+      }
+    },
+    {
+      "from": "source_reviewed",
+      "to": "source_validated",
+      "evidence": {
+        "source_repository": "danielcanfly/knowledge-source",
+        "source_pr": 12,
+        "source_validation_run": 28860095342,
+        "source_validation_artifact": 8135278425,
+        "source_sha": "97979c1c07d6208055d2937c68e500ba49a6ed57"
+      }
+    },
+    {
+      "from": "source_validated",
+      "to": "candidate_built",
+      "evidence": {
+        "candidate_gate_issue": 13,
+        "candidate_gate_status": "passed",
+        "candidate_channel": "candidate-source-97979c1c07d6208055d2937c68e500ba49a6ed57",
+        "release_id": "20260707T111252Z-aebf06593f89",
+        "manifest_sha256": "1a2f2014073e9e97f9e1fdd5df4e43bf19cb2b2679532b6e52ea38480ec4d2ec"
+      }
+    },
+    {
+      "from": "candidate_built",
+      "to": "runtime_accepted",
+      "evidence": {
+        "runtime_acceptance_run": 28881639028,
+        "runtime_acceptance_job": 85671134490,
+        "runtime_acceptance_artifact": 8144308670,
+        "runtime_acceptance_digest": "sha256:8dbc2e63b3be7be005c8a858f05149fafd6d8b9a947c56fbb20dade59416a7ef",
+        "status": "passed"
+      }
+    }
+  ],
+  "final_state": "runtime_accepted",
+  "source_identity": {
+    "sha": "97979c1c07d6208055d2937c68e500ba49a6ed57"
+  },
+  "candidate_identity": {
+    "channel": "candidate-source-97979c1c07d6208055d2937c68e500ba49a6ed57",
+    "release_id": "20260707T111252Z-aebf06593f89",
+    "manifest_sha256": "1a2f2014073e9e97f9e1fdd5df4e43bf19cb2b2679532b6e52ea38480ec4d2ec"
+  },
+  "production_baseline": {
+    "release_id": "20260706T061437Z-bc48bf4810c0",
+    "manifest_sha256": "8eefb904d1eea0f6ca87b074c60edfe94c725bd76adb77961919b8d2bd4c8f96",
+    "pointer_sha256": "edd628ca3c2b1991866c3d7adbff05ff32f8eef581e80d4ebd4b781dbbf6dcd6"
+  },
+  "production_mutated": false
+}

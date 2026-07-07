@@ -2,18 +2,18 @@
   "schema_version": "governed-batch-spec/v2",
   "batch_id": "m8-001-agent-execution-paths",
   "title": "Agent Execution Paths",
-  "lifecycle_state": "planned",
+  "lifecycle_state": "runtime_accepted",
   "source": {
     "repository": "danielcanfly/knowledge-source",
     "paths": ["bundle/concepts/agent-execution-paths.md"],
-    "sha": null
+    "sha": "97979c1c07d6208055d2937c68e500ba49a6ed57"
   },
   "builder_sha": "1b55c68a441def01a5277c94b350efab1437459d",
   "foundation_sha": "d12c7c416c950d743d4cd5e7964fd3c3bc0d9062",
   "candidate": {
-    "channel": null,
-    "release_id": null,
-    "manifest_sha256": null
+    "channel": "candidate-source-97979c1c07d6208055d2937c68e500ba49a6ed57",
+    "release_id": "20260707T111252Z-aebf06593f89",
+    "manifest_sha256": "1a2f2014073e9e97f9e1fdd5df4e43bf19cb2b2679532b6e52ea38480ec4d2ec"
   },
   "production_request": {
     "operation_id": null,
@@ -23,7 +23,7 @@
     "public_query": "How do direct calls, pipelines, routers, state machines, and DAGs differ?",
     "expected_public_status": "answered",
     "expected_citation_url": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-2/",
-    "acl_query": "amber route boundary",
+    "acl_query": "quartz lantern protocol",
     "expected_acl_status": "not_found",
     "raw_fallback_allowed": false
   }
