@@ -7,6 +7,7 @@ from pathlib import Path
 from .batch_registry import load_batch_registry, write_registry_evidence
 from .batch_spec import REGISTRY_PATH, load_batch_spec, validate_transition
 from .operator_preflight import run_operator_preflight, write_preflight_evidence
+from .scale_readiness import run_scale_readiness, write_readiness_evidence
 
 
 def main() -> int:
@@ -36,6 +37,18 @@ def main() -> int:
         default=Path("evidence/operator-preflight.json"),
     )
 
+    readiness = subcommands.add_parser("readiness")
+    readiness.add_argument("--registry-path", type=Path, default=REGISTRY_PATH)
+    readiness.add_argument("--production-pointer-path", type=Path, required=True)
+    readiness.add_argument("--expected-release-id", required=True)
+    readiness.add_argument("--expected-manifest-sha256", required=True)
+    readiness.add_argument("--workflow-health-path", type=Path, required=True)
+    readiness.add_argument(
+        "--output",
+        type=Path,
+        default=Path("evidence/scale-readiness.json"),
+    )
+
     args = parser.parse_args()
     if args.command == "validate":
         result = write_registry_evidence(
@@ -52,7 +65,7 @@ def main() -> int:
     elif args.command == "check-transition":
         validate_transition(args.current, args.target)
         result = {"status": "valid", "current": args.current, "target": args.target}
-    else:
+    elif args.command == "preflight":
         result = run_operator_preflight(
             spec_path=args.spec_path,
             registry_path=args.registry_path,
@@ -61,6 +74,15 @@ def main() -> int:
             production_pointer_path=args.production_pointer_path,
         )
         write_preflight_evidence(result, args.output)
+    else:
+        result = run_scale_readiness(
+            registry_path=args.registry_path,
+            production_pointer_path=args.production_pointer_path,
+            expected_release_id=args.expected_release_id,
+            expected_manifest_sha256=args.expected_manifest_sha256,
+            workflow_health_path=args.workflow_health_path,
+        )
+        write_readiness_evidence(result, args.output)
 
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
