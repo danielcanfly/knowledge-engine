@@ -1,0 +1,94 @@
+name: M8 Lifecycle Reconciliation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "governed_batches/m8-001-agent-execution-paths.json"
+      - "governed_batches/registry-v2.json"
+      - "governed_batches/evidence/m8-001-lifecycle-history.json"
+      - "scripts/m8_validate_lifecycle_history.py"
+      - "tests/test_m8_lifecycle_history.py"
+      - ".github/workflows/m8-lifecycle-reconciliation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install exact Engine
+        run: python -m pip install -e '.[dev]'
+
+      - name: Validate lifecycle history
+        run: |
+          python scripts/m8_validate_lifecycle_history.py \
+            --history governed_batches/evidence/m8-001-lifecycle-history.json \
+            --spec governed_batches/m8-001-agent-execution-paths.json \
+            --registry governed_batches/registry-v2.json \
+            --production-pointer governed_batches/evidence/m8-001-production-pointer.json \
+            --output evidence/m8-001/lifecycle-reconciliation.json
+
+      - name: Run lifecycle tests
+        run: python -m pytest tests/test_m8_lifecycle_history.py
+
+      - name: Run operator preflight
+        run: |
+          python -m knowledge_engine.batch_cli preflight \
+            --spec-path governed_batches/m8-001-agent-execution-paths.json \
+            --registry-path governed_batches/registry-v2.json \
+            --production-pointer-path governed_batches/evidence/m8-001-production-pointer.json \
+            --output evidence/m8-001/operator-preflight.json
+
+      - name: Verify next legal action
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("evidence/m8-001")
+          lifecycle = json.loads((root / "lifecycle-reconciliation.json").read_text())
+          preflight = json.loads((root / "operator-preflight.json").read_text())
+
+          assert lifecycle["status"] == "passed"
+          assert lifecycle["lifecycle_state"] == "runtime_accepted"
+          assert lifecycle["next_action"] == "commit_production_request_spec"
+          assert lifecycle["production_mutated"] is False
+          assert preflight["status"] == "ready"
+          assert preflight["lifecycle_state"] == "runtime_accepted"
+          assert preflight["next_action"] == "commit_production_request_spec"
+          assert preflight["mutations_performed"] == []
+
+          summary = {
+              "status": "passed",
+              "batch_id": lifecycle["batch_id"],
+              "lifecycle_state": lifecycle["lifecycle_state"],
+              "transition_count": lifecycle["transition_count"],
+              "next_action": lifecycle["next_action"],
+              "production_mutated": False,
+              "mutations_performed": [],
+          }
+          (root / "summary.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print("M8_LIFECYCLE_RECONCILIATION_PASSED")
+          PY
+
+      - name: Upload reconciliation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m8-lifecycle-reconciliation-${{ github.sha }}
+          path: evidence/m8-001
+          if-no-files-found: error
+          retention-days: 90
