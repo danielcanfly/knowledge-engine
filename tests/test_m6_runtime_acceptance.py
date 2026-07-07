@@ -18,9 +18,11 @@ def _load_runtime_acceptance_script() -> ModuleType:
 def test_boundary_query_targets_internal_only_fixture_without_weakening_acl_gate() -> None:
     module = _load_runtime_acceptance_script()
 
-    assert "M3 candidate pipeline" in module.BOUNDARY_QUERY
+    assert module.BOUNDARY_QUERY == "delivery controls"
+    assert "Knowledge OS" not in module.BOUNDARY_QUERY
+    assert "M3" not in module.BOUNDARY_QUERY
+    assert "candidate" not in module.BOUNDARY_QUERY.lower()
     assert "public users" not in module.BOUNDARY_QUERY
-    assert "candidate delivery controls" not in module.BOUNDARY_QUERY.lower()
 
 
 def test_source_governance_identity_accepts_concept_id_or_x_kos_id() -> None:
