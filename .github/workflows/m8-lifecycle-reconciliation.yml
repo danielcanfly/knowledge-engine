@@ -29,6 +29,14 @@ jobs:
       - name: Install exact Engine
         run: python -m pip install -e '.[dev]'
 
+      - name: Run operator preflight on clean checkout
+        run: |
+          python -m knowledge_engine.batch_cli preflight \
+            --spec-path governed_batches/m8-001-agent-execution-paths.json \
+            --registry-path governed_batches/registry-v2.json \
+            --production-pointer-path governed_batches/evidence/m8-001-production-pointer.json \
+            --output evidence/m8-001/operator-preflight.json
+
       - name: Validate lifecycle history
         run: |
           python scripts/m8_validate_lifecycle_history.py \
@@ -40,14 +48,6 @@ jobs:
 
       - name: Run lifecycle tests
         run: python -m pytest tests/test_m8_lifecycle_history.py
-
-      - name: Run operator preflight
-        run: |
-          python -m knowledge_engine.batch_cli preflight \
-            --spec-path governed_batches/m8-001-agent-execution-paths.json \
-            --registry-path governed_batches/registry-v2.json \
-            --production-pointer-path governed_batches/evidence/m8-001-production-pointer.json \
-            --output evidence/m8-001/operator-preflight.json
 
       - name: Verify next legal action
         run: |
