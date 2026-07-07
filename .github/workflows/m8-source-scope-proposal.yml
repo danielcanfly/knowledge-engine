@@ -1,0 +1,183 @@
+name: M8 Source Scope Proposal
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "governed_batches/m8-001-agent-execution-paths.json"
+      - "governed_batches/registry-v2.json"
+      - "governed_batches/evidence/m8-001-*.json"
+      - ".github/workflows/m8-source-scope-proposal.yml"
+      - "src/knowledge_engine/batch_*.py"
+      - "src/knowledge_engine/operator_preflight.py"
+      - "src/knowledge_engine/scale_readiness.py"
+
+permissions:
+  contents: read
+
+jobs:
+  scope-proposal:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Engine
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install exact Engine
+        run: python -m pip install -e .
+
+      - name: Run operator preflight
+        run: |
+          python -m knowledge_engine.batch_cli preflight \
+            --spec-path governed_batches/m8-001-agent-execution-paths.json \
+            --registry-path governed_batches/registry-v2.json \
+            --output evidence/m8-001/operator-preflight.json
+
+      - name: Validate governed registry
+        run: |
+          python -m knowledge_engine.batch_cli validate \
+            --registry-path governed_batches/registry-v2.json \
+            --evidence-dir evidence/m8-001
+
+      - name: Run scale readiness gate
+        run: |
+          python -m knowledge_engine.batch_cli readiness \
+            --registry-path governed_batches/registry-v2.json \
+            --production-pointer-path governed_batches/evidence/m8-001-production-pointer.json \
+            --expected-release-id 20260706T061437Z-bc48bf4810c0 \
+            --expected-manifest-sha256 8eefb904d1eea0f6ca87b074c60edfe94c725bd76adb77961919b8d2bd4c8f96 \
+            --workflow-health-path governed_batches/evidence/m8-001-workflow-health.json \
+            --output evidence/m8-001/scale-readiness.json
+
+      - name: Check out exact blog origin
+        uses: actions/checkout@v4
+        with:
+          repository: huaihsuanbusiness/daniel-blog
+          ref: 27e2fe996f878f2129bf510d6a326c02f7d87be5
+          path: blog-origin
+          persist-credentials: false
+
+      - name: Check out Source baseline
+        uses: actions/checkout@v4
+        with:
+          repository: danielcanfly/knowledge-source
+          ref: 6a35f9f35e4c6c599a266710344f760c399d914d
+          path: knowledge-source
+          persist-credentials: false
+
+      - name: Verify exact origin and non-overlap
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          origin_repo = Path("blog-origin")
+          source_repo = Path("knowledge-source")
+          origin_path = Path(
+              "src/content/blog/the-atlas-of-agent-design-patterns-part-2/en.md"
+          )
+          target = Path("bundle/concepts/agent-execution-paths.md")
+
+          origin_commit = subprocess.check_output(
+              ["git", "-C", str(origin_repo), "rev-parse", "HEAD"],
+              text=True,
+          ).strip()
+          origin_blob = subprocess.check_output(
+              ["git", "-C", str(origin_repo), "hash-object", str(origin_path)],
+              text=True,
+          ).strip()
+          source_commit = subprocess.check_output(
+              ["git", "-C", str(source_repo), "rev-parse", "HEAD"],
+              text=True,
+          ).strip()
+
+          assert origin_commit == "27e2fe996f878f2129bf510d6a326c02f7d87be5"
+          assert origin_blob == "9b8912a4dc0193c0c478bcfe83dfaccff21b7ffe"
+          assert source_commit == "6a35f9f35e4c6c599a266710344f760c399d914d"
+          assert (origin_repo / origin_path).is_file()
+          assert not (source_repo / target).exists()
+
+          existing = sorted(
+              str(path.relative_to(source_repo))
+              for path in (source_repo / "bundle/concepts").glob("*.md")
+          )
+          assert str(target) not in existing
+
+          root = Path("evidence/m8-001")
+          root.mkdir(parents=True, exist_ok=True)
+          result = {
+              "status": "verified",
+              "origin_repository": "huaihsuanbusiness/daniel-blog",
+              "origin_commit": origin_commit,
+              "origin_path": str(origin_path),
+              "origin_blob_sha": origin_blob,
+              "source_repository": "danielcanfly/knowledge-source",
+              "source_baseline_sha": source_commit,
+              "intended_source_path": str(target),
+              "intended_source_path_exists": False,
+              "existing_source_paths": existing,
+          }
+          (root / "source-scope-verification.json").write_text(
+              json.dumps(result, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Verify proposal boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("evidence/m8-001")
+          preflight = json.loads((root / "operator-preflight.json").read_text())
+          registry = json.loads((root / "batch-registry-validation.json").read_text())
+          readiness = json.loads((root / "scale-readiness.json").read_text())
+          scope = json.loads((root / "source-scope-verification.json").read_text())
+
+          assert preflight["status"] == "ready"
+          assert preflight["lifecycle_state"] == "planned"
+          assert preflight["next_action"] == "open_source_review"
+          assert preflight["mutations_performed"] == []
+          assert registry["status"] == "valid"
+          assert registry["batch_count"] == 1
+          assert readiness["status"] == "ready_for_governed_dry_run"
+          assert readiness["mutations_performed"] == []
+          assert scope["status"] == "verified"
+          assert scope["intended_source_path_exists"] is False
+
+          summary = {
+              "status": "passed",
+              "batch_id": preflight["batch_id"],
+              "lifecycle_state": preflight["lifecycle_state"],
+              "next_action": preflight["next_action"],
+              "source_scope_verified": True,
+              "origin_blob_verified": True,
+              "source_path_overlap": False,
+              "mutations_performed": [],
+              "source_mutated": False,
+              "candidate_built": False,
+              "request_created": False,
+              "production_mutated": False,
+          }
+          (root / "summary.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print("M8_SOURCE_SCOPE_PROPOSAL_PASSED")
+          PY
+
+      - name: Upload proposal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m8-source-scope-proposal-${{ github.sha }}
+          path: evidence/m8-001
+          if-no-files-found: error
+          retention-days: 90
