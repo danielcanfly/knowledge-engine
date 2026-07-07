@@ -8,22 +8,13 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from .batch_lifecycle import next_action
 from .batch_registry import load_batch_registry, validate_batch_registry
 from .batch_spec import REGISTRY_PATH, BatchSpec, load_batch_spec
 from .errors import IntegrityError
 from .promotion_request import load_promotion_request_spec
 
 PRODUCTION_WORKFLOW = Path(".github/workflows/m5-production-promotion.yml")
-NEXT_ACTION = {
-    "planned": "open_source_review",
-    "source_reviewed": "run_source_validation",
-    "source_validated": "build_candidate",
-    "candidate_built": "run_runtime_acceptance",
-    "runtime_accepted": "commit_production_request_spec",
-    "request_spec_committed": "review_production_promotion",
-    "production_promoted": "run_idempotent_replay_and_close",
-    "closed": "start_next_batch",
-}
 _INPUT_RE = re.compile(r"^      ([A-Za-z0-9_-]+):\s*$", re.MULTILINE)
 
 
@@ -147,7 +138,7 @@ def run_operator_preflight(
         "status": "ready",
         "batch_id": spec.batch_id,
         "lifecycle_state": spec.lifecycle_state,
-        "next_action": NEXT_ACTION[spec.lifecycle_state],
+        "next_action": next_action(spec.lifecycle_state),
         "git_worktree_clean": clean,
         "production_workflow_inputs": inputs,
         "required_environment": list(required_env),
