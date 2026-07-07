@@ -245,7 +245,8 @@ def build_production_ledger_comment(
         f"- Public query: `{normalized['post_promote_public_query']}`",
         f"- Public expected status: `{expected_public_status}`",
         f"- Public actual status: `{public_query.get('status')}`",
-        f"- Public raw fallback used: `{_bool(public_acceptance.get('raw_fallback_used'))}`",
+        f"- Public raw fallback used: "
+        f"`{_bool(public_acceptance.get('raw_fallback_used'))}`",
         f"- Expected citation URL returned: `{expected_citation_url}`",
         f"- Citation count: `{public_acceptance.get('citation_count')}`",
         f"- ACL query: `{normalized.get('post_promote_acl_query', '')}`",
@@ -254,7 +255,9 @@ def build_production_ledger_comment(
         f"- ACL raw fallback used: `{acl_raw_fallback}`",
         f"- ACL filtered count: `{acl_filtered_count}`",
         "",
-        "This ledger entry is automated evidence only. It is not a human approval decision and does not authorize a Source package or production release.",
+        "This ledger entry is automated evidence only. It is not a human "
+        "approval decision and does not authorize a Source package or "
+        "production release.",
         "",
     ]
     return "\n".join(lines)
