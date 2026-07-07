@@ -7,7 +7,7 @@ on:
       - "governed_batches/m8-001-agent-execution-paths.json"
       - "governed_batches/registry-v2.json"
       - "governed_batches/evidence/m8-001-lifecycle-history.json"
-      - "scripts/m8_validate_lifecycle_history.py"
+      - "scripts/m8_validate_closure.py"
       - "tests/test_m8_lifecycle_history.py"
       - ".github/workflows/m8-lifecycle-reconciliation.yml"
 
@@ -37,19 +37,19 @@ jobs:
             --production-pointer-path governed_batches/evidence/m8-001-production-pointer.json \
             --output evidence/m8-001/operator-preflight.json
 
-      - name: Validate lifecycle history
+      - name: Validate closure history
         run: |
-          python scripts/m8_validate_lifecycle_history.py \
+          python scripts/m8_validate_closure.py \
             --history governed_batches/evidence/m8-001-lifecycle-history.json \
             --spec governed_batches/m8-001-agent-execution-paths.json \
             --registry governed_batches/registry-v2.json \
-            --production-pointer governed_batches/evidence/m8-001-production-pointer.json \
+            --baseline governed_batches/evidence/m8-001-production-pointer.json \
             --output evidence/m8-001/lifecycle-reconciliation.json
 
       - name: Run lifecycle tests
         run: python -m pytest tests/test_m8_lifecycle_history.py
 
-      - name: Verify next legal action
+      - name: Verify closure state
         run: |
           python - <<'PY'
           import json
@@ -60,12 +60,14 @@ jobs:
           preflight = json.loads((root / "operator-preflight.json").read_text())
 
           assert lifecycle["status"] == "passed"
-          assert lifecycle["lifecycle_state"] == "request_spec_committed"
-          assert lifecycle["next_action"] == "review_production_promotion"
-          assert lifecycle["production_mutated"] is False
+          assert lifecycle["lifecycle_state"] == "closed"
+          assert lifecycle["transition_count"] == 7
+          assert lifecycle["idempotent_replay"] is True
+          assert lifecycle["production_mutated"] is True
+          assert lifecycle["next_action"] == "start_next_batch"
           assert preflight["status"] == "ready"
-          assert preflight["lifecycle_state"] == "request_spec_committed"
-          assert preflight["next_action"] == "review_production_promotion"
+          assert preflight["lifecycle_state"] == "closed"
+          assert preflight["next_action"] == "start_next_batch"
           assert preflight["mutations_performed"] == []
 
           summary = {
@@ -73,22 +75,23 @@ jobs:
               "batch_id": lifecycle["batch_id"],
               "lifecycle_state": lifecycle["lifecycle_state"],
               "transition_count": lifecycle["transition_count"],
+              "idempotent_replay": True,
               "next_action": lifecycle["next_action"],
-              "production_mutated": False,
+              "production_mutated": True,
               "mutations_performed": [],
           }
           (root / "summary.json").write_text(
               json.dumps(summary, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
-          print("M8_LIFECYCLE_RECONCILIATION_PASSED")
+          print("M8_CLOSURE_RECONCILIATION_PASSED")
           PY
 
       - name: Upload reconciliation evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m8-lifecycle-reconciliation-${{ github.sha }}
+          name: m8-closure-reconciliation-${{ github.sha }}
           path: evidence/m8-001
           if-no-files-found: error
           retention-days: 90

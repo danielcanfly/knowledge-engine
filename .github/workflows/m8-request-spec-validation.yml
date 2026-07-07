@@ -10,7 +10,7 @@ on:
       - "governed_batches/evidence/m8-001-lifecycle-history.json"
       - "tests/test_m8_request_spec.py"
       - "tests/test_m8_lifecycle_history.py"
-      - "scripts/m8_validate_lifecycle_history.py"
+      - "scripts/m8_validate_closure.py"
       - ".github/workflows/m8-request-spec-validation.yml"
       - ".github/workflows/m8-lifecycle-reconciliation.yml"
 
@@ -40,7 +40,7 @@ jobs:
             --production-pointer-path governed_batches/evidence/m8-001-production-pointer.json \
             --output evidence/m8-001/request-spec-preflight.json
 
-      - name: Validate request and lifecycle
+      - name: Validate request and closure
         run: |
           python -m pytest \
             tests/test_m8_request_spec.py \
@@ -69,10 +69,10 @@ jobs:
           )
 
           assert preflight["status"] == "ready"
-          assert preflight["lifecycle_state"] == "request_spec_committed"
-          assert preflight["next_action"] == "review_production_promotion"
+          assert preflight["lifecycle_state"] == "closed"
+          assert preflight["next_action"] == "start_next_batch"
           assert preflight["mutations_performed"] == []
-          assert spec.lifecycle_state == "request_spec_committed"
+          assert spec.lifecycle_state == "closed"
 
           normalized = request.normalized()
           summary = {
@@ -90,8 +90,8 @@ jobs:
               "expected_previous_manifest_sha256": normalized[
                   "expected_previous_manifest_sha256"
               ],
-              "next_action": "review_production_promotion",
-              "production_mutated": False,
+              "next_action": "start_next_batch",
+              "production_mutated": True,
               "mutations_performed": [],
           }
           output = Path("evidence/m8-001/request-spec-summary.json")
@@ -99,7 +99,7 @@ jobs:
               json.dumps(summary, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
-          print("M8_REQUEST_SPEC_VALIDATION_PASSED")
+          print("M8_REQUEST_SPEC_RETENTION_PASSED")
           PY
 
       - name: Upload request evidence
