@@ -1,0 +1,23 @@
+{
+  "schema_version": "m8-proposed-review-decision/v1",
+  "batch_id": "m8-001-agent-execution-paths",
+  "review_id": "review_m8_001_agent_execution_paths",
+  "concept_id": "concepts/agent-execution-paths",
+  "status": "pending_human_review",
+  "reviewer": null,
+  "reviewed_at": null,
+  "approved_audience": null,
+  "decision": null,
+  "required_decisions": [
+    "approve_content_scope",
+    "approve_public_audience",
+    "approve_provenance_claims",
+    "approve_canonical_source_pr_creation"
+  ],
+  "allowed_decisions": [
+    "approve",
+    "request_changes",
+    "reject"
+  ],
+  "canonical_write_authorized": false
+}
