@@ -2,12 +2,10 @@
   "schema_version": "governed-batch-spec/v2",
   "batch_id": "m8-001-agent-execution-paths",
   "title": "Agent Execution Paths",
-  "lifecycle_state": "request_spec_committed",
+  "lifecycle_state": "closed",
   "source": {
     "repository": "danielcanfly/knowledge-source",
-    "paths": [
-      "bundle/concepts/agent-execution-paths.md"
-    ],
+    "paths": ["bundle/concepts/agent-execution-paths.md"],
     "sha": "97979c1c07d6208055d2937c68e500ba49a6ed57"
   },
   "builder_sha": "1b55c68a441def01a5277c94b350efab1437459d",
