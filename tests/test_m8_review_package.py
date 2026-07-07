@@ -3,9 +3,13 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
+from runpy import run_path
 
 import pytest
-from scripts.m8_validate_review_package import validate_review_package
+
+validate_review_package = run_path(
+    "scripts/m8_validate_review_package.py"
+)["validate_review_package"]
 
 
 def test_m8_review_package_is_complete_and_pending() -> None:
