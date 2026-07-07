@@ -8,6 +8,7 @@ on:
       - "governed_batches/registry-v2.json"
       - "governed_batches/evidence/m8-001-*.json"
       - ".github/workflows/m8-source-scope-proposal.yml"
+      - "scripts/m8_verify_source_scope.py"
       - "src/knowledge_engine/batch_*.py"
       - "src/knowledge_engine/operator_preflight.py"
       - "src/knowledge_engine/scale_readiness.py"
@@ -62,72 +63,12 @@ jobs:
           path: blog-origin
           persist-credentials: false
 
-      - name: Check out Source baseline
-        uses: actions/checkout@v4
-        with:
-          repository: danielcanfly/knowledge-source
-          ref: 6a35f9f35e4c6c599a266710344f760c399d914d
-          path: knowledge-source
-          persist-credentials: false
-
-      - name: Verify exact origin and non-overlap
+      - name: Verify exact origin and Source baseline attestation
         run: |
-          python - <<'PY'
-          import json
-          import subprocess
-          from pathlib import Path
-
-          origin_repo = Path("blog-origin")
-          source_repo = Path("knowledge-source")
-          origin_path = Path(
-              "src/content/blog/the-atlas-of-agent-design-patterns-part-2/en.md"
-          )
-          target = Path("bundle/concepts/agent-execution-paths.md")
-
-          origin_commit = subprocess.check_output(
-              ["git", "-C", str(origin_repo), "rev-parse", "HEAD"],
-              text=True,
-          ).strip()
-          origin_blob = subprocess.check_output(
-              ["git", "-C", str(origin_repo), "hash-object", str(origin_path)],
-              text=True,
-          ).strip()
-          source_commit = subprocess.check_output(
-              ["git", "-C", str(source_repo), "rev-parse", "HEAD"],
-              text=True,
-          ).strip()
-
-          assert origin_commit == "27e2fe996f878f2129bf510d6a326c02f7d87be5"
-          assert origin_blob == "9b8912a4dc0193c0c478bcfe83dfaccff21b7ffe"
-          assert source_commit == "6a35f9f35e4c6c599a266710344f760c399d914d"
-          assert (origin_repo / origin_path).is_file()
-          assert not (source_repo / target).exists()
-
-          existing = sorted(
-              str(path.relative_to(source_repo))
-              for path in (source_repo / "bundle/concepts").glob("*.md")
-          )
-          assert str(target) not in existing
-
-          root = Path("evidence/m8-001")
-          root.mkdir(parents=True, exist_ok=True)
-          result = {
-              "status": "verified",
-              "origin_repository": "huaihsuanbusiness/daniel-blog",
-              "origin_commit": origin_commit,
-              "origin_path": str(origin_path),
-              "origin_blob_sha": origin_blob,
-              "source_repository": "danielcanfly/knowledge-source",
-              "source_baseline_sha": source_commit,
-              "intended_source_path": str(target),
-              "intended_source_path_exists": False,
-              "existing_source_paths": existing,
-          }
-          (root / "source-scope-verification.json").write_text(
-              json.dumps(result, indent=2, sort_keys=True) + "\n",
-              encoding="utf-8",
-          )
-          PY
+          python scripts/m8_verify_source_scope.py \
+            --origin-repo blog-origin \
+            --attestation governed_batches/evidence/m8-001-source-baseline-attestation.json \
+            --output evidence/m8-001/source-scope-verification.json
 
       - name: Verify proposal boundary
         run: |
@@ -150,6 +91,8 @@ jobs:
           assert readiness["status"] == "ready_for_governed_dry_run"
           assert readiness["mutations_performed"] == []
           assert scope["status"] == "verified"
+          assert scope["origin_blob_sha"] == "9b8912a4dc0193c0c478bcfe83dfaccff21b7ffe"
+          assert scope["source_baseline_sha"] == "6a35f9f35e4c6c599a266710344f760c399d914d"
           assert scope["intended_source_path_exists"] is False
 
           summary = {
@@ -160,6 +103,7 @@ jobs:
               "source_scope_verified": True,
               "origin_blob_verified": True,
               "source_path_overlap": False,
+              "source_verification_method": scope["source_verification_method"],
               "mutations_performed": [],
               "source_mutated": False,
               "candidate_built": False,
