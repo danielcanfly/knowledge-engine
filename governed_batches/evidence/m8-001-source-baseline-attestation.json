@@ -1,0 +1,26 @@
+{
+  "schema_version": "m8-source-baseline-attestation/v1",
+  "verification_method": "github-connector-exact-ref-content-lookup",
+  "source_repository": "danielcanfly/knowledge-source",
+  "source_sha": "6a35f9f35e4c6c599a266710344f760c399d914d",
+  "intended_source_path": "bundle/concepts/agent-execution-paths.md",
+  "intended_source_path_fetch_status": 404,
+  "intended_source_path_exists": false,
+  "existing_concepts": [
+    {
+      "path": "bundle/concepts/candidate-delivery-controls.md",
+      "blob_sha": "2e1759c4c1968e38dff55cbdcaaed08f5df627a5",
+      "audience": "internal"
+    },
+    {
+      "path": "bundle/concepts/six-dimensional-map-of-llm-agent-architectures.md",
+      "blob_sha": "4feaba133e91d4ebd4d422f8aea7d252fb81f112",
+      "audience": "public"
+    },
+    {
+      "path": "bundle/concepts/source-governance.md",
+      "blob_sha": "b5d9a76ccf31df61ce9cf455ea144593367d85e5",
+      "audience": "public"
+    }
+  ]
+}
