@@ -1,41 +1,33 @@
 # M6-001 Batch Spec: LLM Wiki Foundation
 
-Status: `runtime acceptance workflow pending`
+Status: `production promoted and verified`
 
 Parent tracker: `#42`
 
-Child slices: `#45`, `#56`, `#57`, `#59`, `#60`, `#62`
+Runtime acceptance evidence: `docs/batches/m6-001-runtime-acceptance-evidence.md`
 
-This is the first named M6 batch spec. It references reviewed Source paths, Source validation evidence, candidate evidence planning, and candidate build evidence. It does not edit Source, does not create a production request spec, and does not authorize production promotion.
+Production request evidence: `docs/batches/m6-001-production-request-spec.md`
+
+Production status: `docs/batches/m6-001-production-status.md`
 
 ## 1. Batch identity
 
 - Batch ID: `m6-001-llm-wiki-foundation`
 - Batch title: `LLM Wiki Foundation Batch`
 - Owner / operator: `danielcanfly`
-- Created at: `2026-07-06`
-- Parent issue: `#42`
-- Initial batch spec issue: `#45`
-- Batch spec update issue: `#56`
-- Source validation evidence issue: `#57`
-- Candidate evidence planning issue: `#59`
-- Candidate build evidence issue: `#60`
-- Runtime acceptance issue: `#62`
-- Source PR: `not required yet / selected content already exists on Source main`
-- Related Engine PRs: `#54`, `#55`, `#56`, `#58`, `#59`, `#61`, `pending #62`
+- Source repository: `danielcanfly/knowledge-source`
+- Source SHA: `6a35f9f35e4c6c599a266710344f760c399d914d`
+- Builder SHA: `1b55c68a441def01a5277c94b350efab1437459d`
+- Foundation SHA: `d12c7c416c950d743d4cd5e7964fd3c3bc0d9062`
 
-## 2. Scope
+## 2. Reviewed scope
 
-### Intended content family
-
-This batch covers the first reviewed Source-backed slice for LLM Wiki / Knowledge OS foundation material.
-
-### Reviewed primary content paths
+Primary concepts:
 
 - `bundle/concepts/six-dimensional-map-of-llm-agent-architectures.md`
 - `bundle/concepts/source-governance.md`
 
-### Reviewed supporting paths
+Supporting files:
 
 - `bundle/index.md`
 - `README.md`
@@ -44,70 +36,20 @@ This batch covers the first reviewed Source-backed slice for LLM Wiki / Knowledg
 - `provenance/six-dimensional-map-of-llm-agent-architectures.json`
 - `provenance/source-governance.json`
 
-### Reviewed fixture-only path
+Fixture-only boundary concept:
 
 - `bundle/concepts/candidate-delivery-controls.md`
 
-### Excluded content
+## 3. Source validation
 
-- Sensitive private material
-- Raw chat logs copied directly into canonical Source
-- Any unreviewed Source path not represented in M6.6 / M6.7 planning evidence
-- Any production request spec
-- Any content expansion before candidate evidence is collected
-
-### Risk notes
-
-- Source paths have been reviewed.
-- Source validation evidence has been recorded for the reviewed Source SHA.
-- Candidate evidence planning has locked query strings, citation mapping, boundary query, Builder / Foundation identity, and dispatch plan.
-- Candidate build evidence has been collected and passed.
-- Runtime acceptance workflow is prepared; final runtime artifacts are still pending.
-- The batch must not rely on chat memory as evidence.
-
-## 3. Source identity
-
-- Source repository: `danielcanfly/knowledge-source`
-- Source branch: `main`
-- Source HEAD reviewed: `6a35f9f35e4c6c599a266710344f760c399d914d`
-- Source validation workflow run ID: `28771739838`
-- Source validation job ID: `85306679196`
-- Source validation conclusion: `success`
-- Source validation artifact ID: `8101046344`
-- Source validation artifact digest: `sha256:d8012852c831df3b16ef46ea2b0849783dfb169ce9c3e3f0862e0f222114acfa`
-- Source validation artifact name: `knowledge-source-validation-6a35f9f35e4c6c599a266710344f760c399d914d`
-- Source validation artifact expired: `false`
-- Inventory timestamp: `20260706T152049Z`
+- Validation run ID: `28771739838`
+- Validation job ID: `85306679196`
+- Validation conclusion: `success`
+- Validation artifact ID: `8101046344`
+- Validation artifact digest: `sha256:d8012852c831df3b16ef46ea2b0849783dfb169ce9c3e3f0862e0f222114acfa`
 - Inventory checksum: `375dfe63eaeae00e1aa5a350d98e60f43412f6bc19f15689279fd44ceca9eb57`
-- Path review PR: `#54`
-- Path review merge commit: `48410e213132dbbd062afb21b2cb4c95e4b399fb`
-- Proposal update PR: `#55`
-- Proposal update merge commit: `1e342a6a6b36b379a7e4b18e33717e95144843e5`
-- Batch spec update PR: `#56`
-- Batch spec update merge commit: `f51fca2edd15af9473af0cb0cec6f47a5cdeb36c`
-- Source validation evidence PR: `#58`
-- Source validation evidence merge commit: `3c29abe08e7e46fb1f8446a8dc7753f5c4c24af6`
 
-Required before candidate build:
-
-- Engine-side candidate workflow target confirmed
-- candidate build dispatched by governed Source automation or explicitly reviewed manual fallback
-
-## 4. Builder and Foundation identity
-
-Builder / Foundation rotation decision: `no rotation required for M6-001`
-
-Current policy-pinned identity:
-
-- Builder repository: `danielcanfly/knowledge-engine`
-- Expected Builder SHA: `1b55c68a441def01a5277c94b350efab1437459d`
-- Expected Automation SHA: `1b55c68a441def01a5277c94b350efab1437459d`
-- Expected Foundation SHA: `d12c7c416c950d743d4cd5e7964fd3c3bc0d9062`
-- Rotation PR: `n/a`
-
-If Builder or Foundation SHA changes before candidate build, M6.10 must be repeated.
-
-## 5. Candidate identity
+## 4. Candidate evidence
 
 - Candidate channel: `candidate-source-6a35f9f35e4c6c599a266710344f760c399d914d`
 - Candidate workflow run ID: `28771769531`
@@ -115,160 +57,129 @@ If Builder or Foundation SHA changes before candidate build, M6.10 must be repea
 - Candidate artifact digest: `sha256:ab824a8284a78f6e5c38d547aa89ba119beb2c53084640a40512f9bf0c13ca52`
 - Candidate release ID: `20260706T061437Z-bc48bf4810c0`
 - Candidate manifest SHA-256: `8eefb904d1eea0f6ca87b074c60edfe94c725bd76adb77961919b8d2bd4c8f96`
-- Candidate source snapshot SHA-256: `40fa745903096660150c75ca7fe0d272e90367428e72d9d8e6245bb2ab0cc4d8`
-- Candidate release tree SHA-256: `7b7cb7dabbc499df1228d6e2624ea998978cb3ecc618d025fa9b8694e528c261`
-- Candidate quality overall: `passed`
-- Reproducibility passed: `true`
-- Production pointer unchanged: `true`
+- Candidate quality: `passed`
+- Reproducibility: `passed`
+- Production pointer unchanged during candidate build: `true`
 
-Candidate channel must be derived from the validated Source SHA.
+## 5. Runtime acceptance
 
-## 6. Public acceptance
+Runtime acceptance run:
 
-Final public query 1:
+- Run ID: `28843971131`
+- Job ID: `85543665085`
+- Conclusion: `success`
+- Artifact ID: `8128851263`
+- Artifact digest: `sha256:81426a0cbd093b6ab0cac124f69d0c32949e502c976c34039d6975bcb4ce256e`
+- Summary status: `passed`
+
+Public query 1:
 
 ```text
 What is the Knowledge Source governance boundary in Knowledge OS?
 ```
 
-Expected result:
+Observed:
 
-- Expected public status: `answered`
-- Expected citation target: `bundle/concepts/source-governance.md` or Source-backed runtime citation target for the same concept
-- Raw fallback used: `must be false`
-- Acceptance result artifact: `pending`
+- status: `answered`
+- Source governance identity present: `true`
+- citations present: `true`
+- raw fallback used: `false`
 
-Final public query 2:
+Public query 2:
 
 ```text
 How should LLM agent architectures be reviewed across six engineering dimensions?
 ```
 
-Expected result:
+Observed:
 
-- Expected public status: `answered`
-- Expected citation target: `https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/`
-- Raw fallback used: `must be false`
-- Acceptance result artifact: `pending`
+- status: `answered`
+- required blog citation present: `true`
+- raw fallback used: `false`
 
-## 7. Boundary acceptance
-
-Final boundary query:
+Boundary query:
 
 ```text
-What candidate delivery controls are available for public users in Knowledge OS?
+delivery controls
 ```
 
-Expected result:
+Observed:
 
-- Expected status: `not_found` or equivalent negative result.
-- Fixture-only path not returned as public content: `bundle/concepts/candidate-delivery-controls.md`.
-- Raw fallback used: `must be false`.
-- Boundary result artifact: `pending`.
+- status: `not_found`
+- results: `[]`
+- ACL filtered count: `1`
+- raw fallback used: `false`
 
-## 8. Candidate dispatch plan
+## 6. Production request specification
 
-Expected dispatch source:
+- Request path: `production_promotions/m6-001-llm-wiki-foundation.json`
+- Schema: `production-promotion-request/v1`
+- Operation ID: `m6-001-llm-wiki-foundation-001`
+- Expected previous release: `20260706T024200Z-19b86982de27`
+- Expected previous manifest: `8697f5ab6258d8545328fd32cea60b09c2c80aef4599611b0571a0553ea24a7e`
+- Target release: `20260706T061437Z-bc48bf4810c0`
+- Target manifest: `8eefb904d1eea0f6ca87b074c60edfe94c725bd76adb77961919b8d2bd4c8f96`
+- Committed `control_plane_sha`: `false`
 
-- Source workflow: `danielcanfly/knowledge-source/.github/workflows/publish-candidate.yml`
-- Trigger: successful `Validate Knowledge Source` workflow run on `main`
-- Event type: `knowledge-source-candidate`
-- Validation run ID: `28771739838`
-- Candidate channel: `candidate-source-6a35f9f35e4c6c599a266710344f760c399d914d`
+## 7. Production promotion
 
-Expected dispatch payload identity:
+First promotion run:
 
-- builder_ref: `1b55c68a441def01a5277c94b350efab1437459d`
-- source_repository: `danielcanfly/knowledge-source`
-- source_sha: `6a35f9f35e4c6c599a266710344f760c399d914d`
-- foundation_sha: `d12c7c416c950d743d4cd5e7964fd3c3bc0d9062`
+- Run ID: `28847474378`
+- Promotion status: `promoted`
+- Previous release: `20260706T024200Z-19b86982de27`
+- Target release: `20260706T061437Z-bc48bf4810c0`
 
-## 9. Candidate build evidence
+Final idempotent replay:
 
-Source dispatch:
+- Run ID: `28849698444`
+- Job ID: `85561748154`
+- Workflow conclusion: `success`
+- Precondition state: `already_target`
+- Promotion status: `already_promoted`
+- Idempotent: `true`
 
-- Source dispatch run ID: 28771761112
-- Source dispatch job ID: 85306738884
-- Source dispatch conclusion: success
-- Source dispatch artifact ID: 8101049916
-- Source dispatch artifact digest: sha256:9b1af24f8d8e6e0378d8d4ed4fe25942e6bdac03b06ec684fdf19570a1abf91d
-- Source dispatch HTTP status: 204
+Final production identity:
 
-Engine candidate workflow:
+- Release ID: `20260706T061437Z-bc48bf4810c0`
+- Manifest SHA-256: `8eefb904d1eea0f6ca87b074c60edfe94c725bd76adb77961919b8d2bd4c8f96`
+- Production pointer SHA-256: `edd628ca3c2b1991866c3d7adbff05ff32f8eef581e80d4ebd4b781dbbf6dcd6`
 
-- Engine candidate run ID: 28771769531
-- Engine candidate conclusion: success
-- Candidate artifact ID: 8101061363
-- Candidate artifact digest: sha256:ab824a8284a78f6e5c38d547aa89ba119beb2c53084640a40512f9bf0c13ca52
+## 8. Final runtime and ledger evidence
 
-Built-in candidate gate:
+- Public query status: `answered`
+- Required citation present: `true`
+- Public raw fallback: `false`
+- ACL query status: `not_found`
+- ACL results empty: `true`
+- ACL filtered count: `1`
+- ACL raw fallback: `false`
+- Ledger issue: `#30`
+- Ledger comment ID: `4901314017`
+- Promotion artifact ID: `8131019711`
+- Promotion artifact digest: `sha256:1b24f5005de070877f304e3a7c8630014d93c6a8489611f90fea45ab729da64c`
+- Artifact expiry: `2026-10-05T07:36:49Z`
 
-- internal status: answered
-- internal citation count: 1
-- public status: not_found
-- public ACL filtered count: 1
+## 9. Governance checklist
 
-Important limitation:
-
-- Built-in candidate gate evidence does not replace final runtime acceptance for the M6.10 public query set.
-
-## 10. Production request spec plan
-
-No production request spec exists yet.
-
-- Request spec path: `pending`
-- Operation ID: `pending`
-- Expected previous release ID: `20260706T024200Z-19b86982de27`
-- Expected previous manifest SHA-256: `8697f5ab6258d8545328fd32cea60b09c2c80aef4599611b0571a0553ea24a7e`
-- Target release ID: `pending`
-- Target manifest SHA-256: `pending`
-- Actor: `pending`
-- Reason: `pending`
-
-Forbidden field:
-
-- `control_plane_sha` must not be committed in the request spec.
-
-## 11. Rollout assumptions
-
-- Current production release before promotion: `20260706T024200Z-19b86982de27`
-- Current production manifest before promotion: `8697f5ab6258d8545328fd32cea60b09c2c80aef4599611b0571a0553ea24a7e`
-- Production precondition source: `pending workflow evidence`
-- Rollback expected previous release: `20260706T024200Z-19b86982de27` unless production changes before M6-001
-- Rollback evidence required: `yes`
-
-## 12. Governance checklist
-
-- [x] Source paths are reviewed in Engine planning evidence.
+- [x] Source scope reviewed.
 - [x] Source validation passed.
-- [x] Builder / Foundation rotation decision recorded.
-- [x] Candidate identity is verified from candidate channel and manifest.
-- [x] Candidate quality is `passed`.
-- [ ] Public query expected citation target is present.
-- [ ] Public raw fallback is `false`.
-- [ ] Boundary query passes if configured.
-- [ ] Boundary raw fallback is `false` if configured.
-- [ ] Production identity is committed in request spec.
-- [ ] Production workflow is dispatched by `request_path` only.
-- [ ] Automated ledger comment to `#30` is expected after production workflow success.
-- [ ] Replay / rollback proof remains green on `main`.
+- [x] Builder and Foundation identities recorded.
+- [x] Candidate identity verified.
+- [x] Candidate quality passed.
+- [x] Runtime public queries passed.
+- [x] Required citations returned.
+- [x] Raw fallback remained disabled.
+- [x] ACL boundary query returned no public result.
+- [x] Production identity committed in a request spec.
+- [x] Production workflow dispatched by `request_path` only.
+- [x] Production promotion succeeded.
+- [x] Idempotent replay succeeded.
+- [x] Permanent ledger entry recorded.
+- [x] Evidence artifact retained.
 
-## 13. Decision
+## 10. Decision
 
-- Batch spec status: `runtime acceptance workflow pending`
-- Reviewer: `pending`
-- Decision date: `pending`
-- Notes: `This spec records candidate build evidence and M6.12 runtime acceptance workflow planning. It does not approve request-spec creation or production promotion.`
+M6-001 is complete. Production points to the reviewed release, runtime acceptance passed, the replay path proved idempotency, and the permanent ledger entry exists.
 
-## 14. Next required action
-
-Collect runtime acceptance evidence:
-
-- final public query 1 result artifact
-- final public query 1 citation evidence
-- final public query 1 raw fallback flag
-- final public query 2 result artifact
-- final public query 2 citation evidence
-- final public query 2 raw fallback flag
-- final boundary query result artifact
-- final boundary raw fallback flag
+The next governed phase is M7: scale-up and operator automation. M7 entry work must not mutate Source or production.
