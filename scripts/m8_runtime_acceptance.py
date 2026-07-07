@@ -13,7 +13,7 @@ NEW_QUERY = (
 REGRESSION_QUERY = (
     "How should LLM agent architectures be reviewed across six engineering dimensions?"
 )
-BOUNDARY_QUERY = "delivery controls"
+BOUNDARY_QUERY = "quartz lantern protocol"
 EXPECTED_NEW_CONCEPT = "concepts/agent-execution-paths"
 EXPECTED_NEW_X_KOS_ID = "ko_7FHJFQQ11PKPEWC4W25CCBCGZM"
 EXPECTED_NEW_CITATION = (
@@ -165,6 +165,7 @@ def verify_outputs(
                 "raw_fallback_used": _raw_fallback(regression_query),
             },
             "boundary_query": {
+                "query": BOUNDARY_QUERY,
                 "status": boundary_query.get("status"),
                 "acl_filtered_count": boundary_query.get("retrieval", {}).get(
                     "acl_filtered_count"
