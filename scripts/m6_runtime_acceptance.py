@@ -10,9 +10,7 @@ PUBLIC_QUERY_1 = "What is the Knowledge Source governance boundary in Knowledge 
 PUBLIC_QUERY_2 = (
     "How should LLM agent architectures be reviewed across six engineering dimensions?"
 )
-BOUNDARY_QUERY = (
-    "What is the M3 candidate pipeline in Knowledge OS?"
-)
+BOUNDARY_QUERY = "delivery controls"
 EXPECTED_Q1_CONCEPT_IDS = {
     "concepts/source-governance",
     "source-governance",
