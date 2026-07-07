@@ -53,19 +53,16 @@ def _workflow_inputs(path: Path) -> list[str]:
     return _INPUT_RE.findall(text[start:end])
 
 
-def _selected_entry(registry_result: dict[str, Any], batch_id: str) -> dict[str, Any]:
-    for entry in registry_result["batches"]:
-        if entry["batch_id"] == batch_id:
-            return entry
-    raise IntegrityError(f"batch is not registered: {batch_id}")
+def _selected_entry(registry_result: dict[str, Any], batch_id: str) -> None:
+    if not any(entry["batch_id"] == batch_id for entry in registry_result["batches"]):
+        raise IntegrityError(f"batch is not registered: {batch_id}")
 
 
-def _validate_request_identity(spec: BatchSpec, root: Path) -> dict[str, Any] | None:
+def _validate_request_identity(spec: BatchSpec) -> dict[str, Any] | None:
     if spec.request_path is None:
         return None
-    request_path = root / spec.request_path
     request = load_promotion_request_spec(
-        request_path=request_path,
+        request_path=Path(spec.request_path),
         control_plane_sha="0" * 40,
     )
     if request.request.operation_id != spec.operation_id:
@@ -121,16 +118,18 @@ def run_operator_preflight(
     production_pointer_path: Path | None = None,
 ) -> dict[str, Any]:
     root = root.resolve()
-    registry = load_batch_registry(root / registry_path)
-    registry_result = validate_batch_registry(registry, root=root)
-    spec = load_batch_spec(root / spec_path, root=root)
+    if Path.cwd().resolve() != root:
+        raise IntegrityError("operator preflight must run from the repository root")
+
+    registry_result = validate_batch_registry(load_batch_registry(registry_path))
+    spec = load_batch_spec(spec_path)
     _selected_entry(registry_result, spec.batch_id)
 
     clean = _git_is_clean(root)
     if not clean and not allow_dirty:
         raise IntegrityError("Git worktree is dirty")
 
-    inputs = _workflow_inputs(root / PRODUCTION_WORKFLOW)
+    inputs = _workflow_inputs(PRODUCTION_WORKFLOW)
     if inputs != ["request_path"]:
         raise IntegrityError(
             "production workflow inputs must be exactly ['request_path']"
@@ -143,8 +142,6 @@ def run_operator_preflight(
             "required environment variables are missing: " + ", ".join(missing_env)
         )
 
-    request = _validate_request_identity(spec, root)
-    pointer = _validate_pointer(production_pointer_path)
     return {
         "status": "ready",
         "batch_id": spec.batch_id,
@@ -153,8 +150,8 @@ def run_operator_preflight(
         "git_worktree_clean": clean,
         "production_workflow_inputs": inputs,
         "required_environment": list(required_env),
-        "request": request,
-        "production_pointer": pointer,
+        "request": _validate_request_identity(spec),
+        "production_pointer": _validate_pointer(production_pointer_path),
         "mutations_performed": [],
     }
 
