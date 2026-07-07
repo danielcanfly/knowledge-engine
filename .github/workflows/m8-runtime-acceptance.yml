@@ -1,0 +1,68 @@
+name: M8 Runtime Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Candidate channel to test
+        required: true
+        default: candidate-source-97979c1c07d6208055d2937c68e500ba49a6ed57
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-acceptance:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      CACHE_DIR: .artifacts/runtime-cache
+      CHANNEL: ${{ inputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Engine
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+
+      - name: Verify target channel and R2 configuration
+        run: |
+          set -euo pipefail
+          test "$CHANNEL" = \
+            'candidate-source-97979c1c07d6208055d2937c68e500ba49a6ed57'
+          test -n "$R2_ACCESS_KEY_ID"
+          test -n "$R2_SECRET_ACCESS_KEY"
+          test -n "$R2_BUCKET"
+          test -n "$R2_ENDPOINT_URL"
+
+      - name: Run M8 runtime acceptance
+        run: |
+          set -euo pipefail
+          python scripts/m8_runtime_acceptance.py \
+            --channel "$CHANNEL" \
+            --out-dir evidence/m8-runtime-acceptance
+
+      - name: Upload runtime acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m8-runtime-acceptance-${{ inputs.channel }}
+          path: evidence/m8-runtime-acceptance/
+          if-no-files-found: warn
+          retention-days: 90
