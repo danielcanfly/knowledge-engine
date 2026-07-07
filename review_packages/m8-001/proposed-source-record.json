@@ -1,0 +1,22 @@
+{
+  "schema_version": "m8-proposed-source-record/v1",
+  "status": "pending_human_review",
+  "batch_id": "m8-001-agent-execution-paths",
+  "proposed_record": {
+    "source_id": "source_blog_agent_execution_paths",
+    "title": "Agent execution paths",
+    "kind": "markdown",
+    "owner": "Daniel Huang",
+    "license": "owner-provided",
+    "trust": "reviewed",
+    "audience": "public",
+    "status": "active",
+    "uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-2/",
+    "origin_repository": "huaihsuanbusiness/daniel-blog",
+    "origin_commit": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
+    "origin_path": "src/content/blog/the-atlas-of-agent-design-patterns-part-2/en.md",
+    "origin_blob_sha": "9b8912a4dc0193c0c478bcfe83dfaccff21b7ffe",
+    "content_sha256": null
+  },
+  "completion_rule": "content_sha256 must be calculated from the exact origin bytes before canonical Source write"
+}
