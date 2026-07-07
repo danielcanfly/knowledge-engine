@@ -5,19 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from knowledge_engine.errors import IntegrityError
 from knowledge_engine import operator_preflight
+from knowledge_engine.errors import IntegrityError
 
 
 def _write(path: Path, payload: dict | str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    if isinstance(payload, str):
-        path.write_text(payload, encoding="utf-8")
-    else:
-        path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    text = payload if isinstance(payload, str) else json.dumps(payload) + "\n"
+    path.write_text(text, encoding="utf-8")
 
 
-def _prepare(root: Path, workflow_input: str = "request_path") -> Path:
+def _prepare(root: Path, input_name: str = "request_path") -> Path:
     batch_id = "m7-001-preflight-proof"
     spec_path = Path(f"governed_batches/{batch_id}.json")
     _write(
@@ -44,7 +42,7 @@ def _prepare(root: Path, workflow_input: str = "request_path") -> Path:
                 "public_query": "What is the preflight proof?",
                 "expected_public_status": "answered",
                 "expected_citation_url": "https://example.invalid/preflight-proof",
-                "acl_query": "restricted preflight proof",
+                "acl_query": "boundary preflight proof",
                 "expected_acl_status": "not_found",
                 "raw_fallback_allowed": False,
             },
@@ -66,56 +64,53 @@ def _prepare(root: Path, workflow_input: str = "request_path") -> Path:
             ],
         },
     )
-    _write(
-        root / ".github/workflows/m5-production-promotion.yml",
+    workflow = (
         "name: Promotion\n"
         "on:\n"
         "  workflow_dispatch:\n"
         "    inputs:\n"
-        f"      {workflow_input}:\n"
+        f"      {input_name}:\n"
         "        required: true\n"
         "permissions:\n"
-        "  contents: read\n",
+        "  contents: read\n"
     )
+    _write(root / ".github/workflows/m5-production-promotion.yml", workflow)
     return spec_path
 
 
-def test_preflight_is_non_mutating_and_reports_next_action(
+def test_preflight_reports_next_action_without_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(operator_preflight, "_git_is_clean", lambda root: True)
     spec_path = _prepare(tmp_path)
-
     result = operator_preflight.run_operator_preflight(
         spec_path=spec_path,
         root=tmp_path,
-        required_env=["SOURCE_READ_TOKEN"],
-        environ={"SOURCE_READ_TOKEN": "present"},
+        required_env=["REQUIRED_TOKEN"],
+        environ={"REQUIRED_TOKEN": "present"},
     )
-
     assert result["status"] == "ready"
     assert result["next_action"] == "open_source_review"
     assert result["production_workflow_inputs"] == ["request_path"]
     assert result["mutations_performed"] == []
 
 
-def test_preflight_rejects_extra_workflow_input_and_missing_env(
+def test_preflight_rejects_boundary_and_environment_failures(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(operator_preflight, "_git_is_clean", lambda root: True)
-    spec_path = _prepare(tmp_path, workflow_input="release_id")
+    spec_path = _prepare(tmp_path, input_name="release_id")
     with pytest.raises(IntegrityError, match="inputs must be exactly"):
         operator_preflight.run_operator_preflight(spec_path=spec_path, root=tmp_path)
-
     _prepare(tmp_path)
     with pytest.raises(IntegrityError, match="environment variables are missing"):
         operator_preflight.run_operator_preflight(
             spec_path=spec_path,
             root=tmp_path,
-            required_env=["SOURCE_READ_TOKEN"],
+            required_env=["REQUIRED_TOKEN"],
             environ={},
         )
