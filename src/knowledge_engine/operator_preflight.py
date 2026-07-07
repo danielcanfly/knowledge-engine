@@ -4,8 +4,9 @@ import json
 import os
 import re
 import subprocess
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from .batch_registry import load_batch_registry, validate_batch_registry
 from .batch_spec import REGISTRY_PATH, BatchSpec, load_batch_spec
