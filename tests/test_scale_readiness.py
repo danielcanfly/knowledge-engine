@@ -45,7 +45,7 @@ def _spec(batch_id: str, source_path: str) -> dict:
 
 def _prepare(root: Path, *, overlap: bool = False) -> None:
     batch_ids = ["m7-001-readiness-proof", "m7-002-readiness-proof"]
-    paths = ["bundle/concepts/one.md", "bundle/concepts/one.md" if overlap else "bundle/concepts/two.md"]
+    paths = ["bundle/concepts/one.md", "bundle/concepts/one.md" if overlap else "bundle/concepts/two.md"]  # noqa: E501
     entries = []
     for batch_id, source_path in zip(batch_ids, paths, strict=True):
         spec_path = f"governed_batches/{batch_id}.json"
