@@ -1,0 +1,30 @@
+{
+  "schema_version": "governed-batch-spec/v2",
+  "batch_id": "m7-001-dry-run",
+  "title": "M7 Schema Dry Run",
+  "lifecycle_state": "planned",
+  "source": {
+    "repository": "danielcanfly/knowledge-source",
+    "paths": ["bundle/concepts/m7-dry-run.md"],
+    "sha": null
+  },
+  "builder_sha": "b40bab8ace32e1af6ae274003f846f7c9a961ca8",
+  "foundation_sha": "d12c7c416c950d743d4cd5e7964fd3c3bc0d9062",
+  "candidate": {
+    "channel": null,
+    "release_id": null,
+    "manifest_sha256": null
+  },
+  "production_request": {
+    "operation_id": null,
+    "request_path": null
+  },
+  "acceptance": {
+    "public_query": "What is the M7 dry run?",
+    "expected_public_status": "answered",
+    "expected_citation_url": "https://example.invalid/m7-dry-run",
+    "acl_query": "quartz lantern boundary",
+    "expected_acl_status": "not_found",
+    "raw_fallback_allowed": false
+  }
+}
