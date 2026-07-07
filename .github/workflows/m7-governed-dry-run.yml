@@ -1,0 +1,101 @@
+name: M7 Governed Dry Run
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "governed_batches/**"
+      - "src/knowledge_engine/batch_*.py"
+      - "src/knowledge_engine/operator_preflight.py"
+      - "src/knowledge_engine/scale_readiness.py"
+      - ".github/workflows/m7-governed-dry-run.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install exact Engine
+        run: python -m pip install -e .
+
+      - name: Run operator preflight
+        run: |
+          python -m knowledge_engine.batch_cli preflight \
+            --spec-path governed_batches/m7-001-dry-run.json \
+            --registry-path governed_batches/registry-v1.json \
+            --output evidence/m7-001/operator-preflight.json
+
+      - name: Validate governed registry
+        run: |
+          python -m knowledge_engine.batch_cli validate \
+            --registry-path governed_batches/registry-v1.json \
+            --evidence-dir evidence/m7-001
+
+      - name: Run scale readiness gate
+        run: |
+          python -m knowledge_engine.batch_cli readiness \
+            --registry-path governed_batches/registry-v1.json \
+            --production-pointer-path governed_batches/evidence/m7-001-production-pointer.json \
+            --expected-release-id 20260706T061437Z-bc48bf4810c0 \
+            --expected-manifest-sha256 8eefb904d1eea0f6ca87b074c60edfe94c725bd76adb77961919b8d2bd4c8f96 \
+            --workflow-health-path governed_batches/evidence/m7-001-workflow-health.json \
+            --output evidence/m7-001/scale-readiness.json
+
+      - name: Verify dry-run boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("evidence/m7-001")
+          preflight = json.loads((root / "operator-preflight.json").read_text())
+          registry = json.loads((root / "batch-registry-validation.json").read_text())
+          readiness = json.loads((root / "scale-readiness.json").read_text())
+
+          assert preflight["status"] == "ready"
+          assert preflight["lifecycle_state"] == "planned"
+          assert preflight["next_action"] == "open_source_review"
+          assert preflight["mutations_performed"] == []
+          assert registry["status"] == "valid"
+          assert registry["batch_count"] == 1
+          assert readiness["status"] == "ready_for_governed_dry_run"
+          assert readiness["mutations_performed"] == []
+
+          summary = {
+              "status": "passed",
+              "batch_id": preflight["batch_id"],
+              "lifecycle_state": preflight["lifecycle_state"],
+              "next_action": preflight["next_action"],
+              "registry_batch_count": registry["batch_count"],
+              "readiness_status": readiness["status"],
+              "mutations_performed": [],
+              "source_mutated": False,
+              "candidate_built": False,
+              "request_created": False,
+              "production_mutated": False,
+          }
+          (root / "summary.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print("M7_GOVERNED_DRY_RUN_PASSED")
+          PY
+
+      - name: Upload dry-run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m7-governed-dry-run-${{ github.sha }}
+          path: evidence/m7-001
+          if-no-files-found: error
+          retention-days: 90
