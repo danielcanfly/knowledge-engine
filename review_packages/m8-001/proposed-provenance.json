@@ -1,0 +1,107 @@
+{
+  "schema_version": "m8-proposed-provenance/v1",
+  "status": "pending_human_review",
+  "batch_id": "m8-001-agent-execution-paths",
+  "subject": {
+    "concept_id": "concepts/agent-execution-paths",
+    "target_path": "bundle/concepts/agent-execution-paths.md",
+    "proposed_x_kos_id": "ko_7FHJFQQ11PKPEWC4W25CCBCGZM"
+  },
+  "origin": {
+    "repository": "huaihsuanbusiness/daniel-blog",
+    "commit": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
+    "path": "src/content/blog/the-atlas-of-agent-design-patterns-part-2/en.md",
+    "blob_sha": "9b8912a4dc0193c0c478bcfe83dfaccff21b7ffe",
+    "source_id": "source_blog_agent_execution_paths",
+    "uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-2/"
+  },
+  "claims": [
+    {
+      "claim_id": "claim_outer_structure_is_separate_from_node_logic",
+      "text": "Outer execution structure and node-level decision logic are separate architectural layers and may be combined.",
+      "evidence_locator": {
+        "section": "Execution structure is not node-level intelligence",
+        "source_lines": "34-67"
+      }
+    },
+    {
+      "claim_id": "claim_five_primary_execution_structures",
+      "text": "Direct, Pipeline, Router, State Machine, and DAG answer different execution-control questions and are not a maturity ladder.",
+      "evidence_locator": {
+        "section": "Five core execution structures",
+        "source_lines": "69-91"
+      }
+    },
+    {
+      "claim_id": "claim_direct_and_pipeline_baselines",
+      "text": "Direct is the smallest useful bounded path, while a Pipeline uses a predetermined sequence whose stages should expose explicit contracts and observations.",
+      "evidence_locator": {
+        "sections": [
+          "Direct: use one bounded operation when one is enough",
+          "Pipeline: predictable work in a predetermined sequence"
+        ]
+      }
+    },
+    {
+      "claim_id": "claim_router_requires_abstention_and_observability",
+      "text": "A production Router needs permission-first controls, abstention or clarification outcomes, controlled overrides, and traceable routing evidence.",
+      "evidence_locator": {
+        "sections": [
+          "Router: choose the path before paying for it",
+          "A production router needs an escape path",
+          "What to log"
+        ]
+      }
+    },
+    {
+      "claim_id": "claim_state_machine_models_legal_progress",
+      "text": "A State Machine makes states, legal transitions, guards, persisted progress, waiting, bounded recovery, and terminal outcomes explicit.",
+      "evidence_locator": {
+        "section": "State machine: make progress and legal transitions explicit"
+      }
+    },
+    {
+      "claim_id": "claim_dag_models_dependencies_and_joins",
+      "text": "A DAG models directional task dependencies rather than agent count; concurrency must be bounded and join rules must preserve partial-result policy and provenance.",
+      "evidence_locator": {
+        "sections": [
+          "DAG: express dependencies without cycles",
+          "Parallelism needs limits",
+          "Join logic is part of the design"
+        ]
+      }
+    },
+    {
+      "claim_id": "claim_event_and_human_layers_are_cross_cutting",
+      "text": "Event-driven execution and human review are cross-cutting control layers that can wrap Direct, Pipeline, Router, State Machine, or DAG structures.",
+      "evidence_locator": {
+        "sections": [
+          "Event-driven execution: define what starts the work",
+          "Human-in-the-loop: insert a governed control point"
+        ]
+      }
+    },
+    {
+      "claim_id": "claim_program_generation_is_not_peer_topology",
+      "text": "Program generation is an execution technique that still requires a controlling topology plus parsing, policy, sandbox, privilege, limit, and verification controls.",
+      "evidence_locator": {
+        "section": "Program generation is an execution technique, not a path topology"
+      }
+    },
+    {
+      "claim_id": "claim_selection_should_use_smallest_sufficient_structure",
+      "text": "Architecture selection should start with the smallest sufficient structure and add routing, durable state, dependency graphs, events, and human gates only when their control requirements exist.",
+      "evidence_locator": {
+        "sections": [
+          "How to choose the execution structure",
+          "Production controls that belong around every structure"
+        ]
+      }
+    }
+  ],
+  "evidence_policy": {
+    "verbatim_quotes_embedded": false,
+    "exact_origin_blob_required": true,
+    "citation_required_for_public_runtime": true
+  }
+}
