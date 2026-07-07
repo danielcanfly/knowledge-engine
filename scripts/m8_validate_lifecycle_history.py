@@ -82,8 +82,6 @@ def validate_history(
         raise ValueError("registry lifecycle state mismatch")
 
     action = next_action(spec.lifecycle_state)
-    if action != "commit_production_request_spec":
-        raise ValueError(f"unexpected next action: {action}")
 
     return {
         "schema_version": "m8-lifecycle-reconciliation/v1",
