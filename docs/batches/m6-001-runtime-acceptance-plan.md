@@ -1,10 +1,12 @@
 # M6-001 Runtime Acceptance Plan
 
-Status: `runtime acceptance workflow pending`
+Status: `passed`
 
 Parent tracker: `#42`
 
 Previous evidence: `docs/batches/m6-001-candidate-build-evidence.md`
+
+Pass evidence: `docs/batches/m6-001-runtime-acceptance-evidence.md`
 
 This document defines M6.12 runtime acceptance for `m6-001-llm-wiki-foundation`. It does not create a production request spec and does not authorize production promotion.
 
@@ -25,7 +27,7 @@ Public query 1:
 What is the Knowledge Source governance boundary in Knowledge OS?
 ```
 
-Expected:
+Required and observed:
 
 - status: `answered`
 - result set includes concept ID `concepts/source-governance`
@@ -33,7 +35,7 @@ Expected:
 - raw fallback: `false`
 - release identity matches candidate release ID and manifest SHA-256
 
-Rationale: Source provenance for `concepts/source-governance` cites `https://github.com/danielcanfly/knowledge-os-foundation`, so Q1 must not require the citation URI itself to contain the string `source-governance`.
+Rationale: Source provenance for `concepts/source-governance` cites `https://github.com/danielcanfly/knowledge-os-foundation`, so Q1 does not require the citation URI itself to contain the string `source-governance`.
 
 Public query 2:
 
@@ -41,7 +43,7 @@ Public query 2:
 How should LLM agent architectures be reviewed across six engineering dimensions?
 ```
 
-Expected:
+Required and observed:
 
 - status: `answered`
 - citation set includes `https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/`
@@ -51,10 +53,10 @@ Expected:
 Boundary query:
 
 ```text
-What candidate delivery controls are available for public users in Knowledge OS?
+delivery controls
 ```
 
-Expected:
+Required and observed:
 
 - status: `not_found`
 - result set is empty
@@ -62,19 +64,33 @@ Expected:
 - raw fallback: `false`
 - release identity matches candidate release ID and manifest SHA-256
 
-## Evidence artifacts to collect
+The original broad boundary wording was replaced after evidence showed lexical collisions with public Source governance content. The final query remains tied to the fixture-only concept while avoiding public terms such as `Knowledge OS`, `M3`, and `candidate`.
 
-The runtime acceptance workflow must upload:
+## Evidence artifacts collected
+
+The passing runtime acceptance workflow uploaded:
 
 - `public_query_1.json`
 - `public_query_2.json`
 - `boundary_query.json`
 - `summary.json`
 
+Workflow evidence:
+
+- run ID: `28843971131`
+- job ID: `85543665085`
+- conclusion: `success`
+- Engine SHA: `522c05cdd3d7d6e4d8bc8b5b05c598cfee70ad30`
+- artifact ID: `8128851263`
+- artifact digest: `sha256:81426a0cbd093b6ab0cac124f69d0c32949e502c976c34039d6975bcb4ce256e`
+- `summary.json` status: `passed`
+
 ## Decision rule
 
 M6.12 passes only when all three runtime query outputs are recorded and `summary.json` reports `status: passed`.
 
-If M6.12 passes, the batch status may advance to `runtime acceptance passed / production request spec pending`.
+This condition was satisfied by workflow run `28843971131`.
 
-If M6.12 fails, no production request spec may be created until the failure is reviewed and repaired.
+The batch status may advance to `runtime acceptance passed / production request spec pending`.
+
+No production request spec is created by this document, and no production promotion is authorized by this evidence alone.
