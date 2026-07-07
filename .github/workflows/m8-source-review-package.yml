@@ -1,0 +1,135 @@
+name: M8 Source Review Package
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "review_packages/m8-001/**"
+      - "scripts/m8_validate_review_package.py"
+      - "tests/test_m8_review_package.py"
+      - ".github/workflows/m8-source-review-package.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  review-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install exact Engine
+        run: python -m pip install -e '.[dev]'
+
+      - name: Validate review package
+        run: |
+          python scripts/m8_validate_review_package.py \
+            --package-root review_packages/m8-001 \
+            --output evidence/m8-001/review-package-validation.json
+
+      - name: Run review-package tests
+        run: python -m pytest tests/test_m8_review_package.py
+
+      - name: Check out exact blog origin
+        uses: actions/checkout@v4
+        with:
+          repository: huaihsuanbusiness/daniel-blog
+          ref: 27e2fe996f878f2129bf510d6a326c02f7d87be5
+          path: blog-origin
+          persist-credentials: false
+
+      - name: Reverify source-scope origin
+        run: |
+          python scripts/m8_verify_source_scope.py \
+            --origin-repo blog-origin \
+            --attestation governed_batches/evidence/m8-001-source-baseline-attestation.json \
+            --output evidence/m8-001/source-scope-verification.json
+
+      - name: Verify review-only change boundary
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          allowed = (
+              "review_packages/m8-001/",
+              "scripts/m8_validate_review_package.py",
+              "tests/test_m8_review_package.py",
+              ".github/workflows/m8-source-review-package.yml",
+          )
+          base = os.environ.get("BASE_SHA", "").strip()
+          head = os.environ.get("HEAD_SHA", "").strip()
+          changed = []
+          if base and head:
+              output = subprocess.check_output(
+                  ["git", "diff", "--name-only", base, head],
+                  text=True,
+              )
+              changed = [line for line in output.splitlines() if line]
+              unexpected = [
+                  path
+                  for path in changed
+                  if not any(
+                      path == prefix or path.startswith(prefix)
+                      for prefix in allowed
+                  )
+              ]
+              assert unexpected == [], unexpected
+
+          package = json.loads(
+              Path("evidence/m8-001/review-package-validation.json").read_text()
+          )
+          scope = json.loads(
+              Path("evidence/m8-001/source-scope-verification.json").read_text()
+          )
+          assert package["status"] == "passed"
+          assert package["review_status"] == "pending_human_review"
+          assert package["source_change_ready"] is False
+          assert package["mutations_performed"] == []
+          assert scope["status"] == "verified"
+          assert scope["intended_source_path_exists"] is False
+
+          summary = {
+              "status": "ready_for_human_review",
+              "batch_id": package["batch_id"],
+              "review_status": package["review_status"],
+              "claim_count": package["claim_count"],
+              "proposed_concept_sha256": package["proposed_concept_sha256"],
+              "origin_blob_verified": True,
+              "source_scope_verified": True,
+              "source_change_ready": False,
+              "canonical_source_changed": False,
+              "production_changed": False,
+              "changed_paths": changed,
+              "mutations_performed": [],
+              "next_action": "record_human_review_decision",
+          }
+          root = Path("evidence/m8-001")
+          (root / "review-package-summary.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print("M8_SOURCE_REVIEW_PACKAGE_READY")
+          PY
+
+      - name: Upload review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m8-source-review-package-${{ github.sha }}
+          path: evidence/m8-001
+          if-no-files-found: error
+          retention-days: 90
