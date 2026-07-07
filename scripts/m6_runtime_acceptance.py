@@ -11,7 +11,7 @@ PUBLIC_QUERY_2 = (
     "How should LLM agent architectures be reviewed across six engineering dimensions?"
 )
 BOUNDARY_QUERY = (
-    "What candidate delivery controls are available for public users in Knowledge OS?"
+    "What is the M3 candidate pipeline in Knowledge OS?"
 )
 EXPECTED_Q1_CONCEPT_IDS = {
     "concepts/source-governance",
