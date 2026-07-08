@@ -1,0 +1,39 @@
+{
+  "schema_version": "intake-snapshot/v1",
+  "source_id": "source_blog_agent_patterns_part3",
+  "snapshot_id": "snap_e21e631b072a2f48042c5a24ef772681cf3a17ad7825fc9852e7851697a688dc",
+  "original_uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-3/",
+  "connector_type": "web_url",
+  "connector_version": "web-url/1.0.0",
+  "retrieved_at": "2026-07-08T08:00:00Z",
+  "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "byte_size": 4096,
+  "mime_type": "text/html",
+  "encoding": "utf-8",
+  "license": {
+    "status": "resolved",
+    "value": "owner-provided",
+    "observation_source": "operator_asserted"
+  },
+  "owner": {
+    "status": "resolved",
+    "value": "Daniel",
+    "observation_source": "operator_asserted"
+  },
+  "audience": "public",
+  "acl_status": "resolved",
+  "access_policy": {
+    "policy_type": "public",
+    "principals": [],
+    "observation_source": "observed",
+    "native_evidence_ref": null
+  },
+  "source_version": "etag-example",
+  "parent_snapshot": null,
+  "storage_location": {
+    "backend": "r2",
+    "bucket": "knowledge-artifacts",
+    "key": "intake/v1/raw/sha256/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+}
