@@ -1,0 +1,60 @@
+{
+  "schema_version": "m9-source-candidate-observation/v1",
+  "batch_id": "m9-001-agent-planning-strategies",
+  "status": "passed",
+  "source": {
+    "repository": "danielcanfly/knowledge-source",
+    "pull_request": 13,
+    "sha": "2126db2ed4d372d3d61464fe31a86fc0243a1f24",
+    "concept_path": "bundle/concepts/agent-planning-strategies.md",
+    "concept_sha256": "9a3c1bec7a0e1653a6fa4e5cb13158899911b7e7ee0becd0878c34a5c48650d4",
+    "validation_run": 28916504659,
+    "validation_job": 85784535330,
+    "validation_artifact": 8157822857,
+    "validation_artifact_digest": "sha256:17ff3998ac43758a11fea4dbbad76e2a7278c6f26c2ef934bd426137b4dcb196",
+    "validation_status": "passed",
+    "validation_findings": 0,
+    "test_count": 12,
+    "preview_reproducibility_passed": true
+  },
+  "candidate": {
+    "channel": "candidate-source-2126db2ed4d372d3d61464fe31a86fc0243a1f24",
+    "dispatch_run": 28916529017,
+    "validate_dispatch_job": 85784609389,
+    "publish_candidate_job": 85784621886,
+    "record_evidence_job": 85784713747,
+    "artifact": 8157838642,
+    "artifact_digest": "sha256:f532e0767d905e85022635ff0f2c3360863dd988cd5db65a2568d6187cfdc2ac",
+    "release_id": "20260708T040116Z-69a9f445699a",
+    "manifest_sha256": "2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb",
+    "source_snapshot_sha256": "7390cfabd61febd9678b87c731e2619fbe58f96f22c9efbb3aeebd9ca4d4e64b",
+    "release_tree_sha256": "89049fcfa8b763cafa39c11593b63ae7a1a12207581d85193634f5a80ceb112a",
+    "reproducibility_passed": true,
+    "internal_status": "answered",
+    "internal_result_count": 1,
+    "internal_citation_count": 1,
+    "public_status": "not_found",
+    "public_result_count": 0,
+    "public_acl_filtered_count": 1,
+    "production_pointer_unchanged": true,
+    "release_ready": true,
+    "quality_overall": "passed",
+    "acl_propagation": "passed",
+    "secret_scan": "passed",
+    "contains_restricted_data": false
+  },
+  "limitations": {
+    "generic_candidate_query": "quartz lantern protocol",
+    "targeted_m9_public_query_not_yet_run": true,
+    "targeted_m9_acl_query_not_yet_run": true,
+    "raw_fallback_not_reported_by_generic_candidate_artifact": true
+  },
+  "production": {
+    "baseline_release_id": "20260707T111252Z-aebf06593f89",
+    "baseline_manifest_sha256": "1a2f2014073e9e97f9e1fdd5df4e43bf19cb2b2679532b6e52ea38480ec4d2ec",
+    "pointer_mutated": false,
+    "request_spec_created": false,
+    "ledger_appended": false,
+    "promotion_performed": false
+  }
+}
