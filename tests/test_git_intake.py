@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -184,7 +183,15 @@ def test_mutable_or_noncanonical_revisions_are_rejected_before_git(
 
 @pytest.mark.parametrize(
     "tree_path",
-    ["../secret.md", "/absolute.md", "docs//readme.md", "docs/./readme.md", "docs\\readme.md", " docs/readme.md", "docs/readme.md\n"],
+    [
+        "../secret.md",
+        "/absolute.md",
+        "docs//readme.md",
+        "docs/./readme.md",
+        "docs\\readme.md",
+        " docs/readme.md",
+        "docs/readme.md\n",
+    ],
 )
 def test_noncanonical_tree_paths_are_rejected(tmp_path: Path, tree_path: str) -> None:
     _repository, commit = _init_repository(tmp_path, {"docs/readme.md": b"safe\n"})
@@ -197,20 +204,14 @@ def test_directory_missing_and_untracked_paths_are_rejected(tmp_path: Path) -> N
     repository, commit = _init_repository(tmp_path, {"docs/readme.md": b"safe\n"})
     (repository / "untracked.md").write_text("not committed\n", encoding="utf-8")
 
-    _store, directory = _run(tmp_path / "directory", _request(commit, repository_locator=str(repository), tree_path="docs"))
-    assert directory.failure_code == "PATH_ESCAPE"
+    _store, directory = _run(tmp_path, _request(commit, tree_path="docs"))
+    assert directory.failure_code == "GIT_PATH_IS_DIRECTORY"
 
     _store, missing = _run(tmp_path, _request(commit, tree_path="missing.md"))
     assert missing.failure_code == "GIT_PATH_NOT_FOUND"
 
     _store, untracked = _run(tmp_path, _request(commit, tree_path="untracked.md"))
     assert untracked.failure_code == "GIT_PATH_NOT_FOUND"
-
-
-def test_directory_path_is_rejected_with_repository_inside_allowed_root(tmp_path: Path) -> None:
-    _repository, commit = _init_repository(tmp_path, {"docs/readme.md": b"safe\n"})
-    _store, result = _run(tmp_path, _request(commit, tree_path="docs"))
-    assert result.failure_code == "GIT_PATH_IS_DIRECTORY"
 
 
 def test_tracked_symlink_and_submodule_are_rejected(tmp_path: Path) -> None:
@@ -262,7 +263,7 @@ def test_unsafe_blob_types_fail_before_raw_persistence(
     assert _json(store, result.rejection_key or "")["raw_persisted"] is False
 
 
-def test_oversized_blob_fails_before_cat_file_body_persistence(tmp_path: Path) -> None:
+def test_oversized_blob_fails_before_raw_persistence(tmp_path: Path) -> None:
     payload = b"x" * 1024
     _repository, commit = _init_repository(tmp_path, {"docs/readme.md": payload})
     _store, result = _run(tmp_path, _request(commit, max_bytes=100))
@@ -353,8 +354,10 @@ def test_repository_identity_change_is_detected(tmp_path: Path) -> None:
 
 def test_external_object_alternates_are_rejected(tmp_path: Path) -> None:
     repository, commit = _init_repository(tmp_path, {"docs/readme.md": b"safe\n"})
+    external_objects = tmp_path / "external-objects"
+    external_objects.mkdir()
     alternates = repository / ".git/objects/info/alternates"
-    alternates.write_text("/tmp/external-objects\n", encoding="utf-8")
+    alternates.write_text(str(external_objects) + "\n", encoding="utf-8")
     _store, result = _run(tmp_path, _request(commit))
     assert result.failure_code == "GIT_EXTERNAL_OBJECT_STORE"
     assert result.raw_blob_key is None
@@ -375,10 +378,7 @@ def test_repository_path_escape_and_non_root_are_rejected(tmp_path: Path) -> Non
     inside, inside_commit = _init_repository(allowed, {"docs/readme.md": b"safe\n"})
     nested = intake_local_git_path(
         store=store,
-        request=_request(
-            inside_commit,
-            repository_locator=str(inside / "docs"),
-        ),
+        request=_request(inside_commit, repository_locator=str(inside / "docs")),
         allowed_root=allowed,
     )
     assert nested.failure_code == "GIT_REPOSITORY_ROOT_REQUIRED"
