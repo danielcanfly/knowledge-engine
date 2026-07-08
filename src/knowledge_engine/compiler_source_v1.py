@@ -88,7 +88,10 @@ def _frontmatter(text: str, path: Path) -> tuple[dict[str, Any], str]:
     marker = text.find("\n---\n", 4)
     if marker < 0:
         raise CompilerFailure(
-            "SOURCE_FRONTMATTER_INVALID", "source", "concept front matter unterminated", path=str(path)
+            "SOURCE_FRONTMATTER_INVALID",
+            "source",
+            "concept front matter unterminated",
+            path=str(path),
         )
     try:
         value = yaml.safe_load(text[4:marker])
@@ -98,7 +101,10 @@ def _frontmatter(text: str, path: Path) -> tuple[dict[str, Any], str]:
         ) from exc
     if not isinstance(value, dict):
         raise CompilerFailure(
-            "SOURCE_FRONTMATTER_INVALID", "source", "concept front matter must be a mapping", path=str(path)
+            "SOURCE_FRONTMATTER_INVALID",
+            "source",
+            "concept front matter must be a mapping",
+            path=str(path),
         )
     return value, text[marker + 5 :]
 
@@ -118,20 +124,18 @@ def verify_source_checkout(
     actual = _git(root, "rev-parse", "HEAD").strip().lower()
     if actual != source_commit_sha:
         raise CompilerFailure(
-            "SOURCE_SHA_MISMATCH", "source", "source checkout SHA mismatch", expected=source_commit_sha, actual=actual
+            "SOURCE_SHA_MISMATCH",
+            "source",
+            "source checkout SHA mismatch",
+            expected=source_commit_sha,
+            actual=actual,
         )
     if _git(root, "status", "--porcelain", "--untracked-files=all").strip():
         raise CompilerFailure("SOURCE_DIRTY", "source", "source checkout is dirty")
 
-    tracked = [
-        item
-        for item in _git(root, "ls-files", "-z", "--", "bundle").split("\0")
-        if item
-    ]
+    tracked = [item for item in _git(root, "ls-files", "-z", "--", "bundle").split("\0") if item]
     allowed = [
-        item
-        for item in tracked
-        if Path(item).suffix.lower() in {".md", ".json", ".yaml", ".yml"}
+        item for item in tracked if Path(item).suffix.lower() in {".md", ".json", ".yaml", ".yml"}
     ]
     if not allowed:
         raise CompilerFailure("SOURCE_EMPTY", "source", "source bundle has no tracked records")
@@ -174,17 +178,25 @@ def verify_source_checkout(
         audience = metadata.get("x-kos-audience", "internal")
         description = metadata.get("description", "")
         if not isinstance(concept_id, str) or not SAFE_ID_RE.fullmatch(concept_id):
-            raise CompilerFailure("SOURCE_ID_INVALID", "source", "concept ID invalid", path=relative)
+            raise CompilerFailure(
+                "SOURCE_ID_INVALID", "source", "concept ID invalid", path=relative
+            )
         if not isinstance(title, str) or not title.strip():
-            raise CompilerFailure("SOURCE_TITLE_INVALID", "source", "concept title invalid", path=relative)
+            raise CompilerFailure(
+                "SOURCE_TITLE_INVALID", "source", "concept title invalid", path=relative
+            )
         if aliases is None:
             aliases = []
         if not isinstance(aliases, list) or not all(
             isinstance(item, str) and item.strip() for item in aliases
         ):
-            raise CompilerFailure("SOURCE_ALIAS_INVALID", "source", "concept aliases invalid", path=relative)
+            raise CompilerFailure(
+                "SOURCE_ALIAS_INVALID", "source", "concept aliases invalid", path=relative
+            )
         if audience not in AUDIENCE_RANK:
-            raise CompilerFailure("SOURCE_AUDIENCE_INVALID", "source", "concept audience invalid", path=relative)
+            raise CompilerFailure(
+                "SOURCE_AUDIENCE_INVALID", "source", "concept audience invalid", path=relative
+            )
         if not isinstance(description, str):
             raise CompilerFailure(
                 "SOURCE_DESCRIPTION_INVALID", "source", "concept description invalid", path=relative
