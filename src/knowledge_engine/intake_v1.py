@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import stat
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -51,7 +50,7 @@ def _normalized(value: Any) -> Any:
         return unicodedata.normalize("NFC", value)
     if isinstance(value, Mapping):
         return {str(key): _normalized(item) for key, item in value.items()}
-    if isinstance(value, tuple | list):
+    if isinstance(value, (list, tuple)):
         return [_normalized(item) for item in value]
     return value
 
@@ -71,17 +70,6 @@ def _pretty_json_bytes(value: Any) -> bytes:
     return (
         json.dumps(_normalized(value), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     ).encode("utf-8")
-
-
-def _validate_utc(value: str) -> None:
-    if not value.endswith("Z"):
-        raise IntakeFailure("INVALID_TIMESTAMP", "request", "timestamp must end in Z")
-    try:
-        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
-    except ValueError as exc:
-        raise IntakeFailure("INVALID_TIMESTAMP", "request", "invalid ISO-8601 timestamp") from exc
-    if parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
-        raise IntakeFailure("INVALID_TIMESTAMP", "request", "timestamp must be UTC")
 
 
 def stable_source_id(connector_type: str, canonical_locator: str) -> str:
@@ -109,21 +97,33 @@ def derivative_id_for(
     return "drv_" + sha256_bytes(canonical_json_bytes(payload))
 
 
-def _attempt_id_for(request: LocalMarkdownRequest) -> str:
-    seed = {
-        "schema_version": "intake-attempt/v1",
-        "locator": request.locator,
-        "original_uri": request.original_uri,
-        "source_id": request.source_id,
-        "retrieved_at": request.retrieved_at,
-        "owner": request.owner.to_dict(),
-        "license": request.license.to_dict(),
-        "audience": request.audience,
-        "access_policy": request.access_policy.to_dict(),
-        "parent_snapshot": request.parent_snapshot,
-        "max_bytes": request.max_bytes,
-    }
-    return "attempt_" + sha256_bytes(canonical_json_bytes(seed))[:32]
+class IntakeFailure(IntegrityError):
+    def __init__(
+        self,
+        code: str,
+        stage: str,
+        message: str,
+        *,
+        transient: bool = False,
+        safe_context: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code = code
+        self.stage = stage
+        self.safe_message = message
+        self.transient = transient
+        self.safe_context = dict(safe_context or {})
+
+
+def _validate_utc(value: str) -> None:
+    if not value.endswith("Z"):
+        raise IntakeFailure("INVALID_TIMESTAMP", "request", "timestamp must end in Z")
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError as exc:
+        raise IntakeFailure("INVALID_TIMESTAMP", "request", "invalid ISO-8601 timestamp") from exc
+    if parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
+        raise IntakeFailure("INVALID_TIMESTAMP", "request", "timestamp must be UTC")
 
 
 @dataclass(frozen=True)
@@ -242,6 +242,22 @@ class LocalMarkdownRequest:
                     "INVALID_METADATA", "request", "original_uri cannot contain credentials"
                 )
 
+    def attempt_id(self) -> str:
+        seed = {
+            "schema_version": "intake-attempt/v1",
+            "locator": self.locator,
+            "original_uri": self.original_uri,
+            "source_id": self.source_id,
+            "retrieved_at": self.retrieved_at,
+            "owner": self.owner.to_dict(),
+            "license": self.license.to_dict(),
+            "audience": self.audience,
+            "access_policy": self.access_policy.to_dict(),
+            "parent_snapshot": self.parent_snapshot,
+            "max_bytes": self.max_bytes,
+        }
+        return "attempt_" + sha256_bytes(canonical_json_bytes(seed))[:32]
+
 
 @dataclass(frozen=True)
 class Acquisition:
@@ -251,72 +267,7 @@ class Acquisition:
     retrieved_at: str
     mime_type: str
     encoding: str
-    data: bytes = field(repr=False)
-
-
-@dataclass(frozen=True)
-class SnapshotRecord:
-    source_id: str
-    snapshot_id: str
-    original_uri: str
-    connector_type: str
-    connector_version: str
-    retrieved_at: str
-    content_hash: str
-    byte_size: int
-    mime_type: str
-    encoding: str | None
-    license: dict[str, Any]
-    owner: dict[str, Any]
-    audience: str
-    acl_status: str
-    access_policy: dict[str, Any]
-    source_version: str | None
-    parent_snapshot: str | None
-    storage_location: dict[str, Any]
-    schema_version: str = "intake-snapshot/v1"
-
-    def identity_payload(self) -> dict[str, Any]:
-        return {
-            "schema_version": self.schema_version,
-            "source_id": self.source_id,
-            "original_uri": self.original_uri,
-            "connector_type": self.connector_type,
-            "connector_version": self.connector_version,
-            "retrieved_at": self.retrieved_at,
-            "content_hash": self.content_hash,
-            "byte_size": self.byte_size,
-            "mime_type": self.mime_type,
-            "encoding": self.encoding,
-            "license": self.license,
-            "owner": self.owner,
-            "audience": self.audience,
-            "access_policy": self.access_policy,
-            "source_version": self.source_version,
-            "parent_snapshot": self.parent_snapshot,
-        }
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class DerivativeRecord:
-    derivative_id: str
-    snapshot_id: str
-    normalizer_id: str
-    normalizer_version: str
-    normalized_content_hash: str
-    normalized_key: str
-    byte_size: int
-    mime_type: str
-    warnings: tuple[dict[str, str], ...]
-    schema_version: str = "intake-derivative/v1"
-
-    def to_dict(self) -> dict[str, Any]:
-        value = asdict(self)
-        value["warnings"] = list(self.warnings)
-        return value
+    data: bytes
 
 
 @dataclass(frozen=True)
@@ -347,24 +298,6 @@ class IntakeResult:
         value.pop("idempotent")
         value.pop("raw_blob_reused")
         return value
-
-
-class IntakeFailure(IntegrityError):
-    def __init__(
-        self,
-        code: str,
-        stage: str,
-        message: str,
-        *,
-        transient: bool = False,
-        safe_context: Mapping[str, Any] | None = None,
-    ) -> None:
-        super().__init__(f"{code}: {message}")
-        self.code = code
-        self.stage = stage
-        self.safe_message = message
-        self.transient = transient
-        self.safe_context = dict(safe_context or {})
 
 
 class LocalFileConnector:
@@ -429,19 +362,14 @@ class LocalFileConnector:
         if self._after_read_hook is not None:
             self._after_read_hook()
         after = path.stat()
-        identity_before = (
+        before_identity = (
             before.st_dev,
             before.st_ino,
             before.st_size,
             before.st_mtime_ns,
         )
-        identity_after = (
-            after.st_dev,
-            after.st_ino,
-            after.st_size,
-            after.st_mtime_ns,
-        )
-        if identity_before != identity_after:
+        after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+        if before_identity != after_identity:
             raise IntakeFailure(
                 "SOURCE_CHANGED_DURING_READ",
                 "acquire",
@@ -486,7 +414,7 @@ def _secret_matches(text: str) -> list[str]:
     return sorted(name for name, pattern in SECRET_PATTERNS.items() if pattern.search(text))
 
 
-def _prompt_findings(text: str) -> tuple[dict[str, str], ...]:
+def _prompt_findings(text: str) -> list[dict[str, str]]:
     findings = []
     for name, pattern in PROMPT_INJECTION_PATTERNS.items():
         if pattern.search(text):
@@ -498,7 +426,7 @@ def _prompt_findings(text: str) -> tuple[dict[str, str], ...]:
                     "action": "treat_as_untrusted_data",
                 }
             )
-    return tuple(findings)
+    return findings
 
 
 def _put_immutable(
@@ -560,10 +488,7 @@ def verify_event(event: Mapping[str, Any]) -> bool:
     return isinstance(expected, str) and expected == sha256_bytes(canonical_json_bytes(payload))
 
 
-def _write_event(
-    store: ObjectStore,
-    event: Mapping[str, Any],
-) -> tuple[str, bool]:
+def _write_event(store: ObjectStore, event: Mapping[str, Any]) -> tuple[str, bool]:
     key = (
         f"intake/v1/attempts/{event['attempt_id']}/events/"
         f"{int(event['sequence']):06d}-{event['event_sha256']}.json"
@@ -580,7 +505,25 @@ def _write_output(output_dir: Path | None, relative: str, data: bytes) -> None:
     destination.write_bytes(data)
 
 
-def _rejected_result(
+def _storage_location(store: ObjectStore, key: str, digest: str) -> dict[str, Any]:
+    backend = "filesystem" if store.__class__.__name__ == "FileObjectStore" else "r2"
+    return {
+        "backend": backend,
+        "bucket": getattr(store, "bucket", None),
+        "key": key,
+        "sha256": digest,
+    }
+
+
+def _event_keys(attempt_id: str, events: Sequence[Mapping[str, Any]]) -> tuple[str, ...]:
+    return tuple(
+        f"intake/v1/attempts/{attempt_id}/events/"
+        f"{int(item['sequence']):06d}-{item['event_sha256']}.json"
+        for item in events
+    )
+
+
+def _reject(
     *,
     store: ObjectStore,
     request: LocalMarkdownRequest,
@@ -589,35 +532,39 @@ def _rejected_result(
     current_state: str | None,
     events: list[dict[str, Any]],
     object_states: list[bool],
+    artifacts: Mapping[str, Any],
     output_dir: Path | None,
-    source_id: str | None,
 ) -> IntakeResult:
-    previous_hash = events[-1]["event_sha256"] if events else None
-    rejected_event = _event(
+    rejected = _event(
         attempt_id=attempt_id,
         sequence=len(events) + 1,
         occurred_at=request.retrieved_at,
         from_state=current_state,
         to_state="rejected",
         reason_code=failure.code,
-        evidence_refs=[],
-        previous_event_sha256=previous_hash,
+        evidence_refs=[
+            value
+            for key, value in artifacts.items()
+            if key.endswith("_key") and isinstance(value, str)
+        ],
+        previous_event_sha256=events[-1]["event_sha256"] if events else None,
     )
-    event_key, reused = _write_event(store, rejected_event)
-    events.append(rejected_event)
+    _, reused = _write_event(store, rejected)
+    events.append(rejected)
     object_states.append(reused)
 
     rejection = {
         "schema_version": "intake-rejection/v1",
         "attempt_id": attempt_id,
-        "source_id": source_id,
+        "source_id": artifacts.get("source_id"),
+        "snapshot_id": artifacts.get("snapshot_id"),
         "stage": failure.stage,
         "reason_code": failure.code,
         "message": failure.safe_message,
         "transient": failure.transient,
         "safe_context": failure.safe_context,
         "rejected_at": request.retrieved_at,
-        "raw_persisted": False,
+        "raw_persisted": artifacts.get("raw_blob_key") is not None,
         "canonical_write_permitted": False,
         "production_write_permitted": False,
     }
@@ -631,29 +578,29 @@ def _rejected_result(
     result = IntakeResult(
         attempt_id=attempt_id,
         status="rejected",
-        source_id=source_id,
-        snapshot_id=None,
-        derivative_id=None,
-        raw_blob_key=None,
-        snapshot_key=None,
-        normalized_key=None,
-        derivative_key=None,
+        source_id=artifacts.get("source_id"),
+        snapshot_id=artifacts.get("snapshot_id"),
+        derivative_id=artifacts.get("derivative_id"),
+        raw_blob_key=artifacts.get("raw_blob_key"),
+        snapshot_key=artifacts.get("snapshot_key"),
+        normalized_key=artifacts.get("normalized_key"),
+        derivative_key=artifacts.get("derivative_key"),
         result_key=result_key,
         rejection_key=rejection_key,
         idempotent=False,
-        raw_blob_reused=False,
-        event_keys=tuple(
-            f"intake/v1/attempts/{attempt_id}/events/"
-            f"{int(item['sequence']):06d}-{item['event_sha256']}.json"
-            for item in events
-        ),
+        raw_blob_reused=bool(artifacts.get("raw_blob_reused", False)),
+        event_keys=_event_keys(attempt_id, events),
         failure_code=failure.code,
     )
-    result_bytes = _pretty_json_bytes(result.evidence_dict())
     object_states.append(
-        _put_immutable(store, result_key, result_bytes, content_type="application/json")
+        _put_immutable(
+            store,
+            result_key,
+            _pretty_json_bytes(result.evidence_dict()),
+            content_type="application/json",
+        )
     )
-    result = IntakeResult(**{**result.to_dict(), "event_keys": result.event_keys, "idempotent": all(object_states)})
+    result = replace(result, idempotent=all(object_states))
     _write_output(output_dir, "rejection.json", rejection_bytes)
     _write_output(output_dir, "intake-result.json", _pretty_json_bytes(result.to_dict()))
     return result
@@ -669,11 +616,11 @@ def intake_local_markdown(
 ) -> IntakeResult:
     """Acquire one local Markdown source into the immutable M10 intake namespace."""
 
-    attempt_id = _attempt_id_for(request)
+    attempt_id = request.attempt_id()
     events: list[dict[str, Any]] = []
     object_states: list[bool] = []
+    artifacts: dict[str, Any] = {}
     current_state: str | None = None
-    source_id = request.source_id
 
     try:
         request.validate()
@@ -701,8 +648,10 @@ def intake_local_markdown(
             max_bytes=request.max_bytes,
         )
         original_uri = request.original_uri or acquisition.original_uri
-        canonical_locator = acquisition.canonical_locator
-        source_id = source_id or stable_source_id(CONNECTOR_TYPE, canonical_locator)
+        source_id = request.source_id or stable_source_id(
+            CONNECTOR_TYPE, acquisition.canonical_locator
+        )
+        artifacts["source_id"] = source_id
 
         raw_hash = sha256_bytes(acquisition.data)
         acquired = _event(
@@ -721,21 +670,19 @@ def intake_local_markdown(
         current_state = "acquired"
 
         text = acquisition.data.decode("utf-8-sig")
-        secret_matches = _secret_matches(text)
-        if secret_matches:
+        matches = _secret_matches(text)
+        if matches:
             raise IntakeFailure(
                 "SECRET_LIKE_CONTENT",
                 "safety_gate",
                 "source contains secret-like content",
                 safe_context={
-                    "patterns": secret_matches,
+                    "patterns": matches,
                     "observed_sha256": raw_hash,
                     "observed_bytes": len(acquisition.data),
                 },
             )
 
-        normalized = _normalize_markdown(acquisition.data)
-        normalized_hash = sha256_bytes(normalized)
         raw_blob_key = f"intake/v1/raw/sha256/{raw_hash[:2]}/{raw_hash}"
         raw_reused = _put_immutable(
             store,
@@ -744,6 +691,7 @@ def intake_local_markdown(
             content_type=acquisition.mime_type,
         )
         object_states.append(raw_reused)
+        artifacts.update(raw_blob_key=raw_blob_key, raw_blob_reused=raw_reused)
 
         acl_status = (
             "unresolved"
@@ -751,38 +699,37 @@ def intake_local_markdown(
             or request.access_policy.observation_source == "unresolved"
             else "resolved"
         )
-        provisional = SnapshotRecord(
-            source_id=source_id,
-            snapshot_id="snap_" + "0" * 64,
-            original_uri=original_uri,
-            connector_type=CONNECTOR_TYPE,
-            connector_version=CONNECTOR_VERSION,
-            retrieved_at=request.retrieved_at,
-            content_hash=raw_hash,
-            byte_size=len(acquisition.data),
-            mime_type=acquisition.mime_type,
-            encoding=acquisition.encoding,
-            license=request.license.to_dict(),
-            owner=request.owner.to_dict(),
-            audience=request.audience,
-            acl_status=acl_status,
-            access_policy=request.access_policy.to_dict(),
-            source_version=acquisition.source_version,
-            parent_snapshot=request.parent_snapshot,
-            storage_location={
-                "backend": "object_store",
-                "bucket": None,
-                "key": raw_blob_key,
-                "sha256": raw_hash,
-            },
-        )
-        snapshot_id = snapshot_id_for(provisional.identity_payload())
-        snapshot = SnapshotRecord(**{**provisional.to_dict(), "snapshot_id": snapshot_id})
+        identity = {
+            "schema_version": "intake-snapshot/v1",
+            "source_id": source_id,
+            "original_uri": original_uri,
+            "connector_type": CONNECTOR_TYPE,
+            "connector_version": CONNECTOR_VERSION,
+            "retrieved_at": request.retrieved_at,
+            "content_hash": raw_hash,
+            "byte_size": len(acquisition.data),
+            "mime_type": acquisition.mime_type,
+            "encoding": acquisition.encoding,
+            "license": request.license.to_dict(),
+            "owner": request.owner.to_dict(),
+            "audience": request.audience,
+            "access_policy": request.access_policy.to_dict(),
+            "source_version": acquisition.source_version,
+            "parent_snapshot": request.parent_snapshot,
+        }
+        snapshot_id = snapshot_id_for(identity)
         snapshot_key = f"intake/v1/snapshots/{source_id}/{snapshot_id}/snapshot.json"
-        snapshot_bytes = _pretty_json_bytes(snapshot.to_dict())
+        snapshot = {
+            **identity,
+            "snapshot_id": snapshot_id,
+            "acl_status": acl_status,
+            "storage_location": _storage_location(store, raw_blob_key, raw_hash),
+        }
+        snapshot_bytes = _pretty_json_bytes(snapshot)
         object_states.append(
             _put_immutable(store, snapshot_key, snapshot_bytes, content_type="application/json")
         )
+        artifacts.update(snapshot_id=snapshot_id, snapshot_key=snapshot_key)
 
         snapshotted = _event(
             attempt_id=attempt_id,
@@ -799,6 +746,8 @@ def intake_local_markdown(
         object_states.append(reused)
         current_state = "snapshotted"
 
+        normalized = _normalize_markdown(acquisition.data)
+        normalized_hash = sha256_bytes(normalized)
         derivative_id = derivative_id_for(
             snapshot_id=snapshot_id,
             normalizer_id=NORMALIZER_ID,
@@ -816,18 +765,19 @@ def intake_local_markdown(
         object_states.append(
             _put_immutable(store, normalized_key, normalized, content_type="text/markdown")
         )
-        derivative = DerivativeRecord(
-            derivative_id=derivative_id,
-            snapshot_id=snapshot_id,
-            normalizer_id=NORMALIZER_ID,
-            normalizer_version=NORMALIZER_VERSION,
-            normalized_content_hash=normalized_hash,
-            normalized_key=normalized_key,
-            byte_size=len(normalized),
-            mime_type="text/markdown",
-            warnings=_prompt_findings(normalized.decode("utf-8")),
-        )
-        derivative_bytes = _pretty_json_bytes(derivative.to_dict())
+        derivative = {
+            "schema_version": "intake-derivative/v1",
+            "derivative_id": derivative_id,
+            "snapshot_id": snapshot_id,
+            "normalizer_id": NORMALIZER_ID,
+            "normalizer_version": NORMALIZER_VERSION,
+            "normalized_content_hash": normalized_hash,
+            "normalized_key": normalized_key,
+            "byte_size": len(normalized),
+            "mime_type": "text/markdown",
+            "warnings": _prompt_findings(normalized.decode("utf-8")),
+        }
+        derivative_bytes = _pretty_json_bytes(derivative)
         object_states.append(
             _put_immutable(
                 store,
@@ -835,6 +785,11 @@ def intake_local_markdown(
                 derivative_bytes,
                 content_type="application/json",
             )
+        )
+        artifacts.update(
+            derivative_id=derivative_id,
+            normalized_key=normalized_key,
+            derivative_key=derivative_key,
         )
 
         normalized_event = _event(
@@ -896,31 +851,24 @@ def intake_local_markdown(
             rejection_key=None,
             idempotent=False,
             raw_blob_reused=raw_reused,
-            event_keys=tuple(
-                f"intake/v1/attempts/{attempt_id}/events/"
-                f"{int(item['sequence']):06d}-{item['event_sha256']}.json"
-                for item in events
-            ),
+            event_keys=_event_keys(attempt_id, events),
         )
-        result_bytes = _pretty_json_bytes(result.evidence_dict())
         object_states.append(
-            _put_immutable(store, result_key, result_bytes, content_type="application/json")
+            _put_immutable(
+                store,
+                result_key,
+                _pretty_json_bytes(result.evidence_dict()),
+                content_type="application/json",
+            )
         )
-        result = IntakeResult(
-            **{
-                **result.to_dict(),
-                "event_keys": result.event_keys,
-                "idempotent": all(object_states),
-            }
-        )
-
+        result = replace(result, idempotent=all(object_states))
         _write_output(output_dir, "snapshot.json", snapshot_bytes)
         _write_output(output_dir, "normalized.md", normalized)
         _write_output(output_dir, "derivative.json", derivative_bytes)
         _write_output(output_dir, "intake-result.json", _pretty_json_bytes(result.to_dict()))
         return result
     except IntakeFailure as failure:
-        return _rejected_result(
+        return _reject(
             store=store,
             request=request,
             attempt_id=attempt_id,
@@ -928,6 +876,6 @@ def intake_local_markdown(
             current_state=current_state,
             events=events,
             object_states=object_states,
+            artifacts=artifacts,
             output_dir=output_dir,
-            source_id=source_id,
         )
