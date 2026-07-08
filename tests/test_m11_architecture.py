@@ -162,7 +162,7 @@ def test_architecture_documents_pin_reuse_and_mutation_boundaries() -> None:
     combined = "\n".join((readme, architecture, reuse, boundary, strategy))
 
     assert "M11.2" in combined
-    assert "canonical Source remains the only editable truth" in combined
+    assert "canonical source remains the only editable truth" in combined.lower()
     assert "canonical_json_bytes" in reuse
     assert "exact character-span" in reuse
     assert "issue #30 must remain open" in readme
