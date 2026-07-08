@@ -8,6 +8,10 @@ on:
       - '.github/workflows/r2-release-integration.yml'
       - 'src/knowledge_engine/**'
       - 'examples/okf-bundle/**'
+      - 'docs/architecture/m10/**'
+      - 'scripts/m10_verify_production_baseline.py'
+      - 'tests/test_m10_closure.py'
+      - '.github/workflows/m10-closure-verification.yml'
   push:
     branches: [main]
     paths:
