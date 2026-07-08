@@ -5,7 +5,6 @@ import shutil
 from pathlib import Path
 
 import pytest
-
 from scripts.validate_source_review_package import validate_source_review_package
 
 PACKAGE = Path("review_packages/m9-001")
