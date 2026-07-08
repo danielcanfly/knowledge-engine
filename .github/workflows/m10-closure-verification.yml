@@ -1,0 +1,64 @@
+name: M10 Closure Verification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'docs/architecture/m10/**'
+      - 'scripts/m10_verify_production_baseline.py'
+      - 'tests/test_m10_closure.py'
+      - '.github/workflows/m10-closure-verification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  production-baseline-read-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e .
+      - name: Validate required read-only configuration
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT_URL; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+      - name: Verify production pointer and manifest byte-for-byte
+        env:
+          APP_ENV: production
+          OBJECT_STORE_BACKEND: r2
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+          R2_REGION: auto
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/m10_verify_production_baseline.py \
+            --confirm-read-only \
+            > /tmp/m10-closure-verification.log 2>&1 || {
+              cat /tmp/m10-closure-verification.log
+              exit 1
+            }
+          cat /tmp/m10-closure-verification.log
+      - name: Upload verification failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m10-closure-verification-log
+          path: /tmp/m10-closure-verification.log
+          if-no-files-found: ignore
+          retention-days: 14
