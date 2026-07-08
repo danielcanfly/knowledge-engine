@@ -42,11 +42,15 @@ class SourceResolutionRequest:
         if not RUN_ID_RE.fullmatch(self.compiler_run_id):
             raise CompilerFailure("RESOLUTION_RUN_ID_INVALID", "request", "compiler run ID invalid")
         if self.source_repository != SOURCE_REPOSITORY:
-            raise CompilerFailure("SOURCE_REPOSITORY_INVALID", "request", "unexpected source repository")
+            raise CompilerFailure(
+                "SOURCE_REPOSITORY_INVALID", "request", "unexpected source repository"
+            )
         if not SHA_RE.fullmatch(self.source_commit_sha):
             raise CompilerFailure("SOURCE_SHA_INVALID", "request", "source SHA invalid")
         if not self.resolved_at.endswith("Z"):
-            raise CompilerFailure("RESOLUTION_TIMESTAMP_INVALID", "request", "resolved_at must end in Z")
+            raise CompilerFailure(
+                "RESOLUTION_TIMESTAMP_INVALID", "request", "resolved_at must end in Z"
+            )
         try:
             datetime.fromisoformat(self.resolved_at[:-1] + "+00:00")
         except ValueError as exc:
@@ -56,7 +60,9 @@ class SourceResolutionRequest:
         if not SAFE_VERSION_RE.fullmatch(self.resolver_version):
             raise CompilerFailure("RESOLVER_VERSION_INVALID", "request", "resolver version invalid")
         if not 0 < self.strong_match_threshold <= 1:
-            raise CompilerFailure("RESOLUTION_THRESHOLD_INVALID", "request", "strong threshold invalid")
+            raise CompilerFailure(
+                "RESOLUTION_THRESHOLD_INVALID", "request", "strong threshold invalid"
+            )
         if not 0 < self.contradiction_threshold <= 1:
             raise CompilerFailure(
                 "RESOLUTION_THRESHOLD_INVALID", "request", "contradiction threshold invalid"
@@ -116,9 +122,7 @@ def load_json_object(store: ObjectStore, key: str, label: str) -> dict[str, Any]
             "RESOLUTION_OBJECT_INVALID", "validate", f"invalid {label}", key=key
         ) from exc
     if not isinstance(value, dict):
-        raise CompilerFailure(
-            "RESOLUTION_OBJECT_INVALID", "validate", f"{label} must be an object"
-        )
+        raise CompilerFailure("RESOLUTION_OBJECT_INVALID", "validate", f"{label} must be an object")
     return value
 
 
