@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from knowledge_engine.source_review_package import validate_source_review_package
+from scripts.validate_source_review_package import validate_source_review_package
 
 PACKAGE = Path("review_packages/m9-001")
 
