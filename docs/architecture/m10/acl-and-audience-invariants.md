@@ -18,7 +18,6 @@ Every snapshot records:
 audience
 access_policy
 acl_status
-acl_observation_source
 owner
 license
 ```
