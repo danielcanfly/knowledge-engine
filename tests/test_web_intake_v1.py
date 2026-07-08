@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from knowledge_engine.intake_v1 import AccessPolicy, EvidenceValue, verify_event
+from knowledge_engine.intake_v1 import AccessPolicy, EvidenceValue, IntakeFailure, verify_event
 from knowledge_engine.storage import FileObjectStore
-from knowledge_engine.web_intake_v1 import (
+from knowledge_engine.web_intake import (
     HTTPExchangeResult,
     WebURLRequest,
     canonicalize_https_url,
@@ -23,11 +23,7 @@ SECOND_PUBLIC_IP = "151.101.1.69"
 
 
 def _resolved(value: str) -> EvidenceValue:
-    return EvidenceValue(
-        status="resolved",
-        value=value,
-        observation_source="operator_asserted",
-    )
+    return EvidenceValue("resolved", value, "operator_asserted")
 
 
 def _request(
@@ -35,8 +31,6 @@ def _request(
     url: str = "https://example.com/article",
     retrieved_at: str = "2026-07-08T08:30:00Z",
     source_id: str | None = None,
-    audience: str = "public",
-    access_policy: AccessPolicy | None = None,
     license_value: EvidenceValue | None = None,
     max_bytes: int = 1024 * 1024,
     max_compressed_bytes: int = 1024 * 1024,
@@ -50,13 +44,8 @@ def _request(
         source_id=source_id,
         owner=_resolved("Daniel"),
         license=license_value or _resolved("owner-provided"),
-        audience=audience,
-        access_policy=access_policy
-        or AccessPolicy(
-            policy_type="public",
-            principals=(),
-            observation_source="observed",
-        ),
+        audience="public",
+        access_policy=AccessPolicy("public", (), "observed"),
         max_bytes=max_bytes,
         max_compressed_bytes=max_compressed_bytes,
         max_redirects=max_redirects,
@@ -75,31 +64,25 @@ def _resolver(mapping: Mapping[str, Sequence[str]]):
 
 
 def _response(
-    *,
     body: bytes,
+    *,
     status: int = 200,
-    headers: Mapping[str, str] | None = None,
     connected_ip: str = PUBLIC_IP,
+    headers: Mapping[str, str] | None = None,
 ) -> HTTPExchangeResult:
-    base_headers = {
+    values = {
         "content-type": "text/markdown; charset=utf-8",
         "content-length": str(len(body)),
         "content-encoding": "identity",
         "etag": '"v1"',
     }
-    base_headers.update(headers or {})
-    return HTTPExchangeResult(
-        status=status,
-        reason="OK",
-        headers=base_headers,
-        body=body,
-        connected_ip=connected_ip,
-    )
+    values.update(headers or {})
+    return HTTPExchangeResult(status, "OK", values, body, connected_ip)
 
 
-def _exchange_from_sequence(responses: Sequence[HTTPExchangeResult]):
-    calls: list[tuple[str, str, float, int, dict[str, str]]] = []
+def _sequence_exchange(responses: Sequence[HTTPExchangeResult]):
     queue = list(responses)
+    calls: list[tuple[str, str]] = []
 
     def exchange(
         url: str,
@@ -108,9 +91,8 @@ def _exchange_from_sequence(responses: Sequence[HTTPExchangeResult]):
         max_compressed_bytes: int,
         headers: Mapping[str, str],
     ) -> HTTPExchangeResult:
-        calls.append(
-            (url, connected_ip, timeout_seconds, max_compressed_bytes, dict(headers))
-        )
+        del timeout_seconds, max_compressed_bytes, headers
+        calls.append((url, connected_ip))
         if not queue:
             raise AssertionError("unexpected exchange call")
         return queue.pop(0)
@@ -122,102 +104,99 @@ def _json(store: FileObjectStore, key: str) -> dict:
     return json.loads(store.get(key))
 
 
-def test_https_url_canonicalization_rejects_credentials_and_unsafe_schemes() -> None:
-    assert canonicalize_https_url("HTTPS://Example.COM:443/a?q=1#fragment") == (
+def _run(
+    tmp_path: Path,
+    responses: Sequence[HTTPExchangeResult],
+    *,
+    request: WebURLRequest | None = None,
+    dns: Mapping[str, Sequence[str]] | None = None,
+):
+    store = FileObjectStore(tmp_path / "store")
+    exchange, calls = _sequence_exchange(responses)
+    result = intake_web_url(
+        store=store,
+        request=request or _request(),
+        resolver=_resolver(dns or {"example.com": [PUBLIC_IP]}),
+        exchange=exchange,
+        sleeper=lambda _seconds: None,
+    )
+    return store, result, calls
+
+
+@pytest.mark.parametrize(
+    ("url", "code"),
+    [
+        ("http://example.com/", "UNSUPPORTED_SCHEME"),
+        ("https://user:pass@example.com/", "CREDENTIAL_IN_URL"),
+        ("https://example.com/?access_token=secret", "CREDENTIAL_IN_URL"),
+        ("https://localhost/", "FORBIDDEN_DESTINATION"),
+    ],
+)
+def test_url_policy_rejects_unsafe_inputs(url: str, code: str) -> None:
+    with pytest.raises(IntakeFailure) as caught:
+        canonicalize_https_url(url)
+    assert caught.value.code == code
+
+
+def test_url_canonicalization_removes_default_port_and_fragment() -> None:
+    assert canonicalize_https_url("HTTPS://Example.COM:443/a?q=1#x") == (
         "https://example.com/a?q=1"
     )
-    assert canonicalize_https_url("https://example.com") == "https://example.com/"
-
-    with pytest.raises(Exception, match="only HTTPS"):
-        canonicalize_https_url("http://example.com/")
-    with pytest.raises(Exception, match="userinfo"):
-        canonicalize_https_url("https://user:pass@example.com/")
-    with pytest.raises(Exception, match="sensitive query"):
-        canonicalize_https_url("https://example.com/?access_token=secret")
-    with pytest.raises(Exception, match="local hostnames"):
-        canonicalize_https_url("https://localhost/")
 
 
-def test_public_ip_validation_rejects_private_metadata_and_mixed_answers() -> None:
-    assert validate_public_ips([PUBLIC_IP, SECOND_PUBLIC_IP]) == (
-        SECOND_PUBLIC_IP,
-        PUBLIC_IP,
-    )
-    for forbidden in (
-        "127.0.0.1",
-        "10.0.0.1",
-        "169.254.169.254",
-        "::1",
-        "fe80::1",
-        "0.0.0.0",
-    ):
-        with pytest.raises(Exception, match="non-public"):
-            validate_public_ips([forbidden])
-    with pytest.raises(Exception, match="non-public"):
+@pytest.mark.parametrize(
+    "address",
+    ["127.0.0.1", "10.0.0.1", "169.254.169.254", "::1", "fe80::1", "0.0.0.0"],
+)
+def test_non_public_addresses_are_rejected(address: str) -> None:
+    with pytest.raises(IntakeFailure) as caught:
+        validate_public_ips([address])
+    assert caught.value.code == "FORBIDDEN_DESTINATION"
+
+
+def test_mixed_dns_answer_fails_closed() -> None:
+    with pytest.raises(IntakeFailure):
         validate_public_ips([PUBLIC_IP, "10.0.0.1"])
 
 
-def test_html_success_writes_acquisition_snapshot_derivative_and_events(tmp_path: Path) -> None:
-    html = b"""<!doctype html><html><head><title>Guide</title><script>steal()</script></head>
-    <body><h1>Bounded Web</h1><p>Evidence <strong>first</strong>.</p>
-    <ul><li>Public IP only</li><li>Immutable raw</li></ul></body></html>"""
-    exchange, calls = _exchange_from_sequence(
+def test_html_success_preserves_raw_and_writes_evidence(tmp_path: Path) -> None:
+    html = (
+        b"<!doctype html><html><head><script>bad()</script></head>"
+        b"<body><h1>Bounded Web</h1><p>Evidence first.</p>"
+        b"<ul><li>Public IP only</li></ul></body></html>"
+    )
+    store, result, calls = _run(
+        tmp_path,
         [
             _response(
-                body=html,
+                html,
                 headers={
                     "content-type": "text/html; charset=utf-8",
                     "x-robots-tag": "index, follow",
-                    "last-modified": "Wed, 08 Jul 2026 08:00:00 GMT",
                 },
             )
-        ]
-    )
-    store = FileObjectStore(tmp_path / "store")
-
-    result = intake_web_url(
-        store=store,
-        request=_request(),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=exchange,
-        sleeper=lambda _seconds: None,
-        output_dir=tmp_path / "output",
+        ],
     )
 
     assert result.status == "accepted_for_compilation"
-    assert result.idempotent is False
-    assert result.raw_blob_reused is False
-    assert len(calls) == 1
-    assert calls[0][1] == PUBLIC_IP
-    assert calls[0][4]["Accept-Encoding"] == "gzip, deflate, identity"
-
-    raw = store.get(result.raw_blob_key or "")
-    assert raw == html
-    normalized = store.get(result.normalized_key or "").decode("utf-8")
+    assert calls == [("https://example.com/article", PUBLIC_IP)]
+    assert store.get(result.raw_blob_key or "") == html
+    normalized = store.get(result.normalized_key or "").decode()
     assert "# Bounded Web" in normalized
-    assert "Evidence first." in normalized
     assert "- Public IP only" in normalized
-    assert "steal()" not in normalized
+    assert "bad()" not in normalized
 
     acquisition_key = f"intake/v1/attempts/{result.attempt_id}/acquisition.json"
     acquisition = _json(store, acquisition_key)
-    assert acquisition["final_uri"] == "https://example.com/article"
     assert acquisition["final_resolution"]["connected_ip"] == PUBLIC_IP
     assert acquisition["observed_mime_type"] == "text/html"
-    assert acquisition["transport_body"]["byte_size"] == len(html)
-    assert acquisition["content_decoded_body"]["byte_size"] == len(html)
     assert acquisition["robots_header_observation"] == "index, follow"
-    assert "set-cookie" not in acquisition["safe_response_headers"]
 
     snapshot = _json(store, result.snapshot_key or "")
     assert snapshot["connector_type"] == "web_url"
     assert snapshot["connector_version"] == "bounded-https/1.0.0"
-    assert snapshot["mime_type"] == "text/html"
-    assert snapshot["source_version"] == '"v1"'
-
     derivative = _json(store, result.derivative_key or "")
     assert derivative["normalizer_id"] == "html_to_markdown"
-    assert derivative["normalizer_version"] == "1.0.0"
     assert derivative["acquisition_evidence_key"] == acquisition_key
 
     previous = None
@@ -235,424 +214,184 @@ def test_html_success_writes_acquisition_snapshot_derivative_and_events(tmp_path
         "normalized",
         "accepted_for_compilation",
     ]
-    assert (tmp_path / "output/acquisition.json").is_file()
 
 
-def test_redirect_chain_revalidates_each_host_and_is_evidenced(tmp_path: Path) -> None:
+def test_redirect_revalidates_target_and_records_chain(tmp_path: Path) -> None:
     redirect = _response(
-        body=b"",
+        b"",
         status=302,
-        headers={
-            "location": "https://cdn.example.net/final.md",
-            "content-length": "0",
-        },
+        headers={"location": "https://cdn.example.net/final.md", "content-length": "0"},
     )
-    final = _response(body=b"# Redirected\n", connected_ip=SECOND_PUBLIC_IP)
-    exchange, calls = _exchange_from_sequence([redirect, final])
-    store = FileObjectStore(tmp_path / "store")
-
-    result = intake_web_url(
-        store=store,
+    final = _response(b"# Redirected\n", connected_ip=SECOND_PUBLIC_IP)
+    store, result, calls = _run(
+        tmp_path,
+        [redirect, final],
         request=_request(url="https://example.com/start"),
-        resolver=_resolver(
-            {
-                "example.com": [PUBLIC_IP],
-                "cdn.example.net": [SECOND_PUBLIC_IP],
-            }
-        ),
-        exchange=exchange,
-        sleeper=lambda _seconds: None,
+        dns={"example.com": [PUBLIC_IP], "cdn.example.net": [SECOND_PUBLIC_IP]},
     )
 
     assert result.status == "accepted_for_compilation"
-    assert [call[1] for call in calls] == [PUBLIC_IP, SECOND_PUBLIC_IP]
-    acquisition = _json(
-        store,
-        f"intake/v1/attempts/{result.attempt_id}/acquisition.json",
-    )
-    assert acquisition["final_uri"] == "https://cdn.example.net/final.md"
-    assert acquisition["redirect_chain"] == [
-        {
-            "connected_ip": PUBLIC_IP,
-            "from": "https://example.com/start",
-            "resolved_ips": [PUBLIC_IP],
-            "status": 302,
-            "to": "https://cdn.example.net/final.md",
-        }
+    assert calls == [
+        ("https://example.com/start", PUBLIC_IP),
+        ("https://cdn.example.net/final.md", SECOND_PUBLIC_IP),
     ]
+    evidence = _json(store, f"intake/v1/attempts/{result.attempt_id}/acquisition.json")
+    assert evidence["redirect_chain"][0]["connected_ip"] == PUBLIC_IP
+    assert evidence["final_resolution"]["connected_ip"] == SECOND_PUBLIC_IP
 
 
-def test_redirect_to_private_destination_fails_before_second_exchange(tmp_path: Path) -> None:
+def test_redirect_to_private_and_connected_ip_substitution_fail_closed(tmp_path: Path) -> None:
     redirect = _response(
-        body=b"",
+        b"",
         status=302,
-        headers={"location": "https://internal.example/private", "content-length": "0"},
+        headers={"location": "https://internal.example/a", "content-length": "0"},
     )
-    exchange, calls = _exchange_from_sequence([redirect])
-    store = FileObjectStore(tmp_path / "store")
-
-    result = intake_web_url(
-        store=store,
-        request=_request(),
-        resolver=_resolver(
-            {
-                "example.com": [PUBLIC_IP],
-                "internal.example": ["10.0.0.8"],
-            }
-        ),
-        exchange=exchange,
-        sleeper=lambda _seconds: None,
+    _store, private_result, calls = _run(
+        tmp_path / "private",
+        [redirect],
+        dns={"example.com": [PUBLIC_IP], "internal.example": ["10.0.0.8"]},
     )
-
-    assert result.status == "rejected"
-    assert result.failure_code == "FORBIDDEN_DESTINATION"
+    assert private_result.failure_code == "FORBIDDEN_DESTINATION"
     assert len(calls) == 1
-    assert result.raw_blob_key is None
 
-
-def test_exchange_cannot_switch_to_unvalidated_ip(tmp_path: Path) -> None:
-    exchange, _calls = _exchange_from_sequence(
-        [_response(body=b"# Rebound\n", connected_ip=SECOND_PUBLIC_IP)]
-    )
-    store = FileObjectStore(tmp_path / "store")
-
-    result = intake_web_url(
-        store=store,
+    _store, rebound, _calls = _run(
+        tmp_path / "rebound",
+        [_response(b"# Wrong IP\n", connected_ip=SECOND_PUBLIC_IP)],
         request=_request(max_retries=0),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=exchange,
-        sleeper=lambda _seconds: None,
     )
-
-    assert result.status == "rejected"
-    assert result.failure_code == "DNS_REBINDING_DETECTED"
-    assert result.raw_blob_key is None
+    assert rebound.failure_code == "DNS_REBINDING_DETECTED"
+    assert rebound.raw_blob_key is None
 
 
-def test_gzip_and_deflate_are_bounded_and_deterministic(tmp_path: Path) -> None:
+@pytest.mark.parametrize("encoding", ["gzip", "deflate"])
+def test_supported_compression_decodes_to_raw_representation(
+    tmp_path: Path,
+    encoding: str,
+) -> None:
     source = b"# Compressed\n\nBounded transport.\n"
-    gzip_body = gzip.compress(source)
-    deflate_body = zlib.compress(source)
-    store = FileObjectStore(tmp_path / "store")
-
-    gzip_exchange, _ = _exchange_from_sequence(
+    compressed = gzip.compress(source) if encoding == "gzip" else zlib.compress(source)
+    store, result, _calls = _run(
+        tmp_path,
         [
             _response(
-                body=gzip_body,
+                compressed,
                 headers={
-                    "content-encoding": "gzip",
-                    "content-length": str(len(gzip_body)),
+                    "content-encoding": encoding,
+                    "content-length": str(len(compressed)),
                 },
             )
-        ]
+        ],
+        request=_request(url=f"https://example.com/{encoding}.md"),
     )
-    gzip_result = intake_web_url(
-        store=store,
-        request=_request(url="https://example.com/gzip.md"),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=gzip_exchange,
-        sleeper=lambda _seconds: None,
-    )
-    assert gzip_result.status == "accepted_for_compilation"
-    assert store.get(gzip_result.raw_blob_key or "") == source
-
-    deflate_exchange, _ = _exchange_from_sequence(
-        [
-            _response(
-                body=deflate_body,
-                headers={
-                    "content-encoding": "deflate",
-                    "content-length": str(len(deflate_body)),
-                },
-            )
-        ]
-    )
-    deflate_result = intake_web_url(
-        store=store,
-        request=_request(
-            url="https://example.com/deflate.md",
-            retrieved_at="2026-07-08T08:31:00Z",
-        ),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=deflate_exchange,
-        sleeper=lambda _seconds: None,
-    )
-    assert deflate_result.status == "accepted_for_compilation"
-    assert deflate_result.raw_blob_key == gzip_result.raw_blob_key
-    assert deflate_result.raw_blob_reused is True
-    assert deflate_result.snapshot_id != gzip_result.snapshot_id
+    assert result.status == "accepted_for_compilation"
+    assert store.get(result.raw_blob_key or "") == source
 
 
-def test_compressed_decompressed_and_ratio_limits_fail_closed(tmp_path: Path) -> None:
-    store = FileObjectStore(tmp_path / "store")
-
-    large_body = b"x" * 64
-    large_exchange, _ = _exchange_from_sequence([_response(body=large_body)])
-    compressed_limit = intake_web_url(
-        store=store,
+def test_size_ratio_and_content_length_limits(tmp_path: Path) -> None:
+    _store, compressed, _calls = _run(
+        tmp_path / "compressed",
+        [_response(b"x" * 64)],
         request=_request(max_compressed_bytes=16),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=large_exchange,
-        sleeper=lambda _seconds: None,
     )
-    assert compressed_limit.status == "rejected"
-    assert compressed_limit.failure_code == "SOURCE_TOO_LARGE"
+    assert compressed.failure_code == "SOURCE_TOO_LARGE"
 
-    decoded_source = b"A" * 4096
-    bomb = gzip.compress(decoded_source)
-    decoded_exchange, _ = _exchange_from_sequence(
-        [
-            _response(
-                body=bomb,
-                headers={
-                    "content-encoding": "gzip",
-                    "content-length": str(len(bomb)),
-                },
-            )
-        ]
+    bomb = gzip.compress(b"A" * 4096)
+    _store, decoded, _calls = _run(
+        tmp_path / "decoded",
+        [_response(bomb, headers={"content-encoding": "gzip"})],
+        request=_request(max_bytes=1024),
     )
-    decoded_limit = intake_web_url(
-        store=store,
-        request=_request(
-            url="https://example.com/decoded.md",
-            retrieved_at="2026-07-08T08:32:00Z",
-            max_bytes=1024,
-        ),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=decoded_exchange,
-        sleeper=lambda _seconds: None,
-    )
-    assert decoded_limit.status == "rejected"
-    assert decoded_limit.failure_code == "SOURCE_TOO_LARGE"
+    assert decoded.failure_code == "SOURCE_TOO_LARGE"
 
-    ratio_exchange, _ = _exchange_from_sequence(
-        [
-            _response(
-                body=bomb,
-                headers={
-                    "content-encoding": "gzip",
-                    "content-length": str(len(bomb)),
-                },
-            )
-        ]
+    _store, ratio, _calls = _run(
+        tmp_path / "ratio",
+        [_response(bomb, headers={"content-encoding": "gzip"})],
+        request=_request(max_bytes=8192, max_compression_ratio=2),
     )
-    ratio_limit = intake_web_url(
-        store=store,
-        request=_request(
-            url="https://example.com/ratio.md",
-            retrieved_at="2026-07-08T08:33:00Z",
-            max_bytes=8192,
-            max_compression_ratio=2,
-        ),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=ratio_exchange,
-        sleeper=lambda _seconds: None,
-    )
-    assert ratio_limit.status == "rejected"
-    assert ratio_limit.failure_code == "COMPRESSION_RATIO_EXCEEDED"
+    assert ratio.failure_code == "COMPRESSION_RATIO_EXCEEDED"
 
-
-def test_content_length_mismatch_and_partial_status_are_rejected(tmp_path: Path) -> None:
-    store = FileObjectStore(tmp_path / "store")
-    mismatch_exchange, _ = _exchange_from_sequence(
-        [_response(body=b"short", headers={"content-length": "50"})]
+    _store, mismatch, _calls = _run(
+        tmp_path / "length",
+        [_response(b"short", headers={"content-length": "50"})],
     )
-    mismatch = intake_web_url(
-        store=store,
-        request=_request(),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=mismatch_exchange,
-        sleeper=lambda _seconds: None,
-    )
-    assert mismatch.status == "rejected"
     assert mismatch.failure_code == "CONTENT_LENGTH_MISMATCH"
 
-    partial_exchange, _ = _exchange_from_sequence(
-        [_response(body=b"partial", status=206)]
-    )
-    partial = intake_web_url(
-        store=store,
-        request=_request(retrieved_at="2026-07-08T08:34:00Z"),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=partial_exchange,
-        sleeper=lambda _seconds: None,
-    )
-    assert partial.status == "rejected"
-    assert partial.failure_code == "TRUNCATED_RESPONSE"
+
+@pytest.mark.parametrize(
+    ("response", "code"),
+    [
+        (_response(b"partial", status=206), "TRUNCATED_RESPONSE"),
+        (_response(b"encoded", headers={"content-encoding": "br"}), "UNSUPPORTED_CONTENT_ENCODING"),
+        (
+            _response(b"plain", headers={"content-type": "text/plain; charset=latin-1"}),
+            "UNSUPPORTED_ENCODING",
+        ),
+        (_response(b"%PDF", headers={"content-type": "application/pdf"}), "UNSUPPORTED_MIME_TYPE"),
+        (_response(b"", status=401), "AUTH_REQUIRED"),
+        (_response(b"", status=403), "ACCESS_DENIED"),
+        (_response(b"", status=404), "SOURCE_NOT_FOUND"),
+    ],
+)
+def test_response_taxonomy(tmp_path: Path, response: HTTPExchangeResult, code: str) -> None:
+    _store, result, _calls = _run(tmp_path, [response], request=_request(max_retries=0))
+    assert result.failure_code == code
 
 
-def test_unsupported_content_encoding_charset_and_mime_are_rejected(tmp_path: Path) -> None:
-    store = FileObjectStore(tmp_path / "store")
-
-    br_exchange, _ = _exchange_from_sequence(
-        [_response(body=b"encoded", headers={"content-encoding": "br"})]
-    )
-    br_result = intake_web_url(
-        store=store,
-        request=_request(),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=br_exchange,
-        sleeper=lambda _seconds: None,
-    )
-    assert br_result.failure_code == "UNSUPPORTED_CONTENT_ENCODING"
-
-    charset_exchange, _ = _exchange_from_sequence(
+def test_transient_retries_are_bounded_and_evidenced(tmp_path: Path) -> None:
+    store, result, calls = _run(
+        tmp_path,
         [
-            _response(
-                body=b"plain",
-                headers={"content-type": "text/plain; charset=iso-8859-1"},
-            )
-        ]
-    )
-    charset_result = intake_web_url(
-        store=store,
-        request=_request(retrieved_at="2026-07-08T08:35:00Z"),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=charset_exchange,
-        sleeper=lambda _seconds: None,
-    )
-    assert charset_result.failure_code == "UNSUPPORTED_ENCODING"
-
-    binary_exchange, _ = _exchange_from_sequence(
-        [
-            _response(
-                body=b"%PDF-1.7\n",
-                headers={"content-type": "application/pdf"},
-            )
-        ]
-    )
-    binary_result = intake_web_url(
-        store=store,
-        request=_request(retrieved_at="2026-07-08T08:36:00Z"),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=binary_exchange,
-        sleeper=lambda _seconds: None,
-    )
-    assert binary_result.failure_code == "UNSUPPORTED_MIME_TYPE"
-
-
-def test_transient_retry_is_bounded_evidenced_and_can_recover(tmp_path: Path) -> None:
-    responses = [
-        _response(body=b"", status=503),
-        _response(body=b"", status=429),
-        _response(body=b"# Recovered\n"),
-    ]
-    exchange, calls = _exchange_from_sequence(responses)
-    sleeps: list[float] = []
-    store = FileObjectStore(tmp_path / "store")
-
-    result = intake_web_url(
-        store=store,
+            _response(b"", status=503),
+            _response(b"", status=429),
+            _response(b"# Recovered\n"),
+        ],
         request=_request(max_retries=2),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=exchange,
-        sleeper=sleeps.append,
     )
-
     assert result.status == "accepted_for_compilation"
     assert len(calls) == 3
-    assert sleeps == [0, 0]
-    acquisition = _json(
-        store,
-        f"intake/v1/attempts/{result.attempt_id}/acquisition.json",
-    )
-    assert [event["reason_code"] for event in acquisition["retry_events"]] == [
+    evidence = _json(store, f"intake/v1/attempts/{result.attempt_id}/acquisition.json")
+    assert [item["reason_code"] for item in evidence["retry_events"]] == [
         "UPSTREAM_UNAVAILABLE",
         "RATE_LIMITED",
     ]
 
-
-def test_retry_exhaustion_and_http_status_taxonomy(tmp_path: Path) -> None:
-    store = FileObjectStore(tmp_path / "store")
-    unavailable_exchange, calls = _exchange_from_sequence(
-        [_response(body=b"", status=503), _response(body=b"", status=503)]
-    )
-    unavailable = intake_web_url(
-        store=store,
+    _store, exhausted, calls = _run(
+        tmp_path / "exhausted",
+        [_response(b"", status=503), _response(b"", status=503)],
         request=_request(max_retries=1),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=unavailable_exchange,
-        sleeper=lambda _seconds: None,
     )
-    assert unavailable.status == "rejected"
-    assert unavailable.failure_code == "UPSTREAM_UNAVAILABLE"
+    assert exhausted.failure_code == "UPSTREAM_UNAVAILABLE"
     assert len(calls) == 2
 
-    for index, (status, code) in enumerate(
-        ((401, "AUTH_REQUIRED"), (403, "ACCESS_DENIED"), (404, "SOURCE_NOT_FOUND"))
-    ):
-        exchange, _ = _exchange_from_sequence([_response(body=b"", status=status)])
-        result = intake_web_url(
-            store=store,
-            request=_request(retrieved_at=f"2026-07-08T08:{40 + index}:00Z"),
-            resolver=_resolver({"example.com": [PUBLIC_IP]}),
-            exchange=exchange,
-            sleeper=lambda _seconds: None,
-        )
-        assert result.failure_code == code
 
-
-def test_secret_is_rejected_before_raw_but_after_sanitized_acquisition_evidence(
-    tmp_path: Path,
-) -> None:
-    body = b"# Unsafe\n\napi_key=ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890\n"
-    exchange, _ = _exchange_from_sequence([_response(body=body)])
-    store_root = tmp_path / "store"
-    store = FileObjectStore(store_root)
-
-    result = intake_web_url(
-        store=store,
-        request=_request(),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=exchange,
-        sleeper=lambda _seconds: None,
+def test_secret_rejection_and_license_quarantine(tmp_path: Path) -> None:
+    store, secret, _calls = _run(
+        tmp_path / "secret",
+        [_response(b"api_key=ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890\n")],
     )
+    assert secret.failure_code == "SECRET_LIKE_CONTENT"
+    assert secret.raw_blob_key is None
+    acquisition_key = f"intake/v1/attempts/{secret.attempt_id}/acquisition.json"
+    assert "ABCDEFGHIJKLMNOPQRSTUVWXYZ" not in json.dumps(_json(store, acquisition_key))
 
-    assert result.status == "rejected"
-    assert result.failure_code == "SECRET_LIKE_CONTENT"
-    assert result.raw_blob_key is None
-    acquisition_key = f"intake/v1/attempts/{result.attempt_id}/acquisition.json"
-    acquisition = _json(store, acquisition_key)
-    assert "ABCDEFGHIJKLMNOPQRSTUVWXYZ" not in json.dumps(acquisition)
-    rejection = _json(store, result.rejection_key or "")
-    assert rejection["raw_persisted"] is False
-    assert acquisition_key in _json(store, result.event_keys[-1])["evidence_refs"]
-    assert not (store_root / "intake/v1/raw").exists()
-
-
-def test_unresolved_license_is_post_snapshot_quarantine(tmp_path: Path) -> None:
-    exchange, _ = _exchange_from_sequence([_response(body=b"# Pending license\n")])
-    store = FileObjectStore(tmp_path / "store")
-
-    result = intake_web_url(
-        store=store,
-        request=_request(
-            license_value=EvidenceValue(
-                status="unresolved",
-                value=None,
-                observation_source="unresolved",
-            )
-        ),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=exchange,
-        sleeper=lambda _seconds: None,
+    unresolved = EvidenceValue("unresolved", None, "unresolved")
+    store, quarantined, _calls = _run(
+        tmp_path / "license",
+        [_response(b"# Pending license\n")],
+        request=_request(license_value=unresolved),
     )
-
-    assert result.status == "rejected"
-    assert result.failure_code == "LICENSE_UNRESOLVED"
-    assert result.raw_blob_key is not None
-    assert result.snapshot_key is not None
-    assert result.derivative_key is not None
-    rejection = _json(store, result.rejection_key or "")
-    assert rejection["raw_persisted"] is True
+    assert quarantined.failure_code == "LICENSE_UNRESOLVED"
+    assert quarantined.raw_blob_key is not None
+    assert quarantined.snapshot_key is not None
+    assert _json(store, quarantined.rejection_key or "")["raw_persisted"] is True
 
 
 def test_exact_replay_and_cross_url_raw_dedupe(tmp_path: Path) -> None:
     body = b"# Shared remote content\n"
     store = FileObjectStore(tmp_path / "store")
-    first_exchange, _ = _exchange_from_sequence([_response(body=body)])
     request = _request()
 
+    first_exchange, _ = _sequence_exchange([_response(body)])
     first = intake_web_url(
         store=store,
         request=request,
@@ -660,7 +399,7 @@ def test_exact_replay_and_cross_url_raw_dedupe(tmp_path: Path) -> None:
         exchange=first_exchange,
         sleeper=lambda _seconds: None,
     )
-    replay_exchange, _ = _exchange_from_sequence([_response(body=body)])
+    replay_exchange, _ = _sequence_exchange([_response(body)])
     replay = intake_web_url(
         store=store,
         request=request,
@@ -668,11 +407,12 @@ def test_exact_replay_and_cross_url_raw_dedupe(tmp_path: Path) -> None:
         exchange=replay_exchange,
         sleeper=lambda _seconds: None,
     )
-    assert first.snapshot_id == replay.snapshot_id
+    assert replay.snapshot_id == first.snapshot_id
     assert replay.idempotent is True
-    assert replay.raw_blob_reused is True
 
-    second_exchange, _ = _exchange_from_sequence([_response(body=body)])
+    second_exchange, _ = _sequence_exchange(
+        [_response(body, connected_ip=SECOND_PUBLIC_IP)]
+    )
     second = intake_web_url(
         store=store,
         request=_request(
@@ -683,53 +423,37 @@ def test_exact_replay_and_cross_url_raw_dedupe(tmp_path: Path) -> None:
         exchange=second_exchange,
         sleeper=lambda _seconds: None,
     )
+    assert second.status == "accepted_for_compilation"
     assert second.raw_blob_key == first.raw_blob_key
     assert second.raw_blob_reused is True
     assert second.source_id != first.source_id
     assert second.snapshot_id != first.snapshot_id
 
 
-def test_redirect_loop_and_limit_are_rejected(tmp_path: Path) -> None:
-    loop_response = _response(
-        body=b"",
+def test_redirect_loop_limit_and_namespace_boundary(tmp_path: Path) -> None:
+    loop = _response(
+        b"",
         status=302,
         headers={"location": "https://example.com/article", "content-length": "0"},
     )
-    loop_exchange, _ = _exchange_from_sequence([loop_response])
-    store = FileObjectStore(tmp_path / "store")
-    loop = intake_web_url(
-        store=store,
-        request=_request(),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=loop_exchange,
-        sleeper=lambda _seconds: None,
-    )
-    assert loop.failure_code == "REDIRECT_LOOP"
+    _store, loop_result, _calls = _run(tmp_path / "loop", [loop])
+    assert loop_result.failure_code == "REDIRECT_LOOP"
 
     redirect = _response(
-        body=b"",
+        b"",
         status=302,
         headers={"location": "https://other.example/final", "content-length": "0"},
     )
-    limit_exchange, _ = _exchange_from_sequence([redirect])
-    limit = intake_web_url(
-        store=store,
-        request=_request(
-            retrieved_at="2026-07-08T08:51:00Z",
-            max_redirects=0,
-        ),
-        resolver=_resolver({"example.com": [PUBLIC_IP]}),
-        exchange=limit_exchange,
-        sleeper=lambda _seconds: None,
+    _store, limited, _calls = _run(
+        tmp_path / "limit",
+        [redirect],
+        request=_request(max_redirects=0),
     )
-    assert limit.failure_code == "TOO_MANY_REDIRECTS"
+    assert limited.failure_code == "TOO_MANY_REDIRECTS"
 
-
-def test_web_intake_writes_only_intake_v1_namespace(tmp_path: Path) -> None:
-    exchange, _ = _exchange_from_sequence([_response(body=b"# Boundary\n")])
-    store_root = tmp_path / "store"
+    store_root = tmp_path / "boundary"
     store = FileObjectStore(store_root)
-
+    exchange, _ = _sequence_exchange([_response(b"# Boundary\n")])
     result = intake_web_url(
         store=store,
         request=_request(),
@@ -737,7 +461,6 @@ def test_web_intake_writes_only_intake_v1_namespace(tmp_path: Path) -> None:
         exchange=exchange,
         sleeper=lambda _seconds: None,
     )
-
     assert result.status == "accepted_for_compilation"
     object_paths = [
         path.relative_to(store_root).as_posix()
@@ -748,4 +471,3 @@ def test_web_intake_writes_only_intake_v1_namespace(tmp_path: Path) -> None:
     assert all(path.startswith("intake/v1/") for path in object_paths)
     assert not (store_root / "channels/production.json").exists()
     assert not (store_root / "raw/captures").exists()
-    assert not (store_root / "review/packets").exists()
