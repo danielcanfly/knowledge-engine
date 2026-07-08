@@ -1,0 +1,182 @@
+name: M9 Idempotent Replay Closure
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "governed_batches/m9-001-agent-planning-strategies.json"
+      - "governed_batches/registry-v2.json"
+      - "governed_batches/evidence/m9-001-idempotent-replay-approval.json"
+      - "governed_batches/evidence/m9-001-idempotent-replay-observation.json"
+      - "governed_batches/evidence/m9-001-lifecycle-history.json"
+      - "src/knowledge_engine/idempotent_replay_approval_history.py"
+      - "scripts/validate_historical_idempotent_replay_approval.py"
+      - "tests/test_idempotent_replay_approval.py"
+      - "tests/test_m9_request_spec.py"
+      - "tests/test_m9_planned_batch.py"
+      - ".github/workflows/m9-idempotent-replay-closure.yml"
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  close-batch:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      GH_TOKEN: ${{ github.token }}
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      OPERATION_ID: m9-001-agent-planning-strategies-001
+      TARGET_RELEASE_ID: 20260708T040116Z-69a9f445699a
+      TARGET_MANIFEST_SHA256: 2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb
+      TARGET_POINTER_SHA256: 38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5
+      INTENT_SHA256: 4a7775b5bf715ad4b7ebae79aa38048f9282871a99608a1b55d1b558d8bfaefa
+      RECEIPT_SHA256: 1e38ed04d1e89af70e5ed4ace9dc82876128c074f04250e9747f1a69738d2602
+      REPLAY_RUN_ID: "28922045241"
+      REPLAY_LEDGER_COMMENT_ID: "4911941452"
+      EVIDENCE_DIR: evidence/m9-idempotent-replay-closure
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install exact Engine
+        run: python -m pip install -e '.[dev]'
+      - name: Validate closed governance state
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          python scripts/validate_historical_idempotent_replay_approval.py \
+            --approval-path governed_batches/evidence/m9-001-idempotent-replay-approval.json \
+            --spec-path governed_batches/m9-001-agent-planning-strategies.json \
+            --request-path production_promotions/m9-001-agent-planning-strategies.json \
+            --promotion-observation-path governed_batches/evidence/m9-001-production-promotion-observation.json \
+            --lifecycle-path governed_batches/evidence/m9-001-lifecycle-history.json \
+            --output "$EVIDENCE_DIR/replay-approval-history.json"
+          python -m knowledge_engine.batch_cli validate \
+            --registry-path governed_batches/registry-v2.json \
+            --evidence-dir "$EVIDENCE_DIR/registry"
+          python -m pytest -q \
+            tests/test_idempotent_replay_approval.py \
+            tests/test_m9_request_spec.py \
+            tests/test_m9_planned_batch.py
+      - name: Verify live R2 operation records read-only
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store
+
+          store = create_object_store(Settings.from_env())
+          prefix = f"operations/promotions/{os.environ['OPERATION_ID']}"
+          intent_key = f"{prefix}/intent.json"
+          receipt_key = f"{prefix}/promotion-receipt.json"
+          rollback_key = f"{prefix}/rollback-receipt.json"
+          intent = store.get(intent_key)
+          receipt = store.get(receipt_key)
+          pointer = store.get('channels/production.json')
+          pointer_json = json.loads(pointer)
+          assert hashlib.sha256(intent).hexdigest() == os.environ['INTENT_SHA256']
+          assert hashlib.sha256(receipt).hexdigest() == os.environ['RECEIPT_SHA256']
+          assert hashlib.sha256(pointer).hexdigest() == os.environ['TARGET_POINTER_SHA256']
+          assert pointer_json['release_id'] == os.environ['TARGET_RELEASE_ID']
+          assert pointer_json['manifest_sha256'] == os.environ['TARGET_MANIFEST_SHA256']
+          assert store.head(rollback_key) is None
+          root = Path(os.environ['EVIDENCE_DIR'])
+          (root / 'intent.json').write_bytes(intent)
+          (root / 'promotion-receipt.json').write_bytes(receipt)
+          (root / 'production-pointer.json').write_bytes(pointer)
+          (root / 'r2-observation.json').write_text(json.dumps({
+              'status': 'passed',
+              'intent_key': intent_key,
+              'intent_sha256': hashlib.sha256(intent).hexdigest(),
+              'receipt_key': receipt_key,
+              'receipt_sha256': hashlib.sha256(receipt).hexdigest(),
+              'production_pointer_sha256': hashlib.sha256(pointer).hexdigest(),
+              'rollback_receipt_present': False,
+              'read_only': True,
+              'mutations_performed': [],
+          }, indent=2, sort_keys=True) + '\n')
+          PY
+      - name: Verify permanent ledger replay append
+        run: |
+          set -euo pipefail
+          gh api "/repos/$GITHUB_REPOSITORY/issues/comments/$REPLAY_LEDGER_COMMENT_ID" \
+            > "$EVIDENCE_DIR/ledger-comment.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path(os.environ['EVIDENCE_DIR'], 'ledger-comment.json')
+          comment = json.loads(path.read_text())
+          body = comment['body']
+          assert os.environ['OPERATION_ID'] in body
+          assert os.environ['REPLAY_RUN_ID'] in body
+          assert os.environ['TARGET_RELEASE_ID'] in body
+          assert 'already_promoted' in body
+          assert 'true' in body.lower()
+          PY
+      - name: Write closure summary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['EVIDENCE_DIR'])
+          approval = json.loads((root / 'replay-approval-history.json').read_text())
+          r2 = json.loads((root / 'r2-observation.json').read_text())
+          replay = json.loads(Path('governed_batches/evidence/m9-001-idempotent-replay-observation.json').read_text())
+          lifecycle = json.loads(Path('governed_batches/evidence/m9-001-lifecycle-history.json').read_text())
+          assert approval['approval_consumed'] is True
+          assert replay['replay']['precondition_state'] == 'already_target'
+          assert replay['replay']['status'] == 'already_promoted'
+          assert replay['replay']['idempotent'] is True
+          assert replay['production_target']['pointer_byte_exact_unchanged'] is True
+          assert lifecycle['final_state'] == 'closed'
+          assert lifecycle['replay_mutated_production'] is False
+          summary = {
+              'schema_version': 'm9-idempotent-replay-closure/v1',
+              'status': 'closed',
+              'batch_id': lifecycle['batch_id'],
+              'lifecycle_state': lifecycle['final_state'],
+              'replay_run': replay['replay']['run_id'],
+              'replay_job': replay['replay']['job_id'],
+              'replay_artifact': replay['replay']['artifact_id'],
+              'replay_artifact_digest': replay['replay']['artifact_digest'],
+              'precondition_state': replay['replay']['precondition_state'],
+              'promotion_status': replay['replay']['status'],
+              'idempotent': replay['replay']['idempotent'],
+              'production_pointer_sha256': r2['production_pointer_sha256'],
+              'production_pointer_byte_exact_unchanged': True,
+              'intent_sha256': r2['intent_sha256'],
+              'receipt_sha256': r2['receipt_sha256'],
+              'rollback_receipt_present': False,
+              'ledger_comment_id': replay['ledger']['comment_id'],
+              'production_mutated_by_replay': False,
+              'additional_replay_observed': False,
+              'next_legal_action': 'start_next_batch',
+          }
+          (root / 'summary.json').write_text(json.dumps(summary, indent=2, sort_keys=True) + '\n')
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          print('M9_IDEMPOTENT_REPLAY_CLOSURE_PASSED')
+          PY
+      - name: Upload closure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m9-idempotent-replay-closure-${{ github.sha }}
+          path: evidence/m9-idempotent-replay-closure/
+          if-no-files-found: error
+          retention-days: 90

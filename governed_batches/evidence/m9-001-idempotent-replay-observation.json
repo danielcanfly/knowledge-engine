@@ -1,0 +1,92 @@
+{
+  "schema_version": "m9-idempotent-replay-observation/v1",
+  "status": "passed",
+  "batch_id": "m9-001-agent-planning-strategies",
+  "approval": {
+    "issue": 119,
+    "pr": 120,
+    "merge_commit": "97a3df9356b1847ca0f2d6cd6de3cb60c45de0a4",
+    "path": "governed_batches/evidence/m9-001-idempotent-replay-approval.json",
+    "sha256": "bf9d6852fafe6bb6000503d30e894ceeeba5ea4ecd79bf50d8bf95edd9fdf300"
+  },
+  "dispatch_controller": {
+    "temporary_pr": 122,
+    "merged": false,
+    "run_id": 28922030712,
+    "job_id": 85801161023,
+    "artifact_id": 8159846249,
+    "artifact_digest": "sha256:ef94f75c01011864a63fe76146e9cac3b3e91b76b242583952531a966d944289"
+  },
+  "replay": {
+    "run_id": 28922045241,
+    "job_id": 85801208155,
+    "artifact_id": 8159843482,
+    "artifact_digest": "sha256:c8544c73b919b75b6df0e077c982cdd699e1ecf2a947359160ab9d20d14a6725",
+    "control_plane_sha": "97a3df9356b1847ca0f2d6cd6de3cb60c45de0a4",
+    "operation_id": "m9-001-agent-planning-strategies-001",
+    "request_path": "production_promotions/m9-001-agent-planning-strategies.json",
+    "request_sha256": "41564a42a3f207ea87bbc600935effbb9c3979c8366e16a4b1c7d1f35e172b5b",
+    "precondition_state": "already_target",
+    "status": "already_promoted",
+    "idempotent": true,
+    "reported_intent_key": "not_written_for_already_promoted_replay",
+    "reported_receipt_key": "not_written_for_already_promoted_replay"
+  },
+  "production_target": {
+    "release_id": "20260708T040116Z-69a9f445699a",
+    "manifest_sha256": "2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb",
+    "pointer_sha256_before": "38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5",
+    "pointer_sha256_after": "38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5",
+    "pointer_byte_exact_unchanged": true
+  },
+  "runtime_acceptance": {
+    "public_status": "answered",
+    "expected_citation_url": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-3/",
+    "expected_citation_present": true,
+    "citation_count": 4,
+    "public_raw_fallback_used": false,
+    "acl_query": "cobalt heron checkpoint",
+    "acl_status": "not_found",
+    "acl_result_count": 0,
+    "acl_filtered_count": 1,
+    "acl_raw_fallback_used": false
+  },
+  "ledger": {
+    "issue": 30,
+    "comment_id": 4911941452,
+    "comment_url": "https://github.com/danielcanfly/knowledge-engine/issues/30#issuecomment-4911941452",
+    "appended": true
+  },
+  "authoritative_operation_records": {
+    "temporary_verification_pr": 123,
+    "temporary_verification_pr_merged": false,
+    "verification_run": 28922256432,
+    "verification_job": 85801856176,
+    "verification_artifact": 8159923172,
+    "verification_artifact_digest": "sha256:e8e60f516083bc7e688721ad63c1b9c4f10b06151df71bf8fdba2ddb2d55ddee",
+    "intent_key": "operations/promotions/m9-001-agent-planning-strategies-001/intent.json",
+    "intent_sha256": "4a7775b5bf715ad4b7ebae79aa38048f9282871a99608a1b55d1b558d8bfaefa",
+    "receipt_key": "operations/promotions/m9-001-agent-planning-strategies-001/promotion-receipt.json",
+    "receipt_sha256": "1e38ed04d1e89af70e5ed4ace9dc82876128c074f04250e9747f1a69738d2602",
+    "intent_target_pointer_matches_live_production": true,
+    "intent_reused_as_authoritative_record": true,
+    "receipt_reused_as_authoritative_record": true,
+    "rollback_receipt_present": false,
+    "read_only": true,
+    "mutations_performed": []
+  },
+  "security_notes": {
+    "single_replay_consumed": true,
+    "additional_replay_used": false,
+    "new_non_idempotent_promotion_used": false,
+    "rollback_used": false,
+    "request_modified": false,
+    "operation_id_replaced": false,
+    "target_substituted": false,
+    "raw_fallback_used": false
+  },
+  "production_mutated": false,
+  "lifecycle_transition_authorized": "production_promoted -> closed",
+  "next_framework_action": "start_next_batch",
+  "next_legal_action": "start_next_batch"
+}

@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from knowledge_engine.errors import IntegrityError
-from knowledge_engine.idempotent_replay_approval import (
-    validate_idempotent_replay_approval,
+from knowledge_engine.idempotent_replay_approval_history import (
+    validate_historical_idempotent_replay_approval,
 )
 
 APPROVAL = Path(
@@ -22,7 +22,7 @@ LIFECYCLE = Path("governed_batches/evidence/m9-001-lifecycle-history.json")
 
 
 def _validate(approval_path: Path = APPROVAL) -> dict[str, object]:
-    return validate_idempotent_replay_approval(
+    return validate_historical_idempotent_replay_approval(
         approval_path=approval_path,
         spec_path=SPEC,
         request_path=REQUEST,
@@ -31,7 +31,7 @@ def _validate(approval_path: Path = APPROVAL) -> dict[str, object]:
     )
 
 
-def test_m9_idempotent_replay_approval_is_exact_and_non_mutating() -> None:
+def test_m9_idempotent_replay_approval_is_exact_and_consumed() -> None:
     result = _validate()
 
     assert result["status"] == "approved"
@@ -64,6 +64,9 @@ def test_m9_idempotent_replay_approval_is_exact_and_non_mutating() -> None:
     assert result["permanent_ledger_appended"] is False
     assert result["mutations_performed"] == []
     assert result["next_action"] == "dispatch_idempotent_replay"
+    assert result["lifecycle_state_at_approval"] == "production_promoted"
+    assert result["current_lifecycle_state"] == "closed"
+    assert result["approval_consumed"] is True
 
 
 def _validate_tampered(tmp_path: Path, payload: dict[str, object]) -> None:

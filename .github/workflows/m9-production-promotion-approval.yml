@@ -6,16 +6,15 @@ on:
     paths:
       - "governed_batches/evidence/m9-001-production-promotion-approval.json"
       - "governed_batches/evidence/m9-001-production-promotion-observation.json"
+      - "governed_batches/evidence/m9-001-idempotent-replay-observation.json"
       - "governed_batches/evidence/m9-001-lifecycle-history.json"
       - "governed_batches/m9-001-agent-planning-strategies.json"
       - "production_promotions/m9-001-agent-planning-strategies.json"
-      - "src/knowledge_engine/promotion_approval.py"
       - "src/knowledge_engine/promotion_approval_history.py"
       - "scripts/validate_historical_production_promotion_approval.py"
       - "tests/test_production_promotion_approval.py"
       - "tests/test_m9_request_spec.py"
       - "tests/test_m9_planned_batch.py"
-      - "docs/batches/m9-001-production-promotion-review.md"
       - ".github/workflows/m9-production-promotion-approval.yml"
 
 permissions:
@@ -34,213 +33,88 @@ jobs:
       R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
       R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
       R2_REGION: auto
-      APPROVAL_PATH: governed_batches/evidence/m9-001-production-promotion-approval.json
-      SPEC_PATH: governed_batches/m9-001-agent-planning-strategies.json
-      REQUEST_PATH: production_promotions/m9-001-agent-planning-strategies.json
-      REGISTRY_PATH: governed_batches/registry-v2.json
       EVIDENCE_DIR: evidence/m9-production-approval
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: pyproject.toml
-
       - name: Install exact Engine
+        run: python -m pip install -e '.[dev]'
+      - name: Validate production approval historically
         run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          python -m pip install -e '.[dev]'
-
-      - name: Capture lifecycle-aware live production pointer
+          python scripts/validate_historical_production_promotion_approval.py \
+            --approval-path governed_batches/evidence/m9-001-production-promotion-approval.json \
+            --spec-path governed_batches/m9-001-agent-planning-strategies.json \
+            --request-path production_promotions/m9-001-agent-planning-strategies.json \
+            --output "$EVIDENCE_DIR/approval-validation.json"
+      - name: Verify live target read-only
         run: |
-          set -euo pipefail
-          for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT_URL; do
-            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
-          done
           python - <<'PY'
-          import hashlib
-          import json
-          import os
+          import hashlib, json, os
           from pathlib import Path
-
           from knowledge_engine.config import Settings
           from knowledge_engine.storage import create_object_store
 
-          spec = json.loads(Path(os.environ["SPEC_PATH"]).read_text())
-          promotion = json.loads(
-              Path(
-                  "governed_batches/evidence/"
-                  "m9-001-production-promotion-observation.json"
-              ).read_text()
-          )
-          state = spec["lifecycle_state"]
-          if state == "request_spec_committed":
-              expected = promotion["previous_production"]
-              approval_consumed = False
-          elif state in {"production_promoted", "closed"}:
-              expected = promotion["production_target"]
-              approval_consumed = True
-          else:
-              raise SystemExit(f"unsupported lifecycle state: {state}")
-
-          store = create_object_store(Settings.from_env())
-          pointer_bytes = store.get("channels/production.json")
-          pointer = json.loads(pointer_bytes)
-          pointer_sha256 = hashlib.sha256(pointer_bytes).hexdigest()
-          assert pointer["release_id"] == expected["release_id"]
-          assert pointer["manifest_sha256"] == expected["manifest_sha256"]
-          assert pointer_sha256 == expected["pointer_sha256"]
-
-          Path("/tmp/m9-approval-live-production-pointer.json").write_bytes(
-              pointer_bytes
-          )
-          Path("/tmp/m9-approval-live-production-observation.json").write_text(
-              json.dumps(
-                  {
-                      "status": "passed",
-                      "lifecycle_state": state,
-                      "approval_consumed": approval_consumed,
-                      "release_id": pointer["release_id"],
-                      "manifest_sha256": pointer["manifest_sha256"],
-                      "pointer_sha256": pointer_sha256,
-                      "read_only": True,
-                      "mutations_performed": [],
-                  },
-                  indent=2,
-                  sort_keys=True,
-              )
-              + "\n",
-              encoding="utf-8",
-          )
+          replay = json.loads(Path('governed_batches/evidence/m9-001-idempotent-replay-observation.json').read_text())
+          raw = create_object_store(Settings.from_env()).get('channels/production.json')
+          pointer = json.loads(raw)
+          digest = hashlib.sha256(raw).hexdigest()
+          assert pointer['release_id'] == replay['production_target']['release_id']
+          assert pointer['manifest_sha256'] == replay['production_target']['manifest_sha256']
+          assert digest == replay['production_target']['pointer_sha256_after']
+          root = Path(os.environ['EVIDENCE_DIR'])
+          root.mkdir(parents=True, exist_ok=True)
+          (root / 'live-production-pointer.json').write_bytes(raw)
+          (root / 'live-production-observation.json').write_text(json.dumps({
+              'status': 'passed', 'pointer_sha256': digest,
+              'read_only': True, 'mutations_performed': []
+          }, indent=2, sort_keys=True) + '\n')
           PY
-
-      - name: Run clean-checkout operator preflight
+      - name: Run approval and closure tests
         run: |
-          set -euo pipefail
-          python -m knowledge_engine.batch_cli preflight \
-            --spec-path "$SPEC_PATH" \
-            --registry-path "$REGISTRY_PATH" \
-            --production-pointer-path /tmp/m9-approval-live-production-pointer.json \
-            --output "$EVIDENCE_DIR/operator-preflight.json"
-          cp /tmp/m9-approval-live-production-pointer.json \
-            "$EVIDENCE_DIR/live-production-pointer.json"
-          cp /tmp/m9-approval-live-production-observation.json \
-            "$EVIDENCE_DIR/live-production-observation.json"
-
-      - name: Validate immutable approval historically
-        run: |
-          set -euo pipefail
-          python scripts/validate_historical_production_promotion_approval.py \
-            --approval-path "$APPROVAL_PATH" \
-            --spec-path "$SPEC_PATH" \
-            --request-path "$REQUEST_PATH" \
-            --output "$EVIDENCE_DIR/approval-validation.json"
-
-      - name: Run approval and lifecycle regression tests
-        run: |
-          set -euo pipefail
           python -m pytest -q \
             tests/test_production_promotion_approval.py \
             tests/test_m9_request_spec.py \
             tests/test_m9_planned_batch.py
-
       - name: Write approval-history summary
         run: |
-          set -euo pipefail
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
-
-          validation = json.loads(
-              Path(
-                  "evidence/m9-production-approval/approval-validation.json"
-              ).read_text()
-          )
-          live = json.loads(
-              Path(
-                  "evidence/m9-production-approval/live-production-observation.json"
-              ).read_text()
-          )
-          preflight = json.loads(
-              Path(
-                  "evidence/m9-production-approval/operator-preflight.json"
-              ).read_text()
-          )
-          promotion = json.loads(
-              Path(
-                  "governed_batches/evidence/"
-                  "m9-001-production-promotion-observation.json"
-              ).read_text()
-          )
-
-          assert validation["status"] == "approved"
-          assert validation["production_dispatch_authorized"] is True
-          assert validation["lifecycle_state_at_approval"] == (
-              "request_spec_committed"
-          )
-          assert validation["current_lifecycle_state"] == live[
-              "lifecycle_state"
-          ]
-          assert validation["approval_consumed"] == live["approval_consumed"]
-          assert preflight["status"] == "ready"
-          assert preflight["lifecycle_state"] == live["lifecycle_state"]
-          assert preflight["production_workflow_inputs"] == ["request_path"]
-          assert preflight["mutations_performed"] == []
-          assert live["read_only"] is True
-          assert live["mutations_performed"] == []
-
-          consumed = validation["approval_consumed"]
-          if consumed:
-              assert promotion["status"] == "passed"
-              assert promotion["promotion"]["status"] == "promoted"
-              assert promotion["promotion"]["idempotent"] is False
-              assert promotion["ledger"]["appended"] is True
-
+          root = Path(os.environ['EVIDENCE_DIR'])
+          validation = json.loads((root / 'approval-validation.json').read_text())
+          promotion = json.loads(Path('governed_batches/evidence/m9-001-production-promotion-observation.json').read_text())
+          replay = json.loads(Path('governed_batches/evidence/m9-001-idempotent-replay-observation.json').read_text())
+          live = json.loads((root / 'live-production-observation.json').read_text())
+          assert validation['status'] == 'approved'
+          assert validation['lifecycle_state_at_approval'] == 'request_spec_committed'
+          assert validation['current_lifecycle_state'] == 'closed'
+          assert validation['approval_consumed'] is True
+          assert promotion['promotion']['status'] == 'promoted'
+          assert replay['replay']['status'] == 'already_promoted'
+          assert replay['replay']['idempotent'] is True
           summary = {
-              "schema_version": "m9-production-promotion-approval-history/v1",
-              "status": "passed",
-              "batch_id": validation["batch_id"],
-              "approval_issue": validation["approval_issue"],
-              "approval_sha256": validation["approval_sha256"],
-              "authorized_by": validation["authorized_by"],
-              "authorized_at": validation["authorized_at"],
-              "operation_id": validation["operation_id"],
-              "request_path": validation["request_path"],
-              "request_sha256": validation["request_sha256"],
-              "current_lifecycle_state": validation[
-                  "current_lifecycle_state"
-              ],
-              "approval_consumed": consumed,
-              "production_dispatched": consumed,
-              "production_mutated": consumed,
-              "permanent_ledger_appended": consumed,
-              "idempotent_replay_authorized": False,
-              "idempotent_replay_observed": False,
-              "rollback_authorized": False,
-              "rollback_observed": False,
-              "live_production_pointer_sha256": live["pointer_sha256"],
-              "next_legal_action": (
-                  promotion["next_legal_action"]
-                  if consumed
-                  else "dispatch_production_promotion"
-              ),
+              'schema_version': 'm9-production-promotion-approval-history/v2',
+              'status': 'passed',
+              'approval_sha256': validation['approval_sha256'],
+              'current_lifecycle_state': 'closed',
+              'approval_consumed': True,
+              'production_promotion_observed': True,
+              'idempotent_replay_observed': True,
+              'live_production_pointer_sha256': live['pointer_sha256'],
+              'replay_mutated_production': False,
+              'rollback_observed': False,
+              'next_legal_action': 'start_next_batch',
           }
-          output = Path(
-              "evidence/m9-production-approval/approval-history-summary.json"
-          )
-          output.write_text(
-              json.dumps(summary, indent=2, sort_keys=True) + "\n",
-              encoding="utf-8",
-          )
+          (root / 'summary.json').write_text(json.dumps(summary, indent=2, sort_keys=True) + '\n')
           print(json.dumps(summary, indent=2, sort_keys=True))
           PY
-
-      - name: Upload approval-history evidence
+      - name: Upload approval history
         if: always()
         uses: actions/upload-artifact@v4
         with:

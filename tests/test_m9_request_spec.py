@@ -17,6 +17,9 @@ RUNTIME = Path("governed_batches/evidence/m9-001-runtime-acceptance-observation.
 PROMOTION = Path(
     "governed_batches/evidence/m9-001-production-promotion-observation.json"
 )
+REPLAY = Path(
+    "governed_batches/evidence/m9-001-idempotent-replay-observation.json"
+)
 LIFECYCLE = Path("governed_batches/evidence/m9-001-lifecycle-history.json")
 
 OPERATION_ID = "m9-001-agent-planning-strategies-001"
@@ -37,7 +40,7 @@ def _load(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_m9_request_spec_is_exact_and_consumed_by_promotion() -> None:
+def test_m9_request_spec_is_exact_and_consumed_by_closed_batch() -> None:
     request = load_promotion_request_spec(
         request_path=REQUEST,
         control_plane_sha="0" * 40,
@@ -48,6 +51,7 @@ def test_m9_request_spec_is_exact_and_consumed_by_promotion() -> None:
     baseline = _load(BASELINE)
     runtime = _load(RUNTIME)
     promotion = _load(PROMOTION)
+    replay = _load(REPLAY)
     lifecycle = _load(LIFECYCLE)
     normalized = request.normalized()
 
@@ -55,8 +59,8 @@ def test_m9_request_spec_is_exact_and_consumed_by_promotion() -> None:
     assert "control_plane_sha" not in request.raw
     assert normalized["control_plane_sha"] == "0" * 40
 
-    assert spec.lifecycle_state == "production_promoted"
-    assert next_action(spec.lifecycle_state) == "run_idempotent_replay_and_close"
+    assert spec.lifecycle_state == "closed"
+    assert next_action(spec.lifecycle_state) == "start_next_batch"
     assert normalized["operation_id"] == OPERATION_ID
     assert spec.raw["production_request"] == {
         "operation_id": OPERATION_ID,
@@ -87,25 +91,35 @@ def test_m9_request_spec_is_exact_and_consumed_by_promotion() -> None:
     assert registry["status"] == "valid"
     assert registry["batch_count"] == 2
     entry = raw_registry["batches"][-1]
-    assert entry["lifecycle_state"] == "production_promoted"
+    assert entry["lifecycle_state"] == "closed"
     assert entry["operation_id"] == OPERATION_ID
     assert entry["request_path"] == str(REQUEST)
 
     transitions = [(item["from"], item["to"]) for item in lifecycle["transitions"]]
-    assert transitions[-2:] == [
+    assert transitions[-3:] == [
         ("runtime_accepted", "request_spec_committed"),
         ("request_spec_committed", "production_promoted"),
+        ("production_promoted", "closed"),
     ]
-    request_evidence = lifecycle["transitions"][-2]["evidence"]
+    request_evidence = lifecycle["transitions"][-3]["evidence"]
     assert request_evidence["request_sha256"] == REQUEST_SHA256
     assert request_evidence["control_plane_sha_committed"] is False
-    promotion_evidence = lifecycle["transitions"][-1]["evidence"]
+    promotion_evidence = lifecycle["transitions"][-2]["evidence"]
     assert promotion_evidence["promotion_status"] == "promoted"
     assert promotion_evidence["idempotent"] is False
     assert promotion_evidence["production_pointer_sha256"] == TARGET_POINTER
-    assert lifecycle["final_state"] == "production_promoted"
+    replay_evidence = lifecycle["transitions"][-1]["evidence"]
+    assert replay_evidence["precondition_state"] == "already_target"
+    assert replay_evidence["promotion_status"] == "already_promoted"
+    assert replay_evidence["idempotent"] is True
+    assert replay_evidence["production_pointer_byte_exact_unchanged"] is True
+    assert replay_evidence["intent_reused_as_authoritative_record"] is True
+    assert replay_evidence["receipt_reused_as_authoritative_record"] is True
+    assert replay_evidence["rollback_receipt_present"] is False
+    assert lifecycle["final_state"] == "closed"
     assert lifecycle["production_mutated"] is True
-    assert lifecycle["next_legal_action"] == "review_idempotent_replay"
+    assert lifecycle["replay_mutated_production"] is False
+    assert lifecycle["next_legal_action"] == "start_next_batch"
 
     assert runtime["status"] == "passed"
     assert runtime["production_pointer"]["before_sha256"] == PREVIOUS_POINTER
@@ -134,4 +148,35 @@ def test_m9_request_spec_is_exact_and_consumed_by_promotion() -> None:
     assert promotion["security_notes"]["rollback_used"] is False
     assert promotion["security_notes"]["idempotent_replay_used"] is False
     assert promotion["production_mutated"] is True
-    assert promotion["next_legal_action"] == "review_idempotent_replay"
+
+    assert replay["status"] == "passed"
+    assert replay["replay"]["run_id"] == 28922045241
+    assert replay["replay"]["job_id"] == 85801208155
+    assert replay["replay"]["artifact_id"] == 8159843482
+    assert replay["replay"]["precondition_state"] == "already_target"
+    assert replay["replay"]["status"] == "already_promoted"
+    assert replay["replay"]["idempotent"] is True
+    assert replay["production_target"]["pointer_sha256_before"] == TARGET_POINTER
+    assert replay["production_target"]["pointer_sha256_after"] == TARGET_POINTER
+    assert replay["production_target"]["pointer_byte_exact_unchanged"] is True
+    assert replay["runtime_acceptance"]["public_status"] == "answered"
+    assert replay["runtime_acceptance"]["expected_citation_present"] is True
+    assert replay["runtime_acceptance"]["acl_status"] == "not_found"
+    assert replay["runtime_acceptance"]["acl_filtered_count"] == 1
+    assert replay["runtime_acceptance"]["public_raw_fallback_used"] is False
+    assert replay["runtime_acceptance"]["acl_raw_fallback_used"] is False
+    assert replay["ledger"]["comment_id"] == 4911941452
+    assert replay["ledger"]["appended"] is True
+    assert replay["authoritative_operation_records"]["intent_sha256"] == (
+        "4a7775b5bf715ad4b7ebae79aa38048f9282871a99608a1b55d1b558d8bfaefa"
+    )
+    assert replay["authoritative_operation_records"]["receipt_sha256"] == (
+        "1e38ed04d1e89af70e5ed4ace9dc82876128c074f04250e9747f1a69738d2602"
+    )
+    assert replay["authoritative_operation_records"][
+        "rollback_receipt_present"
+    ] is False
+    assert replay["security_notes"]["additional_replay_used"] is False
+    assert replay["security_notes"]["rollback_used"] is False
+    assert replay["production_mutated"] is False
+    assert replay["next_legal_action"] == "start_next_batch"

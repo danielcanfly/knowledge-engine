@@ -57,7 +57,7 @@ def test_m9_production_promotion_approval_is_exact_and_consumed() -> None:
     assert result["mutations_performed"] == []
     assert result["next_action"] == "dispatch_production_promotion"
     assert result["lifecycle_state_at_approval"] == "request_spec_committed"
-    assert result["current_lifecycle_state"] == "production_promoted"
+    assert result["current_lifecycle_state"] == "closed"
     assert result["approval_consumed"] is True
 
 
