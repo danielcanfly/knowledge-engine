@@ -24,6 +24,16 @@ def _set_limits() -> None:
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
+def _disable_network() -> None:
+    import socket
+
+    def denied(*_args: object, **_kwargs: object) -> object:
+        raise RuntimeError("network access is disabled in PDF parser worker")
+
+    socket.socket = denied  # type: ignore[assignment]
+    socket.create_connection = denied  # type: ignore[assignment]
+
+
 def _page_markdown(page_number: int, text: str) -> str:
     normalized = text.replace("\r\n", "\n").replace("\r", "\n").strip()
     if not normalized:
@@ -48,6 +58,7 @@ def main() -> int:
         return 2
 
     _set_limits()
+    _disable_network()
     from pypdf import PdfReader, __version__ as pypdf_version
 
     source = Path(sys.argv[1])
