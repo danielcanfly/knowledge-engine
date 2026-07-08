@@ -23,6 +23,40 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e .
+      - name: Normalize authentication configuration
+        env:
+          RAW_AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
+          RAW_JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
+          RAW_JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
+          RAW_JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          normalize() {
+            local name="$1"
+            local value="$2"
+            value="${value//$'\r'/}"
+            value="${value//$'\n'/}"
+            value="${value#${value%%[![:space:]]*}}"
+            value="${value%${value##*[![:space:]]}}"
+            if [[ "$value" == "$name="* ]]; then
+              value="${value#*=}"
+            fi
+            if [[ ${#value} -ge 2 ]]; then
+              if [[ "${value:0:1}" == '"' && "${value: -1}" == '"' ]]; then
+                value="${value:1:${#value}-2}"
+              elif [[ "${value:0:1}" == "'" && "${value: -1}" == "'" ]]; then
+                value="${value:1:${#value}-2}"
+              fi
+            fi
+            printf '%s' "$value"
+          }
+          {
+            echo "AUTH_MODE=$(normalize AUTH_MODE "${RAW_AUTH_MODE:-}")"
+            echo "JWT_ISSUER=$(normalize JWT_ISSUER "${RAW_JWT_ISSUER:-}")"
+            echo "JWT_JWKS_URL=$(normalize JWT_JWKS_URL "${RAW_JWT_JWKS_URL:-}")"
+            echo "JWT_AUDIENCE=$(normalize JWT_AUDIENCE "${RAW_JWT_AUDIENCE:-}")"
+          } >> "$GITHUB_ENV"
       - name: Validate required read-only configuration
         env:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
