@@ -1,0 +1,32 @@
+{
+  "schema_version": "m9-lifecycle-history/v1",
+  "batch_id": "m9-001-agent-planning-strategies",
+  "initial_state": "planned",
+  "transitions": [
+    {
+      "from": "planned",
+      "to": "source_reviewed",
+      "evidence": {
+        "review_issue": 102,
+        "review_package_pr": 103,
+        "review_artifact": 8157362864,
+        "review_artifact_digest": "sha256:800ed7391c43059eb14f7748957171cf89fddb732f924a149cd36a2ac64f621c",
+        "review_decision": "approve",
+        "reviewer": "danielcanfly",
+        "reviewed_at": "2026-07-08T03:29:20Z",
+        "approved_audience": "public",
+        "approved_concept_sha256": "cc6fe2743bec8bc90b6b7c5765dce5e32bdba060a0fd82817215197f37248e86"
+      }
+    }
+  ],
+  "final_state": "source_reviewed",
+  "source_identity": {
+    "sha": null
+  },
+  "candidate_identity": {
+    "channel": null,
+    "release_id": null,
+    "manifest_sha256": null
+  },
+  "production_mutated": false
+}
