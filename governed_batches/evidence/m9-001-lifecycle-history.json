@@ -63,9 +63,29 @@
         "public_acl_filtered_count": 1,
         "production_pointer_unchanged": true
       }
+    },
+    {
+      "from": "candidate_built",
+      "to": "runtime_accepted",
+      "evidence": {
+        "framework_merge_commit": "1bc6ffd1c7792d101d4098724575f9a0c8f6ff37",
+        "runtime_acceptance_run": 28917325425,
+        "runtime_acceptance_job": 85786948330,
+        "runtime_acceptance_artifact": 8158118520,
+        "runtime_acceptance_artifact_digest": "sha256:7408f05eec1660894fedf45d74c88a9f3e2240d3127e0ba48e46766792178cb1",
+        "runtime_acceptance_observation_path": "governed_batches/evidence/m9-001-runtime-acceptance-observation.json",
+        "m9_public_status": "answered",
+        "m8_regression_status": "answered",
+        "m6_regression_status": "answered",
+        "acl_status": "not_found",
+        "acl_filtered_count": 1,
+        "raw_fallback_used": false,
+        "production_pointer_sha256": "2de63a9ff5963ea3f72f0051b25a084dda9e5e609fe79615e55e3f95a1351914",
+        "production_pointer_byte_exact_unchanged": true
+      }
     }
   ],
-  "final_state": "candidate_built",
+  "final_state": "runtime_accepted",
   "source_identity": {
     "sha": "2126db2ed4d372d3d61464fe31a86fc0243a1f24"
   },
@@ -80,5 +100,5 @@
     "pointer_sha256": "2de63a9ff5963ea3f72f0051b25a084dda9e5e609fe79615e55e3f95a1351914"
   },
   "production_mutated": false,
-  "next_legal_action": "run_targeted_runtime_acceptance"
+  "next_legal_action": "commit_production_request_spec"
 }
