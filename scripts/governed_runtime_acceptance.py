@@ -51,7 +51,10 @@ def _load_contract(path: Path) -> dict[str, Any]:
     for item in queries:
         _require(isinstance(item, dict), "query contract must be an object")
         name = item.get("name")
-        _require(isinstance(name, str) and SAFE_NAME.fullmatch(name) is not None, "unsafe query name")
+        _require(
+            isinstance(name, str) and SAFE_NAME.fullmatch(name) is not None,
+            "unsafe query name",
+        )
         _require(name not in names, f"duplicate query name: {name}")
         names.add(name)
         for field in (
@@ -67,7 +70,8 @@ def _load_contract(path: Path) -> dict[str, Any]:
     _require(isinstance(boundary, dict), "contract has no boundary_query")
     boundary_name = boundary.get("name")
     _require(
-        isinstance(boundary_name, str) and SAFE_NAME.fullmatch(boundary_name) is not None,
+        isinstance(boundary_name, str)
+        and SAFE_NAME.fullmatch(boundary_name) is not None,
         "unsafe boundary query name",
     )
     _require(boundary_name not in names, f"duplicate query name: {boundary_name}")
