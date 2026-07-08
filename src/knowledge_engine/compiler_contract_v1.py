@@ -7,7 +7,11 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from .errors import IntegrityError, ReleaseConflictError
-from .intake_v1 import IntakeResult, canonical_json_bytes, verify_event as verify_intake_event
+from .intake_v1 import (
+    IntakeResult,
+    canonical_json_bytes,
+    verify_event as verify_intake_event,
+)
 from .storage import ObjectStore, sha256_bytes
 
 COMPILER_VERSION = "local-markdown-reference/1.0.0"
