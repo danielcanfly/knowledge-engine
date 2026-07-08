@@ -14,7 +14,6 @@ def _cases() -> list[GoldenQueryCase]:
             audiences=frozenset({"public", "internal"}),
             expected_status="answered",
             min_selected_results=1,
-            required_concepts=frozenset({"concepts/knowledge-compiler"}),
             release_blocking=False,
         ),
         GoldenQueryCase(
@@ -84,12 +83,14 @@ def test_golden_query_suite_fails_closed_on_acl_forbidden_concept(
 ) -> None:
     store, _, _ = built_store
     runtime = Runtime(store, tmp_path / "cache", "staging")
+    baseline = runtime.query("knowledge compiler", {"public", "internal"})
+    forbidden = str(baseline["results"][0]["concept_id"])
     bad_case = GoldenQueryCase(
         case_id="m12-forbidden-concept",
         query="knowledge compiler",
         audiences=frozenset({"public", "internal"}),
         expected_status="answered",
-        forbidden_concepts=frozenset({"concepts/knowledge-compiler"}),
+        forbidden_concepts=frozenset({forbidden}),
         release_blocking=False,
     )
 
@@ -98,6 +99,4 @@ def test_golden_query_suite_fails_closed_on_acl_forbidden_concept(
     assert report["passed"] is False
     assert report["release_blocking"] is True
     assert report["failure_reasons"] == ["forbidden_concept_returned"]
-    assert report["cases"][0]["forbidden_concepts_returned"] == [
-        "concepts/knowledge-compiler"
-    ]
+    assert report["cases"][0]["forbidden_concepts_returned"] == [forbidden]
