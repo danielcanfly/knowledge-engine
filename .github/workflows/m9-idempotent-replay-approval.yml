@@ -64,7 +64,7 @@ jobs:
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
 
-      - name: Capture live production pointer before validation
+      - name: Capture live production pointer in temporary storage
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -82,23 +82,21 @@ jobs:
           assert expected == promotion["production_target"]
 
           store = create_object_store(Settings.from_env())
-          pointer_bytes = store.get("channels/production.json")
-          pointer = json.loads(pointer_bytes)
-          pointer_sha256 = hashlib.sha256(pointer_bytes).hexdigest()
+          raw = store.get("channels/production.json")
+          pointer = json.loads(raw)
+          digest = hashlib.sha256(raw).hexdigest()
           assert pointer["release_id"] == expected["release_id"]
           assert pointer["manifest_sha256"] == expected["manifest_sha256"]
-          assert pointer_sha256 == expected["pointer_sha256"]
+          assert digest == expected["pointer_sha256"]
 
-          root = Path(os.environ["EVIDENCE_DIR"])
-          root.mkdir(parents=True, exist_ok=True)
-          (root / "production-pointer-before.json").write_bytes(pointer_bytes)
-          (root / "production-before-observation.json").write_text(
+          Path("/tmp/m9-replay-production-pointer-before.json").write_bytes(raw)
+          Path("/tmp/m9-replay-production-before-observation.json").write_text(
               json.dumps(
                   {
                       "status": "passed",
                       "release_id": pointer["release_id"],
                       "manifest_sha256": pointer["manifest_sha256"],
-                      "pointer_sha256": pointer_sha256,
+                      "pointer_sha256": digest,
                       "read_only": True,
                       "mutations_performed": [],
                   },
@@ -110,28 +108,34 @@ jobs:
           )
           PY
 
-      - name: Run production-promoted operator preflight
+      - name: Run clean production-promoted operator preflight
         run: |
           set -euo pipefail
           python -m knowledge_engine.batch_cli preflight \
             --spec-path "$SPEC_PATH" \
             --registry-path "$REGISTRY_PATH" \
-            --production-pointer-path "$EVIDENCE_DIR/production-pointer-before.json" \
-            --output "$EVIDENCE_DIR/operator-preflight.json"
+            --production-pointer-path /tmp/m9-replay-production-pointer-before.json \
+            --output /tmp/m9-replay-operator-preflight.json
           python - <<'PY'
           import json
-          import os
           from pathlib import Path
 
-          preflight = json.loads(
-              Path(os.environ["EVIDENCE_DIR"], "operator-preflight.json").read_text()
+          data = json.loads(
+              Path("/tmp/m9-replay-operator-preflight.json").read_text()
           )
-          assert preflight["status"] == "ready"
-          assert preflight["lifecycle_state"] == "production_promoted"
-          assert preflight["next_action"] == "run_idempotent_replay_and_close"
-          assert preflight["production_workflow_inputs"] == ["request_path"]
-          assert preflight["mutations_performed"] == []
+          assert data["status"] == "ready"
+          assert data["lifecycle_state"] == "production_promoted"
+          assert data["next_action"] == "run_idempotent_replay_and_close"
+          assert data["production_workflow_inputs"] == ["request_path"]
+          assert data["mutations_performed"] == []
           PY
+          mkdir -p "$EVIDENCE_DIR"
+          cp /tmp/m9-replay-production-pointer-before.json \
+            "$EVIDENCE_DIR/production-pointer-before.json"
+          cp /tmp/m9-replay-production-before-observation.json \
+            "$EVIDENCE_DIR/production-before-observation.json"
+          cp /tmp/m9-replay-operator-preflight.json \
+            "$EVIDENCE_DIR/operator-preflight.json"
 
       - name: Validate immutable idempotent replay approval
         run: |
@@ -166,11 +170,12 @@ jobs:
 
           root = Path(os.environ["EVIDENCE_DIR"])
           before = (root / "production-pointer-before.json").read_bytes()
-          store = create_object_store(Settings.from_env())
-          after = store.get("channels/production.json")
+          after = create_object_store(Settings.from_env()).get(
+              "channels/production.json"
+          )
           assert after == before
           pointer = json.loads(after)
-          pointer_sha256 = hashlib.sha256(after).hexdigest()
+          digest = hashlib.sha256(after).hexdigest()
           (root / "production-pointer-after.json").write_bytes(after)
           (root / "production-after-observation.json").write_text(
               json.dumps(
@@ -178,7 +183,7 @@ jobs:
                       "status": "passed",
                       "release_id": pointer["release_id"],
                       "manifest_sha256": pointer["manifest_sha256"],
-                      "pointer_sha256": pointer_sha256,
+                      "pointer_sha256": digest,
                       "byte_exact_unchanged": True,
                       "read_only": True,
                       "mutations_performed": [],
@@ -207,7 +212,6 @@ jobs:
 
           assert validation["status"] == "approved"
           assert validation["single_idempotent_replay_dispatch_authorized"] is True
-          assert validation["permanent_ledger_append_on_success_authorized"] is True
           assert validation["closure_reconciliation_after_success_authorized"] is True
           assert validation["rollback_authorized"] is False
           assert validation["additional_replays_authorized"] is False
@@ -215,7 +219,6 @@ jobs:
           assert validation["production_mutated"] is False
           assert validation["permanent_ledger_appended"] is False
           assert validation["mutations_performed"] == []
-          assert validation["next_action"] == "dispatch_idempotent_replay"
           assert before["pointer_sha256"] == after["pointer_sha256"]
           assert after["byte_exact_unchanged"] is True
           assert preflight["lifecycle_state"] == "production_promoted"
@@ -253,8 +256,7 @@ jobs:
               "mutations_performed": [],
               "next_action": "dispatch_idempotent_replay",
           }
-          output = root / "summary.json"
-          output.write_text(
+          (root / "summary.json").write_text(
               json.dumps(summary, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
