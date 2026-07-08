@@ -12,7 +12,6 @@ on:
       - "governed_batches/m9-001-agent-planning-strategies.json"
       - "governed_batches/registry-v2.json"
       - "governed_batches/evidence/m9-001-approved-review-decision.json"
-      - "governed_batches/evidence/m9-001-lifecycle-history.json"
       - "governed_batches/evidence/m9-001-production-baseline.json"
 
 permissions:
@@ -40,7 +39,7 @@ jobs:
             --package-root review_packages/m9-001 \
             --output evidence/m9-001/review-package-validation.json
 
-      - name: Verify review-state and non-mutating boundary
+      - name: Verify Source-PR authorization and non-mutating boundary
         run: |
           python - <<'PY'
           import json
@@ -58,9 +57,17 @@ jobs:
               Path("evidence/m9-001/review-package-validation.json")
               .read_text(encoding="utf-8")
           )
+          decision = json.loads(
+              Path(
+                  "governed_batches/evidence/"
+                  "m9-001-approved-review-decision.json"
+              ).read_text(encoding="utf-8")
+          )
 
-          state = spec["lifecycle_state"]
-          assert state in {"planned", "source_reviewed"}
+          # Source SHA is required by the batch schema from source_reviewed onward.
+          # Human approval therefore authorizes the Source PR while the batch remains
+          # planned; lifecycle reconciliation follows the validated Source merge.
+          assert spec["lifecycle_state"] == "planned"
           assert spec["source"]["sha"] is None
           assert spec["candidate"] == {
               "channel": None,
@@ -78,38 +85,24 @@ jobs:
           assert baseline["production_pointer_mutated"] is False
           assert baseline["ledger_appended"] is False
 
-          # The proposal remains an immutable pending snapshot even after a
-          # separate approval record advances the governed batch lifecycle.
+          # The proposal is an immutable pending snapshot. Approval is a separate
+          # evidence record and does not rewrite the reviewed package bytes.
           assert validation["status"] == "passed"
           assert validation["review_status"] == "pending_human_review"
           assert validation["source_change_ready"] is False
           assert validation["canonical_write_authorized"] is False
           assert validation["mutations_performed"] == []
 
-          if state == "source_reviewed":
-              decision = json.loads(
-                  Path(
-                      "governed_batches/evidence/"
-                      "m9-001-approved-review-decision.json"
-                  ).read_text(encoding="utf-8")
-              )
-              lifecycle = json.loads(
-                  Path(
-                      "governed_batches/evidence/m9-001-lifecycle-history.json"
-                  ).read_text(encoding="utf-8")
-              )
-              assert decision["status"] == "approved"
-              assert decision["decision"] == "approve"
-              assert decision["canonical_write_authorized"] is True
-              assert decision["candidate_build_authorized"] is False
-              assert decision["production_mutation_authorized"] is False
-              assert lifecycle["initial_state"] == "planned"
-              assert lifecycle["final_state"] == "source_reviewed"
-              assert lifecycle["transitions"][0]["from"] == "planned"
-              assert lifecycle["transitions"][0]["to"] == "source_reviewed"
-              assert lifecycle["production_mutated"] is False
-
-          print("M9_SOURCE_REVIEW_BOUNDARY_PASSED")
+          assert decision["status"] == "approved"
+          assert decision["decision"] == "approve"
+          assert decision["canonical_write_authorized"] is True
+          assert decision["candidate_build_authorized"] is False
+          assert decision["production_mutation_authorized"] is False
+          assert decision["approved_concept_sha256"] == (
+              "cc6fe2743bec8bc90b6b7c5765dce5e32bdba060a0fd82817215197f37248e86"
+          )
+          assert decision["approved_claim_count"] == 11
+          print("M9_SOURCE_PR_AUTHORIZATION_PASSED")
           PY
 
       - name: Run Source review package tests
