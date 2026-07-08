@@ -99,7 +99,13 @@ jobs:
           assert preflight["next_action"] == expected_actions[state]
           assert preflight["mutations_performed"] == []
           assert registry["status"] == "valid"
-          assert registry["batch_count"] == 1
+          assert any(
+              batch["batch_id"] == "m8-001-agent-execution-paths"
+              and batch["lifecycle_state"] == "closed"
+              and batch["spec_path"]
+              == "governed_batches/m8-001-agent-execution-paths.json"
+              for batch in registry["batches"]
+          )
           assert readiness["status"] == "ready_for_governed_dry_run"
           assert readiness["mutations_performed"] == []
           assert scope["status"] == "verified"
