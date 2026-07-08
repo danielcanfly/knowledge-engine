@@ -16,18 +16,22 @@ SOURCE_BASELINE = Path(
 PRODUCTION_BASELINE = Path(
     "governed_batches/evidence/m9-001-production-baseline.json"
 )
+APPROVED_REVIEW = Path(
+    "governed_batches/evidence/m9-001-approved-review-decision.json"
+)
 
 
 def _load(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_m9_planned_batch_is_registered_and_non_mutating() -> None:
+def test_m9_approved_planned_batch_authorizes_source_pr_only() -> None:
     spec = load_batch_spec(SPEC)
     registry = validate_batch_registry(load_batch_registry(REGISTRY))
     origin = _load(ORIGIN)
     source_baseline = _load(SOURCE_BASELINE)
     production_baseline = _load(PRODUCTION_BASELINE)
+    approved_review = _load(APPROVED_REVIEW)
 
     assert spec.batch_id == "m9-001-agent-planning-strategies"
     assert spec.lifecycle_state == "planned"
@@ -62,6 +66,19 @@ def test_m9_planned_batch_is_registered_and_non_mutating() -> None:
     assert source_baseline["intended_source_path_exists"] is False
     assert source_baseline["duplicate_concept_detected"] is False
     assert source_baseline["conflict_detected"] is False
+
+    assert approved_review["status"] == "approved"
+    assert approved_review["decision"] == "approve"
+    assert approved_review["reviewer"] == "danielcanfly"
+    assert approved_review["reviewed_at"] == "2026-07-08T03:29:20Z"
+    assert approved_review["approved_audience"] == "public"
+    assert approved_review["approved_claim_count"] == 11
+    assert approved_review["approved_concept_sha256"] == (
+        "cc6fe2743bec8bc90b6b7c5765dce5e32bdba060a0fd82817215197f37248e86"
+    )
+    assert approved_review["canonical_write_authorized"] is True
+    assert approved_review["candidate_build_authorized"] is False
+    assert approved_review["production_mutation_authorized"] is False
 
     assert production_baseline["production_release_id"] == (
         "20260707T111252Z-aebf06593f89"
