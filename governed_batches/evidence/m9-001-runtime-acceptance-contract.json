@@ -1,0 +1,58 @@
+{
+  "schema_version": "governed-runtime-acceptance-contract/v1",
+  "batch_id": "m9-001-agent-planning-strategies",
+  "candidate": {
+    "channel": "candidate-source-2126db2ed4d372d3d61464fe31a86fc0243a1f24",
+    "release_id": "20260708T040116Z-69a9f445699a",
+    "manifest_sha256": "2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb"
+  },
+  "production_baseline": {
+    "pointer_key": "channels/production.json",
+    "release_id": "20260707T111252Z-aebf06593f89",
+    "manifest_sha256": "1a2f2014073e9e97f9e1fdd5df4e43bf19cb2b2679532b6e52ea38480ec4d2ec",
+    "pointer_sha256": "2de63a9ff5963ea3f72f0051b25a084dda9e5e609fe79615e55e3f95a1351914"
+  },
+  "queries": [
+    {
+      "name": "m9_public_query",
+      "query": "How do bounded ReAct, Plan-and-Execute, adaptive replanning, hierarchical planning, and HTN differ, and how should they be combined in a production agent?",
+      "audiences": "public",
+      "expected_status": "answered",
+      "expected_concept_id": "concepts/agent-planning-strategies",
+      "expected_x_kos_id": "ko_7T9Q4M2V8J6K3R5C1N0PWHDBXF",
+      "expected_citation": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-3/"
+    },
+    {
+      "name": "m8_regression_query",
+      "query": "How should I choose between Direct, Pipeline, Router, State Machine, and DAG execution paths?",
+      "audiences": "public",
+      "expected_status": "answered",
+      "expected_concept_id": "concepts/agent-execution-paths",
+      "expected_x_kos_id": "ko_7FHJFQQ11PKPEWC4W25CCBCGZM",
+      "expected_citation": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-2/"
+    },
+    {
+      "name": "m6_regression_query",
+      "query": "How should LLM agent architectures be reviewed across six engineering dimensions?",
+      "audiences": "public",
+      "expected_status": "answered",
+      "expected_concept_id": "concepts/six-dimensional-map-of-llm-agent-architectures",
+      "expected_x_kos_id": "ko_HW0QBJBSFFJ9SWVXJTDHVV604T",
+      "expected_citation": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/"
+    }
+  ],
+  "boundary_query": {
+    "name": "m9_acl_boundary_query",
+    "query": "cobalt heron checkpoint",
+    "audiences": "public",
+    "expected_status": "not_found",
+    "minimum_acl_filtered_count": 1
+  },
+  "requirements": {
+    "raw_fallback_allowed": false,
+    "minimum_result_count": 1,
+    "require_exact_candidate_identity_on_every_query": true,
+    "require_byte_exact_production_pointer_invariant": true,
+    "production_mutation_authorized": false
+  }
+}
