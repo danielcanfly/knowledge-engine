@@ -8,6 +8,11 @@
       "candidate_channel": "candidate-source-97979c1c07d6208055d2937c68e500ba49a6ed57",
       "operation_id": "m8-001-agent-execution-paths-001",
       "request_path": "production_promotions/m8-001-agent-execution-paths.json"
+    },
+    {
+      "batch_id": "m9-001-agent-planning-strategies",
+      "spec_path": "governed_batches/m9-001-agent-planning-strategies.json",
+      "lifecycle_state": "planned"
     }
   ]
 }

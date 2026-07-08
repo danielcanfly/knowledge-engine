@@ -28,7 +28,12 @@ def test_m8_request_identity_is_preserved() -> None:
     assert spec.lifecycle_state == "closed"
     assert next_action(spec.lifecycle_state) == "start_next_batch"
     assert registry["status"] == "valid"
-    assert registry["batch_count"] == 1
+    assert any(
+        batch["batch_id"] == spec.batch_id
+        and batch["lifecycle_state"] == spec.lifecycle_state
+        and batch["spec_path"] == str(SPEC)
+        for batch in registry["batches"]
+    )
     assert normalized["operation_id"] == spec.raw["production_request"]["operation_id"]
     assert str(REQUEST) == spec.raw["production_request"]["request_path"]
     assert normalized["candidate_channel"] == spec.raw["candidate"]["channel"]
