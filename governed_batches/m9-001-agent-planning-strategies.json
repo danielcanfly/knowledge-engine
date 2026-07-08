@@ -2,7 +2,7 @@
   "schema_version": "governed-batch-spec/v2",
   "batch_id": "m9-001-agent-planning-strategies",
   "title": "Agent Decision and Planning Strategies",
-  "lifecycle_state": "request_spec_committed",
+  "lifecycle_state": "production_promoted",
   "source": {
     "repository": "danielcanfly/knowledge-source",
     "paths": ["bundle/concepts/agent-planning-strategies.md"],
