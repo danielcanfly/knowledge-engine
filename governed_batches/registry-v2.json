@@ -12,8 +12,10 @@
     {
       "batch_id": "m9-001-agent-planning-strategies",
       "spec_path": "governed_batches/m9-001-agent-planning-strategies.json",
-      "lifecycle_state": "runtime_accepted",
-      "candidate_channel": "candidate-source-2126db2ed4d372d3d61464fe31a86fc0243a1f24"
+      "lifecycle_state": "request_spec_committed",
+      "candidate_channel": "candidate-source-2126db2ed4d372d3d61464fe31a86fc0243a1f24",
+      "operation_id": "m9-001-agent-planning-strategies-001",
+      "request_path": "production_promotions/m9-001-agent-planning-strategies.json"
     }
   ]
 }
