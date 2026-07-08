@@ -12,6 +12,9 @@ on:
       - "governed_batches/m9-001-agent-planning-strategies.json"
       - "governed_batches/registry-v2.json"
       - "governed_batches/evidence/m9-001-approved-review-decision.json"
+      - "governed_batches/evidence/m9-001-candidate-build-authorization.json"
+      - "governed_batches/evidence/m9-001-source-candidate-observation.json"
+      - "governed_batches/evidence/m9-001-lifecycle-history.json"
       - "governed_batches/evidence/m9-001-production-baseline.json"
 
 permissions:
@@ -39,79 +42,113 @@ jobs:
             --package-root review_packages/m9-001 \
             --output evidence/m9-001/review-package-validation.json
 
-      - name: Verify Source-PR authorization and non-mutating boundary
+      - name: Verify reconciled candidate and non-production boundary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
 
-          spec = json.loads(
-              Path("governed_batches/m9-001-agent-planning-strategies.json")
-              .read_text(encoding="utf-8")
+          def load(path):
+              return json.loads(Path(path).read_text(encoding="utf-8"))
+
+          spec = load("governed_batches/m9-001-agent-planning-strategies.json")
+          baseline = load("governed_batches/evidence/m9-001-production-baseline.json")
+          validation = load("evidence/m9-001/review-package-validation.json")
+          decision = load(
+              "governed_batches/evidence/m9-001-approved-review-decision.json"
           )
-          baseline = json.loads(
-              Path("governed_batches/evidence/m9-001-production-baseline.json")
-              .read_text(encoding="utf-8")
+          authorization = load(
+              "governed_batches/evidence/m9-001-candidate-build-authorization.json"
           )
-          validation = json.loads(
-              Path("evidence/m9-001/review-package-validation.json")
-              .read_text(encoding="utf-8")
+          observation = load(
+              "governed_batches/evidence/m9-001-source-candidate-observation.json"
           )
-          decision = json.loads(
-              Path(
-                  "governed_batches/evidence/"
-                  "m9-001-approved-review-decision.json"
-              ).read_text(encoding="utf-8")
+          lifecycle = load(
+              "governed_batches/evidence/m9-001-lifecycle-history.json"
           )
 
-          # Source SHA is required by the batch schema from source_reviewed onward.
-          # Human approval therefore authorizes the Source PR while the batch remains
-          # planned; lifecycle reconciliation follows the validated Source merge.
-          assert spec["lifecycle_state"] == "planned"
-          assert spec["source"]["sha"] is None
+          source_sha = "2126db2ed4d372d3d61464fe31a86fc0243a1f24"
+          channel = f"candidate-source-{source_sha}"
+          release_id = "20260708T040116Z-69a9f445699a"
+          manifest = (
+              "2b2630cfe3e8a6e25a8f210d68c70f3"
+              "b9a31b3b26f33c6e3e41b8cc1676fc0bb"
+          )
+
+          assert spec["lifecycle_state"] == "candidate_built"
+          assert spec["source"]["sha"] == source_sha
           assert spec["candidate"] == {
-              "channel": None,
-              "release_id": None,
-              "manifest_sha256": None,
+              "channel": channel,
+              "release_id": release_id,
+              "manifest_sha256": manifest,
           }
           assert spec["production_request"] == {
               "operation_id": None,
               "request_path": None,
           }
-          assert baseline["mutations_performed"] == []
-          assert baseline["source_mutated"] is False
-          assert baseline["candidate_built"] is False
-          assert baseline["r2_mutated"] is False
-          assert baseline["production_pointer_mutated"] is False
-          assert baseline["ledger_appended"] is False
+          assert spec["acceptance"]["raw_fallback_allowed"] is False
 
-          # The proposal is an immutable pending snapshot. Approval is a separate
-          # evidence record and does not rewrite the reviewed package bytes.
+          # The reviewer-facing proposal remains immutable and pending. Decisions
+          # and later authorizations live in separate append-only evidence records.
           assert validation["status"] == "passed"
           assert validation["review_status"] == "pending_human_review"
           assert validation["source_change_ready"] is False
           assert validation["canonical_write_authorized"] is False
           assert validation["mutations_performed"] == []
-
           assert decision["status"] == "approved"
-          assert decision["decision"] == "approve"
           assert decision["canonical_write_authorized"] is True
           assert decision["candidate_build_authorized"] is False
           assert decision["production_mutation_authorized"] is False
-          assert decision["approved_concept_sha256"] == (
-              "cc6fe2743bec8bc90b6b7c5765dce5e32bdba060a0fd82817215197f37248e86"
-          )
-          assert decision["approved_claim_count"] == 11
-          print("M9_SOURCE_PR_AUTHORIZATION_PASSED")
+
+          assert authorization["authorized_by"] == "danielcanfly"
+          assert authorization["production_request_authorized"] is False
+          assert authorization["production_promotion_authorized"] is False
+          assert authorization["permanent_ledger_append_authorized"] is False
+
+          assert observation["status"] == "passed"
+          assert observation["source"]["sha"] == source_sha
+          assert observation["candidate"]["channel"] == channel
+          assert observation["candidate"]["release_id"] == release_id
+          assert observation["candidate"]["manifest_sha256"] == manifest
+          assert observation["candidate"]["reproducibility_passed"] is True
+          assert observation["candidate"]["production_pointer_unchanged"] is True
+          assert observation["limitations"]["targeted_m9_public_query_not_yet_run"] is True
+          assert observation["limitations"]["targeted_m9_acl_query_not_yet_run"] is True
+          assert observation["limitations"][
+              "raw_fallback_not_reported_by_generic_candidate_artifact"
+          ] is True
+
+          transitions = [
+              (item["from"], item["to"])
+              for item in lifecycle["transitions"]
+          ]
+          assert transitions == [
+              ("planned", "source_reviewed"),
+              ("source_reviewed", "source_validated"),
+              ("source_validated", "candidate_built"),
+          ]
+          assert lifecycle["final_state"] == "candidate_built"
+          assert lifecycle["production_mutated"] is False
+
+          # The M8 production baseline is immutable. Candidate publication may
+          # create candidate R2 objects, but it must not change production.
+          assert baseline["mutations_performed"] == []
+          assert baseline["production_pointer_mutated"] is False
+          assert baseline["ledger_appended"] is False
+          assert observation["production"]["pointer_mutated"] is False
+          assert observation["production"]["request_spec_created"] is False
+          assert observation["production"]["ledger_appended"] is False
+          assert observation["production"]["promotion_performed"] is False
+          print("M9_CANDIDATE_RECONCILIATION_PASSED")
           PY
 
-      - name: Run Source review package tests
+      - name: Run M9 governance tests
         run: |
           python -m pytest -q \
             tests/test_source_review_package.py \
             tests/test_m9_planned_batch.py
 
-      - name: Upload review evidence
+      - name: Upload M9 governance evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
