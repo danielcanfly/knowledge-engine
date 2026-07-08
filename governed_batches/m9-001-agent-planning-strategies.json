@@ -2,7 +2,7 @@
   "schema_version": "governed-batch-spec/v2",
   "batch_id": "m9-001-agent-planning-strategies",
   "title": "Agent Decision and Planning Strategies",
-  "lifecycle_state": "runtime_accepted",
+  "lifecycle_state": "request_spec_committed",
   "source": {
     "repository": "danielcanfly/knowledge-source",
     "paths": ["bundle/concepts/agent-planning-strategies.md"],
@@ -16,8 +16,8 @@
     "manifest_sha256": "2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb"
   },
   "production_request": {
-    "operation_id": null,
-    "request_path": null
+    "operation_id": "m9-001-agent-planning-strategies-001",
+    "request_path": "production_promotions/m9-001-agent-planning-strategies.json"
   },
   "acceptance": {
     "public_query": "How do bounded ReAct, Plan-and-Execute, adaptive replanning, hierarchical planning, and HTN differ, and how should they be combined in a production agent?",
