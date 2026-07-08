@@ -1,0 +1,53 @@
+{
+  "schema_version": "production-promotion-approval/v1",
+  "batch_id": "m9-001-agent-planning-strategies",
+  "decision": "approve",
+  "authorized_by": "danielcanfly",
+  "authorized_at": "2026-07-08T04:52:50Z",
+  "authorization_text": "M9.7 Review and Explicitly Approve Production Promotion",
+  "approval_issue": 114,
+  "request": {
+    "operation_id": "m9-001-agent-planning-strategies-001",
+    "request_path": "production_promotions/m9-001-agent-planning-strategies.json",
+    "request_sha256": "41564a42a3f207ea87bbc600935effbb9c3979c8366e16a4b1c7d1f35e172b5b",
+    "request_merge_commit": "ca11751a69e800f9dcc239dbb304c60f0cdc7c82"
+  },
+  "target": {
+    "candidate_channel": "candidate-source-2126db2ed4d372d3d61464fe31a86fc0243a1f24",
+    "release_id": "20260708T040116Z-69a9f445699a",
+    "manifest_sha256": "2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb",
+    "source_repository": "danielcanfly/knowledge-source",
+    "source_sha": "2126db2ed4d372d3d61464fe31a86fc0243a1f24",
+    "builder_sha": "1b55c68a441def01a5277c94b350efab1437459d",
+    "foundation_sha": "d12c7c416c950d743d4cd5e7964fd3c3bc0d9062"
+  },
+  "expected_previous_production": {
+    "release_id": "20260707T111252Z-aebf06593f89",
+    "manifest_sha256": "1a2f2014073e9e97f9e1fdd5df4e43bf19cb2b2679532b6e52ea38480ec4d2ec",
+    "pointer_sha256": "2de63a9ff5963ea3f72f0051b25a084dda9e5e609fe79615e55e3f95a1351914"
+  },
+  "required_post_promote_acceptance": {
+    "public_query": "How do bounded ReAct, Plan-and-Execute, adaptive replanning, hierarchical planning, and HTN differ, and how should they be combined in a production agent?",
+    "expected_public_status": "answered",
+    "expected_citation_url": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-3/",
+    "acl_query": "cobalt heron checkpoint",
+    "expected_acl_status": "not_found",
+    "raw_fallback_allowed": false
+  },
+  "authorization_scope": {
+    "promotion_dispatch_authorized": true,
+    "post_promote_acceptance_authorized": true,
+    "permanent_ledger_append_on_success_authorized": true,
+    "request_modification_authorized": false,
+    "target_substitution_authorized": false,
+    "baseline_weakening_authorized": false,
+    "raw_fallback_authorized": false,
+    "rollback_authorized": false,
+    "idempotent_replay_authorized": false
+  },
+  "lifecycle_state_before_dispatch": "request_spec_committed",
+  "lifecycle_transition_authorized_on_success": "request_spec_committed -> production_promoted",
+  "production_mutated_during_approval": false,
+  "mutations_performed": [],
+  "next_action": "dispatch_production_promotion"
+}
