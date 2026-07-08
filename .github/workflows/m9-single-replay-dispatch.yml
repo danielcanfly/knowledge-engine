@@ -1,0 +1,149 @@
+name: M9 Single Idempotent Replay Dispatch
+
+on:
+  pull_request:
+    types: [opened]
+    paths:
+      - ".github/workflows/m9-single-replay-dispatch.yml"
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+jobs:
+  dispatch-once:
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'ops/m9-single-replay-dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      EXPECTED_MAIN_SHA: 97a3df9356b1847ca0f2d6cd6de3cb60c45de0a4
+      APPROVAL_PATH: governed_batches/evidence/m9-001-idempotent-replay-approval.json
+      APPROVAL_SHA256: bf9d6852fafe6bb6000503d30e894ceeeba5ea4ecd79bf50d8bf95edd9fdf300
+      SPEC_PATH: governed_batches/m9-001-agent-planning-strategies.json
+      REQUEST_PATH: production_promotions/m9-001-agent-planning-strategies.json
+      PROMOTION_PATH: governed_batches/evidence/m9-001-production-promotion-observation.json
+      LIFECYCLE_PATH: governed_batches/evidence/m9-001-lifecycle-history.json
+      REGISTRY_PATH: governed_batches/registry-v2.json
+      TARGET_RELEASE_ID: 20260708T040116Z-69a9f445699a
+      TARGET_MANIFEST_SHA256: 2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb
+      TARGET_POINTER_SHA256: 38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install exact Engine
+        run: python -m pip install -e '.[dev]'
+
+      - name: Validate replay approval and live target
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(sha256sum "$APPROVAL_PATH" | awk '{print $1}')" = "$APPROVAL_SHA256"
+          python scripts/validate_idempotent_replay_approval.py \
+            --approval-path "$APPROVAL_PATH" \
+            --spec-path "$SPEC_PATH" \
+            --request-path "$REQUEST_PATH" \
+            --promotion-observation-path "$PROMOTION_PATH" \
+            --lifecycle-path "$LIFECYCLE_PATH" \
+            --output /tmp/replay-approval.json
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store
+
+          approval = json.loads(Path('/tmp/replay-approval.json').read_text())
+          assert approval['status'] == 'approved'
+          assert approval['single_idempotent_replay_dispatch_authorized'] is True
+          assert approval['additional_replays_authorized'] is False
+          assert approval['rollback_authorized'] is False
+
+          raw = create_object_store(Settings.from_env()).get('channels/production.json')
+          pointer = json.loads(raw)
+          assert pointer['release_id'] == os.environ['TARGET_RELEASE_ID']
+          assert pointer['manifest_sha256'] == os.environ['TARGET_MANIFEST_SHA256']
+          assert hashlib.sha256(raw).hexdigest() == os.environ['TARGET_POINTER_SHA256']
+          Path('/tmp/production-before.json').write_bytes(raw)
+          PY
+          python -m knowledge_engine.batch_cli preflight \
+            --spec-path "$SPEC_PATH" \
+            --registry-path "$REGISTRY_PATH" \
+            --production-pointer-path /tmp/production-before.json \
+            --output /tmp/preflight.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('/tmp/preflight.json').read_text())
+          assert data['status'] == 'ready'
+          assert data['lifecycle_state'] == 'production_promoted'
+          assert data['next_action'] == 'run_idempotent_replay_and_close'
+          assert data['production_workflow_inputs'] == ['request_path']
+          assert data['mutations_performed'] == []
+          PY
+
+      - name: Dispatch one replay and wait
+        run: |
+          set -euo pipefail
+          gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/m5-production-promotion.yml/runs?event=workflow_dispatch&per_page=100" > /tmp/before-runs.json
+          gh api --method POST \
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/m5-production-promotion.yml/dispatches" \
+            --input - <<JSON
+          {"ref":"main","inputs":{"request_path":"$REQUEST_PATH"}}
+          JSON
+          for attempt in $(seq 1 60); do
+            gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/m5-production-promotion.yml/runs?event=workflow_dispatch&per_page=100" > /tmp/after-runs.json
+            RUN_ID="$(python - <<'PY'
+          import json, os
+          from pathlib import Path
+          before = {r['id'] for r in json.loads(Path('/tmp/before-runs.json').read_text())['workflow_runs']}
+          runs = json.loads(Path('/tmp/after-runs.json').read_text())['workflow_runs']
+          matches = [r for r in runs if r['id'] not in before and r['head_sha'] == os.environ['EXPECTED_MAIN_SHA']]
+          print(max((r['id'] for r in matches), default=''))
+          PY
+          )"
+            if [ -n "$RUN_ID" ]; then break; fi
+            sleep 5
+          done
+          test -n "${RUN_ID:-}"
+          printf '%s\n' "$RUN_ID" > /tmp/replay-run-id.txt
+          gh issue comment 121 --repo "$GITHUB_REPOSITORY" --body "M9 single idempotent replay dispatched. Run ID: \`$RUN_ID\`. Request: \`$REQUEST_PATH\`. Control-plane SHA: \`$EXPECTED_MAIN_SHA\`."
+          gh run watch "$RUN_ID" --repo "$GITHUB_REPOSITORY" --interval 5 --exit-status
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --json databaseId,status,conclusion,url,event,headSha,workflowName,createdAt,updatedAt \
+            > /tmp/replay-run.json
+          gh issue comment 121 --repo "$GITHUB_REPOSITORY" --body "M9 single replay workflow completed. Run ID: \`$RUN_ID\`. Result: \`$(cat /tmp/replay-run.json)\`."
+
+      - name: Upload dispatch receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m9-single-replay-dispatch-receipt-${{ github.sha }}
+          path: |
+            /tmp/replay-approval.json
+            /tmp/preflight.json
+            /tmp/production-before.json
+            /tmp/before-runs.json
+            /tmp/after-runs.json
+            /tmp/replay-run-id.txt
+            /tmp/replay-run.json
+          if-no-files-found: warn
+          retention-days: 90
