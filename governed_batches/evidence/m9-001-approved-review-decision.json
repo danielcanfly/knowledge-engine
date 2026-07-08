@@ -1,0 +1,36 @@
+{
+  "schema_version": "governed-approved-review-decision/v1",
+  "batch_id": "m9-001-agent-planning-strategies",
+  "review_id": "review_m9_001_agent_planning_strategies",
+  "concept_id": "concepts/agent-planning-strategies",
+  "decision_id": "dec_92fc06d1a4e249d2877df502d61e2d4e",
+  "resolution_id": "res_8edf59259fda46a1837adb13e6fc59b4",
+  "synthesis_id": "syn_f9f47a97df7343e4bd1514f62658ee08",
+  "status": "approved",
+  "reviewer": "danielcanfly",
+  "reviewed_at": "2026-07-08T03:29:20Z",
+  "approved_audience": "public",
+  "decision": "approve",
+  "approved_concept_sha256": "cc6fe2743bec8bc90b6b7c5765dce5e32bdba060a0fd82817215197f37248e86",
+  "approved_claim_count": 11,
+  "approved_decisions": [
+    "approve_content_scope",
+    "approve_public_audience",
+    "approve_provenance_claims",
+    "approve_m6_m8_boundary",
+    "approve_acl_fixture_strategy",
+    "approve_canonical_source_pr_creation"
+  ],
+  "review_evidence": {
+    "issue": 102,
+    "package_pr": 103,
+    "artifact_id": 8157362864,
+    "artifact_digest": "sha256:800ed7391c43059eb14f7748957171cf89fddb732f924a149cd36a2ac64f621c",
+    "package_manifest_path": "review_packages/m9-001/package-manifest.json",
+    "proposed_concept_path": "review_packages/m9-001/proposed-concept.md"
+  },
+  "canonical_write_authorized": true,
+  "candidate_build_authorized": false,
+  "production_mutation_authorized": false,
+  "notes": "Daniel explicitly approved the M9 Source Review Package. Approval authorizes creation of the canonical Knowledge Source PR only."
+}
