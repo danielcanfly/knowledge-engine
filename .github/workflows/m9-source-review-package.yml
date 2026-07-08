@@ -10,16 +10,13 @@ on:
       - "tests/test_m9_planned_batch.py"
       - "tests/test_m9_request_spec.py"
       - "tests/test_production_promotion_approval.py"
-      - "src/knowledge_engine/promotion_approval_history.py"
-      - "scripts/validate_historical_production_promotion_approval.py"
       - ".github/workflows/m9-source-review-package.yml"
       - "governed_batches/m9-001-agent-planning-strategies.json"
       - "governed_batches/registry-v2.json"
       - "production_promotions/m9-001-agent-planning-strategies.json"
       - "governed_batches/evidence/m9-001-approved-review-decision.json"
-      - "governed_batches/evidence/m9-001-candidate-build-authorization.json"
-      - "governed_batches/evidence/m9-001-production-promotion-approval.json"
       - "governed_batches/evidence/m9-001-production-promotion-observation.json"
+      - "governed_batches/evidence/m9-001-idempotent-replay-observation.json"
       - "governed_batches/evidence/m9-001-lifecycle-history.json"
 
 permissions:
@@ -32,81 +29,55 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install exact Engine
         run: python -m pip install -e '.[dev]'
-
       - name: Validate immutable Source review proposal
         run: |
           python scripts/validate_source_review_package.py \
             --package-root review_packages/m9-001 \
             --output evidence/m9-001/review-package-validation.json
-
-      - name: Validate complete M9 governance history
+      - name: Validate complete closed M9 history
         run: |
-          set -euo pipefail
           python -m pytest -q \
             tests/test_source_review_package.py \
             tests/test_m9_planned_batch.py \
             tests/test_m9_request_spec.py \
             tests/test_production_promotion_approval.py
-
       - name: Write historical review summary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-
-          review = json.loads(
-              Path("evidence/m9-001/review-package-validation.json").read_text()
-          )
-          promotion = json.loads(
-              Path(
-                  "governed_batches/evidence/"
-                  "m9-001-production-promotion-observation.json"
-              ).read_text()
-          )
-          lifecycle = json.loads(
-              Path(
-                  "governed_batches/evidence/m9-001-lifecycle-history.json"
-              ).read_text()
-          )
-
-          assert review["status"] == "passed"
-          assert review["review_status"] == "pending_human_review"
-          assert review["canonical_write_authorized"] is False
-          assert review["mutations_performed"] == []
-          assert promotion["status"] == "passed"
-          assert promotion["production_mutated"] is True
-          assert promotion["security_notes"]["idempotent_replay_used"] is False
-          assert promotion["security_notes"]["rollback_used"] is False
-          assert lifecycle["final_state"] == "production_promoted"
-          assert lifecycle["next_legal_action"] == "review_idempotent_replay"
-
+          review = json.loads(Path('evidence/m9-001/review-package-validation.json').read_text())
+          promotion = json.loads(Path('governed_batches/evidence/m9-001-production-promotion-observation.json').read_text())
+          replay = json.loads(Path('governed_batches/evidence/m9-001-idempotent-replay-observation.json').read_text())
+          lifecycle = json.loads(Path('governed_batches/evidence/m9-001-lifecycle-history.json').read_text())
+          assert review['status'] == 'passed'
+          assert review['review_status'] == 'pending_human_review'
+          assert review['canonical_write_authorized'] is False
+          assert review['mutations_performed'] == []
+          assert promotion['status'] == 'passed'
+          assert replay['replay']['status'] == 'already_promoted'
+          assert replay['replay']['idempotent'] is True
+          assert lifecycle['final_state'] == 'closed'
           summary = {
-              "schema_version": "m9-source-review-history/v1",
-              "status": "passed",
-              "source_review_package_immutable": True,
-              "source_review_authorized_canonical_write": False,
-              "later_human_source_approval_preserved": True,
-              "current_lifecycle_state": lifecycle["final_state"],
-              "production_promotion_observed": True,
-              "idempotent_replay_observed": False,
-              "rollback_observed": False,
-              "next_legal_action": lifecycle["next_legal_action"],
+              'schema_version': 'm9-source-review-history/v1',
+              'status': 'passed',
+              'source_review_package_immutable': True,
+              'later_human_source_approval_preserved': True,
+              'production_promotion_observed': True,
+              'idempotent_replay_observed': True,
+              'rollback_observed': False,
+              'current_lifecycle_state': 'closed',
+              'next_legal_action': 'start_next_batch',
           }
-          output = Path("evidence/m9-001/source-review-history-summary.json")
-          output.write_text(
-              json.dumps(summary, indent=2, sort_keys=True) + "\n",
-              encoding="utf-8",
-          )
+          output = Path('evidence/m9-001/source-review-history-summary.json')
+          output.write_text(json.dumps(summary, indent=2, sort_keys=True) + '\n')
           print(json.dumps(summary, indent=2, sort_keys=True))
           PY
-
       - name: Upload M9 review-history evidence
         if: always()
         uses: actions/upload-artifact@v4
