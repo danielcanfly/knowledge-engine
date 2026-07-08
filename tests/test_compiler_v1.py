@@ -7,13 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-from knowledge_engine.compiler_v1 import (
-    LocalMarkdownCompilerRequest,
-    compile_local_markdown,
-    request_from_intake_result,
-    verify_compiler_event,
-)
 from knowledge_engine.errors import IntegrityError
 from knowledge_engine.intake_v1 import (
     AccessPolicy,
@@ -22,6 +15,13 @@ from knowledge_engine.intake_v1 import (
     intake_local_markdown,
 )
 from knowledge_engine.storage import FileObjectStore, sha256_bytes
+
+from knowledge_engine.compiler_v1 import (
+    LocalMarkdownCompilerRequest,
+    compile_local_markdown,
+    request_from_intake_result,
+    verify_compiler_event,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPILER_MODULE = ROOT / "src" / "knowledge_engine" / "compiler_v1.py"
