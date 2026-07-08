@@ -73,7 +73,10 @@ def _resolve_candidate(
     review_status = "pending_conflict_review"
     synthesis_eligible = False
 
-    if candidate.get("status") == "rejected_unsupported" or candidate.get("synthesis_eligible") is False:
+    if (
+        candidate.get("status") == "rejected_unsupported"
+        or candidate.get("synthesis_eligible") is False
+    ):
         outcome = "rejected_unsupported_claim"
         review_status = "rejected"
         reason_codes = ["UNSUPPORTED_CANDIDATE"]
@@ -109,7 +112,9 @@ def _resolve_candidate(
                 concept for concept in concepts if normalized == concept["title_normalized"]
             ]
             exact_represented = [
-                concept for concept in concepts if normalized and normalized in concept["exact_values"]
+                concept
+                for concept in concepts
+                if normalized and normalized in concept["exact_values"]
             ]
             if candidate_type == "concept" and len(exact_alias) == 1:
                 target_ids = [exact_alias[0]["concept_id"]]
@@ -139,14 +144,11 @@ def _resolve_candidate(
                 for concept in concepts:
                     for sentence in concept["sentences"]:
                         score = jaccard(candidate_tokens, without_negation(tokens(sentence)))
-                        if (
-                            score >= contradiction_threshold
-                            and has_negation(value) != has_negation(sentence)
+                        if score >= contradiction_threshold and has_negation(value) != has_negation(
+                            sentence
                         ):
                             conflict_targets.append((concept, sentence, score))
-                unique_conflicts = {
-                    item[0]["concept_id"]: item for item in conflict_targets
-                }
+                unique_conflicts = {item[0]["concept_id"]: item for item in conflict_targets}
                 if len(unique_conflicts) == 1:
                     target = next(iter(unique_conflicts.values()))[0]
                     target_ids = [target["concept_id"]]
@@ -178,9 +180,7 @@ def _resolve_candidate(
                         outcome = "unresolved_conflict"
                         reason_codes = ["MULTIPLE_VIABLE_SOURCE_TARGETS"]
 
-    target_audiences = {
-        concept["concept_id"]: concept["audience"] for concept in concepts
-    }
+    target_audiences = {concept["concept_id"]: concept["audience"] for concept in concepts}
     effective_rank = AUDIENCE_RANK[candidate["effective_audience"]]
     for target_id in target_ids:
         effective_rank = max(effective_rank, AUDIENCE_RANK[target_audiences[target_id]])
@@ -188,7 +188,9 @@ def _resolve_candidate(
         audience for audience, rank in AUDIENCE_RANK.items() if rank == effective_rank
     )
     if AUDIENCE_RANK[effective_audience] < AUDIENCE_RANK[input_audience]:
-        raise CompilerFailure("RESOLUTION_POLICY_BROADENING", "resolve", "resolution audience broadened")
+        raise CompilerFailure(
+            "RESOLUTION_POLICY_BROADENING", "resolve", "resolution audience broadened"
+        )
 
     identity = {
         "compiler_run_id": compiler_run_id,
@@ -308,9 +310,7 @@ def resolve_compiler_run(
 ) -> ResolutionBatchResult:
     try:
         request.validate()
-        compiler = validate_compiler_run(
-            store, request.compiler_run_id, request.max_candidates
-        )
+        compiler = validate_compiler_run(store, request.compiler_run_id, request.max_candidates)
         source_snapshot, concepts = verify_source_checkout(
             source_root,
             request.source_repository,
@@ -464,8 +464,7 @@ def resolve_compiler_run(
             resolution_prefix=prefix,
         )
         states = [
-            put_immutable(store, key, json_bytes(value))
-            for key, value in sorted(docs.items())
+            put_immutable(store, key, json_bytes(value)) for key, value in sorted(docs.items())
         ]
         for key, event in zip(event_keys, events, strict=True):
             states.append(put_immutable(store, key, json_bytes(event)))
