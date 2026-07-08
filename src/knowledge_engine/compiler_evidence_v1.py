@@ -108,7 +108,9 @@ def _load_normalized(
     snapshot_ref = compiler_input.get("snapshot_ref")
     admission_ref = compiler_input.get("admission_ref")
     policy = compiler_input.get("effective_policy")
-    if not all(isinstance(item, dict) for item in (derivative_ref, snapshot_ref, admission_ref, policy)):
+    if not all(
+        isinstance(item, dict) for item in (derivative_ref, snapshot_ref, admission_ref, policy)
+    ):
         raise CompilerFailure(
             "RESOLUTION_COMPILER_INPUT_INVALID", "validate", "compiler input incomplete"
         )
@@ -148,9 +150,7 @@ def _load_normalized(
         ) from exc
     input_audience = policy.get("audience")
     if input_audience not in AUDIENCE_RANK or policy.get("may_broaden") is not False:
-        raise CompilerFailure(
-            "RESOLUTION_POLICY_INVALID", "validate", "compiler policy invalid"
-        )
+        raise CompilerFailure("RESOLUTION_POLICY_INVALID", "validate", "compiler policy invalid")
     return normalized_text, str(input_audience)
 
 
@@ -199,7 +199,10 @@ def validate_compiler_run(
         raise CompilerFailure(
             "RESOLUTION_CANDIDATE_SET_INVALID", "validate", "candidate set schema invalid"
         )
-    if result.get("compiler_run_id") != compiler_run_id or result.get("status") != "review_only_complete":
+    if (
+        result.get("compiler_run_id") != compiler_run_id
+        or result.get("status") != "review_only_complete"
+    ):
         raise CompilerFailure(
             "RESOLUTION_COMPILER_STATE_INVALID",
             "validate",
@@ -213,7 +216,10 @@ def validate_compiler_run(
         raise CompilerFailure(
             "RESOLUTION_IDENTITY_MISMATCH", "validate", "compiler artifact keys mismatch"
         )
-    if result.get("source_map_key") != keys["maps"] or result.get("candidates_key") != keys["candidates"]:
+    if (
+        result.get("source_map_key") != keys["maps"]
+        or result.get("candidates_key") != keys["candidates"]
+    ):
         raise CompilerFailure(
             "RESOLUTION_IDENTITY_MISMATCH", "validate", "compiler artifact keys mismatch"
         )
@@ -225,9 +231,7 @@ def validate_compiler_run(
     maps = map_set.get("source_maps")
     candidates = candidate_set.get("candidates")
     if not isinstance(blocks, list) or block_set.get("block_count") != len(blocks):
-        raise CompilerFailure(
-            "RESOLUTION_BLOCK_SET_INVALID", "validate", "block set invalid"
-        )
+        raise CompilerFailure("RESOLUTION_BLOCK_SET_INVALID", "validate", "block set invalid")
     if not isinstance(maps, list) or map_set.get("source_map_count") != len(maps):
         raise CompilerFailure(
             "RESOLUTION_SOURCE_MAP_SET_INVALID", "validate", "source-map set invalid"
@@ -243,7 +247,10 @@ def validate_compiler_run(
 
     block_by_id: dict[str, dict[str, Any]] = {}
     for block in blocks:
-        if not isinstance(block, dict) or block.get("schema_version") != "knowledge-compiler-structured-block/v1":
+        if (
+            not isinstance(block, dict)
+            or block.get("schema_version") != "knowledge-compiler-structured-block/v1"
+        ):
             raise CompilerFailure(
                 "RESOLUTION_BLOCK_INVALID", "validate", "structured block invalid"
             )
@@ -260,16 +267,15 @@ def validate_compiler_run(
     for block in blocks:
         parent = block.get("parent_block_id")
         if parent is not None and parent not in block_by_id:
-            raise CompilerFailure(
-                "RESOLUTION_BLOCK_INVALID", "validate", "block parent missing"
-            )
+            raise CompilerFailure("RESOLUTION_BLOCK_INVALID", "validate", "block parent missing")
 
     map_by_id: dict[str, dict[str, Any]] = {}
     for source_map in maps:
-        if not isinstance(source_map, dict) or source_map.get("schema_version") != "knowledge-compiler-source-map/v1":
-            raise CompilerFailure(
-                "RESOLUTION_SOURCE_MAP_INVALID", "validate", "source map invalid"
-            )
+        if (
+            not isinstance(source_map, dict)
+            or source_map.get("schema_version") != "knowledge-compiler-source-map/v1"
+        ):
+            raise CompilerFailure("RESOLUTION_SOURCE_MAP_INVALID", "validate", "source map invalid")
         map_id = source_map.get("source_map_id")
         if map_id != _map_identity(source_map) or map_id in map_by_id:
             raise CompilerFailure(
@@ -291,12 +297,18 @@ def validate_compiler_run(
                 )
             start = segment.get("normalized_start_char")
             end = segment.get("normalized_end_char")
-            if not isinstance(start, int) or not isinstance(end, int) or not 0 <= start < end <= len(normalized_text):
+            if (
+                not isinstance(start, int)
+                or not isinstance(end, int)
+                or not 0 <= start < end <= len(normalized_text)
+            ):
                 raise CompilerFailure(
                     "RESOLUTION_SOURCE_MAP_INVALID", "validate", "source-map offsets invalid"
                 )
             quote = normalized_text[start:end]
-            if segment.get("quote") != quote or segment.get("quote_sha256") != sha256_bytes(quote.encode()):
+            if segment.get("quote") != quote or segment.get("quote_sha256") != sha256_bytes(
+                quote.encode()
+            ):
                 raise CompilerFailure(
                     "RESOLUTION_SOURCE_MAP_INVALID", "validate", "source-map quote invalid"
                 )
@@ -304,7 +316,9 @@ def validate_compiler_run(
                 raise CompilerFailure(
                     "RESOLUTION_SOURCE_MAP_INVALID", "validate", "source-map start line invalid"
                 )
-            if segment.get("normalized_end_line") != _line_number(normalized_text, max(start, end - 1)):
+            if segment.get("normalized_end_line") != _line_number(
+                normalized_text, max(start, end - 1)
+            ):
                 raise CompilerFailure(
                     "RESOLUTION_SOURCE_MAP_INVALID", "validate", "source-map end line invalid"
                 )
@@ -312,7 +326,11 @@ def validate_compiler_run(
 
     for block in blocks:
         map_ids = block.get("source_map_ids")
-        if not isinstance(map_ids, list) or not map_ids or any(item not in map_by_id for item in map_ids):
+        if (
+            not isinstance(map_ids, list)
+            or not map_ids
+            or any(item not in map_by_id for item in map_ids)
+        ):
             raise CompilerFailure(
                 "RESOLUTION_BLOCK_INVALID", "validate", "block source-map reference invalid"
             )
@@ -320,10 +338,11 @@ def validate_compiler_run(
     validated_candidates = []
     seen_candidate_ids = set()
     for candidate in candidates:
-        if not isinstance(candidate, dict) or candidate.get("schema_version") != "knowledge-compiler-extraction-candidate/v1":
-            raise CompilerFailure(
-                "RESOLUTION_CANDIDATE_INVALID", "validate", "candidate invalid"
-            )
+        if (
+            not isinstance(candidate, dict)
+            or candidate.get("schema_version") != "knowledge-compiler-extraction-candidate/v1"
+        ):
+            raise CompilerFailure("RESOLUTION_CANDIDATE_INVALID", "validate", "candidate invalid")
         if candidate.get("candidate_type") not in CANDIDATE_TYPES:
             raise CompilerFailure(
                 "RESOLUTION_CANDIDATE_INVALID", "validate", "candidate type invalid"
@@ -385,9 +404,7 @@ def validate_compiler_run(
                 raise CompilerFailure(
                     "RESOLUTION_CANDIDATE_INVALID", "validate", "candidate evidence link invalid"
                 )
-            quote_hashes = {
-                segment["quote_sha256"] for segment in map_by_id[map_id]["segments"]
-            }
+            quote_hashes = {segment["quote_sha256"] for segment in map_by_id[map_id]["segments"]}
             if evidence.get("quote_sha256") not in quote_hashes:
                 raise CompilerFailure(
                     "RESOLUTION_CANDIDATE_INVALID", "validate", "candidate quote hash invalid"
