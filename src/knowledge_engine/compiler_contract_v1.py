@@ -147,7 +147,13 @@ def request_from_intake_result(
     )
 
 
-def put_immutable(store: ObjectStore, key: str, data: bytes) -> bool:
+def put_immutable(
+    store: ObjectStore,
+    key: str,
+    data: bytes,
+    *,
+    content_type: str = "application/json",
+) -> bool:
     current = store.head(key)
     if current is not None:
         if store.get(key) != data:
@@ -157,7 +163,7 @@ def put_immutable(store: ObjectStore, key: str, data: bytes) -> bool:
         store.put(
             key,
             data,
-            content_type="application/json",
+            content_type=content_type,
             sha256=sha256_bytes(data),
             only_if_absent=True,
         )
