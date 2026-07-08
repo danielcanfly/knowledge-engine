@@ -1,0 +1,138 @@
+name: M9 Production Dispatch Audit
+
+on:
+  pull_request:
+    types: [opened]
+    paths:
+      - ".github/workflows/m9-production-dispatch-audit.yml"
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+jobs:
+  dispatch-once:
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'ops/m9-production-dispatch-audit'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      EXPECTED_MAIN_SHA: 230d57d777a3c7898f789407f5372761541eef6c
+      APPROVAL_PATH: governed_batches/evidence/m9-001-production-promotion-approval.json
+      SPEC_PATH: governed_batches/m9-001-agent-planning-strategies.json
+      REGISTRY_PATH: governed_batches/registry-v2.json
+      REQUEST_PATH: production_promotions/m9-001-agent-planning-strategies.json
+      PREVIOUS_RELEASE_ID: 20260707T111252Z-aebf06593f89
+      PREVIOUS_MANIFEST_SHA256: 1a2f2014073e9e97f9e1fdd5df4e43bf19cb2b2679532b6e52ea38480ec4d2ec
+      PREVIOUS_POINTER_SHA256: 2de63a9ff5963ea3f72f0051b25a084dda9e5e609fe79615e55e3f95a1351914
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install exact Engine
+        run: python -m pip install -e '.[dev]'
+
+      - name: Validate approval, request, and live production
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          python scripts/validate_production_promotion_approval.py \
+            --approval-path "$APPROVAL_PATH" \
+            --spec-path "$SPEC_PATH" \
+            --request-path "$REQUEST_PATH" \
+            --output /tmp/approval.json
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store
+
+          approval = json.loads(Path('/tmp/approval.json').read_text())
+          assert approval['status'] == 'approved'
+          assert approval['production_dispatch_authorized'] is True
+
+          store = create_object_store(Settings.from_env())
+          raw = store.get('channels/production.json')
+          pointer = json.loads(raw)
+          assert pointer['release_id'] == os.environ['PREVIOUS_RELEASE_ID']
+          assert pointer['manifest_sha256'] == os.environ['PREVIOUS_MANIFEST_SHA256']
+          assert hashlib.sha256(raw).hexdigest() == os.environ['PREVIOUS_POINTER_SHA256']
+          Path('/tmp/production-before.json').write_bytes(raw)
+          PY
+          python -m knowledge_engine.batch_cli preflight \
+            --spec-path "$SPEC_PATH" \
+            --registry-path "$REGISTRY_PATH" \
+            --production-pointer-path /tmp/production-before.json \
+            --output /tmp/preflight.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('/tmp/preflight.json').read_text())
+          assert data['status'] == 'ready'
+          assert data['lifecycle_state'] == 'request_spec_committed'
+          assert data['production_workflow_inputs'] == ['request_path']
+          assert data['mutations_performed'] == []
+          PY
+
+      - name: Dispatch existing production workflow once
+        run: |
+          set -euo pipefail
+          gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/m5-production-promotion.yml/runs?event=workflow_dispatch&per_page=100" > /tmp/before.json
+          gh api --method POST \
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/m5-production-promotion.yml/dispatches" \
+            --input - <<JSON
+          {"ref":"main","inputs":{"request_path":"$REQUEST_PATH"}}
+          JSON
+          for attempt in $(seq 1 60); do
+            gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/m5-production-promotion.yml/runs?event=workflow_dispatch&per_page=100" > /tmp/after.json
+            RUN_ID="$(python - <<'PY'
+          import json, os
+          from pathlib import Path
+          before = {r['id'] for r in json.loads(Path('/tmp/before.json').read_text())['workflow_runs']}
+          runs = json.loads(Path('/tmp/after.json').read_text())['workflow_runs']
+          matches = [r for r in runs if r['id'] not in before and r['head_sha'] == os.environ['EXPECTED_MAIN_SHA']]
+          print(max((r['id'] for r in matches), default=''))
+          PY
+          )"
+            if [ -n "$RUN_ID" ]; then break; fi
+            sleep 5
+          done
+          test -n "${RUN_ID:-}"
+          gh issue comment 116 --repo "$GITHUB_REPOSITORY" --body "M9 production dispatch submitted. Run ID: \`$RUN_ID\`. Request: \`$REQUEST_PATH\`. Control-plane SHA: \`$EXPECTED_MAIN_SHA\`."
+          gh run watch "$RUN_ID" --repo "$GITHUB_REPOSITORY" --interval 5 --exit-status
+          RESULT="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion,url,headSha,event,workflowName)"
+          echo "$RESULT" > /tmp/result.json
+          gh issue comment 116 --repo "$GITHUB_REPOSITORY" --body "M9 production dispatch completed. Run ID: \`$RUN_ID\`. Result: \`$RESULT\`."
+
+      - name: Upload dispatch receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m9-production-dispatch-receipt-${{ github.sha }}
+          path: |
+            /tmp/approval.json
+            /tmp/preflight.json
+            /tmp/production-before.json
+            /tmp/before.json
+            /tmp/after.json
+            /tmp/result.json
+          if-no-files-found: warn
+          retention-days: 90
