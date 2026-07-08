@@ -5,7 +5,7 @@ on:
   pull_request:
     paths:
       - "review_packages/m9-001/**"
-      - "src/knowledge_engine/source_review_package.py"
+      - "scripts/validate_source_review_package.py"
       - "tests/test_source_review_package.py"
       - ".github/workflows/m9-source-review-package.yml"
       - "governed_batches/m9-001-agent-planning-strategies.json"
@@ -32,7 +32,7 @@ jobs:
 
       - name: Validate generic Source review package
         run: |
-          python -m knowledge_engine.source_review_package \
+          python scripts/validate_source_review_package.py \
             --package-root review_packages/m9-001 \
             --output evidence/m9-001/review-package-validation.json
 
