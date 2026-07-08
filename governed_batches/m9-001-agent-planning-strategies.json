@@ -9,7 +9,7 @@
     "sha": "2126db2ed4d372d3d61464fe31a86fc0243a1f24"
   },
   "builder_sha": "1b55c68a441def01a5277c94b350efab1437459d",
-  "foundation_sha": "d12c7c416c950f98f0fc4b9803cbb47c37ab9",
+  "foundation_sha": "d12c7c416c950d743d4cd5e7964fd3c3bc0d9062",
   "candidate": {
     "channel": "candidate-source-2126db2ed4d372d3d61464fe31a86fc0243a1f24",
     "release_id": "20260708T040116Z-69a9f445699a",
