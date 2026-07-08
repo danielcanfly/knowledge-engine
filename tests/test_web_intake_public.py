@@ -131,6 +131,8 @@ def test_public_boundary_rejects_oversized_or_control_character_headers(
 
 
 def test_public_api_accepts_bounded_markdown_response(tmp_path: Path) -> None:
+    body = b"# Public API\n\n"
+
     def exchange(
         url: str,
         connected_ip: str,
@@ -144,10 +146,10 @@ def test_public_api_accepts_bounded_markdown_response(tmp_path: Path) -> None:
             reason="OK",
             headers={
                 "Content-Type": "text/markdown; charset=utf-8",
-                "Content-Length": "16",
+                "Content-Length": str(len(body)),
                 "ETag": '"safe-v1"',
             },
-            body=b"# Public API\n\n",
+            body=body,
             connected_ip=connected_ip,
         )
 
