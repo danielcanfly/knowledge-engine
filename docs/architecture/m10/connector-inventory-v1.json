@@ -1,0 +1,115 @@
+{
+  "schema_version": "m10-connector-inventory/v1",
+  "milestone": "M10",
+  "status": "implemented_pending_closure_verification",
+  "architecture_baseline_sha": "3a17593eb1b2cd549e84b9287679023350b4f5b1",
+  "implementation_baseline_sha": "a3d1e2f0c42b089ce6b2e7d8ccaefe2c750a53ad",
+  "initial_source_capability_count": 9,
+  "implemented_connector_type_count": 8,
+  "capability_reconciliation": {
+    "local_file": "implemented by local_file",
+    "markdown": "implemented as the Markdown content mode of local_file using markdown/1.0.0; no duplicate markdown connector type"
+  },
+  "shared_contracts": {
+    "snapshot_schema": "intake-snapshot/v1",
+    "derivative_schema": "intake-derivative/v1",
+    "attempt_schema": "intake-attempt/v1",
+    "event_schema": "intake-event/v1",
+    "result_schema": "intake-result/v1",
+    "rejection_schema": "intake-rejection/v1",
+    "namespace": "intake/v1/",
+    "canonical_json": "m10-canonical-json/v1"
+  },
+  "connectors": [
+    {
+      "connector_type": "local_file",
+      "module": "knowledge_engine.intake_v1",
+      "connector_version": "local-file/1.0.0",
+      "normalizers": ["markdown/1.0.0"],
+      "evidence_schema": "shared-intake-evidence/v1",
+      "source_capabilities": ["local file", "Markdown"],
+      "network": false,
+      "subprocess": false
+    },
+    {
+      "connector_type": "web_url",
+      "module": "knowledge_engine.web_intake_v1",
+      "connector_version": "bounded-https/1.0.0",
+      "normalizers": ["html_to_markdown/1.0.0", "markdown/1.0.0", "plain_text_to_markdown/1.0.0"],
+      "evidence_schema": "web-acquisition/v1",
+      "source_capabilities": ["HTTPS web URL"],
+      "network": true,
+      "subprocess": false
+    },
+    {
+      "connector_type": "local_pdf",
+      "module": "knowledge_engine.pdf_intake",
+      "connector_version": "local-pdf/1.0.0",
+      "normalizers": ["pypdf_text/6.14.2"],
+      "evidence_schema": "pdf-parse-evidence/v1",
+      "source_capabilities": ["PDF"],
+      "network": false,
+      "subprocess": true
+    },
+    {
+      "connector_type": "git_repository_path",
+      "module": "knowledge_engine.git_intake",
+      "connector_version": "git-path/1.0.0",
+      "normalizers": ["git_markdown/1.0.0", "git_text_to_markdown/1.0.0"],
+      "evidence_schema": "git-acquisition-evidence/v1",
+      "source_capabilities": ["Git repository path at exact commit"],
+      "network": false,
+      "subprocess": true
+    },
+    {
+      "connector_type": "google_drive_document",
+      "module": "knowledge_engine.drive_intake",
+      "connector_version": "google-drive-document/1.0.0",
+      "normalizers": ["google_docs_text_to_markdown/1.0.0"],
+      "evidence_schema": "drive-acquisition-evidence/v1",
+      "source_capabilities": ["Google Drive document export"],
+      "network": false,
+      "subprocess": false,
+      "transport_boundary": "credential-owning Drive transport remains external to intake core"
+    },
+    {
+      "connector_type": "media_derived_markdown",
+      "module": "knowledge_engine.media_intake",
+      "connector_version": "media-derived-markdown/1.0.0",
+      "normalizers": ["media_transcript_markdown/1.0.0"],
+      "evidence_schema": "media-acquisition-evidence/v1",
+      "source_capabilities": ["media-derived Markdown evidence bundle"],
+      "network": false,
+      "subprocess": false
+    },
+    {
+      "connector_type": "meeting_transcript",
+      "module": "knowledge_engine.meeting_intake",
+      "connector_version": "meeting-transcript/1.0.0",
+      "normalizers": ["meeting_transcript_markdown/1.0.0"],
+      "evidence_schema": "meeting-acquisition-evidence/v1",
+      "source_capabilities": ["meeting transcript evidence bundle"],
+      "network": false,
+      "subprocess": false,
+      "known_non_blocking_debt": "shared local-bundle filesystem guards still emit MEDIA_BUNDLE_* names for selected hardlink/TOCTOU failures"
+    },
+    {
+      "connector_type": "database_metadata_export",
+      "module": "knowledge_engine.database_intake",
+      "connector_version": "database-metadata-export/1.0.0",
+      "normalizers": ["database_metadata_markdown/1.0.0"],
+      "evidence_schema": "database-acquisition-evidence/v1",
+      "source_capabilities": ["offline relational database metadata export"],
+      "network": false,
+      "subprocess": false
+    }
+  ],
+  "forbidden_connector_mutations": [
+    "canonical Source",
+    "review or governance decision",
+    "workflow or release request",
+    "candidate build",
+    "permanent production ledger",
+    "channels/production.json"
+  ]
+}
