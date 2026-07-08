@@ -1,0 +1,224 @@
+name: M9 Candidate Evidence Audit
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m9-candidate-evidence-audit.yml"
+
+permissions:
+  contents: read
+  issues: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Audit exact M9 candidate evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: 2126db2ed4d372d3d61464fe31a86fc0243a1f24
+          SOURCE_REPOSITORY: danielcanfly/knowledge-source
+          ENGINE_REPOSITORY: danielcanfly/knowledge-engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/extracted
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import urllib.request
+          import zipfile
+          from pathlib import Path
+
+          token = os.environ["GH_TOKEN"]
+          source_sha = os.environ["SOURCE_SHA"]
+          source_repository = os.environ["SOURCE_REPOSITORY"]
+          engine_repository = os.environ["ENGINE_REPOSITORY"]
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {token}",
+              "User-Agent": "m9-candidate-evidence-audit",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+
+          def get_json(url: str):
+              request = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return json.load(response)
+
+          def download(url: str, path: Path) -> None:
+              request = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(request, timeout=120) as response:
+                  path.write_bytes(response.read())
+
+          comments = get_json(
+              f"https://api.github.com/repos/{engine_repository}/issues/13/comments?per_page=100"
+          )
+          matches = [
+              item
+              for item in comments
+              if source_sha in item.get("body", "")
+              and "Source candidate dispatch:" in item.get("body", "")
+          ]
+          if len(matches) != 1:
+              raise SystemExit(f"expected one M9 candidate comment, found {len(matches)}")
+          comment = matches[0]
+          body = comment["body"]
+          if "## Source candidate dispatch: passed" not in body:
+              raise SystemExit("M9 candidate dispatch did not pass")
+
+          fields = dict(
+              re.findall(r"^- ([^:]+): `([^`]*)`$", body, flags=re.MULTILINE)
+          )
+          run_match = re.search(r"^- Actions run: .*/actions/runs/(\d+)$", body, re.MULTILINE)
+          if run_match is None:
+              raise SystemExit("candidate evidence comment has no Actions run ID")
+          candidate_run_id = int(run_match.group(1))
+
+          expected_channel = f"candidate-source-{source_sha}"
+          assert fields["Source repository"] == source_repository
+          assert fields["Source SHA"] == source_sha
+          assert fields["Candidate channel"] == expected_channel
+          assert fields["Dispatch validation"] == "success"
+          assert fields["Candidate gate"] == "success"
+          release_id = fields["Release ID"]
+          manifest_sha256 = fields["Manifest SHA-256"]
+          source_snapshot_sha256 = fields["Source snapshot SHA-256"]
+          validation_run_id = int(fields["Source validation run ID"])
+
+          validation_run = get_json(
+              f"https://api.github.com/repos/{source_repository}/actions/runs/{validation_run_id}"
+          )
+          assert validation_run["event"] == "push"
+          assert validation_run["head_sha"] == source_sha
+          assert validation_run["status"] == "completed"
+          assert validation_run["conclusion"] == "success"
+
+          candidate_run = get_json(
+              f"https://api.github.com/repos/{engine_repository}/actions/runs/{candidate_run_id}"
+          )
+          assert candidate_run["event"] == "repository_dispatch"
+          assert candidate_run["status"] == "completed"
+          assert candidate_run["conclusion"] == "success"
+
+          jobs_payload = get_json(
+              f"https://api.github.com/repos/{engine_repository}/actions/runs/{candidate_run_id}/jobs?per_page=100"
+          )
+          jobs = {item["name"]: item for item in jobs_payload["jobs"]}
+          for name in ("validate-dispatch", "publish-candidate", "record-evidence"):
+              if name not in jobs:
+                  raise SystemExit(f"missing candidate job: {name}")
+              assert jobs[name]["status"] == "completed"
+              assert jobs[name]["conclusion"] == "success"
+
+          artifacts_payload = get_json(
+              f"https://api.github.com/repos/{engine_repository}/actions/runs/{candidate_run_id}/artifacts?per_page=100"
+          )
+          artifact_name = f"source-candidate-{source_sha}"
+          candidates = [
+              item for item in artifacts_payload["artifacts"] if item["name"] == artifact_name
+          ]
+          if len(candidates) != 1:
+              raise SystemExit(f"expected one candidate artifact, found {len(candidates)}")
+          artifact = candidates[0]
+          zip_path = Path("evidence/candidate-artifact.zip")
+          download(
+              f"https://api.github.com/repos/{engine_repository}/actions/artifacts/{artifact['id']}/zip",
+              zip_path,
+          )
+          artifact_zip_sha256 = hashlib.sha256(zip_path.read_bytes()).hexdigest()
+          artifact_digest = artifact.get("digest")
+          if artifact_digest:
+              assert artifact_digest == f"sha256:{artifact_zip_sha256}"
+
+          with zipfile.ZipFile(zip_path) as archive:
+              archive.extractall("evidence/extracted")
+              names = sorted(archive.namelist())
+
+          extracted = Path("evidence/extracted")
+          gate = json.loads((extracted / "source-candidate-gate.json").read_text())
+          manifest = json.loads((extracted / "manifest.json").read_text())
+          snapshot = json.loads((extracted / "source-snapshot.json").read_text())
+          validation_attestation = json.loads(
+              (extracted / "source-validation-run.json").read_text()
+          )
+          job_status = (extracted / "job-status.txt").read_text().strip()
+
+          assert gate["release_id"] == release_id
+          assert gate["manifest_sha256"] == manifest_sha256
+          assert gate["source_snapshot_sha256"] == source_snapshot_sha256
+          assert gate["reproducibility_passed"] is True
+          assert gate["production_pointer_unchanged"] is True
+          assert gate["internal_status"] == "answered"
+          assert gate["internal_citation_count"] >= 1
+          assert gate["public_status"] == "not_found"
+          assert gate["public_result_count"] == 0
+          assert gate["public_acl_filtered_count"] >= 1
+          assert gate.get("raw_fallback_used", False) is False
+          assert job_status == "candidate gate passed"
+
+          manifest_bytes_sha256 = hashlib.sha256(
+              (extracted / "manifest.json").read_bytes()
+          ).hexdigest()
+          assert manifest_bytes_sha256 == manifest_sha256
+          assert manifest["release_id"] == release_id
+          assert manifest["source_sha"] == source_sha
+          assert snapshot["source_sha"] == source_sha
+          assert validation_attestation["head_sha"] == source_sha
+          assert validation_attestation["id"] == validation_run_id
+          assert validation_attestation["conclusion"] == "success"
+
+          summary = {
+              "schema_version": "m9-candidate-evidence-audit/v1",
+              "status": "passed",
+              "source_repository": source_repository,
+              "source_sha": source_sha,
+              "source_validation_run_id": validation_run_id,
+              "candidate_channel": expected_channel,
+              "candidate_run_id": candidate_run_id,
+              "candidate_jobs": {
+                  name: {
+                      "id": jobs[name]["id"],
+                      "status": jobs[name]["status"],
+                      "conclusion": jobs[name]["conclusion"],
+                  }
+                  for name in ("validate-dispatch", "publish-candidate", "record-evidence")
+              },
+              "candidate_artifact_id": artifact["id"],
+              "candidate_artifact_name": artifact["name"],
+              "candidate_artifact_digest": artifact_digest,
+              "candidate_artifact_zip_sha256": artifact_zip_sha256,
+              "candidate_artifact_files": names,
+              "release_id": release_id,
+              "manifest_sha256": manifest_sha256,
+              "source_snapshot_sha256": source_snapshot_sha256,
+              "reproducibility_passed": gate["reproducibility_passed"],
+              "production_pointer_unchanged": gate["production_pointer_unchanged"],
+              "internal_status": gate["internal_status"],
+              "internal_citation_count": gate["internal_citation_count"],
+              "public_status": gate["public_status"],
+              "public_result_count": gate["public_result_count"],
+              "public_acl_filtered_count": gate["public_acl_filtered_count"],
+              "raw_fallback_used": gate.get("raw_fallback_used", False),
+              "evidence_comment_id": comment["id"],
+              "production_mutated": False,
+          }
+          Path("evidence/m9-candidate-audit.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n"
+          )
+          Path("evidence/evidence-comment.md").write_text(body + "\n")
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          print("M9_CANDIDATE_EVIDENCE_AUDIT_PASSED")
+          PY
+
+      - name: Upload M9 candidate audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m9-candidate-evidence-audit-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
