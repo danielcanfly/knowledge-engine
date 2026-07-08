@@ -19,27 +19,23 @@ PRODUCTION_BASELINE = Path(
 APPROVED_REVIEW = Path(
     "governed_batches/evidence/m9-001-approved-review-decision.json"
 )
-LIFECYCLE_HISTORY = Path(
-    "governed_batches/evidence/m9-001-lifecycle-history.json"
-)
 
 
 def _load(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_m9_source_reviewed_batch_is_registered_and_non_mutating() -> None:
+def test_m9_approved_planned_batch_authorizes_source_pr_only() -> None:
     spec = load_batch_spec(SPEC)
     registry = validate_batch_registry(load_batch_registry(REGISTRY))
     origin = _load(ORIGIN)
     source_baseline = _load(SOURCE_BASELINE)
     production_baseline = _load(PRODUCTION_BASELINE)
     approved_review = _load(APPROVED_REVIEW)
-    lifecycle = _load(LIFECYCLE_HISTORY)
 
     assert spec.batch_id == "m9-001-agent-planning-strategies"
-    assert spec.lifecycle_state == "source_reviewed"
-    assert next_action(spec.lifecycle_state) == "run_source_validation"
+    assert spec.lifecycle_state == "planned"
+    assert next_action(spec.lifecycle_state) == "open_source_review"
     assert spec.raw["source"]["sha"] is None
     assert spec.raw["candidate"] == {
         "channel": None,
@@ -56,7 +52,7 @@ def test_m9_source_reviewed_batch_is_registered_and_non_mutating() -> None:
     assert registry["batch_count"] == 2
     assert registry["batches"][-1] == {
         "batch_id": spec.batch_id,
-        "lifecycle_state": "source_reviewed",
+        "lifecycle_state": "planned",
         "spec_path": str(SPEC),
     }
 
@@ -77,43 +73,12 @@ def test_m9_source_reviewed_batch_is_registered_and_non_mutating() -> None:
     assert approved_review["reviewed_at"] == "2026-07-08T03:29:20Z"
     assert approved_review["approved_audience"] == "public"
     assert approved_review["approved_claim_count"] == 11
+    assert approved_review["approved_concept_sha256"] == (
+        "cc6fe2743bec8bc90b6b7c5765dce5e32bdba060a0fd82817215197f37248e86"
+    )
     assert approved_review["canonical_write_authorized"] is True
     assert approved_review["candidate_build_authorized"] is False
     assert approved_review["production_mutation_authorized"] is False
-
-    assert lifecycle["initial_state"] == "planned"
-    assert lifecycle["final_state"] == "source_reviewed"
-    assert lifecycle["transitions"] == [
-        {
-            "from": "planned",
-            "to": "source_reviewed",
-            "evidence": {
-                "review_issue": 102,
-                "review_package_pr": 103,
-                "review_artifact": 8157362864,
-                "review_artifact_digest": (
-                    "sha256:800ed7391c43059eb14f7748957171cf89fddb732f924a149cd36a2ac64f621c"
-                ),
-                "review_decision_path": (
-                    "governed_batches/evidence/m9-001-approved-review-decision.json"
-                ),
-                "review_decision": "approve",
-                "reviewer": "danielcanfly",
-                "reviewed_at": "2026-07-08T03:29:20Z",
-                "approved_audience": "public",
-                "approved_concept_sha256": (
-                    "cc6fe2743bec8bc90b6b7c5765dce5e32bdba060a0fd82817215197f37248e86"
-                ),
-            },
-        }
-    ]
-    assert lifecycle["source_identity"] == {"sha": None}
-    assert lifecycle["candidate_identity"] == {
-        "channel": None,
-        "release_id": None,
-        "manifest_sha256": None,
-    }
-    assert lifecycle["production_mutated"] is False
 
     assert production_baseline["production_release_id"] == (
         "20260707T111252Z-aebf06593f89"
