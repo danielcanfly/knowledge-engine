@@ -1,0 +1,25 @@
+{
+  "schema_version": "governed-proposed-review-decision/v1",
+  "batch_id": "m9-001-agent-planning-strategies",
+  "review_id": "review_m9_001_agent_planning_strategies",
+  "concept_id": "concepts/agent-planning-strategies",
+  "status": "pending_human_review",
+  "reviewer": null,
+  "reviewed_at": null,
+  "approved_audience": null,
+  "decision": null,
+  "required_decisions": [
+    "approve_content_scope",
+    "approve_public_audience",
+    "approve_provenance_claims",
+    "approve_m6_m8_boundary",
+    "approve_acl_fixture_strategy",
+    "approve_canonical_source_pr_creation"
+  ],
+  "allowed_decisions": [
+    "approve",
+    "request_changes",
+    "reject"
+  ],
+  "canonical_write_authorized": false
+}

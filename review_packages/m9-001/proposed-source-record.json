@@ -1,0 +1,22 @@
+{
+  "schema_version": "governed-proposed-source-record/v1",
+  "status": "pending_human_review",
+  "batch_id": "m9-001-agent-planning-strategies",
+  "proposed_record": {
+    "source_id": "source_blog_agent_planning_strategies",
+    "title": "Agent decision and planning strategies",
+    "kind": "markdown",
+    "owner": "Daniel Huang",
+    "license": "owner-provided",
+    "trust": "reviewed",
+    "audience": "public",
+    "status": "active",
+    "uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-3/",
+    "origin_repository": "huaihsuanbusiness/daniel-blog",
+    "origin_commit": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
+    "origin_path": "src/content/blog/the-atlas-of-agent-design-patterns-part-3/en.md",
+    "origin_blob_sha": "185fa419771942e0737cdefe10c3180505bb3c23",
+    "content_sha256": null
+  },
+  "completion_rule": "content_sha256 must be calculated from the exact canonical concept bytes before canonical Source write"
+}

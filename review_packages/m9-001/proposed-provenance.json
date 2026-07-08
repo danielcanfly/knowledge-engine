@@ -1,0 +1,112 @@
+{
+  "schema_version": "governed-proposed-provenance/v1",
+  "status": "pending_human_review",
+  "batch_id": "m9-001-agent-planning-strategies",
+  "subject": {
+    "concept_id": "concepts/agent-planning-strategies",
+    "target_path": "bundle/concepts/agent-planning-strategies.md",
+    "proposed_x_kos_id": "ko_7T9Q4M2V8J6K3R5C1N0PWHDBXF"
+  },
+  "origin": {
+    "repository": "huaihsuanbusiness/daniel-blog",
+    "commit": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
+    "path": "src/content/blog/the-atlas-of-agent-design-patterns-part-3/en.md",
+    "blob_sha": "185fa419771942e0737cdefe10c3180505bb3c23",
+    "source_id": "source_blog_agent_planning_strategies",
+    "uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-3/"
+  },
+  "claims": [
+    {
+      "claim_id": "claim_execution_structure_separate_from_decision_strategy",
+      "text": "Outer execution structure and node-level decision strategy are separate, composable architectural layers.",
+      "evidence_locator": {
+        "sections": [
+          "Execution structure and decision strategy are different layers",
+          "A more precise map of the planning layer"
+        ]
+      }
+    },
+    {
+      "claim_id": "claim_fixed_logic_is_valid_baseline",
+      "text": "Fixed decision logic is the preferred baseline when the next step and contract are known, while typed fallbacks or escalation handle unmodelled conditions.",
+      "evidence_locator": {
+        "section": "Fixed decision logic: keep deterministic work deterministic"
+      }
+    },
+    {
+      "claim_id": "claim_bounded_react_requires_contracts",
+      "text": "Production ReAct should be bounded by a step objective, allowed tools, completion criteria, budgets, progress state, duplicate detection, and escalation.",
+      "evidence_locator": {
+        "sections": [
+          "ReAct: choose the next action from the latest observation",
+          "Why ReAct loops without making progress",
+          "A production ReAct loop needs explicit contracts"
+        ]
+      }
+    },
+    {
+      "claim_id": "claim_plan_steps_must_be_executable",
+      "text": "Plan-and-Execute provides global coverage only when each step has explicit inputs, dependencies, outputs, completion criteria, failure policy, budget, and provenance requirements.",
+      "evidence_locator": {
+        "sections": [
+          "Plan-and-Execute: establish the global structure before acting",
+          "A plan must be executable, not ceremonial"
+        ]
+      }
+    },
+    {
+      "claim_id": "claim_plans_require_validation",
+      "text": "A generated plan is a proposal that may require deterministic validation, review, simulation, or a formal planner or solver.",
+      "evidence_locator": {
+        "section": "Plan validation: a plan is a proposal, not proof"
+      }
+    },
+    {
+      "claim_id": "claim_replanning_needs_triggers_and_versions",
+      "text": "Adaptive replanning should run only after material triggers, distinguish local repair from global revision, preserve valid work, and record versioned diffs.",
+      "evidence_locator": {
+        "section": "Adaptive planning: change the remaining plan when reality changes"
+      }
+    },
+    {
+      "claim_id": "claim_hierarchy_needs_integration_ownership",
+      "text": "Hierarchical planning helps manage large goals but requires parent and child completion contracts, shared facts, provenance, dependency management, integration ownership, and cross-subgoal verification.",
+      "evidence_locator": {
+        "section": "Hierarchical planning: decompose goals at several levels"
+      }
+    },
+    {
+      "claim_id": "claim_htn_uses_domain_methods",
+      "text": "HTN planning refines compound tasks through governed domain methods into primitive executable tasks and can be combined with LLM interpretation.",
+      "evidence_locator": {
+        "section": "HTN: formal decomposition with domain methods"
+      }
+    },
+    {
+      "claim_id": "claim_goals_and_policies_are_cross_cutting",
+      "text": "Goals define measurable outcomes and policies authorise or deny actions across every planning strategy; important policies require runtime or infrastructure enforcement.",
+      "evidence_locator": {
+        "section": "Goals and policies are cross-cutting, not peer strategies"
+      }
+    },
+    {
+      "claim_id": "claim_production_hybrid_separates_responsibilities",
+      "text": "A robust production system combines a Planner, versioned plan store, State Machine, bounded Executor, Verifier, Replanner, and policy layer with explicit responsibilities.",
+      "evidence_locator": {
+        "section": "The production hybrid: Planner, bounded Executor, Verifier, and Replanner"
+      }
+    },
+    {
+      "claim_id": "claim_least_flexible_sufficient_strategy",
+      "text": "Strategy selection should begin with the least flexible mechanism that can reliably complete the task and add planning freedom only when its control requirement exists.",
+      "evidence_locator": {
+        "section": "How to choose a strategy"
+      }
+    }
+  ],
+  "evidence_policy": {
+    "verbatim_quotes_embedded": false,
+    "exact_origin_blob_required": true,
+    "citation_required_for_public_runtime": true
+  }
+}
