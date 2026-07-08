@@ -1,6 +1,6 @@
 # M10 Immutable Intake Architecture
 
-Status: implemented, pending final closure verification
+Status: implemented
 Milestone: M10 — Immutable Intake and Source Connectors
 Architecture baseline: `3a17593eb1b2cd549e84b9287679023350b4f5b1`
 Implementation baseline: `a3d1e2f0c42b089ce6b2e7d8ccaefe2c750a53ad`
@@ -10,7 +10,7 @@ This package defines and records the production intake plane that generalizes th
 
 ## Governing result
 
-M10 now implements nine initial source capabilities through eight runtime connector types. Local file and Markdown are intentionally one connector type: `local_file` acquires exact local bytes and uses `markdown/1.0.0` as the Markdown normalizer. A second, duplicate `markdown` connector type was not created.
+M10 implements nine initial source capabilities through eight runtime connector types. Local file and Markdown are intentionally one connector type: `local_file` acquires exact local bytes and uses `markdown/1.0.0` as the Markdown normalizer. A second, duplicate `markdown` connector type was not created.
 
 All connectors reuse the `intake/v1/` immutable raw, snapshot, derivative, event, result, rejection, replay, dedupe, ACL, license, and quarantine contracts. No connector may write canonical Source, governance decisions, release requests, candidates, permanent production ledger entries, or production channels.
 
@@ -44,7 +44,7 @@ All connectors reuse the `intake/v1/` immutable raw, snapshot, derivative, event
 
 The machine-readable source of truth is `connector-inventory-v1.json`.
 
-## Closure boundary
+## Closure evidence boundary
 
 M10 closure requires all of the following at one reviewed head:
 
@@ -57,4 +57,4 @@ M10 closure requires all of the following at one reviewed head:
 - issue #125 receives final evidence and is closed completed;
 - permanent audit ledger issue #30 remains open and unchanged.
 
-Until those checks pass, the status above remains “pending final closure verification.”
+The exact final merge SHA and workflow run IDs are recorded in parent issue #125 rather than embedded here, so the architecture package remains stable and machine-verifiable.
