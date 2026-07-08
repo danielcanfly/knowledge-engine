@@ -12,6 +12,7 @@ dependencies = [
   "boto3>=1.35,<2",
   "fastapi>=0.115,<1",
   "httpx>=0.28,<1",
+  "pypdf==6.14.2",
   "PyJWT[crypto]>=2.10,<3",
   "PyYAML>=6.0,<7",
   "uvicorn[standard]>=0.34,<1",
@@ -50,6 +51,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "src/knowledge_engine/api.py" = ["B008"]
 "src/knowledge_engine/intake.py" = ["UP012"]
 "src/knowledge_engine/intake_v1.py" = ["SIM102"]
+"src/knowledge_engine/pdf_intake.py" = ["E501", "F401"]
 "src/knowledge_engine/review.py" = ["UP012", "E501"]
 "src/knowledge_engine/web_intake_v1.py" = ["E501", "F401", "SIM114"]
 "tests/test_review.py" = ["E501"]
