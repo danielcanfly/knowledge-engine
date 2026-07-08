@@ -1,0 +1,272 @@
+name: M9 Idempotent Replay Approval
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "governed_batches/evidence/m9-001-idempotent-replay-approval.json"
+      - "governed_batches/evidence/m9-001-production-promotion-observation.json"
+      - "governed_batches/evidence/m9-001-lifecycle-history.json"
+      - "governed_batches/m9-001-agent-planning-strategies.json"
+      - "production_promotions/m9-001-agent-planning-strategies.json"
+      - "src/knowledge_engine/idempotent_replay_approval.py"
+      - "scripts/validate_idempotent_replay_approval.py"
+      - "tests/test_idempotent_replay_approval.py"
+      - "tests/test_m9_request_spec.py"
+      - "tests/test_m9_planned_batch.py"
+      - "docs/batches/m9-001-idempotent-replay-review.md"
+      - ".github/workflows/m9-idempotent-replay-approval.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-replay-approval:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      APPROVAL_PATH: governed_batches/evidence/m9-001-idempotent-replay-approval.json
+      SPEC_PATH: governed_batches/m9-001-agent-planning-strategies.json
+      REQUEST_PATH: production_promotions/m9-001-agent-planning-strategies.json
+      PROMOTION_PATH: governed_batches/evidence/m9-001-production-promotion-observation.json
+      LIFECYCLE_PATH: governed_batches/evidence/m9-001-lifecycle-history.json
+      REGISTRY_PATH: governed_batches/registry-v2.json
+      EVIDENCE_DIR: evidence/m9-idempotent-replay-approval
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install exact Engine
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+
+      - name: Verify read-only R2 configuration
+        run: |
+          set -euo pipefail
+          for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT_URL; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+
+      - name: Capture live production pointer before validation
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store
+
+          approval = json.loads(Path(os.environ["APPROVAL_PATH"]).read_text())
+          promotion = json.loads(Path(os.environ["PROMOTION_PATH"]).read_text())
+          expected = approval["current_production"]
+          assert expected == promotion["production_target"]
+
+          store = create_object_store(Settings.from_env())
+          pointer_bytes = store.get("channels/production.json")
+          pointer = json.loads(pointer_bytes)
+          pointer_sha256 = hashlib.sha256(pointer_bytes).hexdigest()
+          assert pointer["release_id"] == expected["release_id"]
+          assert pointer["manifest_sha256"] == expected["manifest_sha256"]
+          assert pointer_sha256 == expected["pointer_sha256"]
+
+          root = Path(os.environ["EVIDENCE_DIR"])
+          root.mkdir(parents=True, exist_ok=True)
+          (root / "production-pointer-before.json").write_bytes(pointer_bytes)
+          (root / "production-before-observation.json").write_text(
+              json.dumps(
+                  {
+                      "status": "passed",
+                      "release_id": pointer["release_id"],
+                      "manifest_sha256": pointer["manifest_sha256"],
+                      "pointer_sha256": pointer_sha256,
+                      "read_only": True,
+                      "mutations_performed": [],
+                  },
+                  indent=2,
+                  sort_keys=True,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Run production-promoted operator preflight
+        run: |
+          set -euo pipefail
+          python -m knowledge_engine.batch_cli preflight \
+            --spec-path "$SPEC_PATH" \
+            --registry-path "$REGISTRY_PATH" \
+            --production-pointer-path "$EVIDENCE_DIR/production-pointer-before.json" \
+            --output "$EVIDENCE_DIR/operator-preflight.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          preflight = json.loads(
+              Path(os.environ["EVIDENCE_DIR"], "operator-preflight.json").read_text()
+          )
+          assert preflight["status"] == "ready"
+          assert preflight["lifecycle_state"] == "production_promoted"
+          assert preflight["next_action"] == "run_idempotent_replay_and_close"
+          assert preflight["production_workflow_inputs"] == ["request_path"]
+          assert preflight["mutations_performed"] == []
+          PY
+
+      - name: Validate immutable idempotent replay approval
+        run: |
+          set -euo pipefail
+          python scripts/validate_idempotent_replay_approval.py \
+            --approval-path "$APPROVAL_PATH" \
+            --spec-path "$SPEC_PATH" \
+            --request-path "$REQUEST_PATH" \
+            --promotion-observation-path "$PROMOTION_PATH" \
+            --lifecycle-path "$LIFECYCLE_PATH" \
+            --output "$EVIDENCE_DIR/approval-validation.json"
+
+      - name: Run replay approval and M9 governance tests
+        run: |
+          set -euo pipefail
+          python -m pytest -q \
+            tests/test_idempotent_replay_approval.py \
+            tests/test_m9_request_spec.py \
+            tests/test_m9_planned_batch.py
+
+      - name: Verify production pointer remained byte-exact unchanged
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store
+
+          root = Path(os.environ["EVIDENCE_DIR"])
+          before = (root / "production-pointer-before.json").read_bytes()
+          store = create_object_store(Settings.from_env())
+          after = store.get("channels/production.json")
+          assert after == before
+          pointer = json.loads(after)
+          pointer_sha256 = hashlib.sha256(after).hexdigest()
+          (root / "production-pointer-after.json").write_bytes(after)
+          (root / "production-after-observation.json").write_text(
+              json.dumps(
+                  {
+                      "status": "passed",
+                      "release_id": pointer["release_id"],
+                      "manifest_sha256": pointer["manifest_sha256"],
+                      "pointer_sha256": pointer_sha256,
+                      "byte_exact_unchanged": True,
+                      "read_only": True,
+                      "mutations_performed": [],
+                  },
+                  indent=2,
+                  sort_keys=True,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Write non-mutating replay approval summary
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["EVIDENCE_DIR"])
+          validation = json.loads((root / "approval-validation.json").read_text())
+          before = json.loads((root / "production-before-observation.json").read_text())
+          after = json.loads((root / "production-after-observation.json").read_text())
+          preflight = json.loads((root / "operator-preflight.json").read_text())
+
+          assert validation["status"] == "approved"
+          assert validation["single_idempotent_replay_dispatch_authorized"] is True
+          assert validation["permanent_ledger_append_on_success_authorized"] is True
+          assert validation["closure_reconciliation_after_success_authorized"] is True
+          assert validation["rollback_authorized"] is False
+          assert validation["additional_replays_authorized"] is False
+          assert validation["replay_dispatched"] is False
+          assert validation["production_mutated"] is False
+          assert validation["permanent_ledger_appended"] is False
+          assert validation["mutations_performed"] == []
+          assert validation["next_action"] == "dispatch_idempotent_replay"
+          assert before["pointer_sha256"] == after["pointer_sha256"]
+          assert after["byte_exact_unchanged"] is True
+          assert preflight["lifecycle_state"] == "production_promoted"
+
+          summary = {
+              "schema_version": "m9-idempotent-replay-approval-readiness/v1",
+              "status": "approved_and_ready_for_single_replay_dispatch",
+              "batch_id": validation["batch_id"],
+              "approval_issue": validation["approval_issue"],
+              "approval_path": validation["approval_path"],
+              "approval_sha256": validation["approval_sha256"],
+              "authorized_by": validation["authorized_by"],
+              "authorized_at": validation["authorized_at"],
+              "operation_id": validation["operation_id"],
+              "request_path": validation["request_path"],
+              "request_sha256": validation["request_sha256"],
+              "target_release_id": validation["target_release_id"],
+              "target_manifest_sha256": validation["target_manifest_sha256"],
+              "target_pointer_sha256": validation["target_pointer_sha256"],
+              "original_promotion_run": validation["original_promotion_run"],
+              "original_promotion_artifact": validation[
+                  "original_promotion_artifact"
+              ],
+              "production_workflow_inputs": preflight[
+                  "production_workflow_inputs"
+              ],
+              "single_idempotent_replay_dispatch_authorized": True,
+              "closure_reconciliation_after_success_authorized": True,
+              "replay_dispatched": False,
+              "production_pointer_byte_exact_unchanged": True,
+              "production_mutated": False,
+              "permanent_ledger_appended": False,
+              "rollback_authorized": False,
+              "additional_replays_authorized": False,
+              "mutations_performed": [],
+              "next_action": "dispatch_idempotent_replay",
+          }
+          output = root / "summary.json"
+          output.write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          print("M9_IDEMPOTENT_REPLAY_APPROVAL_PASSED")
+          PY
+
+      - name: Upload replay approval evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m9-idempotent-replay-approval-${{ github.sha }}
+          path: evidence/m9-idempotent-replay-approval/
+          if-no-files-found: error
+          retention-days: 90
