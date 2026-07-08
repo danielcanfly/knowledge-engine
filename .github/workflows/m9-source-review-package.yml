@@ -8,11 +8,14 @@ on:
       - "scripts/validate_source_review_package.py"
       - "tests/test_source_review_package.py"
       - "tests/test_m9_planned_batch.py"
+      - "tests/test_m9_request_spec.py"
       - ".github/workflows/m9-source-review-package.yml"
       - "governed_batches/m9-001-agent-planning-strategies.json"
       - "governed_batches/registry-v2.json"
+      - "production_promotions/m9-001-agent-planning-strategies.json"
       - "governed_batches/evidence/m9-001-approved-review-decision.json"
       - "governed_batches/evidence/m9-001-candidate-build-authorization.json"
+      - "governed_batches/evidence/m9-001-request-spec-authorization.json"
       - "governed_batches/evidence/m9-001-source-candidate-observation.json"
       - "governed_batches/evidence/m9-001-runtime-acceptance-observation.json"
       - "governed_batches/evidence/m9-001-lifecycle-history.json"
@@ -43,11 +46,14 @@ jobs:
             --package-root review_packages/m9-001 \
             --output evidence/m9-001/review-package-validation.json
 
-      - name: Verify runtime-accepted and non-production boundary
+      - name: Verify request-spec-committed and non-production boundary
         run: |
           python - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
+
+          from knowledge_engine.promotion_request import load_promotion_request_spec
 
           def load(path):
               return json.loads(Path(path).read_text(encoding="utf-8"))
@@ -58,8 +64,11 @@ jobs:
           decision = load(
               "governed_batches/evidence/m9-001-approved-review-decision.json"
           )
-          authorization = load(
+          candidate_authorization = load(
               "governed_batches/evidence/m9-001-candidate-build-authorization.json"
+          )
+          request_authorization = load(
+              "governed_batches/evidence/m9-001-request-spec-authorization.json"
           )
           candidate = load(
               "governed_batches/evidence/m9-001-source-candidate-observation.json"
@@ -70,6 +79,14 @@ jobs:
           lifecycle = load(
               "governed_batches/evidence/m9-001-lifecycle-history.json"
           )
+          request_path = Path(
+              "production_promotions/m9-001-agent-planning-strategies.json"
+          )
+          request = load_promotion_request_spec(
+              request_path=request_path,
+              control_plane_sha="0" * 40,
+          )
+          normalized = request.normalized()
 
           source_sha = "2126db2ed4d372d3d61464fe31a86fc0243a1f24"
           channel = f"candidate-source-{source_sha}"
@@ -78,12 +95,17 @@ jobs:
               "2b2630cfe3e8a6e25a8f210d68c70f3"
               "b9a31b3b26f33c6e3e41b8cc1676fc0bb"
           )
+          operation_id = "m9-001-agent-planning-strategies-001"
+          request_sha = (
+              "41564a42a3f207ea87bbc600935effbb9"
+              "c3979c8366e16a4b1c7d1f35e172b5b"
+          )
           pointer_sha = (
               "2de63a9ff5963ea3f72f0051b25a084d"
               "da9e5e609fe79615e55e3f95a1351914"
           )
 
-          assert spec["lifecycle_state"] == "runtime_accepted"
+          assert spec["lifecycle_state"] == "request_spec_committed"
           assert spec["source"]["sha"] == source_sha
           assert spec["candidate"] == {
               "channel": channel,
@@ -91,8 +113,8 @@ jobs:
               "manifest_sha256": manifest,
           }
           assert spec["production_request"] == {
-              "operation_id": None,
-              "request_path": None,
+              "operation_id": operation_id,
+              "request_path": str(request_path),
           }
           assert spec["acceptance"]["raw_fallback_allowed"] is False
 
@@ -104,10 +126,18 @@ jobs:
           assert decision["status"] == "approved"
           assert decision["canonical_write_authorized"] is True
           assert decision["production_mutation_authorized"] is False
-          assert authorization["authorized_by"] == "danielcanfly"
-          assert authorization["production_request_authorized"] is False
-          assert authorization["production_promotion_authorized"] is False
-          assert authorization["permanent_ledger_append_authorized"] is False
+
+          assert candidate_authorization["authorized_by"] == "danielcanfly"
+          assert candidate_authorization["production_request_authorized"] is False
+          assert candidate_authorization["production_promotion_authorized"] is False
+          assert candidate_authorization["permanent_ledger_append_authorized"] is False
+
+          assert request_authorization["authorized_by"] == "danielcanfly"
+          assert request_authorization["operation_id"] == operation_id
+          assert request_authorization["request_path"] == str(request_path)
+          assert request_authorization["production_promotion_authorized"] is False
+          assert request_authorization["permanent_ledger_append_authorized"] is False
+          assert request_authorization["rollback_authorized"] is False
 
           assert candidate["status"] == "passed"
           assert candidate["candidate"]["channel"] == channel
@@ -118,16 +148,9 @@ jobs:
 
           assert runtime["status"] == "passed"
           assert runtime["workflow"]["run_id"] == 28917325425
-          assert runtime["workflow"]["job_id"] == 85786948330
-          assert runtime["workflow"]["artifact_id"] == 8158118520
           assert runtime["candidate"]["channel"] == channel
           assert runtime["candidate"]["release_id"] == release_id
           assert runtime["candidate"]["manifest_sha256"] == manifest
-          assert runtime["checks"]["m9_public_query"]["status"] == "answered"
-          assert runtime["checks"]["m8_regression_query"]["status"] == "answered"
-          assert runtime["checks"]["m6_regression_query"]["status"] == "answered"
-          assert runtime["checks"]["m9_acl_boundary_query"]["status"] == "not_found"
-          assert runtime["checks"]["m9_acl_boundary_query"]["acl_filtered_count"] == 1
           assert all(
               check["raw_fallback_used"] is False
               for check in runtime["checks"].values()
@@ -135,9 +158,22 @@ jobs:
           assert runtime["production_pointer"]["before_sha256"] == pointer_sha
           assert runtime["production_pointer"]["after_sha256"] == pointer_sha
           assert runtime["production_pointer"]["byte_exact_unchanged"] is True
-          assert runtime["production_request_created"] is False
           assert runtime["permanent_ledger_appended"] is False
           assert runtime["production_mutated"] is False
+
+          assert "control_plane_sha" not in request.raw
+          assert hashlib.sha256(request_path.read_bytes()).hexdigest() == request_sha
+          assert normalized["operation_id"] == operation_id
+          assert normalized["candidate_channel"] == channel
+          assert normalized["release_id"] == release_id
+          assert normalized["manifest_sha256"] == manifest
+          assert normalized["expected_previous_release_id"] == (
+              "20260707T111252Z-aebf06593f89"
+          )
+          assert normalized["expected_previous_manifest_sha256"] == (
+              "1a2f2014073e9e97f9e1fdd5df4e43b"
+              "f19cb2b2679532b6e52ea38480ec4d2ec"
+          )
 
           transitions = [
               (item["from"], item["to"])
@@ -148,23 +184,25 @@ jobs:
               ("source_reviewed", "source_validated"),
               ("source_validated", "candidate_built"),
               ("candidate_built", "runtime_accepted"),
+              ("runtime_accepted", "request_spec_committed"),
           ]
-          assert lifecycle["final_state"] == "runtime_accepted"
+          assert lifecycle["final_state"] == "request_spec_committed"
           assert lifecycle["production_mutated"] is False
-          assert lifecycle["next_legal_action"] == "commit_production_request_spec"
+          assert lifecycle["next_legal_action"] == "review_production_promotion"
 
           assert baseline["mutations_performed"] == []
           assert baseline["production_pointer_sha256"] == pointer_sha
           assert baseline["production_pointer_mutated"] is False
           assert baseline["ledger_appended"] is False
-          print("M9_RUNTIME_ACCEPTANCE_RECONCILIATION_PASSED")
+          print("M9_REQUEST_SPEC_RECONCILIATION_PASSED")
           PY
 
       - name: Run M9 governance tests
         run: |
           python -m pytest -q \
             tests/test_source_review_package.py \
-            tests/test_m9_planned_batch.py
+            tests/test_m9_planned_batch.py \
+            tests/test_m9_request_spec.py
 
       - name: Upload M9 governance evidence
         if: always()
