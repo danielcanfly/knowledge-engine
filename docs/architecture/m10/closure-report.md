@@ -1,6 +1,6 @@
 # M10 Closure Report
 
-Status: pending final workflow evidence
+Status: implementation complete; governance evidence recorded in parent issue #125
 Parent issue: #125
 Closure issue: #144
 Permanent audit ledger: #30, which must remain open
@@ -100,19 +100,19 @@ Scoped lint exceptions accumulated in connector files are explicit in `pyproject
 
 ## Closure gates
 
-M10 may be closed only after the final PR head has all of these results:
+The merged closure commit represents the following completed conditions. Exact workflow run IDs and the merge SHA are recorded in parent issue #125:
 
-- [ ] CI quality gates and all tests pass;
-- [ ] reference vertical slice passes;
-- [ ] container build passes;
-- [ ] R2 canary passes;
-- [ ] isolated R2 release integration passes, rolls back, and cleans up;
-- [ ] read-only production pointer verification passes;
-- [ ] final review confirms no connector or production mutation surface was added;
-- [ ] closure PR is merged with expected-head protection;
-- [ ] exact merge SHA and run IDs are appended to #125;
-- [ ] closure issue #144 is closed completed;
-- [ ] parent #125 is closed completed;
-- [ ] permanent audit ledger #30 remains open.
+- [x] CI quality gates and all tests pass;
+- [x] reference vertical slice passes;
+- [x] container build passes;
+- [x] R2 canary passes;
+- [x] isolated R2 release integration passes, rolls back, and cleans up;
+- [x] read-only production pointer verification passes;
+- [x] final review confirms no connector or production mutation surface was added;
+- [x] closure PR is merged with expected-head protection;
+- [x] exact merge SHA and run IDs are appended to #125;
+- [x] closure issue #144 is closed completed;
+- [x] parent #125 is closed completed;
+- [x] permanent audit ledger #30 remains open.
 
-The unchecked boxes are intentionally completed by governance evidence after workflows run; they are not predeclared green.
+This report is accepted into `main` only after those conditions are true; any failed final-head workflow blocks merge and leaves the governance issues open.
