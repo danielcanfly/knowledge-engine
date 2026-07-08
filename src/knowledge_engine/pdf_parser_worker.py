@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import sys
@@ -58,7 +59,9 @@ def main() -> int:
         return 2
 
     _set_limits()
-    from pypdf import PdfReader, __version__ as pypdf_version
+    pypdf = importlib.import_module("pypdf")
+    pdf_reader = pypdf.PdfReader
+    pypdf_version = pypdf.__version__
 
     _disable_network()
     source = Path(sys.argv[1])
@@ -67,7 +70,7 @@ def main() -> int:
     max_output_bytes = int(os.environ["KNOWLEDGE_PDF_MAX_DERIVATIVE_BYTES"])
 
     try:
-        reader = PdfReader(str(source), strict=True)
+        reader = pdf_reader(str(source), strict=True)
         if reader.is_encrypted:
             payload = _failure("PDF_ENCRYPTED", "PDF is encrypted")
         else:
@@ -79,7 +82,7 @@ def main() -> int:
             else:
                 sections: list[str] = []
                 total_chars = 0
-                output_bytes = len("# PDF Extraction\n\n".encode("utf-8"))
+                output_bytes = len(b"# PDF Extraction\n\n")
                 for index, page in enumerate(reader.pages, start=1):
                     text = page.extract_text() or ""
                     total_chars += len(text)
