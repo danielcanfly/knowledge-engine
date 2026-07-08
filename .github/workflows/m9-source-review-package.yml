@@ -14,6 +14,7 @@ on:
       - "governed_batches/evidence/m9-001-approved-review-decision.json"
       - "governed_batches/evidence/m9-001-candidate-build-authorization.json"
       - "governed_batches/evidence/m9-001-source-candidate-observation.json"
+      - "governed_batches/evidence/m9-001-runtime-acceptance-observation.json"
       - "governed_batches/evidence/m9-001-lifecycle-history.json"
       - "governed_batches/evidence/m9-001-production-baseline.json"
 
@@ -42,7 +43,7 @@ jobs:
             --package-root review_packages/m9-001 \
             --output evidence/m9-001/review-package-validation.json
 
-      - name: Verify reconciled candidate and non-production boundary
+      - name: Verify runtime-accepted and non-production boundary
         run: |
           python - <<'PY'
           import json
@@ -60,8 +61,11 @@ jobs:
           authorization = load(
               "governed_batches/evidence/m9-001-candidate-build-authorization.json"
           )
-          observation = load(
+          candidate = load(
               "governed_batches/evidence/m9-001-source-candidate-observation.json"
+          )
+          runtime = load(
+              "governed_batches/evidence/m9-001-runtime-acceptance-observation.json"
           )
           lifecycle = load(
               "governed_batches/evidence/m9-001-lifecycle-history.json"
@@ -74,8 +78,12 @@ jobs:
               "2b2630cfe3e8a6e25a8f210d68c70f3"
               "b9a31b3b26f33c6e3e41b8cc1676fc0bb"
           )
+          pointer_sha = (
+              "2de63a9ff5963ea3f72f0051b25a084d"
+              "da9e5e609fe79615e55e3f95a1351914"
+          )
 
-          assert spec["lifecycle_state"] == "candidate_built"
+          assert spec["lifecycle_state"] == "runtime_accepted"
           assert spec["source"]["sha"] == source_sha
           assert spec["candidate"] == {
               "channel": channel,
@@ -88,8 +96,6 @@ jobs:
           }
           assert spec["acceptance"]["raw_fallback_allowed"] is False
 
-          # The reviewer-facing proposal remains immutable and pending. Decisions
-          # and later authorizations live in separate append-only evidence records.
           assert validation["status"] == "passed"
           assert validation["review_status"] == "pending_human_review"
           assert validation["source_change_ready"] is False
@@ -97,26 +103,41 @@ jobs:
           assert validation["mutations_performed"] == []
           assert decision["status"] == "approved"
           assert decision["canonical_write_authorized"] is True
-          assert decision["candidate_build_authorized"] is False
           assert decision["production_mutation_authorized"] is False
-
           assert authorization["authorized_by"] == "danielcanfly"
           assert authorization["production_request_authorized"] is False
           assert authorization["production_promotion_authorized"] is False
           assert authorization["permanent_ledger_append_authorized"] is False
 
-          assert observation["status"] == "passed"
-          assert observation["source"]["sha"] == source_sha
-          assert observation["candidate"]["channel"] == channel
-          assert observation["candidate"]["release_id"] == release_id
-          assert observation["candidate"]["manifest_sha256"] == manifest
-          assert observation["candidate"]["reproducibility_passed"] is True
-          assert observation["candidate"]["production_pointer_unchanged"] is True
-          assert observation["limitations"]["targeted_m9_public_query_not_yet_run"] is True
-          assert observation["limitations"]["targeted_m9_acl_query_not_yet_run"] is True
-          assert observation["limitations"][
-              "raw_fallback_not_reported_by_generic_candidate_artifact"
-          ] is True
+          assert candidate["status"] == "passed"
+          assert candidate["candidate"]["channel"] == channel
+          assert candidate["candidate"]["release_id"] == release_id
+          assert candidate["candidate"]["manifest_sha256"] == manifest
+          assert candidate["candidate"]["reproducibility_passed"] is True
+          assert candidate["production"]["pointer_mutated"] is False
+
+          assert runtime["status"] == "passed"
+          assert runtime["workflow"]["run_id"] == 28917325425
+          assert runtime["workflow"]["job_id"] == 85786948330
+          assert runtime["workflow"]["artifact_id"] == 8158118520
+          assert runtime["candidate"]["channel"] == channel
+          assert runtime["candidate"]["release_id"] == release_id
+          assert runtime["candidate"]["manifest_sha256"] == manifest
+          assert runtime["checks"]["m9_public_query"]["status"] == "answered"
+          assert runtime["checks"]["m8_regression_query"]["status"] == "answered"
+          assert runtime["checks"]["m6_regression_query"]["status"] == "answered"
+          assert runtime["checks"]["m9_acl_boundary_query"]["status"] == "not_found"
+          assert runtime["checks"]["m9_acl_boundary_query"]["acl_filtered_count"] == 1
+          assert all(
+              check["raw_fallback_used"] is False
+              for check in runtime["checks"].values()
+          )
+          assert runtime["production_pointer"]["before_sha256"] == pointer_sha
+          assert runtime["production_pointer"]["after_sha256"] == pointer_sha
+          assert runtime["production_pointer"]["byte_exact_unchanged"] is True
+          assert runtime["production_request_created"] is False
+          assert runtime["permanent_ledger_appended"] is False
+          assert runtime["production_mutated"] is False
 
           transitions = [
               (item["from"], item["to"])
@@ -126,20 +147,17 @@ jobs:
               ("planned", "source_reviewed"),
               ("source_reviewed", "source_validated"),
               ("source_validated", "candidate_built"),
+              ("candidate_built", "runtime_accepted"),
           ]
-          assert lifecycle["final_state"] == "candidate_built"
+          assert lifecycle["final_state"] == "runtime_accepted"
           assert lifecycle["production_mutated"] is False
+          assert lifecycle["next_legal_action"] == "commit_production_request_spec"
 
-          # The M8 production baseline is immutable. Candidate publication may
-          # create candidate R2 objects, but it must not change production.
           assert baseline["mutations_performed"] == []
+          assert baseline["production_pointer_sha256"] == pointer_sha
           assert baseline["production_pointer_mutated"] is False
           assert baseline["ledger_appended"] is False
-          assert observation["production"]["pointer_mutated"] is False
-          assert observation["production"]["request_spec_created"] is False
-          assert observation["production"]["ledger_appended"] is False
-          assert observation["production"]["promotion_performed"] is False
-          print("M9_CANDIDATE_RECONCILIATION_PASSED")
+          print("M9_RUNTIME_ACCEPTANCE_RECONCILIATION_PASSED")
           PY
 
       - name: Run M9 governance tests
