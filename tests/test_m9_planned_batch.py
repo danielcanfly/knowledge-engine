@@ -22,8 +22,11 @@ APPROVED_REVIEW = Path(
 CANDIDATE_AUTH = Path(
     "governed_batches/evidence/m9-001-candidate-build-authorization.json"
 )
-OBSERVATION = Path(
+CANDIDATE_OBSERVATION = Path(
     "governed_batches/evidence/m9-001-source-candidate-observation.json"
+)
+RUNTIME_OBSERVATION = Path(
+    "governed_batches/evidence/m9-001-runtime-acceptance-observation.json"
 )
 LIFECYCLE = Path("governed_batches/evidence/m9-001-lifecycle-history.json")
 
@@ -33,13 +36,16 @@ RELEASE_ID = "20260708T040116Z-69a9f445699a"
 MANIFEST_SHA256 = (
     "2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb"
 )
+PRODUCTION_POINTER_SHA256 = (
+    "2de63a9ff5963ea3f72f0051b25a084dda9e5e609fe79615e55e3f95a1351914"
+)
 
 
 def _load(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_m9_candidate_built_state_is_exact_and_non_production() -> None:
+def test_m9_runtime_accepted_state_is_exact_and_non_production() -> None:
     spec = load_batch_spec(SPEC)
     raw_registry = _load(REGISTRY)
     registry = validate_batch_registry(load_batch_registry(REGISTRY))
@@ -48,12 +54,13 @@ def test_m9_candidate_built_state_is_exact_and_non_production() -> None:
     production_baseline = _load(PRODUCTION_BASELINE)
     approved_review = _load(APPROVED_REVIEW)
     candidate_auth = _load(CANDIDATE_AUTH)
-    observation = _load(OBSERVATION)
+    candidate_observation = _load(CANDIDATE_OBSERVATION)
+    runtime_observation = _load(RUNTIME_OBSERVATION)
     lifecycle = _load(LIFECYCLE)
 
     assert spec.batch_id == "m9-001-agent-planning-strategies"
-    assert spec.lifecycle_state == "candidate_built"
-    assert next_action(spec.lifecycle_state) == "run_runtime_acceptance"
+    assert spec.lifecycle_state == "runtime_accepted"
+    assert next_action(spec.lifecycle_state) == "commit_production_request_spec"
     assert spec.raw["source"] == {
         "repository": "danielcanfly/knowledge-source",
         "paths": ["bundle/concepts/agent-planning-strategies.md"],
@@ -74,7 +81,7 @@ def test_m9_candidate_built_state_is_exact_and_non_production() -> None:
     assert registry["batch_count"] == 2
     assert registry["batches"][-1] == {
         "batch_id": spec.batch_id,
-        "lifecycle_state": "candidate_built",
+        "lifecycle_state": "runtime_accepted",
         "spec_path": str(SPEC),
     }
     assert raw_registry["batches"][-1]["candidate_channel"] == CANDIDATE_CHANNEL
@@ -82,7 +89,6 @@ def test_m9_candidate_built_state_is_exact_and_non_production() -> None:
     assert origin["origin_commit"] == "27e2fe996f878f2129bf510d6a326c02f7d87be5"
     assert origin["approved_scope_option"] == "A"
     assert {item["language"] for item in origin["origins"]} == {"en", "zh"}
-
     assert source_baseline["source_sha"] == (
         "97979c1c07d6208055d2937c68e500ba49a6ed57"
     )
@@ -91,35 +97,18 @@ def test_m9_candidate_built_state_is_exact_and_non_production() -> None:
     assert approved_review["status"] == "approved"
     assert approved_review["canonical_write_authorized"] is True
     assert approved_review["production_mutation_authorized"] is False
-
     assert candidate_auth["authorized_by"] == "danielcanfly"
-    assert candidate_auth["source_pr"] == {
-        "repository": "danielcanfly/knowledge-source",
-        "number": 13,
-    }
     assert candidate_auth["production_request_authorized"] is False
     assert candidate_auth["production_promotion_authorized"] is False
     assert candidate_auth["permanent_ledger_append_authorized"] is False
 
-    source = observation["source"]
-    candidate = observation["candidate"]
-    limitations = observation["limitations"]
-    production = observation["production"]
-    assert source["sha"] == SOURCE_SHA
-    assert source["validation_run"] == 28916504659
-    assert source["validation_artifact"] == 8157822857
-    assert source["validation_findings"] == 0
+    candidate = candidate_observation["candidate"]
+    limitations = candidate_observation["limitations"]
+    production = candidate_observation["production"]
     assert candidate["channel"] == CANDIDATE_CHANNEL
-    assert candidate["dispatch_run"] == 28916529017
     assert candidate["release_id"] == RELEASE_ID
     assert candidate["manifest_sha256"] == MANIFEST_SHA256
     assert candidate["reproducibility_passed"] is True
-    assert candidate["internal_status"] == "answered"
-    assert candidate["internal_citation_count"] == 1
-    assert candidate["public_status"] == "not_found"
-    assert candidate["public_result_count"] == 0
-    assert candidate["public_acl_filtered_count"] == 1
-    assert candidate["production_pointer_unchanged"] is True
     assert limitations["targeted_m9_public_query_not_yet_run"] is True
     assert limitations["targeted_m9_acl_query_not_yet_run"] is True
     assert limitations["raw_fallback_not_reported_by_generic_candidate_artifact"] is True
@@ -128,14 +117,56 @@ def test_m9_candidate_built_state_is_exact_and_non_production() -> None:
     assert production["ledger_appended"] is False
     assert production["promotion_performed"] is False
 
+    assert runtime_observation["status"] == "passed"
+    assert runtime_observation["framework_merge_commit"] == (
+        "1bc6ffd1c7792d101d4098724575f9a0c8f6ff37"
+    )
+    assert runtime_observation["workflow"]["run_id"] == 28917325425
+    assert runtime_observation["workflow"]["job_id"] == 85786948330
+    assert runtime_observation["workflow"]["artifact_id"] == 8158118520
+    assert runtime_observation["workflow"]["artifact_digest"] == (
+        "sha256:7408f05eec1660894fedf45d74c88a9f3e2240d3127e0ba48e46766792178cb1"
+    )
+    assert runtime_observation["candidate"] == {
+        "channel": CANDIDATE_CHANNEL,
+        "release_id": RELEASE_ID,
+        "manifest_sha256": MANIFEST_SHA256,
+    }
+    checks = runtime_observation["checks"]
+    assert checks["m9_public_query"]["status"] == "answered"
+    assert checks["m9_public_query"]["raw_fallback_used"] is False
+    assert checks["m8_regression_query"]["status"] == "answered"
+    assert checks["m8_regression_query"]["raw_fallback_used"] is False
+    assert checks["m6_regression_query"]["status"] == "answered"
+    assert checks["m6_regression_query"]["raw_fallback_used"] is False
+    assert checks["m9_acl_boundary_query"] == {
+        "query": "cobalt heron checkpoint",
+        "status": "not_found",
+        "result_count": 0,
+        "acl_filtered_count": 1,
+        "raw_fallback_used": False,
+        "payload_sha256": (
+            "89fe99e5479287e9ac478629dbda94f3b1d6e0d009739319ae7ecff0e110e451"
+        ),
+    }
+    pointer = runtime_observation["production_pointer"]
+    assert pointer["before_sha256"] == PRODUCTION_POINTER_SHA256
+    assert pointer["after_sha256"] == PRODUCTION_POINTER_SHA256
+    assert pointer["byte_exact_unchanged"] is True
+    assert runtime_observation["production_request_created"] is False
+    assert runtime_observation["permanent_ledger_appended"] is False
+    assert runtime_observation["production_mutated"] is False
+    assert runtime_observation["next_legal_action"] == "commit_production_request_spec"
+
     transitions = [(item["from"], item["to"]) for item in lifecycle["transitions"]]
     assert transitions == [
         ("planned", "source_reviewed"),
         ("source_reviewed", "source_validated"),
         ("source_validated", "candidate_built"),
+        ("candidate_built", "runtime_accepted"),
     ]
     assert lifecycle["initial_state"] == "planned"
-    assert lifecycle["final_state"] == "candidate_built"
+    assert lifecycle["final_state"] == "runtime_accepted"
     assert lifecycle["source_identity"] == {"sha": SOURCE_SHA}
     assert lifecycle["candidate_identity"] == {
         "channel": CANDIDATE_CHANNEL,
@@ -143,10 +174,13 @@ def test_m9_candidate_built_state_is_exact_and_non_production() -> None:
         "manifest_sha256": MANIFEST_SHA256,
     }
     assert lifecycle["production_mutated"] is False
-    assert lifecycle["next_legal_action"] == "run_targeted_runtime_acceptance"
+    assert lifecycle["next_legal_action"] == "commit_production_request_spec"
 
     assert production_baseline["production_release_id"] == (
         "20260707T111252Z-aebf06593f89"
+    )
+    assert production_baseline["production_pointer_sha256"] == (
+        PRODUCTION_POINTER_SHA256
     )
     assert production_baseline["mutations_performed"] == []
     assert production_baseline["production_pointer_mutated"] is False
