@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-os.local/schemas/compiler-synthesis-proposal-v1.schema.json",
+  "title": "Knowledge Compiler Synthesis Proposal v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "proposal_id",
+    "compiler_run_id",
+    "proposal_type",
+    "resolution_ids",
+    "evidence_refs",
+    "target_paths",
+    "content",
+    "effective_audience",
+    "review_status",
+    "source_validation_required",
+    "human_review_required",
+    "direct_apply_permitted",
+    "canonical_write_permitted",
+    "github_write_permitted",
+    "production_write_permitted"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-compiler-synthesis-proposal/v1"
+    },
+    "proposal_id": {
+      "type": "string",
+      "pattern": "^prop_[a-f0-9]{64}$"
+    },
+    "compiler_run_id": {
+      "type": "string",
+      "pattern": "^crun_[a-f0-9]{64}$"
+    },
+    "proposal_type": {
+      "enum": [
+        "concept_page",
+        "comparison_page",
+        "entity_page",
+        "index_change",
+        "citation_change",
+        "relationship_change",
+        "source_patch"
+      ]
+    },
+    "resolution_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^cres_[a-f0-9]{64}$"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^(?:smap|cand|cres)_[a-f0-9]{64}$"
+      }
+    },
+    "target_paths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512,
+        "pattern": "^(?:bundle|provenance|registry)/[A-Za-z0-9._/-]+$"
+      }
+    },
+    "content": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "summary",
+        "claims"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "claims": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/claim"
+          }
+        }
+      }
+    },
+    "effective_audience": {
+      "enum": [
+        "public",
+        "internal",
+        "confidential",
+        "restricted"
+      ]
+    },
+    "review_status": {
+      "const": "pending_human_review"
+    },
+    "source_validation_required": {
+      "const": true
+    },
+    "human_review_required": {
+      "const": true
+    },
+    "direct_apply_permitted": {
+      "const": false
+    },
+    "canonical_write_permitted": {
+      "const": false
+    },
+    "github_write_permitted": {
+      "const": false
+    },
+    "production_write_permitted": {
+      "const": false
+    }
+  },
+  "$defs": {
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_id",
+        "text",
+        "candidate_ids",
+        "evidence_refs",
+        "unsupported"
+      ],
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "pattern": "^claim_[a-z0-9][a-z0-9_-]{2,79}$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "candidate_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^cand_[a-f0-9]{64}$"
+          }
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^smap_[a-f0-9]{64}$"
+          }
+        },
+        "unsupported": {
+          "const": false
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-os.local/schemas/compiler-source-map-v1.schema.json",
+  "title": "Knowledge Compiler Source Map v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_map_id",
+    "compiler_run_id",
+    "snapshot_id",
+    "derivative_id",
+    "normalized_sha256",
+    "segments"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-compiler-source-map/v1"
+    },
+    "source_map_id": {
+      "type": "string",
+      "pattern": "^smap_[a-f0-9]{64}$"
+    },
+    "compiler_run_id": {
+      "type": "string",
+      "pattern": "^crun_[a-f0-9]{64}$"
+    },
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^(?:snap_[a-f0-9]{64}|capture_[a-f0-9]{32})$"
+    },
+    "derivative_id": {
+      "type": "string",
+      "pattern": "^drv_[a-f0-9]{64}$"
+    },
+    "normalized_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "segments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/segment"
+      }
+    }
+  },
+  "$defs": {
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segment_ordinal",
+        "normalized_start_char",
+        "normalized_end_char",
+        "normalized_start_line",
+        "normalized_end_line",
+        "quote",
+        "quote_sha256"
+      ],
+      "properties": {
+        "segment_ordinal": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "normalized_start_char": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "normalized_end_char": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "normalized_start_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "normalized_end_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_start_byte": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "source_end_byte": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000000
+        },
+        "quote_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    }
+  }
+}
