@@ -1,0 +1,71 @@
+{
+  "schema_version": "idempotent-replay-approval/v1",
+  "batch_id": "m9-001-agent-planning-strategies",
+  "decision": "approve",
+  "authorized_by": "danielcanfly",
+  "authorized_at": "2026-07-08T05:31:42Z",
+  "authorization_text": "M9.9 Review and Explicitly Approve Idempotent Replay",
+  "approval_issue": 119,
+  "request": {
+    "operation_id": "m9-001-agent-planning-strategies-001",
+    "request_path": "production_promotions/m9-001-agent-planning-strategies.json",
+    "request_sha256": "41564a42a3f207ea87bbc600935effbb9c3979c8366e16a4b1c7d1f35e172b5b",
+    "request_merge_commit": "ca11751a69e800f9dcc239dbb304c60f0cdc7c82"
+  },
+  "original_promotion": {
+    "run_id": 28919098263,
+    "job_id": 85792150635,
+    "artifact_id": 8158736427,
+    "artifact_digest": "sha256:4ff4418ea5e792d24369846dfb39930fa6815fc5c42a3b8d62a90a9fa9806d7a",
+    "control_plane_sha": "230d57d777a3c7898f789407f5372761541eef6c",
+    "precondition_state": "ready_to_promote",
+    "status": "promoted",
+    "idempotent": false,
+    "ledger_comment_id": 4911573318,
+    "reconciliation_merge_commit": "0650288d025643e5bc817e8c59e26f0956eb6567"
+  },
+  "current_production": {
+    "release_id": "20260708T040116Z-69a9f445699a",
+    "manifest_sha256": "2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb",
+    "pointer_sha256": "38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5"
+  },
+  "required_replay_outcome": {
+    "precondition_state": "already_target",
+    "promotion_status": "already_promoted",
+    "idempotent": true,
+    "production_pointer_byte_exact_unchanged": true,
+    "operation_intent_reused": true,
+    "promotion_receipt_reused": true
+  },
+  "required_post_replay_acceptance": {
+    "public_query": "How do bounded ReAct, Plan-and-Execute, adaptive replanning, hierarchical planning, and HTN differ, and how should they be combined in a production agent?",
+    "expected_public_status": "answered",
+    "expected_citation_url": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-3/",
+    "acl_query": "cobalt heron checkpoint",
+    "expected_acl_status": "not_found",
+    "raw_fallback_allowed": false
+  },
+  "authorization_scope": {
+    "single_idempotent_replay_dispatch_authorized": true,
+    "verify_existing_intent_authorized": true,
+    "verify_existing_receipt_authorized": true,
+    "post_replay_acceptance_authorized": true,
+    "permanent_ledger_append_on_success_authorized": true,
+    "closure_reconciliation_after_success_authorized": true,
+    "request_modification_authorized": false,
+    "operation_id_replacement_authorized": false,
+    "target_substitution_authorized": false,
+    "baseline_weakening_authorized": false,
+    "raw_fallback_authorized": false,
+    "rollback_authorized": false,
+    "new_non_idempotent_promotion_authorized": false,
+    "additional_replays_authorized": false
+  },
+  "lifecycle_state_before_replay": "production_promoted",
+  "lifecycle_transition_authorized_after_successful_replay": "production_promoted -> closed",
+  "replay_dispatched_during_approval": false,
+  "production_mutated_during_approval": false,
+  "permanent_ledger_appended_during_approval": false,
+  "mutations_performed": [],
+  "next_action": "dispatch_idempotent_replay"
+}
