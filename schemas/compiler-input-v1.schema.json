@@ -1,0 +1,343 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-os.local/schemas/compiler-input-v1.schema.json",
+  "title": "Knowledge Compiler Input v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "compiler_run_id",
+    "snapshot_ref",
+    "derivative_ref",
+    "admission_ref",
+    "effective_policy",
+    "compiler_identity"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-compiler-input/v1"
+    },
+    "compiler_run_id": {
+      "type": "string",
+      "pattern": "^crun_[a-f0-9]{64}$"
+    },
+    "snapshot_ref": {
+      "$ref": "#/$defs/snapshotRef"
+    },
+    "derivative_ref": {
+      "$ref": "#/$defs/derivativeRef"
+    },
+    "admission_ref": {
+      "$ref": "#/$defs/admissionRef"
+    },
+    "effective_policy": {
+      "$ref": "#/$defs/effectivePolicy"
+    },
+    "compiler_identity": {
+      "$ref": "#/$defs/compilerIdentity"
+    },
+    "canonical_source_ref": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/sourceRef"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "safeObjectKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$"
+    },
+    "snapshotRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "snapshot_id",
+        "snapshot_key",
+        "snapshot_sha256",
+        "content_hash",
+        "connector_type",
+        "connector_version"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "pattern": "^source_[a-z0-9][a-z0-9_-]{2,127}$"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^(?:snap_[a-f0-9]{64}|capture_[a-f0-9]{32})$"
+        },
+        "snapshot_key": {
+          "$ref": "#/$defs/safeObjectKey"
+        },
+        "snapshot_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "content_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "connector_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "connector_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      }
+    },
+    "derivativeRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "derivative_id",
+        "derivative_key",
+        "derivative_sha256",
+        "normalized_key",
+        "normalized_sha256",
+        "normalizer_id",
+        "normalizer_version",
+        "media_type"
+      ],
+      "properties": {
+        "derivative_id": {
+          "type": "string",
+          "pattern": "^drv_[a-f0-9]{64}$"
+        },
+        "derivative_key": {
+          "$ref": "#/$defs/safeObjectKey"
+        },
+        "derivative_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "normalized_key": {
+          "$ref": "#/$defs/safeObjectKey"
+        },
+        "normalized_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "normalizer_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "normalizer_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "admissionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "result_key",
+        "result_sha256"
+      ],
+      "properties": {
+        "status": {
+          "const": "accepted_for_compilation"
+        },
+        "result_key": {
+          "$ref": "#/$defs/safeObjectKey"
+        },
+        "result_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "evidenceValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "value",
+        "observation_source"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "resolved",
+            "unresolved"
+          ]
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "observation_source": {
+          "enum": [
+            "observed",
+            "operator_asserted",
+            "inherited",
+            "unresolved"
+          ]
+        }
+      }
+    },
+    "accessPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_type",
+        "principals",
+        "observation_source",
+        "native_evidence_ref"
+      ],
+      "properties": {
+        "policy_type": {
+          "enum": [
+            "public",
+            "authenticated",
+            "principal_set",
+            "restricted",
+            "unresolved"
+          ]
+        },
+        "principals": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 320
+          }
+        },
+        "observation_source": {
+          "enum": [
+            "observed",
+            "operator_asserted",
+            "inherited",
+            "unresolved"
+          ]
+        },
+        "native_evidence_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1024
+        }
+      }
+    },
+    "effectivePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audience",
+        "access_policy",
+        "owner",
+        "license",
+        "may_broaden"
+      ],
+      "properties": {
+        "audience": {
+          "enum": [
+            "public",
+            "internal",
+            "confidential",
+            "restricted"
+          ]
+        },
+        "access_policy": {
+          "$ref": "#/$defs/accessPolicy"
+        },
+        "owner": {
+          "$ref": "#/$defs/evidenceValue"
+        },
+        "license": {
+          "$ref": "#/$defs/evidenceValue"
+        },
+        "may_broaden": {
+          "const": false
+        }
+      }
+    },
+    "compilerIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version",
+        "structurer_version",
+        "extractor_version",
+        "resolver_version",
+        "synthesizer_version",
+        "validator_version"
+      ],
+      "properties": {
+        "contract_version": {
+          "const": "knowledge-compiler/v1"
+        },
+        "structurer_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "extractor_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "resolver_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "synthesizer_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "validator_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit_sha",
+        "snapshot_sha256"
+      ],
+      "properties": {
+        "repository": {
+          "const": "danielcanfly/knowledge-source"
+        },
+        "commit_sha": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "snapshot_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}
