@@ -1,0 +1,57 @@
+{
+  "schema_version": "knowledge-compiler-input/v1",
+  "compiler_run_id": "crun_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "snapshot_ref": {
+    "source_id": "source_example_markdown",
+    "snapshot_id": "snap_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "snapshot_key": "intake/v1/snapshots/snap_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.json",
+    "snapshot_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "content_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "connector_type": "local_file",
+    "connector_version": "local-file/1.0.0"
+  },
+  "derivative_ref": {
+    "derivative_id": "drv_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "derivative_key": "intake/v1/derivatives/drv_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.json",
+    "derivative_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "normalized_key": "intake/v1/normalized/1111111111111111111111111111111111111111111111111111111111111111.md",
+    "normalized_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "normalizer_id": "markdown",
+    "normalizer_version": "1.0.0",
+    "media_type": "text/markdown; charset=utf-8"
+  },
+  "admission_ref": {
+    "status": "accepted_for_compilation",
+    "result_key": "intake/v1/results/attempt_example.json",
+    "result_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "effective_policy": {
+    "audience": "public",
+    "access_policy": {
+      "policy_type": "public",
+      "principals": [],
+      "observation_source": "operator_asserted",
+      "native_evidence_ref": null
+    },
+    "owner": {
+      "status": "resolved",
+      "value": "danielcanfly",
+      "observation_source": "operator_asserted"
+    },
+    "license": {
+      "status": "resolved",
+      "value": "owner-controlled-publication",
+      "observation_source": "operator_asserted"
+    },
+    "may_broaden": false
+  },
+  "compiler_identity": {
+    "contract_version": "knowledge-compiler/v1",
+    "structurer_version": "markdown-structure/1.0.0",
+    "extractor_version": "deterministic-markdown/1.0.0",
+    "resolver_version": "disabled/1.0.0",
+    "synthesizer_version": "disabled/1.0.0",
+    "validator_version": "compiler-contract/1.0.0"
+  },
+  "canonical_source_ref": null
+}
