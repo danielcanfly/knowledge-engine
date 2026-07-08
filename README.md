@@ -13,6 +13,7 @@ raw evidence
   -> Cloudflare R2
   -> atomic channel pointer
   -> ACL-aware Runtime API
+  -> deterministic query evaluation gate
 ```
 
 The normative contracts live in `danielcanfly/knowledge-os-foundation`. This repository implements those contracts.
@@ -28,6 +29,7 @@ The normative contracts live in `danielcanfly/knowledge-os-foundation`. This rep
 - Exposes health, current release, refresh, and query endpoints.
 - Verifies Supabase JWTs through JWKS.
 - Applies ACL filters before retrieval and response serialization.
+- Attaches deterministic query evaluation evidence and a fail-closed release-blocking gate to Runtime query responses.
 - Provides permanent approval-gated promotion and rollback workflows.
 - Captures Markdown evidence as immutable content-addressed raw objects.
 - Produces isolated normalized evidence and human-review packets.
@@ -55,6 +57,8 @@ export APP_ENV=development
 knowledge-engine build --bundle examples/okf-bundle --channel staging --release-time 2026-07-02T12:00:00Z
 knowledge-engine query --channel staging --query 'knowledge compiler' --audiences public,internal
 ```
+
+Every query response includes `evaluation` evidence with a deterministic `evaluation_id`, citation coverage, ACL-filtering metrics, fallback usage, stable failure reasons, and a `release_blocking` gate. See `docs/m12-runtime-query-evaluation.md`.
 
 ## Governed Markdown intake
 
