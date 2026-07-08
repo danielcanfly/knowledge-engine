@@ -8,6 +8,10 @@ on:
       - 'scripts/r2_canary.py'
       - '.github/workflows/r2-canary.yml'
       - 'pyproject.toml'
+      - 'docs/architecture/m10/**'
+      - 'scripts/m10_verify_production_baseline.py'
+      - 'tests/test_m10_closure.py'
+      - '.github/workflows/m10-closure-verification.yml'
 
 permissions:
   contents: read
