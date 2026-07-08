@@ -371,18 +371,6 @@ def intake_media_derived_markdown(
                 media_raw_key,
                 manifest.media_sha256,
             ),
-            "secondary_raw_objects": [
-                {
-                    "role": "transcript_input",
-                    "storage_location": _storage_location(
-                        store,
-                        transcript_raw_key,
-                        manifest.transcript_sha256,
-                    ),
-                    "byte_size": manifest.transcript_byte_size,
-                    "mime_type": "text/markdown",
-                }
-            ],
         }
         snapshot_bytes = _pretty_json_bytes(snapshot)
         object_states.append(
