@@ -1,0 +1,24 @@
+{
+  "schema_version": "m9-origin-attestation/v1",
+  "verification_method": "github-connector-exact-ref-content-lookup",
+  "origin_repository": "huaihsuanbusiness/daniel-blog",
+  "origin_commit": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
+  "origin_commit_matches_main": true,
+  "origins": [
+    {
+      "language": "en",
+      "path": "src/content/blog/the-atlas-of-agent-design-patterns-part-3/en.md",
+      "blob_sha": "185fa419771942e0737cdefe10c3180505bb3c23",
+      "public_url": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-3/"
+    },
+    {
+      "language": "zh",
+      "path": "src/content/blog/the-atlas-of-agent-design-patterns-part-3/zh.md",
+      "blob_sha": "2d3d48a066203898cc7493a85bbfdc3ea3e3f754",
+      "public_url": "https://www.danielcanfly.com/zh/blog/the-atlas-of-agent-design-patterns-part-3/"
+    }
+  ],
+  "approved_scope_option": "A",
+  "approved_concept_title": "Agent Decision and Planning Strategies",
+  "approved_batch_id": "m9-001-agent-planning-strategies"
+}
