@@ -1,0 +1,230 @@
+name: M9 Request Spec Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "production_promotions/m9-001-agent-planning-strategies.json"
+      - "governed_batches/m9-001-agent-planning-strategies.json"
+      - "governed_batches/registry-v2.json"
+      - "governed_batches/evidence/m9-001-request-spec-authorization.json"
+      - "governed_batches/evidence/m9-001-runtime-acceptance-observation.json"
+      - "governed_batches/evidence/m9-001-lifecycle-history.json"
+      - "governed_batches/evidence/m9-001-production-baseline.json"
+      - "tests/test_m9_request_spec.py"
+      - "tests/test_m9_planned_batch.py"
+      - ".github/workflows/m9-request-spec-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      REQUEST_PATH: production_promotions/m9-001-agent-planning-strategies.json
+      SPEC_PATH: governed_batches/m9-001-agent-planning-strategies.json
+      REGISTRY_PATH: governed_batches/registry-v2.json
+      EVIDENCE_DIR: evidence/m9-request-spec
+    steps:
+      - name: Check out exact Engine revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install exact Engine
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+
+      - name: Verify read-only R2 configuration
+        run: |
+          set -euo pipefail
+          test -n "$R2_ACCESS_KEY_ID"
+          test -n "$R2_SECRET_ACCESS_KEY"
+          test -n "$R2_BUCKET"
+          test -n "$R2_ENDPOINT_URL"
+
+      - name: Capture live production pointer read-only
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store
+
+          store = create_object_store(Settings.from_env())
+          pointer_bytes = store.get("channels/production.json")
+          pointer = json.loads(pointer_bytes)
+          pointer_sha256 = hashlib.sha256(pointer_bytes).hexdigest()
+
+          assert pointer["release_id"] == "20260707T111252Z-aebf06593f89"
+          assert pointer["manifest_sha256"] == (
+              "1a2f2014073e9e97f9e1fdd5df4e43b"
+              "f19cb2b2679532b6e52ea38480ec4d2ec"
+          )
+          assert pointer_sha256 == (
+              "2de63a9ff5963ea3f72f0051b25a084d"
+              "da9e5e609fe79615e55e3f95a1351914"
+          )
+
+          Path("/tmp/m9-live-production-pointer.json").write_bytes(pointer_bytes)
+          Path("/tmp/m9-live-production-observation.json").write_text(
+              json.dumps(
+                  {
+                      "status": "passed",
+                      "key": "channels/production.json",
+                      "release_id": pointer["release_id"],
+                      "manifest_sha256": pointer["manifest_sha256"],
+                      "pointer_sha256": pointer_sha256,
+                      "read_only": True,
+                      "mutations_performed": [],
+                  },
+                  indent=2,
+                  sort_keys=True,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          print("M9_LIVE_PRODUCTION_BASELINE_PASSED")
+          PY
+
+      - name: Run clean-checkout operator preflight
+        run: |
+          set -euo pipefail
+          python -m knowledge_engine.batch_cli preflight \
+            --spec-path "$SPEC_PATH" \
+            --registry-path "$REGISTRY_PATH" \
+            --production-pointer-path /tmp/m9-live-production-pointer.json \
+            --output "$EVIDENCE_DIR/operator-preflight.json"
+          mkdir -p "$EVIDENCE_DIR"
+          cp /tmp/m9-live-production-pointer.json \
+            "$EVIDENCE_DIR/live-production-pointer.json"
+          cp /tmp/m9-live-production-observation.json \
+            "$EVIDENCE_DIR/live-production-observation.json"
+
+      - name: Validate committed promotion request
+        run: |
+          set -euo pipefail
+          knowledge-engine validate-promotion-request \
+            --request-path "$REQUEST_PATH" \
+            --control-plane-sha "$GITHUB_SHA" \
+            --evidence-dir "$EVIDENCE_DIR" \
+            > "$EVIDENCE_DIR/request-validation-cli.json"
+
+      - name: Run request and lifecycle regression tests
+        run: |
+          set -euo pipefail
+          python -m pytest -q \
+            tests/test_m9_request_spec.py \
+            tests/test_m9_planned_batch.py
+
+      - name: Write non-mutating request summary
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          from knowledge_engine.batch_spec import load_batch_spec
+          from knowledge_engine.promotion_request import load_promotion_request_spec
+
+          request_path = Path(
+              "production_promotions/m9-001-agent-planning-strategies.json"
+          )
+          request = load_promotion_request_spec(
+              request_path=request_path,
+              control_plane_sha="0" * 40,
+          )
+          spec = load_batch_spec(
+              "governed_batches/m9-001-agent-planning-strategies.json"
+          )
+          preflight = json.loads(
+              Path("evidence/m9-request-spec/operator-preflight.json").read_text()
+          )
+          live = json.loads(
+              Path("evidence/m9-request-spec/live-production-observation.json")
+              .read_text()
+          )
+          authorization = json.loads(
+              Path(
+                  "governed_batches/evidence/"
+                  "m9-001-request-spec-authorization.json"
+              ).read_text()
+          )
+          normalized = request.normalized()
+
+          assert preflight["status"] == "ready"
+          assert preflight["lifecycle_state"] == "request_spec_committed"
+          assert preflight["next_action"] == "review_production_promotion"
+          assert preflight["mutations_performed"] == []
+          assert live["status"] == "passed"
+          assert live["read_only"] is True
+          assert live["mutations_performed"] == []
+          assert spec.lifecycle_state == "request_spec_committed"
+          assert authorization["production_promotion_authorized"] is False
+          assert authorization["permanent_ledger_append_authorized"] is False
+          assert "control_plane_sha" not in request.raw
+
+          summary = {
+              "schema_version": "m9-request-spec-validation/v1",
+              "status": "passed",
+              "batch_id": spec.batch_id,
+              "lifecycle_state": spec.lifecycle_state,
+              "operation_id": normalized["operation_id"],
+              "request_path": str(request_path),
+              "request_sha256": hashlib.sha256(request_path.read_bytes()).hexdigest(),
+              "candidate_channel": normalized["candidate_channel"],
+              "release_id": normalized["release_id"],
+              "manifest_sha256": normalized["manifest_sha256"],
+              "expected_previous_release_id": normalized[
+                  "expected_previous_release_id"
+              ],
+              "expected_previous_manifest_sha256": normalized[
+                  "expected_previous_manifest_sha256"
+              ],
+              "live_production_pointer_sha256": live["pointer_sha256"],
+              "control_plane_sha_committed": False,
+              "production_promotion_authorized": False,
+              "permanent_ledger_append_authorized": False,
+              "production_mutated": False,
+              "mutations_performed": [],
+              "next_action": "review_production_promotion",
+          }
+          output = Path("evidence/m9-request-spec/summary.json")
+          output.write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          print("M9_REQUEST_SPEC_VALIDATION_PASSED")
+          PY
+
+      - name: Upload request-spec evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m9-request-spec-${{ github.sha }}
+          path: evidence/m9-request-spec/
+          if-no-files-found: error
+          retention-days: 90

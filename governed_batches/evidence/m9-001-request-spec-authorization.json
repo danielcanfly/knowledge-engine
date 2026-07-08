@@ -1,0 +1,19 @@
+{
+  "schema_version": "governed-request-spec-authorization/v1",
+  "batch_id": "m9-001-agent-planning-strategies",
+  "authorization_text": "M9.6 Commit Production Request Specification",
+  "authorized_by": "danielcanfly",
+  "authorization_recorded_at": "2026-07-08T04:32:48Z",
+  "authorized_actions": [
+    "commit_production_request_spec",
+    "validate_request_schema_and_identity",
+    "run_read_only_production_preflight",
+    "record_runtime_accepted_to_request_spec_committed_transition"
+  ],
+  "operation_id": "m9-001-agent-planning-strategies-001",
+  "request_path": "production_promotions/m9-001-agent-planning-strategies.json",
+  "production_promotion_authorized": false,
+  "permanent_ledger_append_authorized": false,
+  "rollback_authorized": false,
+  "notes": "This authorization commits immutable promotion intent for review. A separate explicit human approval is required before dispatching production promotion."
+}

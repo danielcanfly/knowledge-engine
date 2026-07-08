@@ -83,9 +83,28 @@
         "production_pointer_sha256": "2de63a9ff5963ea3f72f0051b25a084dda9e5e609fe79615e55e3f95a1351914",
         "production_pointer_byte_exact_unchanged": true
       }
+    },
+    {
+      "from": "runtime_accepted",
+      "to": "request_spec_committed",
+      "evidence": {
+        "request_issue": 112,
+        "authorization_text": "M9.6 Commit Production Request Specification",
+        "operation_id": "m9-001-agent-planning-strategies-001",
+        "request_path": "production_promotions/m9-001-agent-planning-strategies.json",
+        "request_sha256": "41564a42a3f207ea87bbc600935effbb9c3979c8366e16a4b1c7d1f35e172b5b",
+        "candidate_release_id": "20260708T040116Z-69a9f445699a",
+        "candidate_manifest_sha256": "2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb",
+        "expected_previous_release_id": "20260707T111252Z-aebf06593f89",
+        "expected_previous_manifest_sha256": "1a2f2014073e9e97f9e1fdd5df4e43bf19cb2b2679532b6e52ea38480ec4d2ec",
+        "expected_previous_pointer_sha256": "2de63a9ff5963ea3f72f0051b25a084dda9e5e609fe79615e55e3f95a1351914",
+        "actor": "danielcanfly",
+        "control_plane_sha_committed": false,
+        "production_promotion_authorized": false
+      }
     }
   ],
-  "final_state": "runtime_accepted",
+  "final_state": "request_spec_committed",
   "source_identity": {
     "sha": "2126db2ed4d372d3d61464fe31a86fc0243a1f24"
   },
@@ -100,5 +119,5 @@
     "pointer_sha256": "2de63a9ff5963ea3f72f0051b25a084dda9e5e609fe79615e55e3f95a1351914"
   },
   "production_mutated": false,
-  "next_legal_action": "commit_production_request_spec"
+  "next_legal_action": "review_production_promotion"
 }
