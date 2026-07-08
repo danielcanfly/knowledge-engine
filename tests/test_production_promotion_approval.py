@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from knowledge_engine.errors import IntegrityError
 from knowledge_engine import promotion_approval
+from knowledge_engine.errors import IntegrityError
 from knowledge_engine.promotion_approval import (
     validate_production_promotion_approval,
 )
