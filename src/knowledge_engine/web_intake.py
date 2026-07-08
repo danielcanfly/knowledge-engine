@@ -12,13 +12,13 @@ from .web_intake_v1 import (
     HTTPExchangeResult,
     Resolver,
     Sleeper,
-    WebURLRequest as _WebURLRequest,
     _default_exchange,
     _default_resolver,
     canonicalize_https_url,
-    intake_web_url as _intake_web_url,
     validate_public_ips,
 )
+from .web_intake_v1 import WebURLRequest as _WebURLRequest
+from .web_intake_v1 import intake_web_url as _intake_web_url
 
 MAX_RESPONSE_HEADERS = 64
 MAX_HEADER_VALUE_BYTES = 2048
@@ -33,6 +33,10 @@ class WebURLRequest(_WebURLRequest):
     def validate(self) -> None:
         _validate_utc(self.retrieved_at)
         super().validate()
+
+
+def _contains_header_control(value: str) -> bool:
+    return chr(10) in value or chr(13) in value
 
 
 def _guarded_exchange(exchange: HTTPExchange) -> HTTPExchange:
@@ -60,7 +64,7 @@ def _guarded_exchange(exchange: HTTPExchange) -> HTTPExchange:
         for raw_name, raw_value in result.headers.items():
             name = raw_name.lower().strip()
             value = raw_value.strip()
-            if not name or "\r" in name or "\n" in name or "\r" in value or "\n" in value:
+            if not name or _contains_header_control(name) or _contains_header_control(value):
                 raise IntakeFailure(
                     "INVALID_RESPONSE_HEADER",
                     "acquire",
