@@ -15,6 +15,7 @@ raw evidence
   -> ACL-aware Runtime API
   -> deterministic query evaluation gate
   -> golden query suite report
+  -> golden query baseline gate
 ```
 
 The normative contracts live in `danielcanfly/knowledge-os-foundation`. This repository implements those contracts.
@@ -32,6 +33,7 @@ The normative contracts live in `danielcanfly/knowledge-os-foundation`. This rep
 - Applies ACL filters before retrieval and response serialization.
 - Attaches deterministic query evaluation evidence and a fail-closed release-blocking gate to Runtime query responses.
 - Runs deterministic golden query suites over ACL-filtered Runtime responses and emits replayable aggregate reports.
+- Compares golden query suite reports to immutable quality baselines before allowing release progression.
 - Provides permanent approval-gated promotion and rollback workflows.
 - Captures Markdown evidence as immutable content-addressed raw objects.
 - Produces isolated normalized evidence and human-review packets.
@@ -63,6 +65,8 @@ knowledge-engine query --channel staging --query 'knowledge compiler' --audience
 Every query response includes `evaluation` evidence with a deterministic `evaluation_id`, citation coverage, ACL-filtering metrics, fallback usage, stable failure reasons, and a `release_blocking` gate. See `docs/m12-runtime-query-evaluation.md`.
 
 Golden query suites execute multiple Runtime queries through the same ACL-filtered surface and emit deterministic aggregate evidence with `gqsuite_`, `gqrun_`, and `gqreport_` identities. See `docs/m12-golden-query-suite.md`.
+
+Golden query baselines compare suite reports to immutable aggregate floors and emit `gqbaseline_` / `gqbaselinecheck_` evidence. See `docs/m12-golden-query-baseline.md`.
 
 ## Governed Markdown intake
 
