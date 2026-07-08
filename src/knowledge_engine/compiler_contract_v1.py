@@ -10,6 +10,8 @@ from .errors import IntegrityError, ReleaseConflictError
 from .intake_v1 import (
     IntakeResult,
     canonical_json_bytes,
+)
+from .intake_v1 import (
     verify_event as verify_intake_event,
 )
 from .storage import ObjectStore, sha256_bytes
