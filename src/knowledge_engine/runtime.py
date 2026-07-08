@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import IntegrityError
+from .query_evaluation import evaluate_runtime_query
 from .storage import ObjectStore, sha256_bytes
 
 AUDIENCE_RANK = {"public": 0, "internal": 1, "confidential": 2, "restricted": 3}
@@ -212,21 +213,35 @@ class Runtime:
                     ],
                 }
             )
+        status = "answered" if results else "not_found"
+        release = {
+            "release_id": active.release_id,
+            "manifest_sha256": active.manifest_sha256,
+            "loaded_at": active.loaded_at,
+        }
+        retrieval = {
+            "strategy": "wiki_first_lexical",
+            "candidate_count": len(scored),
+            "selected_count": len(results),
+            "acl_filtered_count": filtered,
+            "raw_fallback_used": False,
+        }
+        non_answer_reason = None if results else "no_authorized_match"
+        evaluation = evaluate_runtime_query(
+            release=release,
+            query=query,
+            audiences=allowed,
+            status=status,
+            results=results,
+            retrieval=retrieval,
+            non_answer_reason=non_answer_reason,
+        )
         return {
-            "status": "answered" if results else "not_found",
-            "release": {
-                "release_id": active.release_id,
-                "manifest_sha256": active.manifest_sha256,
-                "loaded_at": active.loaded_at,
-            },
+            "status": status,
+            "release": release,
             "query": query,
             "results": results,
-            "retrieval": {
-                "strategy": "wiki_first_lexical",
-                "candidate_count": len(scored),
-                "selected_count": len(results),
-                "acl_filtered_count": filtered,
-                "raw_fallback_used": False,
-            },
-            "non_answer_reason": None if results else "no_authorized_match",
+            "retrieval": retrieval,
+            "evaluation": evaluation,
+            "non_answer_reason": non_answer_reason,
         }
