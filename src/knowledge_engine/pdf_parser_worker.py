@@ -58,9 +58,9 @@ def main() -> int:
         return 2
 
     _set_limits()
-    _disable_network()
     from pypdf import PdfReader, __version__ as pypdf_version
 
+    _disable_network()
     source = Path(sys.argv[1])
     destination = Path(sys.argv[2])
     max_pages = int(os.environ["KNOWLEDGE_PDF_MAX_PAGES"])
