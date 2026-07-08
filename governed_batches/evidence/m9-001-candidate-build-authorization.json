@@ -1,0 +1,23 @@
+{
+  "schema_version": "governed-candidate-build-authorization/v1",
+  "batch_id": "m9-001-agent-planning-strategies",
+  "authorization_text": "批准合併 Source PR #13 並建置 M9 candidate",
+  "authorized_by": "danielcanfly",
+  "authorization_recorded_at": "2026-07-08T04:09:19Z",
+  "authorized_actions": [
+    "merge_source_pr_13",
+    "run_source_main_validation",
+    "dispatch_candidate_build",
+    "publish_candidate_channel",
+    "run_generic_candidate_gate",
+    "reconcile_source_and_candidate_identities"
+  ],
+  "source_pr": {
+    "repository": "danielcanfly/knowledge-source",
+    "number": 13
+  },
+  "production_request_authorized": false,
+  "production_promotion_authorized": false,
+  "permanent_ledger_append_authorized": false,
+  "notes": "Authorization ends after exact Source and candidate identity reconciliation. Targeted M9 runtime acceptance and all production actions require later governed steps."
+}
