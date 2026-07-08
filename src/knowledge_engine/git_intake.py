@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import shutil
-import stat
 import subprocess
 import tempfile
 import unicodedata
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
+from urllib.parse import quote
 
 from .intake_v1 import (
     AUDIENCES,
@@ -47,6 +46,7 @@ NORMALIZER_VERSION = "1.0.0"
 DEFAULT_MAX_BYTES = 10 * 1024 * 1024
 DEFAULT_TIMEOUT_SECONDS = 10.0
 MAX_COMMAND_STDOUT = 64 * 1024
+HARD_MAX_BYTES = 100 * 1024 * 1024
 SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 LFS_PREFIX = b"version https://git-lfs.github.com/spec/v1\n"
@@ -120,7 +120,7 @@ class GitPathRequest:
             self.parent_snapshot
         ):
             raise IntakeFailure("INVALID_METADATA", "request", "invalid parent_snapshot")
-        if self.max_bytes < 1 or self.max_bytes > 100 * 1024 * 1024:
+        if self.max_bytes < 1 or self.max_bytes > HARD_MAX_BYTES:
             raise IntakeFailure(
                 "INVALID_METADATA",
                 "request",
@@ -218,6 +218,10 @@ def canonical_tree_path(value: str) -> str:
     return canonical
 
 
+def _canonical_locator(repository: Path, tree_path: str) -> str:
+    return f"{repository.as_uri()}#git-path={quote(tree_path, safe='/')}"
+
+
 def _normalise_text(data: bytes) -> str:
     if b"\x00" in data:
         raise IntakeFailure("GIT_BINARY_BLOB", "safety_gate", "Git blob contains NUL bytes")
@@ -242,7 +246,12 @@ def _fence_for(text: str) -> str:
     return "`" * max(3, longest + 1)
 
 
-def _normalise_git_blob(tree_path: str, commit_sha: str, object_id: str, data: bytes) -> tuple[bytes, str]:
+def _normalise_git_blob(
+    tree_path: str,
+    commit_sha: str,
+    object_id: str,
+    data: bytes,
+) -> tuple[bytes, str]:
     text = _normalise_text(data)
     suffix = PurePosixPath(tree_path).suffix.lower()
     if suffix in {".md", ".markdown"}:
@@ -307,44 +316,34 @@ class GitRunner:
         ]
         with tempfile.TemporaryDirectory(prefix="knowledge-git-home-") as temporary:
             try:
-                process = subprocess.Popen(
+                completed = subprocess.run(
                     command,
                     stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
                     env=self._environment(Path(temporary)),
+                    timeout=self.timeout_seconds,
+                    check=False,
                     close_fds=True,
                 )
-            except OSError as exc:
-                raise IntakeFailure(
-                    "GIT_COMMAND_FAILED",
-                    stage,
-                    "Git command could not start",
-                ) from exc
-            assert process.stdout is not None
-            try:
-                stdout = process.stdout.read(max_stdout + 1)
-                if len(stdout) > max_stdout:
-                    process.kill()
-                    process.wait()
-                    raise IntakeFailure(
-                        "GIT_OUTPUT_LIMIT",
-                        stage,
-                        "Git command output exceeds policy",
-                    )
-                return_code = process.wait(timeout=self.timeout_seconds)
             except subprocess.TimeoutExpired as exc:
-                process.kill()
-                process.wait()
                 raise IntakeFailure(
                     "GIT_TIMEOUT",
                     stage,
                     "Git command exceeded wall-clock policy",
                     transient=True,
                 ) from exc
-        if return_code != 0:
+            except OSError as exc:
+                raise IntakeFailure(
+                    "GIT_COMMAND_FAILED",
+                    stage,
+                    "Git command could not start",
+                ) from exc
+        if len(completed.stdout) > max_stdout:
+            raise IntakeFailure("GIT_OUTPUT_LIMIT", stage, "Git command output exceeds policy")
+        if completed.returncode != 0:
             raise IntakeFailure("GIT_COMMAND_FAILED", stage, "Git command failed")
-        return stdout
+        return completed.stdout
 
 
 class LocalGitPathConnector:
@@ -355,9 +354,16 @@ class LocalGitPathConnector:
         runner: GitRunner,
         after_blob_hook: AfterBlobHook | None = None,
     ) -> None:
-        self.allowed_root = allowed_root.resolve(strict=True)
+        try:
+            self.allowed_root = allowed_root.resolve(strict=True)
+        except FileNotFoundError as exc:
+            raise IntakeFailure(
+                "ALLOWED_ROOT_NOT_FOUND",
+                "request",
+                "allowed root does not exist",
+            ) from exc
         if not self.allowed_root.is_dir():
-            raise ValueError("allowed_root must be a directory")
+            raise IntakeFailure("INVALID_ALLOWED_ROOT", "request", "allowed root must be a directory")
         self.runner = runner
         self.after_blob_hook = after_blob_hook
 
@@ -376,11 +382,7 @@ class LocalGitPathConnector:
         try:
             resolved.relative_to(self.allowed_root)
         except ValueError as exc:
-            raise IntakeFailure(
-                "PATH_ESCAPE",
-                "discover",
-                "repository escapes the allowed root",
-            ) from exc
+            raise IntakeFailure("PATH_ESCAPE", "discover", "repository escapes the allowed root") from exc
         if not resolved.is_dir():
             raise IntakeFailure(
                 "GIT_REPOSITORY_INVALID",
@@ -390,7 +392,12 @@ class LocalGitPathConnector:
         return resolved
 
     def inspect_repository(self, root: Path) -> GitRepository:
-        if self.runner.run(root, ["rev-parse", "--is-bare-repository"], stage="discover").strip() != b"false":
+        bare = self.runner.run(
+            root,
+            ["rev-parse", "--is-bare-repository"],
+            stage="discover",
+        ).strip()
+        if bare != b"false":
             raise IntakeFailure(
                 "GIT_BARE_REPOSITORY_UNSUPPORTED",
                 "discover",
@@ -421,6 +428,12 @@ class LocalGitPathConnector:
                 "Git metadata directory must remain inside repository root",
             ) from exc
         alternates = git_dir / "objects" / "info" / "alternates"
+        if alternates.is_symlink():
+            raise IntakeFailure(
+                "GIT_EXTERNAL_OBJECT_STORE",
+                "discover",
+                "Git object alternates are forbidden",
+            )
         if alternates.exists() and alternates.read_bytes().strip():
             raise IntakeFailure(
                 "GIT_EXTERNAL_OBJECT_STORE",
@@ -438,9 +451,7 @@ class LocalGitPathConnector:
                 "discover",
                 "Git object format is unsupported",
             )
-        git_version = (
-            self.runner.run(root, ["--version"], stage="discover").decode("ascii").strip()
-        )
+        git_version = self.runner.run(root, ["--version"], stage="discover").decode("ascii").strip()
         root_stat = root.stat()
         git_dir_stat = git_dir.stat()
         return GitRepository(
@@ -505,11 +516,7 @@ class LocalGitPathConnector:
                 "Git tree response is invalid",
             ) from exc
         if observed_path != tree_path:
-            raise IntakeFailure(
-                "GIT_PATH_MISMATCH",
-                "discover",
-                "Git returned a different tree path",
-            )
+            raise IntakeFailure("GIT_PATH_MISMATCH", "discover", "Git returned a different tree path")
         if mode == "040000" or object_type == "tree":
             raise IntakeFailure("GIT_PATH_IS_DIRECTORY", "discover", "Git path is a directory")
         if mode == "120000":
@@ -574,8 +581,15 @@ class LocalGitPathConnector:
 
         if self.after_blob_hook is not None:
             self.after_blob_hook()
-        root_stat = repository.root.stat()
-        git_dir_stat = repository.git_dir.stat()
+        try:
+            root_stat = repository.root.stat()
+            git_dir_stat = repository.git_dir.stat()
+        except OSError as exc:
+            raise IntakeFailure(
+                "GIT_REPOSITORY_CHANGED_DURING_READ",
+                "acquire",
+                "repository identity changed during acquisition",
+            ) from exc
         if (root_stat.st_dev, root_stat.st_ino) != repository.identity or (
             git_dir_stat.st_dev,
             git_dir_stat.st_ino,
@@ -597,14 +611,8 @@ class LocalGitPathConnector:
                 "Git tree entry changed during acquisition",
             )
 
-        entry = GitTreeEntry(
-            mode=mode,
-            object_type=object_type,
-            object_id=object_id,
-            tree_path=tree_path,
-            byte_size=byte_size,
-        )
-        canonical_locator = f"{repository.root.as_uri()}#git-path={tree_path}"
+        entry = GitTreeEntry(mode, object_type, object_id, tree_path, byte_size)
+        canonical_locator = _canonical_locator(repository.root, tree_path)
         return GitAcquisition(
             canonical_locator=canonical_locator,
             original_uri=canonical_locator,
@@ -684,7 +692,7 @@ def intake_local_git_path(
         )
         repository_root = connector.canonicalize_repository(request.repository_locator)
         canonical_tree = canonical_tree_path(request.tree_path)
-        canonical_locator = f"{repository_root.as_uri()}#git-path={canonical_tree}"
+        canonical_locator = _canonical_locator(repository_root, canonical_tree)
         source_id = request.source_id or stable_source_id(CONNECTOR_TYPE, canonical_locator)
         artifacts["source_id"] = source_id
 
