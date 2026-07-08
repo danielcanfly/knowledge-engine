@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from knowledge_engine import promotion_approval
 from knowledge_engine.errors import IntegrityError
 from knowledge_engine.promotion_approval import (
     validate_production_promotion_approval,
@@ -59,53 +58,44 @@ def test_m9_production_promotion_approval_is_exact() -> None:
     assert result["next_action"] == "dispatch_production_promotion"
 
 
-def _validate_tampered(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    payload: dict[str, object],
-) -> None:
-    approval_path = tmp_path / "approval.json"
+def _validate_tampered(tmp_path: Path, payload: dict[str, object]) -> None:
+    approval_path = Path("governed_batches/evidence") / (
+        f".tmp-{tmp_path.name}-approval.json"
+    )
     approval_path.write_text(
         json.dumps(payload, indent=2) + "\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(promotion_approval, "APPROVAL_ROOT", tmp_path)
-    validate_production_promotion_approval(
-        approval_path=approval_path,
-        spec_path=SPEC,
-        request_path=REQUEST,
-    )
+    try:
+        validate_production_promotion_approval(
+            approval_path=approval_path,
+            spec_path=SPEC,
+            request_path=REQUEST,
+        )
+    finally:
+        approval_path.unlink(missing_ok=True)
 
 
-def test_approval_rejects_request_hash_tampering(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_approval_rejects_request_hash_tampering(tmp_path: Path) -> None:
     payload = json.loads(APPROVAL.read_text(encoding="utf-8"))
     payload["request"]["request_sha256"] = "0" * 64
 
     with pytest.raises(IntegrityError, match="request_sha256"):
-        _validate_tampered(tmp_path, monkeypatch, payload)
+        _validate_tampered(tmp_path, payload)
 
 
-def test_approval_rejects_target_substitution(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_approval_rejects_target_substitution(tmp_path: Path) -> None:
     payload = json.loads(APPROVAL.read_text(encoding="utf-8"))
     payload["target"]["release_id"] = "20260101T000000Z-000000000000"
 
     with pytest.raises(IntegrityError, match="target"):
-        _validate_tampered(tmp_path, monkeypatch, payload)
+        _validate_tampered(tmp_path, payload)
 
 
-def test_approval_rejects_replay_or_rollback_authority(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_approval_rejects_replay_or_rollback_authority(tmp_path: Path) -> None:
     payload = json.loads(APPROVAL.read_text(encoding="utf-8"))
     payload["authorization_scope"]["idempotent_replay_authorized"] = True
     payload["authorization_scope"]["rollback_authorized"] = True
 
     with pytest.raises(IntegrityError, match="authorization_scope"):
-        _validate_tampered(tmp_path, monkeypatch, payload)
+        _validate_tampered(tmp_path, payload)
