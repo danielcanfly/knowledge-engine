@@ -48,12 +48,18 @@ def _case_identity(case: GoldenQueryCase) -> str:
 
 
 def _suite_identity(cases: list[GoldenQueryCase]) -> str:
-    payload = {"cases": [case.to_identity() for case in sorted(cases, key=lambda item: item.case_id)]}
+    payload = {
+        "cases": [
+            case.to_identity() for case in sorted(cases, key=lambda item: item.case_id)
+        ]
+    }
     digest = hashlib.sha256(_stable_json(payload)).hexdigest()[:32]
     return f"gqsuite_{digest}"
 
 
-def _report_identity(*, suite_id: str, release: dict[str, Any], cases: list[dict[str, Any]]) -> str:
+def _report_identity(
+    *, suite_id: str, release: dict[str, Any], cases: list[dict[str, Any]]
+) -> str:
     payload = {
         "suite_id": suite_id,
         "release": {
@@ -99,7 +105,11 @@ def evaluate_golden_query_case(
         failure_reasons.append("forbidden_concept_returned")
     if actual_reasons != set(case.expected_reasons):
         failure_reasons.append("evaluation_reasons_mismatch")
-    if case.release_blocking is not None and evaluation.get("release_blocking") != case.release_blocking:
+    expected_release_blocking = case.release_blocking
+    if (
+        expected_release_blocking is not None
+        and evaluation.get("release_blocking") != expected_release_blocking
+    ):
         failure_reasons.append("release_blocking_mismatch")
     if not evaluation.get("passed", False) and case.release_blocking is False:
         failure_reasons.append("unexpected_release_blocking_evaluation")
@@ -119,7 +129,8 @@ def evaluate_golden_query_case(
             "failure_reasons": failure_reasons,
         },
     }
-    case_run_id = f"gqrun_{hashlib.sha256(_stable_json(identity_payload)).hexdigest()[:32]}"
+    run_digest = hashlib.sha256(_stable_json(identity_payload)).hexdigest()[:32]
+    case_run_id = f"gqrun_{run_digest}"
     return {
         "case_id": case.case_id,
         "case_contract_id": _case_identity(case),
@@ -154,7 +165,8 @@ def run_golden_query_suite(
         release = response["release"]
         case_reports.append(evaluate_golden_query_case(case=case, response=response))
 
-    assert release is not None
+    if release is None:
+        raise ValueError("golden query suite did not execute any cases")
     failed_cases = [case for case in case_reports if not case["passed"]]
     aggregate = {
         "case_count": len(case_reports),
