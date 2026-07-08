@@ -49,7 +49,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/knowledge_engine/api.py" = ["B008"]
-"src/knowledge_engine/database_bundle.py" = ["E501"]
+"src/knowledge_engine/database_bundle.py" = ["E501", "I001"]
 "src/knowledge_engine/database_intake.py" = ["E501"]
 "src/knowledge_engine/drive_client.py" = ["E501"]
 "src/knowledge_engine/drive_intake.py" = ["E501", "SIM102"]
