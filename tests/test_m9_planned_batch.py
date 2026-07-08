@@ -41,6 +41,7 @@ def _load(path: Path) -> dict[str, object]:
 
 def test_m9_candidate_built_state_is_exact_and_non_production() -> None:
     spec = load_batch_spec(SPEC)
+    raw_registry = _load(REGISTRY)
     registry = validate_batch_registry(load_batch_registry(REGISTRY))
     origin = _load(ORIGIN)
     source_baseline = _load(SOURCE_BASELINE)
@@ -73,10 +74,10 @@ def test_m9_candidate_built_state_is_exact_and_non_production() -> None:
     assert registry["batch_count"] == 2
     assert registry["batches"][-1] == {
         "batch_id": spec.batch_id,
-        "candidate_channel": CANDIDATE_CHANNEL,
         "lifecycle_state": "candidate_built",
         "spec_path": str(SPEC),
     }
+    assert raw_registry["batches"][-1]["candidate_channel"] == CANDIDATE_CHANNEL
 
     assert origin["origin_commit"] == "27e2fe996f878f2129bf510d6a326c02f7d87be5"
     assert origin["approved_scope_option"] == "A"
