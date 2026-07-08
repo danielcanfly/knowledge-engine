@@ -1,0 +1,22 @@
+# M12.3 Acceptance Checklist
+
+- [ ] M11 preflight verified.
+- [ ] M12.1 and M12.2 closure verified.
+- [ ] Exact canonical Source SHA verified unchanged.
+- [ ] Production release, manifest, and pointer verified unchanged.
+- [ ] Permanent ledger #30 verified open and not appended.
+- [ ] Immutable baseline contract implemented.
+- [ ] Deterministic baseline and check identities implemented.
+- [ ] Baseline check is replayable and idempotent.
+- [ ] ACL/audience broadening fails closed.
+- [ ] Quality regression fails closed.
+- [ ] Release/manifest drift fails closed.
+- [ ] Governance no-write payload present.
+- [ ] Tests added.
+- [ ] Docs added.
+- [ ] R2 Canary path coverage added.
+- [ ] Exact-head CI successful.
+- [ ] Exact-head R2 Canary successful.
+- [ ] Exact-head R2 Release Integration successful.
+- [ ] PR merged.
+- [ ] Completion evidence posted to issue and PR.
