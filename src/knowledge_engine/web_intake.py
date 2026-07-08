@@ -62,13 +62,19 @@ def _guarded_exchange(exchange: HTTPExchange) -> HTTPExchange:
             )
         normalized: dict[str, str] = {}
         for raw_name, raw_value in result.headers.items():
-            name = raw_name.lower().strip()
-            value = raw_value.strip()
-            if not name or _contains_header_control(name) or _contains_header_control(value):
+            if _contains_header_control(raw_name) or _contains_header_control(raw_value):
                 raise IntakeFailure(
                     "INVALID_RESPONSE_HEADER",
                     "acquire",
                     "response header contains forbidden control characters",
+                )
+            name = raw_name.lower().strip()
+            value = raw_value.strip()
+            if not name:
+                raise IntakeFailure(
+                    "INVALID_RESPONSE_HEADER",
+                    "acquire",
+                    "response header name is empty",
                 )
             limit = MAX_LOCATION_BYTES if name == "location" else MAX_HEADER_VALUE_BYTES
             if name in {"etag", "last-modified"}:
