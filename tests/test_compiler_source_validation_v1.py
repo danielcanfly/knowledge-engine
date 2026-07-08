@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
 from knowledge_engine.compiler_contract_v1 import CompilerFailure
 from knowledge_engine.compiler_source_v1 import SOURCE_REPOSITORY, verify_source_checkout
 
