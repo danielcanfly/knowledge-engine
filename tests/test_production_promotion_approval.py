@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from knowledge_engine.errors import IntegrityError
-from knowledge_engine.promotion_approval import (
-    validate_production_promotion_approval,
+from knowledge_engine.promotion_approval_history import (
+    validate_historical_production_promotion_approval,
 )
 
 APPROVAL = Path(
@@ -20,8 +20,8 @@ APPROVAL_SHA256 = (
 )
 
 
-def test_m9_production_promotion_approval_is_exact() -> None:
-    result = validate_production_promotion_approval(
+def test_m9_production_promotion_approval_is_exact_and_consumed() -> None:
+    result = validate_historical_production_promotion_approval(
         approval_path=APPROVAL,
         spec_path=SPEC,
         request_path=REQUEST,
@@ -56,6 +56,9 @@ def test_m9_production_promotion_approval_is_exact() -> None:
     assert result["production_mutated"] is False
     assert result["mutations_performed"] == []
     assert result["next_action"] == "dispatch_production_promotion"
+    assert result["lifecycle_state_at_approval"] == "request_spec_committed"
+    assert result["current_lifecycle_state"] == "production_promoted"
+    assert result["approval_consumed"] is True
 
 
 def _validate_tampered(tmp_path: Path, payload: dict[str, object]) -> None:
@@ -67,7 +70,7 @@ def _validate_tampered(tmp_path: Path, payload: dict[str, object]) -> None:
         encoding="utf-8",
     )
     try:
-        validate_production_promotion_approval(
+        validate_historical_production_promotion_approval(
             approval_path=approval_path,
             spec_path=SPEC,
             request_path=REQUEST,

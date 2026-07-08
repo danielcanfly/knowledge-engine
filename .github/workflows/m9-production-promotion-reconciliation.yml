@@ -1,0 +1,233 @@
+name: M9 Production Promotion Reconciliation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "governed_batches/m9-001-agent-planning-strategies.json"
+      - "governed_batches/registry-v2.json"
+      - "governed_batches/evidence/m9-001-production-promotion-observation.json"
+      - "governed_batches/evidence/m9-001-lifecycle-history.json"
+      - "tests/test_m9_request_spec.py"
+      - "tests/test_m9_planned_batch.py"
+      - "tests/test_production_promotion_approval.py"
+      - "src/knowledge_engine/promotion_approval_history.py"
+      - "scripts/validate_historical_production_promotion_approval.py"
+      - ".github/workflows/m9-production-promotion-reconciliation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      EVIDENCE_DIR: evidence/m9-production-reconciliation
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install exact Engine
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+
+      - name: Verify live M9 production target read-only
+        run: |
+          set -euo pipefail
+          for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT_URL; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store
+
+          observation = json.loads(
+              Path(
+                  "governed_batches/evidence/"
+                  "m9-001-production-promotion-observation.json"
+              ).read_text()
+          )
+          target = observation["production_target"]
+          store = create_object_store(Settings.from_env())
+          pointer_bytes = store.get("channels/production.json")
+          pointer = json.loads(pointer_bytes)
+          pointer_sha256 = hashlib.sha256(pointer_bytes).hexdigest()
+          assert pointer["release_id"] == target["release_id"]
+          assert pointer["manifest_sha256"] == target["manifest_sha256"]
+          assert pointer_sha256 == target["pointer_sha256"]
+
+          root = Path("evidence/m9-production-reconciliation")
+          root.mkdir(parents=True, exist_ok=True)
+          (root / "live-production-pointer.json").write_bytes(pointer_bytes)
+          (root / "live-production-observation.json").write_text(
+              json.dumps(
+                  {
+                      "status": "passed",
+                      "release_id": pointer["release_id"],
+                      "manifest_sha256": pointer["manifest_sha256"],
+                      "pointer_sha256": pointer_sha256,
+                      "read_only": True,
+                      "mutations_performed": [],
+                  },
+                  indent=2,
+                  sort_keys=True,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Run M9 production governance tests
+        run: |
+          set -euo pipefail
+          python -m pytest -q \
+            tests/test_m9_request_spec.py \
+            tests/test_m9_planned_batch.py \
+            tests/test_production_promotion_approval.py
+
+      - name: Write reconciliation summary
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          spec = json.loads(
+              Path(
+                  "governed_batches/m9-001-agent-planning-strategies.json"
+              ).read_text()
+          )
+          registry = json.loads(
+              Path("governed_batches/registry-v2.json").read_text()
+          )
+          lifecycle = json.loads(
+              Path(
+                  "governed_batches/evidence/m9-001-lifecycle-history.json"
+              ).read_text()
+          )
+          promotion = json.loads(
+              Path(
+                  "governed_batches/evidence/"
+                  "m9-001-production-promotion-observation.json"
+              ).read_text()
+          )
+          live = json.loads(
+              Path(
+                  "evidence/m9-production-reconciliation/"
+                  "live-production-observation.json"
+              ).read_text()
+          )
+
+          assert spec["lifecycle_state"] == "production_promoted"
+          assert registry["batches"][-1]["lifecycle_state"] == (
+              "production_promoted"
+          )
+          transitions = [
+              (item["from"], item["to"])
+              for item in lifecycle["transitions"]
+          ]
+          assert transitions[-1] == (
+              "request_spec_committed",
+              "production_promoted",
+          )
+          assert lifecycle["final_state"] == "production_promoted"
+          assert lifecycle["production_mutated"] is True
+          assert lifecycle["next_legal_action"] == "review_idempotent_replay"
+
+          assert promotion["status"] == "passed"
+          assert promotion["promotion"]["run_id"] == 28919098263
+          assert promotion["promotion"]["job_id"] == 85792150635
+          assert promotion["promotion"]["artifact_id"] == 8158736427
+          assert promotion["promotion"]["artifact_digest"] == (
+              "sha256:4ff4418ea5e792d24369846dfb39930f"
+              "a6815fc5c42a3b8d62a90a9fa9806d7a"
+          )
+          assert promotion["promotion"]["precondition_state"] == (
+              "ready_to_promote"
+          )
+          assert promotion["promotion"]["status"] == "promoted"
+          assert promotion["promotion"]["idempotent"] is False
+          assert promotion["runtime_acceptance"]["public_status"] == "answered"
+          assert promotion["runtime_acceptance"][
+              "expected_citation_present"
+          ] is True
+          assert promotion["runtime_acceptance"]["acl_status"] == "not_found"
+          assert promotion["runtime_acceptance"]["acl_filtered_count"] == 1
+          assert promotion["runtime_acceptance"][
+              "public_raw_fallback_used"
+          ] is False
+          assert promotion["runtime_acceptance"][
+              "acl_raw_fallback_used"
+          ] is False
+          assert promotion["ledger"]["comment_id"] == 4911573318
+          assert promotion["ledger"]["appended"] is True
+          assert promotion["security_notes"]["rollback_used"] is False
+          assert promotion["security_notes"]["idempotent_replay_used"] is False
+          assert live["pointer_sha256"] == promotion["production_target"][
+              "pointer_sha256"
+          ]
+
+          summary = {
+              "schema_version": "m9-production-promotion-reconciliation/v1",
+              "status": "passed",
+              "batch_id": spec["batch_id"],
+              "lifecycle_state": spec["lifecycle_state"],
+              "promotion_run": promotion["promotion"]["run_id"],
+              "promotion_job": promotion["promotion"]["job_id"],
+              "promotion_artifact": promotion["promotion"]["artifact_id"],
+              "promotion_artifact_digest": promotion["promotion"][
+                  "artifact_digest"
+              ],
+              "production_release_id": promotion["production_target"][
+                  "release_id"
+              ],
+              "production_manifest_sha256": promotion["production_target"][
+                  "manifest_sha256"
+              ],
+              "production_pointer_sha256": live["pointer_sha256"],
+              "ledger_comment_id": promotion["ledger"]["comment_id"],
+              "production_mutated": True,
+              "idempotent_replay_observed": False,
+              "rollback_observed": False,
+              "next_legal_action": lifecycle["next_legal_action"],
+          }
+          output = Path(
+              "evidence/m9-production-reconciliation/summary.json"
+          )
+          output.write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          PY
+
+      - name: Upload reconciliation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m9-production-reconciliation-${{ github.sha }}
+          path: evidence/m9-production-reconciliation/
+          if-no-files-found: error
+          retention-days: 90

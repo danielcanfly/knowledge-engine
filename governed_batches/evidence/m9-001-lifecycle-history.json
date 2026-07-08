@@ -102,9 +102,45 @@
         "control_plane_sha_committed": false,
         "production_promotion_authorized": false
       }
+    },
+    {
+      "from": "request_spec_committed",
+      "to": "production_promoted",
+      "evidence": {
+        "approval_issue": 114,
+        "approval_pr": 115,
+        "approval_merge_commit": "230d57d777a3c7898f789407f5372761541eef6c",
+        "approval_path": "governed_batches/evidence/m9-001-production-promotion-approval.json",
+        "approval_sha256": "7eadff0fcda73c968982d6fc58bdaf4fc82a852f027ff4192730075f8c88b877",
+        "dispatch_issue": 116,
+        "temporary_dispatch_pr": 117,
+        "temporary_dispatch_pr_merged": false,
+        "dispatch_controller_run": 28919085986,
+        "dispatch_controller_job": 85792109015,
+        "dispatch_controller_artifact": 8158738491,
+        "dispatch_controller_artifact_digest": "sha256:ff6249740e441153c5739f43e671cf6b7f7cc5fedaecd40d35395d139092681b",
+        "promotion_run": 28919098263,
+        "promotion_job": 85792150635,
+        "promotion_artifact": 8158736427,
+        "promotion_artifact_digest": "sha256:4ff4418ea5e792d24369846dfb39930fa6815fc5c42a3b8d62a90a9fa9806d7a",
+        "observation_path": "governed_batches/evidence/m9-001-production-promotion-observation.json",
+        "control_plane_sha": "230d57d777a3c7898f789407f5372761541eef6c",
+        "precondition_state": "ready_to_promote",
+        "promotion_status": "promoted",
+        "idempotent": false,
+        "production_pointer_sha256": "38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5",
+        "public_query_status": "answered",
+        "expected_citation_present": true,
+        "acl_query_status": "not_found",
+        "acl_filtered_count": 1,
+        "raw_fallback_used": false,
+        "ledger_comment": 4911573318,
+        "rollback_used": false,
+        "idempotent_replay_used": false
+      }
     }
   ],
-  "final_state": "request_spec_committed",
+  "final_state": "production_promoted",
   "source_identity": {
     "sha": "2126db2ed4d372d3d61464fe31a86fc0243a1f24"
   },
@@ -118,6 +154,12 @@
     "manifest_sha256": "1a2f2014073e9e97f9e1fdd5df4e43bf19cb2b2679532b6e52ea38480ec4d2ec",
     "pointer_sha256": "2de63a9ff5963ea3f72f0051b25a084dda9e5e609fe79615e55e3f95a1351914"
   },
-  "production_mutated": false,
-  "next_legal_action": "review_production_promotion"
+  "production_target": {
+    "release_id": "20260708T040116Z-69a9f445699a",
+    "manifest_sha256": "2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb",
+    "pointer_sha256": "38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5"
+  },
+  "production_mutated": true,
+  "next_framework_action": "run_idempotent_replay_and_close",
+  "next_legal_action": "review_idempotent_replay"
 }
