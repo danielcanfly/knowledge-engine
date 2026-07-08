@@ -10,72 +10,62 @@ from knowledge_engine.batch_spec import load_batch_spec
 SPEC = Path("governed_batches/m9-001-agent-planning-strategies.json")
 REGISTRY = Path("governed_batches/registry-v2.json")
 ORIGIN = Path("governed_batches/evidence/m9-001-origin-attestation.json")
-SOURCE_BASELINE = Path(
-    "governed_batches/evidence/m9-001-source-baseline-attestation.json"
-)
-PRODUCTION_BASELINE = Path(
-    "governed_batches/evidence/m9-001-production-baseline.json"
-)
 APPROVED_REVIEW = Path(
     "governed_batches/evidence/m9-001-approved-review-decision.json"
 )
 CANDIDATE_AUTH = Path(
     "governed_batches/evidence/m9-001-candidate-build-authorization.json"
 )
-CANDIDATE_OBSERVATION = Path(
-    "governed_batches/evidence/m9-001-source-candidate-observation.json"
-)
-RUNTIME_OBSERVATION = Path(
+RUNTIME = Path(
     "governed_batches/evidence/m9-001-runtime-acceptance-observation.json"
+)
+PROMOTION_APPROVAL = Path(
+    "governed_batches/evidence/m9-001-production-promotion-approval.json"
+)
+PROMOTION = Path(
+    "governed_batches/evidence/m9-001-production-promotion-observation.json"
 )
 LIFECYCLE = Path("governed_batches/evidence/m9-001-lifecycle-history.json")
 
 SOURCE_SHA = "2126db2ed4d372d3d61464fe31a86fc0243a1f24"
-CANDIDATE_CHANNEL = f"candidate-source-{SOURCE_SHA}"
-RELEASE_ID = "20260708T040116Z-69a9f445699a"
-MANIFEST_SHA256 = (
-    "2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb"
-)
-OPERATION_ID = "m9-001-agent-planning-strategies-001"
-REQUEST_PATH = "production_promotions/m9-001-agent-planning-strategies.json"
-PRODUCTION_POINTER_SHA256 = (
-    "2de63a9ff5963ea3f72f0051b25a084dda9e5e609fe79615e55e3f95a1351914"
-)
+CHANNEL = f"candidate-source-{SOURCE_SHA}"
+RELEASE = "20260708T040116Z-69a9f445699a"
+MANIFEST = "2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb"
+TARGET_POINTER = "38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5"
 
 
 def _load(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_m9_request_spec_committed_state_is_exact_and_non_production() -> None:
+def test_m9_production_promoted_state_is_exact() -> None:
     spec = load_batch_spec(SPEC)
     raw_registry = _load(REGISTRY)
     registry = validate_batch_registry(load_batch_registry(REGISTRY))
     origin = _load(ORIGIN)
-    source_baseline = _load(SOURCE_BASELINE)
-    production_baseline = _load(PRODUCTION_BASELINE)
-    approved_review = _load(APPROVED_REVIEW)
+    review = _load(APPROVED_REVIEW)
     candidate_auth = _load(CANDIDATE_AUTH)
-    candidate_observation = _load(CANDIDATE_OBSERVATION)
-    runtime_observation = _load(RUNTIME_OBSERVATION)
+    runtime = _load(RUNTIME)
+    promotion_approval = _load(PROMOTION_APPROVAL)
+    promotion = _load(PROMOTION)
     lifecycle = _load(LIFECYCLE)
 
     assert spec.batch_id == "m9-001-agent-planning-strategies"
-    assert spec.lifecycle_state == "request_spec_committed"
-    assert next_action(spec.lifecycle_state) == "review_production_promotion"
+    assert spec.lifecycle_state == "production_promoted"
+    assert next_action(spec.lifecycle_state) == "run_idempotent_replay_and_close"
     assert spec.raw["source"] == {
         "repository": "danielcanfly/knowledge-source",
         "paths": ["bundle/concepts/agent-planning-strategies.md"],
         "sha": SOURCE_SHA,
     }
     assert spec.raw["candidate"] == {
-        "channel": CANDIDATE_CHANNEL,
-        "release_id": RELEASE_ID,
-        "manifest_sha256": MANIFEST_SHA256,
+        "channel": CHANNEL,
+        "release_id": RELEASE,
+        "manifest_sha256": MANIFEST,
     }
     assert spec.raw["production_request"] == {
-        "operation_id": OPERATION_ID,
-        "request_path": REQUEST_PATH,
+        "operation_id": "m9-001-agent-planning-strategies-001",
+        "request_path": "production_promotions/m9-001-agent-planning-strategies.json",
     }
     assert spec.raw["acceptance"]["raw_fallback_allowed"] is False
 
@@ -83,60 +73,66 @@ def test_m9_request_spec_committed_state_is_exact_and_non_production() -> None:
     assert registry["batch_count"] == 2
     assert registry["batches"][-1] == {
         "batch_id": spec.batch_id,
-        "lifecycle_state": "request_spec_committed",
+        "lifecycle_state": "production_promoted",
         "spec_path": str(SPEC),
     }
-    raw_entry = raw_registry["batches"][-1]
-    assert raw_entry["candidate_channel"] == CANDIDATE_CHANNEL
-    assert raw_entry["operation_id"] == OPERATION_ID
-    assert raw_entry["request_path"] == REQUEST_PATH
+    assert raw_registry["batches"][-1]["operation_id"] == (
+        "m9-001-agent-planning-strategies-001"
+    )
 
-    assert origin["origin_commit"] == "27e2fe996f878f2129bf510d6a326c02f7d87be5"
     assert origin["approved_scope_option"] == "A"
     assert {item["language"] for item in origin["origins"]} == {"en", "zh"}
-    assert source_baseline["source_sha"] == (
-        "97979c1c07d6208055d2937c68e500ba49a6ed57"
-    )
-    assert source_baseline["intended_source_path_exists"] is False
-
-    assert approved_review["status"] == "approved"
-    assert approved_review["canonical_write_authorized"] is True
-    assert approved_review["production_mutation_authorized"] is False
-    assert candidate_auth["authorized_by"] == "danielcanfly"
-    assert candidate_auth["production_request_authorized"] is False
+    assert review["status"] == "approved"
+    assert review["canonical_write_authorized"] is True
+    assert review["production_mutation_authorized"] is False
     assert candidate_auth["production_promotion_authorized"] is False
-    assert candidate_auth["permanent_ledger_append_authorized"] is False
 
-    candidate = candidate_observation["candidate"]
-    production = candidate_observation["production"]
-    assert candidate["channel"] == CANDIDATE_CHANNEL
-    assert candidate["release_id"] == RELEASE_ID
-    assert candidate["manifest_sha256"] == MANIFEST_SHA256
-    assert candidate["reproducibility_passed"] is True
-    assert production["pointer_mutated"] is False
-    assert production["request_spec_created"] is False
-    assert production["ledger_appended"] is False
-    assert production["promotion_performed"] is False
+    assert runtime["status"] == "passed"
+    assert runtime["candidate"]["release_id"] == RELEASE
+    assert all(
+        check["raw_fallback_used"] is False
+        for check in runtime["checks"].values()
+    )
+    assert runtime["production_mutated"] is False
 
-    assert runtime_observation["status"] == "passed"
-    assert runtime_observation["workflow"]["run_id"] == 28917325425
-    assert runtime_observation["candidate"] == {
-        "channel": CANDIDATE_CHANNEL,
-        "release_id": RELEASE_ID,
-        "manifest_sha256": MANIFEST_SHA256,
+    assert promotion_approval["decision"] == "approve"
+    assert promotion_approval["authorization_scope"][
+        "promotion_dispatch_authorized"
+    ] is True
+    assert promotion_approval["authorization_scope"][
+        "idempotent_replay_authorized"
+    ] is False
+    assert promotion_approval["authorization_scope"]["rollback_authorized"] is False
+
+    assert promotion["status"] == "passed"
+    assert promotion["promotion"]["run_id"] == 28919098263
+    assert promotion["promotion"]["job_id"] == 85792150635
+    assert promotion["promotion"]["artifact_id"] == 8158736427
+    assert promotion["promotion"]["status"] == "promoted"
+    assert promotion["promotion"]["idempotent"] is False
+    assert promotion["production_target"] == {
+        "release_id": RELEASE,
+        "manifest_sha256": MANIFEST,
+        "pointer_sha256": TARGET_POINTER,
     }
-    checks = runtime_observation["checks"]
-    assert checks["m9_public_query"]["status"] == "answered"
-    assert checks["m8_regression_query"]["status"] == "answered"
-    assert checks["m6_regression_query"]["status"] == "answered"
-    assert checks["m9_acl_boundary_query"]["status"] == "not_found"
-    assert all(check["raw_fallback_used"] is False for check in checks.values())
-    pointer = runtime_observation["production_pointer"]
-    assert pointer["before_sha256"] == PRODUCTION_POINTER_SHA256
-    assert pointer["after_sha256"] == PRODUCTION_POINTER_SHA256
-    assert pointer["byte_exact_unchanged"] is True
-    assert runtime_observation["permanent_ledger_appended"] is False
-    assert runtime_observation["production_mutated"] is False
+    assert promotion["runtime_acceptance"]["public_status"] == "answered"
+    assert promotion["runtime_acceptance"]["expected_citation_present"] is True
+    assert promotion["runtime_acceptance"]["acl_status"] == "not_found"
+    assert promotion["runtime_acceptance"]["acl_filtered_count"] == 1
+    assert promotion["runtime_acceptance"]["public_raw_fallback_used"] is False
+    assert promotion["runtime_acceptance"]["acl_raw_fallback_used"] is False
+    assert promotion["ledger"] == {
+        "issue": 30,
+        "comment_id": 4911573318,
+        "comment_url": (
+            "https://github.com/danielcanfly/knowledge-engine/issues/30"
+            "#issuecomment-4911573318"
+        ),
+        "appended": True,
+    }
+    assert promotion["security_notes"]["rollback_used"] is False
+    assert promotion["security_notes"]["idempotent_replay_used"] is False
+    assert promotion["production_mutated"] is True
 
     transitions = [(item["from"], item["to"]) for item in lifecycle["transitions"]]
     assert transitions == [
@@ -145,24 +141,16 @@ def test_m9_request_spec_committed_state_is_exact_and_non_production() -> None:
         ("source_validated", "candidate_built"),
         ("candidate_built", "runtime_accepted"),
         ("runtime_accepted", "request_spec_committed"),
+        ("request_spec_committed", "production_promoted"),
     ]
-    assert lifecycle["initial_state"] == "planned"
-    assert lifecycle["final_state"] == "request_spec_committed"
+    assert lifecycle["final_state"] == "production_promoted"
     assert lifecycle["source_identity"] == {"sha": SOURCE_SHA}
     assert lifecycle["candidate_identity"] == {
-        "channel": CANDIDATE_CHANNEL,
-        "release_id": RELEASE_ID,
-        "manifest_sha256": MANIFEST_SHA256,
+        "channel": CHANNEL,
+        "release_id": RELEASE,
+        "manifest_sha256": MANIFEST,
     }
-    assert lifecycle["production_mutated"] is False
-    assert lifecycle["next_legal_action"] == "review_production_promotion"
-
-    assert production_baseline["production_release_id"] == (
-        "20260707T111252Z-aebf06593f89"
-    )
-    assert production_baseline["production_pointer_sha256"] == (
-        PRODUCTION_POINTER_SHA256
-    )
-    assert production_baseline["mutations_performed"] == []
-    assert production_baseline["production_pointer_mutated"] is False
-    assert production_baseline["ledger_appended"] is False
+    assert lifecycle["production_target"]["pointer_sha256"] == TARGET_POINTER
+    assert lifecycle["production_mutated"] is True
+    assert lifecycle["next_framework_action"] == "run_idempotent_replay_and_close"
+    assert lifecycle["next_legal_action"] == "review_idempotent_replay"
