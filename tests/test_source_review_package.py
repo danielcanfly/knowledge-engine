@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import json
+import runpy
 import shutil
 from pathlib import Path
+from typing import Any, Callable
 
 import pytest
-from scripts.validate_source_review_package import validate_source_review_package
 
 PACKAGE = Path("review_packages/m9-001")
+SCRIPT = Path("scripts/validate_source_review_package.py")
+_NAMESPACE = runpy.run_path(str(SCRIPT))
+validate_source_review_package: Callable[[str | Path], dict[str, Any]] = _NAMESPACE[
+    "validate_source_review_package"
+]
 
 
 def test_m9_source_review_package_is_valid_and_pending() -> None:
