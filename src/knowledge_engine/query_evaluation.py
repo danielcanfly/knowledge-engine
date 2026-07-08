@@ -96,7 +96,8 @@ def evaluate_runtime_query(
             "raw_fallback_allowed": effective_policy.raw_fallback_allowed,
         },
     }
-    evaluation_id = "qeval_" + hashlib.sha256(_stable_json(identity_payload)).hexdigest()[:32]
+    evaluation_hash = hashlib.sha256(_stable_json(identity_payload)).hexdigest()[:32]
+    evaluation_id = f"qeval_{evaluation_hash}"
     return {
         "schema_version": "1.0",
         "evaluation_id": evaluation_id,
