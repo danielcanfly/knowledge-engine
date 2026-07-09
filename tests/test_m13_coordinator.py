@@ -6,12 +6,18 @@ from pathlib import Path
 import pytest
 
 from knowledge_engine import m13_contracts as contracts
-from knowledge_engine import m13_coordinator as coordinator
+from knowledge_engine import m13_coordinator_v2 as coordinator
 from knowledge_engine import m13_registry as registry
 from knowledge_engine.storage import FileObjectStore
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE = ROOT / "src/knowledge_engine/m13_coordinator.py"
+MODULES = (
+    ROOT / "src/knowledge_engine/m13_coordination_common.py",
+    ROOT / "src/knowledge_engine/m13_candidate_coordinator.py",
+    ROOT / "src/knowledge_engine/m13_production_lease.py",
+    ROOT / "src/knowledge_engine/m13_production_mutation.py",
+    ROOT / "src/knowledge_engine/m13_coordinator_v2.py",
+)
 SOURCE_SHA = "2126db2ed4d372d3d61464fe31a86fc0243a1f24"
 PRODUCTION = contracts.ProductionIdentity(
     release_id="20260708T040116Z-69a9f445699a",
@@ -21,15 +27,16 @@ PRODUCTION = contracts.ProductionIdentity(
 
 
 def _record(index: int) -> contracts.M13BatchRecord:
-    seed = contracts.M13BatchSeed(
-        source_repository="danielcanfly/knowledge-source",
-        source_commit_sha=SOURCE_SHA,
-        production=PRODUCTION,
-        requested_by="reviewer@example.com",
-        requested_at=f"2026-07-09T09:{index:02d}:00Z",
-        purpose=f"M13.3 fixture batch {index}",
+    return contracts.M13BatchRecord.from_seed(
+        contracts.M13BatchSeed(
+            source_repository="danielcanfly/knowledge-source",
+            source_commit_sha=SOURCE_SHA,
+            production=PRODUCTION,
+            requested_by="reviewer@example.com",
+            requested_at=f"2026-07-09T09:{index:02d}:00Z",
+            purpose=f"M13.3 fixture batch {index}",
+        )
     )
-    return contracts.M13BatchRecord.from_seed(seed)
 
 
 def _operation_result(
@@ -59,22 +66,18 @@ def _operation_result(
     )
 
 
-def _register(store: FileObjectStore, record: contracts.M13BatchRecord, minute: int):
-    return registry.register_batch(
-        store,
-        record,
-        actor="operator@example.com",
-        registered_at=f"2026-07-09T10:{minute:02d}:00Z",
-    )
-
-
 def _advance_to_reviewing(
     store: FileObjectStore,
     record: contracts.M13BatchRecord,
     minute: int,
 ):
-    registered = _register(store, record, minute)
-    result = _operation_result(
+    registered = registry.register_batch(
+        store,
+        record,
+        actor="operator@example.com",
+        registered_at=f"2026-07-09T10:{minute:02d}:00Z",
+    )
+    source_review = _operation_result(
         record=record,
         kind="source_review",
         requested_at=f"2026-07-09T10:{minute:02d}:10Z",
@@ -82,10 +85,10 @@ def _advance_to_reviewing(
     )
     recorded = registry.record_operation_result(
         store,
-        result,
+        source_review,
         expected_registry_version=registered.registry_version,
     )
-    transitioned = registry.transition_batch(
+    return registry.transition_batch(
         store,
         batch_id=record.batch_id,
         target_state="reviewing_source",
@@ -94,7 +97,6 @@ def _advance_to_reviewing(
         expected_registry_version=recorded.registry_version,
         expected_batch_version=1,
     )
-    return transitioned
 
 
 def _advance_to_awaiting(
@@ -164,7 +166,7 @@ def _candidate_request(
 
 
 def _promotion_operation_id(record: contracts.M13BatchRecord, requested_at: str) -> str:
-    request = contracts.M13OperationRequest(
+    return contracts.M13OperationRequest(
         kind="production_promotion",
         batch_id=record.batch_id,
         requested_by="promoter@example.com",
@@ -175,8 +177,7 @@ def _promotion_operation_id(record: contracts.M13BatchRecord, requested_at: str)
         ),
         planning_only=False,
         requires_production_slot=True,
-    )
-    return request.operation_id()
+    ).operation_id()
 
 
 def test_candidate_slots_are_bounded_replayable_and_recoverable(tmp_path: Path) -> None:
@@ -253,6 +254,7 @@ def test_exactly_one_production_lease_and_explicit_recovery(tmp_path: Path) -> N
     second_record = _record(5)
     first_ready = _advance_to_awaiting(store, first_record, 10)
     second_ready = _advance_to_awaiting(store, second_record, 20)
+    current_registry_version = registry.registry_status(store)["registry_version"]
     first = coordinator.acquire_production_lease(
         store,
         batch_id=first_record.batch_id,
@@ -261,7 +263,7 @@ def test_exactly_one_production_lease_and_explicit_recovery(tmp_path: Path) -> N
         acquired_at="2026-07-09T12:00:00Z",
         expires_at="2026-07-09T12:10:00Z",
         observed_production=PRODUCTION,
-        expected_registry_version=first_ready.registry_version,
+        expected_registry_version=current_registry_version,
         expected_batch_version=first_ready.batch_version,
     )
     with pytest.raises(coordinator.M13CoordinatorError) as busy:
@@ -326,13 +328,23 @@ def test_permit_transition_and_commit_authorization_are_fenced(tmp_path: Path) -
     store = FileObjectStore(tmp_path / "store")
     record = _record(6)
     ready = _advance_to_awaiting(store, record, 30)
-    operation_id = _promotion_operation_id(record, "2026-07-09T13:00:00Z")
+    with pytest.raises(registry.M13RegistryError) as bypass:
+        registry.transition_batch(
+            store,
+            batch_id=record.batch_id,
+            target_state="promoting",
+            actor="bypass@example.com",
+            occurred_at="2026-07-09T13:00:00Z",
+            expected_registry_version=ready.registry_version,
+            expected_batch_version=ready.batch_version,
+        )
+    assert bypass.value.code == "M13_COORDINATOR_REQUIRED"
     lease = coordinator.acquire_production_lease(
         store,
         batch_id=record.batch_id,
-        operation_id=operation_id,
+        operation_id=_promotion_operation_id(record, "2026-07-09T13:00:10Z"),
         holder_id="promoter-1",
-        acquired_at="2026-07-09T13:00:00Z",
+        acquired_at="2026-07-09T13:00:10Z",
         expires_at="2026-07-09T13:20:00Z",
         observed_production=PRODUCTION,
         expected_registry_version=ready.registry_version,
@@ -354,17 +366,14 @@ def test_permit_transition_and_commit_authorization_are_fenced(tmp_path: Path) -
         observed_production=PRODUCTION,
     )
     assert transitioned.state == "promoting"
-    with pytest.raises(registry.M13RegistryError) as bypass:
-        registry.transition_batch(
-            store,
-            batch_id=record.batch_id,
-            target_state="closed",
-            actor="bypass@example.com",
-            occurred_at="2026-07-09T13:02:30Z",
-            expected_registry_version=transitioned.registry_version,
-            expected_batch_version=transitioned.batch_version,
-        )
-    assert bypass.value.code == "M13_BATCH_TRANSITION_INVALID"
+    transition_replay = coordinator.transition_batch_to_promoting(
+        store,
+        permit=permit,
+        actor="promoter@example.com",
+        occurred_at="2026-07-09T13:02:00Z",
+        observed_production=PRODUCTION,
+    )
+    assert transition_replay.idempotent is True
     authorization = coordinator.authorize_production_commit(
         store,
         permit=permit,
@@ -379,7 +388,7 @@ def test_permit_transition_and_commit_authorization_are_fenced(tmp_path: Path) -
         checked_at="2026-07-09T13:04:00Z",
         observed_production=PRODUCTION,
     )
-    stale_production = contracts.ProductionIdentity(
+    drifted = contracts.ProductionIdentity(
         release_id=PRODUCTION.release_id,
         manifest_sha256=PRODUCTION.manifest_sha256,
         pointer_sha256="f" * 64,
@@ -390,7 +399,7 @@ def test_permit_transition_and_commit_authorization_are_fenced(tmp_path: Path) -
             authorization=authorization,
             holder_id=lease.holder_id,
             checked_at="2026-07-09T13:05:00Z",
-            observed_production=stale_production,
+            observed_production=drifted,
         )
     assert drift.value.code == "M13_PRODUCTION_EXPECTED_PREVIOUS_STALE"
     resulting = contracts.ProductionIdentity(
@@ -457,7 +466,7 @@ def test_commit_authorized_expiry_requires_manual_reconciliation(tmp_path: Path)
     assert manual.value.code == "M13_PRODUCTION_MANUAL_RECONCILIATION_REQUIRED"
 
 
-def test_wrong_holder_stale_versions_and_production_drift_fail_closed(tmp_path: Path) -> None:
+def test_wrong_holder_versions_and_production_drift_fail_closed(tmp_path: Path) -> None:
     store = FileObjectStore(tmp_path / "store")
     record = _record(8)
     ready = _advance_to_awaiting(store, record, 50)
@@ -515,25 +524,26 @@ def test_wrong_holder_stale_versions_and_production_drift_fail_closed(tmp_path: 
     assert holder.value.code == "M13_PRODUCTION_HOLDER_MISMATCH"
 
 
-def test_coordinator_module_has_no_network_or_direct_release_surface() -> None:
+def test_coordinator_modules_have_no_network_or_direct_release_surface() -> None:
     forbidden_imports = {"boto3", "httpx", "requests", "socket", "subprocess"}
     forbidden_calls = {"create_release", "promote_release", "rollback_release", "delete"}
-    tree = ast.parse(MODULE.read_text(encoding="utf-8"))
-    imported = {
-        alias.name.split(".")[0]
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Import)
-        for alias in node.names
-    }
-    imported.update(
-        (node.module or "").split(".")[0]
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom)
-    )
-    assert imported.isdisjoint(forbidden_imports)
-    calls = {
-        node.func.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-    }
-    assert calls.isdisjoint(forbidden_calls)
+    for module in MODULES:
+        tree = ast.parse(module.read_text(encoding="utf-8"))
+        imported = {
+            alias.name.split(".")[0]
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        }
+        imported.update(
+            (node.module or "").split(".")[0]
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+        )
+        assert imported.isdisjoint(forbidden_imports)
+        calls = {
+            node.func.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        }
+        assert calls.isdisjoint(forbidden_calls)
