@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from functools import lru_cache
+from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -24,6 +26,19 @@ from .m14_public_contracts import (
     PublicErrorDetail,
     PublicErrorResponse,
     public_response_from_runtime,
+)
+from .m14_security import (
+    PublicAbuseController,
+    PublicControlError,
+    PublicEdgeSecurityMiddleware,
+    PublicRequestIdentity,
+    public_client_key,
+    public_rejection_telemetry,
+)
+from .m14_security_contracts import (
+    PublicProductCapabilities,
+    harden_public_widget_javascript,
+    public_product_capabilities,
 )
 from .runtime import Runtime
 from .storage import create_object_store
@@ -71,6 +86,11 @@ def get_authenticator() -> Authenticator:
     return Authenticator(get_settings())
 
 
+@lru_cache(maxsize=1)
+def get_public_abuse_controller() -> PublicAbuseController:
+    return PublicAbuseController(get_settings())
+
+
 def get_principal(
     authorization: str | None = Depends(authorization_header),
 ) -> Principal:
@@ -83,7 +103,93 @@ def get_principal(
         ) from exc
 
 
-app = FastAPI(title="Knowledge Engine", version="0.5.0")
+def get_public_principal(
+    authorization: str | None = Depends(authorization_header),
+) -> Principal:
+    try:
+        return get_authenticator().authenticate_public(authorization)
+    except AuthorizationError as exc:
+        public_rejection_telemetry(
+            reason="authentication",
+            path="/v1/ask",
+            authenticated=False,
+            status_code=401,
+        )
+        detail = PublicErrorDetail(
+            code="PUBLIC-AUTH-401",
+            message="public authentication is required or invalid",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=detail.model_dump(),
+        ) from exc
+
+
+def _raise_public_control_error(
+    error: PublicControlError,
+    *,
+    path: str,
+    authenticated: bool,
+) -> None:
+    public_rejection_telemetry(
+        reason=error.code,
+        path=path,
+        authenticated=authenticated,
+        status_code=error.status_code,
+    )
+    headers = (
+        {"Retry-After": str(error.retry_after)}
+        if error.retry_after is not None
+        else None
+    )
+    detail = PublicErrorDetail(code=error.code, message=error.message)
+    raise HTTPException(
+        status_code=error.status_code,
+        detail=detail.model_dump(),
+        headers=headers,
+    )
+
+
+def get_public_request_identity(
+    request: Request,
+    principal: Principal = Depends(get_public_principal),
+) -> PublicRequestIdentity:
+    identity = PublicRequestIdentity(
+        principal=principal,
+        client_key=public_client_key(
+            principal,
+            request.client.host if request.client is not None else None,
+        ),
+    )
+    try:
+        get_public_abuse_controller().admit(identity.client_key)
+    except PublicControlError as exc:
+        _raise_public_control_error(
+            exc,
+            path=request.url.path,
+            authenticated=principal.authenticated,
+        )
+    return identity
+
+
+def _execute_with_public_controls(
+    operation: Callable[[], Any],
+    *,
+    identity: PublicRequestIdentity,
+    path: str,
+) -> Any:
+    try:
+        return get_public_abuse_controller().execute(operation)
+    except PublicControlError as exc:
+        _raise_public_control_error(
+            exc,
+            path=path,
+            authenticated=identity.principal.authenticated,
+        )
+
+
+app = FastAPI(title="Knowledge Engine", version="0.6.0")
+app.add_middleware(PublicEdgeSecurityMiddleware, settings_provider=get_settings)
 
 
 @app.get("/v1/health")
@@ -174,6 +280,15 @@ def _execute_public_ask(
     request: PublicAskRequest,
     principal: Principal,
 ) -> PublicAskResponse:
+    if request.audience != "public" and not principal.authenticated:
+        detail = PublicErrorDetail(
+            code="PUBLIC-QUERY-403",
+            message="authenticated audience authorization is required",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail.model_dump(),
+        )
     if request.audience not in principal.audiences:
         detail = PublicErrorDetail(
             code="PUBLIC-QUERY-403",
@@ -207,12 +322,16 @@ def _execute_public_ask(
         ) from exc
 
 
-@app.get(
-    "/v1/ask/capabilities",
-    response_model=PublicInterfaceCapabilities,
-)
 def ask_capabilities() -> PublicInterfaceCapabilities:
     return public_interface_capabilities()
+
+
+@app.get(
+    "/v1/ask/capabilities",
+    response_model=PublicProductCapabilities,
+)
+def ask_capabilities_endpoint() -> PublicProductCapabilities:
+    return public_product_capabilities(get_settings())
 
 
 @app.get("/ask", response_class=HTMLResponse, include_in_schema=False)
@@ -235,8 +354,9 @@ def ask_page(lang: str | None = None) -> HTMLResponse:
 
 @app.get("/embed/ask.js", include_in_schema=False)
 def ask_widget_script() -> Response:
+    script = harden_public_widget_javascript(public_ask_widget_javascript())
     return Response(
-        public_ask_widget_javascript(),
+        script,
         media_type="application/javascript",
         headers={
             "Cache-Control": "public, max-age=300",
@@ -245,36 +365,39 @@ def ask_widget_script() -> Response:
     )
 
 
-@app.post(
-    "/v1/ask",
-    response_model=PublicAskResponse,
-    responses={
-        403: {"model": PublicErrorResponse},
-        503: {"model": PublicErrorResponse},
-    },
-)
 def ask(
     request: PublicAskRequest,
-    principal: Principal = Depends(get_principal),
+    principal: Principal,
 ) -> PublicAskResponse:
     return _execute_public_ask(request, principal)
 
 
 @app.post(
-    "/v1/ask/stream",
-    response_class=StreamingResponse,
+    "/v1/ask",
+    response_model=PublicAskResponse,
     responses={
-        200: {
-            "description": "Deterministic public answer event stream",
-            "content": {"text/event-stream": {"schema": {"type": "string"}}},
-        },
+        401: {"model": PublicErrorResponse},
         403: {"model": PublicErrorResponse},
+        413: {"model": PublicErrorResponse},
+        429: {"model": PublicErrorResponse},
         503: {"model": PublicErrorResponse},
+        504: {"model": PublicErrorResponse},
     },
 )
+def ask_endpoint(
+    request: PublicAskRequest,
+    identity: PublicRequestIdentity = Depends(get_public_request_identity),
+) -> PublicAskResponse:
+    return _execute_with_public_controls(
+        lambda: ask(request, identity.principal),
+        identity=identity,
+        path="/v1/ask",
+    )
+
+
 def ask_stream(
     request: PublicAskRequest,
-    principal: Principal = Depends(get_principal),
+    principal: Principal,
 ) -> StreamingResponse:
     response = _execute_public_ask(request, principal)
     return StreamingResponse(
@@ -285,4 +408,31 @@ def ask_stream(
             "X-Accel-Buffering": "no",
             "X-Content-Type-Options": "nosniff",
         },
+    )
+
+
+@app.post(
+    "/v1/ask/stream",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "description": "Deterministic public answer event stream",
+            "content": {"text/event-stream": {"schema": {"type": "string"}}},
+        },
+        401: {"model": PublicErrorResponse},
+        403: {"model": PublicErrorResponse},
+        413: {"model": PublicErrorResponse},
+        429: {"model": PublicErrorResponse},
+        503: {"model": PublicErrorResponse},
+        504: {"model": PublicErrorResponse},
+    },
+)
+def ask_stream_endpoint(
+    request: PublicAskRequest,
+    identity: PublicRequestIdentity = Depends(get_public_request_identity),
+) -> StreamingResponse:
+    return _execute_with_public_controls(
+        lambda: ask_stream(request, identity.principal),
+        identity=identity,
+        path="/v1/ask/stream",
     )
