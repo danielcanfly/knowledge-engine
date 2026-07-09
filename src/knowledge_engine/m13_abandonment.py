@@ -3,11 +3,11 @@ from __future__ import annotations
 from . import m13_registry as registry
 from .m13_contracts import BATCH_ID_RE, ProductionIdentity
 from .m13_lifecycle_common import (
+    ELIGIBLE_ABANDON_STATES,
     LIFECYCLE_SCHEMA,
     AbandonmentReason,
-    ELIGIBLE_ABANDON_STATES,
-    M13LifecycleError,
     LifecycleMutationResult,
+    M13LifecycleError,
     assert_expected_production,
     assert_no_active_production_lease,
     batch_update,
@@ -93,7 +93,7 @@ def abandon_batch(
         target_state="abandoned",
         event_type="batch_abandoned",
     )
-    event, next_snapshot, event_key, snapshot_key = artifact
+    _, next_snapshot, event_key, snapshot_key = artifact
     next_record = registry._record_from_identity(next_snapshot["record"])
     evidence = {
         **identity,
