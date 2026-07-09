@@ -237,8 +237,6 @@ def test_m13_contract_module_has_no_network_or_mutating_surface() -> None:
     calls = {
         node.func.attr
         for node in ast.walk(tree)
-        if isinstance(node.func, ast.Attribute)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
     }
     assert calls.isdisjoint(forbidden_calls)
