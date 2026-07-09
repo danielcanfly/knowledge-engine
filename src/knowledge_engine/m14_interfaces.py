@@ -48,18 +48,27 @@ def public_interface_capabilities() -> PublicInterfaceCapabilities:
         max_results=20,
         citation_markers=True,
         source_cards=True,
-        stream_event_order=["meta", "answer", "citations", "source_cards", "done"],
+        stream_event_order=[
+            "meta",
+            "answer",
+            "citations",
+            "source_cards",
+            "done",
+        ],
     )
 
 
 def normalize_interface_locale(value: str | None) -> str:
-    if value == "zh-TW":
-        return "zh-TW"
-    return "en"
+    return "zh-TW" if value == "zh-TW" else "en"
 
 
 def _json(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
 
 
 def _sse(event: str, event_id: str, payload: object) -> str:
@@ -96,13 +105,21 @@ def public_interface_sse_events(response: PublicAskResponse) -> Iterator[str]:
     yield _sse(
         "citations",
         f"{response.request_id}:{event_index}",
-        {"items": [item.model_dump(mode="json") for item in response.citations]},
+        {
+            "items": [
+                item.model_dump(mode="json") for item in response.citations
+            ]
+        },
     )
     event_index += 1
     yield _sse(
         "source_cards",
         f"{response.request_id}:{event_index}",
-        {"items": [item.model_dump(mode="json") for item in response.source_cards]},
+        {
+            "items": [
+                item.model_dump(mode="json") for item in response.source_cards
+            ]
+        },
     )
     event_index += 1
     yield _sse(
@@ -132,14 +149,36 @@ def standalone_ask_html(locale: str | None = None) -> str:
   <meta name="description" content="{description}">
   <title>{title}</title>
   <style>
-    :root {{ color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }}
+    :root {{
+      color-scheme: light dark;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    }}
     * {{ box-sizing: border-box; }}
-    body {{ margin: 0; min-height: 100vh; background: Canvas; color: CanvasText; }}
-    main {{ width: min(860px, 100%); margin: 0 auto; padding: 32px 16px 64px; }}
-    .shell {{ border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 20px; overflow: hidden; }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      background: Canvas;
+      color: CanvasText;
+    }}
+    main {{
+      width: min(860px, 100%);
+      margin: 0 auto;
+      padding: 32px 16px 64px;
+    }}
+    .shell {{
+      border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+      border-radius: 20px;
+      overflow: hidden;
+    }}
     header {{ padding: 24px 24px 8px; }}
-    h1 {{ margin: 0; font-size: clamp(1.5rem, 4vw, 2.25rem); }}
-    header p {{ margin: 10px 0 0; opacity: .72; }}
+    h1 {{
+      margin: 0;
+      font-size: clamp(1.5rem, 4vw, 2.25rem);
+    }}
+    header p {{
+      margin: 10px 0 0;
+      opacity: .72;
+    }}
   </style>
 </head>
 <body>
@@ -149,7 +188,11 @@ def standalone_ask_html(locale: str | None = None) -> str:
         <h1 id="page-title">{title}</h1>
         <p>{description}</p>
       </header>
-      <knowledge-ask data-mode="standalone" data-locale="{language}" data-endpoint="/v1/ask/stream"></knowledge-ask>
+      <knowledge-ask
+        data-mode="standalone"
+        data-locale="{language}"
+        data-endpoint="/v1/ask/stream">
+      </knowledge-ask>
     </section>
   </main>
   <script src="/embed/ask.js" defer></script>
@@ -170,15 +213,14 @@ def public_ask_widget_javascript() -> str:
       submit: "Ask",
       loading: "Searching the governed wiki…",
       answered: "Answered from the current release.",
-      degraded: "Answer available, but inspectable sources are unavailable.",
+      degraded: "Answer available, but sources are unavailable.",
       notFound: "No supported answer was found in the authorized wiki.",
-      unauthorized: "This interface is not authorized for the requested audience.",
+      unauthorized: "This interface is not authorized.",
       unavailable: "The knowledge service is temporarily unavailable.",
       failed: "The request could not be completed.",
       sources: "Sources",
       confidence: "Confidence",
-      release: "Release",
-      retry: "Try again"
+      release: "Release"
     },
     "zh-TW": {
       title: "詢問 AI",
@@ -194,45 +236,154 @@ def public_ask_widget_javascript() -> str:
       failed: "無法完成這次請求。",
       sources: "來源",
       confidence: "信心",
-      release: "版本",
-      retry: "再試一次"
+      release: "版本"
     }
   };
 
   const STYLE = `
-    :host { display:block; color:inherit; font:inherit; }
-    * { box-sizing:border-box; }
-    .ke-root { padding:20px 24px 24px; }
-    .ke-form { display:grid; gap:10px; }
-    .ke-label { font-weight:650; }
-    .ke-row { display:flex; gap:10px; align-items:flex-end; }
-    .ke-input { flex:1; min-height:74px; resize:vertical; border:1px solid color-mix(in srgb, currentColor 22%, transparent); border-radius:14px; padding:12px 14px; background:Canvas; color:CanvasText; font:inherit; line-height:1.45; }
-    .ke-input:focus { outline:2px solid Highlight; outline-offset:2px; }
-    .ke-button { min-width:88px; min-height:44px; border:0; border-radius:12px; padding:10px 16px; background:CanvasText; color:Canvas; font:inherit; font-weight:700; cursor:pointer; }
-    .ke-button:disabled { opacity:.55; cursor:wait; }
-    .ke-status { min-height:1.4em; margin-top:12px; font-size:.9rem; opacity:.72; }
-    .ke-turns { display:grid; gap:16px; margin-top:18px; }
-    .ke-turn { display:grid; gap:10px; }
-    .ke-user { justify-self:end; max-width:min(82%, 640px); padding:10px 13px; border-radius:14px 14px 4px 14px; background:color-mix(in srgb, Highlight 18%, Canvas); white-space:pre-wrap; }
-    .ke-assistant { max-width:100%; padding:16px; border:1px solid color-mix(in srgb, currentColor 16%, transparent); border-radius:16px; background:color-mix(in srgb, CanvasText 3%, Canvas); }
-    .ke-answer { display:grid; gap:10px; line-height:1.58; }
-    .ke-answer p { margin:0; white-space:pre-wrap; }
-    .ke-meta { display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:14px; font-size:.8rem; opacity:.68; }
-    .ke-notice { margin:0; line-height:1.5; }
-    .ke-sources { margin-top:16px; border-top:1px solid color-mix(in srgb, currentColor 12%, transparent); padding-top:12px; }
-    .ke-sources summary { cursor:pointer; font-weight:650; }
-    .ke-source-list { display:grid; gap:10px; margin:12px 0 0; padding:0; list-style:none; }
-    .ke-source { display:grid; gap:3px; }
-    .ke-source a { color:LinkText; overflow-wrap:anywhere; font-weight:620; }
-    .ke-source small { opacity:.68; }
-    .ke-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-    @media (max-width:600px) { .ke-root { padding:16px; } .ke-row { align-items:stretch; flex-direction:column; } .ke-button { width:100%; } .ke-user { max-width:92%; } }
+    :host {
+      display: block;
+      color: inherit;
+      font: inherit;
+    }
+    * { box-sizing: border-box; }
+    .ke-root { padding: 20px 24px 24px; }
+    .ke-form {
+      display: grid;
+      gap: 10px;
+    }
+    .ke-label { font-weight: 650; }
+    .ke-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .ke-input {
+      flex: 1;
+      min-height: 74px;
+      resize: vertical;
+      border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+      border-radius: 14px;
+      padding: 12px 14px;
+      background: Canvas;
+      color: CanvasText;
+      font: inherit;
+      line-height: 1.45;
+    }
+    .ke-input:focus {
+      outline: 2px solid Highlight;
+      outline-offset: 2px;
+    }
+    .ke-button {
+      min-width: 88px;
+      min-height: 44px;
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 16px;
+      background: CanvasText;
+      color: Canvas;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .ke-button:disabled {
+      opacity: .55;
+      cursor: wait;
+    }
+    .ke-status {
+      min-height: 1.4em;
+      margin-top: 12px;
+      font-size: .9rem;
+      opacity: .72;
+    }
+    .ke-turns {
+      display: grid;
+      gap: 16px;
+      margin-top: 18px;
+    }
+    .ke-turn {
+      display: grid;
+      gap: 10px;
+    }
+    .ke-user {
+      justify-self: end;
+      max-width: min(82%, 640px);
+      padding: 10px 13px;
+      border-radius: 14px 14px 4px 14px;
+      background: color-mix(in srgb, Highlight 18%, Canvas);
+      white-space: pre-wrap;
+    }
+    .ke-assistant {
+      max-width: 100%;
+      padding: 16px;
+      border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+      border-radius: 16px;
+      background: color-mix(in srgb, CanvasText 3%, Canvas);
+    }
+    .ke-answer {
+      display: grid;
+      gap: 10px;
+      line-height: 1.58;
+    }
+    .ke-answer p {
+      margin: 0;
+      white-space: pre-wrap;
+    }
+    .ke-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      margin-top: 14px;
+      font-size: .8rem;
+      opacity: .68;
+    }
+    .ke-notice {
+      margin: 0;
+      line-height: 1.5;
+    }
+    .ke-sources {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+    }
+    .ke-sources summary {
+      cursor: pointer;
+      font-weight: 650;
+    }
+    .ke-source-list {
+      display: grid;
+      gap: 10px;
+      margin: 12px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .ke-source {
+      display: grid;
+      gap: 3px;
+    }
+    .ke-source a {
+      color: LinkText;
+      overflow-wrap: anywhere;
+      font-weight: 620;
+    }
+    .ke-source small { opacity: .68; }
+    @media (max-width: 600px) {
+      .ke-root { padding: 16px; }
+      .ke-row {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .ke-button { width: 100%; }
+      .ke-user { max-width: 92%; }
+    }
   `;
 
   function node(tag, className, text) {
     const value = document.createElement(tag);
     if (className) value.className = className;
-    if (text !== undefined && text !== null) value.textContent = String(text);
+    if (text !== undefined && text !== null) {
+      value.textContent = String(text);
+    }
     return value;
   }
 
@@ -259,8 +410,12 @@ def public_ask_widget_javascript() -> str:
     let event = "message";
     let data = "";
     for (const line of block.split("\n")) {
-      if (line.startsWith("event:")) event = line.slice(6).trim();
-      if (line.startsWith("data:")) data += line.slice(5).trim();
+      if (line.startsWith("event:")) {
+        event = line.slice(6).trim();
+      }
+      if (line.startsWith("data:")) {
+        data += line.slice(5).trim();
+      }
     }
     return data ? { event, payload: JSON.parse(data) } : null;
   }
@@ -272,7 +427,8 @@ def public_ask_widget_javascript() -> str:
     let buffer = "";
     while (true) {
       const chunk = await reader.read();
-      buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done });
+      const bytes = chunk.value || new Uint8Array();
+      buffer += decoder.decode(bytes, { stream: !chunk.done });
       let boundary = buffer.indexOf("\n\n");
       while (boundary >= 0) {
         const block = buffer.slice(0, boundary);
@@ -295,7 +451,9 @@ def public_ask_widget_javascript() -> str:
       this.dataset.ready = "true";
       this.language = localeFor(this.getAttribute("data-locale"));
       this.copy = COPY[this.language];
-      this.maxResults = boundedResults(this.getAttribute("data-max-results"));
+      this.maxResults = boundedResults(
+        this.getAttribute("data-max-results")
+      );
       this.mount();
     }
 
@@ -307,17 +465,22 @@ def public_ask_widget_javascript() -> str:
 
       const shell = node("div", "ke-root");
       const form = node("form", "ke-form");
-      const label = node("label", "ke-label", this.getAttribute("data-title") || this.copy.title);
+      const title = this.getAttribute("data-title") || this.copy.title;
+      const label = node("label", "ke-label", title);
       const inputId = `ke-question-${Math.random().toString(36).slice(2)}`;
       label.htmlFor = inputId;
+
       const row = node("div", "ke-row");
       const input = node("textarea", "ke-input");
       input.id = inputId;
       input.name = "query";
       input.required = true;
       input.maxLength = 8000;
-      input.placeholder = this.getAttribute("data-placeholder") || this.copy.placeholder;
+      input.placeholder = (
+        this.getAttribute("data-placeholder") || this.copy.placeholder
+      );
       input.setAttribute("aria-label", this.copy.label);
+
       const button = node("button", "ke-button", this.copy.submit);
       button.type = "submit";
       row.append(input, button);
@@ -331,7 +494,6 @@ def public_ask_widget_javascript() -> str:
       shell.append(form, status, turns);
       root.append(shell);
 
-      this.form = form;
       this.input = input;
       this.button = button;
       this.status = status;
@@ -363,7 +525,8 @@ def public_ask_widget_javascript() -> str:
     renderSources(container, cards) {
       if (!Array.isArray(cards) || cards.length === 0) return;
       const details = node("details", "ke-sources");
-      details.append(node("summary", "", `${this.copy.sources} (${cards.length})`));
+      const label = `${this.copy.sources} (${cards.length})`;
+      details.append(node("summary", "", label));
       const list = node("ol", "ke-source-list");
       for (const card of cards) {
         const item = node("li", "ke-source");
@@ -371,7 +534,9 @@ def public_ask_widget_javascript() -> str:
         link.href = card.uri;
         link.target = "_blank";
         link.rel = "noopener noreferrer";
-        const secondary = [card.publisher, card.display_host].filter(Boolean).join(" · ");
+        const secondary = [card.publisher, card.display_host]
+          .filter(Boolean)
+          .join(" · ");
         item.append(link, node("small", "", secondary));
         list.append(item);
       }
@@ -380,9 +545,43 @@ def public_ask_widget_javascript() -> str:
     }
 
     errorMessage(statusCode) {
-      if (statusCode === 401 || statusCode === 403) return this.copy.unauthorized;
+      if (statusCode === 401 || statusCode === 403) {
+        return this.copy.unauthorized;
+      }
       if (statusCode === 503) return this.copy.unavailable;
       return this.copy.failed;
+    }
+
+    receiveEvent(turn, state, event, payload) {
+      if (event === "meta") {
+        state.meta = payload;
+        if (payload.status === "not_found") {
+          this.addNotice(turn.answer, this.copy.notFound);
+        }
+        if (payload.status === "degraded") {
+          this.status.textContent = this.copy.degraded;
+        }
+      } else if (event === "answer") {
+        turn.answer.append(node("p", "", payload.text));
+      } else if (event === "source_cards") {
+        state.cards = Array.isArray(payload.items) ? payload.items : [];
+      } else if (event === "done" && state.meta) {
+        if (state.meta.status === "answered") {
+          this.status.textContent = this.copy.answered;
+        }
+        if (state.meta.status === "not_found") {
+          this.status.textContent = this.copy.notFound;
+        }
+      }
+    }
+
+    renderMeta(turn, meta) {
+      if (!meta) return;
+      const confidence = Math.round(meta.confidence * 100);
+      turn.meta.append(
+        node("span", "", `${this.copy.confidence}: ${confidence}%`),
+        node("span", "", `${this.copy.release}: ${meta.release_id}`)
+      );
     }
 
     async submit() {
@@ -392,9 +591,8 @@ def public_ask_widget_javascript() -> str:
       this.input.disabled = true;
       this.status.textContent = this.copy.loading;
       const turn = this.addTurn(query);
+      const state = { meta: null, cards: [] };
       this.input.value = "";
-      let metaPayload = null;
-      let sourceCards = [];
       try {
         const response = await fetch(endpointFor(this), {
           method: "POST",
@@ -403,34 +601,23 @@ def public_ask_widget_javascript() -> str:
             "Accept": "text/event-stream",
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({ query, max_results: this.maxResults, audience: "public" })
+          body: JSON.stringify({
+            query,
+            max_results: this.maxResults,
+            audience: "public"
+          })
         });
         if (!response.ok) {
-          this.addNotice(turn.answer, this.errorMessage(response.status));
-          this.status.textContent = this.errorMessage(response.status);
+          const message = this.errorMessage(response.status);
+          this.addNotice(turn.answer, message);
+          this.status.textContent = message;
           return;
         }
         await readEventStream(response, (event, payload) => {
-          if (event === "meta") {
-            metaPayload = payload;
-            if (payload.status === "not_found") this.addNotice(turn.answer, this.copy.notFound);
-            if (payload.status === "degraded") this.status.textContent = this.copy.degraded;
-          } else if (event === "answer") {
-            turn.answer.append(node("p", "", payload.text));
-          } else if (event === "source_cards") {
-            sourceCards = Array.isArray(payload.items) ? payload.items : [];
-          } else if (event === "done") {
-            if (metaPayload && metaPayload.status === "answered") this.status.textContent = this.copy.answered;
-            if (metaPayload && metaPayload.status === "not_found") this.status.textContent = this.copy.notFound;
-          }
+          this.receiveEvent(turn, state, event, payload);
         });
-        this.renderSources(turn.assistant, sourceCards);
-        if (metaPayload) {
-          turn.meta.append(
-            node("span", "", `${this.copy.confidence}: ${Math.round(metaPayload.confidence * 100)}%`),
-            node("span", "", `${this.copy.release}: ${metaPayload.release_id}`)
-          );
-        }
+        this.renderSources(turn.assistant, state.cards);
+        this.renderMeta(turn, state.meta);
       } catch (error) {
         this.addNotice(turn.answer, this.copy.failed);
         this.status.textContent = this.copy.failed;
