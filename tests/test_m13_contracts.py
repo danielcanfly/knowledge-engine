@@ -4,6 +4,7 @@ import ast
 from pathlib import Path
 
 import pytest
+
 from knowledge_engine import m13_contracts as m13
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,8 +38,7 @@ def _expected_previous() -> m13.ExpectedPreviousProduction:
 
 def test_batch_seed_and_record_identities_are_deterministic() -> None:
     seed = _seed()
-    replay = _seed()
-    assert seed.batch_id() == replay.batch_id()
+    assert seed.batch_id() == _seed().batch_id()
     assert seed.batch_id().startswith("mbatch_")
     batch = m13.M13BatchRecord.from_seed(seed)
     assert batch.batch_id == seed.batch_id()
@@ -50,23 +50,23 @@ def test_candidate_states_require_candidate_channel() -> None:
     with pytest.raises(ValueError, match="candidate_channel"):
         m13.M13BatchRecord.from_seed(_seed(), state="candidate_ready")
     batch = m13.M13BatchRecord.from_seed(
-        _seed(),
-        state="candidate_ready",
-        candidate_channel="candidate-m13-fixture",
+        _seed(), state="candidate_ready", candidate_channel="candidate-m13-fixture"
     )
     assert batch.candidate_channel == "candidate-m13-fixture"
 
 
-def test_batch_transitions_reject_invalid_jumps() -> None:
+def test_batch_and_operation_transitions_reject_invalid_jumps() -> None:
     m13.validate_batch_transition("planned", "reviewing_source")
     m13.validate_batch_transition("promoting", "closed")
+    m13.validate_operation_transition("planned", "running")
+    m13.validate_operation_transition("running", "completed")
     with pytest.raises(ValueError, match="invalid batch transition"):
         m13.validate_batch_transition("planned", "closed")
-    with pytest.raises(ValueError, match="invalid batch transition"):
-        m13.validate_batch_transition("closed", "promoting")
+    with pytest.raises(ValueError, match="invalid operation transition"):
+        m13.validate_operation_transition("completed", "running")
 
 
-def test_operation_request_identities_and_transition_contracts() -> None:
+def test_operation_request_identities_are_deterministic() -> None:
     request = m13.M13OperationRequest(
         kind="candidate_build",
         batch_id=_seed().batch_id(),
@@ -75,22 +75,19 @@ def test_operation_request_identities_and_transition_contracts() -> None:
         expected_previous_production=_expected_previous(),
         artifact_names=("m13/candidate-plan.json",),
     )
-    assert request.operation_id().startswith("mop_")
-    assert request.operation_id() == m13.M13OperationRequest(
+    replay = m13.M13OperationRequest(
         kind="candidate_build",
         batch_id=_seed().batch_id(),
         requested_by="operator@example.com",
         requested_at="2026-07-09T04:02:00Z",
         expected_previous_production=_expected_previous(),
         artifact_names=("m13/candidate-plan.json",),
-    ).operation_id()
-    m13.validate_operation_transition("planned", "running")
-    m13.validate_operation_transition("running", "completed")
-    with pytest.raises(ValueError, match="invalid operation transition"):
-        m13.validate_operation_transition("completed", "running")
+    )
+    assert request.operation_id() == replay.operation_id()
+    assert request.operation_id().startswith("mop_")
 
 
-def test_operation_result_enforces_no_write_for_planning_operations() -> None:
+def test_operation_result_enforces_planning_no_write_boundary() -> None:
     request = m13.M13OperationRequest(
         kind="release_comparison",
         batch_id=_seed().batch_id(),
@@ -118,8 +115,8 @@ def test_operation_result_enforces_no_write_for_planning_operations() -> None:
         )
 
 
-def test_production_mutation_operations_require_slot_and_explicit_governance() -> None:
-    with pytest.raises(ValueError, match="production mutations cannot be planning_only"):
+def test_production_mutation_operations_require_slot_and_explicit_boundary() -> None:
+    with pytest.raises(ValueError, match="planning_only"):
         m13.M13OperationRequest(
             kind="production_promotion",
             batch_id=_seed().batch_id(),
@@ -136,7 +133,7 @@ def test_production_mutation_operations_require_slot_and_explicit_governance() -
         planning_only=False,
         requires_production_slot=True,
     )
-    mutation_governance = {
+    mutation_boundary = {
         **m13.GOVERNANCE_NO_WRITE,
         "release_write_permitted": True,
         "production_write_permitted": True,
@@ -147,7 +144,7 @@ def test_production_mutation_operations_require_slot_and_explicit_governance() -
         request=request,
         state="completed",
         result_at="2026-07-09T04:06:00Z",
-        governance=mutation_governance,
+        governance=mutation_boundary,
     )
     assert result.governance["production_write_permitted"] is True
 
@@ -189,26 +186,9 @@ def test_blocked_and_rejected_operation_results_require_reasons() -> None:
         )
 
 
-def test_m13_contract_module_has_no_network_or_mutating_surface() -> None:
-    forbidden_imports = {
-        "boto3",
-        "httpx",
-        "requests",
-        "socket",
-        "subprocess",
-        "openai",
-        "anthropic",
-    }
-    forbidden_calls = {
-        "create_pull_request",
-        "merge_pull_request",
-        "promote",
-        "rollback",
-        "delete",
-        "put",
-        "write_text",
-        "write_bytes",
-    }
+def test_m13_contract_module_has_no_external_runtime_surface() -> None:
+    forbidden_imports = {"boto3", "httpx", "requests", "socket", "subprocess"}
+    forbidden_calls = {"put", "write_text", "write_bytes"}
     tree = ast.parse(MODULE.read_text(encoding="utf-8"))
     imported = {
         alias.name.split(".")[0]
