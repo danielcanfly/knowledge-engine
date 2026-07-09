@@ -46,6 +46,10 @@ class PublicErrorDetail(BaseModel):
     request_id: str | None = None
 
 
+class PublicErrorResponse(BaseModel):
+    detail: PublicErrorDetail
+
+
 def _canonical_bytes(value: dict[str, Any]) -> bytes:
     return (
         json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
