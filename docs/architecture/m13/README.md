@@ -10,7 +10,7 @@ Implementation is tracked under the M13 parent issue and slice issues. This dire
 4. [M13.4 Retention, Supersession, Abandonment and Rebuild Rules](m13-4-retention-supersession.md)
 5. [M13.5 Deterministic Release Comparison](m13-5-release-comparison.md)
 6. [M13.6 Operator Status, Lookup and Closeout Tools](m13-6-operator-closeout.md)
-7. M13.7 Three-Batch Acceptance and M13 Closure
+7. [M13.7 Three-Batch Acceptance and M13 Closure](m13-7-three-batch-acceptance.md)
 
 ## M13 invariant
 

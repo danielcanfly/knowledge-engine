@@ -1,0 +1,94 @@
+name: M13 Three-Batch Acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/knowledge_engine/m13_*.py'
+      - 'scripts/m13_three_batch_acceptance.py'
+      - 'tests/test_m13_acceptance.py'
+      - 'tests/test_m13_acceptance_surface.py'
+      - 'docs/architecture/m13/**'
+      - '.github/workflows/m13-three-batch-acceptance.yml'
+      - '.github/workflows/r2-canary.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/knowledge_engine/m13_*.py'
+      - 'scripts/m13_three_batch_acceptance.py'
+      - 'tests/test_m13_acceptance.py'
+      - 'tests/test_m13_acceptance_surface.py'
+      - 'docs/architecture/m13/**'
+      - '.github/workflows/m13-three-batch-acceptance.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m13-three-batch-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  three-batch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e .
+      - name: Validate R2 configuration
+        env:
+          APP_ENV: test
+          AUTH_MODE: disabled
+          OBJECT_STORE_BACKEND: r2
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+          R2_REGION: auto
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from knowledge_engine.config import Settings
+          Settings.from_env()
+          print("M13_ACCEPTANCE_CONFIG_PASSED")
+          PY
+      - name: Run isolated three-batch acceptance
+        env:
+          APP_ENV: test
+          AUTH_MODE: disabled
+          OBJECT_STORE_BACKEND: r2
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+          R2_REGION: auto
+          ENGINE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/m13_three_batch_acceptance.py \
+            --run-id '${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}' \
+            --engine-sha "$ENGINE_SHA" \
+            --canonical-source-sha '2126db2ed4d372d3d61464fe31a86fc0243a1f24' \
+            --expected-production-pointer-sha256 '38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5' \
+            --output /tmp/m13-three-batch-acceptance.json \
+            > /tmp/m13-three-batch-acceptance.log 2>&1 || {
+              tail -n 240 /tmp/m13-three-batch-acceptance.log
+              exit 1
+            }
+          cat /tmp/m13-three-batch-acceptance.log
+      - name: Upload acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m13-three-batch-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/m13-three-batch-acceptance.json
+            /tmp/m13-three-batch-acceptance.log
+          if-no-files-found: ignore
+          retention-days: 30
