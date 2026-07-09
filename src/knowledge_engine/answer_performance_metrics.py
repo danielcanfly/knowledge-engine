@@ -321,6 +321,16 @@ def evaluate_answer_performance_metrics(
         "case_metrics": case_metrics,
     }
     digest = hashlib.sha256(_stable_json(identity_payload)).hexdigest()[:32]
+    faithfulness_summary = {
+        key: answer_quality[key]
+        for key in (
+            "faithfulness",
+            "completeness",
+            "contradiction_handling",
+            "unknown_handling",
+            "response_stability",
+        )
+    }
     return {
         "schema_version": "1.0",
         "artifact_id": f"apmetrics_{digest}",
@@ -331,7 +341,10 @@ def evaluate_answer_performance_metrics(
         "stale": False,
         "failure_reasons": reasons,
         "release": identity_payload["release"],
-        "faithfulness_summary": answer_quality,
+        "faithfulness_summary": faithfulness_summary,
+        "unsupported_claim_summary": {
+            "unsupported_claim_rate": answer_quality["unsupported_claim_rate"]
+        },
         "performance_summary": performance,
         "case_metrics": case_metrics,
         "policy": effective_policy.to_identity(),
