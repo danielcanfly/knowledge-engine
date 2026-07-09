@@ -31,6 +31,7 @@ knowledge-intake = "knowledge_engine.intake_cli:main"
 knowledge-synthesis = "knowledge_engine.synthesis_cli:main"
 knowledge-resolution = "knowledge_engine.resolution_cli:main"
 knowledge-review = "knowledge_engine.review_cli:main"
+knowledge-m13 = "knowledge_engine.m13_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]
