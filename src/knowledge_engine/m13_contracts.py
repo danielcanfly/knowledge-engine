@@ -175,9 +175,11 @@ class M13BatchRecord:
             _match(BATCH_ID_RE, self.rebuilt_from_batch_id, "rebuilt_from_batch_id")
             if self.rebuilt_from_batch_id == self.batch_id:
                 raise ValueError("batch cannot rebuild from itself")
-        if self.state in {"candidate_ready", "awaiting_production_slot", "promoting"}:
-            if self.candidate_channel is None:
-                raise ValueError("candidate_channel is required for candidate states")
+        if (
+            self.state in {"candidate_ready", "awaiting_production_slot", "promoting"}
+            and self.candidate_channel is None
+        ):
+            raise ValueError("candidate_channel is required for candidate states")
 
     @classmethod
     def from_seed(
@@ -293,9 +295,10 @@ class M13OperationResult:
             raise ValueError("blocked operations require blocked_reason")
         if self.state == "rejected" and not self.rejection_reason:
             raise ValueError("rejected operations require rejection_reason")
-        if self.state not in {"blocked", "rejected"}:
-            if self.blocked_reason or self.rejection_reason:
-                raise ValueError("terminal reasons are only allowed on blocked/rejected states")
+        if self.state not in {"blocked", "rejected"} and (
+            self.blocked_reason or self.rejection_reason
+        ):
+            raise ValueError("terminal reasons are only allowed on blocked/rejected states")
         expected_governance = dict(GOVERNANCE_NO_WRITE)
         if self.request.kind in PRODUCTION_MUTATION_KINDS:
             expected_governance = {
