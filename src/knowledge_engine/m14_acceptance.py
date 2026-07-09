@@ -121,7 +121,8 @@ def _canonical_json(value: Any) -> str:
 def acceptance_artifact_sha256(artifact: M14AcceptanceArtifact) -> str:
     payload = artifact.model_dump(mode="json")
     payload["artifact_sha256"] = None
-    return hashlib.sha256((_canonical_json(payload) + "\n").encode("utf-8")).hexdigest()
+    canonical = _canonical_json(payload) + "\n"
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def finalize_acceptance_artifact(
@@ -130,6 +131,26 @@ def finalize_acceptance_artifact(
     return artifact.model_copy(
         update={"artifact_sha256": acceptance_artifact_sha256(artifact)}
     )
+
+
+def _capability_forbidden_values(
+    capabilities: PublicProductCapabilities,
+) -> dict[str, bool]:
+    payload = capabilities.model_dump(mode="json")
+    security = payload["security"]
+    feedback = payload["feedback"]
+    return {
+        "server_conversation_state": security["server_conversation_state"],
+        "distributed_rate_limit": security["distributed_rate_limit"],
+        "wildcard_origins_allowed": security["wildcard_origins_allowed"],
+        "cross_origin_credentials": security["cross_origin_credentials"],
+        "direct_source_write": feedback["direct_source_write"],
+        "direct_production_write": feedback["direct_production_write"],
+        "contact_identity_collected": feedback["contact_identity_collected"],
+        "raw_query_collected": feedback["raw_query_collected"],
+        "raw_answer_collected": feedback["raw_answer_collected"],
+        "attachments_supported": feedback["attachments_supported"],
+    }
 
 
 def validate_m14_public_product_acceptance(
@@ -214,19 +235,7 @@ def validate_m14_public_product_acceptance(
     if capabilities.security.cors_mode not in {"same_origin", "exact_allowlist"}:
         errors.append("public CORS mode must be same-origin or exact allowlist")
 
-    capability_payload = capabilities.model_dump(mode="json")
-    forbidden_values = {
-        "server_conversation_state": capability_payload["security"]["server_conversation_state"],
-        "distributed_rate_limit": capability_payload["security"]["distributed_rate_limit"],
-        "wildcard_origins_allowed": capability_payload["security"]["wildcard_origins_allowed"],
-        "cross_origin_credentials": capability_payload["security"]["cross_origin_credentials"],
-        "direct_source_write": capability_payload["feedback"]["direct_source_write"],
-        "direct_production_write": capability_payload["feedback"]["direct_production_write"],
-        "contact_identity_collected": capability_payload["feedback"]["contact_identity_collected"],
-        "raw_query_collected": capability_payload["feedback"]["raw_query_collected"],
-        "raw_answer_collected": capability_payload["feedback"]["raw_answer_collected"],
-        "attachments_supported": capability_payload["feedback"]["attachments_supported"],
-    }
+    forbidden_values = _capability_forbidden_values(capabilities)
     for field in M14_FORBIDDEN_PRODUCT_CAPABILITIES:
         if forbidden_values[field] is not False:
             errors.append(f"forbidden capability is enabled: {field}")
