@@ -20,11 +20,13 @@ The coordinator is split by responsibility:
 m13_coordination_common.py       identities, typed envelopes, time and CAS helpers
 m13_candidate_coordinator.py     bounded candidate slot pool
 m13_production_lease.py          global production lease and recovery
-m13_production_mutation.py       permit, transition, authorization and completion
+m13_production_permit.py         mutation permit and promoting transition
+m13_production_commit.py         commit authorization, validation and completion
+m13_production_mutation.py       compatibility-only re-export facade
 m13_coordinator_v2.py            stable public facade
 ```
 
-The split keeps each concurrency boundary independently reviewable while preserving one public API.
+The split keeps each concurrency boundary independently reviewable while preserving one public API. The compatibility module contains no implementation logic.
 
 ## Candidate build coordination
 
