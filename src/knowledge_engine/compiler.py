@@ -15,11 +15,11 @@ from urllib.parse import unquote, urlsplit
 import yaml
 
 from .errors import IntegrityError
+from .m14_section_index import build_graph_edges, build_section_documents
 from .storage import sha256_bytes
 
 AUDIENCE_RANK = {"public": 0, "internal": 1, "confidential": 2, "restricted": 3}
 LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
-TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u3400-\u9fff]+")
 KOS_ID_RE = re.compile(r"^ko_[0-9A-HJKMNP-TV-Z]{26}$")
 
 
@@ -71,10 +71,6 @@ def _resolve_link(root: Path, source: Path, raw: str) -> Path | None:
     except ValueError as exc:
         raise IntegrityError(f"link escapes bundle: {source}: {raw}") from exc
     return result
-
-
-def _tokens(text: str) -> list[str]:
-    return [token.lower() for token in TOKEN_RE.findall(text)]
 
 
 def _bundle_hash(root: Path) -> str:
@@ -197,7 +193,7 @@ def compile_release(
     artifact_root.mkdir(parents=True)
 
     graph = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "nodes": [
             {
                 "concept_id": item["concept_id"],
@@ -209,31 +205,15 @@ def compile_release(
             }
             for item in concepts
         ],
-        "edges": [],
+        "edges": build_graph_edges(concepts, bundle_root=bundle_root),
     }
     lexical = {
-        "schema_version": "1.0",
-        "documents": [
-            {
-                "concept_id": item["concept_id"],
-                "x_kos_id": item["metadata"]["x-kos-id"],
-                "title": item["metadata"]["title"],
-                "description": item["metadata"]["description"],
-                "audience": item["metadata"]["x-kos-audience"],
-                "path": item["path"].relative_to(bundle_root).as_posix(),
-                "terms": _tokens(
-                    " ".join(
-                        [
-                            str(item["metadata"]["title"]),
-                            str(item["metadata"]["title"]),
-                            str(item["metadata"]["description"]),
-                            item["body"],
-                        ]
-                    )
-                ),
-            }
-            for item in concepts
-        ],
+        "schema_version": "2.0",
+        "document_model": "section",
+        "documents": build_section_documents(
+            concepts,
+            bundle_root=bundle_root,
+        ),
     }
     provenance = {
         "schema_version": "1.0",
@@ -294,9 +274,12 @@ def compile_release(
                 "required": True,
             }
         )
-    created_at = release_time.astimezone(UTC).replace(
-        microsecond=0
-    ).isoformat().replace("+00:00", "Z")
+    created_at = (
+        release_time.astimezone(UTC)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
     manifest = {
         "schema_version": "1.0",
         "release_id": release_id,
@@ -304,7 +287,7 @@ def compile_release(
         "release_ready": True,
         "builder": {
             "name": "knowledge-engine",
-            "version": "0.2.0",
+            "version": "0.3.0",
             "build_id": f"build_{stamp}_{content_hash[:8]}",
         },
         "source": {
@@ -332,12 +315,12 @@ def compile_release(
         },
         "quality": {"overall": "passed"},
         "compatibility": {
-            "runtime_min_version": "0.2.0",
+            "runtime_min_version": "0.3.0",
             "contract_versions": {
                 "layer_model": "0.1.0",
                 "okf_profile": "0.1.0",
-                "build_pipeline": "0.1.0",
-                "runtime_query": "0.1.0",
+                "build_pipeline": "0.2.0",
+                "runtime_query": "0.2.0",
                 "provenance": "1.0",
             },
         },

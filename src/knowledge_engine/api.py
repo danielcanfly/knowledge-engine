@@ -9,6 +9,13 @@ from pydantic import BaseModel, Field
 from .auth import Authenticator, Principal, authorization_header
 from .config import Settings
 from .errors import AuthorizationError, IntegrityError, KnowledgeEngineError
+from .m14_public_contracts import (
+    PublicAskRequest,
+    PublicAskResponse,
+    PublicErrorDetail,
+    PublicErrorResponse,
+    public_response_from_runtime,
+)
 from .runtime import Runtime
 from .storage import create_object_store
 
@@ -67,7 +74,7 @@ def get_principal(
         ) from exc
 
 
-app = FastAPI(title="Knowledge Engine", version="0.3.0")
+app = FastAPI(title="Knowledge Engine", version="0.4.0")
 
 
 @app.get("/v1/health")
@@ -151,4 +158,49 @@ def query(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"code": "RUNTIME-002", "message": str(exc)},
+        ) from exc
+
+
+@app.post(
+    "/v1/ask",
+    response_model=PublicAskResponse,
+    responses={
+        403: {"model": PublicErrorResponse},
+        503: {"model": PublicErrorResponse},
+    },
+)
+def ask(
+    request: PublicAskRequest,
+    principal: Principal = Depends(get_principal),
+) -> PublicAskResponse:
+    if request.audience not in principal.audiences:
+        detail = PublicErrorDetail(
+            code="PUBLIC-QUERY-403",
+            message=f"audience is not authorized: {request.audience}",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail.model_dump(),
+        )
+    try:
+        runtime_result = get_runtime().query(
+            request.query,
+            {request.audience},
+            limit=request.max_results,
+        )
+        return public_response_from_runtime(
+            runtime_result,
+            query=request.query,
+            max_results=request.max_results,
+            audience=request.audience,
+        )
+    except (IntegrityError, FileNotFoundError) as exc:
+        logger.exception("public ask failed integrity check")
+        detail = PublicErrorDetail(
+            code="PUBLIC-QUERY-503",
+            message="current knowledge release is unavailable",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=detail.model_dump(),
         ) from exc

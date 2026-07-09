@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import threading
 from dataclasses import dataclass
@@ -10,11 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from .errors import IntegrityError
+from .m14_retrieval import retrieve_wiki_first
 from .query_evaluation import evaluate_runtime_query
 from .storage import ObjectStore, sha256_bytes
-
-AUDIENCE_RANK = {"public": 0, "internal": 1, "confidential": 2, "restricted": 3}
-TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u3400-\u9fff]+")
 
 
 @dataclass(frozen=True)
@@ -24,16 +21,19 @@ class ActiveRelease:
     loaded_at: str
     manifest: dict[str, Any]
     lexical_index: dict[str, Any]
+    graph: dict[str, Any]
     provenance: dict[str, Any]
+    semantic_index: dict[str, Any] | None
 
 
-def _citation_uri(source: dict[str, Any]) -> str:
-    uri = source.get("uri") or source.get("locator")
-    if not uri:
-        raise IntegrityError(
-            f"provenance source is missing uri: {source.get('source_id', 'unknown')}"
-        )
-    return str(uri)
+def _load_json_file(path: Path, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise IntegrityError(f"{label} is invalid JSON") from exc
+    if not isinstance(value, dict):
+        raise IntegrityError(f"{label} must be a JSON object")
+    return value
 
 
 class Runtime:
@@ -89,6 +89,8 @@ class Runtime:
             manifest = json.loads(manifest_data)
         except json.JSONDecodeError as exc:
             raise IntegrityError("release manifest is invalid JSON") from exc
+        if not isinstance(manifest, dict):
+            raise IntegrityError("release manifest must be a JSON object")
         if manifest.get("release_id") != release_id:
             raise IntegrityError("channel and manifest release IDs differ")
 
@@ -101,12 +103,18 @@ class Runtime:
             artifacts = manifest.get("artifacts")
             if not isinstance(artifacts, list):
                 raise IntegrityError("release manifest artifacts must be a list")
+            artifact_paths: dict[str, Path] = {}
             for artifact in artifacts:
                 if not isinstance(artifact, dict):
                     raise IntegrityError("release artifact entry must be an object")
                 key = artifact.get("key")
+                kind = artifact.get("kind")
                 if not isinstance(key, str) or not key:
                     raise IntegrityError("release artifact key is missing")
+                if not isinstance(kind, str) or not kind:
+                    raise IntegrityError("release artifact kind is missing")
+                if kind in artifact_paths:
+                    raise IntegrityError(f"duplicate release artifact kind: {kind}")
                 data = self.store.get(key)
                 if len(data) != artifact.get("bytes") or sha256_bytes(data) != artifact.get(
                     "sha256"
@@ -123,15 +131,29 @@ class Runtime:
                     raise IntegrityError(f"unsafe artifact path: {key}") from exc
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_bytes(data)
+                artifact_paths[kind] = destination
 
             pointer_after = self.store.get(pointer_key)
             if pointer_after != pointer_data:
                 raise IntegrityError("channel pointer changed during refresh")
 
-            lexical_path = staging_cache / "artifacts/lexical-index.json"
-            provenance_path = staging_cache / "artifacts/provenance.json"
-            lexical_index = json.loads(lexical_path.read_text(encoding="utf-8"))
-            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+            required = {"lexical_index", "graph", "provenance"}
+            missing = sorted(required - set(artifact_paths))
+            if missing:
+                raise IntegrityError(f"release is missing runtime artifacts: {missing}")
+            lexical_index = _load_json_file(
+                artifact_paths["lexical_index"],
+                "lexical index",
+            )
+            graph = _load_json_file(artifact_paths["graph"], "wiki graph")
+            provenance = _load_json_file(
+                artifact_paths["provenance"],
+                "provenance",
+            )
+            semantic_index = None
+            semantic_path = artifact_paths.get("semantic_index")
+            if semantic_path is not None:
+                semantic_index = _load_json_file(semantic_path, "semantic index")
 
             if release_cache.exists():
                 shutil.rmtree(release_cache)
@@ -139,13 +161,17 @@ class Runtime:
             active = ActiveRelease(
                 release_id=release_id,
                 manifest_sha256=actual_manifest_sha,
-                loaded_at=datetime.now(UTC)
-                .replace(microsecond=0)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                loaded_at=(
+                    datetime.now(UTC)
+                    .replace(microsecond=0)
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                ),
                 manifest=manifest,
                 lexical_index=lexical_index,
+                graph=graph,
                 provenance=provenance,
+                semantic_index=semantic_index,
             )
             with self._lock:
                 self._active = active
@@ -169,79 +195,37 @@ class Runtime:
         limit: int = 10,
     ) -> dict[str, Any]:
         active = self.ensure_loaded()
-        allowed = {item for item in allowed_audiences if item in AUDIENCE_RANK}
-        if not allowed:
-            allowed = {"public"}
-        maximum_rank = max(AUDIENCE_RANK[item] for item in allowed)
-        query_terms = [part.lower() for part in TOKEN_RE.findall(query)]
-        records = {
-            record["subject"]["concept_id"]: record
-            for record in active.provenance.get("records", [])
-        }
-        scored: list[tuple[int, dict[str, Any]]] = []
-        filtered = 0
-        for document in active.lexical_index.get("documents", []):
-            if AUDIENCE_RANK[document["audience"]] > maximum_rank:
-                filtered += 1
-                continue
-            terms = document.get("terms", [])
-            score = sum(terms.count(term) for term in query_terms)
-            title_terms = [
-                part.lower() for part in TOKEN_RE.findall(document.get("title", ""))
-            ]
-            score += 4 * sum(title_terms.count(term) for term in query_terms)
-            if score > 0:
-                scored.append((score, document))
-        scored.sort(key=lambda item: (-item[0], item[1]["concept_id"]))
-        results = []
-        for score, document in scored[:limit]:
-            record = records.get(document["concept_id"], {})
-            results.append(
-                {
-                    "concept_id": document["concept_id"],
-                    "x_kos_id": document["x_kos_id"],
-                    "title": document["title"],
-                    "description": document["description"],
-                    "score": score,
-                    "citations": [
-                        {
-                            "source_id": source["source_id"],
-                            "uri": _citation_uri(source),
-                            "retrieved_at": source["retrieved_at"],
-                        }
-                        for source in record.get("sources", [])
-                    ],
-                }
-            )
-        status = "answered" if results else "not_found"
+        retrieved = retrieve_wiki_first(
+            query=query,
+            allowed_audiences=allowed_audiences,
+            lexical_index=active.lexical_index,
+            graph=active.graph,
+            provenance=active.provenance,
+            semantic_index=active.semantic_index,
+            limit=limit,
+        )
         release = {
             "release_id": active.release_id,
             "manifest_sha256": active.manifest_sha256,
             "loaded_at": active.loaded_at,
+            "created_at": active.manifest.get("created_at"),
         }
-        retrieval = {
-            "strategy": "wiki_first_lexical",
-            "candidate_count": len(scored),
-            "selected_count": len(results),
-            "acl_filtered_count": filtered,
-            "raw_fallback_used": False,
-        }
-        non_answer_reason = None if results else "no_authorized_match"
         evaluation = evaluate_runtime_query(
             release=release,
             query=query,
-            audiences=allowed,
-            status=status,
-            results=results,
-            retrieval=retrieval,
-            non_answer_reason=non_answer_reason,
+            audiences=allowed_audiences,
+            status=retrieved["status"],
+            results=retrieved["results"],
+            retrieval=retrieved["retrieval"],
+            non_answer_reason=retrieved["not_found_reason"],
         )
         return {
-            "status": status,
+            "status": retrieved["status"],
             "release": release,
             "query": query,
-            "results": results,
-            "retrieval": retrieval,
+            "results": retrieved["results"],
+            "retrieval": retrieved["retrieval"],
             "evaluation": evaluation,
-            "non_answer_reason": non_answer_reason,
+            "not_found_reason": retrieved["not_found_reason"],
+            "non_answer_reason": retrieved["not_found_reason"],
         }
