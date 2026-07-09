@@ -56,3 +56,24 @@ def test_public_ask_openapi_exposes_citation_and_source_card_contracts() -> None
         "section_ids",
         "claim_ids",
     } <= set(card_schema["properties"])
+
+
+def test_public_interface_capabilities_and_stream_are_documented() -> None:
+    schema = app.openapi()
+    paths = schema["paths"]
+    capabilities = paths["/v1/ask/capabilities"]["get"]
+    capability_schema = capabilities["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]
+    assert capability_schema["$ref"].endswith("/PublicInterfaceCapabilities")
+
+    stream = paths["/v1/ask/stream"]["post"]
+    assert "text/event-stream" in stream["responses"]["200"]["content"]
+    request_schema = stream["requestBody"]["content"]["application/json"]["schema"]
+    assert request_schema["$ref"].endswith("/PublicAskRequest")
+    assert stream["responses"]["403"]["content"]["application/json"]["schema"][
+        "$ref"
+    ].endswith("/PublicErrorResponse")
+
+    assert "/ask" not in paths
+    assert "/embed/ask.js" not in paths

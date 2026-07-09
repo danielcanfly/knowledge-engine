@@ -3,12 +3,21 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .auth import Authenticator, Principal, authorization_header
 from .config import Settings
 from .errors import AuthorizationError, IntegrityError, KnowledgeEngineError
+from .m14_interfaces import (
+    PublicInterfaceCapabilities,
+    normalize_interface_locale,
+    public_ask_widget_javascript,
+    public_interface_capabilities,
+    public_interface_sse_events,
+    standalone_ask_html,
+)
 from .m14_public_contracts import (
     PublicAskRequest,
     PublicAskResponse,
@@ -74,7 +83,7 @@ def get_principal(
         ) from exc
 
 
-app = FastAPI(title="Knowledge Engine", version="0.4.0")
+app = FastAPI(title="Knowledge Engine", version="0.5.0")
 
 
 @app.get("/v1/health")
@@ -161,17 +170,9 @@ def query(
         ) from exc
 
 
-@app.post(
-    "/v1/ask",
-    response_model=PublicAskResponse,
-    responses={
-        403: {"model": PublicErrorResponse},
-        503: {"model": PublicErrorResponse},
-    },
-)
-def ask(
+def _execute_public_ask(
     request: PublicAskRequest,
-    principal: Principal = Depends(get_principal),
+    principal: Principal,
 ) -> PublicAskResponse:
     if request.audience not in principal.audiences:
         detail = PublicErrorDetail(
@@ -204,3 +205,84 @@ def ask(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=detail.model_dump(),
         ) from exc
+
+
+@app.get(
+    "/v1/ask/capabilities",
+    response_model=PublicInterfaceCapabilities,
+)
+def ask_capabilities() -> PublicInterfaceCapabilities:
+    return public_interface_capabilities()
+
+
+@app.get("/ask", response_class=HTMLResponse, include_in_schema=False)
+def ask_page(lang: str | None = None) -> HTMLResponse:
+    locale = normalize_interface_locale(lang)
+    return HTMLResponse(
+        standalone_ask_html(locale),
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Security-Policy": (
+                "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; "
+                "connect-src 'self'; img-src 'self' data:; font-src 'none'; "
+                "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+            ),
+            "Referrer-Policy": "no-referrer",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@app.get("/embed/ask.js", include_in_schema=False)
+def ask_widget_script() -> Response:
+    return Response(
+        public_ask_widget_javascript(),
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "public, max-age=300",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@app.post(
+    "/v1/ask",
+    response_model=PublicAskResponse,
+    responses={
+        403: {"model": PublicErrorResponse},
+        503: {"model": PublicErrorResponse},
+    },
+)
+def ask(
+    request: PublicAskRequest,
+    principal: Principal = Depends(get_principal),
+) -> PublicAskResponse:
+    return _execute_public_ask(request, principal)
+
+
+@app.post(
+    "/v1/ask/stream",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "description": "Deterministic public answer event stream",
+            "content": {"text/event-stream": {"schema": {"type": "string"}}},
+        },
+        403: {"model": PublicErrorResponse},
+        503: {"model": PublicErrorResponse},
+    },
+)
+def ask_stream(
+    request: PublicAskRequest,
+    principal: Principal = Depends(get_principal),
+) -> StreamingResponse:
+    response = _execute_public_ask(request, principal)
+    return StreamingResponse(
+        public_interface_sse_events(response),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
