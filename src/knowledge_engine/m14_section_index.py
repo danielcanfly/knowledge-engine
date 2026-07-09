@@ -80,7 +80,11 @@ def split_markdown_sections(
     ]
 
 
-def build_section_documents(concepts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_section_documents(
+    concepts: list[dict[str, Any]],
+    *,
+    bundle_root: Path,
+) -> list[dict[str, Any]]:
     documents: list[dict[str, Any]] = []
     for item in concepts:
         metadata = item["metadata"]
@@ -114,7 +118,7 @@ def build_section_documents(concepts: list[dict[str, Any]]) -> list[dict[str, An
                     "excerpt": section["excerpt"],
                     "body": section["body"],
                     "audience": metadata["x-kos-audience"],
-                    "path": item["path"].as_posix(),
+                    "path": item["path"].relative_to(bundle_root).as_posix(),
                     "terms": _tokens(searchable),
                 }
             )
