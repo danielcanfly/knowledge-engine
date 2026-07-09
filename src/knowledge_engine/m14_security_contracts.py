@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from .config import Settings
+from .m14_feedback_contracts import FEEDBACK_TYPES, FeedbackType
 from .m14_interfaces import PublicInterfaceCapabilities, public_interface_capabilities
 
 
@@ -25,8 +26,24 @@ class PublicSecurityPosture(BaseModel):
     server_conversation_state: bool = False
 
 
+class PublicFeedbackCapabilities(BaseModel):
+    schema_version: str = "knowledge-engine-public-feedback-capabilities/v1"
+    enabled: bool = True
+    path: str = "/v1/feedback"
+    feedback_types: list[FeedbackType]
+    immutable_intake: bool = True
+    pending_review_queue: bool = True
+    direct_source_write: bool = False
+    direct_production_write: bool = False
+    contact_identity_collected: bool = False
+    raw_query_collected: bool = False
+    raw_answer_collected: bool = False
+    attachments_supported: bool = False
+
+
 class PublicProductCapabilities(PublicInterfaceCapabilities):
     security: PublicSecurityPosture
+    feedback: PublicFeedbackCapabilities
 
 
 def public_product_capabilities(settings: Settings) -> PublicProductCapabilities:
@@ -45,7 +62,12 @@ def public_product_capabilities(settings: Settings) -> PublicProductCapabilities
         request_timeout_seconds=settings.public_request_timeout_seconds,
         max_concurrent_requests=settings.public_max_concurrent_requests,
     )
-    return PublicProductCapabilities(**base, security=security)
+    feedback = PublicFeedbackCapabilities(feedback_types=list(FEEDBACK_TYPES))
+    return PublicProductCapabilities(
+        **base,
+        security=security,
+        feedback=feedback,
+    )
 
 
 def harden_public_widget_javascript(script: str) -> str:
