@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from .m13_contracts import RELEASE_ID_RE, SHA256_RE, stable_json_bytes
 from .storage import ObjectStore, sha256_bytes
@@ -200,7 +201,8 @@ def _canonical_object(data: bytes, label: str) -> dict[str, Any]:
 def _artifact_reference(value: Any) -> ReleaseArtifactReference:
     if not isinstance(value, dict):
         raise M13ReleaseInventoryError(
-            "M13_RELEASE_INVENTORY_INVALID", "artifact inventory entry must be an object"
+            "M13_RELEASE_INVENTORY_INVALID",
+            "artifact inventory entry must be an object",
         )
     try:
         return ReleaseArtifactReference(
