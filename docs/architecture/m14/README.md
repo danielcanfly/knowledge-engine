@@ -9,7 +9,7 @@ M14 turns the governed Knowledge OS runtime into a stable user-facing product su
 3. [M14.3 Citation Payload and Source Cards](m14-3-citation-source-cards.md)
 4. [M14.4 Public Ask AI Interfaces](m14-4-public-ask-interfaces.md)
 5. [M14.5 Audience, Security and Abuse Controls](m14-5-audience-security-abuse-controls.md)
-6. M14.6 Feedback and Correction Intake
+6. [M14.6 Feedback and Correction Intake](m14-6-feedback-correction-intake.md)
 7. M14.7 Public Product Acceptance and M14 Closure
 
 ## M14 invariant
