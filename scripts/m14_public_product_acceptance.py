@@ -20,7 +20,10 @@ def _sample_answer(release_id: str) -> PublicAskResponse:
     citation_id = "cite_" + "1" * 32
     card_id = "card_" + "2" * 32
     return PublicAskResponse(
-        answer="Knowledge Compiler: Public answers remain release-bound, cited and inspectable. [1]",
+        answer=(
+            "Knowledge Compiler: Public answers remain release-bound, "
+            "cited and inspectable. [1]"
+        ),
         status="answered",
         citations=[
             {
@@ -121,7 +124,11 @@ def main() -> int:
     parser.add_argument("--production-manifest-sha256", required=True)
     parser.add_argument("--production-pointer-sha256", required=True)
     parser.add_argument("--ledger-comments", type=int, required=True)
-    parser.add_argument("--output", type=Path, default=Path(".artifacts/m14-public-product-acceptance.json"))
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path(".artifacts/m14-public-product-acceptance.json"),
+    )
     args = parser.parse_args()
 
     accepted = validate_m14_public_product_acceptance(build_artifact(args))
