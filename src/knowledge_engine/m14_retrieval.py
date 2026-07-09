@@ -100,7 +100,9 @@ def _semantic_boosts(
     return boosts, True
 
 
-def _graph_adjacency(graph: dict[str, Any]) -> tuple[dict[str, set[str]], dict[str, str]]:
+def _graph_adjacency(
+    graph: dict[str, Any],
+) -> tuple[dict[str, set[str]], dict[str, str]]:
     nodes = graph.get("nodes")
     edges = graph.get("edges")
     if not isinstance(nodes, list) or not isinstance(edges, list):
@@ -125,6 +127,64 @@ def _graph_adjacency(graph: dict[str, Any]) -> tuple[dict[str, set[str]], dict[s
         adjacency[source].add(target)
         adjacency[target].add(source)
     return adjacency, audiences
+
+
+def _score_document(
+    document: dict[str, Any],
+    *,
+    query_terms: list[str],
+    semantic_boosts: dict[str, int],
+) -> dict[str, Any] | None:
+    title_score = _term_score(query_terms, document["title"], 4)
+    section_title_score = _term_score(
+        query_terms,
+        document["section_title"],
+        3,
+    )
+    description_score = _term_score(
+        query_terms,
+        document["description"],
+        2,
+    )
+    body_score = _term_score(query_terms, document["body"], 1)
+    explicit_score = title_score + section_title_score + description_score + body_score
+    legacy_score = 0
+    if explicit_score == 0:
+        term_counts = Counter(item.lower() for item in document["terms"])
+        legacy_score = sum(term_counts[term] for term in query_terms)
+    semantic_score = semantic_boosts.get(
+        document["section_id"],
+        semantic_boosts.get(document["concept_id"], 0),
+    )
+    lexical_score = explicit_score or legacy_score
+    total = lexical_score + semantic_score
+    if total <= 0:
+        return None
+    return {
+        "document": document,
+        "score_components": {
+            "concept_title": title_score,
+            "section_title": section_title_score,
+            "description": description_score,
+            "body": body_score,
+            "legacy_terms": legacy_score,
+            "semantic": semantic_score,
+            "graph": 0,
+        },
+        "score": total,
+        "expanded_from": [],
+    }
+
+
+def _ordered(items: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        items.values(),
+        key=lambda item: (
+            -item["score"],
+            item["document"]["concept_id"],
+            item["document"]["section_id"],
+        ),
+    )
 
 
 def retrieve_wiki_first(
@@ -160,7 +220,8 @@ def retrieve_wiki_first(
     )
 
     normalized: list[dict[str, Any]] = []
-    acl_filtered = 0
+    filtered_concepts: set[str] = set()
+    filtered_sections = 0
     for raw_document in documents:
         if not isinstance(raw_document, dict):
             raise IntegrityError("lexical document must be an object")
@@ -169,63 +230,23 @@ def retrieve_wiki_first(
             node_audiences=node_audiences,
         )
         if AUDIENCE_RANK[document["audience"]] > maximum_rank:
-            acl_filtered += 1
+            filtered_concepts.add(document["concept_id"])
+            filtered_sections += 1
             continue
         normalized.append(document)
 
     scored: dict[str, dict[str, Any]] = {}
     for document in normalized:
-        title_score = _term_score(query_terms, document["title"], 4)
-        section_title_score = _term_score(
-            query_terms,
-            document["section_title"],
-            3,
+        item = _score_document(
+            document,
+            query_terms=query_terms,
+            semantic_boosts=semantic_boosts,
         )
-        description_score = _term_score(
-            query_terms,
-            document["description"],
-            2,
-        )
-        body_score = _term_score(query_terms, document["body"], 1)
-        explicit_score = (
-            title_score + section_title_score + description_score + body_score
-        )
-        legacy_score = 0
-        if explicit_score == 0:
-            term_counts = Counter(item.lower() for item in document["terms"])
-            legacy_score = sum(term_counts[term] for term in query_terms)
-        semantic_score = semantic_boosts.get(
-            document["section_id"],
-            semantic_boosts.get(document["concept_id"], 0),
-        )
-        lexical_score = explicit_score or legacy_score
-        total = lexical_score + semantic_score
-        if total <= 0:
-            continue
-        scored[document["section_id"]] = {
-            "document": document,
-            "score_components": {
-                "concept_title": title_score,
-                "section_title": section_title_score,
-                "description": description_score,
-                "body": body_score,
-                "legacy_terms": legacy_score,
-                "semantic": semantic_score,
-                "graph": 0,
-            },
-            "score": total,
-            "expanded_from": [],
-        }
+        if item is not None:
+            scored[document["section_id"]] = item
 
-    ordered_seeds = sorted(
-        scored.values(),
-        key=lambda item: (
-            -item["score"],
-            item["document"]["concept_id"],
-            item["document"]["section_id"],
-        ),
-    )
-    seed_concepts = []
+    ordered_seeds = _ordered(scored)
+    seed_concepts: list[str] = []
     for item in ordered_seeds:
         concept_id = item["document"]["concept_id"]
         if concept_id not in seed_concepts:
@@ -236,14 +257,14 @@ def retrieve_wiki_first(
     documents_by_concept: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for document in normalized:
         documents_by_concept[document["concept_id"]].append(document)
-    graph_expanded = 0
+    graph_expanded_concepts: set[str] = set()
     for seed in seed_concepts:
         for neighbor in sorted(adjacency.get(seed, set())):
             audience = node_audiences.get(neighbor)
             if audience not in AUDIENCE_RANK:
                 continue
             if AUDIENCE_RANK[audience] > maximum_rank:
-                acl_filtered += 1
+                filtered_concepts.add(neighbor)
                 continue
             candidates = sorted(
                 documents_by_concept.get(neighbor, []),
@@ -251,14 +272,25 @@ def retrieve_wiki_first(
             )
             if not candidates:
                 continue
-            document = candidates[0]
-            identity = document["section_id"]
-            if identity in scored:
-                scored[identity]["score_components"]["graph"] += 1
-                scored[identity]["score"] += 1
-                scored[identity]["expanded_from"].append(seed)
+            existing = [
+                item
+                for item in scored.values()
+                if item["document"]["concept_id"] == neighbor
+            ]
+            if existing:
+                best = sorted(
+                    existing,
+                    key=lambda item: (
+                        -item["score"],
+                        item["document"]["section_id"],
+                    ),
+                )[0]
+                best["score_components"]["graph"] += 1
+                best["score"] += 1
+                best["expanded_from"].append(seed)
                 continue
-            scored[identity] = {
+            document = candidates[0]
+            scored[document["section_id"]] = {
                 "document": document,
                 "score_components": {
                     "concept_title": 0,
@@ -272,20 +304,16 @@ def retrieve_wiki_first(
                 "score": 1,
                 "expanded_from": [seed],
             }
-            graph_expanded += 1
+            graph_expanded_concepts.add(neighbor)
 
-    ordered = sorted(
-        scored.values(),
-        key=lambda item: (
-            -item["score"],
-            item["document"]["concept_id"],
-            item["document"]["section_id"],
-        ),
-    )
     results: list[dict[str, Any]] = []
-    for item in ordered[:limit]:
+    selected_concepts: set[str] = set()
+    for item in _ordered(scored):
         document = item["document"]
-        record = records.get(document["concept_id"], {})
+        concept_id = document["concept_id"]
+        if concept_id in selected_concepts:
+            continue
+        record = records.get(concept_id, {})
         citations = []
         for source in record.get("sources", []):
             if not isinstance(source, dict):
@@ -295,13 +323,13 @@ def retrieve_wiki_first(
                     "source_id": source["source_id"],
                     "uri": _citation_uri(source),
                     "retrieved_at": source["retrieved_at"],
-                    "concept_id": document["concept_id"],
+                    "concept_id": concept_id,
                     "section_id": document["section_id"],
                 }
             )
         results.append(
             {
-                "concept_id": document["concept_id"],
+                "concept_id": concept_id,
                 "section_id": document["section_id"],
                 "x_kos_id": document.get("x_kos_id"),
                 "title": document["title"],
@@ -315,7 +343,13 @@ def retrieve_wiki_first(
                 "citations": citations,
             }
         )
+        selected_concepts.add(concept_id)
+        if len(results) >= limit:
+            break
 
+    candidate_concepts = {
+        item["document"]["concept_id"] for item in scored.values()
+    }
     semantic_used = any(
         result["score_components"]["semantic"] > 0 for result in results
     )
@@ -323,7 +357,9 @@ def retrieve_wiki_first(
     status = "answered" if results else "not_found"
     not_found_reason = None
     if not results:
-        not_found_reason = "no_authorized_match" if acl_filtered else "no_match"
+        not_found_reason = (
+            "no_authorized_match" if filtered_concepts else "no_match"
+        )
     return {
         "status": status,
         "results": results,
@@ -337,13 +373,15 @@ def retrieve_wiki_first(
             ],
             "query_term_count": len(query_terms),
             "section_document_count": len(normalized),
-            "candidate_count": len(scored),
+            "section_candidate_count": len(scored),
+            "candidate_count": len(candidate_concepts),
             "selected_count": len(results),
-            "acl_filtered_count": acl_filtered,
+            "acl_filtered_count": len(filtered_concepts),
+            "acl_filtered_section_count": filtered_sections,
             "semantic_available": semantic_available,
             "semantic_used": semantic_used,
             "graph_seed_count": len(seed_concepts),
-            "graph_expanded_count": graph_expanded,
+            "graph_expanded_count": len(graph_expanded_concepts),
             "graph_used": graph_used,
             "raw_fallback_allowed": False,
             "raw_fallback_used": False,
