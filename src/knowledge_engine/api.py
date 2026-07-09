@@ -13,6 +13,7 @@ from .m14_public_contracts import (
     PublicAskRequest,
     PublicAskResponse,
     PublicErrorDetail,
+    PublicErrorResponse,
     public_response_from_runtime,
 )
 from .runtime import Runtime
@@ -164,8 +165,8 @@ def query(
     "/v1/ask",
     response_model=PublicAskResponse,
     responses={
-        403: {"model": PublicErrorDetail},
-        503: {"model": PublicErrorDetail},
+        403: {"model": PublicErrorResponse},
+        503: {"model": PublicErrorResponse},
     },
 )
 def ask(
