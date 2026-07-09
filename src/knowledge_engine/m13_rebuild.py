@@ -5,8 +5,8 @@ from .m13_contracts import M13BatchRecord, ProductionIdentity
 from .m13_lifecycle_common import (
     LIFECYCLE_SCHEMA,
     REBUILD_SOURCE_STATES,
-    M13LifecycleError,
     LifecycleMutationResult,
+    M13LifecycleError,
     assert_candidate_channel_available,
     assert_expected_production,
     assert_no_active_production_lease,
@@ -145,7 +145,7 @@ def register_rebuild_batch(
         occurred_at=occurred_at,
         event_type="batch_registered_rebuild",
     )
-    event, snapshot, event_key, snapshot_key = artifact
+    _, snapshot, event_key, snapshot_key = artifact
     evidence = {
         **identity,
         "schema_version": f"{LIFECYCLE_SCHEMA}/rebuild",
