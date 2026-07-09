@@ -5,6 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = ROOT / "src/knowledge_engine/m13_acceptance.py"
+COMMON = ROOT / "src/knowledge_engine/m13_acceptance_common.py"
+FLOW = ROOT / "src/knowledge_engine/m13_acceptance_flow.py"
 SCRIPT = ROOT / "scripts/m13_three_batch_acceptance.py"
 
 
@@ -22,7 +24,7 @@ def test_acceptance_has_no_network_shell_or_github_surface() -> None:
         "subprocess",
         "urllib",
     }
-    for path in (MODULE, SCRIPT):
+    for path in (MODULE, COMMON, FLOW, SCRIPT):
         for node in ast.walk(_tree(path)):
             if isinstance(node, ast.Import):
                 roots = {alias.name.split(".", 1)[0] for alias in node.names}
@@ -39,15 +41,16 @@ def test_acceptance_never_deletes_rolls_back_or_appends_ledger() -> None:
         "delete",
         "rollback_release",
     }
-    for node in ast.walk(_tree(MODULE)):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            if node.func.attr == "delete":
-                assert isinstance(node.func.value, ast.Name)
-                assert node.func.value.id == "isolated"
-            else:
-                assert node.func.attr not in forbidden_calls
-        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            assert node.func.id not in forbidden_calls
+    for path in (MODULE, COMMON, FLOW):
+        for node in ast.walk(_tree(path)):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                if node.func.attr == "delete":
+                    assert isinstance(node.func.value, ast.Name)
+                    assert node.func.value.id == "isolated"
+                else:
+                    assert node.func.attr not in forbidden_calls
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                assert node.func.id not in forbidden_calls
 
 
 def test_acceptance_core_is_isolated_and_governance_is_explicit() -> None:
