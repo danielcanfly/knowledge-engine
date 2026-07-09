@@ -16,6 +16,7 @@ raw evidence
   -> deterministic query evaluation gate
   -> golden query suite report
   -> golden query baseline gate
+  -> release quality gate
 ```
 
 The normative contracts live in `danielcanfly/knowledge-os-foundation`. This repository implements those contracts.
@@ -34,6 +35,7 @@ The normative contracts live in `danielcanfly/knowledge-os-foundation`. This rep
 - Attaches deterministic query evaluation evidence and a fail-closed release-blocking gate to Runtime query responses.
 - Runs deterministic golden query suites over ACL-filtered Runtime responses and emits replayable aggregate reports.
 - Compares golden query suite reports to immutable quality baselines before allowing release progression.
+- Bundles runtime-quality evidence into deterministic release quality gate decisions.
 - Provides permanent approval-gated promotion and rollback workflows.
 - Captures Markdown evidence as immutable content-addressed raw objects.
 - Produces isolated normalized evidence and human-review packets.
@@ -67,6 +69,8 @@ Every query response includes `evaluation` evidence with a deterministic `evalua
 Golden query suites execute multiple Runtime queries through the same ACL-filtered surface and emit deterministic aggregate evidence with `gqsuite_`, `gqrun_`, and `gqreport_` identities. See `docs/m12-golden-query-suite.md`.
 
 Golden query baselines compare suite reports to immutable aggregate floors and emit `gqbaseline_` / `gqbaselinecheck_` evidence. See `docs/m12-golden-query-baseline.md`.
+
+Release quality gates bundle query evaluations, suite reports, and baseline checks into `rqgate_` / `rqdecision_` evidence. See `docs/m12-release-quality-gate.md`.
 
 ## Governed Markdown intake
 
@@ -117,50 +121,6 @@ A provider returns JSON matching this shape:
 ```json
 {
   "schema_version": "1.0",
-  "title": "Evidence separation",
-  "summary": "A summary limited to supported evidence.",
-  "claims": [
-    {
-      "claim_id": "claim_evidence_separation",
-      "text": "Immutable evidence remains separate from canonical knowledge.",
-      "evidence": [
-        {
-          "start_char": 0,
-          "end_char": 64,
-          "quote": "Immutable evidence remains separate from canonical knowledge."
-        }
-      ]
-    }
-  ],
-  "unsupported_claims": []
+  "title": "Evidence separation"
 }
 ```
-
-Validate it with:
-
-```bash
-knowledge-synthesis validate \
-  --request-id sreq_0123456789abcdef0123456789abcdef \
-  --model-output model-output.json \
-  --output-dir .artifacts/synthesis-review
-```
-
-The harness rejects incorrect spans, mismatched quotes, duplicate claim IDs, unknown fields, unresolved intake security findings, and outputs without supported claims. Unsupported claims are stored separately and never rendered into the synthesized draft. All synthesis artifacts remain below `review/`, with GitHub, production, and canonical writes denied.
-
-Run the API:
-
-```bash
-uvicorn knowledge_engine.api:app --host 0.0.0.0 --port 8080
-```
-
-Production values are supplied through GitHub Actions and the Oracle VM `.env`; no production credential belongs in this repository.
-
-## Publishing rule
-
-1. Upload every immutable release object.
-2. Download and verify every hash and byte count.
-3. Upload the manifest.
-4. Verify the manifest hash.
-5. Update the channel pointer last using compare-and-swap semantics.
-
-Rollback only changes the channel pointer to an already verified release.
