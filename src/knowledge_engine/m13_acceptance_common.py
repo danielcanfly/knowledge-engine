@@ -43,11 +43,12 @@ class M13AcceptanceError(ValueError):
 
 
 class IsolatedObjectStore:
-    """Prefix every object key and forbid deletion.
+    """Prefix keys, retain every write, and cache repeat control-plane reads.
 
-    The wrapped store may be the real R2 bucket. M13 sees a complete isolated
-    object store rooted at ``prefix`` and cannot address the real production
-    pointer or any object outside that root.
+    Every write still reaches the wrapped store. Registry and coordinator reads
+    within one acceptance run use a write-through cache so repeated event-chain
+    validation does not multiply R2 round trips. ``get_fresh`` and ``head_fresh``
+    bypass the cache and are used for final immutable-evidence verification.
     """
 
     def __init__(self, store: ObjectStore, prefix: str) -> None:
@@ -60,11 +61,15 @@ class IsolatedObjectStore:
             )
         self.store = store
         self.prefix = normalized
+        self._data_cache: dict[str, bytes] = {}
+        self._metadata_cache: dict[str, ObjectMetadata | None] = {}
 
     def physical_key(self, key: str) -> str:
         if not key or key.startswith("/") or ".." in key.split("/"):
             raise M13AcceptanceError(
-                "M13_ACCEPTANCE_KEY_INVALID", "logical object key is invalid", key=key
+                "M13_ACCEPTANCE_KEY_INVALID",
+                "logical object key is invalid",
+                key=key,
             )
         return f"{self.prefix}/{key}"
 
@@ -95,14 +100,34 @@ class IsolatedObjectStore:
             expected_etag=expected_etag,
             only_if_absent=only_if_absent,
         )
-        return self._logical_metadata(key, value)
+        logical = self._logical_metadata(key, value)
+        self._data_cache[key] = data
+        self._metadata_cache[key] = logical
+        return logical
 
     def get(self, key: str) -> bytes:
-        return self.store.get(self.physical_key(key))
+        if key not in self._data_cache:
+            self._data_cache[key] = self.store.get(self.physical_key(key))
+        return self._data_cache[key]
+
+    def get_fresh(self, key: str) -> bytes:
+        data = self.store.get(self.physical_key(key))
+        self._data_cache[key] = data
+        return data
 
     def head(self, key: str) -> ObjectMetadata | None:
+        if key not in self._metadata_cache:
+            value = self.store.head(self.physical_key(key))
+            self._metadata_cache[key] = (
+                None if value is None else self._logical_metadata(key, value)
+            )
+        return self._metadata_cache[key]
+
+    def head_fresh(self, key: str) -> ObjectMetadata | None:
         value = self.store.head(self.physical_key(key))
-        return None if value is None else self._logical_metadata(key, value)
+        logical = None if value is None else self._logical_metadata(key, value)
+        self._metadata_cache[key] = logical
+        return logical
 
     def delete(self, key: str) -> None:
         raise M13AcceptanceError(
@@ -133,9 +158,15 @@ class AcceptanceRuntimeReceipt:
             "acceptance_id": self.acceptance_id,
             "report_key": self.report_key,
             "report_sha256": self.report_sha256,
-            "real_production_pointer_sha256_before": self.real_production_pointer_sha256_before,
-            "real_production_pointer_sha256_after": self.real_production_pointer_sha256_after,
-            "real_production_pointer_unchanged": self.real_production_pointer_unchanged,
+            "real_production_pointer_sha256_before": (
+                self.real_production_pointer_sha256_before
+            ),
+            "real_production_pointer_sha256_after": (
+                self.real_production_pointer_sha256_after
+            ),
+            "real_production_pointer_unchanged": (
+                self.real_production_pointer_unchanged
+            ),
             "engine_sha": self.engine_sha,
             "canonical_source_sha": self.canonical_source_sha,
             "governance": {
@@ -183,8 +214,9 @@ class _Tracker:
             self.hashes[key] = digest
 
     def verify(self) -> None:
+        fresh_get = getattr(self.store, "get_fresh", self.store.get)
         for key, expected in sorted(self.hashes.items()):
-            observed = sha256_bytes(self.store.get(key))
+            observed = sha256_bytes(fresh_get(key))
             if observed != expected:
                 raise M13AcceptanceError(
                     "M13_ACCEPTANCE_EVIDENCE_OVERWRITTEN",
