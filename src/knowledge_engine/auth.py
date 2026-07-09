@@ -18,6 +18,7 @@ class Principal:
     subject: str
     audiences: frozenset[str]
     claims: dict[str, Any]
+    authenticated: bool = True
 
 
 class Authenticator:
@@ -35,6 +36,7 @@ class Authenticator:
                 subject="development-user",
                 audiences=frozenset(self.settings.jwt_default_audiences),
                 claims={"auth_mode": "disabled"},
+                authenticated=True,
             )
         if not authorization or not authorization.startswith("Bearer "):
             raise AuthorizationError("missing bearer token")
@@ -66,7 +68,20 @@ class Authenticator:
             subject=str(claims["sub"]),
             audiences=frozenset(audiences),
             claims=claims,
+            authenticated=True,
         )
+
+    def authenticate_public(self, authorization: str | None) -> Principal:
+        if not authorization:
+            if not self.settings.public_anonymous_enabled:
+                raise AuthorizationError("public authentication is required")
+            return Principal(
+                subject="anonymous-public",
+                audiences=frozenset({"public"}),
+                claims={"auth_mode": "anonymous_public"},
+                authenticated=False,
+            )
+        return self.authenticate(authorization)
 
 
 def authorization_header(
