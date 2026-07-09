@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-os.local/schemas/multi-batch/operation-result.schema.json",
+  "title": "Knowledge OS Multi-Batch Operation Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "operation_id",
+    "batch_id",
+    "kind",
+    "status",
+    "before_batch_state",
+    "after_batch_state",
+    "occurred_at",
+    "evidence_refs",
+    "failure_code",
+    "mutation_performed",
+    "production_identity_after",
+    "canonical_source_write_permitted",
+    "candidate_write_permitted",
+    "production_write_permitted",
+    "ledger_append_permitted"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-multi-batch-operation-result/v1"},
+    "operation_id": {"type": "string", "pattern": "^mop_[a-f0-9]{32}$"},
+    "batch_id": {"type": "string", "pattern": "^mbatch_[a-f0-9]{32}$"},
+    "kind": {
+      "enum": [
+        "plan_batch",
+        "start_intake",
+        "open_source_review",
+        "build_candidate",
+        "rebuild_candidate",
+        "record_evaluation",
+        "prepare_promotion",
+        "promote_production",
+        "rollback_production",
+        "mark_superseded",
+        "abandon_batch",
+        "close_batch"
+      ]
+    },
+    "status": {
+      "enum": [
+        "requested",
+        "validated",
+        "running",
+        "succeeded",
+        "rejected",
+        "failed",
+        "superseded",
+        "abandoned"
+      ]
+    },
+    "before_batch_state": {"$ref": "#/$defs/batchState"},
+    "after_batch_state": {"$ref": "#/$defs/batchState"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "evidence_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "failure_code": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "minLength": 1}
+      ]
+    },
+    "mutation_performed": {"type": "boolean"},
+    "production_identity_after": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/productionIdentity"}
+      ]
+    },
+    "canonical_source_write_permitted": {"const": false},
+    "candidate_write_permitted": {"const": false},
+    "production_write_permitted": {"const": false},
+    "ledger_append_permitted": {"const": false}
+  },
+  "$defs": {
+    "batchState": {
+      "enum": [
+        "planned",
+        "intake_active",
+        "source_review",
+        "candidate_building",
+        "candidate_ready",
+        "evaluation_ready",
+        "promotion_ready",
+        "production_active",
+        "superseded",
+        "abandoned",
+        "closed",
+        "rejected"
+      ]
+    },
+    "productionIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["release_id", "manifest_sha256", "pointer_sha256"],
+      "properties": {
+        "release_id": {
+          "type": "string",
+          "pattern": "^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{12}$"
+        },
+        "manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "pointer_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    }
+  }
+}
