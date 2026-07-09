@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
 
 from .compiler_contract_v1 import put_immutable
 from .errors import IntegrityError
@@ -91,8 +92,7 @@ class ReleaseComparisonRequest:
         _utc(self.generated_at, "generated_at")
         if (
             self.base_release.release_id == self.target_release.release_id
-            and self.base_release.manifest_sha256
-            != self.target_release.manifest_sha256
+            and self.base_release.manifest_sha256 != self.target_release.manifest_sha256
         ):
             raise M13ReleaseComparisonError(
                 "M13_COMPARISON_RELEASE_ID_COLLISION",
@@ -106,9 +106,7 @@ class ReleaseComparisonRequest:
             "candidate_channel": self.candidate_channel,
             "base_release": self.base_release.to_identity(),
             "target_release": self.target_release.to_identity(),
-            "expected_previous_production": (
-                self.expected_previous_production.to_identity()
-            ),
+            "expected_previous_production": self.expected_previous_production.to_identity(),
             "requested_by": self.requested_by,
             "requested_at": self.requested_at,
             "generated_at": self.generated_at,
@@ -149,9 +147,7 @@ class ReleaseComparisonResult:
             "target_release": self.request.target_release.to_identity(),
             "base_manifest_sha256": self.request.base_release.manifest_sha256,
             "target_manifest_sha256": self.request.target_release.manifest_sha256,
-            "expected_previous_production": (
-                self.request.expected_previous_production.to_identity()
-            ),
+            "expected_previous_production": self.request.expected_previous_production.to_identity(),
             "input_artifact_hashes": list(self.input_artifact_hashes),
             "added_concepts": list(self.added_concepts),
             "removed_concepts": list(self.removed_concepts),
@@ -225,9 +221,7 @@ def _hash(value: Mapping[str, Any]) -> str:
     return hashlib.sha256(stable_json_bytes(dict(value))).hexdigest()
 
 
-def _entries(
-    release: LoadedRelease, kind: str
-) -> dict[str, dict[str, Any]]:
+def _entries(release: LoadedRelease, kind: str) -> dict[str, dict[str, Any]]:
     field = _IDS[kind]
     result: dict[str, dict[str, Any]] = {}
     order: list[str] = []
@@ -263,8 +257,7 @@ def _entries(
 
 
 def _diff(
-    base: Mapping[str, dict[str, Any]],
-    target: Mapping[str, dict[str, Any]],
+    base: Mapping[str, dict[str, Any]], target: Mapping[str, dict[str, Any]]
 ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[dict[str, Any], ...]]:
     base_ids, target_ids = set(base), set(target)
     changed = tuple(
@@ -275,8 +268,7 @@ def _diff(
             "changed_fields": sorted(
                 field
                 for field in set(base[stable_id]) | set(target[stable_id])
-                if base[stable_id].get(field)
-                != target[stable_id].get(field)
+                if base[stable_id].get(field) != target[stable_id].get(field)
             ),
         }
         for stable_id in sorted(base_ids & target_ids)
@@ -290,8 +282,7 @@ def _diff(
 
 
 def _audience(
-    before: Mapping[str, Any] | None,
-    after: Mapping[str, Any] | None,
+    before: Mapping[str, Any] | None, after: Mapping[str, Any] | None
 ) -> AudienceChange:
     if before == after:
         return "unchanged"
@@ -300,13 +291,13 @@ def _audience(
     if after is None:
         return "narrowed"
     before_level, after_level = before.get("audience"), after.get("audience")
-    before_people = before.get("principals", [])
-    after_people = after.get("principals", [])
+    before_people, after_people = (
+        before.get("principals", []),
+        after.get("principals", []),
+    )
 
     def valid_people(value: Any) -> bool:
-        return isinstance(value, list) and all(
-            isinstance(item, str) for item in value
-        )
+        return isinstance(value, list) and all(isinstance(item, str) for item in value)
 
     if (
         before_level not in _RANK
@@ -321,20 +312,17 @@ def _audience(
         set(after_people)
     ):
         raise M13ReleaseComparisonError(
-            "M13_COMPARISON_AUDIENCE_INVALID",
-            "audience principals duplicate",
+            "M13_COMPARISON_AUDIENCE_INVALID", "audience principals duplicate"
         )
-    if (
-        _RANK[after_level] < _RANK[before_level]
-        or set(after_people) < set(before_people)
+    if _RANK[after_level] < _RANK[before_level] or set(after_people) < set(
+        before_people
     ):
         return "broadened"
     return "narrowed"
 
 
 def _audience_changes(
-    base: Mapping[str, dict[str, Any]],
-    target: Mapping[str, dict[str, Any]],
+    base: Mapping[str, dict[str, Any]], target: Mapping[str, dict[str, Any]]
 ) -> tuple[dict[str, Any], ...]:
     values = []
     for stable_id in sorted(set(base) | set(target)):
@@ -345,9 +333,7 @@ def _audience_changes(
                 {
                     "audience_id": stable_id,
                     "classification": classification,
-                    "before_sha256": (
-                        _hash(before) if before is not None else None
-                    ),
+                    "before_sha256": _hash(before) if before is not None else None,
                     "after_sha256": _hash(after) if after is not None else None,
                     "before": before,
                     "after": after,
@@ -357,34 +343,20 @@ def _audience_changes(
 
 
 def _typed(
-    kind: str,
-    base: Mapping[str, dict[str, Any]],
-    target: Mapping[str, dict[str, Any]],
+    kind: str, base: Mapping[str, dict[str, Any]], target: Mapping[str, dict[str, Any]]
 ) -> tuple[dict[str, Any], ...]:
     added, removed, changed = _diff(base, target)
     values = [
         *(
-            {
-                "stable_id": value,
-                "change_type": "added",
-                "artifact_type": kind,
-            }
+            {"stable_id": value, "change_type": "added", "artifact_type": kind}
             for value in added
         ),
         *(
-            {
-                "stable_id": value,
-                "change_type": "removed",
-                "artifact_type": kind,
-            }
+            {"stable_id": value, "change_type": "removed", "artifact_type": kind}
             for value in removed
         ),
         *(
-            {
-                **value,
-                "change_type": "changed",
-                "artifact_type": kind,
-            }
+            {**value, "change_type": "changed", "artifact_type": kind}
             for value in changed
         ),
     ]
@@ -393,9 +365,7 @@ def _typed(
     )
 
 
-def _manifest(
-    base: LoadedRelease, target: LoadedRelease
-) -> tuple[dict[str, Any], ...]:
+def _manifest(base: LoadedRelease, target: LoadedRelease) -> tuple[dict[str, Any], ...]:
     values = [
         {
             "field": field,
@@ -403,29 +373,23 @@ def _manifest(
             "after": target.manifest.get(field),
         }
         for field in sorted(
-            (set(base.manifest) | set(target.manifest))
-            - {"release_id", "artifacts"}
+            (set(base.manifest) | set(target.manifest)) - {"release_id", "artifacts"}
         )
         if base.manifest.get(field) != target.manifest.get(field)
     ]
-    base_artifacts = {
-        item.artifact_type: item.to_identity() for item in base.artifacts
-    }
-    target_artifacts = {
-        item.artifact_type: item.to_identity() for item in target.artifacts
-    }
+    b = {item.artifact_type: item.to_identity() for item in base.artifacts}
+    t = {item.artifact_type: item.to_identity() for item in target.artifacts}
     for kind in ARTIFACT_TYPES:
-        before, after = base_artifacts[kind], target_artifacts[kind]
-        if before != after:
+        if b[kind] != t[kind]:
             values.append(
                 {
                     "field": f"artifacts.{kind}",
-                    "before_sha256": before["sha256"],
-                    "after_sha256": after["sha256"],
-                    "before_bytes": before["bytes"],
-                    "after_bytes": after["bytes"],
-                    "before_schema_version": before["schema_version"],
-                    "after_schema_version": after["schema_version"],
+                    "before_sha256": b[kind]["sha256"],
+                    "after_sha256": t[kind]["sha256"],
+                    "before_bytes": b[kind]["bytes"],
+                    "after_bytes": t[kind]["bytes"],
+                    "before_schema_version": b[kind]["schema_version"],
+                    "after_schema_version": t[kind]["schema_version"],
                 }
             )
     return tuple(values)
@@ -445,9 +409,7 @@ def _ids(value: Any, name: str, stable_id: str) -> list[str]:
     return value
 
 
-def _batch(
-    request: ReleaseComparisonRequest, batch: M13BatchRecord | None
-) -> None:
+def _batch(request: ReleaseComparisonRequest, batch: M13BatchRecord | None) -> None:
     expected = request.expected_previous_production
     if (
         request.base_release.release_id != expected.release_id
@@ -474,16 +436,12 @@ def _batch(
             "M13_COMPARISON_BATCH_PRODUCTION_MISMATCH",
             "batch production does not match",
         )
-    if (
-        batch.seed.source_repository,
-        batch.seed.source_commit_sha,
-    ) != (
+    if (batch.seed.source_repository, batch.seed.source_commit_sha) != (
         request.target_release.source_repository,
         request.target_release.source_commit_sha,
     ):
         raise M13ReleaseComparisonError(
-            "M13_COMPARISON_BATCH_SOURCE_MISMATCH",
-            "target Source does not match batch",
+            "M13_COMPARISON_BATCH_SOURCE_MISMATCH", "target Source does not match batch"
         )
     if (
         batch.candidate_channel is not None
@@ -504,30 +462,25 @@ def create_release_comparison(
 ) -> ReleaseComparisonResult:
     try:
         assert_expected_previous_production(
-            expected=request.expected_previous_production,
-            observed=observed_production,
+            expected=request.expected_previous_production, observed=observed_production
         )
     except ValueError as exc:
         raise M13ReleaseComparisonError(
-            "M13_COMPARISON_EXPECTED_PRODUCTION_STALE",
-            "expected production is stale",
+            "M13_COMPARISON_EXPECTED_PRODUCTION_STALE", "expected production is stale"
         ) from exc
     _batch(request, batch)
     try:
-        base = load_release(store, request.base_release)
-        target = load_release(store, request.target_release)
+        base, target = (
+            load_release(store, request.base_release),
+            load_release(store, request.target_release),
+        )
     except M13ReleaseInventoryError as exc:
-        raise M13ReleaseComparisonError(
-            exc.code, exc.message, **exc.context
-        ) from exc
+        raise M13ReleaseComparisonError(exc.code, exc.message, **exc.context) from exc
 
     entries = {
-        kind: (_entries(base, kind), _entries(target, kind))
-        for kind in ARTIFACT_TYPES
+        kind: (_entries(base, kind), _entries(target, kind)) for kind in ARTIFACT_TYPES
     }
-    added_concepts, removed_concepts, changed_concepts = _diff(
-        *entries["concepts"]
-    )
+    added_concepts, removed_concepts, changed_concepts = _diff(*entries["concepts"])
     added_claims, removed_claims, changed_claims = _diff(*entries["claims"])
     audience_changes = _audience_changes(*entries["audience"])
     citation_changes = _typed("citations", *entries["citations"])
@@ -544,36 +497,38 @@ def create_release_comparison(
     citations_base, citations_target = entries["citations"]
     for stable_id in added_claims:
         if not _ids(
-            claims_target[stable_id].get("citation_ids"),
-            "citation_ids",
-            stable_id,
+            claims_target[stable_id].get("citation_ids"), "citation_ids", stable_id
         ):
             blockers.append(f"uncited_claim:{stable_id}")
     for stable_id in sorted(set(claims_base) & set(claims_target)):
-        before = _ids(
-            claims_base[stable_id].get("citation_ids", []),
-            "citation_ids",
-            stable_id,
-        )
-        after = _ids(
-            claims_target[stable_id].get("citation_ids", []),
-            "citation_ids",
-            stable_id,
-        )
-        if set(before) - set(after):
+        if set(
+            _ids(
+                claims_base[stable_id].get("citation_ids", []),
+                "citation_ids",
+                stable_id,
+            )
+        ) - set(
+            _ids(
+                claims_target[stable_id].get("citation_ids", []),
+                "citation_ids",
+                stable_id,
+            )
+        ):
             blockers.append(f"claim_support_removed:{stable_id}")
     for stable_id in sorted(set(citations_base) & set(citations_target)):
-        before = _ids(
-            citations_base[stable_id].get("supports_claim_ids", []),
-            "supports_claim_ids",
-            stable_id,
-        )
-        after = _ids(
-            citations_target[stable_id].get("supports_claim_ids", []),
-            "supports_claim_ids",
-            stable_id,
-        )
-        if set(before) - set(after):
+        if set(
+            _ids(
+                citations_base[stable_id].get("supports_claim_ids", []),
+                "supports_claim_ids",
+                stable_id,
+            )
+        ) - set(
+            _ids(
+                citations_target[stable_id].get("supports_claim_ids", []),
+                "supports_claim_ids",
+                stable_id,
+            )
+        ):
             blockers.append(f"citation_support_removed:{stable_id}")
 
     hash_values = [
@@ -590,12 +545,9 @@ def create_release_comparison(
         "input_artifact_hashes": list(input_hashes),
     }
     comparison_id = (
-        "mcompare_"
-        + hashlib.sha256(stable_json_bytes(identity)).hexdigest()[:32]
+        "mcompare_" + hashlib.sha256(stable_json_bytes(identity)).hexdigest()[:32]
     )
-    artifact_key = (
-        f"m13/v1/release-comparisons/{comparison_id}/result.json"
-    )
+    artifact_key = f"m13/v1/release-comparisons/{comparison_id}/result.json"
     risk = {
         "added_concepts": len(added_concepts),
         "removed_concepts": len(removed_concepts),
@@ -604,12 +556,10 @@ def create_release_comparison(
         "removed_claims": len(removed_claims),
         "changed_claims": len(changed_claims),
         "audience_broadened": sum(
-            change["classification"] == "broadened"
-            for change in audience_changes
+            c["classification"] == "broadened" for c in audience_changes
         ),
         "audience_narrowed": sum(
-            change["classification"] == "narrowed"
-            for change in audience_changes
+            c["classification"] == "narrowed" for c in audience_changes
         ),
         "citation_changes": len(citation_changes),
         "registry_changes": len(registry_changes),
