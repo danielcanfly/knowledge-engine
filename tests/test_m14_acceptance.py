@@ -14,7 +14,6 @@ from knowledge_engine.m14_acceptance import (
     validate_m14_public_product_acceptance,
 )
 from knowledge_engine.m14_feedback_contracts import PublicFeedbackReceipt
-from knowledge_engine.m14_interfaces import PUBLIC_STREAM_SCHEMA
 from knowledge_engine.m14_public_contracts import PublicAskResponse
 from knowledge_engine.m14_security_contracts import public_product_capabilities
 
@@ -162,7 +161,13 @@ def test_m14_acceptance_artifact_accepts_full_public_product_contract() -> None:
     assert accepted.keep_permanent_ledger_open is True
     assert accepted.answer.status == "answered"
     assert citation.source_card_id == source_card.source_card_id
-    assert accepted.capabilities.stream_schema_version == PUBLIC_STREAM_SCHEMA
+    assert accepted.capabilities.stream_event_order == [
+        "meta",
+        "answer",
+        "citations",
+        "source_cards",
+        "done",
+    ]
     assert accepted.capabilities.feedback.immutable_intake is True
     assert accepted.feedback_receipt.curation_status == "pending_review"
     assert accepted.governance.source_write_allowed is False
