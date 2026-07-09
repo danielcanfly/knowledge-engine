@@ -63,7 +63,7 @@ def sanitize_feedback_text(value: str | None) -> tuple[str | None, list[str]]:
 
 def _submitter_scope(client_key: str) -> str:
     return hashlib.sha256(
-        f"knowledge-engine-feedback/v1:{client_key}".encode("utf-8")
+        f"knowledge-engine-feedback/v1:{client_key}".encode()
     ).hexdigest()
 
 
@@ -169,14 +169,14 @@ class FeedbackIntake:
                 sha256=sha256_bytes(record_bytes),
                 only_if_absent=True,
             )
-        except ReleaseConflictError:
+        except ReleaseConflictError as exc:
             duplicate = True
             stored = self._load_json(intake_key, "feedback intake")
             if stored.get("identity_sha256") != identity_sha256:
-                raise IntegrityError("feedback identity collision")
+                raise IntegrityError("feedback identity collision") from exc
             stored_received_at = stored.get("received_at")
             if not isinstance(stored_received_at, str) or not stored_received_at:
-                raise IntegrityError("feedback intake is missing received_at")
+                raise IntegrityError("feedback intake is missing received_at") from exc
             received_at = stored_received_at
             record_bytes = _canonical_bytes(stored)
 
@@ -202,13 +202,13 @@ class FeedbackIntake:
                 sha256=sha256_bytes(queue_bytes),
                 only_if_absent=True,
             )
-        except ReleaseConflictError:
+        except ReleaseConflictError as exc:
             stored_queue = self._load_json(queue_key, "feedback queue envelope")
             if (
                 stored_queue.get("feedback_id") != feedback_id
                 or stored_queue.get("intake_sha256") != intake_sha256
             ):
-                raise IntegrityError("feedback queue identity collision")
+                raise IntegrityError("feedback queue identity collision") from exc
 
         return PublicFeedbackReceipt(
             feedback_id=feedback_id,
