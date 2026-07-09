@@ -17,6 +17,9 @@ raw evidence
   -> golden query suite report
   -> golden query baseline gate
   -> release quality gate
+  -> retrieval and citation metrics
+  -> answer quality and performance metrics
+  -> final release-blocking M12 gate
 ```
 
 The normative contracts live in `danielcanfly/knowledge-os-foundation`. This repository implements those contracts.
@@ -36,6 +39,8 @@ The normative contracts live in `danielcanfly/knowledge-os-foundation`. This rep
 - Runs deterministic golden query suites over ACL-filtered Runtime responses and emits replayable aggregate reports.
 - Compares golden query suite reports to immutable quality baselines before allowing release progression.
 - Bundles runtime-quality evidence into deterministic release quality gate decisions.
+- Computes deterministic retrieval, citation, answer-quality, and performance metrics from explicit governed observations.
+- Emits a final M12 release-blocking decision with complete boundary and regression evidence.
 - Provides permanent approval-gated promotion and rollback workflows.
 - Captures Markdown evidence as immutable content-addressed raw objects.
 - Produces isolated normalized evidence and human-review packets.
@@ -71,6 +76,12 @@ Golden query suites execute multiple Runtime queries through the same ACL-filter
 Golden query baselines compare suite reports to immutable aggregate floors and emit `gqbaseline_` / `gqbaselinecheck_` evidence. See `docs/m12-golden-query-baseline.md`.
 
 Release quality gates bundle query evaluations, suite reports, and baseline checks into `rqgate_` / `rqdecision_` evidence. See `docs/m12-release-quality-gate.md`.
+
+M12.5 computes `rcmetricset_` / `rcmetrics_` retrieval and citation evidence from explicit case expectations. See `docs/m12/m12-5-retrieval-citation-metrics.md`.
+
+M12.6 computes `apmetricset_` / `apmetrics_` answer-quality and performance evidence from bounded observations. See `docs/m12/m12-6-answer-performance-metrics.md`.
+
+M12.7 composes the final `m12gate_` / `m12closure_` release-blocking decision. See `docs/m12/m12-7-final-gate-and-closure.md`.
 
 ## Governed Markdown intake
 
