@@ -5,7 +5,7 @@ Implementation is tracked under the M13 parent issue and slice issues. This dire
 ## Slices
 
 1. [M13.1 Architecture and Identity Contracts](m13-1-identity-contracts.md)
-2. M13.2 Batch Registry and Lifecycle Planner
+2. [M13.2 Batch Registry and Lifecycle Planner](m13-2-batch-registry-planner.md)
 3. M13.3 Concurrency Coordinator and Single Production Mutation
 4. M13.4 Retention, Supersession, Abandonment and Rebuild Rules
 5. M13.5 Deterministic Release Comparison
