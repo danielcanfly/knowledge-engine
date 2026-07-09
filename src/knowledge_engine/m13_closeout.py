@@ -311,7 +311,7 @@ def close_batch(
             "M13_CLOSEOUT_COMPARISON_MISSING",
             "completed release comparison evidence is required",
         )
-    promotion = _promotion_summary(snapshot, operation_id=lease.operation_id)
+    _promotion_summary(snapshot, operation_id=lease.operation_id)
 
     identity = {
         "schema_version": f"{CLOSEOUT_SCHEMA}/identity",
@@ -355,7 +355,7 @@ def close_batch(
         "closeout_id": closeout_id,
         "closeout_operation_id": operation.operation_id,
         "closeout_operation_key": operation_key,
-        "promotion_summary_before": promotion,
+        "promotion_state_required": "running_or_completed",
         "governance": dict(GOVERNANCE_NO_WRITE),
         "source_write_performed": False,
         "production_write_performed": False,
