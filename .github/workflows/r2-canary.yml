@@ -52,6 +52,10 @@ on:
       - 'src/knowledge_engine/m14_interfaces.py'
       - 'src/knowledge_engine/m14_security.py'
       - 'src/knowledge_engine/m14_security_contracts.py'
+      - 'src/knowledge_engine/m14_feedback.py'
+      - 'src/knowledge_engine/m14_feedback_contracts.py'
+      - 'src/knowledge_engine/m14_feedback_edge.py'
+      - 'src/knowledge_engine/m14_feedback_widget.py'
       - 'tests/fixtures/**'
       - 'tests/test_golden_query_suite.py'
       - 'tests/test_golden_query_baseline.py'
@@ -83,6 +87,9 @@ on:
       - 'tests/test_m14_interface_surface.py'
       - 'tests/test_m14_security.py'
       - 'tests/test_m14_security_surface.py'
+      - 'tests/test_m14_feedback.py'
+      - 'tests/test_m14_feedback_api.py'
+      - 'tests/test_m14_feedback_surface.py'
       - 'docs/m12-golden-query-suite.md'
       - 'docs/m12-golden-query-baseline.md'
       - 'docs/m12-release-quality-gate.md'
@@ -92,6 +99,7 @@ on:
       - 'docs/architecture/m14/**'
       - 'src/knowledge_engine/storage.py'
       - 'scripts/r2_canary.py'
+      - 'scripts/m14_feedback_r2_acceptance.py'
       - 'scripts/m13_three_batch_acceptance.py'
       - '.github/workflows/r2-canary.yml'
       - '.github/workflows/m13-three-batch-acceptance.yml'
@@ -148,11 +156,34 @@ jobs:
               exit 1
             }
           cat /tmp/r2-canary.log
+      - name: M14 feedback R2 acceptance
+        env:
+          APP_ENV: test
+          AUTH_MODE: disabled
+          OBJECT_STORE_BACKEND: r2
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+          R2_REGION: auto
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/m14_feedback_r2_acceptance.py \
+            --run-id '${{ github.run_id }}-${{ github.run_attempt }}' \
+            > /tmp/m14-feedback-r2.log 2>&1 || {
+              cat /tmp/m14-feedback-r2.log
+              exit 1
+            }
+          cat /tmp/m14-feedback-r2.log
       - name: Upload canary failure log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: r2-canary-log
-          path: /tmp/r2-canary.log
+          path: |
+            /tmp/r2-canary.log
+            /tmp/m14-feedback-r2.log
           if-no-files-found: ignore
           retention-days: 7

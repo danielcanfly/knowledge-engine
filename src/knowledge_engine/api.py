@@ -12,6 +12,9 @@ from pydantic import BaseModel, Field
 from .auth import Authenticator, Principal, authorization_header
 from .config import Settings
 from .errors import AuthorizationError, IntegrityError, KnowledgeEngineError
+from .m14_feedback import FeedbackIntake
+from .m14_feedback_contracts import PublicFeedbackReceipt, PublicFeedbackRequest
+from .m14_feedback_widget import enable_feedback_widget_javascript
 from .m14_interfaces import (
     PublicInterfaceCapabilities,
     normalize_interface_locale,
@@ -91,6 +94,11 @@ def get_public_abuse_controller() -> PublicAbuseController:
     return PublicAbuseController(get_settings())
 
 
+@lru_cache(maxsize=1)
+def get_feedback_intake() -> FeedbackIntake:
+    return FeedbackIntake(get_runtime().store)
+
+
 def get_principal(
     authorization: str | None = Depends(authorization_header),
 ) -> Principal:
@@ -104,6 +112,7 @@ def get_principal(
 
 
 def get_public_principal(
+    request: Request,
     authorization: str | None = Depends(authorization_header),
 ) -> Principal:
     try:
@@ -111,7 +120,7 @@ def get_public_principal(
     except AuthorizationError as exc:
         public_rejection_telemetry(
             reason="authentication",
-            path="/v1/ask",
+            path=request.url.path,
             authenticated=False,
             status_code=401,
         )
@@ -188,7 +197,7 @@ def _execute_with_public_controls(
         )
 
 
-app = FastAPI(title="Knowledge Engine", version="0.6.0")
+app = FastAPI(title="Knowledge Engine", version="0.7.0")
 app.add_middleware(PublicEdgeSecurityMiddleware, settings_provider=get_settings)
 
 
@@ -276,11 +285,8 @@ def query(
         ) from exc
 
 
-def _execute_public_ask(
-    request: PublicAskRequest,
-    principal: Principal,
-) -> PublicAskResponse:
-    if request.audience != "public" and not principal.authenticated:
+def _authorize_public_audience(audience: str, principal: Principal) -> None:
+    if audience != "public" and not principal.authenticated:
         detail = PublicErrorDetail(
             code="PUBLIC-QUERY-403",
             message="authenticated audience authorization is required",
@@ -289,15 +295,22 @@ def _execute_public_ask(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=detail.model_dump(),
         )
-    if request.audience not in principal.audiences:
+    if audience not in principal.audiences:
         detail = PublicErrorDetail(
             code="PUBLIC-QUERY-403",
-            message=f"audience is not authorized: {request.audience}",
+            message=f"audience is not authorized: {audience}",
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=detail.model_dump(),
         )
+
+
+def _execute_public_ask(
+    request: PublicAskRequest,
+    principal: Principal,
+) -> PublicAskResponse:
+    _authorize_public_audience(request.audience, principal)
     try:
         runtime_result = get_runtime().query(
             request.query,
@@ -355,6 +368,7 @@ def ask_page(lang: str | None = None) -> HTMLResponse:
 @app.get("/embed/ask.js", include_in_schema=False)
 def ask_widget_script() -> Response:
     script = harden_public_widget_javascript(public_ask_widget_javascript())
+    script = enable_feedback_widget_javascript(script)
     return Response(
         script,
         media_type="application/javascript",
@@ -435,4 +449,61 @@ def ask_stream_endpoint(
         lambda: ask_stream(request, identity.principal),
         identity=identity,
         path="/v1/ask/stream",
+    )
+
+
+def feedback(
+    request: PublicFeedbackRequest,
+    identity: PublicRequestIdentity,
+) -> PublicFeedbackReceipt:
+    _authorize_public_audience(request.audience, identity.principal)
+    try:
+        return get_feedback_intake().submit(
+            request,
+            client_key=identity.client_key,
+            authenticated=identity.principal.authenticated,
+        )
+    except ValueError as exc:
+        detail = PublicErrorDetail(
+            code="PUBLIC-FEEDBACK-422",
+            message=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=detail.model_dump(),
+        ) from exc
+    except (IntegrityError, FileNotFoundError) as exc:
+        logger.exception("public feedback intake failed")
+        detail = PublicErrorDetail(
+            code="PUBLIC-FEEDBACK-503",
+            message="feedback intake is temporarily unavailable",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=detail.model_dump(),
+        ) from exc
+
+
+@app.post(
+    "/v1/feedback",
+    response_model=PublicFeedbackReceipt,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        401: {"model": PublicErrorResponse},
+        403: {"model": PublicErrorResponse},
+        413: {"model": PublicErrorResponse},
+        422: {"model": PublicErrorResponse},
+        429: {"model": PublicErrorResponse},
+        503: {"model": PublicErrorResponse},
+        504: {"model": PublicErrorResponse},
+    },
+)
+def feedback_endpoint(
+    request: PublicFeedbackRequest,
+    identity: PublicRequestIdentity = Depends(get_public_request_identity),
+) -> PublicFeedbackReceipt:
+    return _execute_with_public_controls(
+        lambda: feedback(request, identity),
+        identity=identity,
+        path="/v1/feedback",
     )
