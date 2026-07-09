@@ -8,51 +8,65 @@ Engine baseline: `45c2d8c8f3c71260acad1dc8b349ae05a238d247`
 
 ## Purpose
 
-M13.3 adds deterministic concurrency control for multi-batch operations. Candidate builds may run with a configured bounded capacity. Production mutation remains a single global lane protected by an object-store compare-and-swap lease, monotonic generation, and fencing token.
+M13.3 adds deterministic concurrency control for multi-batch operations. Candidate builds may run with configured bounded capacity. Production mutation remains one global lane protected by object-store compare-and-swap, a monotonic generation, and a fencing token.
 
-This slice controls admission and authorization. It does not itself create a release, write the production pointer, roll back production, modify Source, delete retention targets, or append the permanent ledger.
+This slice controls admission and authorization. It does not create a release, write the production pointer, roll back production, modify Source, delete retention targets, or append the permanent ledger.
+
+## Implementation structure
+
+The coordinator is split by responsibility:
+
+```text
+m13_coordination_common.py       identities, typed envelopes, time and CAS helpers
+m13_candidate_coordinator.py     bounded candidate slot pool
+m13_production_lease.py          global production lease and recovery
+m13_production_mutation.py       permit, transition, authorization and completion
+m13_coordinator_v2.py            stable public facade
+```
+
+The split keeps each concurrency boundary independently reviewable while preserving one public API.
 
 ## Candidate build coordination
 
 Candidate work uses a bounded slot head:
 
 ```text
-m13/v1/concurrency/candidate/head.json
-m13/v1/concurrency/candidate/leases/{slot_id}.json
-m13/v1/concurrency/candidate/releases/{slot_id}.json
-m13/v1/concurrency/candidate/recoveries/{recovery_id}.json
+m13/v2/concurrency/candidate/head.json
+m13/v2/concurrency/candidate/leases/{slot_id}.json
+m13/v2/concurrency/candidate/releases/{slot_id}.json
+m13/v2/concurrency/candidate/recoveries/{recovery_id}.json
 ```
 
-The head contains a fixed capacity, a monotonic head version, and active slot summaries. Updates use compare-and-swap against the prior ETag.
+The head contains fixed capacity, a monotonic head version, and active slot summaries. Updates use compare-and-swap against the exact prior ETag.
 
 Candidate admission requires:
 
 - a planning-only `candidate_build` operation request;
 - a registered batch in `reviewing_source`;
-- an expected-previous production identity equal to the batch seed;
+- expected-previous production equal to the batch seed;
 - a non-empty holder identity;
 - a valid UTC acquisition and expiry window;
 - free capacity.
 
-Exact replay returns the same slot. Expired slots continue occupying capacity until an explicit recovery action writes immutable recovery evidence and updates the head. There is no silent expiry deletion.
+Exact replay returns the same slot. Expired slots continue occupying capacity until an explicit recovery action writes immutable evidence and updates the head. There is no silent expiry deletion.
 
 ## Production mutation lane
 
 Production coordination uses one mutable lease object and immutable evidence objects:
 
 ```text
-m13/v1/concurrency/production/lease.json
-m13/v1/concurrency/production/acquisitions/{lease_id}.json
-m13/v1/concurrency/production/renewals/{renewal_id}.json
-m13/v1/concurrency/production/permits/{permit_id}.json
-m13/v1/concurrency/production/transitions/{marker_id}.json
-m13/v1/concurrency/production/authorizations/{authorization_id}.json
-m13/v1/concurrency/production/completions/{completion_id}.json
-m13/v1/concurrency/production/releases/{release_id}.json
-m13/v1/concurrency/production/recoveries/{recovery_id}.json
+m13/v2/concurrency/production/lease.json
+m13/v2/concurrency/production/acquisitions/{lease_id}.json
+m13/v2/concurrency/production/renewals/{renewal_id}.json
+m13/v2/concurrency/production/permits/{permit_id}.json
+m13/v2/concurrency/production/transitions/{marker_id}.json
+m13/v2/concurrency/production/authorizations/{authorization_id}.json
+m13/v2/concurrency/production/completions/{completion_id}.json
+m13/v2/concurrency/production/releases/{release_id}.json
+m13/v2/concurrency/production/recoveries/{recovery_id}.json
 ```
 
-Only `lease.json` is mutable. Every update uses compare-and-swap. The immutable evidence written before a failed CAS is safe orphan evidence and can be reused by exact replay.
+Only `lease.json` is mutable. Every update uses compare-and-swap. Immutable evidence written before a failed CAS is safe orphan evidence and can be reused by exact replay.
 
 ## Lease lifecycle
 
@@ -63,7 +77,7 @@ active
   -> released
 
 active / permit_issued
-  -> recovered, but only after explicit expiry recovery
+  -> recovered, only after explicit expiry recovery
 ```
 
 A lease contains:
@@ -77,7 +91,7 @@ A lease contains:
 - exact expected-previous production identity;
 - holder, acquisition time, expiry, and immutable evidence keys.
 
-A second batch cannot acquire the production lane while any unexpired active, permit-issued, or commit-authorized lease exists.
+A second batch cannot acquire the production lane while an unexpired active, permit-issued, or commit-authorized lease exists.
 
 ## Acquisition requirements
 
@@ -96,7 +110,7 @@ An expired `active` or `permit_issued` lease cannot be silently replaced. The op
 
 ## Fencing
 
-Every successful production acquisition increments the generation and creates a new fencing token. All renewal, permit, transition, authorization, abort, completion, and recovery actions verify:
+Every successful acquisition increments the generation and creates a new fencing token. Renewal, permit, transition, authorization, abort, completion, and recovery verify:
 
 - lease identity;
 - holder identity;
@@ -108,7 +122,7 @@ A previous generation can never renew, authorize, complete, or release a later l
 
 ## Permit and transition
 
-A mutation permit is immutable and can be issued only while the lease is active and the batch still satisfies the exact acquisition conditions. The permit carries the lease generation, fencing token, expected registry and batch versions, expected-previous production identity, candidate channel, and expiry.
+A mutation permit is immutable and may be issued only while the lease is active and the batch still satisfies the acquisition conditions. The permit carries the lease generation, fencing token, expected registry and batch versions, expected-previous production, candidate channel, and expiry.
 
 The coordinator is the only M13.3 path that moves a batch from `awaiting_production_slot` to `promoting`. It writes:
 
@@ -116,7 +130,7 @@ The coordinator is the only M13.3 path that moves a batch from `awaiting_product
 - a new immutable batch snapshot;
 - a production-promotion running summary linked to the permit;
 - an immutable transition marker;
-- one CAS registry-head update.
+- one registry-head CAS using the same ETag read with the source snapshot.
 
 The ordinary M13.2 transition path continues to reject `awaiting_production_slot -> promoting`.
 
@@ -130,7 +144,7 @@ Commit authorization occurs only after the batch reaches `promoting`. Immediatel
 - exact promoting batch version;
 - observed production still equal to expected previous.
 
-The authorization is immutable and one-time per lease. External production code must call authorization validation immediately before mutation.
+Authorization is immutable and one-time per lease. External production code must validate it immediately before mutation.
 
 ## Completion and recovery
 
@@ -147,12 +161,12 @@ Crash behavior is fail closed:
 
 - expired `active` or `permit_issued`: explicit recovery allowed;
 - unexpired lease: recovery rejected;
-- expired `commit_authorized`: automatic recovery rejected, manual production reconciliation required;
+- expired `commit_authorized`: automatic recovery rejected and manual reconciliation required;
 - CAS collision: action rejected and exact state must be re-read.
 
 ## Governance
 
-Candidate artifacts, leases, recovery evidence, and transition markers retain the no-write boundary. Permit, commit authorization, and completion evidence declare the mutation permissions required by the external production operation, but this module contains no release creation, production-pointer write, rollback, Source write, retention deletion, or ledger append implementation.
+Candidate artifacts, leases, recovery evidence, and transition markers retain the no-write boundary. Permit, commit authorization, and completion evidence declare permissions required by the external production operation, but the coordinator modules contain no release creation, production-pointer write, rollback, Source write, retention deletion, or ledger append implementation.
 
 ## Exit criteria
 
@@ -164,6 +178,6 @@ Candidate artifacts, leases, recovery evidence, and transition markers retain th
 - coordinator-only transition to `promoting`;
 - production revalidation immediately before commit authorization;
 - stale holder, fence, permit, version, production, expiry, and concurrent acquisition rejection;
-- manual reconciliation requirement after commit-authorized expiry;
+- manual reconciliation after commit-authorized expiry;
 - adversarial concurrency tests;
 - exact-head CI, R2 Canary, and R2 Release Integration green.
