@@ -187,10 +187,11 @@ def _request_origin(scope: Scope, headers: dict[bytes, bytes]) -> str:
     host = _decode_header(headers, b"host")
     if not host:
         server = scope.get("server")
-        if isinstance(server, tuple) and len(server) == 2:
-            host = f"{server[0]}:{server[1]}"
-        else:
-            host = ""
+        host = (
+            f"{server[0]}:{server[1]}"
+            if isinstance(server, tuple) and len(server) == 2
+            else ""
+        )
     return f"{scope.get('scheme', 'http')}://{host}".rstrip("/")
 
 
