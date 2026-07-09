@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from knowledge_engine.config import Settings
 from knowledge_engine.m14_acceptance import (
     M14_ACCEPTANCE_SCHEMA,
+    M14AcceptanceArtifact,
     M14Baseline,
     M14Prerequisite,
     finalize_acceptance_artifact,
@@ -122,21 +125,19 @@ def _settings() -> Settings:
         jwt_audience=None,
         jwt_default_audiences=("public",),
         object_store_backend="filesystem",
-        filesystem_store_root=".artifacts/test-store",
+        filesystem_store_root=Path(".artifacts/test-store"),
         r2_endpoint_url=None,
         r2_bucket=None,
         r2_access_key_id=None,
         r2_secret_access_key=None,
         r2_region="auto",
         channel="production",
-        cache_dir=".artifacts/test-cache",
+        cache_dir=Path(".artifacts/test-cache"),
         log_level="INFO",
     )
 
 
-def _artifact():
-    from knowledge_engine.m14_acceptance import M14AcceptanceArtifact
-
+def _artifact() -> M14AcceptanceArtifact:
     answer = _answer()
     return M14AcceptanceArtifact(
         baseline=_baseline(),
@@ -149,6 +150,9 @@ def _artifact():
 
 def test_m14_acceptance_artifact_accepts_full_public_product_contract() -> None:
     accepted = validate_m14_public_product_acceptance(_artifact())
+    citation = accepted.answer.citations[0]
+    source_card = accepted.answer.source_cards[0]
+
     assert accepted.schema_version == M14_ACCEPTANCE_SCHEMA
     assert accepted.artifact_sha256 is not None
     assert len(accepted.artifact_sha256) == 64
@@ -157,7 +161,7 @@ def test_m14_acceptance_artifact_accepts_full_public_product_contract() -> None:
     assert accepted.baseline.ledger_state == "open"
     assert accepted.keep_permanent_ledger_open is True
     assert accepted.answer.status == "answered"
-    assert accepted.answer.citations[0].source_card_id == accepted.answer.source_cards[0].source_card_id
+    assert citation.source_card_id == source_card.source_card_id
     assert accepted.capabilities.stream_schema_version == PUBLIC_STREAM_SCHEMA
     assert accepted.capabilities.feedback.immutable_intake is True
     assert accepted.feedback_receipt.curation_status == "pending_review"
@@ -176,12 +180,16 @@ def test_m14_acceptance_requires_all_completed_prerequisite_slices() -> None:
 def test_m14_acceptance_rejects_uncited_or_non_public_answer() -> None:
     artifact = _artifact()
     artifact.answer = artifact.answer.model_copy(update={"audience": "internal"})
-    artifact.feedback_receipt = artifact.feedback_receipt.model_copy(update={"audience": "internal"})
+    artifact.feedback_receipt = artifact.feedback_receipt.model_copy(
+        update={"audience": "internal"}
+    )
     with pytest.raises(ValueError, match="public audience"):
         validate_m14_public_product_acceptance(artifact)
 
     artifact = _artifact()
-    artifact.answer = artifact.answer.model_copy(update={"citations": [], "source_cards": []})
+    artifact.answer = artifact.answer.model_copy(
+        update={"citations": [], "source_cards": []}
+    )
     with pytest.raises(ValueError, match="inspectable citations"):
         validate_m14_public_product_acceptance(artifact)
 
