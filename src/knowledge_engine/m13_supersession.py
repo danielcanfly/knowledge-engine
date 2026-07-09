@@ -5,8 +5,8 @@ from .m13_contracts import M13BatchRecord, ProductionIdentity
 from .m13_lifecycle_common import (
     ELIGIBLE_ABANDON_STATES,
     LIFECYCLE_SCHEMA,
-    M13LifecycleError,
     LifecycleMutationResult,
+    M13LifecycleError,
     assert_candidate_channel_available,
     assert_expected_production,
     assert_no_active_production_lease,
