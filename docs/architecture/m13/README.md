@@ -8,7 +8,7 @@ Implementation is tracked under the M13 parent issue and slice issues. This dire
 2. [M13.2 Batch Registry and Lifecycle Planner](m13-2-batch-registry-planner.md)
 3. [M13.3 Concurrency Coordinator and Single Production Mutation](m13-3-concurrency-coordinator.md)
 4. [M13.4 Retention, Supersession, Abandonment and Rebuild Rules](m13-4-retention-supersession.md)
-5. M13.5 Deterministic Release Comparison
+5. [M13.5 Deterministic Release Comparison](m13-5-release-comparison.md)
 6. M13.6 Operator Status, Lookup and Closeout Tools
 7. M13.7 Three-Batch Acceptance and M13 Closure
 
