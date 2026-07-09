@@ -12,6 +12,19 @@ M13.4 defines deterministic lifecycle and retention behavior after multiple gove
 
 This slice creates retention plans and registry lifecycle evidence. It does not physically delete objects, modify canonical Source, create a release, write production, execute rollback, or append the permanent ledger.
 
+## Implementation structure
+
+```text
+m13_retention.py          retention identities, reference snapshots, reviews and plans
+m13_lifecycle_common.py   shared lifecycle identities, CAS and immutable-artifact helpers
+m13_abandonment.py        reasoned single-batch abandonment
+m13_supersession.py       atomic multi-batch supersession
+m13_rebuild.py            governed rebuild registration
+m13_lifecycle_rules.py    compatibility-only public facade
+```
+
+The facade contains no lifecycle implementation logic. Every destructive or network-capable surface is excluded by an AST policy test.
+
 ## Retention dispositions
 
 Every artifact is classified into one of four dispositions:
@@ -206,5 +219,5 @@ This prevents registry lineage changes from racing a production mutation.
 - cycle and candidate-channel reuse rejection;
 - strict rebuild ancestry and origin rules;
 - active production lease exclusion;
-- adversarial tests;
+- adversarial tests and all-module non-destructive surface scan;
 - exact-head CI, R2 Canary, and R2 Release Integration green.
