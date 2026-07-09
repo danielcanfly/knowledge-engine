@@ -6,12 +6,12 @@ from pathlib import Path
 import pytest
 from knowledge_engine.m13_contracts import (
     GOVERNANCE_NO_WRITE,
+    ExpectedPreviousProduction,
     M13BatchRecord,
     M13BatchSeed,
     M13OperationRequest,
     M13OperationResult,
     ProductionIdentity,
-    ExpectedPreviousProduction,
     assert_expected_previous_production,
     production_slot_key,
     validate_batch_transition,
