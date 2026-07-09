@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import IntegrityError
+from .m14_citation_runtime import enrich_runtime_citations
 from .m14_retrieval import retrieve_wiki_first
 from .query_evaluation import evaluate_runtime_query
 from .storage import ObjectStore, sha256_bytes
@@ -204,6 +205,12 @@ class Runtime:
             semantic_index=active.semantic_index,
             limit=limit,
         )
+        citation_metrics = enrich_runtime_citations(
+            results=retrieved["results"],
+            provenance=active.provenance,
+            allowed_audiences=allowed_audiences,
+        )
+        retrieved["retrieval"].update(citation_metrics)
         release = {
             "release_id": active.release_id,
             "manifest_sha256": active.manifest_sha256,

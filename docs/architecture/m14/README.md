@@ -6,7 +6,7 @@ M14 turns the governed Knowledge OS runtime into a stable user-facing product su
 
 1. [M14.1 Public Query API and Contracts](m14-1-public-query-contracts.md)
 2. [M14.2 Wiki-First Retrieval Experience](m14-2-wiki-first-retrieval.md)
-3. M14.3 Citation Payload and Source Cards
+3. [M14.3 Citation Payload and Source Cards](m14-3-citation-source-cards.md)
 4. M14.4 Public Ask AI Interfaces
 5. M14.5 Audience, Security and Abuse Controls
 6. M14.6 Feedback and Correction Intake

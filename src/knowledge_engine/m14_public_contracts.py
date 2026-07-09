@@ -6,10 +6,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from .m14_source_cards import build_public_citation_payload
+
 PUBLIC_QUERY_SCHEMA = "knowledge-engine-public-query/v1"
 AskStatus = Literal["answered", "not_found", "degraded"]
 Audience = Literal["public", "internal", "confidential", "restricted"]
 NotFoundReason = Literal["no_match", "no_authorized_match", "release_unavailable"]
+CitationScope = Literal["claim", "concept"]
 
 
 class PublicAskRequest(BaseModel):
@@ -18,12 +21,54 @@ class PublicAskRequest(BaseModel):
     audience: Audience = "public"
 
 
+class PublicEvidenceLocator(BaseModel):
+    heading: str | None = None
+    page: int | float | str | None = None
+    paragraph: int | float | str | None = None
+    start_line: int | float | str | None = None
+    end_line: int | float | str | None = None
+    timecode: str | None = None
+    anchor: str | None = None
+
+
 class PublicCitation(BaseModel):
+    schema_version: str = "knowledge-engine-public-citation/v1"
+    citation_id: str
+    ordinal: int = Field(ge=1)
+    source_card_id: str
     source_id: str
+    source_kind: str
     uri: str
     retrieved_at: str
     concept_id: str
     section_id: str
+    citation_scope: CitationScope
+    claim_ids: list[str]
+    support: str
+    locator: PublicEvidenceLocator | None = None
+    claim_confidence: float | None = None
+    review_status: str | None = None
+    derivation_type: str | None = None
+
+
+class PublicSourceCard(BaseModel):
+    schema_version: str = "knowledge-engine-source-card/v1"
+    source_card_id: str
+    ordinal: int = Field(ge=1)
+    source_id: str
+    title: str
+    publisher: str
+    display_host: str
+    source_kind: str
+    uri: str
+    retrieved_at: str
+    published_at: str | None = None
+    snapshot_available: bool
+    integrity_sha256: str | None = None
+    citation_ids: list[str]
+    concept_ids: list[str]
+    section_ids: list[str]
+    claim_ids: list[str]
 
 
 class PublicAskResponse(BaseModel):
@@ -31,6 +76,7 @@ class PublicAskResponse(BaseModel):
     answer: str | None
     status: AskStatus
     citations: list[PublicCitation]
+    source_cards: list[PublicSourceCard]
     concept_ids: list[str]
     release_id: str
     request_id: str
@@ -77,40 +123,20 @@ def public_request_id(
     return f"req_{digest}"
 
 
-def _dedupe_citations(results: list[dict[str, Any]]) -> list[PublicCitation]:
-    citations: list[PublicCitation] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for result in results:
-        for citation in result.get("citations", []):
-            identity = (
-                str(citation["source_id"]),
-                str(citation["uri"]),
-                str(citation["concept_id"]),
-                str(citation["section_id"]),
-            )
-            if identity in seen:
-                continue
-            seen.add(identity)
-            citations.append(
-                PublicCitation(
-                    source_id=identity[0],
-                    uri=identity[1],
-                    retrieved_at=str(citation["retrieved_at"]),
-                    concept_id=identity[2],
-                    section_id=identity[3],
-                )
-            )
-    return citations
-
-
-def _compose_answer(results: list[dict[str, Any]]) -> str:
+def _compose_answer(
+    results: list[dict[str, Any]],
+    ordinals: dict[tuple[str, str], list[int]],
+) -> str:
     parts = []
     for result in results[:3]:
         title = str(result.get("title") or result["concept_id"])
         section_title = str(result.get("section_title") or title)
         excerpt = " ".join(str(result.get("excerpt") or "").split())
         heading = title if section_title == title else f"{title} · {section_title}"
-        parts.append(f"{heading}: {excerpt}" if excerpt else heading)
+        key = (str(result["concept_id"]), str(result["section_id"]))
+        markers = "".join(f"[{ordinal}]" for ordinal in ordinals.get(key, []))
+        sentence = f"{heading}: {excerpt}" if excerpt else heading
+        parts.append(f"{sentence} {markers}".rstrip())
     return "\n\n".join(parts)
 
 
@@ -141,7 +167,12 @@ def public_response_from_runtime(
     results = runtime_result.get("results")
     if not isinstance(results, list):
         raise ValueError("runtime results must be a list")
-    citations = _dedupe_citations(results)
+    citation_payload, card_payload, ordinals = build_public_citation_payload(
+        results=results,
+        release_id=release_id,
+    )
+    citations = [PublicCitation(**item) for item in citation_payload]
+    source_cards = [PublicSourceCard(**item) for item in card_payload]
     status_value = runtime_result.get("status")
     not_found_reason = runtime_result.get("not_found_reason")
     if status_value == "not_found":
@@ -149,7 +180,7 @@ def public_response_from_runtime(
         answer = None
         confidence = 0.0
     else:
-        answer = _compose_answer(results)
+        answer = _compose_answer(results, ordinals)
         status = "answered" if citations else "degraded"
         confidence = _confidence(results, len(citations))
         not_found_reason = None
@@ -171,6 +202,7 @@ def public_response_from_runtime(
         answer=answer,
         status=status,
         citations=citations,
+        source_cards=source_cards,
         concept_ids=concept_ids,
         release_id=release_id,
         request_id=request_id,

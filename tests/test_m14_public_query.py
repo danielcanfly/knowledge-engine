@@ -29,10 +29,23 @@ def _runtime_result(*, answered: bool = True) -> dict:
                 "citations": [
                     {
                         "source_id": "source-1",
+                        "source_kind": "web",
+                        "source_title": "Compiler Specification",
+                        "publisher": "Example Foundation",
                         "uri": "https://example.com/compiler",
                         "retrieved_at": "2026-07-10T00:00:00Z",
+                        "published_at": "2026-06-01T00:00:00Z",
+                        "content_sha256": "b" * 64,
+                        "snapshot_available": True,
                         "concept_id": "concepts/compiler",
                         "section_id": "concepts/compiler#operations",
+                        "citation_scope": "claim",
+                        "claim_id": "claim-1",
+                        "support": "direct",
+                        "locator": {"heading": "Operations"},
+                        "claim_confidence": 0.98,
+                        "review_status": "human_approved",
+                        "derivation_type": "synthesized",
                     }
                 ],
             }
@@ -96,6 +109,7 @@ def test_public_response_has_only_stable_contract_fields() -> None:
         "answer",
         "status",
         "citations",
+        "source_cards",
         "concept_ids",
         "release_id",
         "request_id",
@@ -105,8 +119,29 @@ def test_public_response_has_only_stable_contract_fields() -> None:
     }
     assert payload["schema_version"] == PUBLIC_QUERY_SCHEMA
     assert payload["status"] == "answered"
+    assert payload["answer"].endswith("[1]")
     assert payload["concept_ids"] == ["concepts/compiler"]
-    assert payload["citations"][0]["section_id"].endswith("#operations")
+    citation = payload["citations"][0]
+    assert citation["citation_id"].startswith("cite_")
+    assert citation["source_card_id"].startswith("card_")
+    assert citation["section_id"].endswith("#operations")
+    assert citation["claim_ids"] == ["claim-1"]
+    assert citation["locator"] == {
+        "heading": "Operations",
+        "page": None,
+        "paragraph": None,
+        "start_line": None,
+        "end_line": None,
+        "timecode": None,
+        "anchor": None,
+    }
+    card = payload["source_cards"][0]
+    assert card["source_card_id"] == citation["source_card_id"]
+    assert card["title"] == "Compiler Specification"
+    assert card["publisher"] == "Example Foundation"
+    assert card["snapshot_available"] is True
+    assert card["integrity_sha256"] == "b" * 64
+    assert card["citation_ids"] == [citation["citation_id"]]
     assert "evaluation" not in payload
     assert "retrieval" not in payload
     assert 0 < payload["confidence"] <= 1
@@ -122,6 +157,7 @@ def test_public_not_found_is_explicit() -> None:
     assert response.status == "not_found"
     assert response.answer is None
     assert response.citations == []
+    assert response.source_cards == []
     assert response.concept_ids == []
     assert response.confidence == 0
     assert response.not_found_reason == "no_match"
@@ -148,6 +184,7 @@ def test_ask_endpoint_uses_requested_audience_without_internal_leak(
     )
     assert response.audience == "public"
     assert response.status == "answered"
+    assert response.source_cards[0].display_host == "example.com"
 
 
 def test_ask_endpoint_rejects_audience_escalation() -> None:
