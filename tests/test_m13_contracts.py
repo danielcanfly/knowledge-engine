@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 from knowledge_engine.m13_contracts import (
-    GOVERNANCE_NO_WRITE,
     ExpectedPreviousProduction,
+    GOVERNANCE_NO_WRITE,
     M13BatchRecord,
     M13BatchSeed,
     M13OperationRequest,
@@ -237,6 +237,8 @@ def test_m13_contract_module_has_no_network_or_mutating_surface() -> None:
     calls = {
         node.func.attr
         for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        if isinstance(node.func, ast.Attribute)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
     }
     assert calls.isdisjoint(forbidden_calls)
