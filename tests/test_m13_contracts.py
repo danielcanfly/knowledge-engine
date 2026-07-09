@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 from knowledge_engine.m13_contracts import (
-    ExpectedPreviousProduction,
     GOVERNANCE_NO_WRITE,
+    ExpectedPreviousProduction,
     M13BatchRecord,
     M13BatchSeed,
     M13OperationRequest,
