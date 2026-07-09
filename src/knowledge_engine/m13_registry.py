@@ -10,6 +10,7 @@ from .compiler_contract_v1 import json_bytes, put_immutable
 from .errors import IntegrityError, ReleaseConflictError
 from .m13_contracts import (
     BATCH_ID_RE,
+    BATCH_TRANSITIONS,
     TERMINAL_BATCH_STATES,
     BatchState,
     ExpectedPreviousProduction,
@@ -28,6 +29,20 @@ from .storage import ObjectStore, sha256_bytes
 
 REGISTRY_SCHEMA = "knowledge-engine-m13-registry/v1"
 REGISTRY_HEAD_KEY = "m13/v1/registry/head.json"
+_ALLOWED_OPERATION_KINDS = frozenset(
+    {
+        "source_review",
+        "candidate_build",
+        "release_comparison",
+        "production_promotion",
+        "rollback",
+        "retention_review",
+        "closeout",
+    }
+)
+_ALLOWED_OPERATION_STATES = frozenset(
+    {"planned", "running", "blocked", "completed", "rejected", "abandoned"}
+)
 
 
 class M13RegistryError(IntegrityError):
@@ -182,6 +197,9 @@ def _record_from_identity(value: Any) -> M13BatchRecord:
     seed_value = value.get("seed")
     if not isinstance(seed_value, dict):
         raise M13RegistryError("M13_BATCH_SNAPSHOT_INVALID", "batch seed is invalid")
+    raw_state = value.get("state")
+    if not isinstance(raw_state, str) or raw_state not in BATCH_TRANSITIONS:
+        raise M13RegistryError("M13_BATCH_SNAPSHOT_INVALID", "batch state is invalid")
     try:
         seed = M13BatchSeed(
             source_repository=str(seed_value["source_repository"]),
@@ -194,7 +212,7 @@ def _record_from_identity(value: Any) -> M13BatchRecord:
         )
         return M13BatchRecord(
             batch_id=str(value["batch_id"]),
-            state=cast(BatchState, str(value["state"])),
+            state=cast(BatchState, raw_state),
             seed=seed,
             candidate_channel=(
                 str(value["candidate_channel"])
@@ -317,6 +335,14 @@ def _validate_operation_summaries(snapshot: dict[str, Any]) -> None:
             raise M13RegistryError(
                 "M13_BATCH_SNAPSHOT_INVALID", "operation summary identity is invalid"
             )
+        if summary.get("kind") not in _ALLOWED_OPERATION_KINDS:
+            raise M13RegistryError(
+                "M13_BATCH_SNAPSHOT_INVALID", "operation summary kind is invalid"
+            )
+        if summary.get("state") not in _ALLOWED_OPERATION_STATES:
+            raise M13RegistryError(
+                "M13_BATCH_SNAPSHOT_INVALID", "operation summary state is invalid"
+            )
         operation_ids.append(operation_id)
     if len(operation_ids) != len(set(operation_ids)):
         raise M13RegistryError(
@@ -346,8 +372,20 @@ def _validate_snapshot_chain(store: ObjectStore, snapshot: dict[str, Any]) -> No
         event_hash = event.get("event_sha256")
         if not isinstance(event_hash, str) or not key.endswith(f"-{event_hash}.json"):
             raise M13RegistryError("M13_EVENT_CHAIN_INVALID", "event key/hash mismatch")
-        if event.get("snapshot_key") != snapshot.get("snapshot_key", event.get("snapshot_key")):
-            pass
+        event_snapshot_key = event.get("snapshot_key")
+        if not isinstance(event_snapshot_key, str):
+            raise M13RegistryError("M13_EVENT_CHAIN_INVALID", "event snapshot key is invalid")
+        event_snapshot = _load_json(store, event_snapshot_key, "historical batch snapshot")
+        event_record = _record_from_identity(event_snapshot.get("record"))
+        if (
+            event_snapshot.get("batch_id") != snapshot.get("batch_id")
+            or event_snapshot.get("batch_version") != index
+            or event_snapshot.get("current_event_hash") != event_hash
+            or event_record.state != event.get("to_state")
+        ):
+            raise M13RegistryError(
+                "M13_EVENT_CHAIN_INVALID", "historical snapshot does not match event"
+            )
         previous = event_hash
     if snapshot.get("current_event_hash") != previous:
         raise M13RegistryError("M13_EVENT_CHAIN_INVALID", "snapshot current event hash mismatch")
@@ -422,6 +460,15 @@ def _transition_prerequisites(
         )
 
 
+def _same_registration_origin(current: M13BatchRecord, original: M13BatchRecord) -> bool:
+    return (
+        current.batch_id == original.batch_id
+        and current.seed.to_identity() == original.seed.to_identity()
+        and current.supersedes_batch_ids == original.supersedes_batch_ids
+        and current.rebuilt_from_batch_id == original.rebuilt_from_batch_id
+    )
+
+
 def register_batch(
     store: ObjectStore,
     record: M13BatchRecord,
@@ -438,17 +485,17 @@ def register_batch(
     existing = head["batches"].get(record.batch_id)
     if existing is not None:
         snapshot, existing_record = _load_batch_snapshot(store, head, record.batch_id)
-        if existing_record.to_identity() != record.to_identity():
+        if not _same_registration_origin(existing_record, record):
             raise M13RegistryError(
                 "M13_BATCH_IDENTITY_COLLISION",
-                "registered batch has divergent identity",
+                "registered batch has divergent origin identity",
                 batch_id=record.batch_id,
             )
         return RegistryMutationResult(
             batch_id=record.batch_id,
             registry_version=head["registry_version"],
             batch_version=snapshot["batch_version"],
-            state=record.state,
+            state=existing_record.state,
             snapshot_key=existing["snapshot_key"],
             event_key=snapshot["event_keys"][-1],
             idempotent=True,
@@ -585,11 +632,16 @@ def transition_batch(
             "M13_CANDIDATE_CHANNEL_IMMUTABLE",
             "candidate channel cannot be changed",
         )
-    next_record = replace(
-        record,
-        state=target_state,
-        candidate_channel=candidate_channel or record.candidate_channel,
-    )
+    try:
+        next_record = replace(
+            record,
+            state=target_state,
+            candidate_channel=candidate_channel or record.candidate_channel,
+        )
+    except ValueError as exc:
+        raise M13RegistryError(
+            "M13_BATCH_RECORD_INVALID", "target batch record is invalid"
+        ) from exc
 
     registry_version = head["registry_version"] + 1
     batch_version = snapshot["batch_version"] + 1
@@ -647,6 +699,10 @@ def record_operation_result(
     *,
     expected_registry_version: int,
 ) -> RegistryMutationResult:
+    if result.request.kind not in _ALLOWED_OPERATION_KINDS:
+        raise M13RegistryError("M13_OPERATION_KIND_INVALID", "operation kind is invalid")
+    if result.state not in _ALLOWED_OPERATION_STATES:
+        raise M13RegistryError("M13_OPERATION_STATE_INVALID", "operation state is invalid")
     head, etag = _load_head(store)
     snapshot, record = _load_batch_snapshot(store, head, result.request.batch_id)
     operation_id = result.operation_id
@@ -815,6 +871,15 @@ def plan_batch_lifecycle(
         raise M13RegistryError("M13_BATCH_SNAPSHOT_INVALID", "batch version is invalid")
 
     blockers: list[str] = []
+    if proposed_candidate_channel is not None:
+        try:
+            replace(
+                record,
+                state="candidate_ready",
+                candidate_channel=proposed_candidate_channel,
+            )
+        except ValueError:
+            blockers.append("candidate_channel_invalid")
     stale = False
     try:
         assert_expected_previous_production(
@@ -875,10 +940,11 @@ def plan_batch_lifecycle(
         operation_kind = "closeout"
         blockers.append("production_mutation_in_progress")
 
-    if operation_kind is not None and operation_kind not in {
-        "production_promotion",
-        "rollback",
-    } and not blockers:
+    if (
+        operation_kind is not None
+        and operation_kind not in {"production_promotion", "rollback"}
+        and not blockers
+    ):
         request = M13OperationRequest(
             kind=operation_kind,
             batch_id=record.batch_id,
