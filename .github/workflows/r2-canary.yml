@@ -44,6 +44,7 @@ on:
       - 'tests/test_m13_coordinator_surface.py'
       - 'tests/test_m13_retention.py'
       - 'tests/test_m13_lifecycle_rules.py'
+      - 'tests/test_m13_retention_surface.py'
       - 'docs/m12-golden-query-suite.md'
       - 'docs/m12-golden-query-baseline.md'
       - 'docs/m12-release-quality-gate.md'
