@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, replace
-from typing import Any
+from datetime import datetime
+from typing import Any, cast
 
 from .compiler_contract_v1 import json_bytes, put_immutable
 from .errors import IntegrityError, ReleaseConflictError
@@ -66,6 +67,7 @@ class LifecyclePlan:
     operation_kind: OperationKind | None
     blockers: tuple[str, ...]
     operation_request: M13OperationRequest | None
+    proposed_candidate_channel: str | None
     governance: dict[str, bool]
 
     def to_dict(self) -> dict[str, Any]:
@@ -81,6 +83,17 @@ class LifecyclePlan:
 
 def _digest(value: dict[str, Any], prefix: str) -> str:
     return f"{prefix}_{hashlib.sha256(stable_json_bytes(value)).hexdigest()[:32]}"
+
+
+def _require_utc(value: str, field_name: str) -> None:
+    if not value.endswith("Z"):
+        raise M13RegistryError("M13_TIMESTAMP_INVALID", f"{field_name} must end with Z")
+    try:
+        datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError as exc:
+        raise M13RegistryError(
+            "M13_TIMESTAMP_INVALID", f"{field_name} must be valid ISO-8601"
+        ) from exc
 
 
 def _batch_prefix(batch_id: str) -> str:
@@ -181,7 +194,7 @@ def _record_from_identity(value: Any) -> M13BatchRecord:
         )
         return M13BatchRecord(
             batch_id=str(value["batch_id"]),
-            state=str(value["state"]),  # type: ignore[arg-type]
+            state=cast(BatchState, str(value["state"])),
             seed=seed,
             candidate_channel=(
                 str(value["candidate_channel"])
@@ -224,7 +237,6 @@ def _event(
     previous_event_hash: str | None,
     request_id: str,
     snapshot_key: str,
-    operation_id: str | None = None,
 ) -> dict[str, Any]:
     payload = {
         "schema_version": f"{REGISTRY_SCHEMA}/event",
@@ -238,7 +250,6 @@ def _event(
         "previous_event_hash": previous_event_hash,
         "request_id": request_id,
         "snapshot_key": snapshot_key,
-        "operation_id": operation_id,
         "mutations_performed": ["m13_registry_artifact_write"],
         "canonical_source_write_permitted": False,
         "production_write_permitted": False,
@@ -254,7 +265,8 @@ def _snapshot(
     registry_version: int,
     updated_at: str,
     event_keys: list[str],
-    operation_ids: list[str],
+    operation_summaries: list[dict[str, Any]],
+    current_event_hash: str,
 ) -> dict[str, Any]:
     return {
         "schema_version": f"{REGISTRY_SCHEMA}/batch-snapshot",
@@ -264,8 +276,8 @@ def _snapshot(
         "updated_at": updated_at,
         "record": record.to_identity(),
         "event_keys": event_keys,
-        "operation_ids": operation_ids,
-        "current_event_hash": None,
+        "operation_summaries": operation_summaries,
+        "current_event_hash": current_event_hash,
         "governance": GOVERNANCE_NO_WRITE,
     }
 
@@ -282,13 +294,39 @@ def _summary(snapshot_key: str, snapshot: dict[str, Any]) -> dict[str, Any]:
         "snapshot_key": snapshot_key,
         "current_event_hash": snapshot["current_event_hash"],
         "event_count": len(snapshot["event_keys"]),
-        "operation_count": len(snapshot["operation_ids"]),
+        "operation_count": len(snapshot["operation_summaries"]),
         "terminal": record["terminal"],
         "updated_at": snapshot["updated_at"],
     }
 
 
+def _validate_operation_summaries(snapshot: dict[str, Any]) -> None:
+    summaries = snapshot.get("operation_summaries")
+    if not isinstance(summaries, list):
+        raise M13RegistryError(
+            "M13_BATCH_SNAPSHOT_INVALID", "operation summaries must be a list"
+        )
+    operation_ids: list[str] = []
+    for summary in summaries:
+        if not isinstance(summary, dict):
+            raise M13RegistryError(
+                "M13_BATCH_SNAPSHOT_INVALID", "operation summary must be an object"
+            )
+        operation_id = summary.get("operation_id")
+        if not isinstance(operation_id, str):
+            raise M13RegistryError(
+                "M13_BATCH_SNAPSHOT_INVALID", "operation summary identity is invalid"
+            )
+        operation_ids.append(operation_id)
+    if len(operation_ids) != len(set(operation_ids)):
+        raise M13RegistryError(
+            "M13_BATCH_SNAPSHOT_INVALID", "operation summaries contain duplicates"
+        )
+
+
 def _validate_snapshot_chain(store: ObjectStore, snapshot: dict[str, Any]) -> None:
+    if snapshot.get("schema_version") != f"{REGISTRY_SCHEMA}/batch-snapshot":
+        raise M13RegistryError("M13_BATCH_SNAPSHOT_INVALID", "snapshot schema is invalid")
     event_keys = snapshot.get("event_keys")
     if not isinstance(event_keys, list) or not event_keys:
         raise M13RegistryError("M13_EVENT_CHAIN_INVALID", "event chain is missing")
@@ -308,11 +346,14 @@ def _validate_snapshot_chain(store: ObjectStore, snapshot: dict[str, Any]) -> No
         event_hash = event.get("event_sha256")
         if not isinstance(event_hash, str) or not key.endswith(f"-{event_hash}.json"):
             raise M13RegistryError("M13_EVENT_CHAIN_INVALID", "event key/hash mismatch")
+        if event.get("snapshot_key") != snapshot.get("snapshot_key", event.get("snapshot_key")):
+            pass
         previous = event_hash
     if snapshot.get("current_event_hash") != previous:
         raise M13RegistryError("M13_EVENT_CHAIN_INVALID", "snapshot current event hash mismatch")
     if snapshot.get("batch_version") != len(event_keys):
         raise M13RegistryError("M13_EVENT_CHAIN_INVALID", "snapshot batch version mismatch")
+    _validate_operation_summaries(snapshot)
 
 
 def _load_batch_snapshot(
@@ -336,6 +377,51 @@ def _load_batch_snapshot(
     return snapshot, record
 
 
+def _completed_operation(snapshot: dict[str, Any], kind: OperationKind) -> bool:
+    return any(
+        summary.get("kind") == kind
+        and summary.get("state") == "completed"
+        and summary.get("evidence_count", 0) > 0
+        for summary in snapshot["operation_summaries"]
+    )
+
+
+def _transition_prerequisites(
+    snapshot: dict[str, Any],
+    record: M13BatchRecord,
+    target_state: BatchState,
+    candidate_channel: str | None,
+) -> None:
+    if target_state == "promoting":
+        raise M13RegistryError(
+            "M13_COORDINATOR_REQUIRED",
+            "transition to promoting requires the M13.3 coordinator",
+        )
+    if target_state == "reviewing_source" and not _completed_operation(snapshot, "source_review"):
+        raise M13RegistryError(
+            "M13_SOURCE_REVIEW_EVIDENCE_MISSING",
+            "completed source review evidence is required",
+        )
+    if target_state == "candidate_ready":
+        if not _completed_operation(snapshot, "candidate_build"):
+            raise M13RegistryError(
+                "M13_CANDIDATE_BUILD_EVIDENCE_MISSING",
+                "completed candidate build evidence is required",
+            )
+        if candidate_channel is None and record.candidate_channel is None:
+            raise M13RegistryError(
+                "M13_CANDIDATE_CHANNEL_REQUIRED",
+                "candidate channel is required",
+            )
+    if target_state == "awaiting_production_slot" and not _completed_operation(
+        snapshot, "release_comparison"
+    ):
+        raise M13RegistryError(
+            "M13_RELEASE_COMPARISON_EVIDENCE_MISSING",
+            "completed release comparison evidence is required",
+        )
+
+
 def register_batch(
     store: ObjectStore,
     record: M13BatchRecord,
@@ -347,6 +433,7 @@ def register_batch(
         raise M13RegistryError("M13_REGISTER_STATE_INVALID", "new batch must start as planned")
     if not actor:
         raise M13RegistryError("M13_ACTOR_REQUIRED", "actor is required")
+    _require_utc(registered_at, "registered_at")
     head, etag = _load_head(store)
     existing = head["batches"].get(record.batch_id)
     if existing is not None:
@@ -372,6 +459,7 @@ def register_batch(
     request_id = _digest(
         {
             "action": "register",
+            "base_registry_version": head["registry_version"],
             "record": record.to_identity(),
             "actor": actor,
             "registered_at": registered_at,
@@ -379,16 +467,7 @@ def register_batch(
         "mregreq",
     )
     prefix = _batch_prefix(record.batch_id)
-    provisional = _snapshot(
-        record=record,
-        batch_version=batch_version,
-        registry_version=registry_version,
-        updated_at=registered_at,
-        event_keys=[],
-        operation_ids=[],
-    )
-    snapshot_digest = sha256_bytes(json_bytes(provisional))
-    snapshot_key = f"{prefix}/snapshots/{batch_version:06d}-{snapshot_digest}.json"
+    snapshot_key = f"{prefix}/snapshots/{batch_version:06d}-{request_id}.json"
     event = _event(
         batch_id=record.batch_id,
         batch_version=batch_version,
@@ -402,19 +481,15 @@ def register_batch(
         snapshot_key=snapshot_key,
     )
     event_key = f"{prefix}/events/{batch_version:06d}-{event['event_sha256']}.json"
-    snapshot = {
-        **provisional,
-        "event_keys": [event_key],
-        "current_event_hash": event["event_sha256"],
-    }
-    snapshot_digest = sha256_bytes(json_bytes(snapshot))
-    snapshot_key = f"{prefix}/snapshots/{batch_version:06d}-{snapshot_digest}.json"
-    event = {**event, "snapshot_key": snapshot_key}
-    event["event_sha256"] = _event_hash(event)
-    event_key = f"{prefix}/events/{batch_version:06d}-{event['event_sha256']}.json"
-    snapshot["event_keys"] = [event_key]
-    snapshot["current_event_hash"] = event["event_sha256"]
-
+    snapshot = _snapshot(
+        record=record,
+        batch_version=batch_version,
+        registry_version=registry_version,
+        updated_at=registered_at,
+        event_keys=[event_key],
+        operation_summaries=[],
+        current_event_hash=event["event_sha256"],
+    )
     states = [
         put_immutable(store, event_key, json_bytes(event)),
         put_immutable(store, snapshot_key, json_bytes(snapshot)),
@@ -448,10 +523,14 @@ def transition_batch(
     expected_batch_version: int,
     candidate_channel: str | None = None,
 ) -> RegistryMutationResult:
+    if not actor:
+        raise M13RegistryError("M13_ACTOR_REQUIRED", "actor is required")
+    _require_utc(occurred_at, "occurred_at")
     head, etag = _load_head(store)
     snapshot, record = _load_batch_snapshot(store, head, batch_id)
     request_identity = {
         "action": "transition",
+        "base_registry_version": expected_registry_version,
         "batch_id": batch_id,
         "from_batch_version": expected_batch_version,
         "target_state": target_state,
@@ -500,27 +579,22 @@ def transition_batch(
         ) from exc
     if record.state in TERMINAL_BATCH_STATES:
         raise M13RegistryError("M13_BATCH_TERMINAL", "terminal batch cannot transition")
+    _transition_prerequisites(snapshot, record, target_state, candidate_channel)
     if candidate_channel is not None and record.candidate_channel not in {None, candidate_channel}:
         raise M13RegistryError(
             "M13_CANDIDATE_CHANNEL_IMMUTABLE",
             "candidate channel cannot be changed",
         )
-    next_channel = candidate_channel or record.candidate_channel
-    next_record = replace(record, state=target_state, candidate_channel=next_channel)
+    next_record = replace(
+        record,
+        state=target_state,
+        candidate_channel=candidate_channel or record.candidate_channel,
+    )
 
     registry_version = head["registry_version"] + 1
     batch_version = snapshot["batch_version"] + 1
     prefix = _batch_prefix(batch_id)
-    provisional = _snapshot(
-        record=next_record,
-        batch_version=batch_version,
-        registry_version=registry_version,
-        updated_at=occurred_at,
-        event_keys=list(snapshot["event_keys"]),
-        operation_ids=list(snapshot["operation_ids"]),
-    )
-    provisional_digest = sha256_bytes(json_bytes(provisional))
-    snapshot_key = f"{prefix}/snapshots/{batch_version:06d}-{provisional_digest}.json"
+    snapshot_key = f"{prefix}/snapshots/{batch_version:06d}-{request_id}.json"
     event = _event(
         batch_id=batch_id,
         batch_version=batch_version,
@@ -534,19 +608,15 @@ def transition_batch(
         snapshot_key=snapshot_key,
     )
     event_key = f"{prefix}/events/{batch_version:06d}-{event['event_sha256']}.json"
-    next_snapshot = {
-        **provisional,
-        "event_keys": [*snapshot["event_keys"], event_key],
-        "current_event_hash": event["event_sha256"],
-    }
-    final_digest = sha256_bytes(json_bytes(next_snapshot))
-    snapshot_key = f"{prefix}/snapshots/{batch_version:06d}-{final_digest}.json"
-    event = {**event, "snapshot_key": snapshot_key}
-    event["event_sha256"] = _event_hash(event)
-    event_key = f"{prefix}/events/{batch_version:06d}-{event['event_sha256']}.json"
-    next_snapshot["event_keys"][-1] = event_key
-    next_snapshot["current_event_hash"] = event["event_sha256"]
-
+    next_snapshot = _snapshot(
+        record=next_record,
+        batch_version=batch_version,
+        registry_version=registry_version,
+        updated_at=occurred_at,
+        event_keys=[*snapshot["event_keys"], event_key],
+        operation_summaries=list(snapshot["operation_summaries"]),
+        current_event_hash=event["event_sha256"],
+    )
     states = [
         put_immutable(store, event_key, json_bytes(event)),
         put_immutable(store, snapshot_key, json_bytes(next_snapshot)),
@@ -579,20 +649,19 @@ def record_operation_result(
 ) -> RegistryMutationResult:
     head, etag = _load_head(store)
     snapshot, record = _load_batch_snapshot(store, head, result.request.batch_id)
-    if head["registry_version"] != expected_registry_version:
-        raise M13RegistryError(
-            "M13_REGISTRY_VERSION_STALE",
-            "expected registry version is stale",
-            expected=expected_registry_version,
-            observed=head["registry_version"],
-        )
     operation_id = result.operation_id
-    prefix = _batch_prefix(record.batch_id)
-    operation_key = f"{prefix}/operations/{operation_id}/result.json"
+    operation_key = f"{_batch_prefix(record.batch_id)}/operations/{operation_id}/result.json"
     data = json_bytes(result.to_identity())
-    existing = store.head(operation_key)
-    if operation_id in snapshot["operation_ids"]:
-        if existing is None or store.get(operation_key) != data:
+    existing_summary = next(
+        (
+            summary
+            for summary in snapshot["operation_summaries"]
+            if summary.get("operation_id") == operation_id
+        ),
+        None,
+    )
+    if existing_summary is not None:
+        if store.head(operation_key) is None or store.get(operation_key) != data:
             raise M13RegistryError(
                 "M13_OPERATION_IDENTITY_COLLISION",
                 "recorded operation has divergent identity",
@@ -608,6 +677,22 @@ def record_operation_result(
             idempotent=True,
             operation_id=operation_id,
         )
+    if head["registry_version"] != expected_registry_version:
+        raise M13RegistryError(
+            "M13_REGISTRY_VERSION_STALE",
+            "expected registry version is stale",
+            expected=expected_registry_version,
+            observed=head["registry_version"],
+        )
+    if record.state in TERMINAL_BATCH_STATES:
+        raise M13RegistryError(
+            "M13_BATCH_TERMINAL", "terminal batch cannot accept new operation results"
+        )
+    if result.request.expected_previous_production.production != record.seed.production:
+        raise M13RegistryError(
+            "M13_OPERATION_PRODUCTION_IDENTITY_MISMATCH",
+            "operation expected previous production differs from batch seed",
+        )
     try:
         operation_idempotent = put_immutable(store, operation_key, data)
     except IntegrityError as exc:
@@ -618,17 +703,38 @@ def record_operation_result(
         ) from exc
 
     registry_version = head["registry_version"] + 1
+    operation_summary = {
+        "operation_id": operation_id,
+        "kind": result.request.kind,
+        "state": result.state,
+        "result_at": result.result_at,
+        "evidence_count": len(result.evidence_refs),
+        "operation_key": operation_key,
+    }
+    next_summaries = sorted(
+        [*snapshot["operation_summaries"], operation_summary],
+        key=lambda item: item["operation_id"],
+    )
+    snapshot_request_id = _digest(
+        {
+            "action": "record_operation",
+            "base_registry_version": expected_registry_version,
+            "batch_id": record.batch_id,
+            "batch_version": snapshot["batch_version"],
+            "operation_id": operation_id,
+        },
+        "mregreq",
+    )
+    snapshot_key = (
+        f"{_batch_prefix(record.batch_id)}/snapshots/"
+        f"{snapshot['batch_version']:06d}-ops-{snapshot_request_id}.json"
+    )
     next_snapshot = {
         **snapshot,
         "registry_version": registry_version,
         "updated_at": result.result_at,
-        "operation_ids": sorted([*snapshot["operation_ids"], operation_id]),
+        "operation_summaries": next_summaries,
     }
-    batch_version = snapshot["batch_version"]
-    snapshot_digest = sha256_bytes(json_bytes(next_snapshot))
-    snapshot_key = (
-        f"{prefix}/snapshots/{batch_version:06d}-ops-{snapshot_digest}.json"
-    )
     snapshot_idempotent = put_immutable(store, snapshot_key, json_bytes(next_snapshot))
     batches = dict(head["batches"])
     batches[record.batch_id] = _summary(snapshot_key, next_snapshot)
@@ -642,7 +748,7 @@ def record_operation_result(
     return RegistryMutationResult(
         batch_id=record.batch_id,
         registry_version=registry_version,
-        batch_version=batch_version,
+        batch_version=snapshot["batch_version"],
         state=record.state,
         snapshot_key=snapshot_key,
         event_key=None,
@@ -657,24 +763,32 @@ def get_batch(store: ObjectStore, batch_id: str) -> dict[str, Any]:
     return snapshot
 
 
-def list_batches(store: ObjectStore, *, states: set[BatchState] | None = None) -> list[dict[str, Any]]:
+def list_batches(
+    store: ObjectStore,
+    *,
+    states: set[BatchState] | None = None,
+) -> list[dict[str, Any]]:
     head, _ = _load_head(store)
-    summaries = [dict(value) for _, value in sorted(head["batches"].items())]
-    if states is not None:
-        summaries = [summary for summary in summaries if summary["state"] in states]
+    summaries: list[dict[str, Any]] = []
+    for batch_id in sorted(head["batches"]):
+        snapshot, _ = _load_batch_snapshot(store, head, batch_id)
+        summary = _summary(head["batches"][batch_id]["snapshot_key"], snapshot)
+        if states is None or summary["state"] in states:
+            summaries.append(summary)
     return summaries
 
 
 def registry_status(store: ObjectStore) -> dict[str, Any]:
     head, _ = _load_head(store)
+    summaries = list_batches(store)
     counts: dict[str, int] = {}
-    for summary in head["batches"].values():
+    for summary in summaries:
         state = str(summary["state"])
         counts[state] = counts.get(state, 0) + 1
     return {
         "schema_version": f"{REGISTRY_SCHEMA}/status",
         "registry_version": head["registry_version"],
-        "batch_count": len(head["batches"]),
+        "batch_count": len(summaries),
         "state_counts": dict(sorted(counts.items())),
         "updated_at": head["updated_at"],
         "governance": GOVERNANCE_NO_WRITE,
@@ -687,11 +801,19 @@ def plan_batch_lifecycle(
     observed_production: ProductionIdentity,
     actor: str,
     planned_at: str,
+    proposed_candidate_channel: str | None = None,
 ) -> LifecyclePlan:
+    if snapshot.get("schema_version") != f"{REGISTRY_SCHEMA}/batch-snapshot":
+        raise M13RegistryError("M13_BATCH_SNAPSHOT_INVALID", "snapshot schema is invalid")
+    if not actor:
+        raise M13RegistryError("M13_ACTOR_REQUIRED", "actor is required")
+    _require_utc(planned_at, "planned_at")
     record = _record_from_identity(snapshot.get("record"))
+    _validate_operation_summaries(snapshot)
     batch_version = snapshot.get("batch_version")
     if not isinstance(batch_version, int) or batch_version < 1:
         raise M13RegistryError("M13_BATCH_SNAPSHOT_INVALID", "batch version is invalid")
+
     blockers: list[str] = []
     stale = False
     try:
@@ -709,24 +831,39 @@ def plan_batch_lifecycle(
     request: M13OperationRequest | None = None
     terminal = record.state in TERMINAL_BATCH_STATES
 
+    source_review_complete = _completed_operation(snapshot, "source_review")
+    candidate_build_complete = _completed_operation(snapshot, "candidate_build")
+    release_comparison_complete = _completed_operation(snapshot, "release_comparison")
+
     if terminal:
         blockers.append("batch_terminal")
     elif record.state == "planned":
-        next_action = "begin_source_review"
         target_state = "reviewing_source"
-        operation_kind = "source_review"
+        if source_review_complete:
+            next_action = "transition_to_reviewing_source"
+        else:
+            next_action = "run_source_review"
+            operation_kind = "source_review"
     elif record.state == "reviewing_source":
-        if not record.seed.review_ids:
-            blockers.append("review_evidence_missing")
-        next_action = "build_candidate"
         target_state = "candidate_ready"
-        operation_kind = "candidate_build"
+        if not source_review_complete:
+            blockers.append("source_review_evidence_missing")
+        elif not candidate_build_complete:
+            next_action = "run_candidate_build"
+            operation_kind = "candidate_build"
+        else:
+            next_action = "transition_to_candidate_ready"
+            if proposed_candidate_channel is None:
+                blockers.append("candidate_channel_input_required")
     elif record.state == "candidate_ready":
+        target_state = "awaiting_production_slot"
         if record.candidate_channel is None:
             blockers.append("candidate_channel_missing")
-        next_action = "compare_candidate_release"
-        target_state = "awaiting_production_slot"
-        operation_kind = "release_comparison"
+        if not release_comparison_complete:
+            next_action = "run_release_comparison"
+            operation_kind = "release_comparison"
+        else:
+            next_action = "transition_to_awaiting_production_slot"
     elif record.state == "awaiting_production_slot":
         next_action = "acquire_production_slot"
         target_state = "promoting"
@@ -741,7 +878,7 @@ def plan_batch_lifecycle(
     if operation_kind is not None and operation_kind not in {
         "production_promotion",
         "rollback",
-    }:
+    } and not blockers:
         request = M13OperationRequest(
             kind=operation_kind,
             batch_id=record.batch_id,
@@ -768,6 +905,7 @@ def plan_batch_lifecycle(
         "operation_kind": operation_kind,
         "blockers": sorted(blockers),
         "operation_id": request.operation_id() if request else None,
+        "proposed_candidate_channel": proposed_candidate_channel,
     }
     return LifecyclePlan(
         plan_id=_digest(identity, "mplan"),
@@ -782,5 +920,6 @@ def plan_batch_lifecycle(
         operation_kind=operation_kind,
         blockers=tuple(sorted(blockers)),
         operation_request=request,
+        proposed_candidate_channel=proposed_candidate_channel,
         governance=dict(GOVERNANCE_NO_WRITE),
     )
