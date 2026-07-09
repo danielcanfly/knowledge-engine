@@ -7,11 +7,12 @@ def test_public_ask_openapi_uses_wrapped_error_wire_format() -> None:
     schema = app.openapi()
     operation = schema["paths"]["/v1/ask"]["post"]
     success = operation["responses"]["200"]["content"]["application/json"]["schema"]
-    forbidden = operation["responses"]["403"]["content"]["application/json"]["schema"]
-    unavailable = operation["responses"]["503"]["content"]["application/json"]["schema"]
     assert success["$ref"].endswith("/PublicAskResponse")
-    assert forbidden["$ref"].endswith("/PublicErrorResponse")
-    assert unavailable["$ref"].endswith("/PublicErrorResponse")
+    for status_code in ("401", "403", "413", "429", "503", "504"):
+        error = operation["responses"][status_code]["content"]["application/json"][
+            "schema"
+        ]
+        assert error["$ref"].endswith("/PublicErrorResponse")
     error_schema = schema["components"]["schemas"]["PublicErrorResponse"]
     assert set(error_schema["properties"]) == {"detail"}
     assert error_schema["properties"]["detail"]["$ref"].endswith(
@@ -65,15 +66,34 @@ def test_public_interface_capabilities_and_stream_are_documented() -> None:
     capability_schema = capabilities["responses"]["200"]["content"][
         "application/json"
     ]["schema"]
-    assert capability_schema["$ref"].endswith("/PublicInterfaceCapabilities")
+    assert capability_schema["$ref"].endswith("/PublicProductCapabilities")
+
+    posture = schema["components"]["schemas"]["PublicSecurityPosture"]
+    assert {
+        "anonymous_public_access",
+        "elevated_audience_requires_authentication",
+        "cors_mode",
+        "allowed_origin_count",
+        "wildcard_origins_allowed",
+        "cross_origin_credentials",
+        "rate_limit_requests",
+        "rate_limit_window_seconds",
+        "max_body_bytes",
+        "request_timeout_seconds",
+        "max_concurrent_requests",
+        "distributed_rate_limit",
+        "server_conversation_state",
+    } <= set(posture["properties"])
 
     stream = paths["/v1/ask/stream"]["post"]
     assert "text/event-stream" in stream["responses"]["200"]["content"]
     request_schema = stream["requestBody"]["content"]["application/json"]["schema"]
     assert request_schema["$ref"].endswith("/PublicAskRequest")
-    assert stream["responses"]["403"]["content"]["application/json"]["schema"][
-        "$ref"
-    ].endswith("/PublicErrorResponse")
+    for status_code in ("401", "403", "413", "429", "503", "504"):
+        error = stream["responses"][status_code]["content"]["application/json"][
+            "schema"
+        ]
+        assert error["$ref"].endswith("/PublicErrorResponse")
 
     assert "/ask" not in paths
     assert "/embed/ask.js" not in paths
