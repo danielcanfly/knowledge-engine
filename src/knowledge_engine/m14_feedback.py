@@ -10,8 +10,11 @@ from typing import Any
 
 from .errors import IntegrityError, ReleaseConflictError
 from .m14_feedback_contracts import PublicFeedbackReceipt, PublicFeedbackRequest
+from .m14_feedback_edge import register_feedback_edge_path
 from .m14_source_cards import safe_public_uri
 from .storage import ObjectStore, sha256_bytes
+
+register_feedback_edge_path()
 
 EMAIL_RE = re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
 BEARER_RE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{8,}")
