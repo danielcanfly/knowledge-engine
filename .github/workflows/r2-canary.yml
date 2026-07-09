@@ -26,6 +26,7 @@ on:
       - 'tests/test_m11_m12_hardening_v2.py'
       - 'tests/test_m13_contracts.py'
       - 'tests/test_m13_registry.py'
+      - 'tests/test_m13_registry_hardening.py'
       - 'docs/m12-golden-query-suite.md'
       - 'docs/m12-golden-query-baseline.md'
       - 'docs/m12-release-quality-gate.md'
