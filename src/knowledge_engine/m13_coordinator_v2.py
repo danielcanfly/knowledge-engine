@@ -18,6 +18,11 @@ from .m13_coordination_common import (
     ProductionLease,
     ProductionMutationPermit,
 )
+from .m13_production_commit import (
+    authorize_production_commit,
+    complete_production_mutation,
+    validate_commit_authorization,
+)
 from .m13_production_lease import (
     abort_production_lease,
     acquire_production_lease,
@@ -25,12 +30,9 @@ from .m13_production_lease import (
     recover_expired_production_lease,
     renew_production_lease,
 )
-from .m13_production_mutation import (
-    authorize_production_commit,
-    complete_production_mutation,
+from .m13_production_permit import (
     issue_production_mutation_permit,
     transition_batch_to_promoting,
-    validate_commit_authorization,
 )
 from .release_quality_gate import GOVERNANCE_NO_WRITE
 from .storage import ObjectStore
