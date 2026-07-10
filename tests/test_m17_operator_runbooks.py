@@ -83,8 +83,9 @@ def test_broken_evidence_chain_is_blocked(tmp_path: Path) -> None:
 
 def test_missing_reference_anchor_is_blocked(tmp_path: Path) -> None:
     payload = load_registry(REGISTRY)
-    payload["steps"][0]["reference"]["anchor"] = "anchor-that-does-not-exist"
     path = _write_registry(tmp_path, payload)
+    payload["steps"][0]["reference"]["anchor"] = "anchor-that-does-not-exist"
+    path.write_text(json.dumps(payload), encoding="utf-8")
     report = validate_runbook_registry(root=tmp_path, registry_path=path)
     assert "missing_reference_anchor" in {item["code"] for item in report["issues"]}
 
