@@ -1,0 +1,53 @@
+name: M16 Source and Control-Plane Reconstruction Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m16_source_control_plane_reconstruction.py"
+      - "tests/test_m16_source_control_plane_reconstruction.py"
+      - "docs/architecture/m16/**"
+      - ".github/workflows/m16-source-control-plane-reconstruction.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-control-plane-reconstruction:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Run M16.5 reconstruction acceptance
+        run: python -m pytest -q tests/test_m16_source_control_plane_reconstruction.py
+      - name: Verify evidence-only reconstruction surface
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path(
+              "src/knowledge_engine/m16_source_control_plane_reconstruction.py"
+          ).read_text()
+          forbidden = (
+              "def reset_source",
+              "def revert_source",
+              "def force_push",
+              "def update_ref",
+              "def create_source_pr",
+              "def mutate_production",
+              "def put_object",
+              "def append_ledger",
+          )
+          found = [item for item in forbidden if item in source]
+          if found:
+              raise SystemExit(f"forbidden reconstruction executor surface: {found}")
+          PY
