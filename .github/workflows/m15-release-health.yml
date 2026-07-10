@@ -1,0 +1,37 @@
+name: M15 Release Health Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m15_release_health.py"
+      - "src/knowledge_engine/m15_observability_contracts.py"
+      - "tests/test_m15_release_health.py"
+      - "docs/architecture/m15/**"
+      - ".github/workflows/m15-release-health.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-health-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Run M15.3 adversarial tests
+        run: pytest -q tests/test_m15_release_health.py
+      - name: Compile health modules
+        run: python -m compileall -q src/knowledge_engine/m15_release_health.py tests/test_m15_release_health.py
+      - name: Assert read-only health surface
+        shell: bash
+        run: |
+          ! grep -R --line-number -E 'put_object|delete_object|copy_object|update_ref|merge_pull_request|purge|repair_pointer|boto3|httpx\.|requests\.' \
+            src/knowledge_engine/m15_release_health.py
