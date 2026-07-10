@@ -107,16 +107,16 @@ def test_duplicate_nodes_and_orphan_edges_are_rejected() -> None:
         )
 
 
-def test_private_payload_fields_are_not_part_of_contract() -> None:
-    with pytest.raises(ValueError):
-        ImpactNode(
-            node_id="fact:1",
-            kind=NodeKind.SOURCE_FACT,
-            audience=Audience.PRIVATE,
-            engine_sha=ENGINE,
-            expected_engine_sha=ENGINE,
-            raw_text="private excerpt",
-        )
+def test_private_payload_fields_are_not_serialized() -> None:
+    candidate = ImpactNode(
+        node_id="fact:1",
+        kind=NodeKind.SOURCE_FACT,
+        audience=Audience.PRIVATE,
+        engine_sha=ENGINE,
+        expected_engine_sha=ENGINE,
+        raw_text="private excerpt",
+    )
+    assert "raw_text" not in candidate.model_dump()
 
 
 def test_unknown_changed_node_and_unbounded_depth_are_rejected() -> None:
