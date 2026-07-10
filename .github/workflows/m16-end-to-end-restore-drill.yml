@@ -1,0 +1,57 @@
+name: M16 End-to-End Restore Drill Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m16_restore_drill_closure.py"
+      - "tests/test_m16_restore_drill_closure.py"
+      - "docs/architecture/m16/**"
+      - ".github/workflows/m16-end-to-end-restore-drill.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  end-to-end-restore-drill:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Run M16.7 restore drill acceptance
+        run: python -m pytest -q tests/test_m16_restore_drill_closure.py
+      - name: Verify evidence-only closure surface
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path(
+              "src/knowledge_engine/m16_restore_drill_closure.py"
+          ).read_text()
+          forbidden = (
+              "def restore_object",
+              "def promote_release",
+              "def execute_rollback",
+              "def repair_pointer",
+              "def purge_cache",
+              "def put_object",
+              "def copy_object",
+              "def delete_object",
+              "def write_source",
+              "def create_source_pr",
+              "def rotate_credentials",
+              "def append_ledger",
+          )
+          found = [item for item in forbidden if item in source]
+          if found:
+              raise SystemExit(f"forbidden restore-drill executor surface: {found}")
+          PY
