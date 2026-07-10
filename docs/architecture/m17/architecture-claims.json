@@ -1,0 +1,317 @@
+{
+  "canonical_entry": "docs/architecture/README.md",
+  "claims": [
+    {
+      "claim_id": "control.governed-request",
+      "model": "mutation_authority",
+      "owner": "control-plane",
+      "plane": "control",
+      "reference": {
+        "anchor": "class PromotionRequestSpec:",
+        "kind": "code",
+        "path": "src/knowledge_engine/promotion_request.py"
+      },
+      "statement": "Production promotion is represented by a closed request contract with exact target and expected-previous identities."
+    },
+    {
+      "claim_id": "control.workflow-injected-identity",
+      "model": "identity_model",
+      "owner": "control-plane",
+      "plane": "control",
+      "reference": {
+        "anchor": "control_plane_sha must be supplied by the workflow runtime",
+        "kind": "code",
+        "path": "src/knowledge_engine/promotion_request.py"
+      },
+      "statement": "The control-plane implementation identity is supplied by the workflow runtime rather than trusted from a committed request."
+    },
+    {
+      "claim_id": "control.explicit-approval",
+      "model": "mutation_authority",
+      "owner": "security-governance",
+      "plane": "control",
+      "reference": {
+        "anchor": "EXPLICIT_APPROVAL = \"explicit_approval\"",
+        "kind": "contract",
+        "path": "src/knowledge_engine/m16_security_contracts.py"
+      },
+      "statement": "Explicit approval is a named security control for governed actions."
+    },
+    {
+      "claim_id": "control.replay-protection",
+      "model": "lifecycle_model",
+      "owner": "security-governance",
+      "plane": "control",
+      "reference": {
+        "anchor": "IDEMPOTENCY_KEY = \"idempotency_key\"",
+        "kind": "contract",
+        "path": "src/knowledge_engine/m16_security_contracts.py"
+      },
+      "statement": "Governed mutations require an idempotency or replay identity."
+    },
+    {
+      "claim_id": "build.stable-source-identity",
+      "model": "identity_model",
+      "owner": "intake",
+      "plane": "build",
+      "reference": {
+        "anchor": "def stable_source_id(",
+        "kind": "code",
+        "path": "src/knowledge_engine/intake_v1.py"
+      },
+      "statement": "Intake derives a stable source identity from connector type and canonical locator."
+    },
+    {
+      "claim_id": "build.immutable-snapshot-identity",
+      "model": "storage_model",
+      "owner": "intake",
+      "plane": "build",
+      "reference": {
+        "anchor": "def snapshot_id_for(",
+        "kind": "code",
+        "path": "src/knowledge_engine/intake_v1.py"
+      },
+      "statement": "Intake derives immutable snapshot identity from canonicalized identity payload."
+    },
+    {
+      "claim_id": "build.deterministic-compiler",
+      "model": "release_model",
+      "owner": "builder",
+      "plane": "build",
+      "reference": {
+        "anchor": "def compile_release(",
+        "kind": "code",
+        "path": "src/knowledge_engine/compiler.py"
+      },
+      "statement": "The compiler validates reviewed Source and emits deterministic release materializations."
+    },
+    {
+      "claim_id": "build.derived-artifacts",
+      "model": "source_of_truth",
+      "owner": "builder",
+      "plane": "build",
+      "reference": {
+        "anchor": "artifact_root = release_root / \"artifacts\"",
+        "kind": "code",
+        "path": "src/knowledge_engine/compiler.py"
+      },
+      "statement": "Runtime artifacts are generated under a release artifact root and are not an editable knowledge source."
+    },
+    {
+      "claim_id": "build.reviewed-source",
+      "model": "source_of_truth",
+      "owner": "builder",
+      "plane": "build",
+      "reference": {
+        "anchor": "review.get(\"status\") != \"approved\"",
+        "kind": "code",
+        "path": "src/knowledge_engine/compiler.py"
+      },
+      "statement": "Only published concepts with approved review metadata enter compilation."
+    },
+    {
+      "claim_id": "runtime.channel-pointer",
+      "model": "storage_model",
+      "owner": "runtime",
+      "plane": "runtime",
+      "reference": {
+        "anchor": "pointer_key = f\"channels/{self.channel}.json\"",
+        "kind": "code",
+        "path": "src/knowledge_engine/runtime.py"
+      },
+      "statement": "Runtime resolves a release through the selected channel pointer."
+    },
+    {
+      "claim_id": "runtime.artifact-integrity",
+      "model": "release_model",
+      "owner": "runtime",
+      "plane": "runtime",
+      "reference": {
+        "anchor": "artifact integrity failure:",
+        "kind": "code",
+        "path": "src/knowledge_engine/runtime.py"
+      },
+      "statement": "Runtime verifies artifact byte count and SHA-256 before activation."
+    },
+    {
+      "claim_id": "runtime.pointer-stability",
+      "model": "lifecycle_model",
+      "owner": "runtime",
+      "plane": "runtime",
+      "reference": {
+        "anchor": "channel pointer changed during refresh",
+        "kind": "code",
+        "path": "src/knowledge_engine/runtime.py"
+      },
+      "statement": "Runtime rejects refresh when the channel pointer changes during activation."
+    },
+    {
+      "claim_id": "runtime.acl-retrieval",
+      "model": "acl_model",
+      "owner": "runtime",
+      "plane": "runtime",
+      "reference": {
+        "anchor": "allowed_audiences=allowed_audiences",
+        "kind": "code",
+        "path": "src/knowledge_engine/runtime.py"
+      },
+      "statement": "Allowed audiences are passed into retrieval before response serialization."
+    },
+    {
+      "claim_id": "runtime.citation-filtering",
+      "model": "acl_model",
+      "owner": "runtime",
+      "plane": "runtime",
+      "reference": {
+        "anchor": "enrich_runtime_citations(",
+        "kind": "code",
+        "path": "src/knowledge_engine/runtime.py"
+      },
+      "statement": "Citation enrichment receives the same allowed-audience boundary as retrieval."
+    },
+    {
+      "claim_id": "runtime.release-health-interface",
+      "model": "release_model",
+      "owner": "runtime-api",
+      "plane": "runtime",
+      "reference": {
+        "anchor": "@app.get(\"/v1/health\")",
+        "kind": "code",
+        "path": "src/knowledge_engine/api.py"
+      },
+      "statement": "The API exposes release-bound health information from the loaded runtime."
+    },
+    {
+      "claim_id": "feedback.bounded-intake",
+      "model": "lifecycle_model",
+      "owner": "feedback",
+      "plane": "feedback",
+      "reference": {
+        "anchor": "def get_feedback_intake()",
+        "kind": "code",
+        "path": "src/knowledge_engine/api.py"
+      },
+      "statement": "Public feedback enters through a dedicated bounded intake component."
+    },
+    {
+      "claim_id": "feedback.deterministic-triage",
+      "model": "lifecycle_model",
+      "owner": "feedback",
+      "plane": "feedback",
+      "reference": {
+        "anchor": "def triage_feedback(",
+        "kind": "code",
+        "path": "src/knowledge_engine/m15_feedback_triage.py"
+      },
+      "statement": "Feedback is deterministically triaged into review states and optional correction candidates."
+    },
+    {
+      "claim_id": "feedback.no-automatic-authority",
+      "model": "mutation_authority",
+      "owner": "feedback",
+      "plane": "feedback",
+      "reference": {
+        "anchor": "class FeedbackAuthority(",
+        "kind": "contract",
+        "path": "src/knowledge_engine/m15_feedback_triage.py"
+      },
+      "statement": "Feedback triage has no automatic Source, merge, production, or permanent-ledger authority."
+    },
+    {
+      "claim_id": "boundary.repository-contracts",
+      "model": "repository_boundaries",
+      "owner": "architecture",
+      "plane": "control",
+      "reference": {
+        "anchor": "This repository implements those contracts.",
+        "kind": "documentation",
+        "path": "README.md"
+      },
+      "statement": "Normative contracts live in the foundation repository while this repository implements them."
+    },
+    {
+      "claim_id": "boundary.trust-enumeration",
+      "model": "trust_boundaries",
+      "owner": "security-governance",
+      "plane": "control",
+      "reference": {
+        "anchor": "class TrustBoundary(",
+        "kind": "contract",
+        "path": "src/knowledge_engine/m16_security_contracts.py"
+      },
+      "statement": "Source control, CI/CD, control plane, object storage, runtime, operator interface, and evidence store are explicit trust boundaries."
+    },
+    {
+      "claim_id": "boundary.exact-system-identity",
+      "model": "identity_model",
+      "owner": "security-governance",
+      "plane": "control",
+      "reference": {
+        "anchor": "class M16Identity(",
+        "kind": "contract",
+        "path": "src/knowledge_engine/m16_security_contracts.py"
+      },
+      "statement": "Security evidence binds Engine, Source, release, manifest, and pointer identities."
+    },
+    {
+      "claim_id": "boundary.audience-non-broadening",
+      "model": "acl_model",
+      "owner": "security-governance",
+      "plane": "runtime",
+      "reference": {
+        "anchor": "AUDIENCE_NON_BROADENING = \"audience_non_broadening\"",
+        "kind": "contract",
+        "path": "src/knowledge_engine/m16_security_contracts.py"
+      },
+      "statement": "Audience non-broadening is an explicit security control."
+    },
+    {
+      "claim_id": "lifecycle.incident-state-machine",
+      "model": "lifecycle_model",
+      "owner": "security-governance",
+      "plane": "control",
+      "reference": {
+        "anchor": "class IncidentState(",
+        "kind": "contract",
+        "path": "src/knowledge_engine/m16_security_contracts.py"
+      },
+      "statement": "Incident handling uses a closed state machine from detection through resolution or blockage."
+    },
+    {
+      "claim_id": "docs.single-entry-and-ownership",
+      "model": "documentation_ownership",
+      "owner": "architecture",
+      "plane": "control",
+      "reference": {
+        "anchor": "## Architecture document ownership",
+        "kind": "documentation",
+        "path": "docs/architecture/README.md"
+      },
+      "statement": "The architecture canon has one entry page, named owners, and same-change anchor maintenance."
+    }
+  ],
+  "owned_documents": [
+    "docs/architecture/README.md",
+    "docs/architecture/m17/system-map.md",
+    "docs/architecture/m17/architecture-claims.json"
+  ],
+  "required_models": [
+    "acl_model",
+    "documentation_ownership",
+    "identity_model",
+    "lifecycle_model",
+    "mutation_authority",
+    "release_model",
+    "repository_boundaries",
+    "source_of_truth",
+    "storage_model",
+    "trust_boundaries"
+  ],
+  "required_planes": [
+    "build",
+    "control",
+    "feedback",
+    "runtime"
+  ],
+  "schema_version": "knowledge-engine-architecture-canon/v1"
+}
