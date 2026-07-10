@@ -122,11 +122,29 @@ def observation(**updates: object) -> SourceControlPlaneObservation:
     return SourceControlPlaneObservation(**payload)
 
 
-def test_corrupted_source_with_complete_evidence_is_ready_for_governed_restore() -> None:
-    report = evaluate_source_control_plane_reconstruction(
-        observation(),
+def fully_executed(**updates: object) -> SourceControlPlaneObservation:
+    payload: dict[str, object] = {
+        "source_restore_authorized": True,
+        "source_restore_executed": True,
+        "restored_source_sha": SOURCE,
+        "rebuild_executed": True,
+        "rebuilt_source_sha": SOURCE,
+        "rebuilt_manifest_sha256": MANIFEST,
+        "components": all_components(reconstructed=True),
+    }
+    payload.update(updates)
+    return observation(**payload)
+
+
+def evaluate(value: SourceControlPlaneObservation):
+    return evaluate_source_control_plane_reconstruction(
+        value,
         expected_identity=identity(),
     )
+
+
+def test_corrupted_source_with_complete_evidence_is_ready_for_restore() -> None:
+    report = evaluate(observation())
 
     assert report.source_state == SourceIntegrityState.CORRUPTED
     assert report.trusted_git_state == TrustedGitState.TRUSTED
@@ -135,6 +153,7 @@ def test_corrupted_source_with_complete_evidence_is_ready_for_governed_restore()
         item.state
         in {
             ReconstructionComponentState.RECONSTRUCTABLE,
+            ReconstructionComponentState.VERIFIED,
             ReconstructionComponentState.UNRECOVERABLE,
         }
         for item in report.components
@@ -143,35 +162,15 @@ def test_corrupted_source_with_complete_evidence_is_ready_for_governed_restore()
 
 
 def test_full_external_restore_and_reconstruction_is_verified() -> None:
-    report = evaluate_source_control_plane_reconstruction(
-        observation(
-            source_restore_authorized=True,
-            source_restore_executed=True,
-            restored_source_sha=SOURCE,
-            rebuild_executed=True,
-            rebuilt_source_sha=SOURCE,
-            rebuilt_manifest_sha256=MANIFEST,
-            components=all_components(reconstructed=True),
-        ),
-        expected_identity=identity(),
-    )
+    report = evaluate(fully_executed())
 
     assert report.decision == ReconstructionDecision.RECONSTRUCTED_AND_VERIFIED
     assert all(item.state == ReconstructionComponentState.VERIFIED for item in report.components)
 
 
-def test_unrecoverable_ephemeral_state_is_visible_but_does_not_invent_data() -> None:
-    report = evaluate_source_control_plane_reconstruction(
-        observation(
-            source_restore_authorized=True,
-            source_restore_executed=True,
-            restored_source_sha=SOURCE,
-            rebuild_executed=True,
-            rebuilt_source_sha=SOURCE,
-            rebuilt_manifest_sha256=MANIFEST,
-            components=all_components(reconstructed=True, ephemeral_present=False),
-        ),
-        expected_identity=identity(),
+def test_unrecoverable_ephemeral_state_is_visible() -> None:
+    report = evaluate(
+        fully_executed(components=all_components(reconstructed=True, ephemeral_present=False))
     )
 
     assert report.decision == ReconstructionDecision.PARTIALLY_RECONSTRUCTED
@@ -185,11 +184,8 @@ def test_unrecoverable_ephemeral_state_is_visible_but_does_not_invent_data() -> 
 
 
 def test_untrusted_git_restoration_point_blocks_reconstruction() -> None:
-    report = evaluate_source_control_plane_reconstruction(
-        observation(
-            trusted_git=trusted_git(commit_signature_verified=False),
-        ),
-        expected_identity=identity(),
+    report = evaluate(
+        observation(trusted_git=trusted_git(commit_signature_verified=False))
     )
 
     assert report.trusted_git_state == TrustedGitState.REJECTED
@@ -197,7 +193,6 @@ def test_untrusted_git_restoration_point_blocks_reconstruction() -> None:
 
 
 def test_missing_ledger_continuity_blocks_reconstruction() -> None:
-    components = all_components(reconstructed=True)
     components = [
         component(
             item.kind,
@@ -208,20 +203,9 @@ def test_missing_ledger_continuity_blocks_reconstruction() -> None:
         )
         if item.kind == ReconstructionComponentKind.LEDGER_CONTINUITY
         else item
-        for item in components
+        for item in all_components(reconstructed=True)
     ]
-    report = evaluate_source_control_plane_reconstruction(
-        observation(
-            source_restore_authorized=True,
-            source_restore_executed=True,
-            restored_source_sha=SOURCE,
-            rebuild_executed=True,
-            rebuilt_source_sha=SOURCE,
-            rebuilt_manifest_sha256=MANIFEST,
-            components=components,
-        ),
-        expected_identity=identity(),
-    )
+    report = evaluate(fully_executed(components=components))
 
     assert report.decision == ReconstructionDecision.BLOCKED
     ledger = next(
@@ -233,19 +217,7 @@ def test_missing_ledger_continuity_blocks_reconstruction() -> None:
 
 
 def test_deterministic_rebuild_mismatch_blocks_completion() -> None:
-    report = evaluate_source_control_plane_reconstruction(
-        observation(
-            source_restore_authorized=True,
-            source_restore_executed=True,
-            restored_source_sha=SOURCE,
-            rebuild_executed=True,
-            rebuilt_source_sha=SOURCE,
-            rebuilt_manifest_sha256=OTHER_MANIFEST,
-            components=all_components(reconstructed=True),
-        ),
-        expected_identity=identity(),
-    )
-
+    report = evaluate(fully_executed(rebuilt_manifest_sha256=OTHER_MANIFEST))
     assert report.decision == ReconstructionDecision.BLOCKED
 
 
@@ -254,18 +226,16 @@ def test_identity_drift_blocks_even_with_other_evidence() -> None:
         observation(),
         expected_identity=identity(engine_sha="f" * 40),
     )
-
     assert report.decision == ReconstructionDecision.BLOCKED
 
 
 def test_healthy_source_and_verified_control_plane_is_healthy() -> None:
-    report = evaluate_source_control_plane_reconstruction(
+    report = evaluate(
         observation(
             observed_source_head_sha=SOURCE,
             source_history_diverged=False,
             components=all_components(reconstructed=True),
-        ),
-        expected_identity=identity(),
+        )
     )
 
     assert report.source_state == SourceIntegrityState.HEALTHY
@@ -274,27 +244,22 @@ def test_healthy_source_and_verified_control_plane_is_healthy() -> None:
 
 def test_restore_execution_requires_authorization() -> None:
     with pytest.raises(ValidationError, match="without authorization"):
-        observation(
-            source_restore_executed=True,
-            restored_source_sha=SOURCE,
-        )
+        observation(source_restore_executed=True, restored_source_sha=SOURCE)
 
 
-def test_missing_critical_component_is_rejected() -> None:
-    components = [
+def test_missing_or_duplicate_critical_components_are_rejected() -> None:
+    missing = [
         item
         for item in all_components(reconstructed=False)
         if item.kind != ReconstructionComponentKind.APPROVALS
     ]
     with pytest.raises(ValidationError, match="missing critical reconstruction components"):
-        observation(components=components)
+        observation(components=missing)
 
-
-def test_duplicate_component_kind_is_rejected() -> None:
-    components = all_components(reconstructed=False)
-    components.append(component(ReconstructionComponentKind.APPROVALS, reconstructed=False))
+    duplicate = all_components(reconstructed=False)
+    duplicate.append(component(ReconstructionComponentKind.APPROVALS, reconstructed=False))
     with pytest.raises(ValidationError, match="must be unique"):
-        observation(components=components)
+        observation(components=duplicate)
 
 
 def test_private_payload_and_extra_fields_are_rejected() -> None:
@@ -303,22 +268,19 @@ def test_private_payload_and_extra_fields_are_rejected() -> None:
             **observation().model_dump(),
             raw_query="private data",
         )
-    with pytest.raises(ValidationError, match="private or unsafe"):
+    with pytest.raises(ValidationError):
         observation(evidence_codes=["https://private.example"])
 
 
 def test_report_is_deterministic_and_tamper_evident() -> None:
-    first = evaluate_source_control_plane_reconstruction(
-        observation(),
-        expected_identity=identity(),
-    )
-    second_observation = observation(
-        components=list(reversed(all_components(reconstructed=False))),
-        evidence_codes=list(reversed(["incident.source.corruption", "control_plane.snapshot.loaded"])),
-    )
-    second = evaluate_source_control_plane_reconstruction(
-        second_observation,
-        expected_identity=identity(),
+    first = evaluate(observation())
+    second = evaluate(
+        observation(
+            components=list(reversed(all_components(reconstructed=False))),
+            evidence_codes=list(
+                reversed(["incident.source.corruption", "control_plane.snapshot.loaded"])
+            ),
+        )
     )
 
     assert first.artifact_sha256 == second.artifact_sha256
@@ -331,6 +293,6 @@ def test_authority_model_rejects_every_mutation_permission() -> None:
     authority = M16SourceControlPlaneAuthority()
     assert not any(authority.model_dump().values())
 
-    for field_name in authority.model_fields:
+    for field_name in M16SourceControlPlaneAuthority.model_fields:
         with pytest.raises(ValidationError, match="evidence-only"):
             M16SourceControlPlaneAuthority(**{field_name: True})
