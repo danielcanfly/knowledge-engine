@@ -1,0 +1,49 @@
+name: M16 Promotion Containment Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m16_promotion_containment.py"
+      - "tests/test_m16_promotion_containment.py"
+      - "docs/architecture/m16/**"
+      - ".github/workflows/m16-promotion-containment.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  promotion-containment:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Run M16.3 promotion containment acceptance
+        run: python -m pytest -q tests/test_m16_promotion_containment.py
+      - name: Verify no mutation executor surface
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("src/knowledge_engine/m16_promotion_containment.py").read_text()
+          forbidden = (
+              "def execute_promotion",
+              "def execute_rollback",
+              "def repair_pointer",
+              "def purge_cache",
+              "def write_r2",
+              "def delete_r2",
+          )
+          found = [item for item in forbidden if item in source]
+          if found:
+              raise SystemExit(f"forbidden mutation surface: {found}")
+          PY
