@@ -69,7 +69,10 @@ def test_missing_required_evidence_blocks_closure() -> None:
     report = evaluate_m15_daily_report(partial, generated_at=NOW, identity=identity())
     assert report.closure_decision == ClosureDecision.BLOCKED
     assert any(alert.reason == AlertReason.MISSING_EVIDENCE for alert in report.alerts)
-    assert any(gate.name == GateName.EVIDENCE_COMPLETE and gate.state == GateState.BLOCKED for gate in report.gates)
+    assert any(
+        gate.name == GateName.EVIDENCE_COMPLETE and gate.state == GateState.BLOCKED
+        for gate in report.gates
+    )
 
 
 def test_unhealthy_and_unknown_evidence_fail_closed() -> None:
@@ -91,7 +94,10 @@ def test_stale_evidence_blocks_freshness_gate() -> None:
     items = [stale if item.section == stale.section else item for item in full_evidence()]
     report = evaluate_m15_daily_report(items, generated_at=NOW, identity=identity())
     assert any(alert.reason == AlertReason.STALE_EVIDENCE for alert in report.alerts)
-    assert any(gate.name == GateName.FRESHNESS and gate.state == GateState.BLOCKED for gate in report.gates)
+    assert any(
+        gate.name == GateName.FRESHNESS and gate.state == GateState.BLOCKED
+        for gate in report.gates
+    )
 
 
 def test_identity_drift_blocks_identity_gate() -> None:
@@ -131,7 +137,11 @@ def test_rejects_non_utc_timestamps() -> None:
     with pytest.raises(ValueError):
         evidence(ReportSection.RELEASE_HEALTH, generated_at=datetime(2026, 7, 10, 5, 0))
     with pytest.raises(ValueError):
-        evaluate_m15_daily_report(full_evidence(), generated_at=datetime(2026, 7, 10, 5, 0), identity=identity())
+        evaluate_m15_daily_report(
+            full_evidence(),
+            generated_at=datetime(2026, 7, 10, 5, 0),
+            identity=identity(),
+        )
 
 
 def test_no_write_authority_is_enforced() -> None:
