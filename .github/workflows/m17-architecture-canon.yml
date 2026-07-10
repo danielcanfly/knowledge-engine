@@ -1,0 +1,68 @@
+name: M17 Architecture Canon Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "docs/architecture/**"
+      - "src/knowledge_engine/m17_architecture_canon.py"
+      - "scripts/m17_architecture_acceptance.py"
+      - "tests/test_m17_architecture_canon.py"
+      - ".github/workflows/m17-architecture-canon.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  architecture-canon:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Run M17.1 architecture canon tests
+        run: python -m pytest -q tests/test_m17_architecture_canon.py
+      - name: Validate canonical architecture registry
+        run: |
+          python scripts/m17_architecture_acceptance.py \
+            --registry docs/architecture/m17/architecture-claims.json \
+            --output .artifacts/m17/architecture-canon-report.json
+      - name: Upload architecture acceptance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: m17-architecture-canon-report
+          path: .artifacts/m17/architecture-canon-report.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Verify documentation-only authority boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("src/knowledge_engine/m17_architecture_canon.py").read_text()
+          forbidden = (
+              "def write_source",
+              "def create_source_pr",
+              "def promote_release",
+              "def rollback_release",
+              "def repair_pointer",
+              "def purge_cache",
+              "def put_object",
+              "def copy_object",
+              "def delete_object",
+              "def rotate_credentials",
+              "def approve_request",
+              "def merge_pull_request",
+              "def append_ledger",
+          )
+          found = [item for item in forbidden if item in source]
+          if found:
+              raise SystemExit(f"forbidden M17.1 executor surface: {found}")
+          PY
