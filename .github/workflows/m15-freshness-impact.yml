@@ -1,0 +1,36 @@
+name: M15 Freshness Impact Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m15_freshness_impact.py"
+      - "tests/test_m15_freshness_impact.py"
+      - "docs/architecture/m15/**"
+      - ".github/workflows/m15-freshness-impact.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freshness-impact-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Run M15.5 adversarial tests
+        run: pytest -q tests/test_m15_freshness_impact.py
+      - name: Compile freshness modules
+        run: python -m compileall -q src/knowledge_engine/m15_freshness_impact.py tests/test_m15_freshness_impact.py
+      - name: Assert advisory-only surface
+        shell: bash
+        run: |
+          ! grep -R --line-number -E 'put_object|delete_object|update_ref|merge_pull_request|create_candidate|purge_cache' \
+            src/knowledge_engine/m15_freshness_impact.py
