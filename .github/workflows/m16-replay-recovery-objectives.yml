@@ -1,0 +1,54 @@
+name: M16 Replay and Recovery Objectives Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m16_replay_recovery_objectives.py"
+      - "tests/test_m16_replay_recovery_objectives.py"
+      - "docs/architecture/m16/**"
+      - ".github/workflows/m16-replay-recovery-objectives.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  replay-recovery-objectives:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Run M16.6 replay and recovery acceptance
+        run: python -m pytest -q tests/test_m16_replay_recovery_objectives.py
+      - name: Verify evidence-only replay surface
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path(
+              "src/knowledge_engine/m16_replay_recovery_objectives.py"
+          ).read_text()
+          forbidden = (
+              "def promote_release",
+              "def execute_rollback",
+              "def repair_pointer",
+              "def purge_cache",
+              "def put_object",
+              "def copy_object",
+              "def delete_object",
+              "def write_source",
+              "def append_ledger",
+          )
+          found = [item for item in forbidden if item in source]
+          if found:
+              raise SystemExit(f"forbidden replay/recovery executor surface: {found}")
+          PY
