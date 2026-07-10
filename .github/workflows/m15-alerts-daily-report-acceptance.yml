@@ -1,0 +1,21 @@
+name: M15 Alerts Daily Report Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m15_alerts_daily_report.py"
+      - "tests/test_m15_alerts_daily_report.py"
+      - ".github/workflows/m15-alerts-daily-report-acceptance.yml"
+  workflow_dispatch:
+
+jobs:
+  alerts-daily-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m pytest -q tests/test_m15_alerts_daily_report.py
