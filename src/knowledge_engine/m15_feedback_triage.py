@@ -76,7 +76,7 @@ class FeedbackEvidence(BaseModel):
     audience: str = Field(pattern=r"^(private|internal|public)$")
 
     @model_validator(mode="after")
-    def reject_unsafe_values(self) -> "FeedbackEvidence":
+    def reject_unsafe_values(self) -> FeedbackEvidence:
         encoded = json.dumps(self.model_dump(mode="json"), sort_keys=True).lower()
         if any(fragment in encoded for fragment in _FORBIDDEN_FRAGMENTS):
             raise ValueError("feedback evidence contains forbidden private or secret material")
@@ -118,7 +118,7 @@ class FeedbackAuthority(BaseModel):
     permanent_ledger_append_allowed: bool = False
 
     @model_validator(mode="after")
-    def reject_authority(self) -> "FeedbackAuthority":
+    def reject_authority(self) -> FeedbackAuthority:
         enabled = sorted(name for name, value in self.model_dump().items() if value)
         if enabled:
             raise ValueError(f"M15.6 is review-gated; authority enabled: {enabled}")
@@ -145,7 +145,11 @@ def finalize_candidate(candidate: CorrectionCandidate) -> CorrectionCandidate:
     return candidate.model_copy(update={"artifact_sha256": digest})
 
 
-def triage_feedback(items: list[FeedbackEvidence], *, minimum_confidence: float = 0.75) -> FeedbackTriageReport:
+def triage_feedback(
+    items: list[FeedbackEvidence],
+    *,
+    minimum_confidence: float = 0.75,
+) -> FeedbackTriageReport:
     if minimum_confidence < 0 or minimum_confidence > 1:
         raise ValueError("minimum_confidence must be between 0 and 1")
     seen: set[str] = set()
@@ -153,7 +157,11 @@ def triage_feedback(items: list[FeedbackEvidence], *, minimum_confidence: float 
     for item in sorted(items, key=lambda value: value.feedback_id):
         fingerprint = feedback_fingerprint(item)
         candidate = None
-        if item.engine_sha != item.expected_engine_sha or item.source_sha != item.expected_source_sha:
+        identity_drift = (
+            item.engine_sha != item.expected_engine_sha
+            or item.source_sha != item.expected_source_sha
+        )
+        if identity_drift:
             state, reason = TriageState.POLICY_REJECTED, DispositionReason.IDENTITY_DRIFT
         elif fingerprint in seen:
             state, reason = TriageState.DUPLICATE, DispositionReason.DUPLICATE_FINGERPRINT
@@ -174,7 +182,14 @@ def triage_feedback(items: list[FeedbackEvidence], *, minimum_confidence: float 
                 )
             )
         seen.add(fingerprint)
-        decisions.append(TriageDecision(feedback_id=item.feedback_id, state=state, reason=reason, candidate=candidate))
+        decisions.append(
+            TriageDecision(
+                feedback_id=item.feedback_id,
+                state=state,
+                reason=reason,
+                candidate=candidate,
+            )
+        )
     decisions.sort(key=lambda value: (value.feedback_id, value.state.value, value.reason.value))
     report = FeedbackTriageReport(decisions=decisions)
     return finalize_report(report)
