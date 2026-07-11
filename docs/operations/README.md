@@ -9,6 +9,7 @@ boundaries, and stop conditions used by a qualified operator.
 1. [End-to-End Governed Batch Runbook](m17/end-to-end-batch-runbook.md)
 2. [Promotion, Rollback, and Recovery](m17/promotion-rollback-recovery.md)
 3. `m17/runbook-registry.json`, the machine-readable ordered lifecycle contract
+4. [Troubleshooting and Failure Atlas](../troubleshooting/README.md)
 
 The architecture canon remains at `docs/architecture/README.md`. When an operations document and an
 implementation disagree, stop. Code, committed contracts, immutable evidence, and approved request
@@ -18,8 +19,8 @@ identity outrank prose. Repair the documentation through a reviewed Engine PR be
 
 The Knowledge Engine maintainers own these runbooks. Any change to command surfaces, evidence
 identities, lifecycle phases, mutation authority, Source governance, candidate publication,
-production promotion, ledger recording, or closeout must update the registry and pass the dedicated
-M17 Operator Runbook Acceptance workflow.
+production promotion, ledger recording, closeout, failure signals, or troubleshooting boundaries
+must update the relevant machine registry and pass its dedicated M17 acceptance workflow.
 
 Runbooks never grant authority. They point to authority that already exists in an explicit approved
 contract or environment. Placeholders such as `<SOURCE_SHA>` must be replaced from current governed
