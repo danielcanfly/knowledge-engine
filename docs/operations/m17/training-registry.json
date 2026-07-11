@@ -1,0 +1,154 @@
+{
+  "schema_version": "knowledge-engine-m17-operator-training-registry/v1",
+  "qualification": {
+    "minimum_score": 85,
+    "maximum_score": 100,
+    "maximum_attempts": 3,
+    "independent_evaluator_required": true,
+    "all_critical_exercises_required": true,
+    "blocked_or_unknown_disqualifies": true,
+    "evidence_digest_required": true
+  },
+  "required_competencies": [
+    "architecture_boundaries",
+    "identity_chain",
+    "source_governance",
+    "evidence_handoffs",
+    "candidate_acceptance",
+    "citation_quality",
+    "acl_safety",
+    "safe_stop_judgment",
+    "rollback_recovery",
+    "privacy_safe_evidence",
+    "closeout_reconciliation"
+  ],
+  "exercises": [
+    {
+      "id": "architecture_orientation",
+      "order": 1,
+      "title": "Architecture orientation",
+      "weight": 10,
+      "critical": false,
+      "authority_mode": "read_only",
+      "allowed_remote_operations": [],
+      "prerequisites": [],
+      "competencies": ["architecture_boundaries", "identity_chain", "safe_stop_judgment"],
+      "deliverables": ["four-plane explanation", "boundary map", "universal stop-condition list"],
+      "passing_criteria": ["all four planes identified", "Source and derived artifacts distinguished", "stop conditions explained"],
+      "stop_conditions": ["candidate treats generated artifacts as canonical truth", "candidate cannot identify mutation boundaries"],
+      "minimum_evidence_items": 1,
+      "references": [
+        {"path": "docs/architecture/m17/system-map.md", "anchor": "# Knowledge OS Four-Plane System Map"}
+      ]
+    },
+    {
+      "id": "planned_governed_batch",
+      "order": 2,
+      "title": "Planned governed batch",
+      "weight": 15,
+      "critical": true,
+      "authority_mode": "local_output",
+      "allowed_remote_operations": [],
+      "prerequisites": ["architecture_orientation"],
+      "competencies": ["identity_chain", "evidence_handoffs", "acl_safety", "safe_stop_judgment"],
+      "deliverables": ["non-executing batch plan", "identity checklist", "rollback readiness plan"],
+      "passing_criteria": ["all lifecycle stages represented", "authority boundaries explicit", "ACL and rollback gates present"],
+      "stop_conditions": ["moving branch used as identity", "approval assumed", "production mutation proposed"],
+      "minimum_evidence_items": 1,
+      "references": [
+        {"path": "docs/operations/m17/end-to-end-batch-runbook.md", "anchor": "## Canonical sequence"}
+      ]
+    },
+    {
+      "id": "source_package_review",
+      "order": 3,
+      "title": "Source package review",
+      "weight": 15,
+      "critical": true,
+      "authority_mode": "read_only",
+      "allowed_remote_operations": [],
+      "prerequisites": ["planned_governed_batch"],
+      "competencies": ["source_governance", "evidence_handoffs", "privacy_safe_evidence", "safe_stop_judgment"],
+      "deliverables": ["fixture review findings", "claim support classification", "ACL and provenance decision"],
+      "passing_criteria": ["unsupported claims detected", "contradictions and provenance gaps detected", "ambiguous audience blocks"],
+      "stop_conditions": ["raw private content copied", "unsupported claim accepted", "generated output edited as Source"],
+      "minimum_evidence_items": 1,
+      "references": [
+        {"path": "docs/operations/m17/end-to-end-batch-runbook.md", "anchor": "### 6. Human review"}
+      ]
+    },
+    {
+      "id": "candidate_evidence_inspection",
+      "order": 4,
+      "title": "Candidate evidence inspection",
+      "weight": 15,
+      "critical": true,
+      "authority_mode": "read_only",
+      "allowed_remote_operations": ["get", "head"],
+      "prerequisites": ["source_package_review"],
+      "competencies": ["candidate_acceptance", "citation_quality", "acl_safety", "identity_chain"],
+      "deliverables": ["candidate identity verification", "acceptance completeness report", "ACL-negative and citation findings"],
+      "passing_criteria": ["manifest identity verified", "required acceptance evidence present", "citation and ACL-negative results interpreted"],
+      "stop_conditions": ["candidate identity mismatch", "missing acceptance evidence", "ACL broadening or citation failure"],
+      "minimum_evidence_items": 1,
+      "references": [
+        {"path": "docs/operations/m17/operator-tooling.md", "anchor": "| `production-status` |"},
+        {"path": "docs/operations/m17/end-to-end-batch-runbook.md", "anchor": "### 11. Candidate acceptance"}
+      ]
+    },
+    {
+      "id": "non_production_dry_run",
+      "order": 5,
+      "title": "Non-production dry run",
+      "weight": 15,
+      "critical": true,
+      "authority_mode": "isolated_fixture",
+      "allowed_remote_operations": [],
+      "prerequisites": ["candidate_evidence_inspection"],
+      "competencies": ["evidence_handoffs", "identity_chain", "privacy_safe_evidence", "safe_stop_judgment"],
+      "deliverables": ["isolated lifecycle evidence", "fixture artifact digests", "safe-stop record"],
+      "passing_criteria": ["filesystem fixture only", "all outputs digest-bound", "no production or credential access"],
+      "stop_conditions": ["production configuration detected", "remote mutation attempted", "evidence identity lost"],
+      "minimum_evidence_items": 2,
+      "references": [
+        {"path": "docs/operations/m17/operator-tooling.md", "anchor": "## Universal safety rules"}
+      ]
+    },
+    {
+      "id": "rollback_drill",
+      "order": 6,
+      "title": "Rollback drill",
+      "weight": 15,
+      "critical": true,
+      "authority_mode": "isolated_fixture",
+      "allowed_remote_operations": [],
+      "prerequisites": ["non_production_dry_run"],
+      "competencies": ["rollback_recovery", "identity_chain", "acl_safety", "safe_stop_judgment"],
+      "deliverables": ["incident classification", "governed recovery plan", "post-rollback verification matrix"],
+      "passing_criteria": ["uncertain state fails closed", "authority and expected-previous identity identified", "query citation cache pointer and ACL checks included"],
+      "stop_conditions": ["real rollback proposed", "missing rollback target", "unknown production state treated as healthy"],
+      "minimum_evidence_items": 1,
+      "references": [
+        {"path": "docs/operations/m17/promotion-rollback-recovery.md", "anchor": "## Failed or uncertain promotion"}
+      ]
+    },
+    {
+      "id": "closeout_package",
+      "order": 7,
+      "title": "Closeout package",
+      "weight": 15,
+      "critical": true,
+      "authority_mode": "local_output",
+      "allowed_remote_operations": [],
+      "prerequisites": ["rollback_drill"],
+      "competencies": ["closeout_reconciliation", "privacy_safe_evidence", "identity_chain", "safe_stop_judgment"],
+      "deliverables": ["bounded closeout package", "identity and digest inventory", "resume-or-stop decision"],
+      "passing_criteria": ["all required identities and evidence digests present", "unresolved items explicit", "package does not claim ledger or closeout mutation"],
+      "stop_conditions": ["missing evidence hidden", "raw private material included", "package represented as approval or ledger append"],
+      "minimum_evidence_items": 1,
+      "references": [
+        {"path": "docs/operations/m17/end-to-end-batch-runbook.md", "anchor": "### 18. Final reconciliation"}
+      ]
+    }
+  ]
+}
