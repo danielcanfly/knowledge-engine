@@ -32,6 +32,7 @@ knowledge-synthesis = "knowledge_engine.synthesis_cli:main"
 knowledge-resolution = "knowledge_engine.resolution_cli:main"
 knowledge-review = "knowledge_engine.review_cli:main"
 knowledge-m13 = "knowledge_engine.m13_cli:main"
+knowledge-inspect = "knowledge_engine.m17_operator_tools_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]
@@ -71,6 +72,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "src/knowledge_engine/m16_restore_drill_closure.py" = ["E501", "SIM102"]
 "src/knowledge_engine/m16_source_control_plane_reconstruction.py" = ["E501", "SIM102"]
 "src/knowledge_engine/m17_operator_runbooks.py" = ["E501"]
+"src/knowledge_engine/m17_operator_tooling_contract.py" = ["E501"]
+"src/knowledge_engine/m17_operator_tools.py" = ["E501", "UP035", "UP036"]
 "src/knowledge_engine/media_bundle.py" = ["E501", "F401", "SIM109"]
 "src/knowledge_engine/media_intake.py" = ["E501"]
 "src/knowledge_engine/meeting_bundle.py" = ["E501"]
@@ -93,6 +96,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "tests/test_m16_replay_recovery_objectives.py" = ["E501"]
 "tests/test_m16_restore_drill_closure.py" = ["E501"]
 "tests/test_m16_source_control_plane_reconstruction.py" = ["E501"]
+"tests/test_m17_operator_tools.py" = ["E501"]
 "tests/test_media_intake.py" = ["E501", "UP012"]
 "tests/test_meeting_intake.py" = ["E501", "UP035"]
 "tests/test_review.py" = ["E501"]

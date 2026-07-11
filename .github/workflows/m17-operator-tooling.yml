@@ -1,0 +1,92 @@
+name: M17 Operator Tooling Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "docs/operations/README.md"
+      - "docs/operations/m17/operator-tooling.md"
+      - "docs/operations/m17/tool-registry.json"
+      - "src/knowledge_engine/m17_operator_tools.py"
+      - "src/knowledge_engine/m17_operator_tooling_contract.py"
+      - "src/knowledge_engine/m17_operator_tools_cli.py"
+      - "scripts/m17_operator_tooling_acceptance.py"
+      - "tests/test_m17_operator_tools.py"
+      - "pyproject.toml"
+      - ".github/workflows/m17-operator-tooling.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operator-tooling:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package and test dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Run M17.4 operator tooling tests
+        run: pytest -q tests/test_m17_operator_tools.py --junitxml=.artifacts/m17/operator-tooling-junit.xml
+
+      - name: Emit deterministic acceptance evidence
+        if: always()
+        run: |
+          python scripts/m17_operator_tooling_acceptance.py \
+            --root . \
+            --registry docs/operations/m17/tool-registry.json \
+            --output .artifacts/m17/operator-tooling-acceptance.json
+
+      - name: Smoke test installed CLI
+        env:
+          OBJECT_STORE_BACKEND: filesystem
+          FILESYSTEM_STORE_ROOT: .artifacts/store
+        run: |
+          knowledge-inspect checklist > .artifacts/m17/checklist.json
+          knowledge-inspect doctor --root . > .artifacts/m17/doctor.json
+
+      - name: Verify read-only remote authority
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          forbidden = {
+              "put", "delete", "promote_release", "rollback_release",
+              "publish_release", "update_ref", "append_comment", "close_batch",
+          }
+          paths = [
+              Path("src/knowledge_engine/m17_operator_tools.py"),
+              Path("src/knowledge_engine/m17_operator_tools_cli.py"),
+          ]
+          found = []
+          for path in paths:
+              tree = ast.parse(path.read_text(encoding="utf-8"))
+              for node in ast.walk(tree):
+                  if not isinstance(node, ast.Call):
+                      continue
+                  name = None
+                  if isinstance(node.func, ast.Name):
+                      name = node.func.id
+                  elif isinstance(node.func, ast.Attribute):
+                      name = node.func.attr
+                  if name in forbidden:
+                      found.append(f"{path}:{name}")
+          if found:
+              raise SystemExit("forbidden mutation calls: " + ", ".join(sorted(found)))
+          PY
+
+      - name: Upload acceptance diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m17-operator-tooling-acceptance
+          path: .artifacts/m17/
+          if-no-files-found: warn

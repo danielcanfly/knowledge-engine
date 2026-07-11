@@ -10,6 +10,8 @@ boundaries, and stop conditions used by a qualified operator.
 2. [Promotion, Rollback, and Recovery](m17/promotion-rollback-recovery.md)
 3. `m17/runbook-registry.json`, the machine-readable ordered lifecycle contract
 4. [Troubleshooting and Failure Atlas](../troubleshooting/README.md)
+5. [Operator Inspection and Evidence Tooling](m17/operator-tooling.md)
+6. `m17/tool-registry.json`, the machine-readable read-only tool authority contract
 
 The architecture canon remains at `docs/architecture/README.md`. When an operations document and an
 implementation disagree, stop. Code, committed contracts, immutable evidence, and approved request
@@ -19,8 +21,9 @@ identity outrank prose. Repair the documentation through a reviewed Engine PR be
 
 The Knowledge Engine maintainers own these runbooks. Any change to command surfaces, evidence
 identities, lifecycle phases, mutation authority, Source governance, candidate publication,
-production promotion, ledger recording, closeout, failure signals, or troubleshooting boundaries
-must update the relevant machine registry and pass its dedicated M17 acceptance workflow.
+production promotion, ledger recording, closeout, failure signals, troubleshooting boundaries, or
+operator inspection authority must update the relevant machine registry and pass its dedicated M17
+acceptance workflow.
 
 Runbooks never grant authority. They point to authority that already exists in an explicit approved
 contract or environment. Placeholders such as `<SOURCE_SHA>` must be replaced from current governed
@@ -49,7 +52,12 @@ python scripts/m17_operator_runbook_acceptance.py \
   --root . \
   --registry docs/operations/m17/runbook-registry.json \
   --output .artifacts/m17/operator-runbook-acceptance.json
+
+python scripts/m17_operator_tooling_acceptance.py \
+  --root . \
+  --registry docs/operations/m17/tool-registry.json \
+  --output .artifacts/m17/operator-tooling-acceptance.json
 ```
 
-The report is canonical JSON, carries a SHA-256 identity, and fails closed when a stage, reference,
-anchor, evidence handoff, mutation guard, or owned document is invalid.
+The reports are canonical JSON, carry SHA-256 identities, and fail closed when a stage, tool,
+reference, evidence handoff, authority boundary, mutation guard, or owned document is invalid.

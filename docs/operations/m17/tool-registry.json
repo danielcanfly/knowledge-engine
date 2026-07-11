@@ -1,0 +1,93 @@
+{
+  "schema_version": "knowledge-engine-m17-operator-tool-registry/v1",
+  "owned_documents": [
+    "docs/operations/m17/operator-tooling.md",
+    "docs/operations/m17/tool-registry.json"
+  ],
+  "tools": [
+    {
+      "command": "checklist",
+      "purpose": "Render the canonical lifecycle stages and stop conditions.",
+      "mode": "read_only",
+      "remote_operations": [],
+      "local_output": false,
+      "reference": {"path": "src/knowledge_engine/m17_operator_tools.py", "anchor": "def build_checklist_report"}
+    },
+    {
+      "command": "doctor",
+      "purpose": "Inspect repository, runtime, registry, and environment readiness without exposing values.",
+      "mode": "read_only",
+      "remote_operations": [],
+      "local_output": false,
+      "reference": {"path": "src/knowledge_engine/m17_operator_tools.py", "anchor": "def build_doctor_report"}
+    },
+    {
+      "command": "batch-status",
+      "purpose": "Summarize a bounded local batch-state export.",
+      "mode": "read_only",
+      "remote_operations": [],
+      "local_output": false,
+      "reference": {"path": "src/knowledge_engine/m17_operator_tools.py", "anchor": "def build_batch_status_report"}
+    },
+    {
+      "command": "production-status",
+      "purpose": "Verify channel pointer, manifest identity, and release artifact metadata.",
+      "mode": "read_only",
+      "remote_operations": ["get", "head"],
+      "local_output": false,
+      "reference": {"path": "src/knowledge_engine/m17_operator_tools.py", "anchor": "def build_production_status_report"}
+    },
+    {
+      "command": "artifact-fetch",
+      "purpose": "Fetch one bounded object into an operator-selected local directory and verify its digest.",
+      "mode": "local_output",
+      "remote_operations": ["get", "head"],
+      "local_output": true,
+      "reference": {"path": "src/knowledge_engine/m17_operator_tools.py", "anchor": "def fetch_artifact"}
+    },
+    {
+      "command": "evidence-verify",
+      "purpose": "Verify a canonical JSON evidence digest and bounded structure.",
+      "mode": "read_only",
+      "remote_operations": [],
+      "local_output": false,
+      "reference": {"path": "src/knowledge_engine/m17_operator_tools.py", "anchor": "def verify_evidence_file"}
+    },
+    {
+      "command": "release-compare",
+      "purpose": "Compare two local release manifests and report identity and artifact differences.",
+      "mode": "read_only",
+      "remote_operations": [],
+      "local_output": false,
+      "reference": {"path": "src/knowledge_engine/m17_operator_tools.py", "anchor": "def compare_release_manifests"}
+    },
+    {
+      "command": "ledger-summarize",
+      "purpose": "Summarize a bounded local ledger export without reproducing raw evidence.",
+      "mode": "read_only",
+      "remote_operations": [],
+      "local_output": false,
+      "reference": {"path": "src/knowledge_engine/m17_operator_tools.py", "anchor": "def summarize_ledger_export"}
+    },
+    {
+      "command": "incident-bundle",
+      "purpose": "Generate a redacted metadata-only local incident bundle from evidence files.",
+      "mode": "local_output",
+      "remote_operations": [],
+      "local_output": true,
+      "reference": {"path": "src/knowledge_engine/m17_operator_tools.py", "anchor": "def generate_incident_bundle"}
+    },
+    {
+      "command": "handoff-generate",
+      "purpose": "Generate a deterministic local operator handoff from verified component reports.",
+      "mode": "local_output",
+      "remote_operations": [],
+      "local_output": true,
+      "reference": {"path": "src/knowledge_engine/m17_operator_tools.py", "anchor": "def generate_handoff"}
+    }
+  ],
+  "forbidden_remote_operations": [
+    "put", "delete", "copy", "promote", "rollback", "merge", "append", "close",
+    "rotate", "purge", "approve", "publish", "write"
+  ]
+}
