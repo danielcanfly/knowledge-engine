@@ -37,6 +37,7 @@ jobs:
         run: pytest -q tests/test_m17_operator_tools.py --junitxml=.artifacts/m17/operator-tooling-junit.xml
 
       - name: Emit deterministic acceptance evidence
+        if: always()
         run: |
           python scripts/m17_operator_tooling_acceptance.py \
             --root . \
