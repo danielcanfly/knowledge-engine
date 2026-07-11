@@ -66,7 +66,7 @@ ledger append or lifecycle mutation.
 `knowledge-qualify assess` accepts a local JSON file with pseudonymous operator and evaluator IDs,
 attempt number, and one result for every exercise. Each result contains status, awarded score, and
 one or more named SHA-256 evidence items. Raw private text, secret material, raw queries or answers,
-private object locations, hostnames, and unbounded traces are forbidden.
+private object locations, network endpoint metadata, and unbounded traces are forbidden.
 
 Example shape:
 
