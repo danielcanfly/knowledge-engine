@@ -4,7 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
-from knowledge_engine.m17_operator_tools import canonical_bytes, validate_tool_registry
+from knowledge_engine.m17_operator_tooling_contract import validate_operator_tooling
+from knowledge_engine.m17_operator_tools import canonical_bytes
 
 
 def main() -> int:
@@ -18,7 +19,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
-    report = validate_tool_registry(args.root, args.registry)
+    report = validate_operator_tooling(args.root, args.registry)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(canonical_bytes(report))
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
