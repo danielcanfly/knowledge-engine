@@ -1,0 +1,198 @@
+name: M17 Independent Operator GA Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "docs/ga/**"
+      - "docs/operations/README.md"
+      - "src/knowledge_engine/m17_ga_acceptance.py"
+      - "src/knowledge_engine/m17_ga_acceptance_cli.py"
+      - "scripts/m17_ga_acceptance.py"
+      - "tests/test_m17_ga_acceptance.py"
+      - "pyproject.toml"
+      - ".github/workflows/m17-ga-acceptance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_SHA: "2126db2ed4d372d3d61464fe31a86fc0243a1f24"
+  RELEASE_ID: "20260708T040116Z-69a9f445699a"
+  MANIFEST_SHA256: "2b2630cfe3e8a6e25a8f210d68c70f3b9a31b3b26f33c6e3e41b8cc1676fc0bb"
+  POINTER_SHA256: "38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5"
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package and test dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Run M17.7 acceptance tests
+        run: |
+          pytest -q tests/test_m17_ga_acceptance.py \
+            --junitxml=.artifacts/m17/ga-acceptance-junit.xml
+
+      - name: Run deterministic reference acceptance
+        run: |
+          python scripts/m17_ga_acceptance.py \
+            --root . \
+            --engine-sha "$GITHUB_SHA" \
+            --source-sha "$SOURCE_SHA" \
+            --release-id "$RELEASE_ID" \
+            --manifest-sha256 "$MANIFEST_SHA256" \
+            --pointer-sha256 "$POINTER_SHA256" \
+            --operator-id reference-operator \
+            --evaluator-id reference-evaluator \
+            --transcript-output .artifacts/m17/reference-transcript.json \
+            --report-output .artifacts/m17/reference-ga-acceptance.json
+
+      - name: Verify evidence-only authority
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          forbidden = {
+              "put", "delete", "copy", "promote_release", "rollback_release",
+              "publish_release", "update_ref", "append_comment", "close_batch",
+              "merge_pull_request", "create_pull_request", "create_issue",
+              "send_email", "dispatch_workflow",
+          }
+          found = []
+          paths = [
+              Path("src/knowledge_engine/m17_ga_acceptance.py"),
+              Path("src/knowledge_engine/m17_ga_acceptance_cli.py"),
+              Path("scripts/m17_ga_acceptance.py"),
+          ]
+          for path in paths:
+              tree = ast.parse(path.read_text(encoding="utf-8"))
+              for node in ast.walk(tree):
+                  if not isinstance(node, ast.Call):
+                      continue
+                  if isinstance(node.func, ast.Name):
+                      name = node.func.id
+                  elif isinstance(node.func, ast.Attribute):
+                      name = node.func.attr
+                  else:
+                      name = None
+                  if name in forbidden:
+                      found.append(f"{path}:{name}:{node.lineno}")
+          if found:
+              raise SystemExit("forbidden executor calls: " + ", ".join(sorted(found)))
+          PY
+
+      - name: Upload contract diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m17-ga-contract-diagnostics
+          path: .artifacts/m17/
+          if-no-files-found: warn
+
+  independent-operator:
+    needs: contract-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out accepted head
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: python -m pip install -e .
+
+      - name: Run repository-only operator drill
+        run: |
+          knowledge-ga drill \
+            --root . \
+            --engine-sha "$GITHUB_SHA" \
+            --source-sha "$SOURCE_SHA" \
+            --release-id "$RELEASE_ID" \
+            --manifest-sha256 "$MANIFEST_SHA256" \
+            --pointer-sha256 "$POINTER_SHA256" \
+            --operator-id independent-operator-job \
+            --output .artifacts/m17/independent-operator-transcript.json
+
+      - name: Upload operator transcript
+        uses: actions/upload-artifact@v4
+        with:
+          name: m17-independent-operator-transcript
+          path: .artifacts/m17/independent-operator-transcript.json
+          if-no-files-found: error
+
+  independent-evaluator:
+    needs: independent-operator
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out accepted head
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: python -m pip install -e .
+
+      - name: Download independent operator transcript
+        uses: actions/download-artifact@v4
+        with:
+          name: m17-independent-operator-transcript
+          path: .artifacts/m17/
+
+      - name: Run independent GA evaluation
+        run: |
+          knowledge-ga assess \
+            --root . \
+            --transcript .artifacts/m17/independent-operator-transcript.json \
+            --evaluator-id independent-evaluator-job \
+            --output .artifacts/m17/final-ga-acceptance.json
+
+      - name: Verify final GA state
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(
+              Path(".artifacts/m17/final-ga-acceptance.json").read_text()
+          )
+          expected = {
+              "status": "ga_accepted",
+              "ga_accepted": True,
+              "stage_count": 18,
+              "capability_count": 20,
+              "safe_stop_count": 4,
+              "operator_context": "repository_only",
+          }
+          for key, value in expected.items():
+              if report.get(key) != value:
+                  raise SystemExit(f"unexpected {key}: {report.get(key)!r}")
+          if report["operator_id"] == report["evaluator_id"]:
+              raise SystemExit("operator and evaluator identities are not independent")
+          if report["issues"]:
+              raise SystemExit("GA report contains issues")
+          PY
+
+      - name: Upload final GA acceptance
+        uses: actions/upload-artifact@v4
+        with:
+          name: m17-final-ga-acceptance
+          path: .artifacts/m17/final-ga-acceptance.json
+          if-no-files-found: error
