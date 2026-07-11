@@ -46,7 +46,7 @@ def _evidence(path: Path, *, status: str = "passed") -> Path:
 
 def test_registry_and_checklist_pass() -> None:
     report = validate_operator_tooling(ROOT, REGISTRY)
-    assert report["status"] == "passed"
+    assert report["status"] == "passed", report
     assert report["tool_count"] == 10
     assert verify_report(report)
     checklist = build_checklist_report(RUNBOOK_REGISTRY)
