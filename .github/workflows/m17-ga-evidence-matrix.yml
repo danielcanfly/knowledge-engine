@@ -1,0 +1,107 @@
+name: M17 GA Evidence Matrix Acceptance
+
+on:
+  pull_request:
+    paths:
+      - "docs/ga/**"
+      - "docs/operations/README.md"
+      - "src/knowledge_engine/m17_ga_evidence.py"
+      - "scripts/m17_ga_evidence_acceptance.py"
+      - "tests/test_m17_ga_evidence.py"
+      - "pyproject.toml"
+      - ".github/workflows/m17-ga-evidence-matrix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ga-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package and test dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Run M17.6 GA evidence tests
+        run: pytest -q tests/test_m17_ga_evidence.py --junitxml=.artifacts/m17/ga-evidence-junit.xml
+
+      - name: Emit deterministic GA evidence acceptance
+        if: always()
+        run: |
+          python scripts/m17_ga_evidence_acceptance.py \
+            --root . \
+            --registry docs/ga/m17/ga-evidence-registry.json \
+            --output .artifacts/m17/ga-evidence-acceptance.json
+
+      - name: Verify every evidence commit is merged into the accepted head
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          registry = json.loads(Path("docs/ga/m17/ga-evidence-registry.json").read_text())
+          failures = []
+          for row in registry["capabilities"]:
+              commit = row["evidence"]["merge_commit"]
+              exists = subprocess.run(
+                  ["git", "cat-file", "-e", f"{commit}^{{commit}}"], check=False
+              ).returncode == 0
+              ancestor = subprocess.run(
+                  ["git", "merge-base", "--is-ancestor", commit, "HEAD"], check=False
+              ).returncode == 0
+              if not exists or not ancestor:
+                  failures.append(f"{row['id']}:{commit}:exists={exists}:ancestor={ancestor}")
+          if failures:
+              raise SystemExit("invalid merged evidence: " + ", ".join(failures))
+          PY
+
+      - name: Verify evidence-only authority
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          forbidden = {
+              "put", "delete", "copy", "promote_release", "rollback_release",
+              "publish_release", "update_ref", "append_comment", "close_batch",
+              "merge_pull_request", "create_pull_request", "create_issue",
+          }
+          found = []
+          for path in [
+              Path("src/knowledge_engine/m17_ga_evidence.py"),
+              Path("scripts/m17_ga_evidence_acceptance.py"),
+          ]:
+              tree = ast.parse(path.read_text(encoding="utf-8"))
+              for node in ast.walk(tree):
+                  if not isinstance(node, ast.Call):
+                      continue
+                  if isinstance(node.func, ast.Name):
+                      name = node.func.id
+                  elif isinstance(node.func, ast.Attribute):
+                      name = node.func.attr
+                  else:
+                      name = None
+                  if name in forbidden:
+                      found.append(f"{path}:{name}")
+          if found:
+              raise SystemExit("forbidden executor calls: " + ", ".join(sorted(found)))
+          PY
+
+      - name: Upload GA evidence diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m17-ga-evidence-acceptance
+          path: .artifacts/m17/
+          if-no-files-found: warn
