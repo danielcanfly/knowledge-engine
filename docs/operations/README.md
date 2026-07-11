@@ -12,6 +12,8 @@ boundaries, and stop conditions used by a qualified operator.
 4. [Troubleshooting and Failure Atlas](../troubleshooting/README.md)
 5. [Operator Inspection and Evidence Tooling](m17/operator-tooling.md)
 6. `m17/tool-registry.json`, the machine-readable read-only tool authority contract
+7. [Operator Training and Qualification](m17/operator-training.md)
+8. `m17/training-registry.json`, the machine-readable curriculum and scoring contract
 
 The architecture canon remains at `docs/architecture/README.md`. When an operations document and an
 implementation disagree, stop. Code, committed contracts, immutable evidence, and approved request
@@ -21,8 +23,9 @@ identity outrank prose. Repair the documentation through a reviewed Engine PR be
 
 The Knowledge Engine maintainers own these runbooks. Any change to command surfaces, evidence
 identities, lifecycle phases, mutation authority, Source governance, candidate publication,
-production promotion, ledger recording, closeout, failure signals, troubleshooting boundaries, or
-operator inspection authority must update the relevant machine registry and pass its dedicated M17
+production promotion, ledger recording, closeout, failure signals, troubleshooting boundaries,
+operator inspection authority, training exercises, competency coverage, qualification scoring, or
+critical-exercise policy must update the relevant machine registry and pass its dedicated M17
 acceptance workflow.
 
 Runbooks never grant authority. They point to authority that already exists in an explicit approved
@@ -42,6 +45,8 @@ evidence, never from memory, a moving branch, or copied historical values.
 - Stop on identity drift, incomplete evidence, failed checks, stale expected-previous state,
   missing approval, replay collision, unready rollback, or failed post-action verification.
 - A safe stop is a valid operational outcome. Improvising a mutation is not.
+- Qualification proves documented competence only. It never substitutes for operation-specific
+  approval or grants production mutation authority.
 
 ## Machine validation
 
@@ -57,7 +62,13 @@ python scripts/m17_operator_tooling_acceptance.py \
   --root . \
   --registry docs/operations/m17/tool-registry.json \
   --output .artifacts/m17/operator-tooling-acceptance.json
+
+python scripts/m17_operator_qualification_acceptance.py \
+  --root . \
+  --registry docs/operations/m17/training-registry.json \
+  --output .artifacts/m17/operator-qualification-acceptance.json
 ```
 
 The reports are canonical JSON, carry SHA-256 identities, and fail closed when a stage, tool,
-reference, evidence handoff, authority boundary, mutation guard, or owned document is invalid.
+exercise, reference, evidence handoff, authority boundary, scoring rule, mutation guard, or owned
+document is invalid.
