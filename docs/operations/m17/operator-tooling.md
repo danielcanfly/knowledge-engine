@@ -40,8 +40,8 @@ evidence is reported as `blocked` or `unknown`; it is never converted into a hea
 - `doctor` reports whether required environment variables are present, never their values.
 - `artifact-fetch` rejects traversal, objects above the configured byte limit, and digest mismatch.
 - Incident and handoff bundles contain metadata, identifiers, bounded status, and file digests only.
-- Raw queries, raw answers, private excerpts, credentials, authentication headers, cookies, hostnames,
-  complete traces, and private object locations are forbidden.
+- Raw queries, raw answers, restricted source passages, credentials, authentication headers, cookies,
+  hostnames, complete traces, and private object locations are forbidden.
 - A generated local artifact is not approval, authority, permanent evidence, or permission to resume.
 - Resume the canonical runbook only after the affected acceptance and recovery gates pass.
 
