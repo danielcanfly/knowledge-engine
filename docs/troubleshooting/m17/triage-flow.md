@@ -111,8 +111,8 @@ Record a bounded troubleshooting packet with:
 - affected gates to re-run;
 - final resolution or explicit unresolved status.
 
-Do not include credentials, bearer values, cookies, raw private text, raw queries, raw answers, private
-object locations, hostnames, or full unbounded traces.
+Do not include credentials, authentication-token values, cookies, raw private text, raw queries, raw
+answers, private object locations, hostnames, or full unbounded traces.
 
 ## Resumption criteria
 
