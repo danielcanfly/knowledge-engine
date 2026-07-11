@@ -1,0 +1,36 @@
+{
+  "schema_version": "knowledge-engine-m17-independent-ga-contract/v1",
+  "operator_context": "repository_only",
+  "mutation_execution_allowed": false,
+  "required_stage_count": 18,
+  "required_capability_count": 20,
+  "final_state": "ga_accepted",
+  "allowed_hint_sources": [
+    "docs/architecture/README.md",
+    "docs/operations/README.md",
+    "docs/troubleshooting/README.md",
+    "docs/ga/README.md"
+  ],
+  "required_safe_stops": [
+    "missing_approval",
+    "stale_expected_previous",
+    "acl_broadening",
+    "replay_conflict"
+  ],
+  "registry_paths": {
+    "runbook": "docs/operations/m17/runbook-registry.json",
+    "ga_evidence": "docs/ga/m17/ga-evidence-registry.json",
+    "training": "docs/operations/m17/training-registry.json"
+  },
+  "allowed_execution_modes": [
+    "read_only_verification",
+    "local_output",
+    "isolated_boundary_simulation"
+  ],
+  "required_independence": {
+    "operator_and_evaluator_distinct": true,
+    "undocumented_hints_forbidden": true,
+    "network_mutation_forbidden": true,
+    "real_governed_mutation_forbidden": true
+  }
+}
