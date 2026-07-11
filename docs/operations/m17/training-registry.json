@@ -93,7 +93,7 @@
       "minimum_evidence_items": 1,
       "references": [
         {"path": "docs/operations/m17/operator-tooling.md", "anchor": "| `production-status` |"},
-        {"path": "docs/operations/m17/end-to-end-batch-runbook.md", "anchor": "### 10. Candidate acceptance"}
+        {"path": "docs/operations/m17/end-to-end-batch-runbook.md", "anchor": "### 11. Candidate acceptance"}
       ]
     },
     {
