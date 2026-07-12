@@ -1,0 +1,50 @@
+{
+  "schema_version": "knowledge-os-m18-acceptance/v1",
+  "milestone": "M18",
+  "baseline_issue": 249,
+  "required_global_checks": [
+    "ruff check .",
+    "pytest -q",
+    "python -m compileall -q src tests scripts",
+    "exact-head workflow success",
+    "changed-file reconciliation",
+    "no unauthorized production mutation",
+    "no ACL broadening"
+  ],
+  "fail_closed_cases": [
+    "unknown_relation_type",
+    "missing_target",
+    "invalid_direction",
+    "invalid_inverse",
+    "duplicate_edge",
+    "alias_collision",
+    "invalid_tag",
+    "missing_provenance",
+    "unapproved_relation",
+    "acl_broadening",
+    "graph_nondeterminism",
+    "renderer_field_leakage",
+    "broken_internal_link",
+    "wikilink_in_release"
+  ],
+  "compatibility": {
+    "lexical_baseline_preserved": true,
+    "generic_links_separate_from_typed_relations": true,
+    "v1_supported_during_bounded_migration": true
+  },
+  "required_evidence": [
+    "base_sha",
+    "pr_head_sha",
+    "contract_versions",
+    "test_and_workflow_identity",
+    "artifact_digests",
+    "production_baseline_comparison",
+    "mutation_dispatched"
+  ],
+  "forbidden": [
+    "automatic_relation_inference_into_source",
+    "renderer_specific_canonical_fields",
+    "automatic_source_or_production_promotion",
+    "graph_neural_retrieval"
+  ]
+}
