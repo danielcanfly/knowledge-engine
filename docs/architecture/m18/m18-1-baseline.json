@@ -1,0 +1,47 @@
+{
+  "schema_version": "knowledge-os-m18-baseline/v1",
+  "recorded_at": "2026-07-12T00:00:00Z",
+  "status": "passed",
+  "repositories": {
+    "engine": "5a375d616f7d14a3e609bdb317bbc93e222e5924",
+    "source": "2126db2ed4d372d3d61464fe31a86fc0243a1f24",
+    "foundation": "608963e2f15e3176e3f80851bf51449411d256da"
+  },
+  "artifacts": {
+    "graph_schema": "1.1",
+    "lexical_schema": "2.0",
+    "lexical_document_model": "section"
+  },
+  "counts": {
+    "concepts": 5,
+    "sections": 28,
+    "graph_nodes": 5,
+    "concept_edges": 0,
+    "provenance_records": 5,
+    "orphan_nodes": 5,
+    "audiences": {
+      "public": 4,
+      "internal": 1,
+      "confidential": 0,
+      "restricted": 0
+    }
+  },
+  "behavior": {
+    "edge_type": "links_to",
+    "wikilinks_allowed": false,
+    "semantic_similarity": false,
+    "graph_expansion": "undirected_direct_neighbor"
+  },
+  "production": {
+    "baseline_checked": true,
+    "identity_values_in_governed_evidence": true,
+    "mutation_dispatched": false
+  },
+  "non_goals": [
+    "source mutation",
+    "graph v2 implementation",
+    "runtime behavior change",
+    "production mutation",
+    "graph neural retrieval"
+  ]
+}
