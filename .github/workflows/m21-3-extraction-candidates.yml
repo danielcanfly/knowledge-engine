@@ -1,0 +1,166 @@
+name: M21.3 Extraction Candidates
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m21-3-extraction-candidates.yml'
+      - 'docs/architecture/m21/m21-3-extraction-candidates.md'
+      - 'src/knowledge_engine/m21_extraction_candidates.py'
+      - 'tests/test_m21_3_extraction_candidates.py'
+
+permissions:
+  contents: read
+
+jobs:
+  extraction-candidates:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M21.3 scope
+        run: >-
+          python -m ruff check
+          src/knowledge_engine/m21_extraction_candidates.py
+          tests/test_m21_3_extraction_candidates.py
+      - name: Test M20 through M21.3 contracts
+        run: >-
+          python -m pytest -q
+          tests/test_m20_1_embedding_contract.py
+          tests/test_m20_2_semantic_artifacts.py
+          tests/test_m20_3_runtime_semantic.py
+          tests/test_m20_4_retrieval_modes.py
+          tests/test_m20_5_hybrid_fusion.py
+          tests/test_m20_6_lexical_enrichment.py
+          tests/test_m20_7_phase_c_acceptance.py
+          tests/test_m21_1_blog_inventory.py
+          tests/test_m21_2_resumable_batch.py
+          tests/test_m21_3_extraction_candidates.py
+      - name: Prove deterministic evidence-bound candidates
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from knowledge_engine.m21_extraction_candidates import build_candidate_packet
+
+          def digest(value):
+              raw = json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
+              return hashlib.sha256(raw).hexdigest()
+
+          identity = {
+              'engine_sha': 'a' * 40,
+              'source_sha': 'b' * 40,
+              'foundation_sha': 'c' * 40,
+              'captured_at': '2026-07-13T18:00:00Z',
+          }
+          item_key = '1' * 64
+          batch_id = '2' * 64
+          plan = {
+              'schema': 'knowledge-engine-resumable-batch/v1',
+              'authority': 'evidence_only',
+              'canonical_knowledge': False,
+              'production_authority': False,
+              'inventory_sha256': '3' * 64,
+              'identity': identity,
+              'batch_size': 25,
+              'item_count': 1,
+              'batches': [{
+                  'batch_index': 0,
+                  'batch_id': batch_id,
+                  'items': [{
+                      'item_key': item_key,
+                      'canonical_url': 'https://www.danielcanfly.com/blog/example',
+                      'content_sha256': '4' * 64,
+                      'source_kind': 'repository_markdown',
+                      'locator': 'content/en/example.md',
+                      'audience': 'public',
+                      'expected_action': 'verify',
+                  }],
+              }],
+          }
+          plan['plan_sha256'] = digest(plan)
+          checkpoint = {
+              'schema': 'knowledge-engine-batch-checkpoint/v1',
+              'plan_sha256': plan['plan_sha256'],
+              'identity': identity,
+              'revision': 1,
+              'states': [{
+                  'item_key': item_key,
+                  'batch_id': batch_id,
+                  'status': 'completed',
+                  'attempts': 1,
+                  'failure_code': None,
+                  'retry_at': None,
+                  'updated_at': '2026-07-13T18:01:00Z',
+              }],
+              'resume_cursor': None,
+          }
+          checkpoint['checkpoint_sha256'] = digest(checkpoint)
+          text = 'RAG uses retrieval and generation.'
+          derivative = {
+              'schema': 'knowledge-engine-normalized-derivative/v1',
+              'derivative_id': 'derivative_example',
+              'item_key': item_key,
+              'batch_id': batch_id,
+              'source_content_sha256': '4' * 64,
+              'audience': 'public',
+              'language': 'en',
+              'normalized': True,
+              'text': text,
+              'text_sha256': hashlib.sha256(text.encode()).hexdigest(),
+          }
+          proposal = {
+              'kind': 'concept',
+              'label': 'Retrieval-Augmented Generation',
+              'language': 'en',
+              'confidence': 0.9,
+              'aliases': ['RAG'],
+              'tags': ['retrieval'],
+              'definition': 'Combines retrieval and generation.',
+              'evidence': [{
+                  'derivative_id': 'derivative_example',
+                  'start': 0,
+                  'end': len(text),
+                  'excerpt_sha256': hashlib.sha256(text.encode()).hexdigest(),
+              }],
+          }
+          first = build_candidate_packet(
+              plan,
+              checkpoint,
+              [derivative],
+              [proposal],
+              allowed_tags=['retrieval'],
+          )
+          second = build_candidate_packet(
+              plan,
+              checkpoint,
+              [derivative],
+              [proposal],
+              allowed_tags=['retrieval'],
+          )
+          assert first == second
+          assert first['authority'] == 'candidate_only'
+          assert first['review_required'] is True
+          assert first['candidates'][0]['evidence_spans'][0]['excerpt_sha256']
+          PY
+      - name: Scan authority and dependency boundary
+        run: |
+          if grep -R -nE 'requests|httpx|aiohttp|urllib.request|subprocess|boto3|production_pointer|openai|anthropic|sentence_transformers' \
+            src/knowledge_engine/m21_extraction_candidates.py; then
+            exit 1
+          fi
+          test -z "$(find . -type f \( -name '*candidate-packet.json' -o -name '*normalized-derivative.json' \) -print -quit)"
+      - name: Compile M21.3 scope
+        run: >-
+          python -m compileall -q
+          src/knowledge_engine/m21_extraction_candidates.py
+          tests/test_m21_3_extraction_candidates.py
