@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import hashlib
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -25,16 +25,25 @@ class MemoryStore:
         return self.objects[key]
 
 
-def _fixture_vectors(suite: dict[str, Any], dimension: int) -> dict[str, list[float]]:
+def _fixture_vectors(
+    suite: dict[str, Any],
+    dimension: int,
+) -> dict[str, list[float]]:
     vectors: dict[str, list[float]] = {}
-    for row, document in enumerate(sorted(suite["documents"], key=lambda item: item["section_id"])):
+    documents = sorted(suite["documents"], key=lambda item: item["section_id"])
+    for row, document in enumerate(documents):
         vector = [0.0] * dimension
         vector[row] = 1.0
         vectors[document["section_id"]] = vector
     return vectors
 
 
-def _artifact(kind: str, key: str, data: bytes, media_type: str) -> dict[str, Any]:
+def _artifact(
+    kind: str,
+    key: str,
+    data: bytes,
+    media_type: str,
+) -> dict[str, Any]:
     return {
         "kind": kind,
         "key": key,
@@ -63,6 +72,10 @@ def _release_store(
         builder_engine_sha=ENGINE_SHA,
     )
 
+    sorted_documents = sorted(
+        suite["documents"],
+        key=lambda item: item["section_id"],
+    )
     documents = [
         {
             "concept_id": document["concept_id"],
@@ -76,12 +89,15 @@ def _release_store(
             "excerpt": document["text"],
             "terms": [],
         }
-        for document in sorted(suite["documents"], key=lambda item: item["section_id"])
+        for document in sorted_documents
     ]
+    lexical_bytes = (
+        json.dumps({"schema_version": "2.0", "documents": documents}) + "\n"
+    ).encode()
     payloads = {
         "lexical_index": (
             "artifacts/lexical-index.json",
-            (json.dumps({"schema_version": "2.0", "documents": documents}) + "\n").encode(),
+            lexical_bytes,
             "application/json",
         ),
         "graph": (
@@ -132,11 +148,15 @@ def _release_store(
         "manifest_key": manifest_key,
         "manifest_sha256": sha256_bytes(manifest_data),
     }
-    objects["channels/staging.json"] = (json.dumps(pointer, sort_keys=True) + "\n").encode()
+    pointer_data = (json.dumps(pointer, sort_keys=True) + "\n").encode()
+    objects["channels/staging.json"] = pointer_data
     return MemoryStore(objects), suite, contract
 
 
-def _rewrite_manifest(store: MemoryStore, mutate: Any) -> None:
+def _rewrite_manifest(
+    store: MemoryStore,
+    mutate: Callable[[dict[str, Any]], None],
+) -> None:
     pointer = json.loads(store.objects["channels/staging.json"])
     manifest = json.loads(store.objects[pointer["manifest_key"]])
     mutate(manifest)
@@ -148,7 +168,9 @@ def _rewrite_manifest(store: MemoryStore, mutate: Any) -> None:
     ).encode()
 
 
-def test_runtime_loads_verified_semantic_pair_as_memory_map(tmp_path: Path) -> None:
+def test_runtime_loads_verified_semantic_pair_as_memory_map(
+    tmp_path: Path,
+) -> None:
     store, _, contract = _release_store(tmp_path)
     runtime = Runtime(
         store,
@@ -173,15 +195,27 @@ def test_runtime_loads_verified_semantic_pair_as_memory_map(tmp_path: Path) -> N
     }
 
 
-def test_semantic_pair_is_optional_but_partial_pair_fails_closed(tmp_path: Path) -> None:
-    no_semantic_store, _, _ = _release_store(tmp_path / "none", semantic_parts="none")
+def test_semantic_pair_is_optional_but_partial_pair_fails_closed(
+    tmp_path: Path,
+) -> None:
+    no_semantic_store, _, _ = _release_store(
+        tmp_path / "none",
+        semantic_parts="none",
+    )
     runtime = Runtime(no_semantic_store, tmp_path / "none-cache", "staging")
     active = runtime.refresh()
     assert active.semantic_runtime is None
     assert runtime.semantic_capability()["status"] == "unavailable"
 
-    metadata_store, _, _ = _release_store(tmp_path / "partial", semantic_parts="metadata")
-    partial_runtime = Runtime(metadata_store, tmp_path / "partial-cache", "staging")
+    metadata_store, _, _ = _release_store(
+        tmp_path / "partial",
+        semantic_parts="metadata",
+    )
+    partial_runtime = Runtime(
+        metadata_store,
+        tmp_path / "partial-cache",
+        "staging",
+    )
     with pytest.raises(IntegrityError, match="must be present together"):
         partial_runtime.refresh()
     assert partial_runtime.active is None
@@ -196,7 +230,9 @@ def test_vector_diagnostic_is_disabled_by_default(tmp_path: Path) -> None:
         runtime.query_vector_diagnostic([1.0] + [0.0] * 63, {"public"})
 
 
-def test_vector_diagnostic_filters_acl_before_serialization(tmp_path: Path) -> None:
+def test_vector_diagnostic_filters_acl_before_serialization(
+    tmp_path: Path,
+) -> None:
     store, suite, _ = _release_store(tmp_path)
     runtime = Runtime(
         store,
@@ -207,16 +243,22 @@ def test_vector_diagnostic_filters_acl_before_serialization(tmp_path: Path) -> N
     active = runtime.refresh()
     assert active.semantic_runtime is not None
     documents = active.semantic_runtime.metadata["documents"]
-    internal = next(document for document in documents if document["audience"] == "internal")
+    internal = next(
+        document for document in documents if document["audience"] == "internal"
+    )
     query = [0.0] * 64
     query[internal["row"]] = 1.0
 
     public = runtime.query_vector_diagnostic(query, {"public"}, limit=8)
     assert all(result["audience"] == "public" for result in public["results"])
     assert public["retrieval"]["acl_filtered_count"] == 1
-    assert internal["section_id"] not in {result["section_id"] for result in public["results"]}
+    public_sections = {result["section_id"] for result in public["results"]}
+    assert internal["section_id"] not in public_sections
 
-    internal_result = runtime.query_vector_diagnostic(query, {"public", "internal"})
+    internal_result = runtime.query_vector_diagnostic(
+        query,
+        {"public", "internal"},
+    )
     assert internal_result["results"][0]["section_id"] == internal["section_id"]
     assert internal_result["results"][0]["score"] == 1.0
     assert len(suite["documents"]) == internal_result["retrieval"]["candidate_count"]
@@ -248,7 +290,9 @@ def test_tampered_metadata_preserves_last_known_good(tmp_path: Path) -> None:
 
     def mutate(manifest: dict[str, Any]) -> None:
         entry = next(
-            artifact for artifact in manifest["artifacts"] if artifact["kind"] == "semantic_metadata"
+            artifact
+            for artifact in manifest["artifacts"]
+            if artifact["kind"] == "semantic_metadata"
         )
         entry["bytes"] = len(tampered_data)
         entry["sha256"] = sha256_bytes(tampered_data)
@@ -275,4 +319,8 @@ def test_query_vector_bounds_are_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(IntegrityError, match="L2-normalized"):
         runtime.query_vector_diagnostic([0.1] * 64, {"public"})
     with pytest.raises(IntegrityError, match="between 1 and 20"):
-        runtime.query_vector_diagnostic([1.0] + [0.0] * 63, {"public"}, limit=21)
+        runtime.query_vector_diagnostic(
+            [1.0] + [0.0] * 63,
+            {"public"},
+            limit=21,
+        )
