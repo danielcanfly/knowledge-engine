@@ -109,3 +109,53 @@ M20.7 tests cover:
 M20.7 does not add retrieval modes, learned weighting, reranking, provider calls, Runtime or FastAPI routes, ANN, vector databases, answer generation, Source mutation, candidate or production publication, production pointers, retained R2 objects, credentials, permanent ledgers, rollback, M21 work, cross-release merge, or Graph Neural Retrieval.
 
 Production mutation dispatched: false.
+
+## Closure reconciliation
+
+### Identity chain
+
+- M20.6 reconciliation / implementation base: `3410204f1299c6768649079c8016c0d7fea014be`
+- final implementation head: `7b959cf8637f7adf3c53099084cd13a5f95f6d1d`
+- implementation merge: `7249bc8d812838dc20675b0eaa6ced15adc3e8c2`
+- Source main: `a6ba738d910d01d2ae99b1968f0831989934c549`
+- Foundation main: `e5ef644053d34e89c70d2ceb37521e1c59234832`
+
+### Exact implementation scope
+
+Implementation PR #309 changed exactly four files:
+
+1. `.github/workflows/m20-7-phase-c-acceptance.yml`
+2. `docs/architecture/m20/m20-7-phase-c-acceptance.md`
+3. `src/knowledge_engine/m20_phase_c_acceptance.py`
+4. `tests/test_m20_7_phase_c_acceptance.py`
+
+No prior M20 implementation, Runtime, FastAPI, dependency, lockfile, compiler, release manifest, Source, production pointer, credential, permanent ledger, or rollback file changed.
+
+### Invalidated head
+
+`4004b837b8a979de57dbb25f61de8a19b30cf5cc` was invalidated after the Phase C workflow referenced a non-existent Runtime regression test file. M20.1 through M20.7 contract tests had passed, but no result from that head is acceptance evidence.
+
+### Final-head acceptance evidence
+
+All workflows associated with implementation head `7b959cf8637f7adf3c53099084cd13a5f95f6d1d` completed successfully:
+
+- M20.7 Phase C Acceptance #2
+- CI #649
+- M17 Architecture Canon Acceptance #55
+- M18 Graph v2 acceptance #85
+- R2 Release Integration #449
+
+The M20.7 workflow passed exact-head checkout, repository Ruff, M20.1 through M20.7 tests, Runtime regressions, authority-boundary assertions, dependency scanning, and Python compilation.
+
+Implementation PR #309 had no conversation comments, submitted reviews, or unresolved review threads at merge time.
+
+### Phase C delivered boundary
+
+- M20.1 through M20.6 are represented as one exact, fail-closed milestone chain;
+- lexical answer, citation, and evaluation authority remains intact;
+- vector mode remains diagnostic and hybrid/enrichment evidence remains non-production;
+- ACL, release identity, deterministic ordering, stable fallback, and output bounds are required evidence;
+- provider/network dependencies, ANN, vector databases, public vector endpoints, automatic Source parsing, and cross-release merge remain excluded;
+- all protected mutation flags remain false.
+
+Production mutation dispatched: false.
