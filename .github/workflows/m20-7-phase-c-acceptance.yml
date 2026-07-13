@@ -1,0 +1,82 @@
+name: M20.7 Phase C Acceptance
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m20-7-phase-c-acceptance.yml"
+      - "docs/architecture/m20/m20-7-phase-c-acceptance.md"
+      - "src/knowledge_engine/m20_phase_c_acceptance.py"
+      - "tests/test_m20_7_phase_c_acceptance.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phase-c-acceptance:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install exact project dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Lint M20.7 scope
+        run: >-
+          ruff check
+          src/knowledge_engine/m20_phase_c_acceptance.py
+          tests/test_m20_7_phase_c_acceptance.py
+
+      - name: Test M20.1 through M20.7 contracts
+        run: >-
+          pytest -q
+          tests/test_m20_1_embedding_contract.py
+          tests/test_m20_2_semantic_artifacts.py
+          tests/test_m20_3_runtime_semantic.py
+          tests/test_m20_4_retrieval_modes.py
+          tests/test_m20_5_hybrid_fusion.py
+          tests/test_m20_6_lexical_enrichment.py
+          tests/test_m20_7_phase_c_acceptance.py
+
+      - name: Test Runtime regressions
+        run: pytest -q tests/test_runtime.py tests/test_runtime_release_contract.py
+
+      - name: Prove Phase C authority boundary
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m20_phase_c_acceptance import (
+              PROTECTED_MUTATION_KEYS,
+              REQUIRED_GUARANTEES,
+              REQUIRED_MILESTONES,
+          )
+          assert REQUIRED_MILESTONES == (
+              "M20.1", "M20.2", "M20.3", "M20.4", "M20.5", "M20.6"
+          )
+          assert "lexical_authority_preserved" in REQUIRED_GUARANTEES
+          assert "no_ann_or_vector_database" in REQUIRED_GUARANTEES
+          assert "production_mutation_dispatched" in PROTECTED_MUTATION_KEYS
+          PY
+
+      - name: Scan authority and dependency boundary
+        run: |
+          ! grep -R -n -E 'requests|httpx|aiohttp|qdrant|faiss|hnsw|chromadb|pinecone' \
+            src/knowledge_engine/m20_phase_c_acceptance.py
+          ! grep -R -n -E 'production_authority[[:space:]]*=[[:space:]]*True' \
+            src/knowledge_engine/m20_phase_c_acceptance.py
+
+      - name: Compile M20.7 scope
+        run: >-
+          python -m py_compile
+          src/knowledge_engine/m20_phase_c_acceptance.py
+          tests/test_m20_7_phase_c_acceptance.py
