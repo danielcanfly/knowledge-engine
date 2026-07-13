@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "src/knowledge_engine/m20_embedding_contract.py"
+      - "src/knowledge_engine/_m20_embedding_common.py"
+      - "src/knowledge_engine/_m20_embedding_benchmark.py"
       - "scripts/m20_embedding_benchmark.py"
       - "tests/test_m20_1_embedding_contract.py"
       - "benchmarks/m20/**"
@@ -16,6 +18,8 @@ on:
       - main
     paths:
       - "src/knowledge_engine/m20_embedding_contract.py"
+      - "src/knowledge_engine/_m20_embedding_common.py"
+      - "src/knowledge_engine/_m20_embedding_benchmark.py"
       - "scripts/m20_embedding_benchmark.py"
       - "tests/test_m20_1_embedding_contract.py"
       - "benchmarks/m20/**"
@@ -48,6 +52,8 @@ jobs:
         run: |
           ruff check \
             src/knowledge_engine/m20_embedding_contract.py \
+            src/knowledge_engine/_m20_embedding_common.py \
+            src/knowledge_engine/_m20_embedding_benchmark.py \
             scripts/m20_embedding_benchmark.py \
             tests/test_m20_1_embedding_contract.py
       - name: Test contract and bilingual benchmark
@@ -88,6 +94,8 @@ jobs:
 
           paths = [
               Path('src/knowledge_engine/m20_embedding_contract.py'),
+              Path('src/knowledge_engine/_m20_embedding_common.py'),
+              Path('src/knowledge_engine/_m20_embedding_benchmark.py'),
               Path('scripts/m20_embedding_benchmark.py'),
           ]
           source = '\n'.join(path.read_text(encoding='utf-8') for path in paths)
@@ -113,5 +121,7 @@ jobs:
         run: |
           python -m compileall -q \
             src/knowledge_engine/m20_embedding_contract.py \
+            src/knowledge_engine/_m20_embedding_common.py \
+            src/knowledge_engine/_m20_embedding_benchmark.py \
             scripts/m20_embedding_benchmark.py \
             tests/test_m20_1_embedding_contract.py
