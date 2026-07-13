@@ -1,0 +1,61 @@
+name: M19.1 Read-only Graph API
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/api.py"
+      - "src/knowledge_engine/m19_graph_api.py"
+      - "tests/test_m19_1_graph_api.py"
+      - "docs/architecture/m19/m19-1-read-only-graph-api.md"
+      - "docs/architecture/m19/m19-1-read-only-graph-api-reconciliation.md"
+      - ".github/workflows/m19-1-read-only-graph-api.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/knowledge_engine/api.py"
+      - "src/knowledge_engine/m19_graph_api.py"
+      - "tests/test_m19_1_graph_api.py"
+      - "docs/architecture/m19/m19-1-read-only-graph-api.md"
+      - "docs/architecture/m19/m19-1-read-only-graph-api-reconciliation.md"
+      - ".github/workflows/m19-1-read-only-graph-api.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-graph-api:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Lint M19.1 scope
+        run: |
+          ruff check \
+            src/knowledge_engine/api.py \
+            src/knowledge_engine/m19_graph_api.py \
+            tests/test_m19_1_graph_api.py
+      - name: Test read-only Graph API and regressions
+        run: |
+          pytest -q \
+            tests/test_m19_1_graph_api.py \
+            tests/test_api.py \
+            tests/test_m14_public_query.py \
+            tests/test_m18_6_runtime_compatibility.py \
+            tests/test_runtime.py
+      - name: Compile M19.1 scope
+        run: |
+          python -m compileall -q \
+            src/knowledge_engine/api.py \
+            src/knowledge_engine/m19_graph_api.py \
+            tests/test_m19_1_graph_api.py
