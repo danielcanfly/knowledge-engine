@@ -221,5 +221,7 @@ def validate_provider_contract(raw: Mapping[str, Any]) -> dict[str, Any]:
         "write_back": False,
         "production_authority": False,
     }:
-        raise ContractError("embedding provider authority must remain local, derived, and read-only")
+        raise ContractError(
+            "embedding provider authority must remain local, derived, and read-only"
+        )
     return result
