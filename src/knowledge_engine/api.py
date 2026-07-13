@@ -5,7 +5,7 @@ from collections.abc import Callable
 from functools import lru_cache
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -42,6 +42,18 @@ from .m14_security_contracts import (
     PublicProductCapabilities,
     harden_public_widget_javascript,
     public_product_capabilities,
+)
+from .m19_graph_api import (
+    MAX_NEIGHBORHOOD_EDGES,
+    MAX_NEIGHBORHOOD_NODES,
+    MAX_OVERVIEW_EDGES,
+    MAX_OVERVIEW_NODES,
+    MAX_SEARCH_RESULTS,
+    GraphApiLimitError,
+    GraphApiNotFoundError,
+    GraphApiRequestError,
+    GraphApiUnavailableError,
+    ReadOnlyGraphService,
 )
 from .runtime import Runtime
 from .storage import create_object_store
@@ -286,6 +298,122 @@ def query(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"code": "RUNTIME-002", "message": str(exc)},
         ) from exc
+
+
+def _graph_service(principal: Principal) -> ReadOnlyGraphService:
+    try:
+        active = get_runtime().ensure_loaded()
+        return ReadOnlyGraphService(active, set(principal.audiences))
+    except (IntegrityError, FileNotFoundError) as exc:
+        logger.exception("graph API release failed integrity validation")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "GRAPH-API-503", "message": "graph release is unavailable"},
+        ) from exc
+
+
+def _execute_graph(operation: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    try:
+        return operation()
+    except GraphApiNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "GRAPH-API-404", "message": str(exc)},
+        ) from exc
+    except GraphApiUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "GRAPH-API-409", "message": str(exc)},
+        ) from exc
+    except GraphApiRequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "GRAPH-API-422", "message": str(exc)},
+        ) from exc
+    except GraphApiLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "GRAPH-API-503", "message": str(exc)},
+        ) from exc
+    except IntegrityError as exc:
+        logger.exception("graph API integrity check failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "GRAPH-API-503", "message": "graph payload is unavailable"},
+        ) from exc
+
+
+@app.get("/v1/graph/capabilities")
+def graph_capabilities(principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    service = _graph_service(principal)
+    return _execute_graph(service.capabilities)
+
+
+@app.get("/v1/graph/release")
+def graph_release(principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    service = _graph_service(principal)
+    return _execute_graph(service.release)
+
+
+@app.get("/v1/graph/search")
+def graph_search(
+    q: str = Query(min_length=1, max_length=200),
+    tags: list[str] = Query(default=[]),
+    types: list[str] = Query(default=[]),
+    limit: int = Query(default=20, ge=1, le=MAX_SEARCH_RESULTS),
+    principal: Principal = Depends(get_principal),
+) -> dict[str, Any]:
+    service = _graph_service(principal)
+    return _execute_graph(
+        lambda: service.search(query=q, tags=tags, types=types, limit=limit)
+    )
+
+
+@app.get("/v1/graph/node/{concept_id:path}")
+def graph_node(
+    concept_id: str,
+    principal: Principal = Depends(get_principal),
+) -> dict[str, Any]:
+    service = _graph_service(principal)
+    return _execute_graph(lambda: service.node(concept_id))
+
+
+@app.get("/v1/graph/neighborhood/{concept_id:path}")
+def graph_neighborhood(
+    concept_id: str,
+    depth: int = Query(default=1, ge=1, le=1),
+    relation_types: list[str] = Query(default=[]),
+    max_nodes: int = Query(default=50, ge=1, le=MAX_NEIGHBORHOOD_NODES),
+    max_edges: int = Query(default=100, ge=1, le=MAX_NEIGHBORHOOD_EDGES),
+    principal: Principal = Depends(get_principal),
+) -> dict[str, Any]:
+    service = _graph_service(principal)
+    return _execute_graph(
+        lambda: service.neighborhood(
+            concept_id,
+            depth=depth,
+            relation_types=relation_types,
+            max_nodes=max_nodes,
+            max_edges=max_edges,
+        )
+    )
+
+
+@app.get("/v1/graph/overview")
+def graph_overview(
+    cluster_level: str = Query(default="none", max_length=40),
+    max_nodes: int = Query(default=200, ge=1, le=MAX_OVERVIEW_NODES),
+    max_edges: int = Query(default=400, ge=1, le=MAX_OVERVIEW_EDGES),
+    principal: Principal = Depends(get_principal),
+) -> dict[str, Any]:
+    service = _graph_service(principal)
+    return _execute_graph(
+        lambda: service.overview(
+            cluster_level=cluster_level,
+            max_nodes=max_nodes,
+            max_edges=max_edges,
+        )
+    )
 
 
 def _authorize_public_audience(audience: str, principal: Principal) -> None:
