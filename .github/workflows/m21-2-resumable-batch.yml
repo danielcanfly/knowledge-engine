@@ -1,0 +1,92 @@
+name: M21.2 Resumable Batch
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m21-2-resumable-batch.yml'
+      - 'docs/architecture/m21/m21-2-resumable-batch.md'
+      - 'src/knowledge_engine/m21_resumable_batch.py'
+      - 'tests/test_m21_2_resumable_batch.py'
+
+permissions:
+  contents: read
+
+jobs:
+  resumable-batch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M21.2 scope
+        run: >-
+          python -m ruff check
+          src/knowledge_engine/m21_resumable_batch.py
+          tests/test_m21_2_resumable_batch.py
+      - name: Test M20 through M21.2 contracts
+        run: >-
+          python -m pytest -q
+          tests/test_m20_1_embedding_contract.py
+          tests/test_m20_2_semantic_artifacts.py
+          tests/test_m20_3_runtime_semantic.py
+          tests/test_m20_4_retrieval_modes.py
+          tests/test_m20_5_hybrid_fusion.py
+          tests/test_m20_6_lexical_enrichment.py
+          tests/test_m20_7_phase_c_acceptance.py
+          tests/test_m21_1_blog_inventory.py
+          tests/test_m21_2_resumable_batch.py
+      - name: Prove deterministic batch evidence
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from knowledge_engine.m21_resumable_batch import build_batch_plan
+
+          snapshot = {
+              'schema': 'knowledge-engine-blog-inventory/v1',
+              'identity': {
+                  'engine_sha': 'e' * 40,
+                  'source_sha': 's' * 40,
+                  'foundation_sha': 'f' * 40,
+                  'captured_at': '2026-07-13T16:00:00Z',
+              },
+              'authority': 'evidence_only',
+              'canonical_knowledge': False,
+              'production_authority': False,
+              'items': [{
+                  'canonical_url': 'https://www.danielcanfly.com/blog/example',
+                  'content_sha256': 'a' * 64,
+                  'source_kind': 'repository_markdown',
+                  'locator': 'content/en/example.md',
+                  'audience': 'public',
+                  'access_status': 'available',
+                  'intake_status': 'captured',
+              }],
+          }
+          raw = json.dumps(snapshot, sort_keys=True, separators=(',', ':')).encode()
+          snapshot['snapshot_sha256'] = hashlib.sha256(raw).hexdigest()
+          first = build_batch_plan(snapshot)
+          second = build_batch_plan(snapshot)
+          assert first == second
+          assert first['authority'] == 'evidence_only'
+          assert first['production_authority'] is False
+          PY
+      - name: Scan authority and dependency boundary
+        run: |
+          ! grep -R -nE 'requests|httpx|aiohttp|urllib.request|subprocess|boto3|production_pointer' \
+            src/knowledge_engine/m21_resumable_batch.py
+          test -z "$(find . -type f \( -name '*.f32' -o -name '*checkpoint.json' -o -name '*batch-manifest.json' \) -print -quit)"
+      - name: Compile M21.2 scope
+        run: >-
+          python -m compileall -q
+          src/knowledge_engine/m21_resumable_batch.py
+          tests/test_m21_2_resumable_batch.py
