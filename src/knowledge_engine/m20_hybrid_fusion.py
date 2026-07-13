@@ -41,21 +41,27 @@ def _rank_contribution(rank: int | None) -> float:
 def _section_id(item: Mapping[str, Any], label: str) -> str:
     value = item.get("section_id")
     if not isinstance(value, str) or not value:
-        raise IntegrityError(f"M20-FUSION-101 {label} result lacks section identity")
+        raise IntegrityError(
+            f"M20-FUSION-101 {label} result lacks section identity"
+        )
     return value
 
 
 def _concept_id(item: Mapping[str, Any], label: str) -> str:
     value = item.get("concept_id")
     if not isinstance(value, str) or not value:
-        raise IntegrityError(f"M20-FUSION-102 {label} result lacks concept identity")
+        raise IntegrityError(
+            f"M20-FUSION-102 {label} result lacks concept identity"
+        )
     return value
 
 
 def _audience(item: Mapping[str, Any], label: str) -> str:
     value = item.get("audience")
     if not isinstance(value, str) or not value:
-        raise IntegrityError(f"M20-FUSION-103 {label} result lacks audience identity")
+        raise IntegrityError(
+            f"M20-FUSION-103 {label} result lacks audience identity"
+        )
     return value
 
 
@@ -79,19 +85,27 @@ def _validate_ranked_results(
     if not isinstance(results, list):
         raise IntegrityError(f"M20-FUSION-105 {label} results must be a list")
     if len(results) > MAX_FUSION_CANDIDATES:
-        raise IntegrityError(f"M20-FUSION-106 {label} result count exceeds fusion bounds")
+        raise IntegrityError(
+            f"M20-FUSION-106 {label} result count exceeds fusion bounds"
+        )
     normalized: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in results:
         if not isinstance(item, Mapping):
-            raise IntegrityError(f"M20-FUSION-107 {label} result must be an object")
+            raise IntegrityError(
+                f"M20-FUSION-107 {label} result must be an object"
+            )
         section_id = _section_id(item, label)
         if section_id in seen:
-            raise IntegrityError(f"M20-FUSION-108 duplicate {label} section: {section_id}")
+            raise IntegrityError(
+                f"M20-FUSION-108 duplicate {label} section: {section_id}"
+            )
         seen.add(section_id)
         audience = _audience(item, label)
         if audience not in allowed_audiences:
-            raise IntegrityError(f"M20-FUSION-109 unauthorized {label} result: {section_id}")
+            raise IntegrityError(
+                f"M20-FUSION-109 unauthorized {label} result: {section_id}"
+            )
         normalized.append(dict(item))
     return normalized
 
@@ -103,13 +117,23 @@ def reciprocal_rank_fuse(
     allowed_audiences: set[str],
     limit: int,
 ) -> list[dict[str, Any]]:
-    if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 20:
-        raise IntegrityError("M20-FUSION-110 limit must be an integer between 1 and 20")
+    if (
+        not isinstance(limit, int)
+        or isinstance(limit, bool)
+        or not 1 <= limit <= 20
+    ):
+        raise IntegrityError(
+            "M20-FUSION-110 limit must be an integer between 1 and 20"
+        )
     lexical = _validate_ranked_results(
-        list(lexical_results), label="lexical", allowed_audiences=allowed_audiences
+        list(lexical_results),
+        label="lexical",
+        allowed_audiences=allowed_audiences,
     )
     vector = _validate_ranked_results(
-        list(vector_results), label="vector", allowed_audiences=allowed_audiences
+        list(vector_results),
+        label="vector",
+        allowed_audiences=allowed_audiences,
     )
 
     records: dict[str, dict[str, Any]] = {}
@@ -141,12 +165,14 @@ def reciprocal_rank_fuse(
                 score = item.get("score")
                 if isinstance(score, bool) or not isinstance(score, (int, float)):
                     raise IntegrityError(
-                        f"M20-FUSION-112 vector score is invalid for section: {section_id}"
+                        "M20-FUSION-112 vector score is invalid for section: "
+                        f"{section_id}"
                     )
                 score_value = float(score)
                 if not math.isfinite(score_value):
                     raise IntegrityError(
-                        f"M20-FUSION-112 vector score is invalid for section: {section_id}"
+                        "M20-FUSION-112 vector score is invalid for section: "
+                        f"{section_id}"
                     )
                 record["vector_score"] = round(score_value, 8)
 
@@ -183,8 +209,12 @@ def reciprocal_rank_fuse(
     fused.sort(
         key=lambda item: (
             -item["fused_score"],
-            item["lexical_rank"] if item["lexical_rank"] is not None else sentinel,
-            item["vector_rank"] if item["vector_rank"] is not None else sentinel,
+            item["lexical_rank"]
+            if item["lexical_rank"] is not None
+            else sentinel,
+            item["vector_rank"]
+            if item["vector_rank"] is not None
+            else sentinel,
             item["section_id"],
         )
     )
@@ -258,7 +288,9 @@ class HybridFusionController:
                     limit=limit,
                     reason=FALLBACK_SEMANTIC_UNAVAILABLE,
                 )
-            raise IntegrityError(f"M20-FUSION-113 semantic capability mismatch: {reason}")
+            raise IntegrityError(
+                f"M20-FUSION-113 semantic capability mismatch: {reason}"
+            )
 
         try:
             shadow = self.mode_controller.query(
@@ -284,7 +316,9 @@ class HybridFusionController:
         if not isinstance(shadow_evaluation, Mapping):
             raise IntegrityError("M20-FUSION-114 hybrid shadow evidence is missing")
         if _release_identity(shadow) != _release_identity(shadow_evaluation):
-            raise IntegrityError("M20-FUSION-115 lexical and vector release identities differ")
+            raise IntegrityError(
+                "M20-FUSION-115 lexical and vector release identities differ"
+            )
 
         lexical_results = shadow.get("results", [])
         vector_results = shadow_evaluation.get("results", [])
