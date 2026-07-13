@@ -111,3 +111,56 @@ M20.5 acceptance covers:
 ## Exclusions
 
 M20.5 does not add learned weights, raw-score fusion, alias/tag/relation boosts, reranking, answer generation changes, embedding-provider calls, Runtime network access, ANN, a vector database, a public vector endpoint, Source mutation, candidate or production publication, production pointer changes, retained R2 objects, credentials, permanent ledger entries, rollback execution, M20.6 work, cross-release merge, or Graph Neural Retrieval.
+
+## Closure reconciliation
+
+### Identity chain
+
+- M20.4 reconciliation / implementation base: `97ce214e01e3447345c74eac9c9835c59a4d7cf8`
+- final implementation head: `5cd2b268fec8b4128bd0d41a76173b917b610d1d`
+- implementation merge: `43e341fc9b6a2741521ff77f9a112598bbbebf9a`
+- Source main: `a6ba738d910d01d2ae99b1968f0831989934c549`
+- Foundation main: `e5ef644053d34e89c70d2ceb37521e1c59234832`
+
+### Exact implementation scope
+
+Implementation PR #303 changed exactly four files:
+
+1. `.github/workflows/m20-5-hybrid-fusion.yml`
+2. `docs/architecture/m20/m20-5-hybrid-fusion.md`
+3. `src/knowledge_engine/m20_hybrid_fusion.py`
+4. `tests/test_m20_5_hybrid_fusion.py`
+
+No Runtime, FastAPI, dependency, lockfile, compiler, release-manifest, Source, production-pointer, credential, permanent-ledger, or rollback file changed.
+
+### Invalidated implementation heads
+
+- `d0f420c378932874d5976fe15ce7c3671c23eb0e` failed repository Ruff on long lines.
+- `2dd2d5dd7b4e56d0be7a9f112d6c787e6f62fdf1` failed repository Ruff on one unused import and one unsorted import block.
+
+Neither invalidated head is acceptance evidence.
+
+### Final-head acceptance evidence
+
+All workflows associated with final implementation head `5cd2b268fec8b4128bd0d41a76173b917b610d1d` completed successfully:
+
+- M20.5 Hybrid fusion #5
+- CI #638
+- M17 Architecture Canon Acceptance #48
+- M18 Graph v2 acceptance #74
+- R2 Release Integration #442
+
+The M20.5 workflow passed exact-head checkout, repository Ruff, M20.1 through M20.5 tests, Runtime regressions, deterministic rank-only fusion checks, authority/dependency scanning, and Python compilation.
+
+Implementation PR #303 had no conversation comments, submitted reviews, or unresolved review threads at merge time.
+
+### Delivered boundary
+
+- fixed RRF with `k=60` and immutable equal rank contributions;
+- lexical results, citations, and evaluation remain authoritative;
+- semantic candidates affect only bounded non-production `fused_candidates`;
+- missing vectors and semantic unavailability fall back deterministically to lexical;
+- model, dimension, release, ACL, identity, duplicate, and malformed-result violations remain fail closed;
+- no provider call, Runtime/API mutation, ANN, vector database, or production authority was introduced.
+
+Production mutation dispatched: false.
