@@ -79,6 +79,6 @@ jobs:
         run: |
           ! grep -R -nE 'requests|httpx|aiohttp|urllib.request|subprocess|boto3|r2|production_pointer' \
             src/knowledge_engine/m21_blog_inventory.py
-          ! find . -name '*.f32' -o -name '*inventory.json'
+          test -z "$(find . \( -name '*.f32' -o -name '*inventory.json' \) -print -quit)"
       - name: Compile M21.1 scope
         run: python -m compileall -q src/knowledge_engine/m21_blog_inventory.py tests/test_m21_1_blog_inventory.py
