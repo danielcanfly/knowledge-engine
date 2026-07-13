@@ -10,7 +10,6 @@ from .errors import IntegrityError
 from .m20_retrieval_modes import (
     HYBRID_MODE,
     LEXICAL_MODE,
-    VECTOR_MODE,
     RetrievalModeController,
     RetrievalRuntime,
 )
