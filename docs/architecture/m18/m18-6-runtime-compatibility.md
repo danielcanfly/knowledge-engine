@@ -53,7 +53,10 @@ planner, or Graph Neural Retrieval.
 
 ## Mutation boundary
 
-All acceptance uses repository tests and filesystem-backed fixtures. No
-candidate publication, production promotion, production pointer change, R2
-access, credential change, permanent ledger append, lifecycle mutation, or
-rollback mutation is authorized or dispatched.
+All M18.6-specific acceptance uses repository tests and filesystem-backed
+fixtures. No M18.6 code path or operator action authorizes candidate publication,
+production promotion, production pointer change, persistent R2 mutation,
+credential change, permanent ledger append, lifecycle mutation, or rollback
+mutation. Existing repository-wide PR checks may exercise a run-isolated R2 test
+channel with mandatory cleanup; that CI boundary is reconciled separately from
+feature activation.
