@@ -1,0 +1,84 @@
+name: M19.7 Phase B acceptance
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/api.py"
+      - "src/knowledge_engine/m19_graph_api.py"
+      - "tests/test_m19_1_graph_api.py"
+      - "packages/graphology-adapter/**"
+      - "packages/graph-explorer/**"
+      - "docs/architecture/m19/m19-7-phase-b-acceptance.md"
+      - "docs/architecture/m19/m19-7-phase-b-acceptance-reconciliation.md"
+      - ".github/workflows/m19-7-phase-b-acceptance.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/knowledge_engine/api.py"
+      - "src/knowledge_engine/m19_graph_api.py"
+      - "tests/test_m19_1_graph_api.py"
+      - "packages/graphology-adapter/**"
+      - "packages/graph-explorer/**"
+      - "docs/architecture/m19/m19-7-phase-b-acceptance.md"
+      - "docs/architecture/m19/m19-7-phase-b-acceptance-reconciliation.md"
+      - ".github/workflows/m19-7-phase-b-acceptance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phase-b-acceptance:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            packages/graphology-adapter/package-lock.json
+            packages/graph-explorer/package-lock.json
+      - name: Install exact dependencies
+        run: |
+          python -m pip install -e '.[dev]'
+          npm ci --prefix packages/graphology-adapter
+          npm ci --prefix packages/graph-explorer
+      - name: Verify Graph API ACL, bounds, release identity, and GET-only authority
+        run: |
+          ruff check src/knowledge_engine/api.py src/knowledge_engine/m19_graph_api.py tests/test_m19_1_graph_api.py
+          pytest -q tests/test_m19_1_graph_api.py tests/test_api.py tests/test_m18_6_runtime_compatibility.py tests/test_runtime.py
+          python - <<'PY'
+          from pathlib import Path
+          source = Path("src/knowledge_engine/m19_graph_api.py").read_text(encoding="utf-8")
+          forbidden = ("@router.post", "@router.put", "@router.patch", "@router.delete")
+          found = [item for item in forbidden if item in source]
+          if found:
+              raise SystemExit(f"Graph API exposes mutation decorators: {found}")
+          PY
+      - name: Verify adapter, explorer, accessibility, and scale contracts
+        run: |
+          npm run check --prefix packages/graphology-adapter
+          npm run check --prefix packages/graph-explorer
+          npm run performance:fixtures --prefix packages/graph-explorer
+      - name: Scan CSP, browser authority, persistence, and write-back surfaces
+        run: npm run acceptance:scan --prefix packages/graph-explorer
+      - name: Audit runtime dependencies
+        run: |
+          npm audit --prefix packages/graphology-adapter --omit=dev --audit-level=high
+          npm audit --prefix packages/graph-explorer --omit=dev --audit-level=high
+      - name: Compile Phase B scope
+        run: |
+          python -m compileall -q src tests
+          npm run build --prefix packages/graphology-adapter
+          npm run build --prefix packages/graph-explorer

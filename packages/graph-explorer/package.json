@@ -11,13 +11,15 @@
   "exports": {
     ".": {"types": "./dist/src/index.d.ts", "import": "./dist/src/index.js"},
     "./details": {"types": "./dist/src/details.d.ts", "import": "./dist/src/details.js"},
-    "./scale": {"types": "./dist/src/scale.d.ts", "import": "./dist/src/scale.js"}
+    "./scale": {"types": "./dist/src/scale.d.ts", "import": "./dist/src/scale.js"},
+    "./acceptance": {"types": "./dist/src/acceptance.d.ts", "import": "./dist/src/acceptance.js"}
   },
   "scripts": {
     "clean": "rm -rf dist",
     "build": "tsc --project tsconfig.json",
     "test": "npm run clean && npm run build && node --test dist/test/*.test.js",
     "performance:fixtures": "npm run clean && npm run build && node dist/perf/scale.js",
+    "acceptance:scan": "npm run clean && npm run build && node dist/acceptance/phase-b.js",
     "check": "npm test"
   },
   "dependencies": {"graphology": "0.26.0", "sigma": "3.0.3"},
