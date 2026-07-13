@@ -1,0 +1,159 @@
+{
+  "schema_version": "knowledge-os-m18-phase-a-closure/v1",
+  "milestone": "M18.7",
+  "status": "ready_for_reconciliation",
+  "issue": 264,
+  "repositories": {
+    "engine_base": "16ee271d64508f1a510a08398d2a16be7ba9ce93",
+    "source": "a6ba738d910d01d2ae99b1968f0831989934c549",
+    "foundation": "e5ef644053d34e89c70d2ceb37521e1c59234832"
+  },
+  "completed_submilestones": [
+    {
+      "id": "M18.1",
+      "issue": 249,
+      "status": "complete",
+      "reconciliation": "docs/architecture/m18/m18-1-exact-baseline-and-adrs.md",
+      "production_mutation_dispatched": false
+    },
+    {
+      "id": "M18.2",
+      "issue": 251,
+      "status": "complete",
+      "reconciliation": "docs/architecture/m18/m18-2-relation-ontology-reconciliation.md",
+      "production_mutation_dispatched": false
+    },
+    {
+      "id": "M18.3",
+      "issue": 253,
+      "status": "complete",
+      "reconciliation": "docs/architecture/m18/m18-3-tags-aliases-reconciliation.md",
+      "production_mutation_dispatched": false
+    },
+    {
+      "id": "M18.4",
+      "issue": 255,
+      "status": "complete",
+      "reconciliation": "docs/architecture/m18/m18-4-graph-v2-reconciliation.md",
+      "production_mutation_dispatched": false
+    },
+    {
+      "id": "M18.5",
+      "issue": 258,
+      "status": "complete",
+      "reconciliation": "docs/architecture/m18/m18-5-five-concept-migration-reconciliation.md",
+      "production_mutation_dispatched": false
+    },
+    {
+      "id": "M18.6",
+      "issue": 261,
+      "status": "complete",
+      "reconciliation": "docs/architecture/m18/m18-6-runtime-compatibility-reconciliation.md",
+      "production_mutation_dispatched": false
+    }
+  ],
+  "source_acceptance": {
+    "repository": "danielcanfly/knowledge-source",
+    "pull_request": 18,
+    "base_sha": "087f96b94d045f1f096ad7a3cab0c9ac2f3c5d04",
+    "head_sha": "f23c6fdb45877b0c8e3d3e533a21175288febe2b",
+    "merge_sha": "a6ba738d910d01d2ae99b1968f0831989934c549",
+    "changed_files": [
+      ".github/workflows/m18-7-phase-a-acceptance.yml",
+      "migrations/m18-7-phase-a-acceptance.json"
+    ],
+    "comments": 0,
+    "reviews": 0,
+    "unresolved_threads": 0,
+    "exact_head_workflows": [
+      {
+        "name": "Validate Knowledge Source",
+        "run_number": 57,
+        "conclusion": "success"
+      },
+      {
+        "name": "Relation validation",
+        "run_number": 23,
+        "conclusion": "success"
+      },
+      {
+        "name": "Tag and alias validation",
+        "run_number": 18,
+        "conclusion": "success"
+      },
+      {
+        "name": "M18.5 migration acceptance",
+        "run_number": 11,
+        "conclusion": "success"
+      },
+      {
+        "name": "M18.5 exact Engine build acceptance",
+        "run_number": 4,
+        "conclusion": "success"
+      },
+      {
+        "name": "M18.7 Phase A exact closure acceptance",
+        "run_number": 2,
+        "conclusion": "success"
+      }
+    ]
+  },
+  "expected": {
+    "concepts": 5,
+    "graph_v2_edges": 5,
+    "tag_assignments": 19,
+    "aliases": 10,
+    "authored_relations": 3,
+    "generated_inverse_edges": 2,
+    "public_concepts": 4,
+    "internal_concepts": 1
+  },
+  "runtime": {
+    "legacy_release_without_graph_v2_loads": true,
+    "relation_graph_optional": true,
+    "relation_aware_expansion_default": false,
+    "enabled_acceptance_test_only": true,
+    "maximum_hops": 1,
+    "maximum_neighbors_per_seed": 20,
+    "acl_rechecked": true,
+    "public_retrieval_evidence_exposed": false
+  },
+  "fail_closed_coverage": {
+    "unknown_relation_type": "danielcanfly/knowledge-source@f23c6fdb45877b0c8e3d3e533a21175288febe2b:tests/test_validate_relations.py",
+    "missing_target": "tests/test_graph_v2.py",
+    "invalid_direction": "danielcanfly/knowledge-source@f23c6fdb45877b0c8e3d3e533a21175288febe2b:tests/test_validate_relations.py",
+    "invalid_inverse": "danielcanfly/knowledge-source@f23c6fdb45877b0c8e3d3e533a21175288febe2b:tests/test_validate_relations.py",
+    "duplicate_edge": "danielcanfly/knowledge-source@f23c6fdb45877b0c8e3d3e533a21175288febe2b:tests/test_validate_relations.py",
+    "alias_collision": "danielcanfly/knowledge-source@f23c6fdb45877b0c8e3d3e533a21175288febe2b:tests/test_tags_aliases.py",
+    "invalid_tag": "danielcanfly/knowledge-source@f23c6fdb45877b0c8e3d3e533a21175288febe2b:tests/test_tags_aliases.py",
+    "missing_provenance": "danielcanfly/knowledge-source@f23c6fdb45877b0c8e3d3e533a21175288febe2b:tests/test_validate_source.py",
+    "unapproved_relation": "danielcanfly/knowledge-source@f23c6fdb45877b0c8e3d3e533a21175288febe2b:tests/test_validate_relations.py",
+    "acl_broadening": "danielcanfly/knowledge-source@f23c6fdb45877b0c8e3d3e533a21175288febe2b:tests/test_validate_relations.py",
+    "graph_nondeterminism": "tests/test_graph_v2.py",
+    "renderer_field_leakage": "tests/test_m18_6_runtime_compatibility.py",
+    "broken_internal_link": "tests/test_m18_7_phase_a_closure.py",
+    "wikilink_in_release": "tests/test_m18_7_phase_a_closure.py"
+  },
+  "compatibility": {
+    "lexical_baseline_preserved": true,
+    "generic_links_separate_from_typed_relations": true,
+    "v1_supported_during_bounded_migration": true
+  },
+  "mutation": {
+    "object_store_backend": "filesystem",
+    "candidate_publication": false,
+    "production_publication": false,
+    "production_pointer": false,
+    "r2": false,
+    "credentials": false,
+    "permanent_ledger": false,
+    "rollback": false
+  },
+  "forbidden": {
+    "automatic_relation_inference_into_source": false,
+    "renderer_specific_canonical_fields": false,
+    "automatic_source_or_production_promotion": false,
+    "graph_neural_retrieval": false
+  },
+  "m19_started": false
+}
