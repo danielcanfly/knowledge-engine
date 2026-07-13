@@ -144,3 +144,39 @@ M21.5 rejects or blocks on:
 ## Exclusions
 
 No model/provider/network call, live connector, scheduler, queue, worker, Source edit, canonical adoption, review approval, bulk Source PR, candidate publication, production publication, production pointer, retained R2 object, credentials, permanent ledger, rollback, M21.6 or later work, M22 multi-hop planner, cross-release merge, or Graph Neural Retrieval is included.
+
+## Closure reconciliation
+
+M21.5 implementation was delivered through issue #325 and implementation PR #326. The implementation PR merged only after the exact final head passed every required workflow and the changed-file, discussion, review, and thread audits were clean.
+
+Exact identity chain:
+
+- M21.4 reconciliation base: `a538abb62adccd5ca4494a4d43c07b8094c08337`;
+- first bootstrap-only head: `9cd3f707c9390eb39b2eba9458a8baa2acf1284d`;
+- corrected bootstrap-only head: `1100b19f306ba5918ac6341b202f6882d6a03179`;
+- non-workflow materializer head: `3cfb4014e76fb62d1029da3421918ad16380b2fb`;
+- transient materialized head: `0d7858658b3a88efc55b1fb4b5164f2dca844726`;
+- bootstrap cleanup head: `fbc8ad7fe5944669e54f10614127c84765557108`;
+- final implementation head: `2834bf63731db73fa5f1c2bbca1682bf9e9b130e`;
+- implementation merge: `04eb8978b20b4ebcc4107e25b1bca4a081daf75a`.
+
+The first bootstrap-only head restored the payload correctly but failed an over-strict temporary-path string assertion. The corrected bootstrap-only head again restored and validated the payload but could not push a commit that self-modified workflow files under the Actions token boundary. Neither head is acceptance evidence. The non-workflow materializer then committed the architecture document, implementation module, and tests without changing workflow files. The transient materialized and bootstrap-cleanup heads are also not acceptance evidence. The connector installed the final exact-head workflow, producing the sole accepted implementation head.
+
+Implementation scope at the accepted head was exactly four added files:
+
+- `.github/workflows/m21-5-entity-resolution.yml`;
+- `docs/architecture/m21/m21-5-entity-resolution.md`;
+- `src/knowledge_engine/m21_entity_resolution.py`;
+- `tests/test_m21_5_entity_resolution.py`.
+
+The accepted head passed:
+
+- M21.5 Entity Resolution and Contradictions #1;
+- CI #680;
+- M17 Architecture Canon Acceptance #73;
+- M18 Graph v2 acceptance #116;
+- R2 Release Integration #467.
+
+PR #326 had no conversation comments, submitted reviews, or unresolved review threads. The merge used expected head SHA `2834bf63731db73fa5f1c2bbca1682bf9e9b130e`.
+
+Local pre-upload validation also passed 25 M21.5 tests, Ruff, and compileall. No Source mutation, review approval, canonical adoption, production or production-pointer change, R2 object change, credential use, permanent-ledger change, rollback change, M21.6 work, M22 work, cross-release merge, or Graph Neural Retrieval was dispatched. Production mutation dispatched: false.
