@@ -7,6 +7,7 @@ on:
       - "tests/test_m18_7_phase_a_closure.py"
       - "docs/architecture/m18/m18-7-phase-a-closure.json"
       - "docs/architecture/m18/m18-7-phase-a-closure.md"
+      - "docs/architecture/m18/m18-7-phase-a-closure-reconciliation.md"
       - ".github/workflows/m18-7-phase-a-closure.yml"
   push:
     branches:
@@ -16,6 +17,7 @@ on:
       - "tests/test_m18_7_phase_a_closure.py"
       - "docs/architecture/m18/m18-7-phase-a-closure.json"
       - "docs/architecture/m18/m18-7-phase-a-closure.md"
+      - "docs/architecture/m18/m18-7-phase-a-closure-reconciliation.md"
       - ".github/workflows/m18-7-phase-a-closure.yml"
   workflow_dispatch:
 
