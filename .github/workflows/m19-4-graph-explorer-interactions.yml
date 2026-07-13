@@ -1,0 +1,51 @@
+name: M19.4 graph explorer interactions
+
+on:
+  pull_request:
+    paths:
+      - "packages/graph-explorer/**"
+      - "docs/architecture/m19/m19-4-graph-explorer-interactions.md"
+      - "docs/architecture/m19/m19-4-graph-explorer-interactions-reconciliation.md"
+      - ".github/workflows/m19-4-graph-explorer-interactions.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/graph-explorer/**"
+      - "docs/architecture/m19/m19-4-graph-explorer-interactions.md"
+      - "docs/architecture/m19/m19-4-graph-explorer-interactions-reconciliation.md"
+      - ".github/workflows/m19-4-graph-explorer-interactions.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  graph-explorer-interactions:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            packages/graphology-adapter/package-lock.json
+            packages/graph-explorer/package-lock.json
+      - name: Install exact locked dependencies
+        run: |
+          npm ci --prefix packages/graphology-adapter
+          npm ci --prefix packages/graph-explorer
+      - name: Verify adapter and bounded explorer interactions
+        run: |
+          npm run check --prefix packages/graphology-adapter
+          npm run check --prefix packages/graph-explorer
+      - name: Audit runtime dependencies
+        run: |
+          npm audit --prefix packages/graphology-adapter --omit=dev --audit-level=high
+          npm audit --prefix packages/graph-explorer --omit=dev --audit-level=high
