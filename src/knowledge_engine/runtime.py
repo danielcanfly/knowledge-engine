@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import threading
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any
 from .errors import IntegrityError
 from .m14_citation_runtime import enrich_runtime_citations
 from .m14_retrieval import retrieve_wiki_first, validate_relation_graph_v2
+from .m20_runtime_semantic import SemanticRuntimeIndex
 from .query_evaluation import evaluate_runtime_query
 from .storage import ObjectStore, sha256_bytes
 
@@ -26,6 +28,7 @@ class ActiveRelease:
     graph_v2: dict[str, Any] | None
     provenance: dict[str, Any]
     semantic_index: dict[str, Any] | None
+    semantic_runtime: SemanticRuntimeIndex | None
 
 
 def _load_json_file(path: Path, label: str) -> dict[str, Any]:
@@ -46,11 +49,17 @@ class Runtime:
         channel: str,
         *,
         relation_aware_expansion_enabled: bool = False,
+        semantic_diagnostic_enabled: bool = False,
+        expected_semantic_model_id: str | None = None,
+        expected_semantic_dimension: int | None = None,
     ) -> None:
         self.store = store
         self.cache_dir = cache_dir.resolve()
         self.channel = channel
         self.relation_aware_expansion_enabled = relation_aware_expansion_enabled
+        self.semantic_diagnostic_enabled = semantic_diagnostic_enabled
+        self.expected_semantic_model_id = expected_semantic_model_id
+        self.expected_semantic_dimension = expected_semantic_dimension
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._active: ActiveRelease | None = None
         self._lock = threading.RLock()
@@ -109,6 +118,7 @@ class Runtime:
         if staging_cache.exists():
             shutil.rmtree(staging_cache)
         staging_cache.mkdir(parents=True)
+        semantic_runtime: SemanticRuntimeIndex | None = None
         try:
             artifacts = manifest.get("artifacts")
             if not isinstance(artifacts, list):
@@ -174,6 +184,22 @@ class Runtime:
             if semantic_path is not None:
                 semantic_index = _load_json_file(semantic_path, "semantic index")
 
+            semantic_metadata_path = artifact_paths.get("semantic_metadata")
+            semantic_vectors_path = artifact_paths.get("semantic_vectors")
+            if (semantic_metadata_path is None) != (semantic_vectors_path is None):
+                raise IntegrityError(
+                    "semantic_metadata and semantic_vectors artifacts must be present together"
+                )
+            if semantic_metadata_path is not None and semantic_vectors_path is not None:
+                semantic_runtime = SemanticRuntimeIndex.open(
+                    semantic_metadata_path,
+                    semantic_vectors_path,
+                    manifest=manifest,
+                    lexical_index=lexical_index,
+                    expected_model_id=self.expected_semantic_model_id,
+                    expected_dimension=self.expected_semantic_dimension,
+                )
+
             if release_cache.exists():
                 shutil.rmtree(release_cache)
             staging_cache.replace(release_cache)
@@ -192,11 +218,14 @@ class Runtime:
                 graph_v2=graph_v2,
                 provenance=provenance,
                 semantic_index=semantic_index,
+                semantic_runtime=semantic_runtime,
             )
             with self._lock:
                 self._active = active
             return active
         except Exception:
+            if semantic_runtime is not None:
+                semantic_runtime.close()
             if staging_cache.exists():
                 shutil.rmtree(staging_cache)
             raise
@@ -206,6 +235,61 @@ class Runtime:
         if active is not None:
             return active
         return self.refresh()
+
+    def semantic_capability(self) -> dict[str, Any]:
+        active = self.active
+        if active is None or active.semantic_runtime is None:
+            return {
+                "status": "unavailable",
+                "memory_mapped": False,
+                "diagnostic_enabled": self.semantic_diagnostic_enabled,
+            }
+        return active.semantic_runtime.capability(
+            diagnostic_enabled=self.semantic_diagnostic_enabled
+        )
+
+    def query_vector_diagnostic(
+        self,
+        query_vector: Sequence[float],
+        allowed_audiences: set[str],
+        *,
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        if not self.semantic_diagnostic_enabled:
+            raise IntegrityError("semantic diagnostic retrieval is disabled")
+        active = self.ensure_loaded()
+        semantic = active.semantic_runtime
+        if semantic is None:
+            raise IntegrityError("active release has no verified semantic artifacts")
+        results = semantic.rank(
+            query_vector,
+            allowed_audiences=allowed_audiences,
+            limit=limit,
+        )
+        documents = semantic.metadata["documents"]
+        authorized_count = sum(
+            document["audience"] in allowed_audiences for document in documents
+        )
+        status = "answered" if results else "not_found"
+        not_found_reason = None if results else "no_authorized_semantic_match"
+        return {
+            "status": status,
+            "release": {
+                "release_id": active.release_id,
+                "manifest_sha256": active.manifest_sha256,
+                "loaded_at": active.loaded_at,
+            },
+            "results": results,
+            "retrieval": {
+                "mode": "vector_diagnostic",
+                "diagnostic_only": True,
+                "candidate_count": len(documents),
+                "authorized_candidate_count": authorized_count,
+                "acl_filtered_count": len(documents) - authorized_count,
+            },
+            "not_found_reason": not_found_reason,
+            "non_answer_reason": not_found_reason,
+        }
 
     def query(
         self,
