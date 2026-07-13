@@ -95,3 +95,18 @@ Acceptance covers:
 ## Exclusions
 
 No live connector call, crawl, scheduler, queue, worker, Source edit, concept/entity/relation extraction, candidate or production publication, production pointer, retained R2 object, credentials, permanent ledger, rollback, M21.3 work, cross-release merge, or Graph Neural Retrieval is included.
+
+## Closure reconciliation
+
+M21.2 implementation PR #317 was based on exact M21.1 reconciliation SHA `ee5a94fc47ae4a4cc8fd151f2a06fb554e38afb5` and merged at `e23ca679cfa242b4054a7c6ecf3c96f9af707565`.
+
+The accepted implementation head was `bd2b3731a4cbfa210e926b5a1374a77eaadc67d1`. Its exact four-file scope was the M21.2 workflow, this architecture contract, the resumable batch module, and its acceptance tests.
+
+Two earlier heads were invalidated and are not acceptance evidence:
+
+- `f6d5137f56891e98336865987ee2c1fa06f9a041` failed repository Ruff on formatting and simplification rules;
+- `bed90ee4326a00294fb348a335bf62613ba1d086` passed Ruff but contained a test that incorrectly expected identical batch IDs across different exact inventory digests.
+
+The final implementation head passed M21.2 Resumable Batch #3, CI #662, M17 Architecture Canon Acceptance #64, M18 Graph v2 Acceptance #98, and R2 Release Integration #458. PR comments, reviews, and unresolved review threads were empty before expected-head merge.
+
+Source remained `a6ba738d910d01d2ae99b1968f0831989934c549` and Foundation remained `e5ef644053d34e89c70d2ceb37521e1c59234832`. No production mutation, connector execution, Source write, publication, pointer update, retained R2 state, credential use, permanent ledger write, or rollback dispatch occurred.
