@@ -1,0 +1,98 @@
+name: M20.3 Runtime semantic verification
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/runtime.py"
+      - "src/knowledge_engine/m20_runtime_semantic.py"
+      - "tests/test_m20_3_runtime_semantic.py"
+      - "benchmarks/m20/**"
+      - "src/knowledge_engine/m20_embedding_contract.py"
+      - "src/knowledge_engine/_m20_embedding_*.py"
+      - "src/knowledge_engine/m20_semantic_artifacts.py"
+      - "docs/architecture/m20/m20-3-runtime-semantic-verification.md"
+      - ".github/workflows/m20-3-runtime-semantic.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-semantic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install exact project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Lint M20.3 scope
+        run: |
+          ruff check \
+            src/knowledge_engine/runtime.py \
+            src/knowledge_engine/m20_runtime_semantic.py \
+            tests/test_m20_3_runtime_semantic.py
+      - name: Test M20.1 through M20.3 contracts
+        run: |
+          pytest -q \
+            tests/test_m20_1_embedding_contract.py \
+            tests/test_m20_2_semantic_artifacts.py \
+            tests/test_m20_3_runtime_semantic.py \
+            tests/test_runtime.py
+      - name: Prove diagnostic mode is isolated
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          runtime = Path('src/knowledge_engine/runtime.py').read_text(encoding='utf-8')
+          api = Path('src/knowledge_engine/api.py').read_text(encoding='utf-8')
+          assert 'query_vector_diagnostic' in runtime
+          assert 'query_vector_diagnostic' not in api
+          assert 'semantic_diagnostic_enabled: bool = False' in runtime
+          assert 'RETRIEVAL_MODE' not in runtime
+          PY
+      - name: Scan authority and dependency boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          scope = '\n'.join(
+              Path(path).read_text(encoding='utf-8')
+              for path in (
+                  'src/knowledge_engine/m20_runtime_semantic.py',
+                  'src/knowledge_engine/runtime.py',
+              )
+          )
+          forbidden = (
+              'import numpy',
+              'import torch',
+              'sentence_transformers',
+              'qdrant',
+              'faiss',
+              'chromadb',
+              'requests.',
+              'httpx.',
+              'boto3.',
+              'put_object',
+              'production pointer',
+          )
+          findings = [token for token in forbidden if token in scope]
+          assert not findings, findings
+          assert Path('pyproject.toml').read_text(encoding='utf-8').count('numpy') == 0
+          PY
+      - name: Compile M20.3 scope
+        run: |
+          python -m compileall -q \
+            src/knowledge_engine/runtime.py \
+            src/knowledge_engine/m20_runtime_semantic.py \
+            tests/test_m20_3_runtime_semantic.py
