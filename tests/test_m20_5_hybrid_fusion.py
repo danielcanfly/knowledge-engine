@@ -22,7 +22,12 @@ RELEASE = {
 }
 
 
-def _item(section: str, *, audience: str = "public", score: float | None = None) -> dict:
+def _item(
+    section: str,
+    *,
+    audience: str = "public",
+    score: float | None = None,
+) -> dict:
     item = {
         "section_id": section,
         "concept_id": section.split("#", 1)[0],
@@ -54,7 +59,9 @@ class FakeRuntime:
 
     def query(self, query: str, audiences: set[str], *, limit: int = 10) -> dict:
         del query
-        results = [item for item in self.lexical_results if item["audience"] in audiences]
+        results = [
+            item for item in self.lexical_results if item["audience"] in audiences
+        ]
         return {
             "status": "answered" if results else "not_found",
             "release": copy.deepcopy(RELEASE),
@@ -72,13 +79,17 @@ class FakeRuntime:
         limit: int = 10,
     ) -> dict:
         del query_vector
-        results = [item for item in self.vector_results if item["audience"] in audiences]
+        results = [
+            item for item in self.vector_results if item["audience"] in audiences
+        ]
         return {
             "status": "answered" if results else "not_found",
             "release": copy.deepcopy(self.vector_release),
             "results": copy.deepcopy(results[:limit]),
             "retrieval": {"mode": "vector_diagnostic"},
-            "not_found_reason": None if results else "no_authorized_semantic_match",
+            "not_found_reason": (
+                None if results else "no_authorized_semantic_match"
+            ),
         }
 
     def semantic_capability(self) -> dict[str, Any]:
@@ -120,7 +131,8 @@ def test_rrf_fuses_rankings_deterministically_without_raw_score_mixing() -> None
         "concepts/c#one",
     ]
     first = result["fused_candidates"][0]
-    assert first["fused_score"] == round(1 / (RRF_K + 2) + 1 / (RRF_K + 1), 12)
+    expected = round(1 / (RRF_K + 2) + 1 / (RRF_K + 1), 12)
+    assert first["fused_score"] == expected
     assert first["vector_score"] == 0.95
     assert result["retrieval"]["fusion_applied"] is True
     assert result["retrieval"]["rrf_k"] == RRF_K
@@ -140,7 +152,9 @@ def test_lexical_results_and_citations_remain_authoritative() -> None:
         "concepts/b#one",
         "concepts/c#one",
     ]
-    assert result["results"][0]["citations"] == [{"source_id": "src-concepts/a#one"}]
+    assert result["results"][0]["citations"] == [
+        {"source_id": "src-concepts/a#one"}
+    ]
     assert result["evaluation"] == {"release_blocking": False}
     assert result["retrieval"]["authoritative_mode"] == LEXICAL_MODE
 
@@ -201,7 +215,10 @@ def test_cross_release_shadow_evidence_remains_fail_closed() -> None:
 
 def test_acl_violation_in_ranked_input_is_rejected_before_fusion() -> None:
     runtime = FakeRuntime()
-    runtime.vector_results.insert(0, _item("concepts/secret#one", audience="internal", score=1.0))
+    runtime.vector_results.insert(
+        0,
+        _item("concepts/secret#one", audience="internal", score=1.0),
+    )
 
     result = _controller().query(
         runtime,
@@ -227,7 +244,11 @@ def test_duplicate_or_identity_drift_fails_closed() -> None:
 
 
 def test_lexical_and_vector_modes_delegate_without_fusion() -> None:
-    lexical = _controller(LEXICAL_MODE).query(FakeRuntime(), "query", {"public"})
+    lexical = _controller(LEXICAL_MODE).query(
+        FakeRuntime(),
+        "query",
+        {"public"},
+    )
     assert lexical["retrieval"]["fusion_applied"] is False
     assert "fused_candidates" not in lexical
 
