@@ -102,3 +102,19 @@ Acceptance covers:
 ## Exclusions
 
 No embedding, LLM, provider, network, live connector, scheduler, queue, worker, Source edit, canonical adoption, typed ontology relationship creation, entity resolution, bulk Source PR, candidate or production publication, production pointer, retained R2 object, credentials, permanent ledger, rollback, M21.4 work, cross-release merge, or Graph Neural Retrieval is included.
+
+## Closure reconciliation
+
+M21.3 implementation was delivered through issue #319 and implementation PR #320.
+
+Exact identity chain:
+
+- M21.2 reconciliation base: `46a1ec57acbafc6531093f9b9447d356d73c34e0`;
+- final implementation head: `65a1013d8a9290cf15fb4348c6e31a910b58f371`;
+- implementation merge: `a852b65407f2c2d763b8dfab953325b5edfe1e76`.
+
+Implementation scope was exactly four added files: the M21.3 workflow, this architecture contract, the extraction-candidate module, and its acceptance tests. The final implementation head passed M21.3 Extraction Candidates #1, CI #666, M17 Architecture Canon Acceptance #66, M18 Graph v2 Acceptance #102, and R2 Release Integration #460.
+
+PR #320 had no conversation comments, submitted reviews, or unresolved review threads. The merge used the recorded expected head SHA.
+
+No model/provider call, live connector call, scheduler, worker, Source mutation, canonical adoption, typed ontology relation creation, entity resolution, bulk Source PR, candidate or production publication, production pointer, retained R2 object, credentials, permanent ledger, rollback, cross-release merge, or Graph Neural Retrieval was dispatched.
