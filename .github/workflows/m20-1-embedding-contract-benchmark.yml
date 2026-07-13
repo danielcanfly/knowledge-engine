@@ -1,0 +1,117 @@
+name: M20.1 embedding contract and bilingual benchmark
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m20_embedding_contract.py"
+      - "scripts/m20_embedding_benchmark.py"
+      - "tests/test_m20_1_embedding_contract.py"
+      - "benchmarks/m20/**"
+      - "schemas/m20-embedding-provider-contract-v1.schema.json"
+      - "docs/architecture/m20/m20-1-embedding-contract-bilingual-benchmark.md"
+      - "docs/architecture/m20/m20-1-embedding-contract-bilingual-benchmark-reconciliation.md"
+      - ".github/workflows/m20-1-embedding-contract-benchmark.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/knowledge_engine/m20_embedding_contract.py"
+      - "scripts/m20_embedding_benchmark.py"
+      - "tests/test_m20_1_embedding_contract.py"
+      - "benchmarks/m20/**"
+      - "schemas/m20-embedding-provider-contract-v1.schema.json"
+      - "docs/architecture/m20/m20-1-embedding-contract-bilingual-benchmark.md"
+      - "docs/architecture/m20/m20-1-embedding-contract-bilingual-benchmark-reconciliation.md"
+      - ".github/workflows/m20-1-embedding-contract-benchmark.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  embedding-contract-benchmark:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install exact project dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: Lint M20.1 scope
+        run: |
+          ruff check \
+            src/knowledge_engine/m20_embedding_contract.py \
+            scripts/m20_embedding_benchmark.py \
+            tests/test_m20_1_embedding_contract.py
+      - name: Test contract and bilingual benchmark
+        run: pytest -q tests/test_m20_1_embedding_contract.py
+      - name: Prove deterministic lexical baseline
+        run: |
+          mkdir -p .artifacts/m20-1
+          python scripts/m20_embedding_benchmark.py \
+            --provider-contract benchmarks/m20/provider-contract.fixture.json \
+            --output .artifacts/m20-1/result-a.json
+          python scripts/m20_embedding_benchmark.py \
+            --provider-contract benchmarks/m20/provider-contract.fixture.json \
+            --output .artifacts/m20-1/result-b.json
+          cmp .artifacts/m20-1/result-a.json .artifacts/m20-1/result-b.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('.artifacts/m20-1/result-a.json').read_text())
+          assert result['method'] == 'deterministic-lexical-baseline'
+          assert result['metrics'] == {
+              'answered_query_count': 10,
+              'cross_language_recall_at_k': 0.666667,
+              'exact_name_recall_at_k': 1.0,
+              'mean_reciprocal_rank': 0.9,
+              'not_found_accuracy': 0.0,
+              'paraphrase_recall_at_k': 1.0,
+              'query_count': 12,
+              'recall_at_k': 0.9,
+          }
+          assert result['read_only'] is True
+          assert result['production_authority'] is False
+          PY
+      - name: Scan authority and dependency boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path('src/knowledge_engine/m20_embedding_contract.py'),
+              Path('scripts/m20_embedding_benchmark.py'),
+          ]
+          source = '\n'.join(path.read_text(encoding='utf-8') for path in paths)
+          forbidden = {
+              'network fetch': 'requests.',
+              'http client': 'httpx.',
+              'model hub download': 'huggingface_hub',
+              'sentence transformers': 'sentence_transformers',
+              'torch runtime': 'import torch',
+              'vector database': 'qdrant',
+              'production mutation': 'production_pointer',
+              'object-store mutation': 'put_object',
+              'permanent ledger': 'permanent_ledger',
+          }
+          found = [name for name, token in forbidden.items() if token in source]
+          if found:
+              raise SystemExit(f'forbidden M20.1 authority or dependency surface: {found}')
+          vector_artifacts = list(Path('.').glob('**/*.f32'))
+          if vector_artifacts:
+              raise SystemExit(f'M20.1 created vector artifacts: {vector_artifacts}')
+          PY
+      - name: Compile M20.1 scope
+        run: |
+          python -m compileall -q \
+            src/knowledge_engine/m20_embedding_contract.py \
+            scripts/m20_embedding_benchmark.py \
+            tests/test_m20_1_embedding_contract.py
