@@ -44,11 +44,16 @@ def _parse_time(value: Any, *, label: str) -> str:
 
 
 def _validate_inventory(snapshot: dict[str, Any]) -> None:
-    if not isinstance(snapshot, dict) or snapshot.get("schema") != "knowledge-engine-blog-inventory/v1":
+    valid_schema = snapshot.get("schema") == "knowledge-engine-blog-inventory/v1"
+    if not isinstance(snapshot, dict) or not valid_schema:
         raise IntegrityError("M21-BATCH-102 invalid inventory schema")
     if snapshot.get("authority") != "evidence_only":
         raise IntegrityError("M21-BATCH-103 inventory authority drift")
-    if snapshot.get("canonical_knowledge") is not False or snapshot.get("production_authority") is not False:
+    grants_authority = (
+        snapshot.get("canonical_knowledge") is not False
+        or snapshot.get("production_authority") is not False
+    )
+    if grants_authority:
         raise IntegrityError("M21-BATCH-104 inventory grants forbidden authority")
     claimed = snapshot.get("snapshot_sha256")
     if not isinstance(claimed, str) or len(claimed) != 64:
@@ -86,7 +91,8 @@ def _item_key(item: dict[str, Any]) -> str:
 
 def build_batch_plan(snapshot: dict[str, Any], *, batch_size: int = 25) -> dict[str, Any]:
     _validate_inventory(snapshot)
-    if not isinstance(batch_size, int) or isinstance(batch_size, bool) or not 1 <= batch_size <= MAX_BATCH_SIZE:
+    valid_size = isinstance(batch_size, int) and not isinstance(batch_size, bool)
+    if not valid_size or not 1 <= batch_size <= MAX_BATCH_SIZE:
         raise IntegrityError("M21-BATCH-111 batch size exceeds bounds")
 
     planned: list[dict[str, Any]] = []
@@ -94,7 +100,8 @@ def build_batch_plan(snapshot: dict[str, Any], *, batch_size: int = 25) -> dict[
     for item in snapshot["items"]:
         if not isinstance(item, dict):
             raise IntegrityError("M21-BATCH-112 inventory item must be an object")
-        if item.get("intake_status") == "rejected" or item.get("access_status") in {"blocked", "missing"}:
+        unavailable = item.get("access_status") in {"blocked", "missing"}
+        if item.get("intake_status") == "rejected" or unavailable:
             continue
         key = _item_key(item)
         if key in seen_keys:
@@ -180,7 +187,8 @@ def build_initial_checkpoint(plan: dict[str, Any], *, created_at: str) -> dict[s
 
 
 def _validate_plan(plan: dict[str, Any]) -> None:
-    if not isinstance(plan, dict) or plan.get("schema") != "knowledge-engine-resumable-batch/v1":
+    valid_schema = plan.get("schema") == "knowledge-engine-resumable-batch/v1"
+    if not isinstance(plan, dict) or not valid_schema:
         raise IntegrityError("M21-BATCH-116 invalid batch plan schema")
     claimed = plan.get("plan_sha256")
     unsigned = dict(plan)
@@ -193,14 +201,17 @@ def _validate_plan(plan: dict[str, Any]) -> None:
 
 def _validate_checkpoint(plan: dict[str, Any], checkpoint: dict[str, Any]) -> None:
     _validate_plan(plan)
-    if not isinstance(checkpoint, dict) or checkpoint.get("schema") != "knowledge-engine-batch-checkpoint/v1":
+    valid_schema = checkpoint.get("schema") == "knowledge-engine-batch-checkpoint/v1"
+    if not isinstance(checkpoint, dict) or not valid_schema:
         raise IntegrityError("M21-BATCH-119 invalid checkpoint schema")
     claimed = checkpoint.get("checkpoint_sha256")
     unsigned = dict(checkpoint)
     unsigned.pop("checkpoint_sha256", None)
     if not isinstance(claimed, str) or _digest(unsigned) != claimed:
         raise IntegrityError("M21-BATCH-120 checkpoint digest mismatch")
-    if checkpoint.get("plan_sha256") != plan["plan_sha256"] or checkpoint.get("identity") != plan["identity"]:
+    plan_drift = checkpoint.get("plan_sha256") != plan["plan_sha256"]
+    identity_drift = checkpoint.get("identity") != plan["identity"]
+    if plan_drift or identity_drift:
         raise IntegrityError("M21-BATCH-121 checkpoint identity mismatch")
     expected = {
         item["item_key"]: batch["batch_id"]
@@ -218,7 +229,8 @@ def _validate_checkpoint(plan: dict[str, Any], checkpoint: dict[str, Any]) -> No
         if state.get("status") not in ALL_STATES:
             raise IntegrityError("M21-BATCH-124 invalid checkpoint status")
         attempts = state.get("attempts")
-        if not isinstance(attempts, int) or isinstance(attempts, bool) or not 0 <= attempts <= MAX_ATTEMPTS:
+        valid_attempts = isinstance(attempts, int) and not isinstance(attempts, bool)
+        if not valid_attempts or not 0 <= attempts <= MAX_ATTEMPTS:
             raise IntegrityError("M21-BATCH-125 invalid checkpoint attempts")
         _parse_time(state.get("updated_at"), label="checkpoint update time")
         observed[key] = state["batch_id"]
@@ -229,7 +241,11 @@ def _validate_checkpoint(plan: dict[str, Any], checkpoint: dict[str, Any]) -> No
 def _resume_cursor(checkpoint: dict[str, Any]) -> dict[str, Any] | None:
     for index, state in enumerate(checkpoint["states"]):
         if state["status"] in ACTIONABLE_STATES:
-            return {"state_index": index, "item_key": state["item_key"], "batch_id": state["batch_id"]}
+            return {
+                "state_index": index,
+                "item_key": state["item_key"],
+                "batch_id": state["batch_id"],
+            }
     return None
 
 
@@ -267,9 +283,16 @@ def transition_checkpoint(
         attempts += 1
         if attempts > MAX_ATTEMPTS:
             raise IntegrityError("M21-BATCH-130 retry attempts exhausted")
-    if target_status in {"failed", "retryable"}:
-        if not isinstance(failure_code, str) or not failure_code or len(failure_code) > 100:
-            raise IntegrityError("M21-BATCH-131 failure code required")
+    invalid_failure_code = (
+        target_status in {"failed", "retryable"}
+        and (
+            not isinstance(failure_code, str)
+            or not failure_code
+            or len(failure_code) > 100
+        )
+    )
+    if invalid_failure_code:
+        raise IntegrityError("M21-BATCH-131 failure code required")
     if target_status == "retryable":
         if retry_at is None:
             raise IntegrityError("M21-BATCH-132 retry time required")
