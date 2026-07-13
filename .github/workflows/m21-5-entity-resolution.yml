@@ -1,0 +1,81 @@
+name: M21.5 Entity Resolution and Contradictions
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m21-5-entity-resolution.yml'
+      - 'docs/architecture/m21/m21-5-entity-resolution.md'
+      - 'src/knowledge_engine/m21_entity_resolution.py'
+      - 'tests/test_m21_5_entity_resolution.py'
+
+permissions:
+  contents: read
+
+jobs:
+  entity-resolution:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M21.5 scope
+        run: >-
+          python -m ruff check
+          src/knowledge_engine/m21_entity_resolution.py
+          tests/test_m21_5_entity_resolution.py
+      - name: Test M20 through M21.5 contracts
+        run: >-
+          python -m pytest -q
+          tests/test_m20_1_embedding_contract.py
+          tests/test_m20_2_semantic_artifacts.py
+          tests/test_m20_3_runtime_semantic.py
+          tests/test_m20_4_retrieval_modes.py
+          tests/test_m20_5_hybrid_fusion.py
+          tests/test_m20_6_lexical_enrichment.py
+          tests/test_m20_7_phase_c_acceptance.py
+          tests/test_m21_1_blog_inventory.py
+          tests/test_m21_2_resumable_batch.py
+          tests/test_m21_3_extraction_candidates.py
+          tests/test_m21_4_governed_relations.py
+          tests/test_m21_5_entity_resolution.py
+      - name: Prove resolution contract closure
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m21_entity_resolution import (
+              FOUNDATION_SHA,
+              OUTCOMES,
+              SOURCE_SHA,
+          )
+
+          assert SOURCE_SHA == 'a6ba738d910d01d2ae99b1968f0831989934c549'
+          assert FOUNDATION_SHA == 'e5ef644053d34e89c70d2ceb37521e1c59234832'
+          assert OUTCOMES == {
+              'exact_existing_match',
+              'attach_alias_candidate',
+              'probable_duplicate',
+              'distinct_new_candidate',
+              'ambiguous',
+              'reject',
+          }
+          PY
+      - name: Scan authority and dependency boundary
+        run: |
+          if grep -nE 'requests|httpx|aiohttp|urllib.request|subprocess|boto3|production_pointer|openai|anthropic|sentence_transformers' \
+            src/knowledge_engine/m21_entity_resolution.py; then
+            exit 1
+          fi
+          test -z "$(find . -type f \( -name '*resolution-candidates.json' -o -name '*contradictions.json' \) -print -quit)"
+      - name: Compile M21.5 scope
+        run: >-
+          python -m compileall -q
+          src/knowledge_engine/m21_entity_resolution.py
+          tests/test_m21_5_entity_resolution.py
