@@ -48,7 +48,9 @@ def main() -> int:
     result = benchmark_result(
         suite,
         rankings,
-        method="candidate-rankings" if args.rankings is not None else "deterministic-lexical-baseline",
+        method="candidate-rankings"
+        if args.rankings is not None
+        else "deterministic-lexical-baseline",
         k=args.k,
         provider_contract=provider,
     )
