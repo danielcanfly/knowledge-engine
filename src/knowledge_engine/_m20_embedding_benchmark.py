@@ -113,7 +113,9 @@ def _validate_query(raw: Mapping[str, Any], document_ids: set[str]) -> dict[str,
         raise ContractError(f"query references unknown sections: {missing}")
     expect_not_found = _required_bool(raw.get("expect_not_found"), "query.expect_not_found")
     if expect_not_found == bool(expected_ids):
-        raise ContractError("not-found queries must have no expected sections and answered queries need one")
+        raise ContractError(
+            "not-found queries must have no expected sections and answered queries need one"
+        )
     return {
         "query_id": _required_string(raw.get("query_id"), "query.query_id", 200),
         "language": language,
@@ -124,9 +126,7 @@ def _validate_query(raw: Mapping[str, Any], document_ids: set[str]) -> dict[str,
         "allowed_audiences": sorted(
             {
                 _required_string(item, "query.allowed_audience", 40)
-                for item in _sequence(
-                    raw.get("allowed_audiences"), "query.allowed_audiences", 10
-                )
+                for item in _sequence(raw.get("allowed_audiences"), "query.allowed_audiences", 10)
             }
         ),
     }
@@ -151,16 +151,16 @@ def validate_benchmark_suite(raw: Mapping[str, Any]) -> dict[str, Any]:
         if expected_hash != item["source_sha256"]:
             raise ContractError(f"document hash mismatch for {item['section_id']}")
 
-    queries = [
-        _validate_query(_mapping(item, "query"), set(section_ids)) for item in queries_raw
-    ]
+    queries = [_validate_query(_mapping(item, "query"), set(section_ids)) for item in queries_raw]
     query_ids = [item["query_id"] for item in queries]
     if len(query_ids) != len(set(query_ids)):
         raise ContractError("query IDs must be unique")
     query_kinds = {item["kind"] for item in queries}
     required_kinds = {"exact-name", "paraphrase", "zh-to-en", "en-to-zh", "not-found"}
     if not required_kinds.issubset(query_kinds):
-        raise ContractError(f"benchmark missing required query kinds: {sorted(required_kinds - query_kinds)}")
+        raise ContractError(
+            f"benchmark missing required query kinds: {sorted(required_kinds - query_kinds)}"
+        )
     document_languages = {item["language"] for item in documents}
     if not {"en", "zh-TW"}.issubset(document_languages):
         raise ContractError("benchmark must contain English and Traditional Chinese documents")
@@ -256,7 +256,9 @@ def evaluate_rankings(
             raise ContractError(f"ranking contains duplicate sections for {query['query_id']}")
         unknown = sorted(set(ranking) - known_sections)
         if unknown:
-            raise ContractError(f"ranking contains unknown sections for {query['query_id']}: {unknown}")
+            raise ContractError(
+                f"ranking contains unknown sections for {query['query_id']}: {unknown}"
+            )
         if query["expect_not_found"]:
             not_found.append(1.0 if not ranking else 0.0)
             continue
