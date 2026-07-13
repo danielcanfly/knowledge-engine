@@ -21,7 +21,7 @@ jobs:
         env:
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-      - name: Materialize exact M21.5 implementation
+      - name: Materialize non-workflow M21.5 implementation
         run: |
           python - <<'PY'
           import base64
@@ -29,7 +29,6 @@ jobs:
           import zlib
 
           payloads = {
-              '.github/workflows/m21-5-entity-resolution.yml': '.m21-5-bootstrap/workflow.b64',
               'docs/architecture/m21/m21-5-entity-resolution.md': '.m21-5-bootstrap/docs.b64',
               'src/knowledge_engine/m21_entity_resolution.py': '.m21-5-bootstrap/source.b64',
               'tests/test_m21_5_entity_resolution.py': '.m21-5-bootstrap/tests.b64',
@@ -39,23 +38,20 @@ jobs:
               target.parent.mkdir(parents=True, exist_ok=True)
               payload = Path(payload_name).read_text().strip()
               target.write_bytes(zlib.decompress(base64.b64decode(payload)))
-          for payload_name in payloads.values():
-              Path(payload_name).unlink()
+          for payload_name in Path('.m21-5-bootstrap').glob('*.b64'):
+              payload_name.unlink()
           Path('.m21-5-bootstrap').rmdir()
-          Path('.github/workflows/m21-5-bootstrap.yml').unlink()
           PY
-      - name: Commit exact four-file implementation scope
+      - name: Commit non-workflow implementation scope
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          test -f .github/workflows/m21-5-entity-resolution.yml
           test -f docs/architecture/m21/m21-5-entity-resolution.md
           test -f src/knowledge_engine/m21_entity_resolution.py
           test -f tests/test_m21_5_entity_resolution.py
           test ! -e .m21-5-bootstrap
-          test ! -e .github/workflows/m21-5-bootstrap.yml
-          git commit -m 'feat: implement M21.5 resolution evidence'
+          git commit -m 'feat: materialize M21.5 resolution implementation'
           git push origin "HEAD:${HEAD_BRANCH}"
