@@ -51,6 +51,11 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          test "$(git diff --cached --name-only | sort | tr '\n' ' ')" = ".github/workflows/m21-5-bootstrap.yml .github/workflows/m21-5-entity-resolution.yml .m21-5-bootstrap/docs.b64 .m21-5-bootstrap/source.b64 .m21-5-bootstrap/tests.b64 .m21-5-bootstrap/workflow.b64 docs/architecture/m21/m21-5-entity-resolution.md src/knowledge_engine/m21_entity_resolution.py tests/test_m21_5_entity_resolution.py "
+          test -f .github/workflows/m21-5-entity-resolution.yml
+          test -f docs/architecture/m21/m21-5-entity-resolution.md
+          test -f src/knowledge_engine/m21_entity_resolution.py
+          test -f tests/test_m21_5_entity_resolution.py
+          test ! -e .m21-5-bootstrap
+          test ! -e .github/workflows/m21-5-bootstrap.yml
           git commit -m 'feat: implement M21.5 resolution evidence'
           git push origin "HEAD:${HEAD_BRANCH}"
