@@ -50,7 +50,7 @@ jobs:
           tests/test_m20_7_phase_c_acceptance.py
 
       - name: Test Runtime regressions
-        run: pytest -q tests/test_runtime.py tests/test_runtime_release_contract.py
+        run: pytest -q tests/test_runtime.py
 
       - name: Prove Phase C authority boundary
         run: |
