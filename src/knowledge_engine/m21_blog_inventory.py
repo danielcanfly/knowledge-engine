@@ -5,7 +5,7 @@ import ipaddress
 import json
 import posixpath
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
@@ -26,7 +26,12 @@ ALLOWED_MEDIA_TYPES = {
 ALLOWED_ACCESS = {"available", "blocked", "missing", "redirected"}
 ALLOWED_INTAKE = {"discovered", "captured", "deferred", "rejected"}
 ALLOWED_AUDIENCES = {"public", "internal"}
-ALLOWED_SOURCE_KINDS = {"repository_markdown", "site_api", "site_feed", "https_url"}
+ALLOWED_SOURCE_KINDS = {
+    "repository_markdown",
+    "site_api",
+    "site_feed",
+    "https_url",
+}
 
 
 @dataclass(frozen=True)
@@ -87,7 +92,11 @@ def canonicalize_url(value: str, *, allowed_hosts: set[str]) -> str:
         raise IntegrityError("M21-INV-107 URL userinfo is forbidden")
     if parsed.fragment:
         raise IntegrityError("M21-INV-108 URL fragments are forbidden")
-    if parsed.port not in (None, 443):
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise IntegrityError("M21-INV-109 invalid URL port") from exc
+    if port not in (None, 443):
         raise IntegrityError("M21-INV-109 non-canonical ports are forbidden")
     host = _normalise_host(parsed.hostname or "")
     normalised_allowed = {_normalise_host(item) for item in allowed_hosts}
@@ -98,12 +107,15 @@ def canonicalize_url(value: str, *, allowed_hosts: set[str]) -> str:
         path = f"/{path}"
     if parsed.path.endswith("/") and not path.endswith("/"):
         path = f"{path}/"
-    netloc = host
-    canonical = SplitResult("https", netloc, path, parsed.query, "")
+    canonical = SplitResult("https", host, path, parsed.query, "")
     return urlunsplit(canonical)
 
 
-def build_connector_descriptor(payload: dict[str, Any], *, allowed_hosts: set[str]) -> ConnectorDescriptor:
+def build_connector_descriptor(
+    payload: dict[str, Any],
+    *,
+    allowed_hosts: set[str],
+) -> ConnectorDescriptor:
     if not isinstance(payload, dict):
         raise IntegrityError("M21-INV-111 connector descriptor must be an object")
     source_kind = payload.get("source_kind")
@@ -114,12 +126,24 @@ def build_connector_descriptor(payload: dict[str, Any], *, allowed_hosts: set[st
         raise IntegrityError("M21-INV-112 unsupported source kind")
     if media_type not in ALLOWED_MEDIA_TYPES:
         raise IntegrityError("M21-INV-113 unsupported media type")
-    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or not 1 <= max_bytes <= MAX_DECLARED_BYTES:
+    valid_max_bytes = (
+        isinstance(max_bytes, int)
+        and not isinstance(max_bytes, bool)
+        and 1 <= max_bytes <= MAX_DECLARED_BYTES
+    )
+    if not valid_max_bytes:
         raise IntegrityError("M21-INV-114 max bytes exceeds bounds")
-    if not isinstance(redirect_limit, int) or isinstance(redirect_limit, bool) or not 0 <= redirect_limit <= MAX_REDIRECTS:
+    valid_redirect_limit = (
+        isinstance(redirect_limit, int)
+        and not isinstance(redirect_limit, bool)
+        and 0 <= redirect_limit <= MAX_REDIRECTS
+    )
+    if not valid_redirect_limit:
         raise IntegrityError("M21-INV-115 redirect limit exceeds bounds")
     if payload.get("credentials_required") is True:
-        raise IntegrityError("M21-INV-116 public blog inventory must not require credentials")
+        raise IntegrityError(
+            "M21-INV-116 public blog inventory must not require credentials"
+        )
     canonical_url = canonicalize_url(payload.get("url"), allowed_hosts=allowed_hosts)
     return ConnectorDescriptor(
         source_kind=source_kind,
@@ -140,7 +164,7 @@ def _parse_time(value: Any, *, label: str) -> str:
         raise IntegrityError(f"M21-INV-117 invalid {label}") from exc
     if parsed.tzinfo is None:
         raise IntegrityError(f"M21-INV-117 invalid {label}")
-    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def build_inventory_snapshot(
@@ -154,8 +178,14 @@ def build_inventory_snapshot(
     identity = InventoryIdentity(
         engine_sha=_sha(identity_payload.get("engine_sha"), label="Engine SHA"),
         source_sha=_sha(identity_payload.get("source_sha"), label="Source SHA"),
-        foundation_sha=_sha(identity_payload.get("foundation_sha"), label="Foundation SHA"),
-        captured_at=_parse_time(identity_payload.get("captured_at"), label="capture time"),
+        foundation_sha=_sha(
+            identity_payload.get("foundation_sha"),
+            label="Foundation SHA",
+        ),
+        captured_at=_parse_time(
+            identity_payload.get("captured_at"),
+            label="capture time",
+        ),
     )
     canonical_seen: set[str] = set()
     digest_seen: set[str] = set()
@@ -163,19 +193,29 @@ def build_inventory_snapshot(
     for raw in items:
         if not isinstance(raw, dict):
             raise IntegrityError("M21-INV-119 inventory item must be an object")
-        canonical_url = canonicalize_url(raw.get("canonical_url"), allowed_hosts=allowed_hosts)
+        canonical_url = canonicalize_url(
+            raw.get("canonical_url"),
+            allowed_hosts=allowed_hosts,
+        )
         if canonical_url in canonical_seen:
             raise IntegrityError("M21-INV-120 duplicate canonical URL")
         canonical_seen.add(canonical_url)
-        content_sha256 = _digest(raw.get("content_sha256"), label="content digest")
+        content_sha256 = _digest(
+            raw.get("content_sha256"),
+            label="content digest",
+        )
         if content_sha256 in digest_seen:
             raise IntegrityError("M21-INV-121 duplicate content digest")
         digest_seen.add(content_sha256)
         redirects = raw.get("redirects", [])
         if not isinstance(redirects, list) or len(redirects) > MAX_REDIRECTS:
             raise IntegrityError("M21-INV-122 redirect chain exceeds bounds")
-        canonical_redirects = [canonicalize_url(item, allowed_hosts=allowed_hosts) for item in redirects]
-        if len(set(canonical_redirects)) != len(canonical_redirects) or canonical_url in canonical_redirects:
+        canonical_redirects = [
+            canonicalize_url(item, allowed_hosts=allowed_hosts)
+            for item in redirects
+        ]
+        duplicate_redirect = len(set(canonical_redirects)) != len(canonical_redirects)
+        if duplicate_redirect or canonical_url in canonical_redirects:
             raise IntegrityError("M21-INV-123 redirect loop detected")
         access_status = raw.get("access_status")
         intake_status = raw.get("intake_status")
@@ -191,10 +231,19 @@ def build_inventory_snapshot(
         ownership_basis = raw.get("ownership_basis")
         if not isinstance(locator, str) or not locator or len(locator) > 2_048:
             raise IntegrityError("M21-INV-127 invalid locator")
-        if not isinstance(ownership_basis, str) or not ownership_basis or len(ownership_basis) > 500:
+        valid_ownership = (
+            isinstance(ownership_basis, str)
+            and bool(ownership_basis)
+            and len(ownership_basis) <= 500
+        )
+        if not valid_ownership:
             raise IntegrityError("M21-INV-128 invalid ownership basis")
         translated = raw.get("translated_counterpart")
-        translated_url = None if translated is None else canonicalize_url(translated, allowed_hosts=allowed_hosts)
+        translated_url = (
+            None
+            if translated is None
+            else canonicalize_url(translated, allowed_hosts=allowed_hosts)
+        )
         published_at = raw.get("published_at")
         modified_at = raw.get("modified_at")
         records.append(
@@ -204,8 +253,16 @@ def build_inventory_snapshot(
                 "slug": raw.get("slug"),
                 "series": raw.get("series"),
                 "part": raw.get("part"),
-                "published_at": None if published_at is None else _parse_time(published_at, label="publication time"),
-                "modified_at": None if modified_at is None else _parse_time(modified_at, label="modified time"),
+                "published_at": (
+                    None
+                    if published_at is None
+                    else _parse_time(published_at, label="publication time")
+                ),
+                "modified_at": (
+                    None
+                    if modified_at is None
+                    else _parse_time(modified_at, label="modified time")
+                ),
                 "content_sha256": content_sha256,
                 "source_kind": source_kind,
                 "locator": locator,
@@ -226,7 +283,11 @@ def build_inventory_snapshot(
         "production_authority": False,
         "items": records,
     }
-    canonical_bytes = json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode()
+    canonical_bytes = json.dumps(
+        snapshot,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
     snapshot["snapshot_sha256"] = hashlib.sha256(canonical_bytes).hexdigest()
     return snapshot
 
