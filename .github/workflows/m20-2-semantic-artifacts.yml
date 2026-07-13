@@ -1,0 +1,225 @@
+name: M20.2 immutable semantic artifacts
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m20_semantic_artifacts.py"
+      - "scripts/m20_semantic_artifacts.py"
+      - "tests/test_m20_2_semantic_artifacts.py"
+      - "schemas/m20-semantic-metadata-v2.schema.json"
+      - "docs/architecture/m20/m20-2-immutable-semantic-artifacts.md"
+      - "docs/architecture/m20/m20-2-immutable-semantic-artifacts-reconciliation.md"
+      - ".github/workflows/m20-2-semantic-artifacts.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/knowledge_engine/m20_semantic_artifacts.py"
+      - "scripts/m20_semantic_artifacts.py"
+      - "tests/test_m20_2_semantic_artifacts.py"
+      - "schemas/m20-semantic-metadata-v2.schema.json"
+      - "docs/architecture/m20/m20-2-immutable-semantic-artifacts.md"
+      - "docs/architecture/m20/m20-2-immutable-semantic-artifacts-reconciliation.md"
+      - ".github/workflows/m20-2-semantic-artifacts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  semantic-artifacts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install exact project dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: Lint M20.2 scope
+        run: |
+          ruff check \
+            src/knowledge_engine/m20_semantic_artifacts.py \
+            scripts/m20_semantic_artifacts.py \
+            tests/test_m20_2_semantic_artifacts.py
+      - name: Test M20.1 and M20.2 contracts
+        run: |
+          pytest -q \
+            tests/test_m20_1_embedding_contract.py \
+            tests/test_m20_2_semantic_artifacts.py
+      - name: Generate deterministic fixture vectors
+        run: |
+          mkdir -p .artifacts/m20-2
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          from knowledge_engine.m20_embedding_contract import (
+              load_json,
+              validate_benchmark_suite,
+              validate_provider_contract,
+          )
+
+          suite = validate_benchmark_suite(
+              load_json('benchmarks/m20/bilingual-blog-benchmark-v1.json')
+          )
+          contract = validate_provider_contract(
+              load_json('benchmarks/m20/provider-contract.fixture.json')
+          )
+          dimension = contract['model']['vector_dimension']
+          vectors = {}
+          for index, document in enumerate(suite['documents']):
+              vector = [0.0] * dimension
+              vector[index] = 1.0
+              vectors[document['section_id']] = vector
+          public = next(item for item in suite['documents'] if item['audience'] == 'public')
+          query = [0.0] * dimension
+          query[suite['documents'].index(public)] = 1.0
+          root = Path('.artifacts/m20-2')
+          root.joinpath('vectors.json').write_text(
+              json.dumps(vectors, ensure_ascii=False, sort_keys=True),
+              encoding='utf-8',
+          )
+          root.joinpath('query.json').write_text(json.dumps(query), encoding='utf-8')
+          root.joinpath('expected-section.txt').write_text(
+              public['section_id'],
+              encoding='utf-8',
+          )
+          internal = next(item for item in suite['documents'] if item['audience'] == 'internal')
+          root.joinpath('internal-section.txt').write_text(
+              internal['section_id'],
+              encoding='utf-8',
+          )
+          PY
+      - name: Prove byte-identical immutable builds
+        run: |
+          HEAD_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          python scripts/m20_semantic_artifacts.py build \
+            --suite benchmarks/m20/bilingual-blog-benchmark-v1.json \
+            --provider-contract benchmarks/m20/provider-contract.fixture.json \
+            --vectors .artifacts/m20-2/vectors.json \
+            --output-dir .artifacts/m20-2/build-a \
+            --builder-engine-sha "$HEAD_SHA" \
+            > .artifacts/m20-2/build-a-report.json
+          python scripts/m20_semantic_artifacts.py build \
+            --suite benchmarks/m20/bilingual-blog-benchmark-v1.json \
+            --provider-contract benchmarks/m20/provider-contract.fixture.json \
+            --vectors .artifacts/m20-2/vectors.json \
+            --output-dir .artifacts/m20-2/build-b \
+            --builder-engine-sha "$HEAD_SHA" \
+            > .artifacts/m20-2/build-b-report.json
+          cmp \
+            .artifacts/m20-2/build-a/semantic-metadata.json \
+            .artifacts/m20-2/build-b/semantic-metadata.json
+          cmp \
+            .artifacts/m20-2/build-a/semantic-vectors.f32 \
+            .artifacts/m20-2/build-b/semantic-vectors.f32
+          test "$(stat -c '%a' .artifacts/m20-2/build-a/semantic-metadata.json)" = "444"
+          test "$(stat -c '%a' .artifacts/m20-2/build-a/semantic-vectors.f32)" = "444"
+      - name: Verify artifacts and flat-cosine ACL
+        run: |
+          HEAD_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          python scripts/m20_semantic_artifacts.py verify \
+            --suite benchmarks/m20/bilingual-blog-benchmark-v1.json \
+            --provider-contract benchmarks/m20/provider-contract.fixture.json \
+            --artifact-dir .artifacts/m20-2/build-a \
+            --expected-builder-engine-sha "$HEAD_SHA" \
+            --output .artifacts/m20-2/verification.json
+          python scripts/m20_semantic_artifacts.py rank \
+            --suite benchmarks/m20/bilingual-blog-benchmark-v1.json \
+            --provider-contract benchmarks/m20/provider-contract.fixture.json \
+            --artifact-dir .artifacts/m20-2/build-a \
+            --query-vector .artifacts/m20-2/query.json \
+            --audience public \
+            --limit 8 \
+            --output .artifacts/m20-2/ranking.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('.artifacts/m20-2')
+          verification = json.loads(root.joinpath('verification.json').read_text())
+          ranking = json.loads(root.joinpath('ranking.json').read_text())
+          expected = root.joinpath('expected-section.txt').read_text()
+          internal = root.joinpath('internal-section.txt').read_text()
+          assert verification['verified'] is True
+          assert verification['row_count'] == 8
+          assert verification['dimension'] == 64
+          assert ranking['method'] == 'deterministic-flat-cosine'
+          assert ranking['results'][0]['section_id'] == expected
+          assert internal not in {item['section_id'] for item in ranking['results']}
+          assert ranking['read_only'] is True
+          assert ranking['production_authority'] is False
+          PY
+      - name: Prove tampering fails closed
+        run: |
+          cp -a .artifacts/m20-2/build-a .artifacts/m20-2/tampered-vectors
+          chmod 644 .artifacts/m20-2/tampered-vectors/semantic-vectors.f32
+          truncate -s -4 .artifacts/m20-2/tampered-vectors/semantic-vectors.f32
+          if python scripts/m20_semantic_artifacts.py verify \
+            --suite benchmarks/m20/bilingual-blog-benchmark-v1.json \
+            --provider-contract benchmarks/m20/provider-contract.fixture.json \
+            --artifact-dir .artifacts/m20-2/tampered-vectors; then
+            echo "truncated vectors were accepted" >&2
+            exit 1
+          fi
+          cp -a .artifacts/m20-2/build-a .artifacts/m20-2/tampered-metadata
+          chmod 644 .artifacts/m20-2/tampered-metadata/semantic-metadata.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('.artifacts/m20-2/tampered-metadata/semantic-metadata.json')
+          value = json.loads(path.read_text())
+          value['documents'][0]['audience'] = 'internal'
+          path.write_text(json.dumps(value), encoding='utf-8')
+          PY
+          if python scripts/m20_semantic_artifacts.py verify \
+            --suite benchmarks/m20/bilingual-blog-benchmark-v1.json \
+            --provider-contract benchmarks/m20/provider-contract.fixture.json \
+            --artifact-dir .artifacts/m20-2/tampered-metadata; then
+            echo "tampered metadata was accepted" >&2
+            exit 1
+          fi
+      - name: Scan authority and dependency boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path('src/knowledge_engine/m20_semantic_artifacts.py'),
+              Path('scripts/m20_semantic_artifacts.py'),
+          ]
+          source = '\n'.join(path.read_text(encoding='utf-8') for path in paths)
+          forbidden = {
+              'network fetch': 'requests.',
+              'http client': 'httpx.',
+              'model hub download': 'huggingface_hub',
+              'sentence transformers': 'sentence_transformers',
+              'torch runtime': 'import torch',
+              'vector database': 'qdrant',
+              'object store client': 'boto3',
+              'runtime loader': 'from .runtime',
+              'object-store mutation': 'put_object',
+              'production pointer': 'production_pointer',
+              'permanent ledger': 'permanent_ledger',
+          }
+          found = [name for name, token in forbidden.items() if token in source]
+          if found:
+              raise SystemExit(f'forbidden M20.2 authority or dependency surface: {found}')
+          if list(Path('.').glob('artifacts/**/*.f32')):
+              raise SystemExit('committed semantic vector binary found under artifacts/')
+          PY
+          test -z "$(git ls-files '*.f32')"
+      - name: Compile M20.2 scope
+        run: |
+          python -m compileall -q \
+            src/knowledge_engine/m20_semantic_artifacts.py \
+            scripts/m20_semantic_artifacts.py \
+            tests/test_m20_2_semantic_artifacts.py
