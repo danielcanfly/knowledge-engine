@@ -1,0 +1,210 @@
+{
+  "documents": [
+    {
+      "audience": "public",
+      "concept_id": "harness-definition",
+      "language": "en",
+      "section_id": "blog/en/harness-theory-part-01#working-definition",
+      "source_path": "/en/blog/harness-theory-part-1/",
+      "source_sha256": "ca2c3564e03ae633c15c8178282e7cbee8a1477647ba157d614265d013d6b61c",
+      "text": "A harness is the execution and governance system around an LLM or agent runtime. The model supplies reasoning and choice; the harness supplies context, tools, state, policy, verification and observability.",
+      "title": "What is an agent harness?"
+    },
+    {
+      "audience": "public",
+      "concept_id": "capability-engineering",
+      "language": "en",
+      "section_id": "blog/en/harness-theory-part-05#capability-engineering",
+      "source_path": "/en/blog/harness-theory-part-5/",
+      "source_sha256": "853efe2b167901b1dbc56be497001998883830570c9c70c757ca78e094daec39",
+      "text": "Capability engineering covers how capabilities are described, discovered, selected, authorised, executed, observed and governed. A tool is executable, a skill packages a method, and MCP connects a host to external capabilities.",
+      "title": "Tools, skills, plugins, hooks, MCP and A2A"
+    },
+    {
+      "audience": "public",
+      "concept_id": "long-running-agent-work",
+      "language": "en",
+      "section_id": "blog/en/harness-theory-part-07#durable-task-state",
+      "source_path": "/en/blog/harness-theory-part-7/",
+      "source_sha256": "9a396f05f1ed27c75fb1ebe2d17fd305c6189983831357069fd9350b9c67db24",
+      "text": "Long-running work cannot depend on one conversation surviving forever. Durable artefacts, structured progress, clean hand-offs and explicit ownership let a fresh session reconstruct the task safely.",
+      "title": "Long-running work across context boundaries"
+    },
+    {
+      "audience": "public",
+      "concept_id": "agentic-security",
+      "language": "en",
+      "section_id": "blog/en/harness-theory-part-09#authority-chain",
+      "source_path": "/en/blog/harness-theory-part-9/",
+      "source_sha256": "16bad336dadde905c180273316b81848dde2316f35aa6e3bebd54bd06d98ea62",
+      "text": "Untrusted content may influence a proposal but must not authorise an operation. Identity, permission, approval, sandbox and egress controls stand between model output and a real side effect.",
+      "title": "Agent security starts with the authority chain"
+    },
+    {
+      "audience": "public",
+      "concept_id": "structured-sql-rag",
+      "language": "zh-TW",
+      "section_id": "blog/zh/production-rag-part-08#structured-sql-rag",
+      "source_path": "/zh/blog/from-rag-to-production-rag-part-8/",
+      "source_sha256": "cdd088795bbaa3ed88ff63b9b4a3ed52fb1f248bf0c9a6e75fb43640b770c803",
+      "text": "不是每一題都該走 vector retrieval。當答案位於資料庫、API 或 metrics table，系統應先判斷 structured intent，再使用唯讀 SQL 或 API allowlist，套用權限、逾時與 row limit。",
+      "title": "Structured／SQL RAG 不該走向量檢索"
+    },
+    {
+      "audience": "public",
+      "concept_id": "controlled-agentic-rag",
+      "language": "zh-TW",
+      "section_id": "blog/zh/production-rag-part-08#agentic-rag",
+      "source_path": "/zh/blog/from-rag-to-production-rag-part-8/",
+      "source_sha256": "3718eae9f7ba6c9d754271966c287998e097ff21ddd0d5682a862e8ae90b9fce",
+      "text": "Agentic RAG 不是讓 agent 自由發揮，而是受控流程：規劃、工具路由、檢索、證據評估、必要時反思或重試、組裝 context，最後驗證並回答。",
+      "title": "Agentic RAG 是受控的多步驟工作流"
+    },
+    {
+      "audience": "public",
+      "concept_id": "long-running-agent-work",
+      "language": "zh-TW",
+      "section_id": "blog/zh/harness-theory-part-07#durable-task-state",
+      "source_path": "/zh/blog/harness-theory-part-7/",
+      "source_sha256": "c617e2b0252d8d30955e143029c030ea36ef29dd7cc721cbeda3f5675f16de36",
+      "text": "長任務的連續性不能依賴同一個對話永遠存在。Task contract、progress ledger、checkpoint、evidence 與 handoff manifest 必須保存在 session 外部，讓新 session 能安全重建工作狀態。",
+      "title": "長任務如何跨越 Context 邊界"
+    },
+    {
+      "audience": "internal",
+      "concept_id": "candidate-release-internal",
+      "language": "zh-TW",
+      "section_id": "blog/zh/internal#candidate-release-secret",
+      "source_path": "/internal/candidate-release-controls/",
+      "source_sha256": "5e8310e422d196fc621f46e62d2858a288b34a8ea163a6a901a7c44845fdbb19",
+      "text": "這是只供 internal audience 使用的候選版本控制說明，不得由 public benchmark query 取回。",
+      "title": "內部 Candidate Release 控制"
+    }
+  ],
+  "identities": {
+    "engine_baseline_sha": "b33d06a8f2b9896a8be29009f36cbbde4b5cb5c1",
+    "foundation_commit_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+    "source_commit_sha": "a6ba738d910d01d2ae99b1968f0831989934c549"
+  },
+  "production_authority": false,
+  "queries": [
+    {
+      "allowed_audiences": ["public"],
+      "expect_not_found": false,
+      "expected_section_ids": ["blog/en/harness-theory-part-01#working-definition"],
+      "kind": "exact-name",
+      "language": "en",
+      "query_id": "q01-harness-exact-en",
+      "text": "What is an agent harness?"
+    },
+    {
+      "allowed_audiences": ["public"],
+      "expect_not_found": false,
+      "expected_section_ids": ["blog/en/harness-theory-part-01#working-definition"],
+      "kind": "paraphrase",
+      "language": "en",
+      "query_id": "q02-harness-paraphrase-en",
+      "text": "What system surrounds a model with state, policy, tools and verification?"
+    },
+    {
+      "allowed_audiences": ["public"],
+      "expect_not_found": false,
+      "expected_section_ids": ["blog/en/harness-theory-part-05#capability-engineering"],
+      "kind": "dependency",
+      "language": "en",
+      "query_id": "q03-capabilities-en",
+      "text": "How are tools, skills and MCP different?"
+    },
+    {
+      "allowed_audiences": ["public"],
+      "expect_not_found": false,
+      "expected_section_ids": [
+        "blog/en/harness-theory-part-07#durable-task-state",
+        "blog/zh/harness-theory-part-07#durable-task-state"
+      ],
+      "kind": "paraphrase",
+      "language": "en",
+      "query_id": "q04-long-running-en",
+      "text": "How can a fresh session continue a long coding task without the full transcript?"
+    },
+    {
+      "allowed_audiences": ["public"],
+      "expect_not_found": false,
+      "expected_section_ids": ["blog/en/harness-theory-part-09#authority-chain"],
+      "kind": "zh-to-en",
+      "language": "zh-TW",
+      "query_id": "q05-security-zh-to-en",
+      "text": "不可信內容為什麼不能直接授權工具執行？"
+    },
+    {
+      "allowed_audiences": ["public"],
+      "expect_not_found": false,
+      "expected_section_ids": ["blog/zh/production-rag-part-08#structured-sql-rag"],
+      "kind": "exact-name",
+      "language": "zh-TW",
+      "query_id": "q06-sql-rag-zh",
+      "text": "Structured SQL RAG"
+    },
+    {
+      "allowed_audiences": ["public"],
+      "expect_not_found": false,
+      "expected_section_ids": ["blog/zh/production-rag-part-08#structured-sql-rag"],
+      "kind": "en-to-zh",
+      "language": "en",
+      "query_id": "q07-sql-rag-en-to-zh",
+      "text": "When should retrieval use a read-only SQL allowlist instead of vectors?"
+    },
+    {
+      "allowed_audiences": ["public"],
+      "expect_not_found": false,
+      "expected_section_ids": ["blog/zh/production-rag-part-08#agentic-rag"],
+      "kind": "paraphrase",
+      "language": "zh-TW",
+      "query_id": "q08-agentic-rag-zh",
+      "text": "Agentic RAG 應該如何限制 agent 自由探索？"
+    },
+    {
+      "allowed_audiences": ["public"],
+      "expect_not_found": false,
+      "expected_section_ids": ["blog/zh/harness-theory-part-07#durable-task-state"],
+      "kind": "exact-name",
+      "language": "zh-TW",
+      "query_id": "q09-long-running-zh",
+      "text": "長任務如何跨越 Context 邊界"
+    },
+    {
+      "allowed_audiences": ["public"],
+      "expect_not_found": false,
+      "expected_section_ids": [
+        "blog/zh/harness-theory-part-07#durable-task-state",
+        "blog/en/harness-theory-part-07#durable-task-state"
+      ],
+      "kind": "en-to-zh",
+      "language": "en",
+      "query_id": "q10-long-running-en-to-zh",
+      "text": "durable task state and handoff manifest"
+    },
+    {
+      "allowed_audiences": ["public"],
+      "expect_not_found": true,
+      "expected_section_ids": [],
+      "kind": "not-found",
+      "language": "zh-TW",
+      "query_id": "q11-not-found",
+      "text": "這個知識庫如何維修量子重力望遠鏡？"
+    },
+    {
+      "allowed_audiences": ["public"],
+      "expect_not_found": true,
+      "expected_section_ids": [],
+      "kind": "acl-negative",
+      "language": "zh-TW",
+      "query_id": "q12-acl-negative",
+      "text": "內部 Candidate Release 控制"
+    }
+  ],
+  "read_only": true,
+  "schema_version": "knowledge-os-bilingual-blog-benchmark/v1",
+  "suite_id": "daniel-bilingual-blog-retrieval-v1",
+  "suite_revision": "2026-07-13.1"
+}
