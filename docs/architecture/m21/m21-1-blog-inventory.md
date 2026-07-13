@@ -99,3 +99,16 @@ M21.1 acceptance covers:
 ## Exclusions
 
 No live whole-site ingestion, browser extraction, entity or concept extraction, relation extraction, resumable batch execution, Source edit, candidate or production publication, production pointer, retained R2 object, credentials, permanent ledger, rollback, M21.2 work, cross-release merge, or Graph Neural Retrieval is included.
+
+## Closure reconciliation
+
+M21.1 implementation PR #314 was based on exact Phase C closure `ec7962edb13807246c752aee029148515a9a496a` and merged at `c6471e6bcbedc9a0c78a59185bc84074accefa0e` from final expected head `ce673c919cb6d32c62e2f7ed1c5183410b95ff5f`.
+
+The implementation changed exactly four files: this architecture contract, the M21.1 workflow, the inventory module, and its acceptance tests. Final-head workflows were all green: M21.1 Blog Inventory #4, CI #656, M17 Architecture Canon Acceptance #60, M18 Graph v2 Acceptance #92, and R2 Release Integration #454. PR comments, reviews, and unresolved threads were empty.
+
+Two earlier heads are invalidated and provide no acceptance evidence:
+
+- `a22bc20f62ad2133104a15582a9047e4bdc8b7e0`, rejected by repository Ruff formatting and `datetime.UTC` rules;
+- `978db6b8f13e6aee03478b9ab6c36b1b6a9e3454`, where all tests passed but the shell authority scan incorrectly used `! find`.
+
+Source remained `a6ba738d910d01d2ae99b1968f0831989934c549` and Foundation remained `e5ef644053d34e89c70d2ceb37521e1c59234832`. No live crawl, Source mutation, publication, production pointer, retained R2 object, credentials, permanent ledger, rollback, M21.2 implementation, cross-release merge, or Graph Neural Retrieval was dispatched.
