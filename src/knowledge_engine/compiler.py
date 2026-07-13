@@ -15,6 +15,7 @@ from urllib.parse import unquote, urlsplit
 import yaml
 
 from .errors import IntegrityError
+from .graph_v2 import compile_graph_v2
 from .m14_section_index import build_graph_edges, build_section_documents
 from .storage import sha256_bytes
 
@@ -207,6 +208,14 @@ def compile_release(
         ],
         "edges": build_graph_edges(concepts, bundle_root=bundle_root),
     }
+    graph_v2 = compile_graph_v2(
+        concepts,
+        bundle_root=bundle_root,
+        release_id=release_id,
+        source_commit_sha=source_commit_sha,
+        foundation_commit_sha=foundation_commit_sha,
+        content_sha256=content_hash,
+    )
     lexical = {
         "schema_version": "2.0",
         "document_model": "section",
@@ -240,6 +249,7 @@ def compile_release(
     }
     for filename, payload in (
         ("graph.json", graph),
+        ("graph-v2.json", graph_v2),
         ("lexical-index.json", lexical),
         ("provenance.json", provenance),
         ("build-report.json", report),
@@ -255,6 +265,7 @@ def compile_release(
     artifact_specs = [
         ("okf_bundle", "bundle.tar.gz", "application/gzip"),
         ("graph", "artifacts/graph.json", "application/json"),
+        ("graph_v2", "artifacts/graph-v2.json", "application/json"),
         ("lexical_index", "artifacts/lexical-index.json", "application/json"),
         ("provenance", "artifacts/provenance.json", "application/json"),
         ("build_report", "artifacts/build-report.json", "application/json"),
@@ -322,6 +333,7 @@ def compile_release(
                 "build_pipeline": "0.2.0",
                 "runtime_query": "0.2.0",
                 "provenance": "1.0",
+                "knowledge_graph": "2.0",
             },
         },
     }
