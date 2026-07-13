@@ -311,6 +311,9 @@ def main() -> int:
         store,
         settings.cache_dir,
         args.channel or settings.channel,
+        relation_aware_expansion_enabled=(
+            settings.relation_aware_expansion_enabled
+        ),
     )
     if args.command == "refresh":
         active = runtime.refresh()
