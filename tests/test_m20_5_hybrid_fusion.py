@@ -6,7 +6,10 @@ from typing import Any
 import pytest
 
 from knowledge_engine.errors import IntegrityError
-from knowledge_engine.m20_hybrid_fusion import HybridFusionController, RRF_K
+from knowledge_engine.m20_hybrid_fusion import (
+    RRF_K,
+    HybridFusionController,
+)
 from knowledge_engine.m20_retrieval_modes import (
     HYBRID_MODE,
     LEXICAL_MODE,
