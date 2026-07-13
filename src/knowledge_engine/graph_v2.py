@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 from __future__ import annotations
 
 import hashlib
@@ -30,6 +31,8 @@ def _edge_id(source: str, target: str, relation_type: str, directed: bool, quali
 
 def _profile(bundle_root: Path) -> dict[str, Any]:
     path = bundle_root / "_meta" / "graph-profile.json"
+    if not path.is_file():
+        return {"authoring_relation_types": []}
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
