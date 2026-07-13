@@ -89,3 +89,24 @@ No candidate is approved or adopted automatically.
 ## Exclusions
 
 No model/provider/network call, live connector, scheduler, queue, worker, Source edit, canonical adoption, review approval, inverse edge materialization, entity resolution, bulk Source PR, candidate or production publication, production pointer, retained R2 object, credentials, permanent ledger, rollback, M21.5 work, cross-release merge, or Graph Neural Retrieval is included.
+
+## Closure reconciliation
+
+M21.4 implementation was delivered through issue #322 and implementation PR #323.
+
+Exact identity chain:
+
+- M21.3 reconciliation base: `672dfdbd1371f44873d24104b5dd6dfc52d598fc`;
+- invalidated implementation head: `d02aee6cefe9e4a1a302c0d4891ef739b1cc2c6c`;
+- final implementation head: `14efc6b46d592e3ee6d289885ad3095be9685573`;
+- implementation merge: `f5107b70d279d61ecf65595dc575925a987a5c38`.
+
+The invalidated head passed exact checkout and dependency installation but failed one Ruff E501 in a test fixture before functional tests ran. It is not acceptance evidence.
+
+Implementation scope was exactly four added files: the M21.4 workflow, this architecture contract, the governed relation/tag module, and its acceptance tests. The final implementation head passed M21.4 Governed Relations and Tags #2, CI #671, M17 Architecture Canon Acceptance #69, M18 Graph v2 Acceptance #107, and R2 Release Integration #463.
+
+PR #323 had no conversation comments, submitted reviews, or unresolved review threads. The merge used the recorded expected head SHA.
+
+One invalid PR creation request using head `none` was rejected by GitHub with HTTP 422 before the canonical issue and branch existed. It created no repository object and has no evidence role.
+
+No model/provider/network call, live connector, scheduler, worker, Source mutation, canonical adoption, review approval, inverse edge materialization, entity resolution, bulk Source PR, candidate or production publication, production pointer, retained R2 object, credentials, permanent ledger, rollback, cross-release merge, or Graph Neural Retrieval was dispatched.
