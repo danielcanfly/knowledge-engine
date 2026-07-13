@@ -10,7 +10,7 @@ from typing import Any
 
 from .errors import IntegrityError
 from .m14_citation_runtime import enrich_runtime_citations
-from .m14_retrieval import retrieve_wiki_first
+from .m14_retrieval import retrieve_wiki_first, validate_relation_graph_v2
 from .query_evaluation import evaluate_runtime_query
 from .storage import ObjectStore, sha256_bytes
 
@@ -23,6 +23,7 @@ class ActiveRelease:
     manifest: dict[str, Any]
     lexical_index: dict[str, Any]
     graph: dict[str, Any]
+    graph_v2: dict[str, Any] | None
     provenance: dict[str, Any]
     semantic_index: dict[str, Any] | None
 
@@ -38,10 +39,18 @@ def _load_json_file(path: Path, label: str) -> dict[str, Any]:
 
 
 class Runtime:
-    def __init__(self, store: ObjectStore, cache_dir: Path, channel: str) -> None:
+    def __init__(
+        self,
+        store: ObjectStore,
+        cache_dir: Path,
+        channel: str,
+        *,
+        relation_aware_expansion_enabled: bool = False,
+    ) -> None:
         self.store = store
         self.cache_dir = cache_dir.resolve()
         self.channel = channel
+        self.relation_aware_expansion_enabled = relation_aware_expansion_enabled
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._active: ActiveRelease | None = None
         self._lock = threading.RLock()
@@ -147,6 +156,15 @@ class Runtime:
                 "lexical index",
             )
             graph = _load_json_file(artifact_paths["graph"], "wiki graph")
+            graph_v2 = None
+            graph_v2_path = artifact_paths.get("graph_v2")
+            if graph_v2_path is not None:
+                graph_v2 = _load_json_file(graph_v2_path, "wiki graph v2")
+                validate_relation_graph_v2(
+                    graph_v2,
+                    expected_release_id=release_id,
+                    compatibility_graph=graph,
+                )
             provenance = _load_json_file(
                 artifact_paths["provenance"],
                 "provenance",
@@ -171,6 +189,7 @@ class Runtime:
                 manifest=manifest,
                 lexical_index=lexical_index,
                 graph=graph,
+                graph_v2=graph_v2,
                 provenance=provenance,
                 semantic_index=semantic_index,
             )
@@ -201,6 +220,8 @@ class Runtime:
             allowed_audiences=allowed_audiences,
             lexical_index=active.lexical_index,
             graph=active.graph,
+            relation_graph=active.graph_v2,
+            relation_aware_expansion=self.relation_aware_expansion_enabled,
             provenance=active.provenance,
             semantic_index=active.semantic_index,
             limit=limit,

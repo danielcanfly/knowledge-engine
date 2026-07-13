@@ -117,6 +117,7 @@ class Settings:
     channel: str
     cache_dir: Path
     log_level: str
+    relation_aware_expansion_enabled: bool = False
     public_anonymous_enabled: bool = True
     public_allowed_origins: tuple[str, ...] = ()
     public_rate_limit_requests: int = 30
@@ -160,6 +161,10 @@ class Settings:
                 _env("CACHE_DIR", ".artifacts/cache") or ".artifacts/cache"
             ).expanduser(),
             log_level=(_env("LOG_LEVEL", "INFO") or "INFO").upper(),
+            relation_aware_expansion_enabled=_bool(
+                "RELATION_AWARE_EXPANSION_ENABLED",
+                False,
+            ),
             public_anonymous_enabled=_bool("PUBLIC_ANONYMOUS_ENABLED", True),
             public_allowed_origins=_csv(_env("PUBLIC_ALLOWED_ORIGINS", "") or ""),
             public_rate_limit_requests=_int("PUBLIC_RATE_LIMIT_REQUESTS", 30),

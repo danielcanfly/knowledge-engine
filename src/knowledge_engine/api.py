@@ -81,6 +81,9 @@ def get_runtime() -> Runtime:
         create_object_store(settings),
         settings.cache_dir,
         settings.channel,
+        relation_aware_expansion_enabled=(
+            settings.relation_aware_expansion_enabled
+        ),
     )
 
 
