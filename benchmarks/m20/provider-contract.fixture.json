@@ -1,0 +1,45 @@
+{
+  "authority": {
+    "canonical_source": "markdown",
+    "production_authority": false,
+    "runtime_network_required": false,
+    "vectors_are_derived": true,
+    "write_back": false
+  },
+  "batching": {
+    "batch_size": 32,
+    "deterministic": true,
+    "preserve_input_order": true
+  },
+  "identities": {
+    "engine_commit_sha": "b33d06a8f2b9896a8be29009f36cbbde4b5cb5c1",
+    "foundation_commit_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+    "source_commit_sha": "a6ba738d910d01d2ae99b1968f0831989934c549"
+  },
+  "model": {
+    "digest_sha256": "b0f92bac613fddba5532798b1b7e873846147354948a56b6d69ed6561de410c9",
+    "id": "fixture-token-hash-v1",
+    "revision": "m20.1-fixture.1",
+    "vector_dimension": 64
+  },
+  "preprocessing": {
+    "input_template": "{title}\n{text}",
+    "maximum_input_length": 2048,
+    "normalization": "l2",
+    "pooling": "provider-native",
+    "query_template": "{query}",
+    "truncation": "error",
+    "unicode_normalization": "NFKC"
+  },
+  "provider": {
+    "execution": "local-test-only",
+    "implementation": "knowledge_engine.m20_embedding_contract",
+    "name": "deterministic-fixture"
+  },
+  "schema_version": "knowledge-os-embedding-provider-contract/v1",
+  "tokenizer": {
+    "digest_sha256": "faf8244515a90db4c8b797ca23fb3b92d1987bad83f17548fa3e3cc8b7f9a79d",
+    "id": "unicode-nfkc-token-fixture",
+    "revision": "m20.1-fixture.1"
+  }
+}

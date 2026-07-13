@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-os.invalid/schemas/m20-embedding-provider-contract-v1.schema.json",
+  "title": "Knowledge OS M20.1 Embedding Provider Contract",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "provider",
+    "model",
+    "tokenizer",
+    "preprocessing",
+    "batching",
+    "identities",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-os-embedding-provider-contract/v1"},
+    "provider": {
+      "type": "object",
+      "required": ["name", "implementation", "execution"],
+      "additionalProperties": false
+    },
+    "model": {
+      "type": "object",
+      "required": ["id", "vector_dimension"],
+      "anyOf": [
+        {"required": ["revision"]},
+        {"required": ["digest_sha256"]}
+      ],
+      "additionalProperties": false
+    },
+    "tokenizer": {
+      "type": "object",
+      "required": ["id"],
+      "anyOf": [
+        {"required": ["revision"]},
+        {"required": ["digest_sha256"]}
+      ],
+      "additionalProperties": false
+    },
+    "preprocessing": {
+      "type": "object",
+      "required": [
+        "pooling",
+        "normalization",
+        "input_template",
+        "query_template",
+        "maximum_input_length",
+        "truncation",
+        "unicode_normalization"
+      ],
+      "additionalProperties": false
+    },
+    "batching": {
+      "type": "object",
+      "required": ["batch_size", "preserve_input_order", "deterministic"],
+      "additionalProperties": false
+    },
+    "identities": {
+      "type": "object",
+      "required": ["engine_commit_sha", "source_commit_sha", "foundation_commit_sha"],
+      "additionalProperties": false
+    },
+    "authority": {
+      "type": "object",
+      "required": [
+        "canonical_source",
+        "vectors_are_derived",
+        "runtime_network_required",
+        "write_back",
+        "production_authority"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
