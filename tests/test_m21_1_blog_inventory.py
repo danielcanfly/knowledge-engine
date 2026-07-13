@@ -11,7 +11,11 @@ from knowledge_engine.m21_blog_inventory import (
     canonicalize_url,
 )
 
-ALLOWED = {"danielcanfly.com", "www.danielcanfly.com", "raw.githubusercontent.com"}
+ALLOWED = {
+    "danielcanfly.com",
+    "www.danielcanfly.com",
+    "raw.githubusercontent.com",
+}
 IDENTITY = {
     "engine_sha": "e" * 40,
     "source_sha": "s" * 40,
@@ -33,7 +37,9 @@ def _item(slug: str = "rag-part-1") -> dict:
         "source_kind": "repository_markdown",
         "locator": f"content/en/{slug}.md",
         "redirects": [],
-        "translated_counterpart": f"https://www.danielcanfly.com/zh/blog/{slug}",
+        "translated_counterpart": (
+            f"https://www.danielcanfly.com/zh/blog/{slug}"
+        ),
         "access_status": "available",
         "intake_status": "captured",
         "ownership_basis": "First-party article owned by Daniel Huang",
@@ -52,7 +58,10 @@ def test_connector_preference_descriptor_is_bounded_and_secret_free() -> None:
     descriptor = build_connector_descriptor(
         {
             "source_kind": "repository_markdown",
-            "url": "https://raw.githubusercontent.com/danielcanfly/site/main/post.md",
+            "url": (
+                "https://raw.githubusercontent.com/"
+                "danielcanfly/site/main/post.md"
+            ),
             "media_type": "text/markdown",
             "max_bytes": 200_000,
             "redirect_limit": 0,
@@ -76,10 +85,17 @@ def test_connector_rejects_non_https_userinfo_private_hosts_and_secrets() -> Non
         "https://127.0.0.1/blog/a",
     ):
         with pytest.raises(IntegrityError):
-            build_connector_descriptor({**base, "url": url}, allowed_hosts=ALLOWED | {"127.0.0.1"})
+            build_connector_descriptor(
+                {**base, "url": url},
+                allowed_hosts=ALLOWED | {"127.0.0.1"},
+            )
     with pytest.raises(IntegrityError, match="must not require credentials"):
         build_connector_descriptor(
-            {**base, "url": "https://www.danielcanfly.com/blog/a", "credentials_required": True},
+            {
+                **base,
+                "url": "https://www.danielcanfly.com/blog/a",
+                "credentials_required": True,
+            },
             allowed_hosts=ALLOWED,
         )
 
@@ -92,19 +108,35 @@ def test_connector_rejects_redirect_payload_and_media_bounds() -> None:
         "max_bytes": 100,
     }
     with pytest.raises(IntegrityError, match="redirect limit"):
-        build_connector_descriptor({**base, "redirect_limit": 9}, allowed_hosts=ALLOWED)
+        build_connector_descriptor(
+            {**base, "redirect_limit": 9},
+            allowed_hosts=ALLOWED,
+        )
     with pytest.raises(IntegrityError, match="max bytes"):
-        build_connector_descriptor({**base, "max_bytes": 8_000_001}, allowed_hosts=ALLOWED)
+        build_connector_descriptor(
+            {**base, "max_bytes": 8_000_001},
+            allowed_hosts=ALLOWED,
+        )
     with pytest.raises(IntegrityError, match="media type"):
-        build_connector_descriptor({**base, "media_type": "application/octet-stream"}, allowed_hosts=ALLOWED)
+        build_connector_descriptor(
+            {**base, "media_type": "application/octet-stream"},
+            allowed_hosts=ALLOWED,
+        )
 
 
 def test_inventory_snapshot_is_stable_sorted_and_evidence_only() -> None:
     second = _item("rag-part-2")
     second["content_sha256"] = "b" * 64
     second["part"] = 2
-    snapshot = build_inventory_snapshot(IDENTITY, [second, _item()], allowed_hosts=ALLOWED)
-    assert [item["slug"] for item in snapshot["items"]] == ["rag-part-1", "rag-part-2"]
+    snapshot = build_inventory_snapshot(
+        IDENTITY,
+        [second, _item()],
+        allowed_hosts=ALLOWED,
+    )
+    assert [item["slug"] for item in snapshot["items"]] == [
+        "rag-part-1",
+        "rag-part-2",
+    ]
     assert snapshot["authority"] == "evidence_only"
     assert snapshot["canonical_knowledge"] is False
     assert snapshot["production_authority"] is False
@@ -112,7 +144,11 @@ def test_inventory_snapshot_is_stable_sorted_and_evidence_only() -> None:
 
 
 def test_inventory_timestamps_normalize_to_utc() -> None:
-    snapshot = build_inventory_snapshot(IDENTITY, [_item()], allowed_hosts=ALLOWED)
+    snapshot = build_inventory_snapshot(
+        IDENTITY,
+        [_item()],
+        allowed_hosts=ALLOWED,
+    )
     item = snapshot["items"][0]
     assert item["published_at"] == "2026-01-01T00:00:00Z"
     assert item["modified_at"] == "2026-02-01T00:00:00Z"
@@ -122,11 +158,19 @@ def test_duplicate_url_and_content_fail_closed() -> None:
     duplicate_url = _item()
     duplicate_url["content_sha256"] = "b" * 64
     with pytest.raises(IntegrityError, match="duplicate canonical URL"):
-        build_inventory_snapshot(IDENTITY, [_item(), duplicate_url], allowed_hosts=ALLOWED)
+        build_inventory_snapshot(
+            IDENTITY,
+            [_item(), duplicate_url],
+            allowed_hosts=ALLOWED,
+        )
 
     duplicate_content = _item("rag-part-2")
     with pytest.raises(IntegrityError, match="duplicate content digest"):
-        build_inventory_snapshot(IDENTITY, [_item(), duplicate_content], allowed_hosts=ALLOWED)
+        build_inventory_snapshot(
+            IDENTITY,
+            [_item(), duplicate_content],
+            allowed_hosts=ALLOWED,
+        )
 
 
 def test_redirect_loops_and_host_escape_fail_closed() -> None:
@@ -145,7 +189,11 @@ def test_identity_status_audience_and_item_bounds_fail_closed() -> None:
     bad_identity = copy.deepcopy(IDENTITY)
     bad_identity["source_sha"] = "short"
     with pytest.raises(IntegrityError, match="Source SHA"):
-        build_inventory_snapshot(bad_identity, [_item()], allowed_hosts=ALLOWED)
+        build_inventory_snapshot(
+            bad_identity,
+            [_item()],
+            allowed_hosts=ALLOWED,
+        )
 
     bad = _item()
     bad["audience"] = "secret"
@@ -157,6 +205,14 @@ def test_identity_status_audience_and_item_bounds_fail_closed() -> None:
 
 
 def test_snapshot_is_byte_semantically_reproducible() -> None:
-    first = build_inventory_snapshot(IDENTITY, [_item()], allowed_hosts=ALLOWED)
-    second = build_inventory_snapshot(IDENTITY, [_item()], allowed_hosts=ALLOWED)
+    first = build_inventory_snapshot(
+        IDENTITY,
+        [_item()],
+        allowed_hosts=ALLOWED,
+    )
+    second = build_inventory_snapshot(
+        IDENTITY,
+        [_item()],
+        allowed_hosts=ALLOWED,
+    )
     assert first == second
