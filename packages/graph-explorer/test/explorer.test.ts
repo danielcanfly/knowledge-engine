@@ -6,10 +6,13 @@ import * as Graphology from "graphology";
 
 import {
   EXPLORER_SCHEMA,
+  MAX_SEARCH_QUERY_LENGTH,
   MAX_TEXT_FALLBACK_NODES,
+  computeExplorerView,
   createExplorerShell,
   createRendererProjection,
   type ExplorerGraph,
+  type ExplorerViewControls,
   type RendererFactory,
 } from "../src/index.js";
 
@@ -23,22 +26,38 @@ function graph(nodeCount = 2): ExplorerGraph {
   value.replaceAttributes({
     adapterSchemaVersion: "knowledge-os-graphology-adapter/v1",
     rendererNeutral: true,
-    releaseId: "release-m19-3",
+    releaseId: "release-m19-4",
     readOnly: true,
   });
+  const titles = [
+    "Agent Systems",
+    "Retrieval Augmented Generation",
+    "Vector Embeddings",
+    "Security Governance",
+    "Detached Concept",
+  ];
+  const types = ["Concept", "Technique", "Technique", "Policy", "Concept"];
+  const tags = [
+    ["agents"],
+    ["agents", "retrieval"],
+    ["retrieval", "vectors"],
+    ["governance"],
+    ["agents"],
+  ];
+  const aliases = [[], ["RAG"], ["Embeddings"], ["Safety Policy"], []];
   for (let index = 0; index < nodeCount; index += 1) {
     const id = `concepts/${index.toString().padStart(3, "0")}`;
     value.addNode(id, {
-      aliases: [],
+      aliases: aliases[index] ?? [],
       audience: "public",
       conceptId: id,
       confidence: 0.9,
-      description: `${id} description`,
+      description: `${titles[index] ?? `Concept ${index}`} description`,
       sourcePath: `${id}.md`,
       status: "published",
-      tags: ["agents"],
-      title: `Concept ${index}`,
-      type: "Concept",
+      tags: tags[index] ?? ["agents"],
+      title: titles[index] ?? `Concept ${index}`,
+      type: types[index] ?? "Concept",
       xKosId: `ko_${index}`,
     });
   }
@@ -50,6 +69,26 @@ function graph(nodeCount = 2): ExplorerGraph {
       edgeId: "edge-0",
       generatedInverse: false,
       relationType: "part_of",
+    });
+  }
+  if (nodeCount >= 3) {
+    value.addDirectedEdgeWithKey("edge-1", "concepts/001", "concepts/002", {
+      audience: "public",
+      confidence: 0.9,
+      directed: true,
+      edgeId: "edge-1",
+      generatedInverse: false,
+      relationType: "depends_on",
+    });
+  }
+  if (nodeCount >= 4) {
+    value.addDirectedEdgeWithKey("edge-2", "concepts/002", "concepts/003", {
+      audience: "public",
+      confidence: 0.9,
+      directed: true,
+      edgeId: "edge-2",
+      generatedInverse: false,
+      relationType: "related_to",
     });
   }
   return value;
@@ -166,6 +205,16 @@ function shell(source = graph()) {
   return { container, explorer, renderer, selections };
 }
 
+function controls(overrides: Partial<ExplorerViewControls> = {}): ExplorerViewControls {
+  return {
+    query: "",
+    focusNodeId: null,
+    neighborhoodDepth: 0,
+    filters: { relationTypes: [], tags: [], types: [], showOrphans: true },
+    ...overrides,
+  };
+}
+
 test("creates a deterministic renderer projection without mutating canonical attributes", () => {
   const source = graph();
   const before = source.export();
@@ -187,7 +236,7 @@ test("rejects graphs that are not read-only, renderer-neutral, and release-bound
   }
 });
 
-test("supports click selection and stage deselection on the ACL-safe graph", () => {
+test("supports click selection and stage deselection on the visible ACL-safe graph", () => {
   const { explorer, renderer, selections } = shell();
   renderer.emit("clickNode", { node: "concepts/001" });
   assert.equal(explorer.getState().selectedNodeId, "concepts/001");
@@ -195,7 +244,7 @@ test("supports click selection and stage deselection on the ACL-safe graph", () 
   renderer.emit("clickStage");
   assert.equal(explorer.getSelection(), null);
   assert.deepEqual(selections, ["concepts/001", null]);
-  assert.throws(() => explorer.selectNode("concepts/restricted"), /outside the ACL-safe graph/);
+  assert.throws(() => explorer.selectNode("concepts/restricted"), /visible ACL-safe graph/);
 });
 
 test("provides deterministic keyboard selection and accessible container semantics", () => {
@@ -224,7 +273,7 @@ test("uses renderer reducers for selection rather than canonical graph mutation"
     forceLabel: true,
     highlighted: true,
     size: 8,
-    zIndex: 1,
+    zIndex: 2,
   });
   assert.equal(source.getNodeAttribute("concepts/000", "color"), undefined);
   assert.equal(renderer.settings.renderEdgeLabels, false);
@@ -235,7 +284,7 @@ test("exposes exact release identity and a bounded textual fallback", () => {
   const { explorer } = shell(graph(MAX_TEXT_FALLBACK_NODES + 1));
   const state = explorer.getState();
   assert.equal(state.schemaVersion, EXPLORER_SCHEMA);
-  assert.equal(state.releaseId, "release-m19-3");
+  assert.equal(state.releaseId, "release-m19-4");
   assert.equal(state.readOnly, true);
   assert.equal(state.textualFallback.length, MAX_TEXT_FALLBACK_NODES);
   assert.equal(state.textualFallbackTruncated, true);
@@ -263,6 +312,132 @@ test("resets the camera and performs idempotent teardown", async () => {
   assert.equal(container.getAttribute("role"), "region");
   assert.equal(container.listeners.size, 0);
   await assert.rejects(explorer.resetCamera(), /destroyed/);
+});
+
+test("searches normalized canonical fields with deterministic bounded ranking", () => {
+  const source = graph(5);
+  const byAlias = computeExplorerView(source, controls({ query: " rag " }));
+  assert.deepEqual(byAlias.searchResults.map((item) => item.id), ["concepts/001"]);
+  const byTag = computeExplorerView(source, controls({ query: "retrieval" }));
+  assert.deepEqual(byTag.searchResults.map((item) => item.id), [
+    "concepts/001",
+    "concepts/002",
+  ]);
+  assert.throws(
+    () => computeExplorerView(source, controls({ query: "x".repeat(MAX_SEARCH_QUERY_LENGTH + 1) })),
+    /at most 160/,
+  );
+});
+
+test("focuses deterministic one- and two-hop neighborhoods without following direction", () => {
+  const source = graph(5);
+  const oneHop = computeExplorerView(
+    source,
+    controls({ focusNodeId: "concepts/000", neighborhoodDepth: 1 }),
+  );
+  assert.deepEqual(oneHop.visibleNodeIds, ["concepts/000", "concepts/001"]);
+  assert.deepEqual(oneHop.visibleEdgeIds, ["edge-0"]);
+  const twoHop = computeExplorerView(
+    source,
+    controls({ focusNodeId: "concepts/000", neighborhoodDepth: 2 }),
+  );
+  assert.deepEqual(twoHop.visibleNodeIds, [
+    "concepts/000",
+    "concepts/001",
+    "concepts/002",
+  ]);
+  assert.deepEqual(twoHop.visibleEdgeIds, ["edge-0", "edge-1"]);
+});
+
+test("applies relation filters before bounded neighborhood expansion", () => {
+  const view = computeExplorerView(
+    graph(5),
+    controls({
+      focusNodeId: "concepts/000",
+      neighborhoodDepth: 2,
+      filters: {
+        relationTypes: ["part_of"],
+        tags: [],
+        types: [],
+        showOrphans: true,
+      },
+    }),
+  );
+  assert.deepEqual(view.visibleNodeIds, ["concepts/000", "concepts/001"]);
+  assert.deepEqual(view.visibleEdgeIds, ["edge-0"]);
+});
+
+test("uses OR within tag and type filters and AND across dimensions", () => {
+  const view = computeExplorerView(
+    graph(5),
+    controls({
+      filters: {
+        relationTypes: [],
+        tags: ["retrieval", "governance"],
+        types: ["Technique"],
+        showOrphans: true,
+      },
+    }),
+  );
+  assert.deepEqual(view.visibleNodeIds, ["concepts/001", "concepts/002"]);
+  assert.deepEqual(view.visibleEdgeIds, ["edge-1"]);
+});
+
+test("hides orphan nodes explicitly while preserving an isolated focus node", () => {
+  const source = graph(5);
+  const withoutOrphans = computeExplorerView(
+    source,
+    controls({
+      filters: { relationTypes: [], tags: [], types: [], showOrphans: false },
+    }),
+  );
+  assert.equal(withoutOrphans.visibleNodeIds.includes("concepts/004"), false);
+  const isolatedFocus = computeExplorerView(
+    source,
+    controls({
+      focusNodeId: "concepts/004",
+      neighborhoodDepth: 1,
+      filters: { relationTypes: [], tags: [], types: [], showOrphans: false },
+    }),
+  );
+  assert.deepEqual(isolatedFocus.visibleNodeIds, ["concepts/004"]);
+});
+
+test("updates renderer-only visibility, search, focus, and filters without canonical mutation", () => {
+  const source = graph(5);
+  const before = source.export();
+  const { explorer, renderer, selections } = shell(source);
+  explorer.selectNode("concepts/004");
+  explorer.setFilters({ showOrphans: false });
+  assert.equal(explorer.getSelection(), null);
+  assert.deepEqual(selections, ["concepts/004", null]);
+  explorer.setSearchQuery("rag");
+  assert.deepEqual(explorer.getState().searchResults.map((item) => item.id), ["concepts/001"]);
+  explorer.focusNode("concepts/000", 2);
+  assert.equal(explorer.getState().visibleNodeCount, 3);
+  const nodeReducer = renderer.settings.nodeReducer as (
+    id: string,
+    attributes: Record<string, unknown>,
+  ) => Record<string, unknown>;
+  const edgeReducer = renderer.settings.edgeReducer as (
+    id: string,
+    attributes: Record<string, unknown>,
+  ) => Record<string, unknown>;
+  assert.equal(nodeReducer("concepts/004", {}).hidden, true);
+  assert.equal(edgeReducer("edge-2", {}).hidden, true);
+  explorer.clearFocus();
+  assert.equal(explorer.getState().focusNodeId, null);
+  assert.deepEqual(source.export(), before);
+});
+
+test("rejects unbounded controls and nodes outside the ACL-safe graph", () => {
+  const { explorer } = shell(graph(5));
+  assert.throws(() => explorer.focusNode("concepts/restricted"), /outside the ACL-safe graph/);
+  assert.throws(() => explorer.focusNode("concepts/000", 3 as 1), /one or two hops/);
+  assert.throws(
+    () => explorer.setFilters({ tags: Array.from({ length: 51 }, (_, index) => `tag-${index}`) }),
+    /at most 50/,
+  );
 });
 
 test("pins Sigma v3 locally and exposes no network or mutation authority", async () => {
