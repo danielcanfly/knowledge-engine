@@ -1,0 +1,51 @@
+name: M19.3 Sigma explorer shell
+
+on:
+  pull_request:
+    paths:
+      - "packages/graph-explorer/**"
+      - "docs/architecture/m19/m19-3-sigma-explorer-shell.md"
+      - "docs/architecture/m19/m19-3-sigma-explorer-shell-reconciliation.md"
+      - ".github/workflows/m19-3-sigma-explorer-shell.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/graph-explorer/**"
+      - "docs/architecture/m19/m19-3-sigma-explorer-shell.md"
+      - "docs/architecture/m19/m19-3-sigma-explorer-shell-reconciliation.md"
+      - ".github/workflows/m19-3-sigma-explorer-shell.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sigma-explorer-shell:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            packages/graphology-adapter/package-lock.json
+            packages/graph-explorer/package-lock.json
+      - name: Install exact locked dependencies
+        run: |
+          npm ci --prefix packages/graphology-adapter
+          npm ci --prefix packages/graph-explorer
+      - name: Verify adapter and read-only Sigma shell
+        run: |
+          npm run check --prefix packages/graphology-adapter
+          npm run check --prefix packages/graph-explorer
+      - name: Audit runtime dependencies
+        run: |
+          npm audit --prefix packages/graphology-adapter --omit=dev --audit-level=high
+          npm audit --prefix packages/graph-explorer --omit=dev --audit-level=high
