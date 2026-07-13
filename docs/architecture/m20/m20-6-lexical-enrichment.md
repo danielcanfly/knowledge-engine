@@ -85,3 +85,54 @@ M20.6 acceptance covers:
 ## Exclusions
 
 M20.6 does not modify Runtime, FastAPI, M20.5 RRF, semantic-only candidates, fallback policy, embedding providers, network access, ANN, vector databases, answer generation, public endpoints, Source, candidate or production publication, production pointers, retained R2 objects, credentials, permanent ledgers, rollback, M20.7 work, cross-release merge, or Graph Neural Retrieval.
+
+## Closure reconciliation
+
+### Identity chain
+
+- M20.5 reconciliation / implementation base: `5dc857b61c1adb4b85b99006db40b419f9151d4e`
+- final implementation head: `26a761ba28ba9ea7af3529c03c5c547cb2bcf336`
+- implementation merge: `5d51e9533a08d0c3549799d555530be3dd2ff86a`
+- Source main: `a6ba738d910d01d2ae99b1968f0831989934c549`
+- Foundation main: `e5ef644053d34e89c70d2ceb37521e1c59234832`
+
+### Exact implementation scope
+
+Implementation PR #306 changed exactly four files:
+
+1. `.github/workflows/m20-6-lexical-enrichment.yml`
+2. `docs/architecture/m20/m20-6-lexical-enrichment.md`
+3. `src/knowledge_engine/m20_lexical_enrichment.py`
+4. `tests/test_m20_6_lexical_enrichment.py`
+
+No Runtime, FastAPI, M20.5 fusion, dependency, lockfile, compiler, release manifest, Source, production pointer, credential, permanent ledger, or rollback file changed.
+
+### Invalidated heads
+
+- `398346ef82f4b3050164221f36fe9d7e20bbcb73` was invalidated after repository Ruff rejected one unused import.
+- `c4e6a5a679c219ac7498859bb861aefae50f83cc` was invalidated after an acceptance assertion incorrectly treated alias and tag signals as mutually exclusive.
+
+Neither head is acceptance evidence.
+
+### Final-head acceptance evidence
+
+All workflows associated with implementation head `26a761ba28ba9ea7af3529c03c5c547cb2bcf336` completed successfully:
+
+- M20.6 Lexical enrichment #3
+- CI #644
+- M17 Architecture Canon Acceptance #52
+- M18 Graph v2 acceptance #80
+- R2 Release Integration #446
+
+The M20.6 workflow passed exact-head checkout, repository Ruff, M20.1 through M20.6 tests, Runtime regressions, fixed-weight assertions, authority/dependency scanning, and Python compilation.
+
+Implementation PR #306 had no conversation comments, submitted reviews, or unresolved review threads at merge time.
+
+### Delivered boundary
+
+- lexical results, citations, answers, and evaluation remain authoritative;
+- alias, tag, and typed-relation evidence is release-bound and deterministic;
+- ACL, identity, uniqueness, and bounds are revalidated before scoring;
+- no Runtime/API integration, automatic Source parsing, vector fusion change, provider call, or production authority was introduced.
+
+Production mutation dispatched: false.
