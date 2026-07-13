@@ -111,7 +111,9 @@ def _ontology() -> dict:
                 "provenance_expectation": provenance,
                 "allowed_qualifiers": ["scope", "context", "valid_from", "valid_to"],
                 "retrieval_semantics": list(retrieval),
-                "description": f"Governed description for relation type {relation_type} in Knowledge OS.",
+                "description": (
+                    f"Governed description for relation type {relation_type} in Knowledge OS."
+                ),
             }
         )
     return {
