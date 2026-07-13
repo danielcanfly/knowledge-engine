@@ -67,7 +67,7 @@ def test_plan_is_deterministic_partitioned_and_evidence_only() -> None:
     assert first["production_authority"] is False
 
 
-def test_stable_item_and_batch_ids_do_not_depend_on_input_order() -> None:
+def test_item_keys_are_stable_but_batches_bind_exact_inventory_digest() -> None:
     left = _snapshot(4)
     right = copy.deepcopy(left)
     right["items"].reverse()
@@ -76,7 +76,15 @@ def test_stable_item_and_batch_ids_do_not_depend_on_input_order() -> None:
     right["snapshot_sha256"] = hashlib.sha256(
         json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
-    assert build_batch_plan(left, batch_size=2) == build_batch_plan(right, batch_size=2)
+    left_plan = build_batch_plan(left, batch_size=2)
+    right_plan = build_batch_plan(right, batch_size=2)
+    left_keys = [item["item_key"] for batch in left_plan["batches"] for item in batch["items"]]
+    right_keys = [item["item_key"] for batch in right_plan["batches"] for item in batch["items"]]
+    assert left_keys == right_keys
+    assert left_plan["inventory_sha256"] != right_plan["inventory_sha256"]
+    assert [batch["batch_id"] for batch in left_plan["batches"]] != [
+        batch["batch_id"] for batch in right_plan["batches"]
+    ]
 
 
 def test_rejected_and_unavailable_items_are_not_planned() -> None:
