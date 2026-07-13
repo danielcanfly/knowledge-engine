@@ -1,0 +1,69 @@
+name: M18.5 Source migration acceptance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migration:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: danielcanfly/knowledge-source
+          ref: 1a4b4030b6b25a58ff3edba204e303ae1f95b931
+          path: .m18-source
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Verify exact Source identity
+        run: test "$(git -C .m18-source rev-parse HEAD)" = "1a4b4030b6b25a58ff3edba204e303ae1f95b931"
+      - name: Build exact Source twice without object-store mutation
+        env:
+          APP_ENV: test
+          AUTH_MODE: disabled
+          OBJECT_STORE_BACKEND: filesystem
+          KNOWLEDGE_ENGINE_BUILDER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          SOURCE_SHA=1a4b4030b6b25a58ff3edba204e303ae1f95b931
+          FOUNDATION_SHA=e53af5833193a644a4d7397b7d466ababb5e1373
+          RELEASE_TIME=2026-07-13T02:37:00Z
+          SOURCE_URL="file://$GITHUB_WORKSPACE/.m18-source"
+          FILESYSTEM_STORE_ROOT=.artifacts/store-a knowledge-engine build-source             --source-url "$SOURCE_URL"             --source-repository danielcanfly/knowledge-source             --source-sha "$SOURCE_SHA"             --foundation-sha "$FOUNDATION_SHA"             --channel m18-5-preview-a             --release-time "$RELEASE_TIME"             --work-dir .artifacts/build-a
+          FILESYSTEM_STORE_ROOT=.artifacts/store-b knowledge-engine build-source             --source-url "$SOURCE_URL"             --source-repository danielcanfly/knowledge-source             --source-sha "$SOURCE_SHA"             --foundation-sha "$FOUNDATION_SHA"             --channel m18-5-preview-b             --release-time "$RELEASE_TIME"             --work-dir .artifacts/build-b
+          diff -qr .artifacts/build-a/releases .artifacts/build-b/releases
+      - name: Verify graph v2 migration contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          graphs = list(Path(".artifacts/build-a/releases").glob("*/artifacts/graph-v2.json"))
+          assert len(graphs) == 1
+          graph = json.loads(graphs[0].read_text())
+          assert graph["schema_version"] == "knowledge-os-graph/v2"
+          assert graph["release"]["source_commit_sha"] == "1a4b4030b6b25a58ff3edba204e303ae1f95b931"
+          assert len(graph["nodes"]) == 5
+          assert len(graph["edges"]) == 5
+          assert sum(len(node["tags"]) for node in graph["nodes"]) == 19
+          assert sum(len(node["aliases"]) for node in graph["nodes"]) == 10
+          assert {edge["relation_type"] for edge in graph["edges"]} == {
+              "part_of", "has_part", "complements"
+          }
+          forbidden = {"x", "y", "color", "size", "sigma_color", "coordinates"}
+          assert all(forbidden.isdisjoint(node) for node in graph["nodes"])
+          assert all(forbidden.isdisjoint(edge) for edge in graph["edges"])
+          assert all(edge["audience"] == "public" for edge in graph["edges"])
+          print("M18_5_EXACT_SOURCE_MIGRATION_ACCEPTANCE_PASSED")
+          PY
+      - run: python -m pytest -q tests/test_graph_v2.py
+      - run: ruff check src/knowledge_engine/graph_v2.py tests/test_graph_v2.py
