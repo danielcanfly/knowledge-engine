@@ -100,7 +100,8 @@ def test_fixed_signal_weights_reorder_candidates_deterministically() -> None:
         "concepts/c#one",
     ]
     assert candidates[0]["alias_score"] == ALIAS_WEIGHT
-    assert candidates[0]["signal_score"] == ALIAS_WEIGHT
+    assert candidates[0]["tag_score"] == TAG_WEIGHT
+    assert candidates[0]["signal_score"] == ALIAS_WEIGHT + TAG_WEIGHT
     assert result["results"][0]["citations"] == [
         {"source_id": "src-concepts/a#one"}
     ]
