@@ -191,3 +191,40 @@ M22.4 is accepted only when:
 No network request, live retrieval, production graph traversal, R2 read/write, provider/model call, arbitrary tool execution, final answer synthesis, retry/refinement loop, Source mutation, production deployment, production pointer, retained R2 object, credentials, permanent ledger, rollback, M22.5 work or Graph Neural Retrieval is included.
 
 Production mutation dispatched: false.
+
+## Closure reconciliation
+
+M22.4 implementation was reconciled against live GitHub state.
+
+- authoritative issue: #347;
+- implementation PR: #348;
+- exact entry base: `4f0bc8ee154d56d7c465194750bda5c6acd5ac65`;
+- accepted implementation head: `3adc4ebceb30ca734432d1e642c66271643de147`;
+- implementation merge: `3c1c98ca1c70dd676367746cef08f4d4b311455f`;
+- implementation branch: `feat/m22-4-execution-trace`;
+- reconciliation branch: `docs/m22-4-reconciliation`.
+
+The accepted final implementation diff contains exactly:
+
+- `.github/workflows/m22-4-execution-trace.yml`;
+- `docs/architecture/m22/m22-4-execution-trace.md`;
+- `src/knowledge_engine/m22_execution_trace.py`;
+- `tests/test_m22_4_execution_trace.py`.
+
+Two earlier implementation heads failed the dedicated Ruff gate. They were not accepted and none of their workflow results are closure evidence. The final head refactored nested conditionals and context managers without adding lint ignores or weakening any gate.
+
+Local isolated prevalidation completed with 34 focused tests and syntax compilation. Repository exact-head CI then validated the real M22.1 through M22.4 integration.
+
+The accepted implementation head passed:
+
+- M22.4 Execution Trace Validation #4;
+- CI #724;
+- M17 Architecture Canon Acceptance #94;
+- M18 Graph v2 acceptance #160;
+- R2 Release Integration #489.
+
+PR #348 had no conversation comments, submitted reviews or unresolved review threads. Its final head and exact four-file diff were revalidated immediately before merge. The implementation was merged using expected head `3adc4ebceb30ca734432d1e642c66271643de147`.
+
+Protected-state review confirmed no network request, live retrieval, production graph traversal, R2 read/write, provider/model call, arbitrary tool execution, final answer synthesis, retry/refinement loop, Source mutation, production mutation, production pointer update, retained R2 creation, credential modification, permanent-ledger write, rollback dispatch, M22.5 implementation or Graph Neural Retrieval.
+
+Production mutation dispatched: false.
