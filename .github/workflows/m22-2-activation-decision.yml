@@ -1,0 +1,62 @@
+name: M22.2 Activation Decision
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m22-2-activation-decision.yml'
+      - 'docs/architecture/m22/m22-2-activation-decision.md'
+      - 'src/knowledge_engine/m22_activation_decision.py'
+      - 'tests/test_m22_2_activation_decision.py'
+
+permissions:
+  contents: read
+
+jobs:
+  activation-decision:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M22.2 scope
+        run: >-
+          python -m ruff check
+          src/knowledge_engine/m22_activation_decision.py
+          tests/test_m22_2_activation_decision.py
+      - name: Test M22.1 and M22.2 contracts
+        run: >-
+          python -m pytest -q
+          tests/test_m22_1_reasoning_modes.py
+          tests/test_m22_2_activation_decision.py
+      - name: Prove deterministic non-executing activation
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m22_activation_decision import (
+              ACTIVATION_THRESHOLD,
+              DISPOSITIONS,
+          )
+
+          assert ACTIVATION_THRESHOLD == 4
+          assert DISPOSITIONS == ('direct_only', 'activate', 'blocked')
+          PY
+      - name: Scan router, executor, and secret boundary
+        run: |
+          if grep -nE 'requests|httpx|aiohttp|urllib.request|subprocess|boto3|openai|anthropic|sentence_transformers|raw_query|api_key|token=' \
+            src/knowledge_engine/m22_activation_decision.py; then
+            exit 1
+          fi
+          test -z "$(find . -type f \( -name '*planner-trace.json' -o -name '*reasoning-execution.json' \) -print -quit)"
+      - name: Compile M22.2 scope
+        run: >-
+          python -m compileall -q
+          src/knowledge_engine/m22_activation_decision.py
+          tests/test_m22_2_activation_decision.py
