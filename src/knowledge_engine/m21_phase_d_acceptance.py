@@ -6,18 +6,27 @@ from typing import Any
 
 from .errors import IntegrityError
 
+SOURCE_SHA = "a6ba738d910d01d2ae99b1968f0831989934c549"
+FOUNDATION_SHA = "e5ef644053d34e89c70d2ceb37521e1c59234832"
 REQUIRED_MILESTONES = tuple(f"M21.{index}" for index in range(1, 7))
-REQUIRED_WORKFLOW_FAMILIES = (
-    "M21.1 Blog Inventory",
-    "M21.2 Resumable Batch",
-    "M21.3 Extraction Candidates",
-    "M21.4 Governed Relations and Tags",
-    "M21.5 Entity Resolution and Contradictions",
-    "M21.6 Review Packets and Source PR Preparation",
+MILESTONE_WORKFLOW_FAMILIES = {
+    "M21.1": "M21.1 Blog Inventory",
+    "M21.2": "M21.2 Resumable Batch",
+    "M21.3": "M21.3 Extraction Candidates",
+    "M21.4": "M21.4 Governed Relations and Tags",
+    "M21.5": "M21.5 Entity Resolution and Contradictions",
+    "M21.6": "M21.6 Review Packets and Source PR Preparation",
+}
+REQUIRED_FINAL_WORKFLOW_FAMILIES = (
+    "M21.7 Phase D Acceptance",
     "CI",
     "M17 Architecture Canon Acceptance",
     "M18 Graph v2 acceptance",
     "R2 Release Integration",
+)
+REQUIRED_WORKFLOW_FAMILIES = (
+    *tuple(MILESTONE_WORKFLOW_FAMILIES.values()),
+    *REQUIRED_FINAL_WORKFLOW_FAMILIES,
 )
 PROTECTED_MUTATION_KEYS = (
     "source_mutation_dispatched",
@@ -117,10 +126,34 @@ def _require_positive_int(value: Any, *, label: str) -> int:
     return value
 
 
+def _validate_successful_workflow(
+    payload: Any,
+    *,
+    expected_name: str,
+    expected_head: str,
+    label: str,
+) -> None:
+    workflow = _require_mapping(payload, label=label)
+    if set(workflow) != {"name", "conclusion", "head_sha"}:
+        raise IntegrityError(f"M21-ACCEPT-105 {label} shape is invalid")
+    if workflow.get("name") != expected_name:
+        raise IntegrityError(f"M21-ACCEPT-106 {label} name mismatch")
+    if workflow.get("conclusion") != "success":
+        raise IntegrityError(f"M21-ACCEPT-107 workflow did not succeed: {expected_name}")
+    workflow_head = _require_sha(
+        workflow.get("head_sha"),
+        label=f"{expected_name} workflow head",
+    )
+    if workflow_head != expected_head:
+        raise IntegrityError(
+            f"M21-ACCEPT-108 workflow is not bound to expected head: {expected_name}"
+        )
+
+
 def _validate_milestones(payload: Any) -> int:
     milestones = _require_mapping(payload, label="milestones")
     if tuple(sorted(milestones)) != REQUIRED_MILESTONES:
-        raise IntegrityError("M21-ACCEPT-105 milestone set must be exactly M21.1 through M21.6")
+        raise IntegrityError("M21-ACCEPT-109 milestone set must be exactly M21.1 through M21.6")
     issue_numbers: set[int] = set()
     implementation_prs: set[int] = set()
     reconciliation_prs: set[int] = set()
@@ -138,17 +171,17 @@ def _validate_milestones(payload: Any) -> int:
             or implementation_pr in implementation_prs
             or reconciliation_pr in reconciliation_prs
         ):
-            raise IntegrityError("M21-ACCEPT-106 duplicate issue or PR evidence")
+            raise IntegrityError("M21-ACCEPT-110 duplicate issue or PR evidence")
         issue_numbers.add(issue)
         implementation_prs.add(implementation_pr)
         reconciliation_prs.add(reconciliation_pr)
         if evidence.get("issue_state") != "completed":
-            raise IntegrityError(f"M21-ACCEPT-107 {name} issue is not completed")
+            raise IntegrityError(f"M21-ACCEPT-111 {name} issue is not completed")
         if evidence.get("implementation_merged") is not True:
-            raise IntegrityError(f"M21-ACCEPT-108 {name} implementation is not merged")
+            raise IntegrityError(f"M21-ACCEPT-112 {name} implementation is not merged")
         if evidence.get("reconciliation_merged") is not True:
-            raise IntegrityError(f"M21-ACCEPT-109 {name} reconciliation is not merged")
-        _require_sha(
+            raise IntegrityError(f"M21-ACCEPT-113 {name} reconciliation is not merged")
+        implementation_head = _require_sha(
             evidence.get("implementation_head_sha"),
             label=f"{name} implementation head",
         )
@@ -164,35 +197,37 @@ def _validate_milestones(payload: Any) -> int:
             evidence.get("reconciliation_merge_sha"),
             label=f"{name} reconciliation merge",
         )
+        _validate_successful_workflow(
+            evidence.get("workflow"),
+            expected_name=MILESTONE_WORKFLOW_FAMILIES[name],
+            expected_head=implementation_head,
+            label=f"{name} workflow evidence",
+        )
     return len(milestones)
 
 
-def _validate_workflows(payload: Any, engine_sha: str) -> int:
-    if not isinstance(payload, list) or not payload or len(payload) > 64:
-        raise IntegrityError("M21-ACCEPT-110 workflows must be a bounded non-empty list")
-    names: list[str] = []
+def _validate_final_workflows(payload: Any, engine_sha: str) -> int:
+    if not isinstance(payload, list) or not payload or len(payload) > 32:
+        raise IntegrityError("M21-ACCEPT-114 final workflows must be a bounded non-empty list")
+    by_name: dict[str, Mapping[str, Any]] = {}
     for value in payload:
-        evidence = _require_mapping(value, label="workflow evidence")
+        evidence = _require_mapping(value, label="final workflow evidence")
         name = evidence.get("name")
         if not isinstance(name, str) or not name:
-            raise IntegrityError("M21-ACCEPT-111 workflow name is invalid")
-        if evidence.get("conclusion") != "success":
-            raise IntegrityError(f"M21-ACCEPT-112 workflow did not succeed: {name}")
-        workflow_head = _require_sha(
-            evidence.get("head_sha"),
-            label=f"{name} workflow head",
+            raise IntegrityError("M21-ACCEPT-115 final workflow name is invalid")
+        if name in by_name:
+            raise IntegrityError("M21-ACCEPT-116 duplicate final workflow evidence")
+        by_name[name] = evidence
+    if set(by_name) != set(REQUIRED_FINAL_WORKFLOW_FAMILIES):
+        raise IntegrityError("M21-ACCEPT-117 required final workflow evidence is missing")
+    for name in REQUIRED_FINAL_WORKFLOW_FAMILIES:
+        _validate_successful_workflow(
+            by_name[name],
+            expected_name=name,
+            expected_head=engine_sha,
+            label=f"{name} final workflow evidence",
         )
-        if workflow_head != engine_sha:
-            raise IntegrityError(
-                f"M21-ACCEPT-113 workflow is not bound to exact Engine head: {name}"
-            )
-        names.append(name)
-    if len(set(names)) != len(names):
-        raise IntegrityError("M21-ACCEPT-114 duplicate workflow evidence")
-    missing = [name for name in REQUIRED_WORKFLOW_FAMILIES if name not in names]
-    if missing:
-        raise IntegrityError("M21-ACCEPT-115 required workflow evidence is missing")
-    return len(names)
+    return len(REQUIRED_MILESTONES) + len(by_name)
 
 
 def _validate_guarantee_group(
@@ -272,9 +307,13 @@ def validate_phase_d_acceptance(payload: Mapping[str, Any]) -> dict[str, Any]:
     engine_sha = _require_sha(identity.get("engine_sha"), label="Engine SHA")
     source_sha = _require_sha(identity.get("source_sha"), label="Source SHA")
     foundation_sha = _require_sha(identity.get("foundation_sha"), label="Foundation SHA")
+    if source_sha != SOURCE_SHA:
+        raise IntegrityError("M21-ACCEPT-143 Source release identity mismatch")
+    if foundation_sha != FOUNDATION_SHA:
+        raise IntegrityError("M21-ACCEPT-144 Foundation release identity mismatch")
 
     milestone_count = _validate_milestones(root.get("milestones"))
-    workflow_count = _validate_workflows(root.get("workflows"), engine_sha)
+    workflow_count = _validate_final_workflows(root.get("workflows"), engine_sha)
     inventory_items, largest_batch_items, review_items, output_bytes, throughput = (
         _validate_throughput(root.get("throughput"))
     )
@@ -299,11 +338,11 @@ def validate_phase_d_acceptance(payload: Mapping[str, Any]) -> dict[str, Any]:
     _validate_protected_state(root.get("protected_state"))
 
     if root.get("source_write_permitted") is not False:
-        raise IntegrityError("M21-ACCEPT-143 Phase D must not permit Source writes")
+        raise IntegrityError("M21-ACCEPT-145 Phase D must not permit Source writes")
     if root.get("github_source_pr_creation_permitted") is not False:
-        raise IntegrityError("M21-ACCEPT-144 Phase D must not permit Source PR creation")
+        raise IntegrityError("M21-ACCEPT-146 Phase D must not permit Source PR creation")
     if root.get("production_authority") is not False:
-        raise IntegrityError("M21-ACCEPT-145 Phase D must not grant production authority")
+        raise IntegrityError("M21-ACCEPT-147 Phase D must not grant production authority")
 
     verified = tuple((*throughput, *replay, *privacy, *review))
     report = PhaseDAcceptanceReport(
@@ -324,17 +363,21 @@ def validate_phase_d_acceptance(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
+    "FOUNDATION_SHA",
     "MAX_BATCH_ITEMS",
     "MAX_INVENTORY_ITEMS",
     "MAX_OUTPUT_BYTES",
     "MAX_REVIEW_ITEMS",
+    "MILESTONE_WORKFLOW_FAMILIES",
     "PROTECTED_MUTATION_KEYS",
+    "REQUIRED_FINAL_WORKFLOW_FAMILIES",
     "REQUIRED_MILESTONES",
     "REQUIRED_PRIVACY_GUARANTEES",
     "REQUIRED_REPLAY_GUARANTEES",
     "REQUIRED_REVIEW_GUARANTEES",
     "REQUIRED_THROUGHPUT_GUARANTEES",
     "REQUIRED_WORKFLOW_FAMILIES",
+    "SOURCE_SHA",
     "PhaseDAcceptanceReport",
     "validate_phase_d_acceptance",
 ]
