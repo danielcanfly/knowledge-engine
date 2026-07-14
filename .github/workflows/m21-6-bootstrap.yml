@@ -38,8 +38,11 @@ jobs:
           python - <<'PY'
           import base64, zlib
           from pathlib import Path
-          payload = Path('.m21-6-bootstrap/source.b64').read_text().strip()
+          parts = [Path(f'.m21-6-bootstrap/source-{index}.part') for index in range(1, 5)]
+          payload = ''.join(path.read_text().strip() for path in parts)
+          assert len(payload) == 7620
           data = zlib.decompress(base64.b64decode(payload, validate=True))
+          assert len(data) == 26961
           target = Path('src/knowledge_engine/m21_review_source_pr.py')
           target.parent.mkdir(parents=True, exist_ok=True)
           target.write_bytes(data)
