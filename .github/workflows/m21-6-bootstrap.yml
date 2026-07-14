@@ -34,10 +34,17 @@ jobs:
               'tests/test_m21_6_review_source_pr.py': '.m21-6-bootstrap/tests.b64',
           }
           for target_name, payload_name in payloads.items():
+              payload = Path(payload_name).read_text().strip()
+              print(f'checking {payload_name}: chars={len(payload)} mod4={len(payload) % 4}')
+              try:
+                  decoded = base64.b64decode(payload, validate=True)
+                  materialized = zlib.decompress(decoded)
+              except Exception as exc:
+                  raise RuntimeError(f'payload decode failed: {payload_name}: {exc}') from exc
+              print(f'materialized {target_name}: bytes={len(materialized)}')
               target = Path(target_name)
               target.parent.mkdir(parents=True, exist_ok=True)
-              payload = Path(payload_name).read_text().strip()
-              target.write_bytes(zlib.decompress(base64.b64decode(payload)))
+              target.write_bytes(materialized)
           for payload_name in Path('.m21-6-bootstrap').glob('*.b64'):
               payload_name.unlink()
           Path('.m21-6-bootstrap').rmdir()
