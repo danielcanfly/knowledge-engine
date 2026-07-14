@@ -141,3 +141,29 @@ M21.6 rejects:
 ## Exclusions
 
 No Source write, Source checkout mutation, GitHub Source PR creation, reviewer decision, canonical adoption, model/provider/network call, live connector, scheduler, queue, worker, candidate publication, production publication, production pointer, retained R2 object, credentials, permanent ledger, rollback, M21.7 or later work, M22 work, cross-release merge, or Graph Neural Retrieval is included.
+
+## Closure reconciliation
+
+M21.6 implementation was delivered through issue #328 and implementation PR #329.
+
+Exact identity chain:
+
+- M21.5 reconciliation base: `278eb0d2ef2a9460b0199609fefa905ebfbdf552`;
+- final implementation head: `208ba7f097e7d191baa8ff1b86572906203ec288`;
+- implementation merge: `8440736f586da2d1f9c12a548eed8da1b725dc37`.
+
+The final implementation diff contained exactly four added files: the M21.6 exact-head workflow, this architecture contract, the review/source-PR preparation module, and its acceptance tests. All temporary bootstrap workflows and payload fragments were removed before final-head acceptance.
+
+Several transient transport heads were used only to diagnose and repair a damaged large source payload during connector-backed materialization. They are not acceptance evidence. The accepted head is solely `208ba7f097e7d191baa8ff1b86572906203ec288`.
+
+The accepted implementation head passed:
+
+- M21.6 Review Packets and Source PR Preparation #1;
+- CI #694;
+- M17 Architecture Canon Acceptance #77;
+- M18 Graph v2 acceptance #130;
+- R2 Release Integration #471.
+
+PR #329 had no conversation comments, submitted reviews, or unresolved review threads. The merge used the recorded expected head SHA.
+
+No Source write, Source pull request creation, reviewer approval, canonical adoption, production deployment, production pointer update, retained R2 object, credential write, permanent ledger mutation, rollback mutation, M21.7 work, M22 work, cross-release merge, or Graph Neural Retrieval was dispatched. Production mutation dispatched: false.
