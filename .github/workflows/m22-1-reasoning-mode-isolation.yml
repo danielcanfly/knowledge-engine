@@ -1,0 +1,64 @@
+name: M22.1 Reasoning Mode Isolation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m22-1-reasoning-mode-isolation.yml'
+      - 'docs/architecture/m22/m22-1-reasoning-mode-isolation.md'
+      - 'src/knowledge_engine/m22_reasoning_modes.py'
+      - 'tests/test_m22_1_reasoning_modes.py'
+
+permissions:
+  contents: read
+
+jobs:
+  reasoning-mode-isolation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M22.1 scope
+        run: >-
+          python -m ruff check
+          src/knowledge_engine/m22_reasoning_modes.py
+          tests/test_m22_1_reasoning_modes.py
+      - name: Test M21 closure and M22.1 isolation
+        run: >-
+          python -m pytest -q
+          tests/test_m21_7_phase_d_acceptance.py
+          tests/test_m22_1_reasoning_modes.py
+      - name: Prove off mode and release locks
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m22_reasoning_modes import (
+              FOUNDATION_SHA,
+              REASONING_MODES,
+              SOURCE_SHA,
+          )
+
+          assert REASONING_MODES == ('off', 'auto', 'force')
+          assert SOURCE_SHA == 'a6ba738d910d01d2ae99b1968f0831989934c549'
+          assert FOUNDATION_SHA == 'e5ef644053d34e89c70d2ceb37521e1c59234832'
+          PY
+      - name: Scan executor and secret boundary
+        run: |
+          if grep -nE 'requests|httpx|aiohttp|urllib.request|subprocess|boto3|openai|anthropic|sentence_transformers|api_key|token=' \
+            src/knowledge_engine/m22_reasoning_modes.py; then
+            exit 1
+          fi
+          test -z "$(find . -type f \( -name '*m22-reasoning-run.json' -o -name '*planner-trace.json' \) -print -quit)"
+      - name: Compile M22.1 scope
+        run: >-
+          python -m compileall -q
+          src/knowledge_engine/m22_reasoning_modes.py
+          tests/test_m22_1_reasoning_modes.py
