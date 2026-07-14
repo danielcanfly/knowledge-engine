@@ -97,3 +97,40 @@ Total closeout is accepted only when:
 No provider/model call, live retrieval, production graph traversal, traffic change, deployment, promotion, production pointer, R2 write, credential modification, permanent-ledger write, rollback dispatch, retained-evidence write, Source write or Graph Neural Retrieval is included.
 
 Production mutation dispatched: false.
+
+## Closure reconciliation
+
+The post-GA final audit was reconciled against live GitHub state.
+
+- authoritative issue: #362;
+- implementation PR: #363;
+- exact entry base: `436e435acd8477adc11d061b34e00c5d4f4696eb`;
+- accepted implementation head: `374e29e49f377adb174e69e06411381221faad99`;
+- implementation merge: `4e542fd3e7575d2167576d1dc3690515dc44250b`;
+- implementation branch: `audit/m18-m22-final-closeout`;
+- reconciliation branch: `docs/m18-m22-final-audit-reconciliation`.
+
+The accepted implementation diff contains exactly:
+
+- `.github/workflows/m18-m22-final-audit.yml`;
+- `docs/architecture/post-ga/m18-m22-final-audit.md`;
+- `src/knowledge_engine/m18_m22_final_audit.py`;
+- `tests/test_m18_m22_final_audit.py`.
+
+The accepted implementation head passed:
+
+- M18-M22 Final Audit #1;
+- CI #741;
+- M17 Architecture Canon Acceptance #103;
+- M18 Graph v2 acceptance #177;
+- R2 Release Integration #498.
+
+The dedicated audit gate successfully re-ran the Phase A, C, D and E machine contracts, Phase B API and Runtime tests, Graphology adapter and Explorer checks, accessibility and 50k scale fixtures, CSP/read-only scans, production dependency audits, exact inventory proof, boundary scan and compilation.
+
+PR #363 had no conversation comments, submitted reviews or unresolved review threads. Its exact four-file diff and head SHA were revalidated immediately before merge. The implementation was merged using expected head `374e29e49f377adb174e69e06411381221faad99`.
+
+No additional functional repair issue was required. The only required prior gap was the already-completed Phase D evidence-binding repair #334/#335/#336, which was revalidated by the final audit.
+
+Protected-state review confirmed no provider or model call, live retrieval, production graph traversal, traffic change, deployment, promotion, production pointer update, R2 write, credential modification, permanent-ledger write, rollback dispatch, retained-evidence write, Source write or Graph Neural Retrieval.
+
+Production mutation dispatched: false.
