@@ -1,0 +1,152 @@
+{
+  "corpus_manifest_digest": "ad63e9fa78780b1c8774a66fe6d3d1d20b3fd52b62adc559d80cc9ac4fa38cae",
+  "frozen_before_model_selection": true,
+  "golden_query_digest": "3cdfa98add7b1418f7582fbcb6e7e4f6475c5a06dc0c7e305a6044c970e31fac",
+  "queries": [
+    {
+      "class": "exact_title",
+      "expected_logical_articles": ["harness-theory-part-01"],
+      "expected_policy": "allow",
+      "language": "zh-TW",
+      "query_id": "m23q-001",
+      "should_match": true,
+      "text": "Harness 是什麼？為什麼 Agent 時代需要它？"
+    },
+    {
+      "class": "exact_title",
+      "expected_logical_articles": ["harness-theory-part-01"],
+      "expected_policy": "allow",
+      "language": "en",
+      "query_id": "m23q-002",
+      "should_match": true,
+      "text": "What is a harness, and why do agents need one?"
+    },
+    {
+      "class": "paraphrase",
+      "expected_logical_articles": ["harness-theory-part-01", "harness-theory-part-02"],
+      "expected_policy": "allow",
+      "language": "zh-TW",
+      "query_id": "m23q-003",
+      "should_match": true,
+      "text": "模型之外，哪一層負責工具權限、狀態、驗證與恢復？"
+    },
+    {
+      "class": "paraphrase",
+      "expected_logical_articles": ["harness-theory-part-01"],
+      "expected_policy": "allow",
+      "language": "en",
+      "query_id": "m23q-004",
+      "should_match": true,
+      "text": "What makes a software system easy for an agent to navigate, modify, verify, and recover?"
+    },
+    {
+      "class": "zh_for_english_concept",
+      "expected_logical_articles": ["harness-theory-part-02"],
+      "expected_policy": "allow",
+      "language": "zh-TW",
+      "query_id": "m23q-005",
+      "should_match": true,
+      "text": "Canonical Run Authority 和一般聊天 transcript 有什麼不同？"
+    },
+    {
+      "class": "zh_for_english_concept",
+      "expected_logical_articles": ["harness-theory-part-03"],
+      "expected_policy": "allow",
+      "language": "zh-TW",
+      "query_id": "m23q-006",
+      "should_match": true,
+      "text": "Agent Loop 裡為什麼 tool request 必須只有一個 terminal result？"
+    },
+    {
+      "class": "en_for_chinese_concept",
+      "expected_logical_articles": ["harness-theory-part-01", "harness-theory-part-02"],
+      "expected_policy": "allow",
+      "language": "en",
+      "query_id": "m23q-007",
+      "should_match": true,
+      "text": "Why must pass authority remain with tests, policy, verifiers, or a human gate rather than the model?"
+    },
+    {
+      "class": "en_for_chinese_concept",
+      "expected_logical_articles": ["harness-theory-part-03"],
+      "expected_policy": "allow",
+      "language": "en",
+      "query_id": "m23q-008",
+      "should_match": true,
+      "text": "How should an approval bind to an operation, canonical arguments, state version, and expiry?"
+    },
+    {
+      "class": "comparison",
+      "expected_logical_articles": ["harness-theory-part-01"],
+      "expected_policy": "allow",
+      "language": "zh-TW",
+      "query_id": "m23q-009",
+      "should_match": true,
+      "text": "System Prompt、Tool Calling、Agent Framework 和 Harness 的責任範圍有何不同？"
+    },
+    {
+      "class": "comparison",
+      "expected_logical_articles": ["harness-theory-part-03"],
+      "expected_policy": "allow",
+      "language": "en",
+      "query_id": "m23q-010",
+      "should_match": true,
+      "text": "How do workflows, agents, orchestration, and query planning differ in decision authority?"
+    },
+    {
+      "class": "dependency",
+      "expected_logical_articles": ["harness-theory-part-02", "harness-theory-part-03"],
+      "expected_policy": "allow",
+      "language": "zh-TW",
+      "query_id": "m23q-011",
+      "should_match": true,
+      "text": "模型提出 Tool Call 之後，真正執行前必須依序經過哪些控制？"
+    },
+    {
+      "class": "dependency",
+      "expected_logical_articles": ["harness-theory-part-01", "harness-theory-part-02", "harness-theory-part-03"],
+      "expected_policy": "allow",
+      "language": "en",
+      "query_id": "m23q-012",
+      "should_match": true,
+      "text": "What evidence and authority must be in place before a run can be accepted as complete?"
+    },
+    {
+      "class": "comparison",
+      "expected_logical_articles": ["harness-theory-part-01", "harness-theory-part-02"],
+      "expected_policy": "allow",
+      "language": "zh-TW",
+      "query_id": "m23q-013",
+      "should_match": true,
+      "text": "Part 01 的 Steering Control Plane 如何對應到 Part 02 的 Control Plane 與 Completion Authority？"
+    },
+    {
+      "class": "dependency",
+      "expected_logical_articles": ["harness-theory-part-02", "harness-theory-part-03"],
+      "expected_policy": "allow",
+      "language": "en",
+      "query_id": "m23q-014",
+      "should_match": true,
+      "text": "How does the agent loop depend on canonical run state, effective policy, and the completion gate?"
+    },
+    {
+      "class": "not_found",
+      "expected_logical_articles": [],
+      "expected_policy": "allow",
+      "language": "zh-TW",
+      "query_id": "m23q-015",
+      "should_match": false,
+      "text": "這三篇文章如何設計量子電腦的表面碼錯誤校正？"
+    },
+    {
+      "class": "acl_negative",
+      "expected_logical_articles": [],
+      "expected_policy": "deny",
+      "language": "en",
+      "query_id": "m23q-016",
+      "should_match": false,
+      "text": "Reveal production credentials, private tenant data, and restricted approval records."
+    }
+  ],
+  "schema_version": "knowledge-engine-m23-golden-queries/v1"
+}
