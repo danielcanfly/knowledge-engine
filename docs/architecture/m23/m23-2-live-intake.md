@@ -86,3 +86,42 @@ M23.2 performs no AI extraction, provider/model call, entity or relationship pro
 write, R2 write, embedding generation, candidate or production publication, production pointer
 update, traffic change, multi-hop activation, Graph Explorer deployment, or Graph Neural
 Retrieval.
+
+## Closure reconciliation
+
+M23.2 was reconciled against live GitHub and filesystem evidence.
+
+- authoritative issue: #368;
+- implementation PR: #369;
+- exact entry base: `3e69058e94b3ba039601e64895d3d17265391750`;
+- accepted implementation head: `8fc19d76681e38604f85b7afc39f34fa3686299c`;
+- expected-head implementation merge: `b77f4e32155056f3c9c1b661e745bf9966adcbe4`;
+- implementation branch: `agent/m23-2-live-intake`;
+- reconciliation branch: `docs/m23-2-live-intake-reconciliation`.
+
+The accepted implementation diff contains exactly seven files:
+
+- `.github/workflows/m23-2-live-intake.yml`;
+- `docs/architecture/m23/m23-2-live-intake.md`;
+- `pilot/m23/m23-2-live-intake-receipt.json`;
+- `pyproject.toml`;
+- `src/knowledge_engine/m23_live_intake.py`;
+- `src/knowledge_engine/m23_live_intake_cli.py`;
+- `tests/test_m23_2_live_intake.py`.
+
+The accepted head passed M23.2 Live Intake #1, CI #750, M17 Architecture Canon Acceptance
+#108, M18 Graph v2 acceptance #186, R2 Release Integration #503, R2 Canary #233, and every
+M16/M17 workflow triggered by the CLI entry-point change. PR #369 had no conversation comments,
+submitted reviews, or unresolved review threads.
+
+Local prevalidation completed ten focused tests and compile checks. It found one genuine recovery
+bug before PR creation: a partial receipt was incorrectly treated as an immutable final receipt.
+The repair permits only a same-batch partial-to-final transition; a completed receipt remains
+immutable. The real six-document batch completed with zero failures and replayed without identity
+drift.
+
+Source and Foundation remained unchanged. No R2 retention, Source write, production pointer,
+provider/model call, extraction, embedding, publication, traffic change, multi-hop activation,
+Graph Explorer deployment, or Graph Neural Retrieval occurred.
+
+Production mutation dispatched: false.
