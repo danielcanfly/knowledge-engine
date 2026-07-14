@@ -139,3 +139,43 @@ M22.7 is accepted only when:
 No M18-M22 audit repair is included in the M22.7 implementation PR. No provider/model call, network request, live retrieval, graph traversal, answer generation, semantic judge, traffic allocation, deployment, rollout, Source mutation, production pointer, R2 mutation, credentials, permanent ledger, rollback, retained evidence write or Graph Neural Retrieval is included.
 
 Production mutation dispatched: false.
+
+## Closure reconciliation
+
+M22.7 implementation was reconciled against live GitHub state.
+
+- canonical issue: #356;
+- implementation PR: #360;
+- exact entry base: `3b4d3c71adac43de2dcaddbb826d93b3f070e6c4`;
+- rejected initial implementation head: `387e973d423752246eaebdf53c5c95d663d9eab7`;
+- accepted implementation head: `d41f7d024e3d0f33ffcf50678f61f8febfb5dc0b`;
+- implementation merge: `dd6a9d78c2f491198c76788a0d8cbf191a4cdabb`;
+- implementation branch: `feat/m22-7-phase-e-acceptance`;
+- reconciliation branch: `docs/m22-7-reconciliation`.
+
+The accepted implementation diff contains exactly:
+
+- `.github/workflows/m22-7-phase-e-acceptance.yml`;
+- `docs/architecture/m22/m22-7-phase-e-acceptance.md`;
+- `src/knowledge_engine/m22_phase_e_acceptance.py`;
+- `tests/test_m22_7_phase_e_acceptance.py`.
+
+Local isolated prevalidation completed with 35 focused tests, Ruff and compileall.
+
+The initial implementation head failed the dedicated M22.7 gate and repository CI on Ruff B905 because the intentional adjacent-pair `zip()` lacked an explicit strictness parameter. It was rejected as acceptance evidence. The repair added `strict=False`, matching the deliberate one-element length difference without adding an ignore or weakening the reconciliation-chain check.
+
+The accepted implementation head passed:
+
+- M22.7 Phase E Acceptance #2;
+- CI #737;
+- M17 Architecture Canon Acceptance #101;
+- M18 Graph v2 acceptance #173;
+- R2 Release Integration #496.
+
+PR #360 had no conversation comments, submitted reviews or unresolved review threads. Its final head and exact four-file diff were revalidated immediately before merge. The implementation was merged using expected head `d41f7d024e3d0f33ffcf50678f61f8febfb5dc0b`.
+
+Issues #357, #358 and #359 remain closed `not_planned` and have no evidence role.
+
+Protected-state review confirmed no provider or model call, network request, live retrieval, graph traversal, answer generation, semantic judge, traffic allocation, deployment, rollout, Source mutation, production mutation, production pointer update, R2 mutation, credential modification, permanent-ledger write, rollback dispatch, retained evidence write or Graph Neural Retrieval.
+
+Production mutation dispatched: false.
