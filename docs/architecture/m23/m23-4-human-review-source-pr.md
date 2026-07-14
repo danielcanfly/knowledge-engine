@@ -37,3 +37,24 @@ Only a later, explicit adoption step may convert approved proposals into canonic
 ## Protected boundaries
 
 No Source main mutation, human approval, canonical adoption, candidate or production publication, production pointer, R2 retention, embedding generation, traffic change, multi-hop activation, Graph Explorer deployment or Graph Neural Retrieval.
+
+## Closure reconciliation
+
+M23.4 implementation and the review surface were reconciled against live GitHub evidence.
+
+- authoritative Engine issue: #374;
+- Engine implementation PR: #375;
+- exact implementation base: `5de0327501a8584098e5304160462c9c7e92daba`;
+- accepted implementation head: `7e6d754cd2df9bad689d33cf88530d19ee067068`;
+- expected-head implementation merge: `4cdc9196f7556e0dd42f38955b7c0286b93bcc2c`;
+- Source draft review PR: `knowledge-source#19`;
+- Source review head: `deb3ad1e631c2149183d10561fbceb0a1848a989`;
+- Source PR state at reconciliation: open, draft, unmerged;
+- Source main remains `a6ba738d910d01d2ae99b1968f0831989934c549`;
+- Foundation main remains `e5ef644053d34e89c70d2ceb37521e1c59234832`.
+
+The implementation diff contains exactly seven files. The accepted head passed M23.4 Human Review Source PR #1, CI #759, M23.3 #4, M23.2 #5, M17 Architecture #113, M18 Graph v2 #195, R2 Release Integration #508, R2 Canary #236, and every triggered M16/M17 safeguard. PR #375 had no conversation comments, submitted reviews, or unresolved review threads.
+
+The Source draft PR contains exactly five files under `proposals/m23-4/`: review overview, pending decision template, compact concept proposals, candidate-ID review manifest, and evidence-offset provenance summary. It changes no canonical Source path.
+
+The tooling milestone is complete, while all fifteen human decisions and canonical adoption remain explicitly pending. M23.5 and M23.6 must not treat these proposals as accepted Source knowledge.
