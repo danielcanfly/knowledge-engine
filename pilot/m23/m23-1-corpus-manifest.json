@@ -1,0 +1,274 @@
+{
+  "authority": {
+    "article_bytes_committed": false,
+    "intake_deferred_to": "M23.2",
+    "repository_discovery": "no_connected_authoritative_blog_repository",
+    "repository_identity_fabricated": false,
+    "source_kind": "conversation_upload"
+  },
+  "documents": [
+    {
+      "audience": "public",
+      "blob_sha": null,
+      "byte_length": 21051,
+      "canonical_url": null,
+      "counterpart_document_id": "harness-theory-part-01-en",
+      "document_id": "harness-theory-part-01-zh-tw",
+      "image_assets_supplied": false,
+      "image_references": [
+        "./images/harness-theory-part-01-figure-1-1.png",
+        "./images/harness-theory-part-01-figure-1-2.png",
+        "./images/harness-theory-part-01-figure-1-3.png"
+      ],
+      "language": "zh-TW",
+      "line_count": 382,
+      "logical_article_id": "harness-theory-part-01",
+      "original_filename": "Harness_理論篇_Part01_中文_優化版(1).md",
+      "ownership_basis": "user_supplied",
+      "part": 1,
+      "pilot_role": [
+        "definition",
+        "boundary",
+        "bilingual_counterpart"
+      ],
+      "repository": null,
+      "repository_commit": null,
+      "repository_path": null,
+      "series": "Harness 理論篇",
+      "sha256": "c1deaf4fce0673f9c92c9b4e0b5c1ad994964f7cb6e83a10c76d807ac7a3f86b",
+      "source_status": "draft",
+      "title": "Harness 理論篇 Part 01｜Harness 是什麼？為什麼 Agent 時代需要它？",
+      "unresolved_identity_fields": [
+        "repository",
+        "repository_commit",
+        "repository_path",
+        "blob_sha",
+        "canonical_url"
+      ],
+      "upload_id": "file_000000003c7871f8967cfe739cbc7b01"
+    },
+    {
+      "audience": "public",
+      "blob_sha": null,
+      "byte_length": 23036,
+      "canonical_url": null,
+      "counterpart_document_id": "harness-theory-part-01-zh-tw",
+      "document_id": "harness-theory-part-01-en",
+      "image_assets_supplied": false,
+      "image_references": [
+        "./images/harness-theory-part-01-figure-1-1.png",
+        "./images/harness-theory-part-01-figure-1-2.png",
+        "./images/harness-theory-part-01-figure-1-3.png"
+      ],
+      "language": "en",
+      "line_count": 380,
+      "logical_article_id": "harness-theory-part-01",
+      "original_filename": "Harness_Theory_Part01_English_Optimised(1).md",
+      "ownership_basis": "user_supplied",
+      "part": 1,
+      "pilot_role": [
+        "definition",
+        "boundary",
+        "bilingual_counterpart"
+      ],
+      "repository": null,
+      "repository_commit": null,
+      "repository_path": null,
+      "series": "Harness Theory",
+      "sha256": "9b988a0e38a3142d94a72ff0d85e9b58ba1a9b5a294ad7f9a88a60832d9e39e8",
+      "source_status": "draft",
+      "title": "Harness Theory Part 01 | What Is a Harness, and Why Do Agents Need One?",
+      "unresolved_identity_fields": [
+        "repository",
+        "repository_commit",
+        "repository_path",
+        "blob_sha",
+        "canonical_url"
+      ],
+      "upload_id": "file_0000000080b8720b8121f5adf3600fee"
+    },
+    {
+      "audience": "public",
+      "blob_sha": null,
+      "byte_length": 29106,
+      "canonical_url": null,
+      "counterpart_document_id": "harness-theory-part-02-en",
+      "document_id": "harness-theory-part-02-zh-tw",
+      "image_assets_supplied": false,
+      "image_references": [
+        "./images/harness-theory-part-02-figure-2-1.png",
+        "./images/harness-theory-part-02-figure-2-2.png",
+        "./images/harness-theory-part-02-figure-2-3.png",
+        "./images/harness-theory-part-02-figure-2-4.png"
+      ],
+      "language": "zh-TW",
+      "line_count": 551,
+      "logical_article_id": "harness-theory-part-02",
+      "original_filename": "Harness_理論篇_Part02_中文_優化版(1).md",
+      "ownership_basis": "user_supplied",
+      "part": 2,
+      "pilot_role": [
+        "architecture",
+        "authority",
+        "bilingual_counterpart"
+      ],
+      "repository": null,
+      "repository_commit": null,
+      "repository_path": null,
+      "series": "Harness 理論篇",
+      "sha256": "4f5d265e2a4ff81d3744b3a72bd09cb2b1c2682f144fb9be90c38babeb6b0da7",
+      "source_status": "draft",
+      "title": "Harness 理論篇 Part 02｜Harness 的完整架構：一個 Agent 系統有哪些層？",
+      "unresolved_identity_fields": [
+        "repository",
+        "repository_commit",
+        "repository_path",
+        "blob_sha",
+        "canonical_url"
+      ],
+      "upload_id": "file_000000006168720bbb7d78d265b227b4"
+    },
+    {
+      "audience": "public",
+      "blob_sha": null,
+      "byte_length": 31159,
+      "canonical_url": null,
+      "counterpart_document_id": "harness-theory-part-02-zh-tw",
+      "document_id": "harness-theory-part-02-en",
+      "image_assets_supplied": false,
+      "image_references": [
+        "./images/harness-theory-part-02-figure-2-1.png",
+        "./images/harness-theory-part-02-figure-2-2.png",
+        "./images/harness-theory-part-02-figure-2-3.png",
+        "./images/harness-theory-part-02-figure-2-4.png"
+      ],
+      "language": "en",
+      "line_count": 551,
+      "logical_article_id": "harness-theory-part-02",
+      "original_filename": "Harness_Theory_Part02_English_Optimised(1).md",
+      "ownership_basis": "user_supplied",
+      "part": 2,
+      "pilot_role": [
+        "architecture",
+        "authority",
+        "bilingual_counterpart"
+      ],
+      "repository": null,
+      "repository_commit": null,
+      "repository_path": null,
+      "series": "Harness Theory",
+      "sha256": "baa1ea6c5dc251759c42972a42a53a22c7368851d88d48122b49047b79377908",
+      "source_status": "draft",
+      "title": "Harness Theory Part 02 | The Complete Harness Architecture: Which Layers Does an Agent System Need?",
+      "unresolved_identity_fields": [
+        "repository",
+        "repository_commit",
+        "repository_path",
+        "blob_sha",
+        "canonical_url"
+      ],
+      "upload_id": "file_000000008bf4720bbaeb34b48f2942c5"
+    },
+    {
+      "audience": "public",
+      "blob_sha": null,
+      "byte_length": 27298,
+      "canonical_url": null,
+      "counterpart_document_id": "harness-theory-part-03-en",
+      "document_id": "harness-theory-part-03-zh-tw",
+      "image_assets_supplied": false,
+      "image_references": [
+        "./images/harness-theory-part-03-figure-3-1.png",
+        "./images/harness-theory-part-03-figure-3-2.png",
+        "./images/harness-theory-part-03-figure-3-3.png",
+        "./images/harness-theory-part-03-figure-3-4.png"
+      ],
+      "language": "zh-TW",
+      "line_count": 612,
+      "logical_article_id": "harness-theory-part-03",
+      "original_filename": "Harness_理論篇_Part03_中文_優化版(1).md",
+      "ownership_basis": "user_supplied",
+      "part": 3,
+      "pilot_role": [
+        "agent_loop",
+        "control_flow",
+        "bilingual_counterpart"
+      ],
+      "repository": null,
+      "repository_commit": null,
+      "repository_path": null,
+      "series": "Harness 理論篇",
+      "sha256": "ab637ca15ab867ce169cbc4062bd8e455842627648511c7fb2f294092155f7d1",
+      "source_status": "draft",
+      "title": "Harness 理論篇 Part 03｜Agent Loop 與控制流：模型如何真正開始工作？",
+      "unresolved_identity_fields": [
+        "repository",
+        "repository_commit",
+        "repository_path",
+        "blob_sha",
+        "canonical_url"
+      ],
+      "upload_id": "file_00000000873c71f8a17c0f9ff3e429a1"
+    },
+    {
+      "audience": "public",
+      "blob_sha": null,
+      "byte_length": 28725,
+      "canonical_url": null,
+      "counterpart_document_id": "harness-theory-part-03-zh-tw",
+      "document_id": "harness-theory-part-03-en",
+      "image_assets_supplied": false,
+      "image_references": [
+        "./images/harness-theory-part-03-figure-3-1.png",
+        "./images/harness-theory-part-03-figure-3-2.png",
+        "./images/harness-theory-part-03-figure-3-3.png",
+        "./images/harness-theory-part-03-figure-3-4.png"
+      ],
+      "language": "en",
+      "line_count": 612,
+      "logical_article_id": "harness-theory-part-03",
+      "original_filename": "Harness_Theory_Part03_English_Optimised(1).md",
+      "ownership_basis": "user_supplied",
+      "part": 3,
+      "pilot_role": [
+        "agent_loop",
+        "control_flow",
+        "bilingual_counterpart"
+      ],
+      "repository": null,
+      "repository_commit": null,
+      "repository_path": null,
+      "series": "Harness Theory",
+      "sha256": "a6df919cc2f03a1351d20c2c8bbe97044698eea39fc0703f11ef061545c97172",
+      "source_status": "draft",
+      "title": "Harness Theory Part 03 | Agent Loops and Control Flow: How Does the Model Start Doing Work?",
+      "unresolved_identity_fields": [
+        "repository",
+        "repository_commit",
+        "repository_path",
+        "blob_sha",
+        "canonical_url"
+      ],
+      "upload_id": "file_00000000a8e8720b91a41ea442deec18"
+    }
+  ],
+  "entry_baseline": {
+    "engine_sha": "14a7f9bcf375925458e17272418d6db9aa308caf",
+    "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+    "source_sha": "a6ba738d910d01d2ae99b1968f0831989934c549"
+  },
+  "manifest_digest": "ad63e9fa78780b1c8774a66fe6d3d1d20b3fd52b62adc559d80cc9ac4fa38cae",
+  "protected_state": {
+    "article_byte_ingestion": false,
+    "embedding_generation": false,
+    "extraction": false,
+    "graph_neural_retrieval": false,
+    "multi_hop_activation": false,
+    "production_pointer_update": false,
+    "provider_call": false,
+    "r2_write": false,
+    "source_write": false,
+    "traffic_change": false
+  },
+  "schema_version": "knowledge-engine-m23-pilot-corpus/v1"
+}
