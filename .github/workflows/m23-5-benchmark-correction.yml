@@ -1,0 +1,100 @@
+name: M23.5 corrected benchmark contract
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_benchmark_correction.py"
+      - "src/knowledge_engine/m23_benchmark_evaluation.py"
+      - "src/knowledge_engine/m23_benchmark_decision.py"
+      - "src/knowledge_engine/m23_benchmark_offline.py"
+      - "src/knowledge_engine/m23_benchmark_correction_cli.py"
+      - "src/knowledge_engine/m23_cloudflare_qdrant.py"
+      - "tests/test_m23_5_benchmark_correction.py"
+      - "tests/test_m23_5_cloudflare_qdrant.py"
+      - "pilot/m23/m23-5-corrected-gold.json"
+      - "pilot/m23/m23-5-cloudflare-offline-decision.json"
+      - "pilot/m23/m23-5-cloudflare-offline-rebenchmark-receipt.json"
+      - "docs/architecture/m23-5-benchmark-contract-correction.md"
+      - "pyproject.toml"
+      - ".github/workflows/m23-5-benchmark-correction.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  corrected-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: python -m pip install --quiet -e ".[dev]"
+      - name: Ruff
+        run: |
+          ruff check --output-format concise \
+            src/knowledge_engine/m23_benchmark_correction.py \
+            src/knowledge_engine/m23_benchmark_evaluation.py \
+            src/knowledge_engine/m23_benchmark_decision.py \
+            src/knowledge_engine/m23_benchmark_offline.py \
+            src/knowledge_engine/m23_benchmark_correction_cli.py \
+            src/knowledge_engine/m23_cloudflare_qdrant.py \
+            tests/test_m23_5_benchmark_correction.py \
+            tests/test_m23_5_cloudflare_qdrant.py
+      - name: Tests
+        run: |
+          pytest -q \
+            tests/test_m23_5_benchmark_correction.py \
+            tests/test_m23_5_cloudflare_qdrant.py
+      - name: Deterministic decision and authority guard
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          def canonical(value):
+              return json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+              )
+
+          gold = json.loads(
+              Path("pilot/m23/m23-5-corrected-gold.json").read_text()
+          )
+          decision = json.loads(
+              Path(
+                  "pilot/m23/m23-5-cloudflare-offline-decision.json"
+              ).read_text()
+          )
+          receipt = json.loads(
+              Path(
+                  "pilot/m23/m23-5-cloudflare-offline-rebenchmark-receipt.json"
+              ).read_text()
+          )
+
+          gold_sha = hashlib.sha256(canonical(gold).encode()).hexdigest()
+          assert gold_sha == decision["corrected_gold_sha256"]
+          assert gold_sha == receipt["corrected_gold_sha256"]
+          assert decision["decision"] == "select_for_non_production_pilot"
+          assert decision["retrieval_default"] == "lexical"
+          assert decision["qdrant_pilot_write_authorized"] is False
+          assert decision["candidate_release_eligible"] is False
+          assert decision["production_authority"] is False
+          assert decision["authority"]["qdrant_write"] is False
+          assert receipt["cloudflare_calls"] == 0
+          assert receipt["network_calls"] == 0
+          assert receipt["qdrant_writes"] == 0
+          assert receipt["production_authority"] is False
+          PY
+      - name: Secret and forbidden-mode guard
+        run: |
+          ! grep -R "CLOUDFLARE_API_TOKEN=.*" -n src tests docs pilot
+          ! grep -R "QDRANT_API_KEY=.*" -n src tests docs pilot
+          ! grep -R "GRAPH_NEURAL_RETRIEVAL_ENABLED=true" -n src tests docs pilot
+          grep -q '"retrieval_default": "lexical"' \
+            pilot/m23/m23-5-cloudflare-offline-decision.json
