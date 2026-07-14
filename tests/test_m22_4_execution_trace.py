@@ -232,12 +232,14 @@ def test_invalid_plan_authority_is_rejected(field: str, value: object) -> None:
     altered = copy.deepcopy(payload["bounded_plan"])
     altered[field] = value
     payload["bounded_plan"] = altered
-    with patch(
-        "knowledge_engine.m22_execution_trace.compile_bounded_reasoning_plan",
-        return_value=copy.deepcopy(altered),
+    with (
+        patch(
+            "knowledge_engine.m22_execution_trace.compile_bounded_reasoning_plan",
+            return_value=copy.deepcopy(altered),
+        ),
+        pytest.raises(IntegrityError, match="authority is invalid"),
     ):
-        with pytest.raises(IntegrityError, match="authority is invalid"):
-            validate_bounded_execution_trace(payload)
+        validate_bounded_execution_trace(payload)
 
 
 @pytest.mark.parametrize(
@@ -361,29 +363,30 @@ def test_step_after_failure_must_skip_dependency() -> None:
 
 
 @pytest.mark.parametrize(
-    ("budget_field", "result_field", "value"),
+    ("budget_field", "value"),
     [
-        ("max_retrievals", "retrievals_used", 0),
-        ("max_model_calls", "model_calls_used", 0),
-        ("max_total_tokens", "tokens_used", 50),
-        ("timeout_ms", "elapsed_ms", 50),
+        ("max_retrievals", 0),
+        ("max_model_calls", 0),
+        ("max_total_tokens", 50),
+        ("timeout_ms", 50),
     ],
 )
 def test_aggregate_usage_cannot_exceed_plan_budget(
     budget_field: str,
-    result_field: str,
     value: int,
 ) -> None:
     payload = _payload()
     altered = copy.deepcopy(payload["bounded_plan"])
     altered["budget_reservation"][budget_field] = value
     payload["bounded_plan"] = altered
-    with patch(
-        "knowledge_engine.m22_execution_trace.compile_bounded_reasoning_plan",
-        return_value=copy.deepcopy(altered),
+    with (
+        patch(
+            "knowledge_engine.m22_execution_trace.compile_bounded_reasoning_plan",
+            return_value=copy.deepcopy(altered),
+        ),
+        pytest.raises(IntegrityError, match="execution usage exceeds budget"),
     ):
-        with pytest.raises(IntegrityError, match="execution usage exceeds budget"):
-            validate_bounded_execution_trace(payload)
+        validate_bounded_execution_trace(payload)
 
 
 def test_result_count_must_match_plan() -> None:
