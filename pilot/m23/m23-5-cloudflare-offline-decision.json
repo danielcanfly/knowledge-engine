@@ -1,0 +1,28 @@
+{
+  "abstention_promotion_pass": false,
+  "authority": {"canonical_knowledge":false,"pointer_mutation":false,"production_authority":false,"qdrant_write":false,"r2_mutation":false,"source_write":false,"traffic_change":false},
+  "candidate_release_eligible": false,
+  "corrected_gold_sha256": "32553b921a6be265d90ab699de6e4c345767625d926b8420737bb38969aed406",
+  "decision": "select_for_non_production_pilot",
+  "decision_sha256": "25b31d59a07c3e647744320b05a5c2f20b488a3b5d00f80b8087946eb8ba2ee0",
+  "embedding_model": "@cf/baai/bge-m3",
+  "embedding_provider": "cloudflare-workers-ai",
+  "gates": {"article_mrr_minimum":0.95,"article_recall_at_3_minimum":0.7,"cross_language_recall_at_3_minimum":0.9,"held_out_negative_count_for_promotion":3,"held_out_negative_threshold_clearance_minimum":0.02,"held_out_separation_margin_minimum":0.05,"not_found_accuracy_required":1.0},
+  "milestone": "M23.5",
+  "observed": {
+    "held_out_abstention": {"accuracy":1.0,"all_negative_below_threshold":true,"all_positive_above_threshold":true,"held_out_negative_count":1,"held_out_positive_count":4,"maximum_negative_top_score":0.523667494785617,"minimum_positive_top_score":0.5467247303449392,"negative_threshold_clearance":0.0014441215134249896,"separation_margin":0.023057235559322153},
+    "threshold_calibration": {"calibration_negative_count":1,"calibration_positive_count":10,"maximum_negative_top_score":0.45628161504854164,"minimum_positive_top_score":0.5939416175495424,"separation_margin":0.1376600025010008,"strategy":"midpoint-between-worst-positive-and-worst-negative","threshold":0.525111616299042},
+    "vector": {"answered_query_count":14,"cross_language_recall_at_3":0.9375,"evaluation_unit":"parent-article","k":3,"mean_reciprocal_rank":0.964286,"ndcg_at_3":0.829664,"not_found_accuracy":1.0,"query_count":16,"recall_at_3":0.714286}
+  },
+  "preferred_retrieval_candidate": "vector-first",
+  "production_authority": false,
+  "provider_selection_pass": true,
+  "qdrant_pilot_write_authorized": false,
+  "required_follow_up": ["retain RETRIEVAL_MODE=lexical","collect at least three independent semantic held-out negatives","require at least 0.02 negative threshold clearance and 0.05 held-out separation","use named Qdrant vector default and collection preflight before any pilot upsert","require explicit operator authorization for the first Qdrant pilot write"],
+  "retrieval_default": "lexical",
+  "schema_version": "knowledge-engine-m23-model-selection-decision/v1",
+  "simple_rrf_selected": false,
+  "source_evidence_sha256": "1b71c79ed3fddc24abfb510709a08e6a1ad0a3806df23287d2d14a70994f7272",
+  "source_semantic_artifact_id": "semantic-35314911af0a514c9f0d64b7cfb1d6d0d2ec88cfa50317fa614e92f21f185f0d",
+  "vector_dimension": 1024
+}
