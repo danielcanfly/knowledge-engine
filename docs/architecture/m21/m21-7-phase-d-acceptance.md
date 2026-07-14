@@ -2,19 +2,19 @@
 
 ## Status
 
-Implementation contract for issue #331. M21.7 validates the exact M21.1 through M21.6 completion chain and produces deterministic, evidence-only Phase D acceptance. It does not execute ingestion, review, Source writes, GitHub Source PR creation, publication, or production operations.
+Implementation contract for issue #331, hardened by closure-audit issue #334. M21.7 validates the exact M21.1 through M21.6 completion chain and produces deterministic, evidence-only Phase D acceptance. It does not execute ingestion, review, Source writes, GitHub Source PR creation, publication, or production operations.
 
 ## Pinned authority
 
 M21.7 pins:
 
-- Engine baseline `8ae7eae22f591ccd2543af08c82b885b8c703d4c`;
 - Source commit `a6ba738d910d01d2ae99b1968f0831989934c549`;
 - Foundation commit `e5ef644053d34e89c70d2ceb37521e1c59234832`;
 - exact issue, implementation PR, reconciliation PR, head, and merge evidence for M21.1 through M21.6;
-- exact-head workflow evidence for all six M21 workflow families and repository regressions.
+- each milestone-specific workflow to that milestone's accepted implementation head;
+- M21.7 and repository-wide regression workflows to the exact final Phase D Engine head.
 
-Narrative milestone labels are not acceptance evidence. Missing or malformed evidence fails closed.
+Narrative milestone labels are not acceptance evidence. Missing, stale, swapped, or malformed evidence fails closed.
 
 ## Milestone evidence
 
@@ -29,26 +29,33 @@ The input schema is `knowledge-engine-phase-d-evidence/v1`. The `milestones` obj
 - exact implementation head SHA;
 - exact implementation merge SHA;
 - exact reconciliation head SHA;
-- exact reconciliation merge SHA.
+- exact reconciliation merge SHA;
+- its exact governed workflow name;
+- successful workflow conclusion;
+- workflow head equal to the milestone's implementation head.
 
-M21.7 does not infer completion from a file, title, or branch name.
+M21.7 does not infer completion from a file, title, branch name, or green run on another head.
 
 ## Exact-head workflows
 
-The workflow evidence list must include successful runs for:
+Milestone-specific workflow evidence is bound independently:
 
-- M21.1 Blog Inventory;
-- M21.2 Resumable Batch;
-- M21.3 Extraction Candidates;
-- M21.4 Governed Relations and Tags;
-- M21.5 Entity Resolution and Contradictions;
-- M21.6 Review Packets and Source PR Preparation;
+- M21.1 Blog Inventory → M21.1 implementation head;
+- M21.2 Resumable Batch → M21.2 implementation head;
+- M21.3 Extraction Candidates → M21.3 implementation head;
+- M21.4 Governed Relations and Tags → M21.4 implementation head;
+- M21.5 Entity Resolution and Contradictions → M21.5 implementation head;
+- M21.6 Review Packets and Source PR Preparation → M21.6 implementation head.
+
+The final workflow list must contain exactly these successful runs on the final Phase D Engine head:
+
+- M21.7 Phase D Acceptance;
 - CI;
 - M17 Architecture Canon Acceptance;
 - M18 Graph v2 acceptance;
 - R2 Release Integration.
 
-Every workflow entry must bind to the exact Engine head being accepted. A green run on an older head is rejected.
+This split reflects live path-filtered GitHub Actions behavior while preserving exact-head acceptance. A milestone workflow cannot be substituted with another milestone's workflow, and a stale repository regression cannot close Phase D.
 
 ## Throughput bounds
 
@@ -127,43 +134,44 @@ Successful validation emits `knowledge-engine-phase-d-acceptance/v1` with exact 
 M21 can close only after:
 
 1. M21.1 through M21.6 implementation and reconciliation evidence is complete;
-2. M21.7 implementation and reconciliation are independently merged by expected head SHA;
-3. all required exact-head workflows are green;
-4. M21.1 through M21.7 issue, PR, CI, merge, and reconciliation evidence is audited against live GitHub state;
-5. no protected boundary was mutated;
-6. M22 has not started.
+2. each milestone-specific workflow is green on that milestone's accepted implementation head;
+3. M21.7 and repository-wide regression workflows are green on the final Phase D head;
+4. M21.7 implementation and reconciliation are independently merged by expected head SHA;
+5. M21.1 through M21.7 issue, PR, CI, merge, and reconciliation evidence is audited against live GitHub state;
+6. Source and Foundation remain on the exact pinned release SHAs;
+7. no protected boundary was mutated;
+8. M22 has not started.
 
 ## Exclusions
 
 No Source write, Source checkout mutation, GitHub Source PR creation, reviewer decision, canonical adoption, model/provider/network call, live connector, scheduler, queue, worker, candidate publication, production publication, production pointer, retained R2 object, credentials, permanent ledger, rollback, M22 work, cross-release merge, or Graph Neural Retrieval is included.
 
-## Closure reconciliation
+## Original M21.7 closure reconciliation
 
 M21.7 implementation and acceptance evidence was reconciled against live GitHub state.
 
 - entry Engine main: `8ae7eae22f591ccd2543af08c82b885b8c703d4c`;
 - initial implementation head: `f75496d73cf6a04bdda21fc1e1c087d0903c5446`;
 - formatting-corrected head: `5e0fda9ab91bec183b836ed2037113900fc84220`;
-- accepted final implementation head: `84d19d8886f835704f69e62ea98cb585eddd05e7`;
+- accepted implementation head: `84d19d8886f835704f69e62ea98cb585eddd05e7`;
 - implementation merge: `2f38edc9974e09c1d281ecbb8858ddfd9799e040`;
-- implementation issue: #331;
-- implementation PR: #332.
+- reconciliation head: `2d94f36567630d50d79815abd2fe37729c7c8d68`;
+- reconciliation merge: `669e1b0b31cf218e8283004f6828f40955a13eff`;
+- issue: #331;
+- implementation PR: #332;
+- reconciliation PR: #333.
 
-The accepted implementation diff contains exactly:
+The accepted implementation diff contained exactly the M21.7 workflow, architecture document, validator, and test file. The implementation head passed M21.7 #3, CI #700, M17 #81, M18 #136, and R2 #475. The reconciliation head passed M21.7 #4, CI #702, M17 #82, and M18 #138. Both PRs had clean comment, review, and thread state and were merged by expected head SHA.
 
-- `.github/workflows/m21-7-phase-d-acceptance.yml`;
-- `docs/architecture/m21/m21-7-phase-d-acceptance.md`;
-- `src/knowledge_engine/m21_phase_d_acceptance.py`;
-- `tests/test_m21_7_phase_d_acceptance.py`.
+## Closure-audit correction
 
-The final implementation head passed:
+The post-M21.7 live audit found that the original validator required all workflow families to share one final Engine SHA, which did not match path-filtered milestone workflow execution. It also accepted any syntactically valid Source and Foundation SHA.
 
-- M21.7 Phase D Acceptance #3;
-- CI #700;
-- M17 Architecture Canon Acceptance #81;
-- M18 Graph v2 acceptance #136;
-- R2 Release Integration #475.
+Issue #334 corrects this by:
 
-The final implementation PR had no conversation comments, submitted reviews, or unresolved review threads. It was merged with expected head `84d19d8886f835704f69e62ea98cb585eddd05e7`. Earlier heads and their workflow results are transient non-acceptance evidence.
+- binding M21.1 through M21.6 workflows to their own accepted implementation heads;
+- binding M21.7 and repository-wide regressions to the final Phase D head;
+- pinning Source and Foundation to the exact governed release SHAs;
+- rejecting swapped workflow names, stale workflow heads, duplicate final workflows, and release identity drift.
 
-Protected-state review confirmed no Source write, GitHub Source PR creation, production mutation, production pointer update, retained R2 creation, credential modification, permanent-ledger write, or rollback dispatch. Production mutation dispatched: false.
+M21 remains open until issue #334 implementation and reconciliation are complete. Production mutation dispatched: false.

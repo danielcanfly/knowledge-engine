@@ -6,24 +6,27 @@ import pytest
 
 from knowledge_engine.errors import IntegrityError
 from knowledge_engine.m21_phase_d_acceptance import (
+    FOUNDATION_SHA,
+    MILESTONE_WORKFLOW_FAMILIES,
     PROTECTED_MUTATION_KEYS,
+    REQUIRED_FINAL_WORKFLOW_FAMILIES,
     REQUIRED_MILESTONES,
     REQUIRED_PRIVACY_GUARANTEES,
     REQUIRED_REPLAY_GUARANTEES,
     REQUIRED_REVIEW_GUARANTEES,
     REQUIRED_THROUGHPUT_GUARANTEES,
     REQUIRED_WORKFLOW_FAMILIES,
+    SOURCE_SHA,
     validate_phase_d_acceptance,
 )
 
 ENGINE_SHA = "1" * 40
-SOURCE_SHA = "2" * 40
-FOUNDATION_SHA = "3" * 40
 
 
 def _payload() -> dict:
     milestones = {}
     for index, name in enumerate(REQUIRED_MILESTONES, start=1):
+        implementation_head = f"{index:x}" * 40
         milestones[name] = {
             "issue_number": 300 + index,
             "implementation_pr": 310 + index,
@@ -31,10 +34,15 @@ def _payload() -> dict:
             "issue_state": "completed",
             "implementation_merged": True,
             "reconciliation_merged": True,
-            "implementation_head_sha": f"{index:x}" * 40,
+            "implementation_head_sha": implementation_head,
             "implementation_merge_sha": f"{index + 6:x}" * 40,
             "reconciliation_head_sha": f"{index + 7:x}" * 40,
             "reconciliation_merge_sha": f"{index + 8:x}" * 40,
+            "workflow": {
+                "name": MILESTONE_WORKFLOW_FAMILIES[name],
+                "conclusion": "success",
+                "head_sha": implementation_head,
+            },
         }
     return {
         "schema_version": "knowledge-engine-phase-d-evidence/v1",
@@ -46,7 +54,7 @@ def _payload() -> dict:
         "milestones": milestones,
         "workflows": [
             {"name": name, "conclusion": "success", "head_sha": ENGINE_SHA}
-            for name in REQUIRED_WORKFLOW_FAMILIES
+            for name in REQUIRED_FINAL_WORKFLOW_FAMILIES
         ],
         "throughput": {
             "inventory_items": 5000,
@@ -114,10 +122,29 @@ def test_incomplete_or_duplicate_milestone_evidence_fails_closed() -> None:
         validate_phase_d_acceptance(duplicate)
 
 
-def test_workflow_evidence_must_be_complete_successful_and_exact_head() -> None:
+def test_milestone_workflow_must_match_name_and_implementation_head() -> None:
+    swapped = _payload()
+    swapped["milestones"]["M21.2"]["workflow"]["name"] = MILESTONE_WORKFLOW_FAMILIES[
+        "M21.1"
+    ]
+    with pytest.raises(IntegrityError, match="name mismatch"):
+        validate_phase_d_acceptance(swapped)
+
+    stale = _payload()
+    stale["milestones"]["M21.3"]["workflow"]["head_sha"] = "f" * 40
+    with pytest.raises(IntegrityError, match="expected head"):
+        validate_phase_d_acceptance(stale)
+
+    failed = _payload()
+    failed["milestones"]["M21.4"]["workflow"]["conclusion"] = "failure"
+    with pytest.raises(IntegrityError, match="workflow did not succeed"):
+        validate_phase_d_acceptance(failed)
+
+
+def test_final_workflows_must_be_complete_unique_and_exact_head() -> None:
     missing = _payload()
     missing["workflows"].pop()
-    with pytest.raises(IntegrityError, match="workflow evidence is missing"):
+    with pytest.raises(IntegrityError, match="required final workflow"):
         validate_phase_d_acceptance(missing)
 
     failed = _payload()
@@ -127,13 +154,25 @@ def test_workflow_evidence_must_be_complete_successful_and_exact_head() -> None:
 
     stale = _payload()
     stale["workflows"][0]["head_sha"] = "f" * 40
-    with pytest.raises(IntegrityError, match="exact Engine head"):
+    with pytest.raises(IntegrityError, match="expected head"):
         validate_phase_d_acceptance(stale)
 
     duplicate = _payload()
     duplicate["workflows"].append(copy.deepcopy(duplicate["workflows"][0]))
-    with pytest.raises(IntegrityError, match="duplicate workflow"):
+    with pytest.raises(IntegrityError, match="duplicate final workflow"):
         validate_phase_d_acceptance(duplicate)
+
+
+def test_source_and_foundation_release_identity_are_pinned() -> None:
+    source = _payload()
+    source["identity"]["source_sha"] = "a" * 40
+    with pytest.raises(IntegrityError, match="Source release identity mismatch"):
+        validate_phase_d_acceptance(source)
+
+    foundation = _payload()
+    foundation["identity"]["foundation_sha"] = "b" * 40
+    with pytest.raises(IntegrityError, match="Foundation release identity mismatch"):
+        validate_phase_d_acceptance(foundation)
 
 
 @pytest.mark.parametrize(
