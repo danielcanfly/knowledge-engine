@@ -167,11 +167,21 @@ The accepted implementation diff contained exactly the M21.7 workflow, architect
 
 The post-M21.7 live audit found that the original validator required all workflow families to share one final Engine SHA, which did not match path-filtered milestone workflow execution. It also accepted any syntactically valid Source and Foundation SHA.
 
-Issue #334 corrects this by:
+Issue #334 corrected this by:
 
 - binding M21.1 through M21.6 workflows to their own accepted implementation heads;
 - binding M21.7 and repository-wide regressions to the final Phase D head;
 - pinning Source and Foundation to the exact governed release SHAs;
 - rejecting swapped workflow names, stale workflow heads, duplicate final workflows, and release identity drift.
 
-M21 remains open until issue #334 implementation and reconciliation are complete. Production mutation dispatched: false.
+The correction was implemented in PR #335 from exact base `669e1b0b31cf218e8283004f6828f40955a13eff`.
+
+- accepted correction head: `3745884a6de47180c955d53023f98883e7f3e75f`;
+- correction merge: `c2b27c90411b469776def052d183463df568fa71`;
+- exact changed-file scope: M21.7 workflow, architecture document, validator, and tests;
+- local focused tests: 19 passed;
+- final-head workflows: M21.7 #5, CI #704, M17 #83, M18 #140, R2 #477;
+- PR comments, reviews, and unresolved threads: none;
+- merge guard: expected head `3745884a6de47180c955d53023f98883e7f3e75f`.
+
+This reconciliation branch changes only this architecture document. Protected-state review remains clean. Production mutation dispatched: false.
