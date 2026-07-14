@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from src.knowledge_engine.errors import IntegrityError
-from src.knowledge_engine.m23_real_data_baseline import validate_real_data_baseline
+from knowledge_engine.errors import IntegrityError
+from knowledge_engine.m23_real_data_baseline import validate_real_data_baseline
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "pilot" / "m23" / "m23-1-corpus-manifest.json"
