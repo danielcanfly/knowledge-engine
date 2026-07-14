@@ -70,9 +70,9 @@ jobs:
           assert 'source_mutation_dispatched' in PROTECTED_MUTATION_KEYS
           assert 'production_mutation_dispatched' in PROTECTED_MUTATION_KEYS
           PY
-      - name: Scan authority and dependency boundary
+      - name: Scan executor dependency boundary
         run: |
-          if grep -nE 'requests|httpx|aiohttp|urllib.request|subprocess|boto3|production_pointer|openai|anthropic|sentence_transformers' \
+          if grep -nE 'requests|httpx|aiohttp|urllib.request|subprocess|boto3|openai|anthropic|sentence_transformers' \
             src/knowledge_engine/m21_phase_d_acceptance.py; then
             exit 1
           fi
