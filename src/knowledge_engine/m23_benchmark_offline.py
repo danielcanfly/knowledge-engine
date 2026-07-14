@@ -10,6 +10,7 @@ from typing import Any
 from .m23_benchmark_correction import (
     RECEIPT_SCHEMA,
     RESULT_SCHEMA,
+    VECTOR_DIMENSION,
     BenchmarkCorrectionError,
     canonical_sha256,
     file_sha256,
@@ -164,7 +165,7 @@ def run_offline_rebenchmark(
         "model": {
             "provider": "cloudflare-workers-ai",
             "id": "@cf/baai/bge-m3",
-            "dimension": 1024,
+            "dimension": VECTOR_DIMENSION,
         },
         "threshold_calibration": calibration,
         "held_out_abstention": held_out,
