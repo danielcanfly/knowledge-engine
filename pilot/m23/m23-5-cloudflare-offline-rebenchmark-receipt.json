@@ -1,0 +1,18 @@
+{
+  "cloudflare_calls": 0,
+  "corrected_gold_sha256": "32553b921a6be265d90ab699de6e4c345767625d926b8420737bb38969aed406",
+  "decision_sha256": "25b31d59a07c3e647744320b05a5c2f20b488a3b5d00f80b8087946eb8ba2ee0",
+  "network_calls": 0,
+  "pointer_mutation": false,
+  "production_authority": false,
+  "qdrant_reads": 0,
+  "qdrant_writes": 0,
+  "r2_mutation": false,
+  "receipt_sha256": "2df93702d677e5b15f836f12adf02131ed1a10e8ebdc06fdc6b723258c97ecc2",
+  "result_sha256": "19a8ffd870125b8856c6df9635e98b4e240b7c4bd242efa14f5bc18c162db4dd",
+  "retrieval_default": "lexical",
+  "schema_version": "knowledge-engine-m23-offline-rebenchmark-receipt/v1",
+  "source_evidence_sha256": "1b71c79ed3fddc24abfb510709a08e6a1ad0a3806df23287d2d14a70994f7272",
+  "source_write": false,
+  "traffic_change": false
+}
