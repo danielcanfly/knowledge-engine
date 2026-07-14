@@ -299,7 +299,7 @@ def validate_phase_e_acceptance(payload: Mapping[str, Any]) -> dict[str, Any]:
     if len({row["reconciliation_pr"] for row in normalized}) != len(normalized):
         raise IntegrityError("M22-PHASE-E-120 reconciliation PRs must be unique")
 
-    for previous, current in zip(normalized, normalized[1:]):
+    for previous, current in zip(normalized, normalized[1:], strict=False):
         if current["entry_base"] != previous["reconciliation_merge"]:
             raise IntegrityError("M22-PHASE-E-121 reconciliation chain is broken")
     if normalized[-1]["reconciliation_merge"] != FINAL_ENGINE_SHA:
