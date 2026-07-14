@@ -1,0 +1,20 @@
+{
+  "schema_version": "knowledge-engine-m23-corrected-benchmark-summary/v1",
+  "source_evidence_sha256": "1b71c79ed3fddc24abfb510709a08e6a1ad0a3806df23287d2d14a70994f7272",
+  "corrected_gold_sha256": "32553b921a6be265d90ab699de6e4c345767625d926b8420737bb38969aed406",
+  "result_sha256": "19a8ffd870125b8856c6df9635e98b4e240b7c4bd242efa14f5bc18c162db4dd",
+  "model": "@cf/baai/bge-m3",
+  "methods": {
+    "lexical": {"recall_at_3":0.452381,"mean_reciprocal_rank":0.892857,"ndcg_at_3":0.590789,"cross_language_recall_at_3":0.5,"not_found_accuracy":0.5},
+    "vector": {"recall_at_3":0.714286,"mean_reciprocal_rank":0.964286,"ndcg_at_3":0.829664,"cross_language_recall_at_3":0.9375,"not_found_accuracy":1.0},
+    "rrf_hybrid_k60": {"recall_at_3":0.607143,"mean_reciprocal_rank":1.0,"ndcg_at_3":0.752058,"cross_language_recall_at_3":0.6875,"not_found_accuracy":0.5}
+  },
+  "threshold": 0.525111616299042,
+  "held_out_negative_count": 1,
+  "held_out_negative_threshold_clearance": 0.0014441215134249896,
+  "provider_selection_pass": true,
+  "abstention_promotion_pass": false,
+  "retrieval_default": "lexical",
+  "qdrant_write": false,
+  "production_authority": false
+}
