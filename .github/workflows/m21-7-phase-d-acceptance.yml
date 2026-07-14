@@ -1,0 +1,84 @@
+name: M21.7 Phase D Acceptance
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m21-7-phase-d-acceptance.yml'
+      - 'docs/architecture/m21/m21-7-phase-d-acceptance.md'
+      - 'src/knowledge_engine/m21_phase_d_acceptance.py'
+      - 'tests/test_m21_7_phase_d_acceptance.py'
+
+permissions:
+  contents: read
+
+jobs:
+  phase-d-acceptance:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M21.7 scope
+        run: >-
+          python -m ruff check
+          src/knowledge_engine/m21_phase_d_acceptance.py
+          tests/test_m21_7_phase_d_acceptance.py
+      - name: Test M20 through M21.7 contracts
+        run: >-
+          python -m pytest -q
+          tests/test_m20_1_embedding_contract.py
+          tests/test_m20_2_semantic_artifacts.py
+          tests/test_m20_3_runtime_semantic.py
+          tests/test_m20_4_retrieval_modes.py
+          tests/test_m20_5_hybrid_fusion.py
+          tests/test_m20_6_lexical_enrichment.py
+          tests/test_m20_7_phase_c_acceptance.py
+          tests/test_m21_1_blog_inventory.py
+          tests/test_m21_2_resumable_batch.py
+          tests/test_m21_3_extraction_candidates.py
+          tests/test_m21_4_governed_relations.py
+          tests/test_m21_5_entity_resolution.py
+          tests/test_m21_6_review_source_pr.py
+          tests/test_m21_7_phase_d_acceptance.py
+      - name: Prove Phase D closure constants
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m21_phase_d_acceptance import (
+              PROTECTED_MUTATION_KEYS,
+              REQUIRED_MILESTONES,
+              REQUIRED_WORKFLOW_FAMILIES,
+          )
+
+          assert REQUIRED_MILESTONES == (
+              'M21.1',
+              'M21.2',
+              'M21.3',
+              'M21.4',
+              'M21.5',
+              'M21.6',
+          )
+          assert 'M21.6 Review Packets and Source PR Preparation' in REQUIRED_WORKFLOW_FAMILIES
+          assert 'source_mutation_dispatched' in PROTECTED_MUTATION_KEYS
+          assert 'production_mutation_dispatched' in PROTECTED_MUTATION_KEYS
+          PY
+      - name: Scan authority and dependency boundary
+        run: |
+          if grep -nE 'requests|httpx|aiohttp|urllib.request|subprocess|boto3|production_pointer|openai|anthropic|sentence_transformers' \
+            src/knowledge_engine/m21_phase_d_acceptance.py; then
+            exit 1
+          fi
+          test -z "$(find . -type f \( -name '*phase-d-acceptance.json' -o -name '*m21-closeout.json' \) -print -quit)"
+      - name: Compile M21.7 scope
+        run: >-
+          python -m compileall -q
+          src/knowledge_engine/m21_phase_d_acceptance.py
+          tests/test_m21_7_phase_d_acceptance.py
