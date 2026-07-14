@@ -17,7 +17,12 @@ QUERIES_PATH = ROOT / "pilot" / "m23" / "m23-1-golden-queries.json"
 
 def _digest(value: dict, key: str) -> str:
     payload = {name: item for name, item in value.items() if name != key}
-    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -71,7 +76,9 @@ def test_m23_1_rejects_fabricated_repository_identity() -> None:
 def test_m23_1_rejects_missing_query_class() -> None:
     manifest, queries = _load()
     tampered = copy.deepcopy(queries)
-    tampered["queries"] = [item for item in tampered["queries"] if item["class"] != "dependency"]
+    tampered["queries"] = [
+        item for item in tampered["queries"] if item["class"] != "dependency"
+    ]
     tampered["golden_query_digest"] = _digest(tampered, "golden_query_digest")
 
     with pytest.raises(IntegrityError, match="coverage"):
