@@ -80,3 +80,40 @@ this milestone. M23.4 owns entity resolution, human decisions, and the bounded S
 No external provider API call, credential use, Source mutation, review approval, canonical adoption,
 embedding generation, R2 write, candidate or production publication, production pointer, traffic
 change, multi-hop activation, Graph Explorer deployment, or Graph Neural Retrieval.
+
+## Closure reconciliation
+
+M23.3 was reconciled against the real six-document extraction evidence and live GitHub state.
+
+- authoritative issue: #371;
+- implementation PR: #372;
+- exact entry Engine: `c9a91bfbe21ee107b80cd79644cb398c9abbed95`;
+- rejected implementation head: `9f05f0563065cb950fb068de21bf9c0f58fb3de7`;
+- accepted implementation head: `902c40a39a487a798e7a708ff00409d8b8621327`;
+- expected-head implementation merge: `daf43375c80b998c156f3684eb584e8c21cf80d9`;
+- implementation branch: `agent/m23-3-real-ai-extraction`;
+- reconciliation branch: `docs/m23-3-real-ai-extraction-reconciliation`.
+
+The accepted implementation diff contains exactly nine files:
+
+- `.github/workflows/m23-3-real-ai-extraction.yml`;
+- `docs/architecture/m23/m23-3-real-ai-extraction.md`;
+- `pilot/m23/m23-3-real-ai-extraction-receipt.json`;
+- `pyproject.toml`;
+- `src/knowledge_engine/m23_real_ai_extraction.py`;
+- `src/knowledge_engine/m23_real_ai_extraction_cli.py`;
+- `tests/fixtures/m23/checkpoint.json`;
+- `tests/fixtures/m23/plan.json`;
+- `tests/test_m23_3_real_ai_extraction.py`.
+
+The first head passed the dedicated M23.3 gate but CI #754 correctly rejected an accidental
+`pyproject.toml` regression that removed an existing M16 `SIM102` exemption. The accepted head
+restored only that pre-existing configuration and passed M23.3 #2, CI #755, M17 Architecture #111,
+M18 Graph v2 #191, R2 Release Integration #506, R2 Canary #235, M23.2 #4, and every triggered
+M16/M17 safeguard. PR #372 had no comments, reviews, or unresolved review threads.
+
+The bounded evidence package SHA-256 is
+`910abb34601f6425f05cdaf23e2d27e4ba42e462937175721b20d5a3f0356b2f`.
+Source and Foundation remained unchanged. M23.4 review and Source-PR work has not started.
+
+Production mutation dispatched: false.
