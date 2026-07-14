@@ -58,14 +58,18 @@ PHASES = (
         "closure_issue": 331,
         "implementation_pr": 332,
         "reconciliation_pr": 333,
-        "implementation_head": "3745884a6de47180c955d53023f98883e7f3e75f",
-        "implementation_merge": "c2b27c90411b469776def052d183463df568fa71",
-        "reconciliation_head": "a77e85ee42b63f92486ea23e94ea2c0fcfee8847",
-        "reconciliation_merge": "a68dfb177ab1b044d23fe5e8077548392d8aec42",
+        "implementation_head": "84d19d8886f835704f69e62ea98cb585eddd05e7",
+        "implementation_merge": "2f38edc9974e09c1d281ecbb8858ddfd9799e040",
+        "reconciliation_head": "2d94f36567630d50d79815abd2fe37729c7c8d68",
+        "reconciliation_merge": "669e1b0b31cf218e8283004f6828f40955a13eff",
         "contract": "tests/test_m21_7_phase_d_acceptance.py",
         "repair_issue": 334,
         "repair_implementation_pr": 335,
         "repair_reconciliation_pr": 336,
+        "repair_implementation_head": "3745884a6de47180c955d53023f98883e7f3e75f",
+        "repair_implementation_merge": "c2b27c90411b469776def052d183463df568fa71",
+        "repair_reconciliation_head": "a77e85ee42b63f92486ea23e94ea2c0fcfee8847",
+        "repair_reconciliation_merge": "a68dfb177ab1b044d23fe5e8077548392d8aec42",
     },
     {
         "phase": "E",
@@ -152,7 +156,12 @@ def _validate_phase(payload: Any, expected: Mapping[str, Any]) -> dict[str, Any]
                 "repair_issue",
                 "repair_implementation_pr",
                 "repair_reconciliation_pr",
+                "repair_implementation_head",
+                "repair_implementation_merge",
+                "repair_reconciliation_head",
+                "repair_reconciliation_merge",
                 "repair_completed",
+                "repair_expected_head_merges",
             }
         )
     _exact(phase, keys, label="phase")
@@ -171,7 +180,10 @@ def _validate_phase(payload: Any, expected: Mapping[str, Any]) -> dict[str, Any]
     ):
         if phase[key] is not True:
             raise IntegrityError(f"FINAL-AUDIT-105 phase completion is false: {key}")
-    if expected["phase"] == "D" and phase["repair_completed"] is not True:
+    if expected["phase"] == "D" and not (
+        phase["repair_completed"] is True
+        and phase["repair_expected_head_merges"] is True
+    ):
         raise IntegrityError("FINAL-AUDIT-106 Phase D repair is incomplete")
     return dict(phase)
 
