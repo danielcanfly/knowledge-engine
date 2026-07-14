@@ -114,3 +114,23 @@ empty collection for the first pilot write. A write still requires
 M23.5 may close as an embedding-selection milestone. Production retrieval, independent
 abstention acceptance and the first Qdrant ingestion remain later, separately authorised
 work.
+
+## Contract reconciliation
+
+Implementation PR #381 was accepted from exact head
+`de29a5e0dd6b6c2c9383c881b79c3128a29b6b29` and merged as
+`71358e1e838f55a6093520e0c86d2d42bf94a102`.
+
+The accepted-head checks were green, including:
+
+- CI run 772;
+- M23.5 corrected benchmark contract run 3;
+- M23.5 Cloudflare Qdrant contract run 8;
+- R2 Release Integration run 517;
+- R2 Canary run 243;
+- all triggered M16, M17, M18 and M23 safety workflows.
+
+The accepted implementation performs no Cloudflare call, Qdrant write, R2 mutation,
+pointer mutation, Source mutation or production traffic change. The Qdrant collection
+remains outside release authority and Source PR #19 remains unmerged. The authoritative
+runtime default remains lexical.
