@@ -148,10 +148,22 @@ def _validate_milestones(payload: Any) -> int:
             raise IntegrityError(f"M21-ACCEPT-108 {name} implementation is not merged")
         if evidence.get("reconciliation_merged") is not True:
             raise IntegrityError(f"M21-ACCEPT-109 {name} reconciliation is not merged")
-        _require_sha(evidence.get("implementation_head_sha"), label=f"{name} implementation head")
-        _require_sha(evidence.get("implementation_merge_sha"), label=f"{name} implementation merge")
-        _require_sha(evidence.get("reconciliation_head_sha"), label=f"{name} reconciliation head")
-        _require_sha(evidence.get("reconciliation_merge_sha"), label=f"{name} reconciliation merge")
+        _require_sha(
+            evidence.get("implementation_head_sha"),
+            label=f"{name} implementation head",
+        )
+        _require_sha(
+            evidence.get("implementation_merge_sha"),
+            label=f"{name} implementation merge",
+        )
+        _require_sha(
+            evidence.get("reconciliation_head_sha"),
+            label=f"{name} reconciliation head",
+        )
+        _require_sha(
+            evidence.get("reconciliation_merge_sha"),
+            label=f"{name} reconciliation merge",
+        )
     return len(milestones)
 
 
@@ -166,8 +178,14 @@ def _validate_workflows(payload: Any, engine_sha: str) -> int:
             raise IntegrityError("M21-ACCEPT-111 workflow name is invalid")
         if evidence.get("conclusion") != "success":
             raise IntegrityError(f"M21-ACCEPT-112 workflow did not succeed: {name}")
-        if _require_sha(evidence.get("head_sha"), label=f"{name} workflow head") != engine_sha:
-            raise IntegrityError(f"M21-ACCEPT-113 workflow is not bound to exact Engine head: {name}")
+        workflow_head = _require_sha(
+            evidence.get("head_sha"),
+            label=f"{name} workflow head",
+        )
+        if workflow_head != engine_sha:
+            raise IntegrityError(
+                f"M21-ACCEPT-113 workflow is not bound to exact Engine head: {name}"
+            )
         names.append(name)
     if len(set(names)) != len(names):
         raise IntegrityError("M21-ACCEPT-114 duplicate workflow evidence")
@@ -190,7 +208,9 @@ def _validate_guarantee_group(
         raise IntegrityError(f"M21-ACCEPT-{code} unknown {label} guarantee")
     for name in required:
         if guarantees.get(name) is not True:
-            raise IntegrityError(f"M21-ACCEPT-{code + 1} {label} guarantee is not proven: {name}")
+            raise IntegrityError(
+                f"M21-ACCEPT-{code + 1} {label} guarantee is not proven: {name}"
+            )
     return required
 
 
