@@ -1,0 +1,27 @@
+{
+  "article_id_derivation": "section_id before /chunk-",
+  "benchmark_suite_sha256": "086cfb2648626dbe2cca64376dffaa6aea24e807c71f6b2b89e9ab1796d67f0e",
+  "production_authority": false,
+  "queries": [
+    {"evaluation_role":"threshold-calibration-positive","expected_article_ids":["pilot/harness-theory-part-01-en","pilot/harness-theory-part-01-zh-tw"],"query_id":"m23q-001","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"threshold-calibration-positive","expected_article_ids":["pilot/harness-theory-part-01-en","pilot/harness-theory-part-01-zh-tw"],"query_id":"m23q-002","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"threshold-calibration-positive","expected_article_ids":["pilot/harness-theory-part-01-en","pilot/harness-theory-part-01-zh-tw","pilot/harness-theory-part-02-en","pilot/harness-theory-part-02-zh-tw"],"query_id":"m23q-003","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"threshold-calibration-positive","expected_article_ids":["pilot/harness-theory-part-01-en","pilot/harness-theory-part-01-zh-tw"],"query_id":"m23q-004","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"threshold-calibration-positive","expected_article_ids":["pilot/harness-theory-part-02-en","pilot/harness-theory-part-02-zh-tw"],"query_id":"m23q-005","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"threshold-calibration-positive","expected_article_ids":["pilot/harness-theory-part-03-en","pilot/harness-theory-part-03-zh-tw"],"query_id":"m23q-006","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"threshold-calibration-positive","expected_article_ids":["pilot/harness-theory-part-01-en","pilot/harness-theory-part-01-zh-tw","pilot/harness-theory-part-02-en","pilot/harness-theory-part-02-zh-tw"],"query_id":"m23q-007","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"threshold-calibration-positive","expected_article_ids":["pilot/harness-theory-part-03-en","pilot/harness-theory-part-03-zh-tw"],"query_id":"m23q-008","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"threshold-calibration-positive","expected_article_ids":["pilot/harness-theory-part-01-en","pilot/harness-theory-part-01-zh-tw"],"query_id":"m23q-009","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"threshold-calibration-positive","expected_article_ids":["pilot/harness-theory-part-03-en","pilot/harness-theory-part-03-zh-tw"],"query_id":"m23q-010","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"held-out-positive","expected_article_ids":["pilot/harness-theory-part-02-en","pilot/harness-theory-part-02-zh-tw","pilot/harness-theory-part-03-en","pilot/harness-theory-part-03-zh-tw"],"query_id":"m23q-011","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"held-out-positive","expected_article_ids":["pilot/harness-theory-part-01-en","pilot/harness-theory-part-01-zh-tw","pilot/harness-theory-part-02-en","pilot/harness-theory-part-02-zh-tw","pilot/harness-theory-part-03-en","pilot/harness-theory-part-03-zh-tw"],"query_id":"m23q-012","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"held-out-positive","expected_article_ids":["pilot/harness-theory-part-01-en","pilot/harness-theory-part-01-zh-tw","pilot/harness-theory-part-02-en","pilot/harness-theory-part-02-zh-tw"],"query_id":"m23q-013","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"held-out-positive","expected_article_ids":["pilot/harness-theory-part-02-en","pilot/harness-theory-part-02-zh-tw","pilot/harness-theory-part-03-en","pilot/harness-theory-part-03-zh-tw"],"query_id":"m23q-014","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"threshold-calibration-negative","expected_article_ids":[],"query_id":"m23q-015","semantic_probe_audiences":["public"]},
+    {"evaluation_role":"held-out-negative","expected_article_ids":[],"query_id":"m23q-016","semantic_probe_audiences":["public"]}
+  ],
+  "read_only": true,
+  "schema_version": "knowledge-engine-m23-retrieval-gold/v1",
+  "suite_id": "m23-5-harness-pilot-local",
+  "suite_revision": "2026-07-14-local-v1"
+}
