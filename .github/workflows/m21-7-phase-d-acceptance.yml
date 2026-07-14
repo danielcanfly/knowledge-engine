@@ -49,26 +49,31 @@ jobs:
           tests/test_m21_5_entity_resolution.py
           tests/test_m21_6_review_source_pr.py
           tests/test_m21_7_phase_d_acceptance.py
-      - name: Prove Phase D closure constants
+      - name: Prove Phase D evidence-binding constants
         run: |
           python - <<'PY'
           from knowledge_engine.m21_phase_d_acceptance import (
-              PROTECTED_MUTATION_KEYS,
+              FOUNDATION_SHA,
+              MILESTONE_WORKFLOW_FAMILIES,
+              REQUIRED_FINAL_WORKFLOW_FAMILIES,
               REQUIRED_MILESTONES,
-              REQUIRED_WORKFLOW_FAMILIES,
+              SOURCE_SHA,
           )
 
-          assert REQUIRED_MILESTONES == (
-              'M21.1',
-              'M21.2',
-              'M21.3',
-              'M21.4',
-              'M21.5',
-              'M21.6',
+          assert SOURCE_SHA == 'a6ba738d910d01d2ae99b1968f0831989934c549'
+          assert FOUNDATION_SHA == 'e5ef644053d34e89c70d2ceb37521e1c59234832'
+          assert tuple(MILESTONE_WORKFLOW_FAMILIES) == REQUIRED_MILESTONES
+          assert MILESTONE_WORKFLOW_FAMILIES['M21.1'] == 'M21.1 Blog Inventory'
+          assert MILESTONE_WORKFLOW_FAMILIES['M21.6'] == (
+              'M21.6 Review Packets and Source PR Preparation'
           )
-          assert 'M21.6 Review Packets and Source PR Preparation' in REQUIRED_WORKFLOW_FAMILIES
-          assert 'source_mutation_dispatched' in PROTECTED_MUTATION_KEYS
-          assert 'production_mutation_dispatched' in PROTECTED_MUTATION_KEYS
+          assert REQUIRED_FINAL_WORKFLOW_FAMILIES == (
+              'M21.7 Phase D Acceptance',
+              'CI',
+              'M17 Architecture Canon Acceptance',
+              'M18 Graph v2 acceptance',
+              'R2 Release Integration',
+          )
           PY
       - name: Scan executor dependency boundary
         run: |
