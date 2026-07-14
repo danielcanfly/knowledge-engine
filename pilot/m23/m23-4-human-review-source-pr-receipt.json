@@ -1,0 +1,22 @@
+{
+  "authority": "review_only",
+  "candidate_count": 38,
+  "canonical_knowledge": false,
+  "decision_template_sha256": "71f04c05a60907f60e7b245b780426b6996f49a7b1efe6aab892cac7b58fd611",
+  "endpoint_count": 15,
+  "engine_sha": "5de0327501a8584098e5304160462c9c7e92daba",
+  "expected_distinct_count": 0,
+  "expected_probable_duplicate_count": 15,
+  "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+  "governed_tag_count": 34,
+  "human_approval_recorded": false,
+  "m21_6_status": "blocked_by_m21_5",
+  "manual_review_packet_sha256": "9388a4fd95bb366690ad0ec746bd48b9145290f4710d17c042f2fedaf1085444",
+  "production_authority": false,
+  "receipt_sha256": "fbcb849533d9bd561f552abd1679eb40dae8c60eed4564d07cf6a1b283629cc5",
+  "schema_version": "knowledge-engine-m23-human-review-receipt/v1",
+  "source_pr_merge_permitted": false,
+  "source_pr_required_state": "draft",
+  "source_sha": "a6ba738d910d01d2ae99b1968f0831989934c549",
+  "typed_relation_count": 12
+}
