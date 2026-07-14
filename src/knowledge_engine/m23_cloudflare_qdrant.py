@@ -19,6 +19,7 @@ CLOUDFLARE_PROVIDER = "cloudflare-workers-ai"
 VECTOR_DIMENSION = 1024
 MAX_BATCH_SIZE = 100
 QDRANT_DISTANCE = "Cosine"
+QDRANT_VECTOR_NAME = "default"
 RECEIPT_SCHEMA = "knowledge-engine-m23-cloudflare-qdrant-receipt/v1"
 POINT_NAMESPACE = uuid.UUID("e251e02f-81ef-4cd6-a9fb-d55cba1925ea")
 
@@ -104,8 +105,7 @@ def build_cloudflare_request(texts: Sequence[str]) -> dict[str, Any]:
         raise IntegrityError(
             f"M23-EMBED-109 batch must contain 1 to {MAX_BATCH_SIZE} texts"
         )
-    normalized = [normalize_text(text) for text in texts]
-    return {"text": normalized}
+    return {"text": [normalize_text(text) for text in texts]}
 
 
 def _extract_embedding_rows(response: Mapping[str, Any]) -> list[Any]:
@@ -117,7 +117,11 @@ def _extract_embedding_rows(response: Mapping[str, Any]) -> list[Any]:
         return data
     openai_data = response.get("data")
     if isinstance(openai_data, list):
-        return [item.get("embedding") for item in openai_data if isinstance(item, Mapping)]
+        return [
+            item.get("embedding")
+            for item in openai_data
+            if isinstance(item, Mapping)
+        ]
     raise IntegrityError("M23-EMBED-110 Cloudflare response contains no embedding data")
 
 
@@ -145,7 +149,10 @@ def parse_cloudflare_embeddings(
             if not math.isfinite(number):
                 raise IntegrityError("M23-EMBED-115 embedding values must be finite")
             vector.append(number)
-        vectors.append(vector)
+        norm = math.sqrt(math.fsum(value * value for value in vector))
+        if norm <= 0.0:
+            raise IntegrityError("M23-EMBED-116 embedding norm must be positive")
+        vectors.append([value / norm for value in vector])
     return vectors
 
 
@@ -158,11 +165,14 @@ def build_qdrant_points(
     sections: Sequence[SectionInput], vectors: Sequence[Sequence[float]]
 ) -> list[dict[str, Any]]:
     if len(sections) != len(vectors):
-        raise IntegrityError("M23-EMBED-116 section/vector count mismatch")
+        raise IntegrityError("M23-EMBED-117 section/vector count mismatch")
     points: list[dict[str, Any]] = []
     for section, vector in zip(sections, vectors, strict=True):
         if len(vector) != VECTOR_DIMENSION:
-            raise IntegrityError("M23-EMBED-117 invalid vector dimension")
+            raise IntegrityError("M23-EMBED-118 invalid vector dimension")
+        numeric = [float(value) for value in vector]
+        if not all(math.isfinite(value) for value in numeric):
+            raise IntegrityError("M23-EMBED-119 vector values must be finite")
         payload = {
             **dict(section.payload),
             "section_id": section.section_id,
@@ -170,6 +180,7 @@ def build_qdrant_points(
             "embedding_model": CLOUDFLARE_MODEL,
             "embedding_provider": CLOUDFLARE_PROVIDER,
             "vector_dimension": VECTOR_DIMENSION,
+            "vector_name": QDRANT_VECTOR_NAME,
             "canonical_knowledge": False,
             "candidate_release_eligible": False,
             "production_authority": False,
@@ -177,7 +188,7 @@ def build_qdrant_points(
         points.append(
             {
                 "id": deterministic_point_id(section.section_id),
-                "vector": [float(value) for value in vector],
+                "vector": {QDRANT_VECTOR_NAME: numeric},
                 "payload": payload,
             }
         )
@@ -243,6 +254,7 @@ def build_execution_plan(
         "vector_dimension": VECTOR_DIMENSION,
         "qdrant": {
             "collection_name": collection,
+            "vector_name": QDRANT_VECTOR_NAME,
             "distance": QDRANT_DISTANCE,
             "point_count": len(sections),
         },
@@ -295,7 +307,7 @@ def embed_sections(
             response.raise_for_status()
             payload = response.json()
             if not isinstance(payload, Mapping):
-                raise IntegrityError("M23-EMBED-118 provider response must be an object")
+                raise IntegrityError("M23-EMBED-120 provider response must be an object")
             vectors.extend(
                 parse_cloudflare_embeddings(payload, expected_count=len(batch))
             )
@@ -303,6 +315,76 @@ def embed_sections(
         if owned_client:
             http.close()
     return vectors
+
+
+def validate_qdrant_collection_response(payload: Mapping[str, Any]) -> dict[str, Any]:
+    result = payload.get("result")
+    if not isinstance(result, Mapping):
+        raise IntegrityError("M23-EMBED-121 Qdrant collection response has no result")
+    config = result.get("config")
+    if not isinstance(config, Mapping):
+        raise IntegrityError("M23-EMBED-122 Qdrant collection response has no config")
+    params = config.get("params")
+    if not isinstance(params, Mapping):
+        raise IntegrityError("M23-EMBED-123 Qdrant collection response has no params")
+    vectors = params.get("vectors")
+    if not isinstance(vectors, Mapping):
+        raise IntegrityError("M23-EMBED-124 Qdrant collection has no vectors")
+    vector = vectors.get(QDRANT_VECTOR_NAME)
+    if not isinstance(vector, Mapping):
+        raise IntegrityError(
+            f"M23-EMBED-125 Qdrant collection requires named vector {QDRANT_VECTOR_NAME}"
+        )
+    if vector.get("size") != VECTOR_DIMENSION:
+        raise IntegrityError(
+            f"M23-EMBED-126 Qdrant vector dimension must be {VECTOR_DIMENSION}"
+        )
+    if vector.get("distance") != QDRANT_DISTANCE:
+        raise IntegrityError(
+            f"M23-EMBED-127 Qdrant distance must be {QDRANT_DISTANCE}"
+        )
+    sparse = params.get("sparse_vectors")
+    if sparse not in (None, {}):
+        raise IntegrityError(
+            "M23-EMBED-128 pilot collection must not contain sparse vectors"
+        )
+    if result.get("status") != "green":
+        raise IntegrityError("M23-EMBED-129 Qdrant collection must be green")
+    return {
+        "status": result.get("status"),
+        "points_count": result.get("points_count"),
+        "indexed_vectors_count": result.get("indexed_vectors_count"),
+        "vector_name": QDRANT_VECTOR_NAME,
+        "vector_dimension": VECTOR_DIMENSION,
+        "distance": QDRANT_DISTANCE,
+        "sparse_vectors": sparse,
+        "read_only": True,
+    }
+
+
+def preflight_qdrant_collection(
+    config: QdrantConfig, *, client: httpx.Client | None = None
+) -> dict[str, Any]:
+    base_url = _required_string(config.base_url, "base_url", 2_000).rstrip("/")
+    api_key = _required_string(config.api_key, "api_key", 10_000)
+    collection = quote(
+        _required_string(config.collection_name, "collection_name", 255), safe=""
+    )
+    owned_client = client is None
+    http = client or httpx.Client(timeout=config.timeout_seconds)
+    try:
+        response = http.get(
+            f"{base_url}/collections/{collection}",
+            headers={"api-key": api_key},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, Mapping):
+            raise IntegrityError("M23-EMBED-130 Qdrant preflight response must be an object")
+        return validate_qdrant_collection_response(payload)
+    finally:
+        if owned_client:
+            http.close()
 
 
 def upsert_qdrant_points(
@@ -313,18 +395,22 @@ def upsert_qdrant_points(
     client: httpx.Client | None = None,
 ) -> dict[str, Any]:
     if allow_write is not True:
-        raise IntegrityError("M23-EMBED-119 Qdrant write requires explicit allow_write")
+        raise IntegrityError("M23-EMBED-131 Qdrant write requires explicit allow_write")
     base_url = _required_string(config.base_url, "base_url", 2_000).rstrip("/")
     api_key = _required_string(config.api_key, "api_key", 10_000)
     collection = quote(
         _required_string(config.collection_name, "collection_name", 255), safe=""
     )
-    url = f"{base_url}/collections/{collection}/points"
     owned_client = client is None
     http = client or httpx.Client(timeout=config.timeout_seconds)
     try:
+        preflight = preflight_qdrant_collection(config, client=http)
+        if preflight.get("points_count") not in (0, None):
+            raise IntegrityError(
+                "M23-EMBED-132 first pilot write requires an empty collection"
+            )
         response = http.put(
-            url,
+            f"{base_url}/collections/{collection}/points",
             params={"wait": "true", "ordering": "strong"},
             headers={"api-key": api_key, "Content-Type": "application/json"},
             json={"points": list(points)},
@@ -332,8 +418,12 @@ def upsert_qdrant_points(
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, Mapping) or payload.get("status") != "ok":
-            raise IntegrityError("M23-EMBED-120 Qdrant upsert was not acknowledged")
-        return dict(payload)
+            raise IntegrityError("M23-EMBED-133 Qdrant upsert was not acknowledged")
+        return {
+            "status": "ok",
+            "preflight": preflight,
+            "upsert": dict(payload),
+        }
     finally:
         if owned_client:
             http.close()
@@ -361,6 +451,7 @@ def build_receipt(
         "qdrant_write": qdrant_write,
         "vector_count": len(vectors) if vectors is not None else 0,
         "vector_dimension": VECTOR_DIMENSION,
+        "qdrant_vector_name": QDRANT_VECTOR_NAME,
         "vector_digest_sha256": vector_digest,
         "qdrant_status": qdrant_response.get("status") if qdrant_response else None,
         "secrets_recorded": False,
