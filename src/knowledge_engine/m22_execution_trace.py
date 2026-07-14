@@ -221,11 +221,12 @@ def _validate_result(
             raise IntegrityError(
                 "M22-EXEC-122 completed retrieval step requires retrieval evidence"
             )
-        if expected_step.get("step_type") == "verify_acl_provenance_citations":
-            if not provenance_complete or not citations_complete:
-                raise IntegrityError(
-                    "M22-EXEC-123 final verification evidence is incomplete"
-                )
+        if expected_step.get("step_type") == "verify_acl_provenance_citations" and (
+            not provenance_complete or not citations_complete
+        ):
+            raise IntegrityError(
+                "M22-EXEC-123 final verification evidence is incomplete"
+            )
     elif status == "failed":
         if not isinstance(error_code, str) or not ERROR_PATTERN.fullmatch(error_code):
             raise IntegrityError("M22-EXEC-124 failed step requires governed error code")
@@ -301,15 +302,14 @@ def validate_bounded_execution_trace(payload: Mapping[str, Any]) -> dict[str, An
             expected_step=expected_step,
             plan_sha256=plan["plan_sha256"],
         )
-        if terminal_status is not None:
-            if result["status"] != "skipped_dependency":
-                raise IntegrityError(
-                    "M22-EXEC-131 steps after terminal stop must skip dependency"
-                )
-        elif result["status"] in {"failed", "skipped_budget"}:
+        if terminal_status is not None and result["status"] != "skipped_dependency":
+            raise IntegrityError(
+                "M22-EXEC-131 steps after terminal stop must skip dependency"
+            )
+        if terminal_status is None and result["status"] in {"failed", "skipped_budget"}:
             terminal_status = result["status"]
             stop_step_id = result["step_id"]
-        elif result["status"] == "skipped_dependency":
+        elif terminal_status is None and result["status"] == "skipped_dependency":
             raise IntegrityError(
                 "M22-EXEC-132 dependency skip requires an earlier terminal stop"
             )
