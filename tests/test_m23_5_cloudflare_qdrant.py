@@ -5,7 +5,6 @@ from pathlib import Path
 
 import httpx
 import pytest
-
 from src.knowledge_engine.errors import IntegrityError
 from src.knowledge_engine.m23_cloudflare_qdrant import (
     CLOUDFLARE_MODEL,
