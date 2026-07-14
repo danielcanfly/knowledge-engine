@@ -188,3 +188,38 @@ M22.5 is accepted only when:
 No answer text generation, semantic LLM judge, provider/model call, network request, live retrieval, production graph traversal, R2 read/write, arbitrary tool execution, A/B evaluation, runtime rollout, Source mutation, production deployment, production pointer, retained R2 object, credentials, permanent ledger, rollback, M22.6 work or Graph Neural Retrieval is included.
 
 Production mutation dispatched: false.
+
+## Closure reconciliation
+
+M22.5 implementation was reconciled against live GitHub state.
+
+- authoritative issue: #350;
+- implementation PR: #351;
+- exact entry base: `0e7e1111fd6c08f3377529b33075a185bfebfcbd`;
+- accepted implementation head: `c5403d997ea34b887e616a7740246fa49213e7a5`;
+- implementation merge: `5e2693ba238f4eaddf025dca8b243b031f14ff33`;
+- implementation branch: `feat/m22-5-grounded-answer`;
+- reconciliation branch: `docs/m22-5-reconciliation`.
+
+The accepted implementation diff contains exactly:
+
+- `.github/workflows/m22-5-grounded-answer.yml`;
+- `docs/architecture/m22/m22-5-grounded-answer.md`;
+- `src/knowledge_engine/m22_grounded_answer.py`;
+- `tests/test_m22_5_grounded_answer.py`.
+
+Local isolated prevalidation completed with 38 focused tests, Ruff and compileall. The container could not resolve GitHub, so repository exact-head CI remained authoritative for the real M22.1 through M22.5 integration.
+
+The accepted implementation head passed:
+
+- M22.5 Grounded Answer Validation #1;
+- CI #728;
+- M17 Architecture Canon Acceptance #96;
+- M18 Graph v2 acceptance #164;
+- R2 Release Integration #491.
+
+PR #351 had no conversation comments, submitted reviews or unresolved review threads. Its exact four-file diff and head SHA were revalidated immediately before merge. The implementation was merged using expected head `c5403d997ea34b887e616a7740246fa49213e7a5`.
+
+Protected-state review confirmed no answer text generation, semantic LLM judge, provider or model call, network request, live retrieval, production graph traversal, R2 read or write, arbitrary tool execution, A/B evaluation, runtime rollout, Source mutation, production mutation, production pointer update, retained R2 creation, credential modification, permanent-ledger write, rollback dispatch, M22.6 implementation or Graph Neural Retrieval.
+
+Production mutation dispatched: false.
