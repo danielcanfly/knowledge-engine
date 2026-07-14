@@ -202,14 +202,14 @@ def test_plan_may_not_exceed_activation_estimate(field: str) -> None:
         compile_bounded_reasoning_plan(payload)
 
 
-def test_plan_may_not_exceed_policy_budget() -> None:
+def test_policy_budget_overflow_is_blocked_before_planning() -> None:
     payload = _payload()
     payload["policy"]["budget"]["max_total_tokens"] = 7000
     payload["activation_evidence"]["policy"]["budget"]["max_total_tokens"] = 7000
     payload["activation_decision"] = decide_reasoning_activation(
         payload["activation_evidence"]
     )
-    with pytest.raises(IntegrityError, match="exceeds policy budget"):
+    with pytest.raises(IntegrityError, match="does not permit planning"):
         compile_bounded_reasoning_plan(payload)
 
 
