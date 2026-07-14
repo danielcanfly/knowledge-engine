@@ -134,3 +134,33 @@ M22.1 is accepted only when:
 No activation heuristic, planner, model/provider call, network request, live retrieval, graph traversal, semantic search, step executor, retry loop, answer synthesis, Source mutation, production deployment, production pointer, retained R2 object, credential, permanent ledger, rollback, or M22.2 work is included.
 
 Production mutation dispatched: false.
+
+## Closure reconciliation
+
+M22.1 implementation was reconciled against live GitHub state.
+
+- issue: #337;
+- implementation PR: #338;
+- exact entry base: `a68dfb177ab1b044d23fe5e8077548392d8aec42`;
+- accepted implementation head: `002b04a68430f4d24c4a4ce2a05ff03a4fd4ece0`;
+- implementation merge: `02fa5715fde28eba0b9baa7629ab14dab5e15a61`;
+- implementation branch: `feat/m22-1-reasoning-mode-isolation`.
+
+The accepted implementation diff contained exactly:
+
+- `.github/workflows/m22-1-reasoning-mode-isolation.yml`;
+- `docs/architecture/m22/m22-1-reasoning-mode-isolation.md`;
+- `src/knowledge_engine/m22_reasoning_modes.py`;
+- `tests/test_m22_1_reasoning_modes.py`.
+
+The final implementation head passed:
+
+- M22.1 Reasoning Mode Isolation #1;
+- CI #708;
+- M17 Architecture Canon Acceptance #85;
+- M18 Graph v2 acceptance #144;
+- R2 Release Integration #479.
+
+The implementation PR had no conversation comments, submitted reviews, or unresolved review threads. It was merged with expected head `002b04a68430f4d24c4a4ce2a05ff03a4fd4ece0`.
+
+Protected-state review confirmed no Source mutation, production mutation, production pointer update, retained R2 creation, credential modification, permanent-ledger write, rollback dispatch, Graph Neural Retrieval, or M22.2 implementation. Production mutation dispatched: false.
