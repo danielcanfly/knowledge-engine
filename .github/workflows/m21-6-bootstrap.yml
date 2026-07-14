@@ -21,34 +21,44 @@ jobs:
         env:
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-      - name: Materialize non-workflow M21.6 implementation
+      - name: Decode documentation payload
         run: |
           python - <<'PY'
-          import base64
+          import base64, zlib
           from pathlib import Path
-          import zlib
-
-          payloads = {
-              'docs/architecture/m21/m21-6-review-source-pr-preparation.md': '.m21-6-bootstrap/docs.b64',
-              'src/knowledge_engine/m21_review_source_pr.py': '.m21-6-bootstrap/source.b64',
-              'tests/test_m21_6_review_source_pr.py': '.m21-6-bootstrap/tests.b64',
-          }
-          for target_name, payload_name in payloads.items():
-              payload = Path(payload_name).read_text().strip()
-              print(f'checking {payload_name}: chars={len(payload)} mod4={len(payload) % 4}')
-              try:
-                  decoded = base64.b64decode(payload, validate=True)
-                  materialized = zlib.decompress(decoded)
-              except Exception as exc:
-                  raise RuntimeError(f'payload decode failed: {payload_name}: {exc}') from exc
-              print(f'materialized {target_name}: bytes={len(materialized)}')
-              target = Path(target_name)
-              target.parent.mkdir(parents=True, exist_ok=True)
-              target.write_bytes(materialized)
-          for payload_name in Path('.m21-6-bootstrap').glob('*.b64'):
-              payload_name.unlink()
-          Path('.m21-6-bootstrap').rmdir()
+          payload = Path('.m21-6-bootstrap/docs.b64').read_text().strip()
+          data = zlib.decompress(base64.b64decode(payload, validate=True))
+          target = Path('docs/architecture/m21/m21-6-review-source-pr-preparation.md')
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_bytes(data)
+          print(len(payload), len(data))
           PY
+      - name: Decode source payload
+        run: |
+          python - <<'PY'
+          import base64, zlib
+          from pathlib import Path
+          payload = Path('.m21-6-bootstrap/source.b64').read_text().strip()
+          data = zlib.decompress(base64.b64decode(payload, validate=True))
+          target = Path('src/knowledge_engine/m21_review_source_pr.py')
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_bytes(data)
+          print(len(payload), len(data))
+          PY
+      - name: Decode tests payload
+        run: |
+          python - <<'PY'
+          import base64, zlib
+          from pathlib import Path
+          payload = Path('.m21-6-bootstrap/tests.b64').read_text().strip()
+          data = zlib.decompress(base64.b64decode(payload, validate=True))
+          target = Path('tests/test_m21_6_review_source_pr.py')
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_bytes(data)
+          print(len(payload), len(data))
+          PY
+      - name: Remove payloads
+        run: rm -rf .m21-6-bootstrap
       - name: Commit non-workflow implementation scope
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
