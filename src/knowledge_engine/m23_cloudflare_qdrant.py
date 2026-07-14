@@ -110,10 +110,7 @@ def build_cloudflare_request(texts: Sequence[str]) -> dict[str, Any]:
 
 def _extract_embedding_rows(response: Mapping[str, Any]) -> list[Any]:
     result = response.get("result", response)
-    if isinstance(result, Mapping):
-        data = result.get("data")
-    else:
-        data = None
+    data = result.get("data") if isinstance(result, Mapping) else None
     if isinstance(data, list):
         if data and isinstance(data[0], Mapping) and "embedding" in data[0]:
             return [item.get("embedding") for item in data]
