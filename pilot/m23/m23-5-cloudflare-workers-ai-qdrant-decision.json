@@ -1,0 +1,40 @@
+{
+  "schema_version": "knowledge-engine-m23-embedding-decision/v1",
+  "milestone": "M23.5",
+  "decision": "adopt_for_pilot_benchmark",
+  "embedding_provider": "cloudflare-workers-ai",
+  "embedding_model": "@cf/baai/bge-m3",
+  "vector_dimension": 1024,
+  "vector_store": "qdrant-cloud",
+  "canonical_store": "cloudflare-r2",
+  "retrieval_default": "lexical",
+  "local_mac_role": [
+    "benchmark",
+    "migration",
+    "offline_fallback"
+  ],
+  "routine_ingestion_requires_local_mac": false,
+  "authority": {
+    "canonical_knowledge": false,
+    "candidate_release_eligible": false,
+    "production_authority": false,
+    "source_write": false,
+    "r2_mutation": false,
+    "pointer_mutation": false,
+    "traffic_change": false
+  },
+  "selection_rationale": [
+    "Cloudflare hosts BGE-M3 behind a managed Workers AI endpoint.",
+    "The model supports multilingual dense retrieval and returns 1024-dimensional vectors.",
+    "The provider aligns with the existing R2 and Workers architecture.",
+    "Qdrant provides a dedicated vector index while R2 and Markdown remain canonical.",
+    "The local E5 benchmark did not justify replacing lexical retrieval.",
+    "Local BGE-M3 and GTE downloads were operationally unreliable on the target network."
+  ],
+  "required_follow_up": [
+    "run the frozen 16-query benchmark through the real Cloudflare endpoint",
+    "create a non-production Qdrant collection using cosine distance and dimension 1024",
+    "verify M20 semantic artifacts and exact vector hashes",
+    "retain lexical rollback and do not enable production retrieval"
+  ]
+}
