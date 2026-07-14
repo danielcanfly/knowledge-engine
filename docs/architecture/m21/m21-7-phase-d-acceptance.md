@@ -136,3 +136,34 @@ M21 can close only after:
 ## Exclusions
 
 No Source write, Source checkout mutation, GitHub Source PR creation, reviewer decision, canonical adoption, model/provider/network call, live connector, scheduler, queue, worker, candidate publication, production publication, production pointer, retained R2 object, credentials, permanent ledger, rollback, M22 work, cross-release merge, or Graph Neural Retrieval is included.
+
+## Closure reconciliation
+
+M21.7 implementation and acceptance evidence was reconciled against live GitHub state.
+
+- entry Engine main: `8ae7eae22f591ccd2543af08c82b885b8c703d4c`;
+- initial implementation head: `f75496d73cf6a04bdda21fc1e1c087d0903c5446`;
+- formatting-corrected head: `5e0fda9ab91bec183b836ed2037113900fc84220`;
+- accepted final implementation head: `84d19d8886f835704f69e62ea98cb585eddd05e7`;
+- implementation merge: `2f38edc9974e09c1d281ecbb8858ddfd9799e040`;
+- implementation issue: #331;
+- implementation PR: #332.
+
+The accepted implementation diff contains exactly:
+
+- `.github/workflows/m21-7-phase-d-acceptance.yml`;
+- `docs/architecture/m21/m21-7-phase-d-acceptance.md`;
+- `src/knowledge_engine/m21_phase_d_acceptance.py`;
+- `tests/test_m21_7_phase_d_acceptance.py`.
+
+The final implementation head passed:
+
+- M21.7 Phase D Acceptance #3;
+- CI #700;
+- M17 Architecture Canon Acceptance #81;
+- M18 Graph v2 acceptance #136;
+- R2 Release Integration #475.
+
+The final implementation PR had no conversation comments, submitted reviews, or unresolved review threads. It was merged with expected head `84d19d8886f835704f69e62ea98cb585eddd05e7`. Earlier heads and their workflow results are transient non-acceptance evidence.
+
+Protected-state review confirmed no Source write, GitHub Source PR creation, production mutation, production pointer update, retained R2 creation, credential modification, permanent-ledger write, or rollback dispatch. Production mutation dispatched: false.
