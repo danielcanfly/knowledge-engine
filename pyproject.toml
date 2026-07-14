@@ -35,6 +35,7 @@ knowledge-m13 = "knowledge_engine.m13_cli:main"
 knowledge-inspect = "knowledge_engine.m17_operator_tools_cli:main"
 knowledge-qualify = "knowledge_engine.m17_operator_qualification_cli:main"
 knowledge-ga = "knowledge_engine.m17_ga_acceptance_cli:main"
+knowledge-m23-intake = "knowledge_engine.m23_live_intake_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]
