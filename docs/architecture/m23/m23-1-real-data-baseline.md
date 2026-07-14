@@ -69,3 +69,41 @@ The golden-query digest is `3cdfa98add7b1418f7582fbcb6e7e4f6475c5a06dc0c7e305a60
 M23.1 performs no article-byte ingestion, normalization, Source write, R2 write, production-pointer update, provider/model call, extraction, embedding generation, traffic change, multi-hop activation, or Graph Neural Retrieval.
 
 M23.2 may begin only after this issue has an expected-head implementation merge and separate reconciliation.
+
+## Closure reconciliation
+
+M23.1 was reconciled against live GitHub state.
+
+- authoritative issue: #365;
+- implementation PR: #366;
+- implementation branch: `agent/m23-1-real-data-baseline`;
+- exact entry base: `14a7f9bcf375925458e17272418d6db9aa308caf`;
+- initially rejected head: `587c46372ff298ea13eac8074f5df1aba7df4829`;
+- accepted implementation head: `c54236d90784601139e6d7a2258f76497114073a`;
+- expected-head implementation merge: `562549d2f6bfc8d7feb9ec46515a6f6d68c502a5`;
+- reconciliation branch: `docs/m23-1-real-data-baseline-reconciliation`.
+
+The initial head was correctly rejected by CI and the dedicated M23.1 workflow because the test module used a non-canonical import path. The repair changed only the test imports to the repository-standard installed `knowledge_engine` package path. No failed head is accepted as evidence.
+
+The accepted implementation diff contains exactly:
+
+- `.github/workflows/m23-1-real-data-baseline.yml`;
+- `docs/architecture/m23/m23-1-real-data-baseline.md`;
+- `pilot/m23/m23-1-corpus-manifest.json`;
+- `pilot/m23/m23-1-golden-queries.json`;
+- `src/knowledge_engine/m23_real_data_baseline.py`;
+- `tests/test_m23_1_real_data_baseline.py`.
+
+The accepted implementation head passed:
+
+- M23.1 Real Data Baseline #2;
+- CI #746;
+- M17 Architecture Canon Acceptance #106;
+- M18 Graph v2 acceptance #182;
+- R2 Release Integration #501.
+
+Focused local prevalidation passed six tests and Python compilation. PR #366 had no conversation comments, submitted reviews, or unresolved review threads. The exact six-file diff and accepted head were revalidated before the expected-head merge.
+
+Source and Foundation remained at their entry identities. No article-byte ingestion, normalization, provider/model call, extraction, embedding, Source mutation, candidate or production publication, production pointer update, R2 mutation, credentials, permanent-ledger write, rollback dispatch, retained-evidence write, traffic change, multi-hop activation, or Graph Neural Retrieval occurred.
+
+Production mutation dispatched: false.
