@@ -171,3 +171,38 @@ M22.6 is accepted only when:
 No semantic LLM judge, answer generation, provider/model call, network request, live retrieval, production graph traversal, R2 read/write, arbitrary tool execution, traffic allocation, shadow traffic, canary, deployment, rollout, production pointer, retained evidence, permanent ledger, rollback, M22.7 closure work, Source mutation, credentials or Graph Neural Retrieval is included.
 
 Production mutation dispatched: false.
+
+## Closure reconciliation
+
+M22.6 implementation was reconciled against live GitHub state.
+
+- authoritative issue: #353;
+- implementation PR: #354;
+- exact entry base: `2aa77473775abb2b3c6e7260bfc8b59a2c453736`;
+- accepted implementation head: `7edb988fc0bdc4e78df45b23768cf1f12a56ee78`;
+- implementation merge: `5fb14d13030b40d92bccfe1fa164e01e639c7202`;
+- implementation branch: `feat/m22-6-offline-evaluation`;
+- reconciliation branch: `docs/m22-6-reconciliation`.
+
+The accepted implementation diff contains exactly:
+
+- `.github/workflows/m22-6-offline-evaluation.yml`;
+- `docs/architecture/m22/m22-6-offline-evaluation.md`;
+- `src/knowledge_engine/m22_offline_evaluation.py`;
+- `tests/test_m22_6_offline_evaluation.py`.
+
+Local isolated prevalidation completed with 19 focused tests, Ruff and compileall. The local container could not resolve GitHub, so repository exact-head CI remained authoritative for real M22.1 through M22.6 integration.
+
+The accepted implementation head passed:
+
+- M22.6 Offline Controlled Variant Evaluation #1;
+- CI #732;
+- M17 Architecture Canon Acceptance #98;
+- M18 Graph v2 acceptance #168;
+- R2 Release Integration #493.
+
+PR #354 had no conversation comments, submitted reviews or unresolved review threads. Its exact four-file diff and head SHA were revalidated immediately before merge. The implementation was merged using expected head `7edb988fc0bdc4e78df45b23768cf1f12a56ee78`.
+
+Protected-state review confirmed no semantic LLM judge, answer generation, provider or model call, network request, live retrieval, production graph traversal, R2 read or write, arbitrary tool execution, traffic allocation, shadow traffic, canary, deployment, rollout, production pointer update, retained evidence creation, credential modification, permanent-ledger write, rollback dispatch, M22.7 closure work, Source mutation or Graph Neural Retrieval.
+
+Production mutation dispatched: false.
