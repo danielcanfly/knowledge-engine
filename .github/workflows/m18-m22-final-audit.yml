@@ -1,0 +1,97 @@
+name: M18-M22 Final Audit
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m18-m22-final-audit.yml'
+      - 'docs/architecture/post-ga/m18-m22-final-audit.md'
+      - 'src/knowledge_engine/m18_m22_final_audit.py'
+      - 'tests/test_m18_m22_final_audit.py'
+
+permissions:
+  contents: read
+
+jobs:
+  final-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            packages/graphology-adapter/package-lock.json
+            packages/graph-explorer/package-lock.json
+      - name: Install exact dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -q -e '.[dev]'
+          npm ci --prefix packages/graphology-adapter
+          npm ci --prefix packages/graph-explorer
+      - name: Lint final audit scope
+        run: >-
+          python -m ruff check --output-format concise
+          src/knowledge_engine/m18_m22_final_audit.py
+          tests/test_m18_m22_final_audit.py
+      - name: Re-run Phase A, C, D, E machine contracts
+        run: >-
+          python -m pytest -q
+          tests/test_m18_7_phase_a_closure.py
+          tests/test_m20_7_phase_c_acceptance.py
+          tests/test_m21_7_phase_d_acceptance.py
+          tests/test_m22_7_phase_e_acceptance.py
+          tests/test_m18_m22_final_audit.py
+      - name: Re-run Phase B API and Runtime contracts
+        run: >-
+          python -m pytest -q
+          tests/test_m19_1_graph_api.py
+          tests/test_api.py
+          tests/test_m18_6_runtime_compatibility.py
+          tests/test_runtime.py
+      - name: Re-run Phase B adapter, explorer, scale, and read-only contracts
+        run: |
+          npm run check --prefix packages/graphology-adapter
+          npm run check --prefix packages/graph-explorer
+          npm run performance:fixtures --prefix packages/graph-explorer
+          npm run acceptance:scan --prefix packages/graph-explorer
+          npm run build --prefix packages/graphology-adapter
+          npm run build --prefix packages/graph-explorer
+      - name: Audit Phase B runtime dependencies
+        run: |
+          npm audit --prefix packages/graphology-adapter --omit=dev --audit-level=high
+          npm audit --prefix packages/graph-explorer --omit=dev --audit-level=high
+      - name: Prove exact inventory and non-authority boundary
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m18_m22_final_audit import (
+              ENGINE_SHA,
+              NON_CANONICAL_ISSUES,
+              PHASES,
+          )
+
+          assert len(PHASES) == 5
+          assert sum(len(phase['issues']) for phase in PHASES) == 35
+          assert len({issue for phase in PHASES for issue in phase['issues']}) == 35
+          assert PHASES[-1]['reconciliation_merge'] == ENGINE_SHA
+          assert NON_CANONICAL_ISSUES == (286, 287, 311, 313, 341, 357, 358, 359)
+          PY
+      - name: Scan production, provider, traffic, and Graph Neural boundary
+        run: |
+          if grep -nE 'requests|httpx|aiohttp|urllib.request|subprocess|boto3|openai|anthropic|sentence_transformers|api_key|token=' \
+            src/knowledge_engine/m18_m22_final_audit.py; then
+            exit 1
+          fi
+      - name: Compile final audit scope
+        run: >-
+          python -m compileall -q
+          src/knowledge_engine/m18_m22_final_audit.py
+          tests/test_m18_m22_final_audit.py
