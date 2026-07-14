@@ -125,3 +125,31 @@ knowledge-m23-embed \
 5. Verify vector shape, hashes, latency, quota and M20 semantic artifact output.
 6. Keep production retrieval lexical until benchmark and human review gates pass.
 7. Add Queue/Worker automation in M23.6 after M23.5 selection evidence is accepted.
+
+## Contract reconciliation
+
+The managed embedding execution contract was reconciled against live GitHub evidence.
+This reconciliation closes the implementation slice, not the whole M23.5 milestone.
+
+- authoritative Engine issue: #377, still open;
+- exact implementation base: `1d574c5085c8fecbe7423aded093ac205c30465b`;
+- implementation PR: #378;
+- accepted implementation head: `9be1c5d21252fbf58c41c38f62667d19cc8a07ee`;
+- expected-head implementation merge: `37f9c1f910d799f1ac3f3d8836e70710fe6f0690`;
+- implementation diff: seven files, 881 additions, no deletions;
+- accepted-head CI: CI #766 and M23.5 Cloudflare Qdrant contract #4 passed;
+- every triggered R2, M16, M17, M18, M23.2, M23.3 and M23.4 safeguard passed;
+- PR conversation comments: none;
+- submitted review threads: none;
+- Source draft PR `knowledge-source#19`: remains open, draft and unmerged;
+- Source main remains `a6ba738d910d01d2ae99b1968f0831989934c549`;
+- Foundation main remains `e5ef644053d34e89c70d2ceb37521e1c59234832`.
+
+No Cloudflare credential was used, no Qdrant collection was created or written, no R2
+object or pointer changed, no production traffic changed, and no retrieval default
+changed. Production mutation dispatched: false.
+
+M23.5 remains incomplete until a non-production Qdrant collection and least-privilege
+credentials exist, the frozen 16-query corpus is run through the actual Workers AI
+endpoint, the returned vectors pass M20 verification, and the benchmark decision is
+recorded. Until then, `RETRIEVAL_MODE=lexical` remains authoritative.
