@@ -1,0 +1,70 @@
+name: M22.4 Execution Trace Validation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m22-4-execution-trace.yml'
+      - 'docs/architecture/m22/m22-4-execution-trace.md'
+      - 'src/knowledge_engine/m22_execution_trace.py'
+      - 'tests/test_m22_4_execution_trace.py'
+
+permissions:
+  contents: read
+
+jobs:
+  execution-trace:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: >-
+          python -m pip install --disable-pip-version-check -q -e '.[dev]'
+      - name: Lint M22.4 scope
+        run: >-
+          python -m ruff check --output-format concise
+          src/knowledge_engine/m22_execution_trace.py
+          tests/test_m22_4_execution_trace.py
+      - name: Test M22.1 through M22.4 contracts
+        run: >-
+          python -m pytest -q
+          tests/test_m22_1_reasoning_modes.py
+          tests/test_m22_2_activation_decision.py
+          tests/test_m22_3_bounded_plan.py
+          tests/test_m22_4_execution_trace.py
+      - name: Prove evidence-only execution boundary
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m22_execution_trace import (
+              STEP_STATUSES,
+              TRACE_OUTCOMES,
+          )
+
+          assert STEP_STATUSES == (
+              'completed',
+              'failed',
+              'skipped_budget',
+              'skipped_dependency',
+          )
+          assert TRACE_OUTCOMES == ('completed', 'failed', 'budget_stopped')
+          PY
+      - name: Scan network, executor, provider, and secret boundary
+        run: |
+          if grep -nE 'requests|httpx|aiohttp|urllib.request|subprocess|boto3|openai|anthropic|sentence_transformers|raw_query|api_key|token=' \
+            src/knowledge_engine/m22_execution_trace.py; then
+            exit 1
+          fi
+          test -z "$(find . -type f \( -name '*final-answer.json' -o -name '*reasoning-runtime.json' \) -print -quit)"
+      - name: Compile M22.4 scope
+        run: >-
+          python -m compileall -q
+          src/knowledge_engine/m22_execution_trace.py
+          tests/test_m22_4_execution_trace.py
