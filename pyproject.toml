@@ -39,6 +39,7 @@ knowledge-m23-intake = "knowledge_engine.m23_live_intake_cli:main"
 knowledge-m23-extract = "knowledge_engine.m23_real_ai_extraction_cli:main"
 knowledge-m23-review = "knowledge_engine.m23_human_review_source_pr_cli:main"
 knowledge-m23-embed = "knowledge_engine.m23_cloudflare_qdrant_cli:main"
+knowledge-m23-rebenchmark = "knowledge_engine.m23_benchmark_correction_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]
