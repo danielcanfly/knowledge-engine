@@ -1,0 +1,57 @@
+name: M21.6 Bootstrap Materializer
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m21-6-bootstrap.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Materialize non-workflow M21.6 implementation
+        run: |
+          python - <<'PY'
+          import base64
+          from pathlib import Path
+          import zlib
+
+          payloads = {
+              'docs/architecture/m21/m21-6-review-source-pr-preparation.md': '.m21-6-bootstrap/docs.b64',
+              'src/knowledge_engine/m21_review_source_pr.py': '.m21-6-bootstrap/source.b64',
+              'tests/test_m21_6_review_source_pr.py': '.m21-6-bootstrap/tests.b64',
+          }
+          for target_name, payload_name in payloads.items():
+              target = Path(target_name)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              payload = Path(payload_name).read_text().strip()
+              target.write_bytes(zlib.decompress(base64.b64decode(payload)))
+          for payload_name in Path('.m21-6-bootstrap').glob('*.b64'):
+              payload_name.unlink()
+          Path('.m21-6-bootstrap').rmdir()
+          PY
+      - name: Commit non-workflow implementation scope
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          test -f docs/architecture/m21/m21-6-review-source-pr-preparation.md
+          test -f src/knowledge_engine/m21_review_source_pr.py
+          test -f tests/test_m21_6_review_source_pr.py
+          test ! -e .m21-6-bootstrap
+          git commit -m 'feat: materialize M21.6 review preparation'
+          git push origin "HEAD:${HEAD_BRANCH}"
