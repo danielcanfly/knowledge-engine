@@ -23,8 +23,10 @@ from .m23_7_5_live_shadow import (
 )
 from .m23_7_r1_semantic_alignment import (
     canonical_fixture_samples,
-    canonical_manifest as r1_manifest,
     compile_probe_plan,
+)
+from .m23_7_r1_semantic_alignment import (
+    canonical_manifest as r1_manifest,
 )
 from .m23_7_r2_latency_path import StrictModeSafeBatchLatencyClient
 
