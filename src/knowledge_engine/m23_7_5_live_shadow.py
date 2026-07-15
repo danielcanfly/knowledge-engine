@@ -17,9 +17,9 @@ from .m23_cloudflare_qdrant import (
     QdrantConfig,
     SectionInput,
     embed_sections,
-    validate_embedding,
     validate_qdrant_collection_response,
 )
+from .m23_candidate_semantic_runtime import validate_embedding
 
 SCHEMA_VERSION = "knowledge-engine-m23-7-5-live-shadow/v1"
 ENGINE_ENTRY_SHA = "21386886105b5a44130f713b4e92d04f3bfd247d"
