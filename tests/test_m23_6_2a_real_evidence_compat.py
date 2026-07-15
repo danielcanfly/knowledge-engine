@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
+
 from src.knowledge_engine.errors import IntegrityError
 from src.knowledge_engine.m23_qdrant_pilot_ingestion import (
     BLOCKED_COLLECTION,
