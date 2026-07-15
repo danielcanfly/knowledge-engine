@@ -1,0 +1,109 @@
+{
+  "acceptance": {
+    "carry_forward_blockers": [
+      "blocked_pending_latency",
+      "blocked_pending_retrieval_quality"
+    ],
+    "collection_identity_passed": true,
+    "latency_budget_passed": false,
+    "m23_7_6_may_begin": true,
+    "observation_execution_complete": true,
+    "outcome": "completed_fail_closed",
+    "privacy_contract_passed": true,
+    "promotion_eligibility_granted": false,
+    "read_only_invariant_passed": true,
+    "retrieval_drift_clear": false,
+    "zero_output_influence_passed": true
+  },
+  "authority": {
+    "candidate_output_served": false,
+    "production_mutation_dispatched": false,
+    "production_response_authority": false,
+    "production_retrieval": "lexical"
+  },
+  "candidate": {
+    "manifest_sha256": "3303a1d54d448c96c724178b482dc73daed2712ba8d09b0e34fa96eb8761e560",
+    "release_id": "m23cand-c7fbec7e945e79d05d3263b0"
+  },
+  "canonical_budgets": {
+    "changed": false,
+    "max_acl_violation_rate": 0.0,
+    "max_error_rate": 0.0,
+    "max_output_influence_rate": 0.0,
+    "max_primary_dispatch_overhead_p95_ms": 25,
+    "max_shadow_p95_ms": 1200
+  },
+  "engine_base_sha": "c9c7f0f84596afc4be0046bd074d16ff31ab107b",
+  "evidence_payload_sha256": "c8e7d3d672bc848ab22cdef8ca55b8ed444aacae294c4d662e018bedb7ed4e71",
+  "milestone": "M23.7.5",
+  "observations": [
+    {
+      "budget_violations": [
+        "shadow-latency"
+      ],
+      "error_rate": 0.0,
+      "label": "pre-session-reuse",
+      "overlap_at_5_mean": 0.25,
+      "primary_dispatch_overhead_p95_ms": 1,
+      "provider_p95_ms": 2242,
+      "qdrant_p95_ms": 2226,
+      "receipt_sha256": "cb3bfc59dcc471ac924c8a3bc73d6307d99cffa6d26a0a6e6fbdd64fbde8076f",
+      "sample_count": 8,
+      "shadow_p95_ms": 3381,
+      "status": "rejected",
+      "success_count": 8
+    },
+    {
+      "budget_violations": [
+        "shadow-latency"
+      ],
+      "error_rate": 0.0,
+      "label": "post-session-reuse",
+      "overlap_at_5_mean": 0.25,
+      "overlap_drift": -0.7,
+      "primary_dispatch_overhead_p95_ms": 1,
+      "provider_p95_ms": 1328,
+      "qdrant_p95_ms": 576,
+      "receipt_sha256": "493515fce1bdeb1c7155ea69c198f658c0cf05f83314a905bf2d945152dc4b3e",
+      "sample_count": 8,
+      "shadow_latency_drift_ms": 1436,
+      "shadow_p95_ms": 1731,
+      "status": "rejected",
+      "success_count": 8
+    }
+  ],
+  "parent_issue": 430,
+  "privacy": {
+    "arbitrary_exception_text_persisted": false,
+    "credentials_persisted": false,
+    "raw_answers_persisted": false,
+    "raw_queries_persisted": false,
+    "service_urls_persisted": false
+  },
+  "qdrant": {
+    "collection": "llm_wiki_m23_pilot_bge_m3_1024",
+    "distance": "Cosine",
+    "expected_points": 107,
+    "read_only": true,
+    "release_id": "m23pilot-a07eb79e381ca7e635cc9139",
+    "release_manifest_sha256": "a07eb79e381ca7e635cc91397c322fd6ff57a62b5571a54866d26aefb734ebe9",
+    "vector_dimension": 1024,
+    "vector_name": "default"
+  },
+  "reconciliation_issue": 444,
+  "schema_version": "knowledge-engine-m23-7-5-final-observation-evidence/v1",
+  "source_pr_19": {
+    "draft": true,
+    "head_sha": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+    "merged": false,
+    "state": "open"
+  },
+  "transport_improvement": {
+    "provider_p95_reduction_ms": 914,
+    "provider_p95_reduction_ratio": 0.407672,
+    "qdrant_p95_reduction_ms": 1650,
+    "qdrant_p95_reduction_ratio": 0.74124,
+    "shadow_p95_reduction_ms": 1650,
+    "shadow_p95_reduction_ratio": 0.488021
+  }
+}
