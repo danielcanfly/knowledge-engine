@@ -43,7 +43,22 @@ The initial implementation head failed only the repository import-order lint gat
 
 During M23.7.4 entry verification, issue #425 found that the replay evidence identity was not portable across supported Python runtimes. Python 3.11 emitted `0d4ac3763ba0b5b5661a25273487654d2dd335d376b3a4b84cc754dda4fe4d9d`, while Python 3.12 emitted `b4048b3ac29fcad50ba7f43bf932b6b188068efdbf58abb2ef36f76070a0eee2`. The difference came from runtime-specific floating-point summation tails entering the evidence hash. Metric floats are now canonicalised to fixed precision before threshold evaluation and hashing. A permanent Python 3.11/3.12 matrix and regression assertion both pin `b4048b3ac29fcad50ba7f43bf932b6b188068efdbf58abb2ef36f76070a0eee2`. The accepted metrics, lexical authority and production state did not change.
 
-No review comments or unresolved review threads were present on PR #421 at merge time.
+### Identity repair reconciliation
+
+Issue #425 was implemented in PR #426 from exact head `bb0ba933f80a8409735a8149d7562eb8b2b21764` and merged by expected-head squash merge as `04388c63e269dbe0e21be56df85e8090e9ef84cb`.
+
+The accepted repair head passed every triggered workflow:
+
+- M23.7.3 Cross-Runtime Identity run `29399215926` (run 4), with both Python 3.11 and 3.12 jobs successful;
+- M23.7.3 Shadow Retrieval Replay run `29399215910` (run 9);
+- CI run `29399215894` (run 859);
+- R2 Release Integration run `29399215993` (run 576);
+- M17 Architecture Canon Acceptance run `29399215907` (run 175);
+- M18 Graph v2 acceptance run `29399215886` (run 295).
+
+The repair introduced no production mutation, changed no accepted retrieval metric and preserved lexical authority. It only canonicalised evidence-hash float representation and added permanent cross-runtime identity enforcement.
+
+No review threads were present on PR #426 at merge time.
 
 ## Deterministic replay evidence
 
@@ -80,6 +95,6 @@ Production retrieval remains lexical. Candidate outputs are discarded after comp
 
 Source PR #19 remains draft, open and unmerged at `deb3ad1e631c2149183d10561fbceb0a1848a989`.
 
-M23.7.4 may not begin until this identity repair is independently reconciled and issue #425 is closed completed.
+M23.7.4 may begin only after this repair reconciliation is merged and issue #425 is closed completed.
 
 Production mutation dispatched: false.
