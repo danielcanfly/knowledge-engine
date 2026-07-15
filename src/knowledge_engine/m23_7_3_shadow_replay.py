@@ -381,6 +381,13 @@ def evaluate_shadow_replay(payload: Mapping[str, Any]) -> dict[str, Any]:
         "semantic_output_influence_rate": 0.0,
         "failure_isolation_success_rate": 1.0,
     }
+    # Python 3.12 changed float summation internals. Canonicalise metric floats
+    # before threshold evaluation and evidence hashing so replay identities are
+    # stable across supported Python runtimes.
+    metrics = {
+        key: round(value, 12) if isinstance(value, float) else value
+        for key, value in metrics.items()
+    }
     _require(metrics["candidate_recall_at_5"] >= 0.82, 150, "Recall@5 below contract")
     _require(metrics["candidate_mrr_at_10"] >= 0.68, 151, "MRR@10 below contract")
     _require(metrics["candidate_ndcg_at_10"] >= 0.72, 152, "nDCG@10 below contract")
