@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from src.knowledge_engine.errors import IntegrityError
 from src.knowledge_engine.m23_pilot_authority import (
     QDRANT_COLLECTION,
