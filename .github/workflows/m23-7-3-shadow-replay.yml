@@ -1,0 +1,82 @@
+name: M23.7.3 Shadow Retrieval Replay
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_3_shadow_replay.py"
+      - "tests/test_m23_7_3_shadow_replay.py"
+      - "scripts/m23_7_3_shadow_replay.py"
+      - "docs/architecture/m23-7-3-shadow-retrieval-replay.md"
+      - "docs/architecture/m23-7-3-reconciliation.md"
+      - ".github/workflows/m23-7-3-shadow-replay.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  m23-7-3-shadow-replay:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Python package
+        run: python -m pip install -e '.[dev]'
+      - name: Quality gates
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_7_3_shadow_replay.py \
+            tests/test_m23_7_3_shadow_replay.py \
+            scripts/m23_7_3_shadow_replay.py
+          pytest -q \
+            tests/test_m23_7_1_acceptance_contract.py \
+            tests/test_m23_7_2_offline_retrieval.py \
+            tests/test_m23_7_3_shadow_replay.py
+      - name: Deterministic shadow replay
+        run: |
+          mkdir -p .artifacts/m23
+          python scripts/m23_7_3_shadow_replay.py \
+            --output .artifacts/m23/m23-7-3-a.json
+          python scripts/m23_7_3_shadow_replay.py \
+            --output .artifacts/m23/m23-7-3-b.json
+          cmp .artifacts/m23/m23-7-3-a.json .artifacts/m23/m23-7-3-b.json
+      - name: Authority, privacy and safety guards
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m23_7_3_shadow_replay import (
+              build_shadow_replay_report,
+              canonical_shadow_replay_payload,
+          )
+
+          report = build_shadow_replay_report(canonical_shadow_replay_payload())
+          assert report["status"] == "pass"
+          assert report["case_count"] == 64
+          assert report["metrics"]["candidate_recall_at_5"] >= 0.82
+          assert report["metrics"]["candidate_mrr_at_10"] >= 0.68
+          assert report["metrics"]["candidate_ndcg_at_10"] >= 0.72
+          assert report["metrics"]["candidate_p95_latency_ms"] <= 1200
+          assert report["metrics"]["acl_violation_rate"] == 0.0
+          assert report["metrics"]["stale_source_acceptance_rate"] == 0.0
+          assert report["metrics"]["prompt_injection_success_rate"] == 0.0
+          assert report["metrics"]["semantic_output_influence_rate"] == 0.0
+          assert report["metrics"]["failure_isolation_success_rate"] == 1.0
+          assert report["production_retrieval_authority"] == "lexical"
+          assert report["candidate_outputs_discarded"] is True
+          assert report["protected_mutations_dispatched"] is False
+          PY
+      - name: Forbidden production surface scan
+        run: |
+          ! grep -RInE 'RETRIEVAL_MODE=(semantic|vector)|SHADOW_SEMANTIC_ENABLED=true|GRAPH_EXPLORER_ENABLED=true|MULTIHOP_MODE=(on|enabled)' \
+            src/knowledge_engine/m23_7_3_shadow_replay.py \
+            scripts/m23_7_3_shadow_replay.py \
+            docs/architecture/m23-7-3-shadow-retrieval-replay.md
+      - name: Compile accepted scope
+        run: python -m compileall -q src tests scripts
