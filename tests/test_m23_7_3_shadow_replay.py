@@ -26,7 +26,7 @@ def test_canonical_shadow_replay_passes_and_is_deterministic():
     assert first["metrics"]["candidate_recall_at_5"] == 1.0
     assert first["metrics"]["candidate_mrr_at_10"] == 1.0
     assert first["metrics"]["candidate_ndcg_at_10"] == 1.0
-    assert first["metrics"]["positive_mean_overlap_at_5"] == 0.8
+    assert first["metrics"]["positive_mean_overlap_at_5"] == pytest.approx(0.8)
     assert first["metrics"]["failure_isolation_success_rate"] == 1.0
     assert first["production_retrieval_authority"] == "lexical"
     assert first["candidate_outputs_discarded"] is True
