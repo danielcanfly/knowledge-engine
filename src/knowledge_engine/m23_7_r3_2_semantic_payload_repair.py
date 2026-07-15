@@ -148,7 +148,7 @@ def _normalised_vector(vector: Sequence[Any], row: int) -> list[float]:
     values: list[float] = []
     for item in vector:
         _require(
-            not isinstance(item, bool) and isinstance(item, (int, float)),
+            not isinstance(item, bool) and isinstance(item, int | float),
             105,
             f"vector row {row} contains a non-number",
         )
@@ -201,7 +201,11 @@ def build_payload_v2(
         "candidate_release_eligible": False,
         "production_authority": False,
     }
-    _require(tuple(payload) == REQUIRED_PAYLOAD_FIELDS_V2, 108, "payload v2 field ordering drifted")
+    _require(
+        tuple(payload) == REQUIRED_PAYLOAD_FIELDS_V2,
+        108,
+        "payload v2 field ordering drifted",
+    )
     return payload
 
 
@@ -227,7 +231,11 @@ def build_repaired_ingestion_preview(
     seen_point_ids: set[str] = set()
     seen_sections: set[str] = set()
     for row, (document, vector) in enumerate(zip(documents, vectors, strict=True)):
-        section_id = _required_string(document.get("section_id"), f"documents[{row}].section_id", 500)
+        section_id = _required_string(
+            document.get("section_id"),
+            f"documents[{row}].section_id",
+            500,
+        )
         _require(section_id not in seen_sections, 112, "duplicate section id")
         seen_sections.add(section_id)
         point_id = deterministic_point_id(section_id)
@@ -324,7 +332,9 @@ def _semantic_surface(payload: Mapping[str, Any]) -> tuple[str, list[str]]:
     return surface, tokens
 
 
-def compile_repaired_probe_plan(samples_payload: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def compile_repaired_probe_plan(
+    samples_payload: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     _require(len(samples_payload) == SAMPLE_CAP, 116, "exactly eight samples are required")
     ordered = sorted(samples_payload, key=lambda item: item.get("point_id", item.get("id")))
     probes: list[dict[str, Any]] = []
