@@ -129,3 +129,51 @@ reconciliation. The next legal action is the real evidence dry run and review. A
 write remains separately authorised M23.6.3 work.
 
 Production mutation dispatched: false.
+
+## Contract reconciliation
+
+Implementation PR #388 was accepted from exact head
+`f9de0b5d7b351b2551f9cf68a36a31f5674acbfa` and merged as
+`f9c17811bc23f7af171686805c9c93e0ca7c78bd`.
+
+The accepted head passed all 22 triggered workflows:
+
+| Workflow | Run | Run ID |
+|---|---:|---:|
+| M23.6.2 Qdrant Ingestion Manifest | 2 | 29384126418 |
+| CI | 782 | 29384126447 |
+| R2 Release Integration | 523 | 29384126419 |
+| R2 Canary | 245 | 29384126394 |
+| M16 Security Contract Acceptance | 35 | 29384126428 |
+| M16 ACL and Injection Security Acceptance | 34 | 29384126425 |
+| M16 Promotion Containment Acceptance | 32 | 29384126416 |
+| M16 R2 Object Restoration Acceptance | 30 | 29384126430 |
+| M16 Source and Control-Plane Reconstruction Acceptance | 28 | 29384126468 |
+| M16 Replay and Recovery Objectives Acceptance | 25 | 29384126445 |
+| M16 End-to-End Restore Drill Acceptance | 23 | 29384126409 |
+| M17 Architecture Canon Acceptance | 128 | 29384126422 |
+| M17 Operator Tooling Acceptance | 21 | 29384126459 |
+| M17 Operator Qualification Acceptance | 16 | 29384126432 |
+| M17 GA Evidence Matrix Acceptance | 15 | 29384126408 |
+| M17 Independent Operator GA Acceptance | 14 | 29384126434 |
+| M18 Graph v2 acceptance | 218 | 29384126491 |
+| M23.2 Live Intake | 14 | 29384126404 |
+| M23.3 Real AI Extraction | 13 | 29384126386 |
+| M23.4 Human Review Source PR | 11 | 29384126421 |
+| M23.5 Cloudflare Qdrant contract | 10 | 29384126427 |
+| M23.5 corrected benchmark contract | 6 | 29384126393 |
+
+The accepted implementation performed no network call, Cloudflare call, Qdrant read or
+write, R2 mutation, pointer mutation, Source mutation, Source PR #19 merge, production
+traffic change, public deployment, permanent-ledger mutation, physical deletion,
+credential rotation or Graph Neural Retrieval. Production retrieval remains lexical.
+
+The real evidence ZIP was not available in this execution environment and the real
+107-point dry run was not claimed or fabricated. Synthetic CI cannot replace it. Before
+M23.6.3 may request any write approval, an operator must run the accepted CLI against the
+exact ZIP, verify the exact evidence digest, inspect all three immutable outputs, record the
+real manifest and receipt SHA-256 values, and re-confirm the Qdrant collection is green and
+empty through a separately authorised read-only preflight.
+
+M23.6.2 is reconciled as a deterministic planner and validation milestone. The next legal
+action is the real evidence dry run and review. Qdrant write authority remains false.
