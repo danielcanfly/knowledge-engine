@@ -1,0 +1,52 @@
+name: M23.7.5 Latency Diagnostic Evidence
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_5_latency_diagnostic.py"
+      - "scripts/m23_7_5_latency_diagnostic.py"
+      - "tests/test_m23_7_5_latency_diagnostic.py"
+      - ".github/workflows/m23-7-5-latency-diagnostic.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  latency-evidence-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Quality gates
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_7_5_latency_diagnostic.py \
+            scripts/m23_7_5_latency_diagnostic.py \
+            tests/test_m23_7_5_latency_diagnostic.py
+          pytest -q \
+            tests/test_m23_7_5_live_shadow.py \
+            tests/test_m23_7_5_qdrant_strict_mode.py \
+            tests/test_m23_7_5_latency_diagnostic.py
+      - name: Privacy surface scan
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          text = Path("src/knowledge_engine/m23_7_5_latency_diagnostic.py").read_text()
+          assert "canonical_budget_changed" in text
+          assert "raw query" not in text.lower()
+          assert "service_url" not in text
+          PY
+      - name: Compile accepted scope
+        run: python -m compileall -q src tests scripts
