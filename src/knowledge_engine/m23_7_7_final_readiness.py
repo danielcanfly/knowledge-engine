@@ -12,7 +12,9 @@ REPORT_SCHEMA_VERSION = "knowledge-engine-m23-7-7-final-readiness-report/v1"
 ENTRY_ENGINE_SHA = "a71d3e0e6f42b8de4f6c370bd988c7505161567f"
 SOURCE_PR_HEAD = "deb3ad1e631c2149183d10561fbceb0a1848a989"
 CANDIDATE_RELEASE = "m23cand-c7fbec7e945e79d05d3263b0"
-CANDIDATE_MANIFEST = "3303a1d54d448c96c724178b482dc73daed2712ba8d09b0e34fa96eb8761e560"
+CANDIDATE_MANIFEST = (
+    "3303a1d54d448c96c724178b482dc73daed2712ba8d09b0e34fa96eb8761e560"
+)
 READINESS_DECISION = "hold_for_m23_7_8"
 PACKET_SHA256 = "93234c4ce6f225c41563427ce3b2cff7e35bf6f9471f0f9ca47642e79281260a"
 REPORT_SHA256 = "c81800a4626ba8c96e201a0bc7a0d0a63f61c3328bde93cb124d0f18aa8aa48f"
@@ -125,7 +127,9 @@ def canonical_readiness_packet() -> dict[str, Any]:
             }
             for milestone, kind, sha256, status in CHAIN
         ],
-        "m23_7_6_rebuild_descriptor_sha256": "53e048805c60e9c08d23c67cc96e0b84ae75c0ee9fe121c1776cd28c5053e8e7",
+        "m23_7_6_rebuild_descriptor_sha256": (
+            "53e048805c60e9c08d23c67cc96e0b84ae75c0ee9fe121c1776cd28c5053e8e7"
+        ),
         "candidate": {
             "release_id": CANDIDATE_RELEASE,
             "manifest_sha256": CANDIDATE_MANIFEST,
@@ -184,12 +188,22 @@ def validate_readiness_packet(payload: Mapping[str, Any]) -> dict[str, Any]:
     _require(root["milestone"] == "M23.7.7", 105, "milestone drifted")
     _require(root["entry_engine_sha"] == ENTRY_ENGINE_SHA, 106, "entry SHA drifted")
 
-    chain = [dict(_mapping(row, "chain row")) for row in _sequence(root["m23_7_chain"], "chain")]
+    chain = [
+        dict(_mapping(row, "chain row"))
+        for row in _sequence(root["m23_7_chain"], "chain")
+    ]
     expected_chain = expected["m23_7_chain"]
     _require(chain == expected_chain, 107, "M23.7 evidence chain drifted")
     _require(
         [row["milestone"] for row in chain]
-        == ["M23.7.1", "M23.7.2", "M23.7.3", "M23.7.4", "M23.7.5", "M23.7.6"],
+        == [
+            "M23.7.1",
+            "M23.7.2",
+            "M23.7.3",
+            "M23.7.4",
+            "M23.7.5",
+            "M23.7.6",
+        ],
         108,
         "M23.7 milestone order drifted",
     )
@@ -209,21 +223,49 @@ def validate_readiness_packet(payload: Mapping[str, Any]) -> dict[str, Any]:
     _require(production == expected["production"], 114, "production authority drifted")
 
     blocker_evidence = _mapping(root["m23_7_5_blocker_evidence"], "M23.7.5 blockers")
-    _require(blocker_evidence == expected["m23_7_5_blocker_evidence"], 115, "blocker evidence drifted")
-    _require(blocker_evidence["latency_budget_passed"] is False, 116, "latency blocker cleared without evidence")
-    _require(blocker_evidence["retrieval_drift_clear"] is False, 117, "retrieval blocker cleared without evidence")
+    _require(
+        blocker_evidence == expected["m23_7_5_blocker_evidence"],
+        115,
+        "blocker evidence drifted",
+    )
+    _require(
+        blocker_evidence["latency_budget_passed"] is False,
+        116,
+        "latency blocker cleared without evidence",
+    )
+    _require(
+        blocker_evidence["retrieval_drift_clear"] is False,
+        117,
+        "retrieval blocker cleared without evidence",
+    )
 
     decision = root["readiness_decision"]
     _require(decision == READINESS_DECISION, 118, "readiness decision drifted")
     options = _mapping(root["m23_7_8_decision_options"], "decision options")
-    _require(set(options) == {"promote", "hold", "repair", "reject"}, 119, "decision option set drifted")
+    _require(
+        set(options) == {"promote", "hold", "repair", "reject"},
+        119,
+        "decision option set drifted",
+    )
     promote = _mapping(options["promote"], "promote option")
-    _require(promote["currently_available"] is False, 120, "promote became available while blockers remain")
-    _require(tuple(promote["requires_blockers_cleared"]) == CARRY_FORWARD_BLOCKERS, 121, "promote prerequisites drifted")
+    _require(
+        promote["currently_available"] is False,
+        120,
+        "promote became available while blockers remain",
+    )
+    _require(
+        tuple(promote["requires_blockers_cleared"]) == CARRY_FORWARD_BLOCKERS,
+        121,
+        "promote prerequisites drifted",
+    )
 
     protected = _mapping(root["protected_mutations"], "protected mutations")
     _require(set(protected) == set(PROTECTED_MUTATIONS), 122, "protected mutation set drifted")
-    _require(all(protected[key] is False for key in PROTECTED_MUTATIONS), 123, "protected mutation was dispatched")
+    _require(
+        all(protected[key] is False for key in PROTECTED_MUTATIONS),
+        123,
+        "protected mutation was dispatched",
+    )
 
     _require(canonical_sha256(root) == PACKET_SHA256, 124, "packet digest drifted")
     return root
