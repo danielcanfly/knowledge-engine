@@ -87,12 +87,39 @@ wrong vector name or dimension, non-public audience, response-shape drift, any u
 failure, point-count change, latency-budget breach, output influence or protected
 mutation.
 
+## Live execution procedure
+
+The knowledge-engine repository does not currently hold the four Cloudflare/Qdrant
+GitHub Actions secrets. The governed credentials remain in the existing local secret
+file and must not be copied into source control.
+
+After the implementation merge, execute from the local repository checkout:
+
+```bash
+cd /Users/huaihsuanhuang/Documents/GitHub/knowledge-engine
+git switch main
+git pull --ff-only
+set -a
+source /Users/daniel/LLM-Wiki-Local/secrets/m23-5-cloud.env
+set +a
+mkdir -p /Users/daniel/LLM-Wiki-Local/evidence/m23-7-5
+python scripts/m23_7_5_live_shadow.py \
+  --mode live \
+  --output /Users/daniel/LLM-Wiki-Local/evidence/m23-7-5/live-shadow.json
+```
+
+The output is already redacted. Before it may be committed as reconciliation evidence,
+verify that it contains no raw query, answer, credential, service URL or arbitrary
+exception text. The workflow-dispatch live job is an alternative only after the same
+four values are deliberately configured as repository secrets and `execute_live=true`
+is explicitly selected.
+
 ## Evidence and next gate
 
-The implementation workflow runs deterministic mocked acceptance and, using governed
-same-repository secrets, one bounded non-production live observation. Only the redacted
-report is retained for seven days. Independent reconciliation must seal the accepted
-head, report SHA, aggregate metrics and no-production-mutation proof before #430 closes.
+The pull-request workflow proves deterministic contract readiness. The real observation
+remains a separate explicit operation because the credentials are local, not repository
+secrets. Independent reconciliation must seal the accepted implementation head, the
+real report SHA, aggregate metrics and no-production-mutation proof before #430 closes.
 
 M23.7.6 remains blocked until M23.7.5 implementation and reconciliation are merged and
 issue #430 is closed completed.
