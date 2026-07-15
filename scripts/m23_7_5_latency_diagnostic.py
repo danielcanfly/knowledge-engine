@@ -45,9 +45,8 @@ def main() -> int:
         collection_name="llm_wiki_m23_pilot_bge_m3_1024",
         timeout_seconds=5.0,
     )
-    report = run_latency_diagnostic(
-        StrictModeSafeHttpLiveShadowClient(cloudflare, qdrant)
-    )
+    with StrictModeSafeHttpLiveShadowClient(cloudflare, qdrant) as client:
+        report = run_latency_diagnostic(client)
     output = Path(args.output)
     _write(output, report)
     metrics = report["metrics"]
