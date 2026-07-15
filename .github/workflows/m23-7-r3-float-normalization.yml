@@ -4,18 +4,19 @@ on:
   pull_request:
     paths:
       - ".github/workflows/m23-7-r3-float-normalization.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   normalize:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.head_ref || 'agent/m23-7-r3-bounded-live-reobservation' }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -104,4 +105,4 @@ jobs:
             .github/workflows/m23-7-r3-bounded-live-reobservation.yml \
             .github/workflows/m23-7-r3-float-normalization.yml
           git commit -m "fix: normalize R3 metric precision across Python versions"
-          git push origin HEAD:${{ github.head_ref }}
+          git push origin HEAD:agent/m23-7-r3-bounded-live-reobservation
