@@ -49,6 +49,13 @@ jobs:
           python scripts/m23_7_4_candidate_answer.py \
             --output .artifacts/m23/m23-7-4-b.json
           cmp .artifacts/m23/m23-7-4-a.json .artifacts/m23/m23-7-4-b.json
+      - name: Upload deterministic report evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-7-4-candidate-answer-report
+          path: .artifacts/m23/m23-7-4-a.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Grounding, budget, privacy and authority guards
         run: |
           python - <<'PY'
