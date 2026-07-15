@@ -10,7 +10,9 @@ on:
       - "workers/m23-7-r2-regional-binding/**"
       - "pilot/m23/m23-7-r2-regional-binding-contract.json"
       - "pilot/m23/m23-7-r2-regional-binding-fixture-report.json"
+      - "pilot/m23/m23-7-r2-regional-binding-live-acceptance.json"
       - "docs/architecture/m23-7-r2-regional-binding.md"
+      - "docs/architecture/m23-7-r2-regional-binding-live-acceptance.md"
       - ".github/workflows/m23-7-r2-regional-binding.yml"
   workflow_dispatch:
 
@@ -91,6 +93,7 @@ jobs:
       - name: Privacy authority and budget scan
         run: |
           python - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
 
@@ -110,6 +113,36 @@ jobs:
           encoded = json.dumps(report, sort_keys=True)
           for forbidden in ('What does', 'What is', 'How does', 'Which source'):
               assert forbidden not in encoded
+
+          acceptance = json.loads(
+              Path('pilot/m23/m23-7-r2-regional-binding-live-acceptance.json').read_text()
+          )
+          stored = acceptance.pop('acceptance_record_sha256')
+          canonical = json.dumps(
+              acceptance,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(canonical).hexdigest() == stored
+          assert stored == 'bcffb10590a4118c4c77a23d1c35bf618d8f0f87bf6ac27987fe862fea3c9da2'
+          assert acceptance['receipt']['sha256'] == 'aa56655d19cb617177bd8e4708c02e1cd6ce02189fcfee32a5b397ef0eba67db'
+          assert acceptance['status'] == 'pass_regional_path_qualified'
+          assert acceptance['paths']['candidate']['shadow_ms'] == 781
+          assert acceptance['acceptance']['canonical_max_shadow_p95_ms'] == 1200
+          assert acceptance['acceptance']['canonical_budget_changed'] is False
+          assert acceptance['acceptance']['budget_inflation_used'] is False
+          assert acceptance['comparison']['ranked_results_equivalent'] is True
+          assert acceptance['comparison']['direct_and_worker_collection_identity_equivalent'] is True
+          assert acceptance['exit']['latency_blocker_cleared'] is True
+          assert acceptance['exit']['retrieval_quality_blocker_cleared'] is False
+          assert acceptance['exit']['promotion_eligibility_granted'] is False
+          assert acceptance['remaining_blockers'] == ['blocked_pending_retrieval_quality']
+          assert acceptance['authority']['production_retrieval'] == 'lexical'
+          assert acceptance['authority']['protected_mutations_dispatched'] is False
+          assert acceptance['diagnostic_worker']['deletion_completed'] is False
+
           worker = Path('workers/m23-7-r2-regional-binding/worker.mjs').read_text()
           assert 'env.AI.run' in worker
           assert 'api.cloudflare.com' not in worker
