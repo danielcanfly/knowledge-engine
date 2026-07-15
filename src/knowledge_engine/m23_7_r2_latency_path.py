@@ -14,10 +14,8 @@ import httpx
 from . import m23_7_5_live_shadow as live_shadow
 from .errors import IntegrityError
 from .m23_7_5_qdrant_strict_mode import StrictModeSafeHttpLiveShadowClient
-from .m23_7_r1_semantic_alignment import (
-    canonical_manifest as r1_manifest,
-    compile_probe_plan,
-)
+from .m23_7_r1_semantic_alignment import canonical_manifest as r1_manifest
+from .m23_7_r1_semantic_alignment import compile_probe_plan
 from .m23_cloudflare_qdrant import SectionInput, embed_sections
 
 SCHEMA_VERSION = "knowledge-engine-m23-7-r2-latency-path/v1"
@@ -118,7 +116,11 @@ def validate_origin_label(value: str) -> str:
         105,
         "origin label must be a bounded non-secret label",
     )
-    _require("http" not in candidate and "token" not in candidate, 106, "origin label is unsafe")
+    _require(
+        "http" not in candidate and "token" not in candidate,
+        106,
+        "origin label is unsafe",
+    )
     return candidate
 
 
@@ -216,7 +218,9 @@ class LatencyPathClient(Protocol):
 
     def embed(self, text: str) -> Sequence[float]: ...
 
-    def query(self, vector: Sequence[float], top_k: int) -> Sequence[Mapping[str, Any]]: ...
+    def query(
+        self, vector: Sequence[float], top_k: int
+    ) -> Sequence[Mapping[str, Any]]: ...
 
     def embed_batch(self, texts: Sequence[str]) -> Sequence[Sequence[float]]: ...
 
@@ -311,7 +315,11 @@ def _validate_snapshot(snapshot: Mapping[str, Any]) -> dict[str, Any]:
         "read_only": True,
     }
     for key, value in expected.items():
-        _require(snapshot.get(key) == value, 112, f"collection identity drifted: {key}")
+        _require(
+            snapshot.get(key) == value,
+            112,
+            f"collection identity drifted: {key}",
+        )
     indexed = snapshot.get("indexed_vectors_count")
     _require(isinstance(indexed, int) and indexed >= 0, 113, "indexed count invalid")
     return {**expected, "indexed_vectors_count": indexed}
@@ -334,17 +342,29 @@ def _ranked_ids(points: Sequence[Mapping[str, Any]]) -> list[str]:
             "production_authority": False,
         }
         for key, value in expected.items():
-            _require(payload.get(key) == value, 114, f"ranked point drifted: {key}")
+            _require(
+                payload.get(key) == value,
+                114,
+                f"ranked point drifted: {key}",
+            )
         section_id = payload.get("section_id")
         score = raw.get("score")
-        _require(isinstance(section_id, str) and bool(section_id), 115, "ranked section missing")
+        _require(
+            isinstance(section_id, str) and bool(section_id),
+            115,
+            "ranked section missing",
+        )
         _require(
             isinstance(score, (int, float)) and not isinstance(score, bool),
             116,
             "ranked score invalid",
         )
         number = float(score)
-        _require(math.isfinite(number) and -1.0 <= number <= 1.0, 117, "ranked score invalid")
+        _require(
+            math.isfinite(number) and -1.0 <= number <= 1.0,
+            117,
+            "ranked score invalid",
+        )
         ranked.append((number, section_id))
     ranked.sort(key=lambda item: (-item[0], item[1]))
     return [section_id for _, section_id in ranked]
@@ -360,7 +380,11 @@ def run_latency_path_comparison(
     origin = validate_origin_label(origin_label)
     before = _validate_snapshot(client.collection_snapshot())
     raw_samples = list(client.sample_points(SAMPLE_CAP))
-    _require(len(raw_samples) == SAMPLE_CAP, 118, "exactly eight live samples are required")
+    _require(
+        len(raw_samples) == SAMPLE_CAP,
+        118,
+        "exactly eight live samples are required",
+    )
     probes = compile_probe_plan(r1_manifest(), raw_samples)
     _require(len(probes) == SAMPLE_CAP, 119, "R1 probe compilation drifted")
 
@@ -399,7 +423,11 @@ def run_latency_path_comparison(
     qdrant_end = clock_ns()
     _require(len(batch_results) == SAMPLE_CAP, 121, "batch result count drifted")
     batch_rankings = [_ranked_ids(points) for points in batch_results]
-    _require(batch_rankings == sequential_rankings, 122, "batch ranking drifted from baseline")
+    _require(
+        batch_rankings == sequential_rankings,
+        122,
+        "batch ranking drifted from baseline",
+    )
 
     after = _validate_snapshot(client.collection_snapshot())
     _require(before == after, 123, "collection changed during read-only comparison")
@@ -518,7 +546,11 @@ def validate_report(payload: Mapping[str, Any]) -> dict[str, Any]:
     root = dict(_mapping(payload, "report"))
     digest = root.pop("report_sha256", None)
     _require(digest == canonical_sha256(root), 124, "report digest mismatch")
-    _require(root.get("contract_sha256") == canonical_contract()["contract_sha256"], 125, "contract identity drifted")
+    _require(
+        root.get("contract_sha256") == canonical_contract()["contract_sha256"],
+        125,
+        "contract identity drifted",
+    )
     status = root.get("status")
     _require(
         status in {"pass_latency_path_qualified", "rejected_latency_path"},
@@ -531,34 +563,97 @@ def validate_report(payload: Mapping[str, Any]) -> dict[str, Any]:
         127,
         "canonical budget drifted",
     )
-    _require(acceptance.get("canonical_budget_changed") is False, 128, "budget changed")
-    _require(acceptance.get("budget_inflation_used") is False, 129, "budget inflated")
+    _require(
+        acceptance.get("canonical_budget_changed") is False,
+        128,
+        "budget changed",
+    )
+    _require(
+        acceptance.get("budget_inflation_used") is False,
+        129,
+        "budget inflated",
+    )
     comparison = _mapping(root.get("comparison"), "comparison")
-    _require(comparison.get("ranked_results_equivalent") is True, 130, "ranking equivalence missing")
-    _require(comparison.get("connection_reuse_preserved") is True, 131, "connection reuse missing")
+    _require(
+        comparison.get("ranked_results_equivalent") is True,
+        130,
+        "ranking equivalence missing",
+    )
+    _require(
+        comparison.get("connection_reuse_preserved") is True,
+        131,
+        "connection reuse missing",
+    )
     paths = _mapping(root.get("paths"), "paths")
     baseline = _mapping(paths.get("baseline"), "baseline path")
     candidate = _mapping(paths.get("candidate"), "candidate path")
-    _require(baseline.get("data_plane_requests") == 16, 132, "baseline request count drifted")
-    _require(candidate.get("data_plane_requests") == 2, 133, "batch request count drifted")
-    latency_pass = candidate.get("shadow_p95_ms", MAX_SHADOW_P95_MS + 1) <= MAX_SHADOW_P95_MS
-    _require(acceptance.get("batch_shadow_budget_pass") is latency_pass, 134, "budget result drifted")
+    _require(
+        baseline.get("data_plane_requests") == 16,
+        132,
+        "baseline request count drifted",
+    )
+    _require(
+        candidate.get("data_plane_requests") == 2,
+        133,
+        "batch request count drifted",
+    )
+    latency_pass = (
+        candidate.get("shadow_p95_ms", MAX_SHADOW_P95_MS + 1)
+        <= MAX_SHADOW_P95_MS
+    )
+    _require(
+        acceptance.get("batch_shadow_budget_pass") is latency_pass,
+        134,
+        "budget result drifted",
+    )
     exit_state = _mapping(root.get("exit"), "exit")
-    _require(exit_state.get("r2_complete") is latency_pass, 135, "R2 exit drifted")
-    _require(exit_state.get("latency_blocker_cleared") is latency_pass, 136, "latency blocker drifted")
-    _require(exit_state.get("retrieval_quality_blocker_cleared") is False, 137, "retrieval blocker cleared")
-    _require(exit_state.get("promotion_eligibility_granted") is False, 138, "promotion claimed")
+    _require(
+        exit_state.get("r2_complete") is latency_pass,
+        135,
+        "R2 exit drifted",
+    )
+    _require(
+        exit_state.get("latency_blocker_cleared") is latency_pass,
+        136,
+        "latency blocker drifted",
+    )
+    _require(
+        exit_state.get("retrieval_quality_blocker_cleared") is False,
+        137,
+        "retrieval blocker cleared",
+    )
+    _require(
+        exit_state.get("promotion_eligibility_granted") is False,
+        138,
+        "promotion claimed",
+    )
     remaining = list(_sequence(root.get("remaining_blockers"), "remaining blockers"))
     expected_remaining = ["blocked_pending_retrieval_quality"]
     if not latency_pass:
         expected_remaining.insert(0, "blocked_pending_latency")
     _require(remaining == expected_remaining, 139, "remaining blockers drifted")
     authority = _mapping(root.get("authority"), "authority")
-    _require(authority.get("production_retrieval") == "lexical", 140, "production retrieval drifted")
-    _require(authority.get("candidate_mode_enabled") is False, 141, "candidate mode enabled")
-    _require(authority.get("protected_mutations_dispatched") is False, 142, "protected mutation dispatched")
+    _require(
+        authority.get("production_retrieval") == "lexical",
+        140,
+        "production retrieval drifted",
+    )
+    _require(
+        authority.get("candidate_mode_enabled") is False,
+        141,
+        "candidate mode enabled",
+    )
+    _require(
+        authority.get("protected_mutations_dispatched") is False,
+        142,
+        "protected mutation dispatched",
+    )
     privacy = _mapping(root.get("privacy"), "privacy")
-    _require(all(value is False for value in privacy.values()), 143, "privacy boundary drifted")
+    _require(
+        all(value is False for value in privacy.values()),
+        143,
+        "privacy boundary drifted",
+    )
     external = _mapping(root.get("external_calls"), "external calls")
     _require(external.get("qdrant_write") == 0, 144, "Qdrant write detected")
     return {**root, "report_sha256": digest}
