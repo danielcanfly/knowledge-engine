@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.invalid/schemas/m23-candidate-shadow-response-v1.schema.json",
+  "title": "M23 candidate shadow response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "milestone", "request_id", "query_sha256", "lexical_point_ids", "semantic_point_ids", "overlap_count", "overlap_at_k", "rank_diagnostics", "lexical_only_point_ids", "semantic_only_point_ids", "semantic_response_sha256", "authority", "shadow_sha256"],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m23-candidate-shadow-response/v1"},
+    "milestone": {"const": "M23.6.5"},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "lexical_point_ids": {"type": "array", "maxItems": 20, "uniqueItems": true, "items": {"type": "string"}},
+    "semantic_point_ids": {"type": "array", "maxItems": 20, "uniqueItems": true, "items": {"type": "string"}},
+    "overlap_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "overlap_at_k": {"type": "number", "minimum": 0, "maximum": 1},
+    "rank_diagnostics": {"type": "array", "maxItems": 20},
+    "lexical_only_point_ids": {"type": "array", "maxItems": 20},
+    "semantic_only_point_ids": {"type": "array", "maxItems": 20},
+    "semantic_response_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authority": {"type": "object"},
+    "shadow_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
