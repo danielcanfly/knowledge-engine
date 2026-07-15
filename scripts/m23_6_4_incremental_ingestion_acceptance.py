@@ -82,7 +82,7 @@ def build_report() -> dict[str, Any]:
     worker_source = WORKER.read_text()
     required_worker_tokens = [
         "message.ack()",
-        "message.retry(",
+        "item.raw.retry(",
         "batch.ackAll()",
         "wait=true&ordering=strong",
         "optimistic-precondition-mismatch",
