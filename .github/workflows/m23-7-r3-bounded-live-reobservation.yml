@@ -11,8 +11,10 @@ on:
       - "pilot/m23/m23-7-r3-bounded-live-reobservation-contract.json"
       - "pilot/m23/m23-7-r3-bounded-live-reobservation-fixture-report.json"
       - "pilot/m23/m23-7-r3-live-rejection.json"
+      - "pilot/m23/m23-7-r3-live-rejection-reconciliation.json"
       - "docs/architecture/m23-7-r3-bounded-live-reobservation.md"
       - "docs/architecture/m23-7-r3-live-rejection.md"
+      - "docs/architecture/m23-7-r3-live-rejection-reconciliation.md"
       - ".github/workflows/m23-7-r3-bounded-live-reobservation.yml"
   workflow_dispatch:
 
@@ -90,7 +92,7 @@ jobs:
             --output workers/m23-7-r3-observation/wrangler.local.jsonc
           test -f workers/m23-7-r3-observation/wrangler.local.jsonc
           test -z "$(git status --porcelain)"
-      - name: Privacy authority threshold identity and rejection scan
+      - name: Privacy authority threshold identity rejection and reconciliation scan
         run: |
           python - <<'PY'
           import hashlib
@@ -112,6 +114,12 @@ jobs:
                   encoding='utf-8'
               )
           )
+          reconciliation = json.loads(
+              Path(
+                  'pilot/m23/m23-7-r3-live-rejection-reconciliation.json'
+              ).read_text(encoding='utf-8')
+          )
+
           assert contract['contract_sha256'] == '44177964da873958f1d433aab719725ff622f050bd7e96ec086cc8e06aa0f412'
           assert report['report_sha256'] == '676e4d1fa34ee85149294c20c7e3da0b3236215887c285d199a2a443eaed2a49'
           assert contract['entry']['engine_sha'] == '5870e4dd3d10076ef7d35a1eb485b358179d9305'
@@ -182,6 +190,49 @@ jobs:
           assert rejection['authority']['protected_mutations_dispatched'] is False
           assert rejection['diagnostic_worker']['deletion_completed'] is False
           assert rejection['path']['external_calls']['qdrant_write'] == 0
+
+          reconciliation_stored = reconciliation.pop(
+              'reconciliation_record_sha256'
+          )
+          reconciliation_canonical = json.dumps(
+              reconciliation,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(reconciliation_canonical).hexdigest() == reconciliation_stored
+          assert reconciliation_stored == '60533be4677af81614ded0b872cca64d4844c8fd8ab74a944a19001d6ac65b1c'
+          assert reconciliation['status'] == 'reconciled_rejection_pending_worker_deletion'
+          assert reconciliation['acceptance']['pr'] == 476
+          assert reconciliation['acceptance']['head_sha'] == '86695fb07f190b4fc7cdd02d9d0091bd7df7e257'
+          assert reconciliation['acceptance']['merge_sha'] == '8045d67492bb412e5c0531844723bb227c1b228a'
+          assert reconciliation['acceptance']['receipt_sha256'] == '43496be4ff84589c74075124e9f70fc7a2b89f2a400c287ebeb35053b1c6e7fe'
+          assert len(reconciliation['exact_head_workflows']) == 4
+          assert all(
+              item['conclusion'] == 'success'
+              for item in reconciliation['exact_head_workflows']
+          )
+          assert reconciliation['gates']['failed'] == [
+              'recall_at_5',
+              'mrr_at_10',
+              'ndcg_at_10',
+              'worker_internal_shadow',
+          ]
+          assert reconciliation['gates']['passed'] == [
+              'error_rate',
+              'acl_violation_rate',
+              'output_influence_rate',
+          ]
+          assert reconciliation['blockers']['cleared'] == []
+          assert reconciliation['blockers']['remaining'] == [
+              'blocked_pending_retrieval_quality'
+          ]
+          assert reconciliation['authority']['production_retrieval'] == 'lexical'
+          assert reconciliation['authority']['promotion_eligibility_granted'] is False
+          assert reconciliation['diagnostic_worker']['deletion_completed'] is False
+          assert reconciliation['diagnostic_worker']['issue_remains_open_after_deletion'] is True
+          assert reconciliation['next_legal_workstream'] == 'M23.7-R3.1 retrieval-quality root-cause repair'
 
           encoded = json.dumps(report, sort_keys=True)
           for forbidden in (
