@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.invalid/schemas/m23-candidate-semantic-response-v1.schema.json",
+  "title": "M23 candidate semantic response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "milestone", "request_id", "query_sha256", "collection", "vector_name", "embedding_model", "result_count", "results", "authority", "response_sha256"],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m23-candidate-semantic-response/v1"},
+    "milestone": {"const": "M23.6.5"},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "query_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "collection": {"const": "llm_wiki_m23_pilot_bge_m3_1024"},
+    "vector_name": {"const": "default"},
+    "embedding_model": {"const": "@cf/baai/bge-m3"},
+    "result_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "results": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["rank", "point_id", "score", "section_id", "source_path", "source_sha256", "text_sha256", "release_id", "release_manifest_sha256", "canonical_knowledge", "candidate_release_eligible", "production_authority"]
+      }
+    },
+    "authority": {"type": "object"},
+    "response_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
