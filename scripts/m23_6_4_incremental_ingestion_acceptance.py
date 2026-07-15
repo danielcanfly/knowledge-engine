@@ -79,7 +79,7 @@ def build_report() -> dict[str, Any]:
     assert wrangler["preview_urls"] is False
     assert wrangler["vars"]["EXECUTION_ENABLED"] == "false"
 
-    worker_source = WORKER.read_text()
+    worker_surface = WORKER.read_text() + "\n" + WRANGLER.read_text()
     required_worker_tokens = [
         "message.ack()",
         "item.raw.retry(",
@@ -89,7 +89,7 @@ def build_report() -> dict[str, Any]:
         "EXECUTION_ENABLED",
         "@cf/baai/bge-m3",
     ]
-    assert all(token in worker_source for token in required_worker_tokens)
+    assert all(token in worker_surface for token in required_worker_tokens)
     forbidden_worker_tokens = [
         "passThroughOnException",
         "Math.random(",
@@ -98,7 +98,7 @@ def build_report() -> dict[str, Any]:
         "production_authority: true",
         "canonical_knowledge: true",
     ]
-    assert not [token for token in forbidden_worker_tokens if token in worker_source]
+    assert not [token for token in forbidden_worker_tokens if token in worker_surface]
 
     old_sha = hashlib.sha256(b"old").hexdigest()
     inserted = section("insert#one", "insert")
