@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m23-candidate-graph-v2.schema.json",
+  "title": "M23 candidate Graph v2 artifact",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "release",
+    "nodes",
+    "edges",
+    "renderer_neutral",
+    "candidate_only",
+    "canonical_knowledge",
+    "production_authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-os-graph/v2"},
+    "renderer_neutral": {"const": true},
+    "candidate_only": {"const": true},
+    "canonical_knowledge": {"const": false},
+    "production_authority": {"const": false},
+    "release": {
+      "type": "object",
+      "required": ["release_id", "source_commit_sha", "foundation_commit_sha", "content_sha256"],
+      "properties": {
+        "release_id": {"type": "string", "pattern": "^m23graph-[0-9a-f]{24}$"},
+        "source_commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "foundation_commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
+      "items": {
+        "type": "object",
+        "required": [
+          "concept_id",
+          "x_kos_id",
+          "title",
+          "description",
+          "type",
+          "audience",
+          "status",
+          "confidence",
+          "tags",
+          "aliases",
+          "path",
+          "semantic_anchor_graph_node_id",
+          "canonical_knowledge",
+          "candidate_release_eligible",
+          "production_authority"
+        ],
+        "properties": {
+          "concept_id": {"type": "string", "pattern": "^conceptcand_[0-9a-f]{32}$"},
+          "x_kos_id": {"type": "string", "pattern": "^conceptcand_[0-9a-f]{32}$"},
+          "audience": {"const": "internal"},
+          "status": {"const": "pending-human-review"},
+          "confidence": {"const": 0.0},
+          "semantic_anchor_graph_node_id": {"type": "string", "pattern": "^pilot/harness-theory-part-0[1-3]$"},
+          "canonical_knowledge": {"const": false},
+          "candidate_release_eligible": {"const": false},
+          "production_authority": {"const": false}
+        },
+        "additionalProperties": true
+      }
+    },
+    "edges": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "required": [
+          "edge_id",
+          "source",
+          "target",
+          "relation_type",
+          "directed",
+          "audience",
+          "confidence",
+          "generated_inverse"
+        ],
+        "properties": {
+          "edge_id": {"type": "string", "pattern": "^m23edge_[0-9a-f]{24}$"},
+          "source": {"type": "string", "pattern": "^conceptcand_[0-9a-f]{32}$"},
+          "target": {"type": "string", "pattern": "^conceptcand_[0-9a-f]{32}$"},
+          "relation_type": {"enum": ["contains", "implements", "part_of", "related_to", "requires", "supports"]},
+          "directed": {"type": "boolean"},
+          "audience": {"const": "internal"},
+          "confidence": {"const": 0.0},
+          "generated_inverse": {"const": false}
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
