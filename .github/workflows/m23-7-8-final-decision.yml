@@ -1,0 +1,75 @@
+name: M23.7.8 Final Decision
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_8_final_decision.py"
+      - "scripts/m23_7_8_final_decision.py"
+      - "tests/test_m23_7_8_final_decision.py"
+      - "docs/architecture/m23-7-8-final-repair-decision.md"
+      - "pilot/m23/m23-7-8-final-decision-report.json"
+      - "pilot/m23/m23-7-8-repair-handoff.json"
+      - ".github/workflows/m23-7-8-final-decision.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  final-decision:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Quality gates
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_7_8_final_decision.py \
+            scripts/m23_7_8_final_decision.py \
+            tests/test_m23_7_8_final_decision.py
+          pytest -q tests/test_m23_7_8_final_decision.py
+      - name: Deterministic decision replay
+        run: |
+          python scripts/m23_7_8_final_decision.py \
+            --output /tmp/m23-7-8-report.json \
+            --handoff-output /tmp/m23-7-8-handoff.json
+          cmp /tmp/m23-7-8-report.json \
+            pilot/m23/m23-7-8-final-decision-report.json
+          cmp /tmp/m23-7-8-handoff.json \
+            pilot/m23/m23-7-8-repair-handoff.json
+      - name: Decision and authority scan
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(
+              Path("pilot/m23/m23-7-8-final-decision-report.json").read_text()
+          )
+          handoff = json.loads(
+              Path("pilot/m23/m23-7-8-repair-handoff.json").read_text()
+          )
+          assert report["decision"] == "repair"
+          assert report["promotion_eligibility_granted"] is False
+          assert report["candidate_mode_enabled"] is False
+          assert report["production_retrieval"] == "lexical"
+          assert report["protected_mutations_dispatched"] is False
+          assert handoff["carry_forward_blockers"] == [
+              "blocked_pending_latency",
+              "blocked_pending_retrieval_quality",
+          ]
+          assert [row["id"] for row in handoff["workstreams"]] == ["R1", "R2", "R3"]
+          assert "locked_1200ms_budget" in handoff["workstreams"][1]["required_evidence"]
+          PY
+      - name: Compile accepted scope
+        run: python -m compileall -q src tests scripts
