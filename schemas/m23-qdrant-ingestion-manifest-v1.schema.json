@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-os.local/schemas/m23-qdrant-ingestion-manifest-v1.schema.json",
+  "title": "M23.6.2 deterministic Qdrant ingestion manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "milestone",
+    "mode",
+    "builder_engine_commit_sha",
+    "source_evidence",
+    "authority_contract_sha256",
+    "release",
+    "source_membership",
+    "qdrant",
+    "content_hash_policy",
+    "points",
+    "authority",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-engine-m23-qdrant-ingestion-manifest/v1"
+    },
+    "milestone": {"const": "M23.6.2"},
+    "mode": {"const": "offline-dry-run"},
+    "builder_engine_commit_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "source_evidence": {
+      "type": "object",
+      "required": [
+        "archive_root",
+        "evidence_zip_sha256",
+        "receipt_files",
+        "benchmark_suite_sha256",
+        "document_vectors_filename",
+        "document_vectors_sha256",
+        "document_vectors_byte_length",
+        "semantic_metadata_sha256",
+        "semantic_artifact_id"
+      ],
+      "properties": {
+        "evidence_zip_sha256": {
+          "const": "1b71c79ed3fddc24abfb510709a08e6a1ad0a3806df23287d2d14a70994f7272"
+        },
+        "document_vectors_filename": {"const": "pilot-document-vectors.f32"},
+        "document_vectors_byte_length": {"const": 438272},
+        "semantic_artifact_id": {
+          "const": "semantic-35314911af0a514c9f0d64b7cfb1d6d0d2ec88cfa50317fa614e92f21f185f0d"
+        }
+      }
+    },
+    "authority_contract_sha256": {
+      "const": "c28a5d3503b24358c240283cfa1b4629c3e0bfeb6c854f72725481ff4c4a1941"
+    },
+    "release": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "release_id",
+        "release_manifest_sha256",
+        "source_membership",
+        "candidate_release_eligible",
+        "production_authority"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "knowledge-engine-m23-pilot-release-descriptor/v1"
+        },
+        "release_id": {
+          "type": "string",
+          "pattern": "^m23pilot-[0-9a-f]{24}$"
+        },
+        "source_membership": {
+          "const": "evaluation-only-pending-proposal"
+        },
+        "candidate_release_eligible": {"const": false},
+        "production_authority": {"const": false}
+      }
+    },
+    "source_membership": {
+      "type": "object",
+      "required": [
+        "membership",
+        "point_count",
+        "all_points_noncanonical",
+        "candidate_release_eligible",
+        "production_authority",
+        "full_rebuild_required_after_source_adoption"
+      ],
+      "properties": {
+        "membership": {"const": "evaluation-only-pending-proposal"},
+        "point_count": {"const": 107},
+        "all_points_noncanonical": {"const": true},
+        "candidate_release_eligible": {"const": false},
+        "production_authority": {"const": false},
+        "full_rebuild_required_after_source_adoption": {"const": true}
+      }
+    },
+    "qdrant": {
+      "type": "object",
+      "required": [
+        "collection",
+        "blocked_collection",
+        "vector_name",
+        "dimension",
+        "distance",
+        "point_count",
+        "payload_schema_version",
+        "payload_fields",
+        "write_authorized"
+      ],
+      "properties": {
+        "collection": {"const": "llm_wiki_m23_pilot_bge_m3_1024"},
+        "blocked_collection": {"const": "llamaindex_demo_hybrid"},
+        "vector_name": {"const": "default"},
+        "dimension": {"const": 1024},
+        "distance": {"const": "Cosine"},
+        "point_count": {"const": 107},
+        "payload_schema_version": {
+          "const": "knowledge-engine-m23-qdrant-payload/v1"
+        },
+        "payload_fields": {
+          "type": "array",
+          "minItems": 20,
+          "maxItems": 20,
+          "uniqueItems": true
+        },
+        "write_authorized": {"const": false}
+      }
+    },
+    "content_hash_policy": {"type": "object"},
+    "points": {
+      "type": "array",
+      "minItems": 107,
+      "maxItems": 107,
+      "items": {
+        "type": "object",
+        "required": [
+          "row",
+          "section_id",
+          "point_id",
+          "vector_byte_offset",
+          "vector_byte_length",
+          "vector_sha256",
+          "content_hash_sha256",
+          "source_membership",
+          "canonical_knowledge",
+          "candidate_release_eligible",
+          "production_authority"
+        ],
+        "properties": {
+          "row": {"type": "integer", "minimum": 0, "maximum": 106},
+          "point_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "vector_byte_length": {"const": 4096},
+          "source_membership": {
+            "const": "evaluation-only-pending-proposal"
+          },
+          "canonical_knowledge": {"const": false},
+          "candidate_release_eligible": {"const": false},
+          "production_authority": {"const": false}
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "properties": {
+        "network_calls": {"const": false},
+        "cloudflare_calls": {"const": false},
+        "qdrant_reads": {"const": false},
+        "qdrant_writes": {"const": false},
+        "r2_mutation": {"const": false},
+        "pointer_mutation": {"const": false},
+        "source_mutation": {"const": false},
+        "production_traffic_change": {"const": false},
+        "production_authority": {"const": false}
+      }
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}
