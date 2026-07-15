@@ -10,7 +10,9 @@ from . import m23_7_5_live_shadow as live_shadow
 
 SCHEMA_VERSION = "knowledge-engine-m23-7-5-latency-diagnostic/v1"
 CANONICAL_MAX_SHADOW_P95_MS = live_shadow.MAX_SHADOW_P95_MS
+CANONICAL_MAX_PRIMARY_DISPATCH_OVERHEAD_MS = live_shadow.MAX_PRIMARY_DISPATCH_OVERHEAD_MS
 DIAGNOSTIC_MAX_SHADOW_P95_MS = 30_000
+DIAGNOSTIC_MAX_PRIMARY_DISPATCH_OVERHEAD_MS = 30_000
 
 
 def _sha(value: Any) -> str:
@@ -31,17 +33,22 @@ def run_latency_diagnostic(
 ) -> dict[str, Any]:
     """Run the real bounded observation while preserving rejected latency evidence.
 
-    The temporary diagnostic ceiling exists only so the canonical runner can construct
-    its already-redacted report. Acceptance is still evaluated against the unchanged
+    Temporary diagnostic ceilings exist only so the canonical runner can construct its
+    already-redacted report. Acceptance is still evaluated against the unchanged
     canonical 1200 ms shadow p95 and 25 ms dispatch-overhead budgets.
     """
 
-    original_limit = live_shadow.MAX_SHADOW_P95_MS
+    original_shadow_limit = live_shadow.MAX_SHADOW_P95_MS
+    original_dispatch_limit = live_shadow.MAX_PRIMARY_DISPATCH_OVERHEAD_MS
     try:
         live_shadow.MAX_SHADOW_P95_MS = DIAGNOSTIC_MAX_SHADOW_P95_MS
+        live_shadow.MAX_PRIMARY_DISPATCH_OVERHEAD_MS = (
+            DIAGNOSTIC_MAX_PRIMARY_DISPATCH_OVERHEAD_MS
+        )
         observed = live_shadow.run_bounded_observation(client, clock_ns=clock_ns)
     finally:
-        live_shadow.MAX_SHADOW_P95_MS = original_limit
+        live_shadow.MAX_SHADOW_P95_MS = original_shadow_limit
+        live_shadow.MAX_PRIMARY_DISPATCH_OVERHEAD_MS = original_dispatch_limit
 
     metrics = observed["metrics"]
     violations: list[str] = []
@@ -49,7 +56,10 @@ def run_latency_diagnostic(
         violations.append("error-rate")
     if metrics["shadow_p95_ms"] > CANONICAL_MAX_SHADOW_P95_MS:
         violations.append("shadow-latency")
-    if metrics["primary_dispatch_overhead_p95_ms"] > live_shadow.MAX_PRIMARY_DISPATCH_OVERHEAD_MS:
+    if (
+        metrics["primary_dispatch_overhead_p95_ms"]
+        > CANONICAL_MAX_PRIMARY_DISPATCH_OVERHEAD_MS
+    ):
         violations.append("primary-dispatch-overhead")
 
     receipt = {
@@ -59,9 +69,12 @@ def run_latency_diagnostic(
         "acceptance": {
             "canonical_max_shadow_p95_ms": CANONICAL_MAX_SHADOW_P95_MS,
             "canonical_max_primary_dispatch_overhead_ms": (
-                live_shadow.MAX_PRIMARY_DISPATCH_OVERHEAD_MS
+                CANONICAL_MAX_PRIMARY_DISPATCH_OVERHEAD_MS
             ),
-            "diagnostic_ceiling_ms": DIAGNOSTIC_MAX_SHADOW_P95_MS,
+            "diagnostic_max_shadow_p95_ms": DIAGNOSTIC_MAX_SHADOW_P95_MS,
+            "diagnostic_max_primary_dispatch_overhead_ms": (
+                DIAGNOSTIC_MAX_PRIMARY_DISPATCH_OVERHEAD_MS
+            ),
             "budget_violations": violations,
             "canonical_budget_changed": False,
         },
