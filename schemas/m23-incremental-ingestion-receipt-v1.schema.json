@@ -13,7 +13,8 @@
     "section_count",
     "outcomes",
     "estimated_usd",
-    "authority"
+    "authority",
+    "receipt_sha256"
   ],
   "properties": {
     "schema_version": {
@@ -40,6 +41,10 @@
       "type": "number",
       "minimum": 0,
       "maximum": 0.5
+    },
+    "receipt_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
     },
     "outcomes": {
       "type": "array",
