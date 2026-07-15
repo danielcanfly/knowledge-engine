@@ -41,6 +41,8 @@ The remaining exact-head workflows for M16, M17, M23.2 through M23.6 and operato
 
 The initial implementation head failed only the repository import-order lint gate. A scoped lint-policy correction was committed and re-evaluated from a new exact head. The next global CI run passed lint and 1436 existing tests but exposed one strict floating-point equality assertion in the new replay test (`0.8000000000000002` versus `0.8`). The assertion was corrected to use `pytest.approx(0.8)` without changing replay behavior, report values or authority boundaries. The final exact head then passed the complete workflow matrix.
 
+During M23.7.4 entry verification, issue #425 found that this document previously recorded replay SHA `47df7595ffc27d320c3a70d00c90fcb3a682b315f6b67eefb57497c99865fbf3`. That value was a documentation/evidence transcription error. The canonical executable builder, rerun from exact diagnostic head `0344a98d9326feeb1d1b2c61ccd8f8de00257ce1` in workflow run `29398801911`, deterministically emitted `b4048b3ac29fcad50ba7f43bf932b6b188068efdbf58abb2ef36f76070a0eee2`. The replay algorithm, metrics, authority and production state did not change. A regression assertion now pins the executable identity.
+
 No review comments or unresolved review threads were present on PR #421 at merge time.
 
 ## Deterministic replay evidence
@@ -53,7 +55,7 @@ The accepted report consumed:
 - candidate release `m23cand-c7fbec7e945e79d05d3263b0`;
 - candidate manifest `3303a1d54d448c96c724178b482dc73daed2712ba8d09b0e34fa96eb8761e560`.
 
-The deterministic shadow replay SHA is `47df7595ffc27d320c3a70d00c90fcb3a682b315f6b67eefb57497c99865fbf3`.
+The deterministic executable shadow replay SHA is `b4048b3ac29fcad50ba7f43bf932b6b188068efdbf58abb2ef36f76070a0eee2`.
 
 Accepted results:
 
@@ -78,6 +80,6 @@ Production retrieval remains lexical. Candidate outputs are discarded after comp
 
 Source PR #19 remains draft, open and unmerged at `deb3ad1e631c2149183d10561fbceb0a1848a989`.
 
-M23.7.4 may not begin until this reconciliation is merged, issue #420 is closed completed, and a separate explicit M23.7.4 entry authorises its bounded scope.
+M23.7.4 may not begin until this identity repair is independently reconciled and issue #425 is closed completed.
 
 Production mutation dispatched: false.
