@@ -140,3 +140,27 @@ regressions are green. The next legal engineering action is M23.6.2, which build
 deterministic 107-point ingestion manifest without network or write authority.
 
 Production mutation dispatched: false.
+
+## Contract reconciliation
+
+Implementation PR #385 was accepted from exact head
+`2a284811d36128ec44a16c694930e620b7ee485d` and merged as
+`620d0dba184d5bbda7e32a86fb7fb388017778fc`.
+
+The accepted exact-head checks were all green:
+
+- M23.6.1 Pilot Authority Contract run `29382687615` (run 2);
+- CI run `29382687591` (run 777);
+- R2 Release Integration run `29382687626` (run 520);
+- M17 Architecture Canon Acceptance run `29382687589` (run 125);
+- M18 Graph v2 acceptance run `29382687598` (run 213).
+
+The accepted implementation performed no Cloudflare embedding call, Qdrant write, R2
+mutation, production pointer mutation, Source mutation, Source PR #19 merge, production
+traffic change, public deployment, permanent-ledger mutation, physical deletion or
+credential rotation. Source PR #19 remains draft, open and unmerged. Production retrieval
+remains lexical, Graph Explorer remains disabled and Graph Neural Retrieval remains
+forbidden.
+
+M23.6.1 is reconciled. The next legal action is M23.6.2 deterministic ingestion-manifest
+construction with no network and no write authority.
