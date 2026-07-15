@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "llm-wiki-m23-candidate-runtime",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "vars": {
+    "CANDIDATE_RUNTIME_ENABLED": "false",
+    "SHADOW_SEMANTIC_ENABLED": "false",
+    "QDRANT_COLLECTION": "llm_wiki_m23_pilot_bge_m3_1024",
+    "QDRANT_VECTOR_NAME": "default",
+    "EMBEDDING_MODEL": "@cf/baai/bge-m3",
+    "ACCESS_TEAM_DOMAIN": "https://replace-me.cloudflareaccess.com",
+    "ACCESS_POLICY_AUD": "replace-me-before-explicit-deployment",
+    "MAX_QUERY_CHARS": "2000",
+    "MAX_TOP_K": "20",
+    "QDRANT_TIMEOUT_MS": "5000"
+  }
+}

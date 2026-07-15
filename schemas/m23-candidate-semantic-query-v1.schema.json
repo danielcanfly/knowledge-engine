@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.invalid/schemas/m23-candidate-semantic-query-v1.schema.json",
+  "title": "M23 candidate semantic query",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "query"],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m23-candidate-semantic-query/v1"},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "query": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "top_k": {"type": "integer", "minimum": 1, "maximum": 20},
+    "lexical_point_ids": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 128}
+    }
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "schema_version": "knowledge-engine-m23-candidate-runtime-contract/v1",
+  "milestone": "M23.6.5",
+  "entry_baseline": {
+    "engine_commit_sha": "d0fb8b1b799d91b15520fd0bf8dacd093cf91e0d",
+    "m23_6_3_receipt_sha256": "0e89d9971e6fd10505b5e36113e079629c444c371d01ac6d909d717270c7c21b",
+    "source_commit_sha": "a6ba738d910d01d2ae99b1968f0831989934c549",
+    "source_pr_19_head_sha": "deb3ad1e631c2149183d10561fbceb0a1848a989"
+  },
+  "runtime": {
+    "worker_name": "llm-wiki-m23-candidate-runtime",
+    "base_path": "/internal/candidate/m23",
+    "retrieval_path": "/internal/candidate/m23/retrieve",
+    "shadow_path": "/internal/candidate/m23/shadow/retrieve",
+    "deployment_authorized": false,
+    "runtime_enabled_default": false,
+    "shadow_enabled_default": false,
+    "public_route_allowed": false,
+    "read_only": true,
+    "answer_generation_allowed": false,
+    "planner_multi_hop_allowed": false,
+    "single_hop_max": 1
+  },
+  "authentication": {
+    "mode": "cloudflare-access-jwt-fixed-audience",
+    "header": "Cf-Access-Jwt-Assertion",
+    "issuer_required": true,
+    "audience_required": true,
+    "signature_verification_required": true,
+    "access_application_creation_authorized": false
+  },
+  "semantic_query": {
+    "embedding_provider": "cloudflare-workers-ai",
+    "embedding_model": "@cf/baai/bge-m3",
+    "vector_dimension": 1024,
+    "normalize_query_vector": true,
+    "max_query_chars": 2000,
+    "default_top_k": 8,
+    "max_top_k": 20,
+    "max_request_bytes": 16384,
+    "max_response_bytes": 262144,
+    "max_estimated_usd_per_query": 0.01,
+    "qdrant_timeout_ms": 5000
+  },
+  "qdrant": {
+    "collection": "llm_wiki_m23_pilot_bge_m3_1024",
+    "vector_name": "default",
+    "distance": "Cosine",
+    "query_endpoint": "/collections/llm_wiki_m23_pilot_bge_m3_1024/points/query",
+    "with_payload": true,
+    "with_vector": false,
+    "read_allowed_when_explicitly_deployed": true,
+    "write_allowed": false,
+    "delete_allowed": false,
+    "expected_release_id": "m23pilot-a07eb79e381ca7e635cc9139",
+    "expected_release_manifest_sha256": "a07eb79e381ca7e635cc91397c322fd6ff57a62b5571a54866d26aefb734ebe9",
+    "required_source_membership": "evaluation-only-pending-proposal"
+  },
+  "shadow": {
+    "max_lexical_point_ids": 20,
+    "lexical_output_authoritative": true,
+    "semantic_output_served_to_production": false,
+    "rank_overlap_diagnostics_only": true,
+    "production_response_mutation_allowed": false
+  },
+  "locked_defaults": {
+    "AUTO_EXTRACTION_ENABLED": false,
+    "CANDIDATE_RUNTIME_ENABLED": false,
+    "GRAPH_EXPLORER_ENABLED": false,
+    "GRAPH_NEURAL_RETRIEVAL_ENABLED": false,
+    "MULTIHOP_MODE": "off",
+    "RETRIEVAL_MODE": "lexical",
+    "SHADOW_SEMANTIC_ENABLED": false
+  },
+  "authority": {
+    "deployment_dispatched": false,
+    "access_application_creation_dispatched": false,
+    "cloudflare_inference_dispatched": false,
+    "qdrant_read_dispatched": false,
+    "qdrant_write_dispatched": false,
+    "source_mutation_dispatched": false,
+    "source_pr_19_merge_dispatched": false,
+    "r2_mutation_dispatched": false,
+    "pointer_mutation_dispatched": false,
+    "production_traffic_change_dispatched": false,
+    "production_mutation_dispatched": false,
+    "permanent_ledger_mutation_dispatched": false,
+    "delete_dispatched": false,
+    "credential_rotation_dispatched": false,
+    "public_graph_explorer_dispatched": false,
+    "graph_neural_retrieval_dispatched": false
+  }
+}

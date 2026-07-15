@@ -1,0 +1,126 @@
+name: M23.6.5 Candidate Semantic Runtime
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_candidate_semantic_runtime.py"
+      - "tests/test_m23_6_5_candidate_semantic_runtime.py"
+      - "scripts/m23_6_5_candidate_runtime_acceptance.py"
+      - "pilot/m23/m23-6-5-candidate-runtime-contract.json"
+      - "schemas/m23-candidate-semantic-query-v1.schema.json"
+      - "schemas/m23-candidate-semantic-response-v1.schema.json"
+      - "schemas/m23-candidate-shadow-response-v1.schema.json"
+      - "packages/m23-candidate-runtime/**"
+      - "docs/architecture/m23-6-5-read-only-candidate-semantic-runtime.md"
+      - ".github/workflows/m23-6-5-candidate-semantic-runtime.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate-runtime:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Python package
+        run: python -m pip install -e '.[dev]'
+      - name: Python quality gates
+        run: >-
+          ruff check
+          src/knowledge_engine/m23_candidate_semantic_runtime.py
+          tests/test_m23_6_5_candidate_semantic_runtime.py
+          scripts/m23_6_5_candidate_runtime_acceptance.py
+      - name: Candidate Runtime policy tests
+        run: pytest -q tests/test_m23_6_5_candidate_semantic_runtime.py
+      - name: Deterministic acceptance replay
+        run: |
+          python scripts/m23_6_5_candidate_runtime_acceptance.py \
+            --output .artifacts/m23/m23-6-5-acceptance-a.json
+          python scripts/m23_6_5_candidate_runtime_acceptance.py \
+            --output .artifacts/m23/m23-6-5-acceptance-b.json
+          cmp \
+            .artifacts/m23/m23-6-5-acceptance-a.json \
+            .artifacts/m23/m23-6-5-acceptance-b.json
+      - name: Install pinned Runtime toolchain
+        working-directory: packages/m23-candidate-runtime
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Strict Runtime typecheck
+        working-directory: packages/m23-candidate-runtime
+        run: npm run check
+      - name: Wrangler configuration validation
+        working-directory: packages/m23-candidate-runtime
+        run: npx wrangler deploy --dry-run --outdir .wrangler-dry-run
+      - name: Deployment and authority guard
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          contract = json.loads(
+              Path("pilot/m23/m23-6-5-candidate-runtime-contract.json").read_text()
+          )
+          wrangler = json.loads(
+              Path("packages/m23-candidate-runtime/wrangler.jsonc").read_text()
+          )
+          assert contract["runtime"]["deployment_authorized"] is False
+          assert contract["runtime"]["runtime_enabled_default"] is False
+          assert contract["runtime"]["shadow_enabled_default"] is False
+          assert contract["runtime"]["read_only"] is True
+          assert contract["shadow"]["lexical_output_authoritative"] is True
+          assert contract["shadow"]["semantic_output_served_to_production"] is False
+          assert all(value is False for value in contract["authority"].values())
+          assert wrangler["workers_dev"] is False
+          assert wrangler["preview_urls"] is False
+          assert wrangler["vars"]["CANDIDATE_RUNTIME_ENABLED"] == "false"
+          assert wrangler["vars"]["SHADOW_SEMANTIC_ENABLED"] == "false"
+          assert "routes" not in wrangler
+          PY
+      - name: Read-only and Access surface guard
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path("packages/m23-candidate-runtime/src/index.ts"),
+              Path("packages/m23-candidate-runtime/wrangler.jsonc"),
+              Path("pilot/m23/m23-6-5-candidate-runtime-contract.json"),
+          ]
+          source = "\n".join(path.read_text() for path in paths)
+          required = [
+              "createRemoteJWKSet",
+              "jwtVerify",
+              "Cf-Access-Jwt-Assertion",
+              "/points/query",
+              "with_payload: true",
+              "with_vector: false",
+              "lexical_output_authoritative: true",
+              "semantic_output_served_to_production: false",
+          ]
+          missing = [token for token in required if token not in source]
+          if missing:
+              raise SystemExit(f"missing read-only or Access surfaces: {missing}")
+          forbidden = [
+              'method: "PUT"',
+              'method: "DELETE"',
+              "wait=true",
+              "passThroughOnException",
+              "Math.random(",
+              "llamaindex_demo_hybrid",
+              '"CANDIDATE_RUNTIME_ENABLED": "true"',
+              '"SHADOW_SEMANTIC_ENABLED": "true"',
+              '"deployment_authorized": true',
+              '"production_authority": true',
+              '"canonical_knowledge": true',
+          ]
+          found = [token for token in forbidden if token in source]
+          if found:
+              raise SystemExit(f"forbidden mutation or public surface: {found}")
+          PY
