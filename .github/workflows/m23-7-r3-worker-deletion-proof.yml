@@ -1,0 +1,86 @@
+name: M23.7 R3 Worker Deletion Proof
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-worker-deletion-proof.json"
+      - "docs/architecture/m23-7-r3-worker-deletion-proof.md"
+      - ".github/workflows/m23-7-r3-worker-deletion-proof.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deletion-proof:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deletion proof identity and authority
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path('pilot/m23/m23-7-r3-worker-deletion-proof.json')
+          record = json.loads(path.read_text(encoding='utf-8'))
+          stored = record.pop('record_sha256')
+          canonical = json.dumps(
+              record,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(canonical).hexdigest() == stored
+          assert stored == 'e8855372892b7b7e39b4b22001982288f5cb3240d971d1d1ccc59d02a08b5856'
+          assert record['issue'] == 474
+          assert record['reconciliation']['pr'] == 477
+          assert record['reconciliation']['exact_head'] == '18e556f4e9a8201c8fd202530e2b3cd4ded3f278'
+          assert record['reconciliation']['merge_sha'] == '9b79c38314f16c7fcd0ed229cac80a8777a177f9'
+          worker = record['worker']
+          assert worker['service'] == 'knowledge-engine-m23-7-r3-observation'
+          assert worker['delete_exit_code'] == 0
+          assert worker['delete_command_succeeded'] is True
+          assert worker['deployments_exit_code'] == 1
+          assert worker['deployments_control_plane_code'] == 10007
+          assert worker['versions_exit_code'] == 1
+          assert worker['versions_control_plane_code'] == 10007
+          assert worker['post_delete_http_code'] == 404
+          assert worker['post_delete_platform_error_code'] == 1042
+          assert worker['endpoint_serves_worker_code'] is False
+          assert worker['deletion_completed'] is True
+          rejection = record['live_rejection']
+          assert rejection['receipt_sha256'] == '43496be4ff84589c74075124e9f70fc7a2b89f2a400c287ebeb35053b1c6e7fe'
+          assert rejection['rejection_record_sha256'] == '79f27ecf68aa32e855f458e4e30a62932e0a2ea8bc1de522fa5869ed0d4a5ee5'
+          assert rejection['remaining_blockers'] == ['blocked_pending_retrieval_quality']
+          pattern = record['case_pattern']
+          assert pattern['sample_count'] == 8
+          assert pattern['target_missing_from_top_10'] == 6
+          assert pattern['target_present_in_top_10'] == 2
+          assert pattern['target_in_top_5'] == 1
+          assert pattern['raw_queries_persisted'] is False
+          authority = record['authority']
+          assert authority['production_retrieval'] == 'lexical'
+          assert authority['promotion_eligibility_granted'] is False
+          assert authority['protected_mutations_dispatched'] is False
+          exit_state = record['exit']
+          assert exit_state['r3_rejection_lifecycle_cleanup_complete'] is True
+          assert exit_state['r3_complete'] is False
+          assert exit_state['issue_474_remains_open'] is True
+          assert exit_state['next_legal_workstream'] == 'M23.7-R3.1 retrieval-quality root-cause repair'
+          PY
+      - name: Verify documentation boundary
+        run: |
+          grep -F 'Production retrieval remains lexical.' docs/architecture/m23-7-r3-worker-deletion-proof.md
+          grep -F 'R3 remains incomplete and #474 remains open.' docs/architecture/m23-7-r3-worker-deletion-proof.md
+          grep -F 'The next legal workstream is #478.' docs/architecture/m23-7-r3-worker-deletion-proof.md
