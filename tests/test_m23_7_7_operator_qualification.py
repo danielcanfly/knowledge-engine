@@ -4,9 +4,9 @@ import copy
 import json
 
 import pytest
-from knowledge_engine.errors import IntegrityError
 
 from knowledge_engine import m23_7_7_operator_qualification as qualification
+from knowledge_engine.errors import IntegrityError
 
 
 def _resign(payload: dict) -> dict:
