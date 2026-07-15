@@ -1,0 +1,50 @@
+name: M23.7.2 Offline Retrieval Evaluation
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_offline_retrieval_evaluation.py"
+      - "tests/test_m23_7_2_offline_retrieval_evaluation.py"
+      - "scripts/m23_7_2_offline_retrieval_evaluation.py"
+      - "docs/architecture/m23-7-2-deterministic-offline-retrieval-evaluation.md"
+      - ".github/workflows/m23-7-2-offline-retrieval-evaluation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-evaluation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e '.[dev]'
+      - name: Quality and adversarial tests
+        run: |
+          ruff check src/knowledge_engine/m23_7_offline_retrieval_evaluation.py tests/test_m23_7_2_offline_retrieval_evaluation.py scripts/m23_7_2_offline_retrieval_evaluation.py
+          pytest -q tests/test_m23_7_1_quality_contract.py tests/test_m23_7_2_offline_retrieval_evaluation.py
+      - name: Deterministic replay
+        run: |
+          mkdir -p .artifacts/m23
+          python scripts/m23_7_2_offline_retrieval_evaluation.py --evidence-output .artifacts/m23/evidence-a.json --report-output .artifacts/m23/report-a.json
+          python scripts/m23_7_2_offline_retrieval_evaluation.py --evidence-output .artifacts/m23/evidence-b.json --report-output .artifacts/m23/report-b.json
+          cmp .artifacts/m23/evidence-a.json .artifacts/m23/evidence-b.json
+          cmp .artifacts/m23/report-a.json .artifacts/m23/report-b.json
+      - name: Authority guard
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m23_7_offline_retrieval_evaluation import build_report, canonical_evidence
+          report = build_report(canonical_evidence())
+          assert report["status"] == "pass"
+          assert report["candidate_activation_authorized"] is False
+          assert report["production_retrieval_mode"] == "lexical"
+          assert report["production_authority"] is False
+          PY
+      - run: python -m compileall -q src tests scripts
