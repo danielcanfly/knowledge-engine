@@ -32,18 +32,29 @@ async function requestBody() {
   };
 }
 
-function collectionPayload(indexed = 0) {
+function collectionPayload(indexed = 0, sparseMode = "null") {
+  const params = {
+    vectors: { default: { size: 1024, distance: "Cosine" } },
+  };
+  if (sparseMode === "null") {
+    params.sparse_vectors = null;
+  } else if (sparseMode === "empty") {
+    params.sparse_vectors = {};
+  } else if (sparseMode === "configured") {
+    params.sparse_vectors = {
+      text: {
+        index: { on_disk: false },
+      },
+    };
+  } else {
+    assert.equal(sparseMode, "omitted");
+  }
   return {
     result: {
       status: "green",
       points_count: 107,
       indexed_vectors_count: indexed,
-      config: {
-        params: {
-          vectors: { default: { size: 1024, distance: "Cosine" } },
-          sparse_vectors: null,
-        },
-      },
+      config: { params },
     },
   };
 }
@@ -104,6 +115,17 @@ async function makeRequest(body, token = OPERATOR_TOKEN) {
   });
 }
 
+function successfulQdrantFetch(sparseMode = "null") {
+  return async (_url, init = {}) => {
+    if (init.method === "POST") {
+      return Response.json({
+        result: Array.from({ length: 8 }, (_, index) => ({ points: [point(index + 1)] })),
+      });
+    }
+    return Response.json(collectionPayload(0, sparseMode));
+  };
+}
+
 test("successful request uses one AI binding call and one Qdrant batch query", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
@@ -144,6 +166,44 @@ test("successful request uses one AI binding call and one Qdrant batch query", a
     for (const query of body.queries) {
       assert.equal(encoded.includes(query.query_text), false);
     }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+for (const sparseMode of ["omitted", "null", "empty"]) {
+  test(`empty sparse-vector metadata form ${sparseMode} normalizes to null`, async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = successfulQdrantFetch(sparseMode);
+    try {
+      const workerEnv = env();
+      const response = await handleRequest(await makeRequest(await requestBody()), workerEnv);
+      assert.equal(response.status, 200);
+      const payload = await response.json();
+      assert.equal(payload.collection_before.sparse_vectors, null);
+      assert.equal(payload.collection_after.sparse_vectors, null);
+      assert.equal(workerEnv.AI.calls, 1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+}
+
+test("configured sparse-vector metadata still fails closed", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return Response.json(collectionPayload(0, "configured"));
+  };
+  try {
+    const workerEnv = env();
+    const response = await handleRequest(await makeRequest(await requestBody()), workerEnv);
+    assert.equal(response.status, 502);
+    const payload = await response.json();
+    assert.equal(payload.code, "sparse-vector-drift");
+    assert.equal(workerEnv.AI.calls, 0);
+    assert.equal(calls, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }
