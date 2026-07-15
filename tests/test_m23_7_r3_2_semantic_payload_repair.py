@@ -38,9 +38,13 @@ def _documents() -> list[dict[str, object]]:
     output: list[dict[str, object]] = []
     for index, (title, language) in enumerate(zip(titles, languages, strict=True), start=1):
         text = f"repair fixture text {index}"
+        section_id = (
+            f"pilot/harness-theory-part-{index:02d}-{language.lower()}"
+            f"/chunk-{index:03d}"
+        )
         output.append(
             {
-                "section_id": f"pilot/harness-theory-part-{index:02d}-{language.lower()}/chunk-{index:03d}",
+                "section_id": section_id,
                 "concept_id": (
                     title.lower().replace(" ", "-")
                     if language == "en"
