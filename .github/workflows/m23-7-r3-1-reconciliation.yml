@@ -1,0 +1,81 @@
+name: M23.7 Repair R3.1 Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-1-reconciliation.json"
+      - "docs/architecture/m23-7-r3-1-reconciliation.md"
+      - ".github/workflows/m23-7-r3-1-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile-root-cause:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Verify diagnosis merge ancestry
+        run: git merge-base --is-ancestor 41609ef983de09208766fe8c016e9b28526fa3ea HEAD
+      - name: Verify reconciliation record
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path('pilot/m23/m23-7-r3-1-reconciliation.json')
+          record = json.loads(path.read_text(encoding='utf-8'))
+          stated = record.pop('reconciliation_record_sha256')
+          canonical = json.dumps(
+              record,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(canonical).hexdigest() == stated
+          assert stated == '8eb0e46693741d3f66008d3d23ab99570edb9fff3096d5c1c6a2aebb9d6fbb99'
+          assert record['diagnosis_acceptance']['pr'] == 482
+          assert record['diagnosis_acceptance']['head_sha'] == '7583aca27d330ff5207c738aff39ab11911a6ccb'
+          assert record['diagnosis_acceptance']['merge_sha'] == '41609ef983de09208766fe8c016e9b28526fa3ea'
+          assert record['diagnosis_acceptance']['root_cause_report_sha256'] == '10a5bd0aa1b141cb508db8781269d2d47ed1cf9309a3065671f3356f7e1d5f7c'
+          assert len(record['exact_head_workflows']) == 5
+          assert all(item['conclusion'] == 'success' for item in record['exact_head_workflows'])
+          assert record['root_cause']['primary'] == 'identifier_humanisation_query_collision'
+          assert record['root_cause']['compounding'] == ['corpus_hubness']
+          assert record['root_cause']['repair_proposal_included'] is False
+          assert record['authority']['production_retrieval'] == 'lexical'
+          assert record['authority']['promotion_eligibility_granted'] is False
+          assert record['authority']['qdrant_writes'] == 0
+          assert record['blockers']['remaining'] == ['blocked_pending_retrieval_quality']
+          assert record['issues']['r3_1_issue'] == 478
+          assert record['issues']['parent_r3_issue'] == 474
+          assert record['issues']['parent_must_remain_open'] is True
+          assert record['next_legal_workstream'] == 'separately_governed_repair_proposal'
+          PY
+      - name: Privacy and mutation guard
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          encoded = Path('pilot/m23/m23-7-r3-1-reconciliation.json').read_text(
+              encoding='utf-8'
+          )
+          for forbidden in (
+              'What does',
+              'What is',
+              'How does',
+              'Which source',
+              'QDRANT_API_KEY',
+              'CLOUDFLARE_API_TOKEN',
+              'https://',
+          ):
+              assert forbidden not in encoded
+          PY
