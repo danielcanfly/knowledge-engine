@@ -11,8 +11,10 @@ on:
       - "pilot/m23/m23-7-r2-regional-binding-contract.json"
       - "pilot/m23/m23-7-r2-regional-binding-fixture-report.json"
       - "pilot/m23/m23-7-r2-regional-binding-live-acceptance.json"
+      - "pilot/m23/m23-7-r2-regional-binding-reconciliation.json"
       - "docs/architecture/m23-7-r2-regional-binding.md"
       - "docs/architecture/m23-7-r2-regional-binding-live-acceptance.md"
+      - "docs/architecture/m23-7-r2-regional-binding-reconciliation.md"
       - ".github/workflows/m23-7-r2-regional-binding.yml"
   workflow_dispatch:
 
@@ -90,7 +92,7 @@ jobs:
             --output workers/m23-7-r2-regional-binding/wrangler.local.jsonc
           test -f workers/m23-7-r2-regional-binding/wrangler.local.jsonc
           test -z "$(git status --porcelain)"
-      - name: Privacy authority and budget scan
+      - name: Privacy authority budget and reconciliation scan
         run: |
           python - <<'PY'
           import hashlib
@@ -142,6 +144,35 @@ jobs:
           assert acceptance['authority']['production_retrieval'] == 'lexical'
           assert acceptance['authority']['protected_mutations_dispatched'] is False
           assert acceptance['diagnostic_worker']['deletion_completed'] is False
+
+          reconciliation = json.loads(
+              Path('pilot/m23/m23-7-r2-regional-binding-reconciliation.json').read_text()
+          )
+          reconciliation_stored = reconciliation.pop('reconciliation_record_sha256')
+          reconciliation_canonical = json.dumps(
+              reconciliation,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(reconciliation_canonical).hexdigest() == reconciliation_stored
+          assert reconciliation_stored == '409ac1ea1e79bb43735f15795fc529b8b24190e397b78ac011a280ebcbecac34'
+          assert reconciliation['status'] == 'reconciled_pending_worker_deletion'
+          assert reconciliation['acceptance']['pr'] == 471
+          assert reconciliation['acceptance']['head_sha'] == 'afb64ab41d778866760f50db843c3d7157e8312c'
+          assert reconciliation['acceptance']['merge_sha'] == '1174be8d67415cd9f2280f89dfdb6305adfd24f9'
+          assert reconciliation['acceptance']['receipt_sha256'] == 'aa56655d19cb617177bd8e4708c02e1cd6ce02189fcfee32a5b397ef0eba67db'
+          assert len(reconciliation['exact_head_workflows']) == 4
+          assert all(item['conclusion'] == 'success' for item in reconciliation['exact_head_workflows'])
+          assert reconciliation['measurement']['candidate_shadow_ms'] == 781
+          assert reconciliation['measurement']['margin_ms'] == 419
+          assert reconciliation['blockers']['cleared'] == ['blocked_pending_latency']
+          assert reconciliation['blockers']['remaining'] == ['blocked_pending_retrieval_quality']
+          assert reconciliation['authority']['production_retrieval'] == 'lexical'
+          assert reconciliation['authority']['promotion_eligibility_granted'] is False
+          assert reconciliation['diagnostic_worker']['deletion_completed'] is False
+          assert reconciliation['diagnostic_worker']['issues_close_only_after_deletion'] is True
 
           worker = Path('workers/m23-7-r2-regional-binding/worker.mjs').read_text()
           assert 'env.AI.run' in worker
