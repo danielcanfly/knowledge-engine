@@ -1,0 +1,162 @@
+name: M23.7 Repair R3 Bounded Live Re-observation
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_r3_bounded_live_reobservation.py"
+      - "scripts/m23_7_r3_bounded_live_reobservation.py"
+      - "scripts/m23_7_r3_worker_config.py"
+      - "tests/test_m23_7_r3_bounded_live_reobservation.py"
+      - "workers/m23-7-r3-observation/**"
+      - "pilot/m23/m23-7-r3-bounded-live-reobservation-contract.json"
+      - "pilot/m23/m23-7-r3-bounded-live-reobservation-fixture-report.json"
+      - "docs/architecture/m23-7-r3-bounded-live-reobservation.md"
+      - ".github/workflows/m23-7-r3-bounded-live-reobservation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-live-reobservation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff accepted scope
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_7_r3_bounded_live_reobservation.py \
+            scripts/m23_7_r3_bounded_live_reobservation.py \
+            scripts/m23_7_r3_worker_config.py \
+            tests/test_m23_7_r3_bounded_live_reobservation.py
+      - name: Python adversarial tests
+        run: |
+          pytest -q \
+            tests/test_m23_7_r1_semantic_alignment.py \
+            tests/test_m23_7_r2_latency_path.py \
+            tests/test_m23_7_r2_regional_binding.py \
+            tests/test_m23_7_r3_bounded_live_reobservation.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Worker unit tests
+        working-directory: workers/m23-7-r3-observation
+        run: node --test worker.test.mjs
+      - name: Deterministic contract and fixture replay
+        run: |
+          mkdir -p .artifacts/m23
+          python - <<'PY'
+          from pathlib import Path
+          from knowledge_engine.m23_7_r3_bounded_live_reobservation import (
+              canonical_contract,
+              canonical_json,
+          )
+
+          Path('.artifacts/m23/r3-contract.json').write_text(
+              canonical_json(canonical_contract()) + '\n',
+              encoding='utf-8',
+          )
+          PY
+          cmp \
+            .artifacts/m23/r3-contract.json \
+            pilot/m23/m23-7-r3-bounded-live-reobservation-contract.json
+          python scripts/m23_7_r3_bounded_live_reobservation.py \
+            --mode fixture \
+            --output .artifacts/m23/r3-report-a.json
+          python scripts/m23_7_r3_bounded_live_reobservation.py \
+            --mode fixture \
+            --output .artifacts/m23/r3-report-b.json
+          cmp .artifacts/m23/r3-report-a.json .artifacts/m23/r3-report-b.json
+          cmp \
+            .artifacts/m23/r3-report-a.json \
+            pilot/m23/m23-7-r3-bounded-live-reobservation-fixture-report.json
+      - name: Generated placement config stays untracked
+        run: |
+          export QDRANT_URL="https://fixture-qdrant.example"
+          python scripts/m23_7_r3_worker_config.py \
+            --output workers/m23-7-r3-observation/wrangler.local.jsonc
+          test -f workers/m23-7-r3-observation/wrangler.local.jsonc
+          test -z "$(git status --porcelain)"
+      - name: Privacy authority threshold and identity scan
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          contract = json.loads(
+              Path(
+                  'pilot/m23/m23-7-r3-bounded-live-reobservation-contract.json'
+              ).read_text(encoding='utf-8')
+          )
+          report = json.loads(
+              Path(
+                  'pilot/m23/m23-7-r3-bounded-live-reobservation-fixture-report.json'
+              ).read_text(encoding='utf-8')
+          )
+          assert contract['contract_sha256'] == '44177964da873958f1d433aab719725ff622f050bd7e96ec086cc8e06aa0f412'
+          assert report['report_sha256'] == '676e4d1fa34ee85149294c20c7e3da0b3236215887c285d199a2a443eaed2a49'
+          assert contract['entry']['engine_sha'] == '5870e4dd3d10076ef7d35a1eb485b358179d9305'
+          assert contract['entry']['r1_manifest_sha256'] == 'ebff335d572461f4438ed06c4cc35288b0d0def8bbfc2b51e80bb262db12c576'
+          assert contract['entry']['r2_1_live_receipt_sha256'] == 'aa56655d19cb617177bd8e4708c02e1cd6ce02189fcfee32a5b397ef0eba67db'
+          assert contract['thresholds'] == {
+              'min_recall_at_5': 0.82,
+              'min_mrr_at_10': 0.68,
+              'min_ndcg_at_10': 0.72,
+              'max_worker_internal_shadow_ms': 1200,
+              'max_error_rate': 0.0,
+              'max_acl_violation_rate': 0.0,
+              'max_output_influence_rate': 0.0,
+              'budget_changed': False,
+              'budget_inflation_allowed': False,
+          }
+          assert report['status'] == 'pass_bounded_live_reobservation'
+          assert report['metrics']['recall_at_5'] == 1.0
+          assert report['metrics']['mrr_at_10'] == 0.8125
+          assert report['metrics']['ndcg_at_10'] > 0.86
+          assert report['metrics']['worker_internal_shadow_ms'] == 780
+          assert all(report['gates'].values())
+          assert len(report['cases']) == 8
+          assert all(len(case['ranked_section_ids']) == 10 for case in report['cases'])
+          assert all(case['raw_query_persisted'] is False for case in report['cases'])
+          assert report['external_calls'] == {
+              'workers_ai_binding': 1,
+              'qdrant_collection_reads': 2,
+              'qdrant_query_batch': 1,
+              'qdrant_write': 0,
+          }
+          assert report['authority']['production_retrieval'] == 'lexical'
+          assert report['authority']['protected_mutations_dispatched'] is False
+          assert report['exit']['promotion_eligibility_granted'] is False
+          encoded = json.dumps(report, sort_keys=True)
+          for forbidden in (
+              'What does',
+              'What is',
+              'How does',
+              'Which source',
+              'QDRANT_API_KEY',
+              'M23_R3_OPERATOR_TOKEN',
+              'https://',
+          ):
+              assert forbidden not in encoded
+          worker = Path('workers/m23-7-r3-observation/worker.mjs').read_text(
+              encoding='utf-8'
+          )
+          assert 'limit: TOP_K' in worker
+          assert 'const TOP_K = 10' in worker
+          assert 'env.AI.run' in worker
+          assert 'console.log' not in worker
+          assert 'api.cloudflare.com' not in worker
+          PY
+      - name: Compile accepted Python scope
+        run: python -m compileall -q src tests scripts
