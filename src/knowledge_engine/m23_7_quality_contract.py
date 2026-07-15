@@ -36,7 +36,12 @@ PROTECTED = (
 
 
 def _sha(value: Any) -> str:
-    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -45,7 +50,9 @@ def canonical_contract() -> dict[str, Any]:
         {
             "case_id": f"m23q-{index:02d}",
             "query_class": QUERY_CLASSES[(index - 1) % len(QUERY_CLASSES)],
-            "expected_relevant_ids": [] if index % 6 == 0 else [f"section-{index:03d}"],
+            "expected_relevant_ids": (
+                [] if index % 6 == 0 else [f"section-{index:03d}"]
+            ),
             "acl_allowed": index % 6 != 5,
             "no_answer_expected": index % 6 == 0,
         }
@@ -122,18 +129,32 @@ def validate_contract(payload: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(suite, Mapping):
         raise IntegrityError("M23.7.1-105 suite must be an object")
     cases = suite.get("cases")
-    if isinstance(cases, (str, bytes)) or not isinstance(cases, Sequence) or len(cases) != 24:
+    if (
+        isinstance(cases, (str, bytes))
+        or not isinstance(cases, Sequence)
+        or len(cases) != 24
+    ):
         raise IntegrityError("M23.7.1-106 exactly 24 cases are required")
     ids = [case.get("case_id") for case in cases if isinstance(case, Mapping)]
     if ids != [f"m23q-{index:02d}" for index in range(1, 25)]:
         raise IntegrityError("M23.7.1-107 case identity or order mismatch")
-    classes = [case.get("query_class") for case in cases if isinstance(case, Mapping)]
-    if set(classes) != set(QUERY_CLASSES) or any(classes.count(name) != 4 for name in QUERY_CLASSES):
+    classes = [
+        case.get("query_class") for case in cases if isinstance(case, Mapping)
+    ]
+    if set(classes) != set(QUERY_CLASSES) or any(
+        classes.count(name) != 4 for name in QUERY_CLASSES
+    ):
         raise IntegrityError("M23.7.1-108 query-class balance mismatch")
-    if suite.get("provider_calls_allowed") is not False or suite.get("network_calls_allowed") is not False:
+    if (
+        suite.get("provider_calls_allowed") is not False
+        or suite.get("network_calls_allowed") is not False
+    ):
         raise IntegrityError("M23.7.1-109 external execution was authorised")
     metrics = root.get("metrics")
-    if not isinstance(metrics, Mapping) or metrics.get("provenance_coverage_floor") != 1.0:
+    if (
+        not isinstance(metrics, Mapping)
+        or metrics.get("provenance_coverage_floor") != 1.0
+    ):
         raise IntegrityError("M23.7.1-110 metric contract mismatch")
     authority = root.get("authority")
     if not isinstance(authority, Mapping) or dict(authority) != {
