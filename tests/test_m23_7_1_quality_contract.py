@@ -23,11 +23,27 @@ def test_contract_passes_and_report_replays():
     ("mutator", "match"),
     [
         (lambda item: item.__setitem__("contract_sha256", "0" * 64), "digest"),
-        (lambda item: item["entry"].__setitem__("qdrant_points", 106), "entry identity"),
+        (
+            lambda item: item["entry"].__setitem__("qdrant_points", 106),
+            "entry identity",
+        ),
         (lambda item: item["suite"]["cases"].pop(), "digest|24 cases"),
-        (lambda item: item["suite"].__setitem__("network_calls_allowed", True), "digest|external"),
-        (lambda item: item["authority"].__setitem__("production_retrieval_mode", "semantic"), "digest|authority"),
-        (lambda item: item["protected_state"].__setitem__("r2_write", True), "digest|protected"),
+        (
+            lambda item: item["suite"].__setitem__(
+                "network_calls_allowed", True
+            ),
+            "digest|external",
+        ),
+        (
+            lambda item: item["authority"].__setitem__(
+                "production_retrieval_mode", "semantic"
+            ),
+            "digest|authority",
+        ),
+        (
+            lambda item: item["protected_state"].__setitem__("r2_write", True),
+            "digest|protected",
+        ),
     ],
 )
 def test_contract_fails_closed(mutator, match):
