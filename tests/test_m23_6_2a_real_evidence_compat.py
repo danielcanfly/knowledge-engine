@@ -7,9 +7,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
-
 from src.knowledge_engine.errors import IntegrityError
-from src.knowledge_engine.m23_qdrant_pilot_ingestion_real import build_dry_run
 from src.knowledge_engine.m23_qdrant_pilot_ingestion import (
     BLOCKED_COLLECTION,
     EXPECTED_DOCUMENT_COUNT,
@@ -21,6 +19,7 @@ from src.knowledge_engine.m23_qdrant_pilot_ingestion import (
     canonical_bytes,
     canonical_sha256,
 )
+from src.knowledge_engine.m23_qdrant_pilot_ingestion_real import build_dry_run
 
 
 SOURCE_SHA = "a6ba738d910d01d2ae99b1968f0831989934c549"
@@ -161,7 +160,7 @@ def _semantic_metadata(suite: dict, vectors: bytes, *, drop_last: bool = False) 
             "endianness": "little",
             "normalized": True,
             "pooling": "provider-native",
-            "input_template": "{title}\\n\\n{text}",
+            "input_template": "{title}\n\n{text}",
             "query_template": "{text}",
             "maximum_input_length": 60000,
             "truncation": "error",
