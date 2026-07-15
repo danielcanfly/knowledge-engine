@@ -8,7 +8,6 @@ import zipfile
 from pathlib import Path
 
 import pytest
-
 from src.knowledge_engine.errors import IntegrityError
 from src.knowledge_engine.m23_qdrant_pilot_ingestion import (
     BLOCKED_COLLECTION,
@@ -342,7 +341,9 @@ def test_authority_collection_or_write_drift_fails_closed(tmp_path: Path):
         load_authority_contract(path, expected_sha256=authority["contract_sha256"])
 
 
-def test_payload_fields_are_exact_and_content_hashes_change_with_content(tmp_path: Path):
+def test_payload_fields_are_exact_and_content_hashes_change_with_content(
+    tmp_path: Path,
+):
     result = _build(tmp_path)
     points = result["points"]["points"]
     summaries = result["manifest"]["points"]
