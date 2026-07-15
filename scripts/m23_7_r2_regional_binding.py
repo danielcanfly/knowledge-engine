@@ -66,18 +66,20 @@ def main() -> int:
             collection_name="llm_wiki_m23_pilot_bge_m3_1024",
             timeout_seconds=10.0,
         )
-        with StrictModeSafeBatchLatencyClient(cloudflare, qdrant) as direct_client:
-            with HttpRegionalWorkerInvoker(
+        with (
+            StrictModeSafeBatchLatencyClient(cloudflare, qdrant) as direct_client,
+            HttpRegionalWorkerInvoker(
                 endpoint=_required_env("M23_R2_WORKER_URL"),
                 operator_token=_required_env("M23_R2_OPERATOR_TOKEN"),
-            ) as worker_invoker:
-                report = run_regional_binding_comparison(
-                    direct_client,
-                    worker_invoker,
-                    direct_origin=args.direct_origin,
-                    worker_origin=args.worker_origin,
-                    placement_config=placement_config,
-                )
+            ) as worker_invoker,
+        ):
+            report = run_regional_binding_comparison(
+                direct_client,
+                worker_invoker,
+                direct_origin=args.direct_origin,
+                worker_origin=args.worker_origin,
+                placement_config=placement_config,
+            )
 
     validate_report(report)
     output = Path(args.output)
