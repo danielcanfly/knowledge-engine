@@ -1,0 +1,81 @@
+name: M23.7 R2.1 Worker Deletion Proof
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r2-regional-binding-deletion-proof.json"
+      - "docs/architecture/m23-7-r2-regional-binding-deletion-proof.md"
+      - ".github/workflows/m23-7-r2-worker-deletion-proof.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deletion-proof:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate deletion proof and authority boundary
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path('pilot/m23/m23-7-r2-regional-binding-deletion-proof.json')
+          proof = json.loads(path.read_text(encoding='utf-8'))
+          stored = proof.pop('deletion_proof_sha256')
+          canonical = json.dumps(
+              proof,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(canonical).hexdigest() == stored
+          assert stored == 'edff6720917a45f753c46f31fbfc828bfa556b738737e1d6ba8d9d308d93b297'
+          assert proof['status'] == 'completed'
+          assert proof['issue'] == 465
+          assert proof['parent_issue'] == 463
+          assert proof['reconciliation']['pr'] == 472
+          assert proof['reconciliation']['head_sha'] == 'f83d10ad074f92f09d9d6a0e1547c6da8b44af66'
+          assert proof['reconciliation']['merge_sha'] == '7b996efc16db50d0bef8a8f9a184d4c45acd7fd9'
+          worker = proof['worker']
+          assert worker['service'] == 'knowledge-engine-m23-7-r2-binding'
+          assert worker['wrangler_delete_exit_code'] == 0
+          assert worker['deployments_list_exit_code'] == 1
+          assert worker['deployments_list_cloudflare_code'] == 10007
+          assert worker['deployments_list_result'] == 'worker_not_found'
+          assert worker['versions_list_exit_code'] == 1
+          assert worker['versions_list_cloudflare_code'] == 10007
+          assert worker['versions_list_result'] == 'worker_not_found'
+          assert worker['workers_dev_http_code'] == 404
+          assert worker['workers_dev_error_code'] == 1042
+          assert worker['deletion_confirmed'] is True
+          assert proof['acceptance']['receipt_sha256'] == 'aa56655d19cb617177bd8e4708c02e1cd6ce02189fcfee32a5b397ef0eba67db'
+          assert proof['acceptance']['candidate_shadow_ms'] == 781
+          assert proof['acceptance']['canonical_max_shadow_p95_ms'] == 1200
+          assert proof['acceptance']['latency_blocker_cleared'] is True
+          assert proof['blockers']['cleared'] == ['blocked_pending_latency']
+          assert proof['blockers']['remaining'] == ['blocked_pending_retrieval_quality']
+          assert proof['authority']['production_retrieval'] == 'lexical'
+          assert proof['authority']['candidate_mode_enabled'] is False
+          assert proof['authority']['promotion_eligibility_granted'] is False
+          assert proof['authority']['protected_mutations_dispatched'] is False
+          assert proof['next_legal_workstream'] == 'M23.7-R3 bounded live re-observation'
+          PY
+      - name: Check documentation boundary
+        run: |
+          grep -F 'code `10007`' docs/architecture/m23-7-r2-regional-binding-deletion-proof.md
+          grep -F 'HTTP `404`' docs/architecture/m23-7-r2-regional-binding-deletion-proof.md
+          grep -F 'error code `1042`' docs/architecture/m23-7-r2-regional-binding-deletion-proof.md
+          grep -F 'Production mutation dispatched: false.' docs/architecture/m23-7-r2-regional-binding-deletion-proof.md
