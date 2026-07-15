@@ -8,7 +8,7 @@
     "types": "wrangler types --env-interface CloudflareEnv"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260714.0",
+    "@cloudflare/workers-types": "5.20260715.1",
     "typescript": "5.9.3",
     "wrangler": "4.27.0"
   }
