@@ -6,7 +6,9 @@ import os
 from pathlib import Path
 
 from knowledge_engine.m23_7_5_latency_diagnostic import run_latency_diagnostic
-from knowledge_engine.m23_7_5_qdrant_strict_mode import StrictModeSafeLiveShadowClient
+from knowledge_engine.m23_7_5_qdrant_strict_mode import (
+    StrictModeSafeHttpLiveShadowClient,
+)
 from knowledge_engine.m23_cloudflare_qdrant import CloudflareConfig, QdrantConfig
 
 
@@ -43,7 +45,9 @@ def main() -> int:
         collection_name="llm_wiki_m23_pilot_bge_m3_1024",
         timeout_seconds=5.0,
     )
-    report = run_latency_diagnostic(StrictModeSafeLiveShadowClient(cloudflare, qdrant))
+    report = run_latency_diagnostic(
+        StrictModeSafeHttpLiveShadowClient(cloudflare, qdrant)
+    )
     output = Path(args.output)
     _write(output, report)
     metrics = report["metrics"]

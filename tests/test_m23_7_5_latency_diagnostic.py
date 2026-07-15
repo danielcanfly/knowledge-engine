@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
+from pathlib import Path
 
 from knowledge_engine.m23_7_5_latency_diagnostic import (
     CANONICAL_MAX_SHADOW_P95_MS,
@@ -83,6 +85,15 @@ class Clock:
     def __call__(self) -> int:
         self.value += self.step_ns
         return self.value
+
+
+def test_cli_module_imports_actual_strict_mode_client():
+    script = Path(__file__).parents[1] / "scripts" / "m23_7_5_latency_diagnostic.py"
+    spec = importlib.util.spec_from_file_location("m23_7_5_latency_diagnostic_cli", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert callable(module.main)
 
 
 def test_fast_receipt_passes_without_changing_canonical_budget():
