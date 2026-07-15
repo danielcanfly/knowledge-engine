@@ -8,8 +8,13 @@ on:
       - "scripts/m23_7_5_live_shadow.py"
       - "docs/architecture/m23-7-5-bounded-live-shadow.md"
       - ".github/workflows/m23-7-5-bounded-live-shadow.yml"
-      - "pyproject.toml"
   workflow_dispatch:
+    inputs:
+      execute_live:
+        description: "Execute the explicitly authorised non-production live observation"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -66,6 +71,7 @@ jobs:
           assert report["metrics"]["sample_count"] == 8
           assert report["raw_queries_persisted"] is False
           assert report["raw_answers_persisted"] is False
+          assert report["service_urls_persisted"] is False
           assert report["candidate_outputs_served"] is False
           assert report["production_response_authority"] is False
           assert report["protected_mutations_dispatched"] is False
@@ -83,6 +89,7 @@ jobs:
         run: python -m compileall -q src tests scripts
 
   bounded-live-observation:
+    if: github.event_name == 'workflow_dispatch' && inputs.execute_live
     runs-on: ubuntu-24.04
     needs: deterministic-contract
     env:
@@ -130,6 +137,7 @@ jobs:
           assert report["metrics"]["output_influence_rate"] == 0.0
           assert report["raw_queries_persisted"] is False
           assert report["raw_answers_persisted"] is False
+          assert report["service_urls_persisted"] is False
           assert report["candidate_outputs_served"] is False
           assert report["production_response_authority"] is False
           assert report["protected_mutations_dispatched"] is False
