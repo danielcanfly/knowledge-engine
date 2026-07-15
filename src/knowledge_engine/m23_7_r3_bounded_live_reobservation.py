@@ -406,10 +406,24 @@ def _reciprocal_rank(target: str, ranked: Sequence[str]) -> float:
     return 0.0
 
 
+_NDCG_AT_10_BY_RANK = (
+    1.0,
+    0.6309297535714575,
+    0.5,
+    0.43067655807339306,
+    0.38685280723454163,
+    0.3562071871080222,
+    0.3333333333333333,
+    0.31546487678572877,
+    0.3010299956639812,
+    0.2890648263178879,
+)
+
+
 def _ndcg(target: str, ranked: Sequence[str]) -> float:
     for index, section_id in enumerate(ranked[:TOP_K], start=1):
         if section_id == target:
-            return 1.0 / math.log2(index + 1)
+            return _NDCG_AT_10_BY_RANK[index - 1]
     return 0.0
 
 

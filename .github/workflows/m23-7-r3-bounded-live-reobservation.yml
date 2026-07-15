@@ -105,7 +105,7 @@ jobs:
               ).read_text(encoding='utf-8')
           )
           assert contract['contract_sha256'] == '44177964da873958f1d433aab719725ff622f050bd7e96ec086cc8e06aa0f412'
-          assert report['report_sha256'] == '9bdd7404907e532530dc277051c8d4347bc4cf03290f76c538624aaf05154338'
+          assert report['report_sha256'] == '2e3118092be7c1c66a14a7518df8e4f61e6d88bad3d525d65da696f25fe5bf07'
           assert contract['entry']['engine_sha'] == '5870e4dd3d10076ef7d35a1eb485b358179d9305'
           assert contract['entry']['r1_manifest_sha256'] == 'ebff335d572461f4438ed06c4cc35288b0d0def8bbfc2b51e80bb262db12c576'
           assert contract['entry']['r2_1_live_receipt_sha256'] == 'aa56655d19cb617177bd8e4708c02e1cd6ce02189fcfee32a5b397ef0eba67db'
