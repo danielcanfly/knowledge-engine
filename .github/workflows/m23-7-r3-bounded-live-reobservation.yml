@@ -10,7 +10,9 @@ on:
       - "workers/m23-7-r3-observation/**"
       - "pilot/m23/m23-7-r3-bounded-live-reobservation-contract.json"
       - "pilot/m23/m23-7-r3-bounded-live-reobservation-fixture-report.json"
+      - "pilot/m23/m23-7-r3-live-rejection.json"
       - "docs/architecture/m23-7-r3-bounded-live-reobservation.md"
+      - "docs/architecture/m23-7-r3-live-rejection.md"
       - ".github/workflows/m23-7-r3-bounded-live-reobservation.yml"
   workflow_dispatch:
 
@@ -88,9 +90,10 @@ jobs:
             --output workers/m23-7-r3-observation/wrangler.local.jsonc
           test -f workers/m23-7-r3-observation/wrangler.local.jsonc
           test -z "$(git status --porcelain)"
-      - name: Privacy authority threshold and identity scan
+      - name: Privacy authority threshold identity and rejection scan
         run: |
           python - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
 
@@ -103,6 +106,11 @@ jobs:
               Path(
                   'pilot/m23/m23-7-r3-bounded-live-reobservation-fixture-report.json'
               ).read_text(encoding='utf-8')
+          )
+          rejection = json.loads(
+              Path('pilot/m23/m23-7-r3-live-rejection.json').read_text(
+                  encoding='utf-8'
+              )
           )
           assert contract['contract_sha256'] == '44177964da873958f1d433aab719725ff622f050bd7e96ec086cc8e06aa0f412'
           assert report['report_sha256'] == '676e4d1fa34ee85149294c20c7e3da0b3236215887c285d199a2a443eaed2a49'
@@ -138,6 +146,43 @@ jobs:
           assert report['authority']['production_retrieval'] == 'lexical'
           assert report['authority']['protected_mutations_dispatched'] is False
           assert report['exit']['promotion_eligibility_granted'] is False
+
+          stored = rejection.pop('record_sha256')
+          canonical = json.dumps(
+              rejection,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(canonical).hexdigest() == stored
+          assert stored == '79f27ecf68aa32e855f458e4e30a62932e0a2ea8bc1de522fa5869ed0d4a5ee5'
+          assert rejection['receipt']['sha256'] == '43496be4ff84589c74075124e9f70fc7a2b89f2a400c287ebeb35053b1c6e7fe'
+          assert rejection['status'] == 'rejected_bounded_live_reobservation'
+          assert rejection['metrics']['recall_at_5'] == 0.125
+          assert rejection['metrics']['mrr_at_10'] == 0.049107142857
+          assert rejection['metrics']['ndcg_at_10'] == 0.095501236426
+          assert rejection['metrics']['worker_internal_shadow_ms'] == 1774
+          assert rejection['metrics']['provider_ms'] == 1177
+          assert rejection['metrics']['qdrant_ms'] == 597
+          assert rejection['gates']['recall_at_5'] is False
+          assert rejection['gates']['mrr_at_10'] is False
+          assert rejection['gates']['ndcg_at_10'] is False
+          assert rejection['gates']['worker_internal_shadow'] is False
+          assert rejection['gates']['error_rate'] is True
+          assert rejection['gates']['acl_violation_rate'] is True
+          assert rejection['gates']['output_influence_rate'] is True
+          assert rejection['remaining_blockers'] == [
+              'blocked_pending_retrieval_quality'
+          ]
+          assert rejection['exit']['r3_complete'] is False
+          assert rejection['exit']['retrieval_quality_blocker_cleared'] is False
+          assert rejection['exit']['promotion_eligibility_granted'] is False
+          assert rejection['authority']['production_retrieval'] == 'lexical'
+          assert rejection['authority']['protected_mutations_dispatched'] is False
+          assert rejection['diagnostic_worker']['deletion_completed'] is False
+          assert rejection['path']['external_calls']['qdrant_write'] == 0
+
           encoded = json.dumps(report, sort_keys=True)
           for forbidden in (
               'What does',
