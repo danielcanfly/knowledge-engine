@@ -21,6 +21,10 @@ def test_canonical_shadow_replay_passes_and_is_deterministic():
     second = build_shadow_replay_report(evidence())
     assert first == second
     assert first["status"] == "pass"
+    assert (
+        first["shadow_replay_sha256"]
+        == "b4048b3ac29fcad50ba7f43bf932b6b188068efdbf58abb2ef36f76070a0eee2"
+    )
     assert first["case_count"] == 64
     assert set(first["class_counts"].values()) == {8}
     assert first["metrics"]["candidate_recall_at_5"] == 1.0
