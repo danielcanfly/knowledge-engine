@@ -127,9 +127,8 @@ def main() -> int:
             collection_name="llm_wiki_m23_pilot_bge_m3_1024",
             timeout_seconds=5.0,
         )
-        report = run_bounded_observation(
-            StrictModeSafeHttpLiveShadowClient(cloudflare, qdrant)
-        )
+        with StrictModeSafeHttpLiveShadowClient(cloudflare, qdrant) as client:
+            report = run_bounded_observation(client)
 
     output = Path(args.output)
     _write(output, report)
