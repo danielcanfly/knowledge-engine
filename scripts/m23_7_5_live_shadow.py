@@ -12,9 +12,11 @@ from knowledge_engine.m23_7_5_live_shadow import (
     SAMPLE_CAP,
     VECTOR_DIMENSION,
     VECTOR_NAME,
-    HttpLiveShadowClient,
     ShadowFailure,
     run_bounded_observation,
+)
+from knowledge_engine.m23_7_5_qdrant_strict_mode import (
+    StrictModeSafeHttpLiveShadowClient,
 )
 from knowledge_engine.m23_cloudflare_qdrant import CloudflareConfig, QdrantConfig
 
@@ -125,7 +127,9 @@ def main() -> int:
             collection_name="llm_wiki_m23_pilot_bge_m3_1024",
             timeout_seconds=5.0,
         )
-        report = run_bounded_observation(HttpLiveShadowClient(cloudflare, qdrant))
+        report = run_bounded_observation(
+            StrictModeSafeHttpLiveShadowClient(cloudflare, qdrant)
+        )
 
     output = Path(args.output)
     _write(output, report)
