@@ -1,0 +1,110 @@
+name: M23.7 Repair R3.1 Root-Cause Diagnostics
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_r3_1_root_cause.py"
+      - "src/knowledge_engine/m23_7_r3_1_fixture.py"
+      - "scripts/m23_7_r3_1_root_cause.py"
+      - "tests/test_m23_7_r3_1_root_cause.py"
+      - "docs/architecture/m23-7-r3-1-root-cause.md"
+      - "pilot/m23/m23-7-r3-1-root-cause-report.json"
+      - ".github/workflows/m23-7-r3-1-root-cause.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  query-root-cause:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff accepted scope
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_7_r3_1_root_cause.py \
+            src/knowledge_engine/m23_7_r3_1_fixture.py \
+            scripts/m23_7_r3_1_root_cause.py \
+            tests/test_m23_7_r3_1_root_cause.py
+      - name: Adversarial tests
+        run: |
+          pytest -q \
+            tests/test_m23_7_r1_semantic_alignment.py \
+            tests/test_m23_7_r3_bounded_live_reobservation.py \
+            tests/test_m23_7_r3_1_root_cause.py
+      - name: Deterministic preliminary replay
+        run: |
+          mkdir -p .artifacts/m23
+          python scripts/m23_7_r3_1_root_cause.py \
+            --output .artifacts/m23/r3-1-a.json
+          python scripts/m23_7_r3_1_root_cause.py \
+            --output .artifacts/m23/r3-1-b.json
+          cmp .artifacts/m23/r3-1-a.json .artifacts/m23/r3-1-b.json
+      - name: Final seal, privacy and authority scan
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          preliminary = json.loads(
+              Path('.artifacts/m23/r3-1-a.json').read_text(encoding='utf-8')
+          )
+          assert preliminary['status'] == 'phase_a_b_complete_vector_diagnostics_pending'
+          assert preliminary['root_cause']['final_seal'] is False
+          assert preliminary['exit']['r3_1_complete'] is False
+
+          path = Path('pilot/m23/m23-7-r3-1-root-cause-report.json')
+          report = json.loads(path.read_text(encoding='utf-8'))
+          stated = report.pop('report_sha256')
+          canonical = json.dumps(
+              report,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(canonical).hexdigest() == stated
+          assert stated == '10a5bd0aa1b141cb508db8781269d2d47ed1cf9309a3065671f3356f7e1d5f7c'
+          assert report['status'] == 'root_cause_sealed'
+          assert report['root_cause']['primary'] == 'identifier_humanisation_query_collision'
+          assert report['root_cause']['compounding'] == ['corpus_hubness']
+          assert report['root_cause']['final_seal'] is True
+          assert report['root_cause']['repair_proposal_included'] is False
+          assert report['evidence']['all_expected_pairs_collide'] is True
+          assert report['evidence']['all_receipt_rankings_match_local_cosine'] is True
+          assert report['evidence']['maximum_top10_hub_frequency'] == 8
+          assert report['authority']['production_retrieval'] == 'lexical'
+          assert report['authority']['promotion_eligibility_granted'] is False
+          assert report['authority']['qdrant_writes'] == 0
+          assert report['exit']['r3_1_complete'] is True
+          assert report['exit']['parent_r3_complete'] is False
+          assert report['exit']['issue_474_must_remain_open'] is True
+          assert report['remaining_blockers'] == ['blocked_pending_retrieval_quality']
+
+          encoded = path.read_text(encoding='utf-8')
+          for forbidden in (
+              'What does',
+              'What is',
+              'How does',
+              'Which source',
+              'QDRANT_API_KEY',
+              'CLOUDFLARE_API_TOKEN',
+              'https://',
+          ):
+              assert forbidden not in encoded
+          PY
+      - name: Compile accepted Python scope
+        run: python -m compileall -q src tests scripts
