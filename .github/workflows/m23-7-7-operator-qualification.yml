@@ -31,13 +31,27 @@ jobs:
           cache: pip
       - name: Install package
         run: python -m pip install -e '.[dev]'
-      - name: Quality gates
+      - name: Ruff
         run: |
           ruff check \
             src/knowledge_engine/m23_7_7_operator_qualification.py \
             scripts/m23_7_7_operator_qualification.py \
             tests/test_m23_7_7_operator_qualification.py
-          pytest -q tests/test_m23_7_7_operator_qualification.py
+      - name: Operator qualification tests
+        run: |
+          set +e
+          pytest -q tests/test_m23_7_7_operator_qualification.py \
+            > /tmp/m23-7-7-pytest.log 2>&1
+          status=$?
+          cat /tmp/m23-7-7-pytest.log
+          exit "$status"
+      - name: Upload qualification failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-7-7-pytest-diagnostics
+          path: /tmp/m23-7-7-pytest.log
+          retention-days: 7
       - name: Cold-start deterministic replay
         run: |
           python scripts/m23_7_7_operator_qualification.py \
