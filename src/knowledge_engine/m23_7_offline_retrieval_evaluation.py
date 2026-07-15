@@ -28,12 +28,17 @@ def _ranked(case: Mapping[str, Any], *, candidate: bool) -> list[dict[str, Any]]
     relevant_rank = 1 if candidate or index % 4 else 2
     rows = []
     for rank in range(1, 6):
-        section_id = relevant if rank == relevant_rank else f"distractor-{index:02d}-{rank}"
+        section_id = (
+            relevant if rank == relevant_rank else f"distractor-{index:02d}-{rank}"
+        )
         rows.append(
             {
                 "section_id": section_id,
                 "rank": rank,
-                "score": round(1.0 - (rank * 0.1) + (0.01 if candidate else 0.0), 6),
+                "score": round(
+                    1.0 - (rank * 0.1) + (0.01 if candidate else 0.0),
+                    6,
+                ),
                 "provenance_present": True,
                 "acl_allowed": True,
             }
@@ -84,11 +89,17 @@ def _metrics(cases: Sequence[Mapping[str, Any]], lane: str) -> dict[str, float]:
     for case in answerable:
         expected = set(case["expected_relevant_ids"])
         ranked = case[lane]
-        hit_ranks = [row["rank"] for row in ranked if row["section_id"] in expected]
+        hit_ranks = [
+            row["rank"] for row in ranked if row["section_id"] in expected
+        ]
         recalls.append(1.0 if any(rank <= 5 for rank in hit_ranks) else 0.0)
         first = min(hit_ranks) if hit_ranks else None
-        reciprocals.append(0.0 if first is None or first > 10 else 1.0 / first)
-        ndcgs.append(0.0 if first is None or first > 10 else 1.0 / math.log2(first + 1))
+        reciprocals.append(
+            0.0 if first is None or first > 10 else 1.0 / first
+        )
+        ndcgs.append(
+            0.0 if first is None or first > 10 else 1.0 / math.log2(first + 1)
+        )
         provenance.append(
             1.0
             if ranked and all(row["provenance_present"] is True for row in ranked)
@@ -97,7 +108,9 @@ def _metrics(cases: Sequence[Mapping[str, Any]], lane: str) -> dict[str, float]:
     acl_cases = [case for case in cases if not case["acl_allowed"]]
     no_answer_cases = [case for case in cases if case["no_answer_expected"]]
     acl_leakage = sum(1 for case in acl_cases if case[lane]) / len(acl_cases)
-    no_answer_fp = sum(1 for case in no_answer_cases if case[lane]) / len(no_answer_cases)
+    no_answer_fp = sum(
+        1 for case in no_answer_cases if case[lane]
+    ) / len(no_answer_cases)
     return {
         "recall_at_5": round(sum(recalls) / len(recalls), 6),
         "mrr_at_10": round(sum(reciprocals) / len(reciprocals), 6),
@@ -125,16 +138,18 @@ def validate_evidence(payload: Mapping[str, Any]) -> dict[str, Any]:
     if [case.get("case_id") for case in cases] != expected_ids:
         raise IntegrityError("M23.7.2-105 case identity mismatch")
     for case in cases:
-        if case["no_answer_expected"] or not case["acl_allowed"]:
-            if case["lexical"] or case["candidate"]:
-                raise IntegrityError("M23.7.2-106 negative case leaked results")
+        if (
+            case["no_answer_expected"] or not case["acl_allowed"]
+        ) and (case["lexical"] or case["candidate"]):
+            raise IntegrityError("M23.7.2-106 negative case leaked results")
         for lane in ("lexical", "candidate"):
             ranks = [row["rank"] for row in case[lane]]
             if ranks != list(range(1, len(ranks) + 1)):
                 raise IntegrityError("M23.7.2-107 ranking order mismatch")
             if any(row["acl_allowed"] is not True for row in case[lane]):
                 raise IntegrityError("M23.7.2-108 ACL violation")
-    if any(root.get(key) != 0 for key in ("provider_calls", "network_calls", "live_qdrant_calls")):
+    call_keys = ("provider_calls", "network_calls", "live_qdrant_calls")
+    if any(root.get(key) != 0 for key in call_keys):
         raise IntegrityError("M23.7.2-109 external call detected")
     if root.get("production_authority") is not False:
         raise IntegrityError("M23.7.2-110 production authority claimed")
