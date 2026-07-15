@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -10,6 +12,50 @@ from knowledge_engine.publisher import publish_release
 from knowledge_engine.storage import FileObjectStore
 
 ROOT = Path(__file__).resolve().parents[1]
+_M23_INGESTION_TEST_MODULE = "test_m23_6_2_qdrant_ingestion_manifest"
+_FIXED_ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
+
+
+@pytest.fixture(autouse=True)
+def freeze_synthetic_m23_ingestion_zip_headers(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep the M23.6.2 synthetic evidence digest independent of wall-clock time.
+
+    The production ingestion contract hashes immutable evidence bytes. Its synthetic
+    test fixture created ZIP entries from bare names, which lets ``zipfile`` inject
+    the current timestamp into each member header. Two otherwise identical fixture
+    builds could therefore differ when they crossed ZIP's two-second time boundary.
+    This patch is restricted to that test module and does not alter runtime code.
+    """
+
+    module = request.node.module
+    if module is None or module.__name__.rsplit(".", 1)[-1] != _M23_INGESTION_TEST_MODULE:
+        return
+
+    original = zipfile.ZipFile.writestr
+
+    def deterministic_writestr(
+        archive: zipfile.ZipFile,
+        zinfo_or_arcname: str | zipfile.ZipInfo,
+        data: str | bytes,
+        compress_type: int | None = None,
+        compresslevel: int | None = None,
+    ) -> Any:
+        if isinstance(zinfo_or_arcname, str):
+            info = zipfile.ZipInfo(zinfo_or_arcname, date_time=_FIXED_ZIP_TIMESTAMP)
+            info.compress_type = archive.compression if compress_type is None else compress_type
+            zinfo_or_arcname = info
+        return original(
+            archive,
+            zinfo_or_arcname,
+            data,
+            compress_type=compress_type,
+            compresslevel=compresslevel,
+        )
+
+    monkeypatch.setattr(zipfile.ZipFile, "writestr", deterministic_writestr)
 
 
 @pytest.fixture
