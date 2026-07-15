@@ -1,0 +1,77 @@
+{
+  "authority": {
+    "cloudflare_call": false,
+    "credential_rotation": false,
+    "graph_neural_retrieval": false,
+    "permanent_ledger_mutation": false,
+    "physical_delete": false,
+    "pointer_mutation": false,
+    "production_authority": false,
+    "production_traffic_change": false,
+    "qdrant_read": false,
+    "qdrant_write": false,
+    "r2_mutation": false,
+    "source_mutation": false
+  },
+  "contract_sha256": "756c90a8d8cafa84796ed2c5adda6dd28a5e3efbe0368ae955ffcf2dd70d7bad",
+  "identities": {
+    "authority_contract_sha256": "c28a5d3503b24358c240283cfa1b4629c3e0bfeb6c854f72725481ff4c4a1941",
+    "engine_entry_sha": "913c8cbb19dd6c7b89b753aecd61afd943e373fc",
+    "evidence_zip_sha256": "1b71c79ed3fddc24abfb510709a08e6a1ad0a3806df23287d2d14a70994f7272",
+    "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+    "semantic_artifact_id": "semantic-35314911af0a514c9f0d64b7cfb1d6d0d2ec88cfa50317fa614e92f21f185f0d",
+    "source_sha": "a6ba738d910d01d2ae99b1968f0831989934c549"
+  },
+  "milestone": "M23.6.2",
+  "outputs": {
+    "dry_run_receipt": "dry-run-receipt.json",
+    "ingestion_manifest": "ingestion-manifest.json",
+    "qdrant_points": "qdrant-points.json"
+  },
+  "qdrant": {
+    "blocked_collection": "llamaindex_demo_hybrid",
+    "collection": "llm_wiki_m23_pilot_bge_m3_1024",
+    "dimension": 1024,
+    "distance": "Cosine",
+    "payload_fields": [
+      "payload_schema_version",
+      "section_id",
+      "article_id",
+      "document_id",
+      "concept_id",
+      "source_path",
+      "source_sha256",
+      "text_sha256",
+      "audience",
+      "source_membership",
+      "release_id",
+      "release_manifest_sha256",
+      "graph_node_id",
+      "embedding_provider",
+      "embedding_model",
+      "vector_dimension",
+      "vector_name",
+      "canonical_knowledge",
+      "candidate_release_eligible",
+      "production_authority"
+    ],
+    "point_count": 107,
+    "vector_name": "default",
+    "write_authorized": false
+  },
+  "real_evidence_boundary": {
+    "committed_to_repository": false,
+    "github_actions_mount_available": false,
+    "real_dry_run_required_before_m23_6_3": true,
+    "synthetic_ci_can_replace_real_dry_run": false
+  },
+  "schema_version": "knowledge-engine-m23-qdrant-ingestion-contract/v1",
+  "source_membership": {
+    "candidate_release_eligible": false,
+    "canonical_knowledge": false,
+    "membership": "evaluation-only-pending-proposal",
+    "point_count": 107,
+    "production_authority": false,
+    "rebuild_after_adoption": true
+  }
+}
