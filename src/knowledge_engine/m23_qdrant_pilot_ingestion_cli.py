@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .m23_qdrant_pilot_ingestion import build_dry_run, write_dry_run
+from .m23_qdrant_pilot_ingestion_real import build_dry_run, write_dry_run
 
 
 def build_parser() -> argparse.ArgumentParser:
