@@ -33,13 +33,15 @@ jobs:
           cache: pip
       - name: Install package
         run: python -m pip install -e '.[dev]'
-      - name: Python quality and adversarial tests
+      - name: Ruff accepted scope
         run: |
           ruff check \
             src/knowledge_engine/m23_7_r3_bounded_live_reobservation.py \
             scripts/m23_7_r3_bounded_live_reobservation.py \
             scripts/m23_7_r3_worker_config.py \
             tests/test_m23_7_r3_bounded_live_reobservation.py
+      - name: Python adversarial tests
+        run: |
           pytest -q \
             tests/test_m23_7_r1_semantic_alignment.py \
             tests/test_m23_7_r2_latency_path.py \
