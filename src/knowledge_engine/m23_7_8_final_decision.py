@@ -292,36 +292,98 @@ def validate_decision_packet(payload: Mapping[str, Any]) -> dict[str, Any]:
     _require(root["entry_engine_sha"] == ENTRY_ENGINE_SHA, 105, "entry SHA drifted")
 
     options = _mapping(root["decision_options"], "decision options")
-    _require(set(options) == {"promote", "hold", "repair", "reject"}, 106, "option set drifted")
-    selected = [name for name, item in options.items() if _mapping(item, name)["selected"]]
+    expected_options = {"promote", "hold", "repair", "reject"}
+    _require(set(options) == expected_options, 106, "option set drifted")
+    selected = [
+        name
+        for name, item in options.items()
+        if _mapping(item, name)["selected"]
+    ]
     _require(selected == ["repair"], 107, "exactly repair must be selected")
-    _require(options["promote"]["available"] is False, 108, "promote became available")
+    _require(
+        options["promote"]["available"] is False,
+        108,
+        "promote became available",
+    )
 
-    chain = [dict(_mapping(row, "chain row")) for row in _sequence(root["evidence_chain"], "chain")]
+    chain = [
+        dict(_mapping(row, "chain row"))
+        for row in _sequence(root["evidence_chain"], "chain")
+    ]
     _require(chain == expected["evidence_chain"], 109, "evidence chain drifted")
 
     blocking = _mapping(root["blocking_evidence"], "blocking evidence")
-    _require(tuple(blocking["carry_forward_blockers"]) == BLOCKERS, 110, "blockers changed")
+    _require(
+        tuple(blocking["carry_forward_blockers"]) == BLOCKERS,
+        110,
+        "blockers changed",
+    )
     latency = _mapping(blocking["latency"], "latency evidence")
-    _require(latency == expected["blocking_evidence"]["latency"], 111, "latency evidence drifted")
+    _require(
+        latency == expected["blocking_evidence"]["latency"],
+        111,
+        "latency evidence drifted",
+    )
     _require(latency["budget_changed"] is False, 112, "latency budget was inflated")
     retrieval = _mapping(blocking["retrieval_quality"], "retrieval evidence")
-    _require(retrieval == expected["blocking_evidence"]["retrieval_quality"], 113, "retrieval evidence drifted")
+    _require(
+        retrieval == expected["blocking_evidence"]["retrieval_quality"],
+        113,
+        "retrieval evidence drifted",
+    )
 
-    workstreams = [dict(_mapping(row, "workstream")) for row in _sequence(root["repair_workstreams"], "workstreams")]
-    _require(workstreams == expected["repair_workstreams"], 114, "repair workstreams drifted")
-    _require([row["id"] for row in workstreams] == ["R1", "R2", "R3"], 115, "repair order drifted")
+    workstreams = [
+        dict(_mapping(row, "workstream"))
+        for row in _sequence(root["repair_workstreams"], "workstreams")
+    ]
+    _require(
+        workstreams == expected["repair_workstreams"],
+        114,
+        "repair workstreams drifted",
+    )
+    _require(
+        [row["id"] for row in workstreams] == ["R1", "R2", "R3"],
+        115,
+        "repair order drifted",
+    )
 
-    preconditions = _mapping(root["future_promotion_preconditions"], "preconditions")
-    _require(preconditions == expected["future_promotion_preconditions"], 116, "promotion preconditions drifted")
+    preconditions = _mapping(
+        root["future_promotion_preconditions"],
+        "preconditions",
+    )
+    _require(
+        preconditions == expected["future_promotion_preconditions"],
+        116,
+        "promotion preconditions drifted",
+    )
     _require(all(preconditions.values()), 117, "promotion prerequisite was removed")
 
-    _require(root["source_pr_19"] == expected["source_pr_19"], 118, "Source PR #19 drifted")
-    _require(root["production"] == expected["production"], 119, "production authority drifted")
+    _require(
+        root["source_pr_19"] == expected["source_pr_19"],
+        118,
+        "Source PR #19 drifted",
+    )
+    _require(
+        root["production"] == expected["production"],
+        119,
+        "production authority drifted",
+    )
     protected = _mapping(root["protected_mutations"], "protected mutations")
-    _require(set(protected) == set(PROTECTED_MUTATIONS), 120, "protected mutation set drifted")
-    _require(all(protected[key] is False for key in PROTECTED_MUTATIONS), 121, "protected mutation dispatched")
-    _require(canonical_sha256(root) == DECISION_PACKET_SHA256, 122, "packet digest drifted")
+    _require(
+        set(protected) == set(PROTECTED_MUTATIONS),
+        120,
+        "protected mutation set drifted",
+    )
+    _require(
+        all(protected[key] is False for key in PROTECTED_MUTATIONS),
+        121,
+        "protected mutation dispatched",
+    )
+    _require(
+        canonical_sha256(root) == DECISION_PACKET_SHA256,
+        122,
+        "packet digest drifted",
+    )
     return root
 
 
@@ -344,7 +406,11 @@ def build_repair_handoff(payload: Mapping[str, Any]) -> dict[str, Any]:
             "production_mutation_dispatched": False,
         },
     }
-    _require(canonical_sha256(handoff) == REPAIR_HANDOFF_SHA256, 123, "handoff digest drifted")
+    _require(
+        canonical_sha256(handoff) == REPAIR_HANDOFF_SHA256,
+        123,
+        "handoff digest drifted",
+    )
     return handoff
 
 
@@ -366,5 +432,9 @@ def build_decision_report(payload: Mapping[str, Any]) -> dict[str, Any]:
         "parent_issue_closure_authorized_after_reconciliation": True,
         "protected_mutations_dispatched": False,
     }
-    _require(canonical_sha256(report) == REPORT_SHA256, 124, "report digest drifted")
+    _require(
+        canonical_sha256(report) == REPORT_SHA256,
+        124,
+        "report digest drifted",
+    )
     return report
