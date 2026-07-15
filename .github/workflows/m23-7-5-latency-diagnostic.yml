@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - "src/knowledge_engine/m23_7_5_latency_diagnostic.py"
+      - "src/knowledge_engine/m23_7_5_qdrant_strict_mode.py"
       - "scripts/m23_7_5_latency_diagnostic.py"
+      - "tests/test_m23_7_5_qdrant_strict_mode.py"
       - "tests/test_m23_7_5_latency_diagnostic.py"
       - ".github/workflows/m23-7-5-latency-diagnostic.yml"
   workflow_dispatch:
@@ -32,7 +34,9 @@ jobs:
         run: |
           ruff check \
             src/knowledge_engine/m23_7_5_latency_diagnostic.py \
+            src/knowledge_engine/m23_7_5_qdrant_strict_mode.py \
             scripts/m23_7_5_latency_diagnostic.py \
+            tests/test_m23_7_5_qdrant_strict_mode.py \
             tests/test_m23_7_5_latency_diagnostic.py
           pytest -q \
             tests/test_m23_7_5_live_shadow.py \
