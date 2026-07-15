@@ -1,0 +1,147 @@
+name: M23.6.7 Acceptance and Closure
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_6_acceptance.py"
+      - "tests/test_m23_6_7_acceptance.py"
+      - "scripts/m23_6_7_acceptance.py"
+      - "docs/architecture/m23-6-7-acceptance-closure.md"
+      - "docs/architecture/m23-6-7-acceptance-reconciliation.md"
+      - ".github/workflows/m23-6-7-acceptance-closure.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  m23-6-acceptance:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            packages/m23-pilot-ingestion-worker/package-lock.json
+            packages/m23-candidate-runtime/package-lock.json
+            packages/graphology-adapter/package-lock.json
+            packages/graph-explorer/package-lock.json
+      - name: Install exact Python dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: M23.6 acceptance quality gates
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_6_acceptance.py \
+            tests/test_m23_6_7_acceptance.py \
+            scripts/m23_6_7_acceptance.py
+          pytest -q tests/test_m23_6_*.py
+      - name: Deterministic closure report replay
+        run: |
+          mkdir -p .artifacts/m23
+          python scripts/m23_6_7_acceptance.py \
+            --output .artifacts/m23/m23-6-7-acceptance-a.json
+          python scripts/m23_6_7_acceptance.py \
+            --output .artifacts/m23/m23-6-7-acceptance-b.json
+          cmp \
+            .artifacts/m23/m23-6-7-acceptance-a.json \
+            .artifacts/m23/m23-6-7-acceptance-b.json
+      - name: Replay immutable M23.6.6 candidate release
+        run: |
+          python scripts/m23_6_6_candidate_release_acceptance.py \
+            --output-dir .artifacts/m23/m23-6-6-a
+          python scripts/m23_6_6_candidate_release_acceptance.py \
+            --output-dir .artifacts/m23/m23-6-6-b
+          diff -ru \
+            .artifacts/m23/m23-6-6-a \
+            .artifacts/m23/m23-6-6-b
+      - name: Verify real Qdrant receipt and dormant authority contracts
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          receipt = json.loads(
+              Path("pilot/m23/m23-6-3-first-upsert-receipt.json").read_text()
+          )
+          worker = json.loads(
+              Path("pilot/m23/m23-6-4-worker-queue-contract.json").read_text()
+          )
+          runtime = json.loads(
+              Path("pilot/m23/m23-6-5-candidate-runtime-contract.json").read_text()
+          )
+          release = json.loads(
+              Path("pilot/m23/m23-6-6-candidate-release-contract.json").read_text()
+          )
+          assert receipt["status"] == "pass"
+          assert receipt["postflight"]["points_count"] == 107
+          assert receipt["readback"]["all_expected_ids_present"] is True
+          assert receipt["readback"]["all_payloads_and_vectors_match"] is True
+          assert receipt["production_authority"] is False
+          assert worker["worker"]["deployment_authorized"] is False
+          assert all(value is False for value in worker["authority"].values())
+          assert runtime["runtime"]["deployment_authorized"] is False
+          assert runtime["runtime"]["runtime_enabled_default"] is False
+          assert runtime["shadow"]["lexical_output_authoritative"] is True
+          assert all(value is False for value in runtime["authority"].values())
+          assert release["explorer"]["feature_flag_default"] is False
+          assert release["explorer"]["public_route_allowed"] is False
+          assert all(value is False for value in release["authority"].values())
+          PY
+      - name: Install and check Worker packages
+        run: |
+          npm install --prefix packages/m23-pilot-ingestion-worker \
+            --ignore-scripts --no-audit --no-fund
+          npm run check --prefix packages/m23-pilot-ingestion-worker
+          npm install --prefix packages/m23-candidate-runtime \
+            --ignore-scripts --no-audit --no-fund
+          npm run check --prefix packages/m23-candidate-runtime
+      - name: Wrangler dry-run validation only
+        run: |
+          (cd packages/m23-pilot-ingestion-worker && \
+            npx wrangler deploy --dry-run --outdir .wrangler-dry-run)
+          (cd packages/m23-candidate-runtime && \
+            npx wrangler deploy --dry-run --outdir .wrangler-dry-run)
+      - name: Verify Graphology and complete Explorer regressions
+        run: |
+          npm ci --prefix packages/graphology-adapter
+          npm ci --prefix packages/graph-explorer
+          npm run check --prefix packages/graphology-adapter
+          npm run check --prefix packages/graph-explorer
+          npm run performance:fixtures --prefix packages/graph-explorer
+          npm run acceptance:scan --prefix packages/graph-explorer
+      - name: Runtime dependency audits
+        run: |
+          npm audit --prefix packages/graphology-adapter --omit=dev --audit-level=high
+          npm audit --prefix packages/graph-explorer --omit=dev --audit-level=high
+      - name: Locked rollback and no-mutation guard
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m23_6_acceptance import (
+              build_m23_6_acceptance_report,
+              canonical_acceptance_evidence,
+          )
+
+          report = build_m23_6_acceptance_report(canonical_acceptance_evidence())
+          assert report["status"] == "pass"
+          assert report["rollback"]["mode"] == "lexical-only"
+          assert report["rollback"]["candidate_dependency_required"] is False
+          assert report["rollback"]["immediate"] is True
+          assert report["production_authority"] is False
+          assert report["protected_mutations_dispatched"] is False
+          PY
+      - name: Compile accepted scope
+        run: |
+          python -m compileall -q src tests scripts
+          npm run build --prefix packages/graphology-adapter
+          npm run build --prefix packages/graph-explorer
