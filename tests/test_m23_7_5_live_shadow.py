@@ -117,6 +117,7 @@ def test_canonical_live_observation_passes_and_is_privacy_safe():
     assert report["metrics"]["output_influence_rate"] == 0.0
     assert report["raw_queries_persisted"] is False
     assert report["raw_answers_persisted"] is False
+    assert report["service_urls_persisted"] is False
     assert report["candidate_outputs_served"] is False
     assert report["candidate_outputs_discarded"] is True
     assert report["production_response_authority"] is False
@@ -127,7 +128,7 @@ def test_canonical_live_observation_passes_and_is_privacy_safe():
     assert "query_text" not in repr(report)
     assert "answer_text" not in repr(report)
     assert "api_key" not in repr(report)
-    assert "service_url" not in repr(report)
+    assert "https://" not in repr(report)
 
 
 def test_report_is_deterministic_for_same_live_receipts():
