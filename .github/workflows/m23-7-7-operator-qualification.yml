@@ -1,0 +1,116 @@
+name: M23.7.7 Operator Qualification
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_7_operator_qualification.py"
+      - "scripts/m23_7_7_operator_qualification.py"
+      - "tests/test_m23_7_7_operator_qualification.py"
+      - "pilot/m23/m23-7-7-operator-challenge.json"
+      - "pilot/m23/m23-7-7-operator-closeout.json"
+      - "docs/architecture/m23-7-7-operator-qualification.md"
+      - ".github/workflows/m23-7-7-operator-qualification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operator-qualification:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_7_7_operator_qualification.py \
+            scripts/m23_7_7_operator_qualification.py \
+            tests/test_m23_7_7_operator_qualification.py
+      - name: Operator qualification tests
+        run: |
+          set +e
+          pytest -q tests/test_m23_7_7_operator_qualification.py \
+            > /tmp/m23-7-7-pytest.log 2>&1
+          status=$?
+          cat /tmp/m23-7-7-pytest.log
+          exit "$status"
+      - name: Upload qualification failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-7-7-pytest-diagnostics
+          path: /tmp/m23-7-7-pytest.log
+          retention-days: 7
+      - name: Cold-start deterministic replay
+        run: |
+          python scripts/m23_7_7_operator_qualification.py \
+            --output /tmp/m23-7-7-closeout-a.json \
+            --report-output /tmp/m23-7-7-report-a.json
+          python scripts/m23_7_7_operator_qualification.py \
+            --output /tmp/m23-7-7-closeout-b.json \
+            --report-output /tmp/m23-7-7-report-b.json
+          cmp /tmp/m23-7-7-closeout-a.json /tmp/m23-7-7-closeout-b.json
+          cmp /tmp/m23-7-7-report-a.json /tmp/m23-7-7-report-b.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          closeout = json.loads(Path('/tmp/m23-7-7-closeout-a.json').read_text())
+          report = json.loads(Path('/tmp/m23-7-7-report-a.json').read_text())
+          assert report['status'] == 'qualified_with_blockers'
+          assert report['operator_qualified'] is True
+          assert report['score_percent'] == 100
+          assert report['promotion_eligibility_granted'] is False
+          assert report['production_retrieval'] == 'lexical'
+          assert report['graph_explorer_exposure'] == 'internal-only'
+          assert closeout['execution']['prior_chat_context_used'] is False
+          assert closeout['execution']['network_used'] is False
+          assert closeout['execution']['qdrant_read_used'] is False
+          assert closeout['authority']['production_mutation_dispatched'] is False
+          PY
+      - name: Challenge privacy and authority scan
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          challenge = json.loads(
+              Path('pilot/m23/m23-7-7-operator-challenge.json').read_text()
+          )
+          assert challenge['rules']['prior_chat_context_allowed'] is False
+          assert challenge['rules']['expected_answers_in_challenge_allowed'] is False
+          assert challenge['rules']['network_allowed'] is False
+          for task in challenge['tasks']:
+              assert set(task) == {
+                  'task_id', 'procedure', 'evidence_paths', 'required_output_fields'
+              }
+          source = Path('src/knowledge_engine/m23_7_7_operator_qualification.py').read_text()
+          assert 'production_mutation_dispatched": True' not in source
+          assert 'promotion_eligibility_granted": True' not in source
+          PY
+      - name: Compare committed closeout when present
+        run: |
+          if test -f pilot/m23/m23-7-7-operator-closeout.json; then
+            cmp /tmp/m23-7-7-closeout-a.json pilot/m23/m23-7-7-operator-closeout.json
+          fi
+      - name: Upload bounded closeout evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-7-7-operator-closeout
+          path: |
+            /tmp/m23-7-7-closeout-a.json
+            /tmp/m23-7-7-report-a.json
+          retention-days: 7
+      - name: Compile accepted scope
+        run: python -m compileall -q src tests scripts
