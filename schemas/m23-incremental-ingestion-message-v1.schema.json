@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.invalid/schemas/m23-incremental-ingestion-message-v1.schema.json",
+  "title": "M23 incremental ingestion message",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "message_id",
+    "collection",
+    "release_id",
+    "source_commit_sha",
+    "emitted_at",
+    "estimated_usd",
+    "sections",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-engine-m23-incremental-ingestion-message/v1"
+    },
+    "message_id": {
+      "type": "string",
+      "pattern": "^m23inc-[0-9a-f]{24}$"
+    },
+    "collection": {
+      "const": "llm_wiki_m23_pilot_bge_m3_1024"
+    },
+    "release_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "source_commit_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "emitted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "estimated_usd": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 0.5
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 25,
+      "items": {
+        "$ref": "#/$defs/section"
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_knowledge",
+        "candidate_release_eligible",
+        "production_authority",
+        "delete_authorized"
+      ],
+      "properties": {
+        "canonical_knowledge": { "const": false },
+        "candidate_release_eligible": { "const": false },
+        "production_authority": { "const": false },
+        "delete_authorized": { "const": false }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section_id",
+        "point_id",
+        "expected_previous_text_sha256",
+        "text",
+        "text_sha256",
+        "payload"
+      ],
+      "properties": {
+        "section_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "point_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expected_previous_text_sha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50000
+        },
+        "text_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "payload_schema_version",
+            "section_id",
+            "source_sha256",
+            "text_sha256",
+            "source_membership",
+            "canonical_knowledge",
+            "candidate_release_eligible",
+            "production_authority"
+          ],
+          "properties": {
+            "section_id": { "type": "string" },
+            "source_sha256": { "$ref": "#/$defs/sha256" },
+            "text_sha256": { "$ref": "#/$defs/sha256" },
+            "source_membership": {
+              "const": "evaluation-only-pending-proposal"
+            },
+            "canonical_knowledge": { "const": false },
+            "candidate_release_eligible": { "const": false },
+            "production_authority": { "const": false }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,138 @@
+name: M23.6.4 Worker Queue Incremental Ingestion
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_incremental_ingestion.py"
+      - "tests/test_m23_6_4_incremental_ingestion.py"
+      - "scripts/m23_6_4_incremental_ingestion_acceptance.py"
+      - "pilot/m23/m23-6-4-worker-queue-contract.json"
+      - "schemas/m23-incremental-ingestion-message-v1.schema.json"
+      - "schemas/m23-incremental-ingestion-receipt-v1.schema.json"
+      - "packages/m23-pilot-ingestion-worker/**"
+      - "docs/architecture/m23-6-4-worker-queue-incremental-ingestion.md"
+      - ".github/workflows/m23-6-4-worker-queue-incremental-ingestion.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  incremental-ingestion:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Python package
+        run: python -m pip install -e '.[dev]'
+      - name: Python quality gates
+        run: >-
+          ruff check
+          src/knowledge_engine/m23_incremental_ingestion.py
+          tests/test_m23_6_4_incremental_ingestion.py
+          scripts/m23_6_4_incremental_ingestion_acceptance.py
+      - name: Incremental policy tests
+        run: pytest -q tests/test_m23_6_4_incremental_ingestion.py
+      - name: Deterministic acceptance replay
+        run: |
+          mkdir -p .artifacts/m23
+          set +e
+          python scripts/m23_6_4_incremental_ingestion_acceptance.py \
+            --output .artifacts/m23/m23-6-4-acceptance-a.json \
+            > .artifacts/m23/acceptance.log 2>&1
+          status=$?
+          cat .artifacts/m23/acceptance.log
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+          python scripts/m23_6_4_incremental_ingestion_acceptance.py \
+            --output .artifacts/m23/m23-6-4-acceptance-b.json \
+            >> .artifacts/m23/acceptance.log 2>&1
+          cmp \
+            .artifacts/m23/m23-6-4-acceptance-a.json \
+            .artifacts/m23/m23-6-4-acceptance-b.json
+      - name: Upload acceptance failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-6-4-acceptance-failure
+          path: .artifacts/m23
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Install pinned Worker toolchain
+        working-directory: packages/m23-pilot-ingestion-worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Strict Worker typecheck
+        working-directory: packages/m23-pilot-ingestion-worker
+        run: |
+          mkdir -p ../../.artifacts/m23
+          set +e
+          npm run check > ../../.artifacts/m23/typecheck.log 2>&1
+          status=$?
+          cat ../../.artifacts/m23/typecheck.log
+          exit "$status"
+      - name: Upload typecheck failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-6-4-typecheck-failure
+          path: .artifacts/m23/typecheck.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Wrangler configuration validation
+        working-directory: packages/m23-pilot-ingestion-worker
+        run: npx wrangler deploy --dry-run --outdir .wrangler-dry-run
+      - name: Deployment and authority guard
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          contract = json.loads(
+              Path("pilot/m23/m23-6-4-worker-queue-contract.json").read_text()
+          )
+          wrangler = json.loads(
+              Path("packages/m23-pilot-ingestion-worker/wrangler.jsonc").read_text()
+          )
+          assert contract["worker"]["deployment_authorized"] is False
+          assert contract["worker"]["execution_enabled_default"] is False
+          assert all(value is False for value in contract["authority"].values())
+          assert wrangler["workers_dev"] is False
+          assert wrangler["preview_urls"] is False
+          assert wrangler["vars"]["EXECUTION_ENABLED"] == "false"
+          assert wrangler["queues"]["consumers"][0]["max_batch_size"] == 4
+          assert wrangler["queues"]["consumers"][0]["max_retries"] == 2
+          assert wrangler["queues"]["consumers"][0]["max_concurrency"] == 2
+          PY
+      - name: No secret or forbidden mutation surface
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path("packages/m23-pilot-ingestion-worker/src/index.ts"),
+              Path("packages/m23-pilot-ingestion-worker/wrangler.jsonc"),
+              Path("pilot/m23/m23-6-4-worker-queue-contract.json"),
+          ]
+          source = "\n".join(path.read_text() for path in paths)
+          forbidden = [
+              "CLOUDFLARE_API_TOKEN=",
+              "QDRANT_API_KEY=",
+              "sk-",
+              '"method": "DELETE"',
+              "llamaindex_demo_hybrid",
+              '"EXECUTION_ENABLED": "true"',
+              '"deployment_authorized": true',
+              '"production_authority": true',
+              '"canonical_knowledge": true',
+          ]
+          found = [token for token in forbidden if token in source]
+          if found:
+              raise SystemExit(f"forbidden mutation or secret surface: {found}")
+          PY

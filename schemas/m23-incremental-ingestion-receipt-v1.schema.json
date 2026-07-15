@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.invalid/schemas/m23-incremental-ingestion-receipt-v1.schema.json",
+  "title": "M23 incremental ingestion receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "milestone",
+    "status",
+    "collection",
+    "message_count",
+    "section_count",
+    "outcomes",
+    "estimated_usd",
+    "authority",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-engine-m23-incremental-ingestion-receipt/v1"
+    },
+    "milestone": { "const": "M23.6.4" },
+    "status": {
+      "enum": ["pass", "rejected", "retry-required"]
+    },
+    "collection": {
+      "const": "llm_wiki_m23_pilot_bge_m3_1024"
+    },
+    "message_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "section_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 500
+    },
+    "estimated_usd": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 0.5
+    },
+    "receipt_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "outcomes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_id",
+          "section_id",
+          "point_id",
+          "action",
+          "reason"
+        ],
+        "properties": {
+          "message_id": { "type": "string" },
+          "section_id": { "type": "string" },
+          "point_id": { "type": "string" },
+          "action": {
+            "enum": [
+              "insert",
+              "skip-duplicate",
+              "replace",
+              "reject-stale",
+              "reject-invalid",
+              "retry-transient"
+            ]
+          },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deployment_dispatched",
+        "queue_creation_dispatched",
+        "cloudflare_inference_dispatched",
+        "qdrant_write_dispatched",
+        "source_mutation_dispatched",
+        "r2_mutation_dispatched",
+        "pointer_mutation_dispatched",
+        "production_mutation_dispatched",
+        "permanent_ledger_mutation_dispatched",
+        "delete_dispatched"
+      ],
+      "properties": {
+        "deployment_dispatched": { "const": false },
+        "queue_creation_dispatched": { "const": false },
+        "cloudflare_inference_dispatched": { "const": false },
+        "qdrant_write_dispatched": { "const": false },
+        "source_mutation_dispatched": { "const": false },
+        "r2_mutation_dispatched": { "const": false },
+        "pointer_mutation_dispatched": { "const": false },
+        "production_mutation_dispatched": { "const": false },
+        "permanent_ledger_mutation_dispatched": { "const": false },
+        "delete_dispatched": { "const": false }
+      }
+    }
+  }
+}

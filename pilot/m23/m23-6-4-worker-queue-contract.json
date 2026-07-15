@@ -1,0 +1,100 @@
+{
+  "schema_version": "knowledge-engine-m23-worker-queue-contract/v1",
+  "milestone": "M23.6.4",
+  "entry": {
+    "engine_commit_sha": "baa0fb9bf89bb216dbc34d3fb633b6eee706f029",
+    "m23_6_3_receipt_sha256": "0e89d9971e6fd10505b5e36113e079629c444c371d01ac6d909d717270c7c21b",
+    "qdrant_collection": "llm_wiki_m23_pilot_bge_m3_1024",
+    "qdrant_point_count": 107,
+    "source_pr_19_state": "draft-open-unmerged"
+  },
+  "worker": {
+    "name": "llm-wiki-m23-pilot-embed-consumer",
+    "package": "packages/m23-pilot-ingestion-worker",
+    "compatibility_date": "2026-07-15",
+    "deployment_authorized": false,
+    "execution_enabled_default": false,
+    "public_http_route_allowed": false,
+    "structured_logging": true
+  },
+  "queue": {
+    "name": "llm-wiki-m23-pilot-embed",
+    "dead_letter_queue": "llm-wiki-m23-pilot-embed-dlq",
+    "max_batch_messages": 4,
+    "max_batch_timeout_seconds": 10,
+    "max_concurrency": 2,
+    "max_delivery_attempts": 3,
+    "explicit_per_message_ack": true,
+    "retryable_failures": [
+      "workers-ai-transient",
+      "qdrant-transient",
+      "qdrant-schema-temporarily-unavailable"
+    ],
+    "terminal_failures": [
+      "invalid-message",
+      "wrong-collection",
+      "oversize-message",
+      "budget-exceeded",
+      "stale-event",
+      "authority-violation"
+    ]
+  },
+  "limits": {
+    "max_sections_per_message": 25,
+    "max_sections_per_run": 500,
+    "max_sections_per_day": 2000,
+    "max_estimated_usd_per_run": 0.5,
+    "max_estimated_usd_per_day": 2.0,
+    "price_estimate_required": true
+  },
+  "incremental_policy": {
+    "identity": "deterministic-point-id",
+    "insert": "point-missing-and-expected-previous-text-sha-null",
+    "skip": "existing-text-sha-equals-new-text-sha",
+    "replace": "existing-text-sha-equals-expected-previous-text-sha",
+    "stale_reject": "existing-text-sha-differs-from-both-new-and-expected-previous",
+    "delete_allowed": false,
+    "cross_collection_write_allowed": false,
+    "vector_name": "default",
+    "vector_dimension": 1024,
+    "distance": "Cosine",
+    "embedding_provider": "cloudflare-workers-ai",
+    "embedding_model": "@cf/baai/bge-m3"
+  },
+  "message": {
+    "schema_version": "knowledge-engine-m23-incremental-ingestion-message/v1",
+    "schema_path": "schemas/m23-incremental-ingestion-message-v1.schema.json",
+    "max_sections": 25,
+    "all_payload_authority_flags_false": true
+  },
+  "receipt": {
+    "schema_version": "knowledge-engine-m23-incremental-ingestion-receipt/v1",
+    "schema_path": "schemas/m23-incremental-ingestion-receipt-v1.schema.json",
+    "credential_material_recorded": false,
+    "service_url_recorded": false
+  },
+  "daily_budget_enforcement": {
+    "producer_pre_enqueue_gate_required": true,
+    "consumer_rechecks_batch_run_cap": true,
+    "persistent_budget_ledger_created": false,
+    "reason": "M23.6.4 has no authority to create or mutate a permanent external ledger"
+  },
+  "authority": {
+    "cloudflare_deployment": false,
+    "queue_creation": false,
+    "cloudflare_inference_dispatched": false,
+    "qdrant_write_dispatched": false,
+    "source_mutation": false,
+    "source_pr_19_merge": false,
+    "r2_mutation": false,
+    "pointer_mutation": false,
+    "production_traffic_change": false,
+    "production_retrieval_change": false,
+    "permanent_ledger_mutation": false,
+    "physical_delete": false,
+    "credential_rotation": false,
+    "public_graph_explorer": false,
+    "graph_neural_retrieval": false,
+    "production_mutation_dispatched": false
+  }
+}

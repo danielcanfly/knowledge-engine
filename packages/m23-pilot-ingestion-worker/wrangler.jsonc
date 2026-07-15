@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "llm-wiki-m23-pilot-embed-consumer",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "vars": {
+    "EXECUTION_ENABLED": "false",
+    "QDRANT_COLLECTION": "llm_wiki_m23_pilot_bge_m3_1024",
+    "QDRANT_VECTOR_NAME": "default",
+    "EMBEDDING_MODEL": "@cf/baai/bge-m3",
+    "MAX_SECTIONS_PER_MESSAGE": "25",
+    "MAX_SECTIONS_PER_RUN": "500",
+    "MAX_ESTIMATED_USD_PER_RUN": "0.5"
+  },
+  "queues": {
+    "consumers": [
+      {
+        "queue": "llm-wiki-m23-pilot-embed",
+        "max_batch_size": 4,
+        "max_batch_timeout": 10,
+        "max_retries": 2,
+        "dead_letter_queue": "llm-wiki-m23-pilot-embed-dlq",
+        "max_concurrency": 2
+      }
+    ]
+  }
+}

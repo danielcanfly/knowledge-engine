@@ -1,0 +1,15 @@
+{
+  "name": "@knowledge-engine/m23-pilot-ingestion-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "types": "wrangler types --env-interface CloudflareEnv"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260715.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.110.0"
+  }
+}
