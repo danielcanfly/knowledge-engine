@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 from copy import deepcopy
-from datetime import UTC, datetime
 from uuid import NAMESPACE_URL, uuid5
 
 import pytest
@@ -58,7 +57,7 @@ def message(*sections: dict[str, object], cost: float = 0.01) -> dict[str, objec
     return build_message(
         release_id="m23pilot-test",
         source_commit_sha=SOURCE_COMMIT,
-        emitted_at=datetime(2026, 7, 15, tzinfo=UTC).isoformat(),
+        emitted_at="2026-07-15T00:00:00Z",
         estimated_usd=cost,
         sections=sections,
     )
