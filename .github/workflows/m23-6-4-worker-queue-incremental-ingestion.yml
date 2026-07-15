@@ -70,7 +70,21 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Strict Worker typecheck
         working-directory: packages/m23-pilot-ingestion-worker
-        run: npm run check
+        run: |
+          mkdir -p ../../.artifacts/m23
+          set +e
+          npm run check > ../../.artifacts/m23/typecheck.log 2>&1
+          status=$?
+          cat ../../.artifacts/m23/typecheck.log
+          exit "$status"
+      - name: Upload typecheck failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-6-4-typecheck-failure
+          path: .artifacts/m23/typecheck.log
+          if-no-files-found: warn
+          retention-days: 7
       - name: Wrangler configuration validation
         working-directory: packages/m23-pilot-ingestion-worker
         run: npx wrangler deploy --dry-run --outdir .wrangler-dry-run
