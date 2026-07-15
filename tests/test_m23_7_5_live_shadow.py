@@ -176,9 +176,10 @@ def test_provider_failure_is_classified_but_acceptance_fails_closed():
 
 def test_collection_identity_drift_fails_closed():
     client = FakeClient()
+    original_snapshot = client.collection_snapshot
 
     def bad_snapshot() -> dict:
-        value = client.collection_snapshot()
+        value = original_snapshot()
         value["points_count"] = 106
         return value
 
