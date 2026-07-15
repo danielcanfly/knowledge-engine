@@ -1,0 +1,66 @@
+name: M23.7.1 Acceptance Contract
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_acceptance_contract.py"
+      - "tests/test_m23_7_1_acceptance_contract.py"
+      - "scripts/m23_7_1_acceptance_contract.py"
+      - "docs/architecture/m23-7-1-acceptance-contract.md"
+      - "docs/architecture/m23-7-1-reconciliation.md"
+      - ".github/workflows/m23-7-1-acceptance-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  m23-7-1-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Python package
+        run: python -m pip install -e '.[dev]'
+      - name: Quality gates
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_7_acceptance_contract.py \
+            tests/test_m23_7_1_acceptance_contract.py \
+            scripts/m23_7_1_acceptance_contract.py
+          pytest -q tests/test_m23_7_1_acceptance_contract.py
+      - name: Deterministic contract replay
+        run: |
+          mkdir -p .artifacts/m23
+          python scripts/m23_7_1_acceptance_contract.py \
+            --output .artifacts/m23/m23-7-1-a.json
+          python scripts/m23_7_1_acceptance_contract.py \
+            --output .artifacts/m23/m23-7-1-b.json
+          cmp .artifacts/m23/m23-7-1-a.json .artifacts/m23/m23-7-1-b.json
+      - name: No mutation or premature M23.7.2 guard
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m23_7_acceptance_contract import (
+              build_acceptance_contract_report,
+              canonical_acceptance_contract,
+              validate_acceptance_contract,
+          )
+
+          contract = validate_acceptance_contract(canonical_acceptance_contract())
+          report = build_acceptance_contract_report(canonical_acceptance_contract())
+          assert contract["m23_7_2_gate"]["may_begin"] is False
+          assert contract["evaluation_scope"]["production_retrieval_authority"] == "lexical"
+          assert all(value is False for value in contract["protected_mutations"].values())
+          assert report["production_authority"] is False
+          assert report["protected_mutations_dispatched"] is False
+          PY
+      - name: Compile accepted scope
+        run: python -m compileall -q src tests scripts
