@@ -8,8 +8,6 @@ from typing import Any
 
 from knowledge_engine.m23_7_5_live_shadow import (
     EXPECTED_POINTS,
-    QDRANT_MANIFEST,
-    QDRANT_RELEASE,
     VECTOR_DIMENSION,
     VECTOR_NAME,
 )
@@ -24,10 +22,15 @@ from knowledge_engine.m23_cloudflare_qdrant import CloudflareConfig, QdrantConfi
 
 class DeterministicFixtureClient:
     def __init__(self) -> None:
-        self.samples = [
-            {"id": item["point_id"], "payload": dict(item["payload"])}
-            for item in canonical_fixture_samples()
-        ]
+        self.samples: list[dict[str, Any]] = []
+        for item in canonical_fixture_samples():
+            payload = {
+                **dict(item["payload"]),
+                "vector_name": VECTOR_NAME,
+                "vector_dimension": VECTOR_DIMENSION,
+                "embedding_model": "@cf/baai/bge-m3",
+            }
+            self.samples.append({"id": item["point_id"], "payload": payload})
         self.query_index = 0
 
     def collection_snapshot(self) -> dict[str, Any]:
