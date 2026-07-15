@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m23-candidate-release-v1.schema.json",
+  "title": "M23 candidate release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "milestone",
+    "candidate_release_id",
+    "manifest_sha256",
+    "immutable",
+    "read_only",
+    "production_authority",
+    "candidate_release_eligible",
+    "canonical_knowledge",
+    "source_separation",
+    "artifacts",
+    "semantic",
+    "graph",
+    "authority",
+    "locked_defaults"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m23-candidate-release/v1"},
+    "milestone": {"const": "M23.6.6"},
+    "candidate_release_id": {"type": "string", "pattern": "^m23cand-[0-9a-f]{24}$"},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "immutable": {"const": true},
+    "read_only": {"const": true},
+    "production_authority": {"const": false},
+    "candidate_release_eligible": {"const": false},
+    "canonical_knowledge": {"const": false},
+    "source_separation": {
+      "type": "object",
+      "required": [
+        "canonical_current_source_commit_sha",
+        "evaluation_source_pr_head_sha",
+        "evaluation_source_pr_state",
+        "cross_lane_merge_permitted",
+        "canonical_rebuild_required_after_adoption"
+      ],
+      "properties": {
+        "canonical_current_source_commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "evaluation_source_pr_head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "evaluation_source_pr_state": {"const": "draft-open-unmerged"},
+        "cross_lane_merge_permitted": {"const": false},
+        "canonical_rebuild_required_after_adoption": {"const": true}
+      },
+      "additionalProperties": false
+    },
+    "artifacts": {"type": "object", "minProperties": 20},
+    "semantic": {
+      "type": "object",
+      "required": [
+        "pilot_release_id",
+        "pilot_release_manifest_sha256",
+        "model",
+        "dimension",
+        "point_count",
+        "anchor_counts"
+      ],
+      "properties": {
+        "pilot_release_id": {"type": "string"},
+        "pilot_release_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "model": {"const": "@cf/baai/bge-m3"},
+        "dimension": {"const": 1024},
+        "point_count": {"const": 107},
+        "anchor_counts": {
+          "type": "object",
+          "minProperties": 3,
+          "maxProperties": 3,
+          "additionalProperties": {"type": "integer", "minimum": 1}
+        }
+      },
+      "additionalProperties": true
+    },
+    "graph": {
+      "type": "object",
+      "required": [
+        "graph_release_id",
+        "node_count",
+        "typed_edge_count",
+        "semantic_edge_count",
+        "semantic_overlay_mode",
+        "renderer_neutral"
+      ],
+      "properties": {
+        "graph_release_id": {"type": "string"},
+        "node_count": {"const": 15},
+        "typed_edge_count": {"const": 12},
+        "semantic_edge_count": {"const": 0},
+        "semantic_overlay_mode": {"const": "evidence-anchor-only"},
+        "renderer_neutral": {"const": true}
+      },
+      "additionalProperties": false
+    },
+    "authority": {
+      "type": "object",
+      "minProperties": 10,
+      "additionalProperties": {"const": false}
+    },
+    "locked_defaults": {
+      "type": "object",
+      "required": [
+        "GRAPH_EXPLORER_ENABLED",
+        "CANDIDATE_RUNTIME_ENABLED",
+        "SHADOW_SEMANTIC_ENABLED",
+        "RETRIEVAL_MODE",
+        "MULTIHOP_MODE",
+        "GRAPH_NEURAL_RETRIEVAL_ENABLED"
+      ],
+      "properties": {
+        "GRAPH_EXPLORER_ENABLED": {"const": false},
+        "CANDIDATE_RUNTIME_ENABLED": {"const": false},
+        "SHADOW_SEMANTIC_ENABLED": {"const": false},
+        "RETRIEVAL_MODE": {"const": "lexical"},
+        "MULTIHOP_MODE": {"const": "off"},
+        "GRAPH_NEURAL_RETRIEVAL_ENABLED": {"const": false}
+      },
+      "additionalProperties": false
+    }
+  }
+}

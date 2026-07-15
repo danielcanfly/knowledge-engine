@@ -1,0 +1,131 @@
+name: M23.6.6 Candidate Release and Internal Explorer
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_candidate_release.py"
+      - "tests/test_m23_6_6_candidate_release.py"
+      - "scripts/m23_6_6_candidate_release_acceptance.py"
+      - "schemas/m23-candidate-release-v1.schema.json"
+      - "schemas/m23-candidate-graph-v2.schema.json"
+      - "pilot/m23/m23-6-6-candidate-release-contract.json"
+      - "pilot/m23/m23-6-6/**"
+      - "packages/graph-explorer/src/candidate.ts"
+      - "packages/graph-explorer/test/candidate.test.ts"
+      - "packages/graph-explorer/package.json"
+      - "packages/graph-explorer/package-lock.json"
+      - "docs/architecture/m23-6-6-graph-semantic-candidate-release.md"
+      - ".github/workflows/m23-6-6-candidate-release-explorer.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate-release-explorer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            packages/graphology-adapter/package-lock.json
+            packages/graph-explorer/package-lock.json
+      - name: Install exact dependencies
+        run: |
+          python -m pip install -e '.[dev]'
+          npm ci --prefix packages/graphology-adapter
+          npm ci --prefix packages/graph-explorer
+      - name: Python candidate release quality gates
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_candidate_release.py \
+            tests/test_m23_6_6_candidate_release.py \
+            scripts/m23_6_6_candidate_release_acceptance.py
+          pytest -q tests/test_m23_6_6_candidate_release.py
+      - name: Deterministic candidate release replay
+        run: |
+          mkdir -p .artifacts/m23
+          python scripts/m23_6_6_candidate_release_acceptance.py \
+            --output-dir .artifacts/m23/m23-6-6-a
+          python scripts/m23_6_6_candidate_release_acceptance.py \
+            --output-dir .artifacts/m23/m23-6-6-b
+          diff -ru \
+            .artifacts/m23/m23-6-6-a \
+            .artifacts/m23/m23-6-6-b
+      - name: Verify Graphology and complete Explorer regressions
+        run: |
+          npm run check --prefix packages/graphology-adapter
+          npm run check --prefix packages/graph-explorer
+      - name: Verify large-graph performance fixtures
+        run: npm run performance:fixtures --prefix packages/graph-explorer
+      - name: Scan CSP, network, persistence, and write-back surfaces
+        run: npm run acceptance:scan --prefix packages/graph-explorer
+      - name: Audit runtime dependencies
+        run: |
+          npm audit --prefix packages/graphology-adapter --omit=dev --audit-level=high
+          npm audit --prefix packages/graph-explorer --omit=dev --audit-level=high
+      - name: Deployment and authority guard
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          contract = json.loads(
+              Path("pilot/m23/m23-6-6-candidate-release-contract.json").read_text()
+          )
+          assert contract["schema_version"] == "knowledge-engine-m23-candidate-release-contract/v1"
+          assert all(value is False for value in contract["authority"].values())
+          assert contract["explorer"]["feature_flag_default"] is False
+          assert contract["explorer"]["public_route_allowed"] is False
+          assert contract["explorer"]["read_only"] is True
+          assert contract["explorer"]["editing_allowed"] is False
+          assert contract["explorer"]["browser_network_client_allowed"] is False
+          assert contract["explorer"]["browser_persistence_allowed"] is False
+          assert contract["explorer"]["typed_graph_and_semantic_overlay_conflation_allowed"] is False
+          assert contract["explorer"]["graph_neural_retrieval_allowed"] is False
+          PY
+      - name: No deployment or mutation implementation surface
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path("src/knowledge_engine/m23_candidate_release.py"),
+              Path("packages/graph-explorer/src/candidate.ts"),
+              Path("pilot/m23/m23-6-6-candidate-release-contract.json"),
+          ]
+          source = "\n".join(path.read_text() for path in paths)
+          forbidden = [
+              'method: "PUT"',
+              'method: "DELETE"',
+              'method: "PATCH"',
+              "passThroughOnException",
+              "Math.random(",
+              "llamaindex_demo_hybrid",
+              '"GRAPH_EXPLORER_ENABLED": true',
+              '"production_authority": true',
+              '"canonical_knowledge": true',
+              '"deployment_dispatched": true',
+              '"r2_write_dispatched": true',
+          ]
+          found = [token for token in forbidden if token in source]
+          if found:
+              raise SystemExit(f"forbidden deployment or mutation surface: {found}")
+          PY
+      - name: Compile accepted scope
+        run: |
+          python -m compileall -q src tests scripts
+          npm run build --prefix packages/graphology-adapter
+          npm run build --prefix packages/graph-explorer

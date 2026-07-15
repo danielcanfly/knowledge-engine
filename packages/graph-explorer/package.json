@@ -12,7 +12,8 @@
     ".": {"types": "./dist/src/index.d.ts", "import": "./dist/src/index.js"},
     "./details": {"types": "./dist/src/details.d.ts", "import": "./dist/src/details.js"},
     "./scale": {"types": "./dist/src/scale.d.ts", "import": "./dist/src/scale.js"},
-    "./acceptance": {"types": "./dist/src/acceptance.d.ts", "import": "./dist/src/acceptance.js"}
+    "./acceptance": {"types": "./dist/src/acceptance.d.ts", "import": "./dist/src/acceptance.js"},
+    "./candidate": {"types": "./dist/src/candidate.d.ts", "import": "./dist/src/candidate.js"}
   },
   "scripts": {
     "clean": "rm -rf dist",
