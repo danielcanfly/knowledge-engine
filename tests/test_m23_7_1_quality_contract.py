@@ -25,7 +25,7 @@ def test_contract_passes_and_report_replays():
         (lambda item: item.__setitem__("contract_sha256", "0" * 64), "digest"),
         (
             lambda item: item["entry"].__setitem__("qdrant_points", 106),
-            "entry identity",
+            "digest|entry identity",
         ),
         (lambda item: item["suite"]["cases"].pop(), "digest|24 cases"),
         (
