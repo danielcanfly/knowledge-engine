@@ -20,6 +20,8 @@ The previous M23.7.5 overlap@5 result of `0.25` and drift of `-0.70` remains val
 - R3 contract: `44177964da873958f1d433aab719725ff622f050bd7e96ec086cc8e06aa0f412`;
 - deterministic fixture report: `9bdd7404907e532530dc277051c8d4347bc4cf03290f76c538624aaf05154338`.
 
+The accepted implementation scope is required to pass Ruff, Python adversarial tests, Worker unit tests, deterministic replay and privacy-authority scans at the same exact PR head.
+
 ## Execution path
 
 The operator samples exactly eight public, evaluation-only Qdrant points through the accepted strict-mode-safe read client. R1 deterministically compiles the same eight semantic probes and binds each probe to one exact target section.
