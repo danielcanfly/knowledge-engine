@@ -43,7 +43,7 @@ def test_contract_and_fixture_are_deterministic() -> None:
     assert canonical_json(report_a) == canonical_json(report_b)
     assert (
         report_a["report_sha256"]
-        == "2e3118092be7c1c66a14a7518df8e4f61e6d88bad3d525d65da696f25fe5bf07"
+        == "676e4d1fa34ee85149294c20c7e3da0b3236215887c285d199a2a443eaed2a49"
     )
 
 
@@ -53,7 +53,7 @@ def test_fixture_passes_all_frozen_gates() -> None:
     assert report["metrics"]["recall_at_5"] == 1.0
     assert report["metrics"]["mrr_at_10"] == 0.8125
     assert report["metrics"]["ndcg_at_10"] == pytest.approx(
-        0.8615986575892965
+        0.861598657589
     )
     assert report["metrics"]["worker_internal_shadow_ms"] == 780
     assert all(report["gates"].values())

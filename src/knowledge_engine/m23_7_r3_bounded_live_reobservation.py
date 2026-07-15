@@ -590,9 +590,18 @@ def build_report(
     _require(len(probes) == SAMPLE_CAP, 150, "probe count drifted")
     result = _validate_worker_result(worker, probes)
     cases = result["cases"]
-    recall_at_5 = sum(case["target_in_top_5"] for case in cases) / SAMPLE_CAP
-    mrr_at_10 = sum(case["reciprocal_rank_at_10"] for case in cases) / SAMPLE_CAP
-    ndcg_at_10 = sum(case["ndcg_at_10"] for case in cases) / SAMPLE_CAP
+    recall_at_5 = round(
+        sum(case["target_in_top_5"] for case in cases) / SAMPLE_CAP,
+        12,
+    )
+    mrr_at_10 = round(
+        sum(case["reciprocal_rank_at_10"] for case in cases) / SAMPLE_CAP,
+        12,
+    )
+    ndcg_at_10 = round(
+        sum(case["ndcg_at_10"] for case in cases) / SAMPLE_CAP,
+        12,
+    )
     metrics = {
         "recall_at_5": recall_at_5,
         "mrr_at_10": mrr_at_10,

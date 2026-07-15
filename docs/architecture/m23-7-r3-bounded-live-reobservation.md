@@ -18,7 +18,7 @@ The previous M23.7.5 overlap@5 result of `0.25` and drift of `-0.70` remains val
 - M23.7.1 quality contract: `7dbaca446fa7a7eccd5f072ab71ffaa8bd601ba8c3140afae3d80d81ce0ad8c1`;
 - M23.7.2 offline evaluation: `9d39f4c90392a0ae56f758b26b7b080bd03872aa1ccce596e8762087896f08ce`;
 - R3 contract: `44177964da873958f1d433aab719725ff622f050bd7e96ec086cc8e06aa0f412`;
-- deterministic fixture report: `2e3118092be7c1c66a14a7518df8e4f61e6d88bad3d525d65da696f25fe5bf07`.
+- deterministic fixture report: `676e4d1fa34ee85149294c20c7e3da0b3236215887c285d199a2a443eaed2a49`.
 
 The accepted implementation scope is required to pass Ruff, Python adversarial tests, Worker unit tests, deterministic replay and privacy-authority scans at the same exact PR head.
 
