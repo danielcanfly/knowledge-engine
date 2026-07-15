@@ -168,7 +168,10 @@ def _parse_point(raw: Mapping[str, object]) -> CandidateResult:
         or payload.get("production_authority") is not False
     ):
         raise IntegrityError("point authority flags are not fail-closed")
-    if payload.get("vector_name") != VECTOR_NAME or payload.get("vector_dimension") != VECTOR_DIMENSION:
+    if (
+        payload.get("vector_name") != VECTOR_NAME
+        or payload.get("vector_dimension") != VECTOR_DIMENSION
+    ):
         raise IntegrityError("point vector contract mismatch")
     if payload.get("embedding_model") != "@cf/baai/bge-m3":
         raise IntegrityError("point embedding model mismatch")
@@ -182,13 +185,18 @@ def _parse_point(raw: Mapping[str, object]) -> CandidateResult:
         source_path=_required_string(payload.get("source_path"), "source_path", max_length=2_000),
         source_sha256=_validate_sha256(payload.get("source_sha256"), "source_sha256"),
         text_sha256=_validate_sha256(payload.get("text_sha256"), "text_sha256"),
-        graph_node_id=_required_string(payload.get("graph_node_id"), "graph_node_id", max_length=500),
+        graph_node_id=_required_string(
+            payload.get("graph_node_id"), "graph_node_id", max_length=500
+        ),
         release_id=RELEASE_ID,
         release_manifest_sha256=RELEASE_MANIFEST_SHA256,
     )
 
 
-def shape_response(request: Mapping[str, object], raw_points: Sequence[Mapping[str, object]]) -> dict[str, Any]:
+def shape_response(
+    request: Mapping[str, object],
+    raw_points: Sequence[Mapping[str, object]],
+) -> dict[str, Any]:
     normalized = validate_request(request)
     if len(raw_points) > MAX_RESPONSE_RESULTS:
         raise IntegrityError("qdrant result count exceeds response ceiling")
@@ -261,8 +269,12 @@ def shape_shadow_response(
         "overlap_count": len(overlap),
         "overlap_at_k": len(overlap) / max(1, min(len(lexical_ids), len(semantic_ids))),
         "rank_diagnostics": diagnostics,
-        "lexical_only_point_ids": [point_id for point_id in lexical_ids if point_id not in semantic_rank],
-        "semantic_only_point_ids": [point_id for point_id in semantic_ids if point_id not in lexical_rank],
+        "lexical_only_point_ids": [
+            point_id for point_id in lexical_ids if point_id not in semantic_rank
+        ],
+        "semantic_only_point_ids": [
+            point_id for point_id in semantic_ids if point_id not in lexical_rank
+        ],
         "semantic_response_sha256": semantic["response_sha256"],
         "authority": {
             "lexical_output_authoritative": True,
