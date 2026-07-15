@@ -6,6 +6,7 @@ on:
       - "src/knowledge_engine/m23_6_acceptance.py"
       - "tests/test_m23_6_7_acceptance.py"
       - "scripts/m23_6_7_acceptance.py"
+      - "pilot/m23/m23-6-7-acceptance-evidence.json"
       - "docs/architecture/m23-6-7-acceptance-closure.md"
       - "docs/architecture/m23-6-7-acceptance-reconciliation.md"
       - ".github/workflows/m23-6-7-acceptance-closure.yml"
