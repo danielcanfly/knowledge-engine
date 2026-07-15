@@ -1,0 +1,88 @@
+name: M23.6.1 Pilot Authority Contract
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m23-6-1-pilot-authority.yml"
+      - "docs/architecture/m23-6-1-pilot-authority-contract.md"
+      - "pilot/m23/m23-6-1-authority-contract.json"
+      - "scripts/m23_6_1_authority_acceptance.py"
+      - "src/knowledge_engine/m23_pilot_authority.py"
+      - "tests/test_m23_6_1_pilot_authority.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authority-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_pilot_authority.py \
+            scripts/m23_6_1_authority_acceptance.py \
+            tests/test_m23_6_1_pilot_authority.py
+      - name: Targeted tests
+        run: pytest -q tests/test_m23_6_1_pilot_authority.py
+      - name: Deterministic acceptance replay
+        run: |
+          rm -rf .artifacts/m23/replay-a .artifacts/m23/replay-b
+          mkdir -p .artifacts/m23/replay-a .artifacts/m23/replay-b
+          python scripts/m23_6_1_authority_acceptance.py \
+            --contract pilot/m23/m23-6-1-authority-contract.json \
+            --output .artifacts/m23/replay-a/authority-acceptance.json
+          python scripts/m23_6_1_authority_acceptance.py \
+            --contract pilot/m23/m23-6-1-authority-contract.json \
+            --output .artifacts/m23/replay-b/authority-acceptance.json
+          cmp \
+            .artifacts/m23/replay-a/authority-acceptance.json \
+            .artifacts/m23/replay-b/authority-acceptance.json
+      - name: Authority and forbidden-surface guard
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          contract = json.loads(
+              Path("pilot/m23/m23-6-1-authority-contract.json").read_text()
+          )
+          assert contract["locked_defaults"]["RETRIEVAL_MODE"] == "lexical"
+          assert contract["locked_defaults"]["GRAPH_EXPLORER_ENABLED"] is False
+          assert contract["locked_defaults"]["MULTIHOP_MODE"] == "off"
+          assert contract["locked_defaults"]["GRAPH_NEURAL_RETRIEVAL_ENABLED"] is False
+          assert contract["qdrant"]["collection"] == "llm_wiki_m23_pilot_bge_m3_1024"
+          assert contract["qdrant"]["blocked_collection"] == "llamaindex_demo_hybrid"
+          assert contract["qdrant"]["first_write_authorized"] is False
+          assert all(value is False for value in contract["authority"].values())
+          assert contract["source_adoption"]["lane"] == (
+              "evaluation-only-pending-proposal"
+          )
+          PY
+      - name: Secret and production mutation scan
+        run: |
+          set -euo pipefail
+          files=(
+            docs/architecture/m23-6-1-pilot-authority-contract.md
+            pilot/m23/m23-6-1-authority-contract.json
+            scripts/m23_6_1_authority_acceptance.py
+            src/knowledge_engine/m23_pilot_authority.py
+            tests/test_m23_6_1_pilot_authority.py
+          )
+          ! grep -Ein \
+            '(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|api[_-]?key[[:space:]]*[:=][[:space:]]*[^" ]|bearer[[:space:]]+[A-Za-z0-9._-]{16,}|client[_-]?secret[[:space:]]*[:=])' \
+            "${files[@]}"
+          code_files=(
+            scripts/m23_6_1_authority_acceptance.py
+            src/knowledge_engine/m23_pilot_authority.py
+          )
+          ! grep -Ein \
+            '(put_object\(|delete_object\(|update_pointer\(|merge_pull_request\(|graph_neural_retrieval_enabled[[:space:]]*[:=][[:space:]]*true)' \
+            "${code_files[@]}"
