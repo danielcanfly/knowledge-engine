@@ -32,26 +32,17 @@ jobs:
           cache: pip
       - name: Install Python package
         run: python -m pip install -e '.[dev]'
-      - name: Emit executable replay identity
+      - name: Verify executable replay identity
         run: |
-          mkdir -p .artifacts/m23
-          python - <<'PY' > .artifacts/m23/replay-sha.txt
+          python - <<'PY'
           from knowledge_engine.m23_7_3_shadow_replay import (
               build_shadow_replay_report,
               canonical_shadow_replay_payload,
           )
 
+          expected = "b4048b3ac29fcad50ba7f43bf932b6b188068efdbf58abb2ef36f76070a0eee2"
           report = build_shadow_replay_report(canonical_shadow_replay_payload())
-          print(report["shadow_replay_sha256"])
+          assert report["shadow_replay_sha256"] == expected
           PY
-          cat .artifacts/m23/replay-sha.txt
-      - name: Upload diagnostic identity and source
-        uses: actions/upload-artifact@v4
-        with:
-          name: m23-7-3-python-${{ matrix.python-version }}
-          path: |
-            .artifacts/m23/replay-sha.txt
-            src/knowledge_engine/m23_7_3_shadow_replay.py
-          retention-days: 1
       - name: Run replay tests
         run: pytest -q tests/test_m23_7_3_shadow_replay.py
