@@ -16,8 +16,6 @@ import httpx
 from .errors import IntegrityError
 from .m23_7_5_live_shadow import (
     EXPECTED_POINTS,
-    QDRANT_MANIFEST,
-    QDRANT_RELEASE,
     VECTOR_DIMENSION,
     VECTOR_NAME,
 )
