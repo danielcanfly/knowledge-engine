@@ -30,6 +30,17 @@ jobs:
           cache: pip
       - name: Install Python package
         run: python -m pip install -e '.[dev]'
+      - name: Print executable M23.7.3 replay identity
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m23_7_3_shadow_replay import (
+              build_shadow_replay_report,
+              canonical_shadow_replay_payload,
+          )
+
+          report = build_shadow_replay_report(canonical_shadow_replay_payload())
+          print("EXECUTABLE_M23_7_3_SHA=" + report["shadow_replay_sha256"])
+          PY
       - name: Quality gates
         run: |
           ruff check \
