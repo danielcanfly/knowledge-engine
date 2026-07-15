@@ -243,7 +243,11 @@ def canonical_operator_submission() -> dict[str, Any]:
 
     production = _mapping(authority["production_snapshot"], "production snapshot")
     _require(production["release_id"] == PRODUCTION_RELEASE, 126, "production release drifted")
-    _require(production["pointer_sha256"] == PRODUCTION_POINTER_SHA, 127, "production pointer drifted")
+    _require(
+        production["pointer_sha256"] == PRODUCTION_POINTER_SHA,
+        127,
+        "production pointer drifted",
+    )
     _require(production["remote_mutation_dispatched"] is False, 128, "production snapshot mutated")
 
     source_pr = _mapping(m23_7_5["source_pr_19"], "Source PR #19")
