@@ -31,11 +31,24 @@ jobs:
       - name: Install package
         run: python -m pip install -e '.[dev]'
       - name: Ruff accepted scope
+        id: ruff
+        continue-on-error: true
         run: |
+          mkdir -p .artifacts/m23
+          set -o pipefail
           ruff check \
             src/knowledge_engine/m23_7_r3_2_semantic_payload_repair.py \
             scripts/m23_7_r3_2_semantic_payload_repair.py \
-            tests/test_m23_7_r3_2_semantic_payload_repair.py
+            tests/test_m23_7_r3_2_semantic_payload_repair.py \
+            --output-format=concise 2>&1 | tee .artifacts/m23/r3-2-ruff.txt
+      - name: Upload Ruff diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-7-r3-2-ruff-${{ github.event.pull_request.head.sha || github.sha }}
+          path: .artifacts/m23/r3-2-ruff.txt
+          if-no-files-found: error
+          retention-days: 3
       - name: Repair and regression tests
         run: |
           pytest -q \
@@ -85,3 +98,6 @@ jobs:
           PY
       - name: Compile accepted Python scope
         run: python -m compileall -q src tests scripts
+      - name: Enforce Ruff result
+        if: always()
+        run: test "${{ steps.ruff.outcome }}" = "success"
