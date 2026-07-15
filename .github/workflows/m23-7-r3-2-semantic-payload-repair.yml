@@ -64,9 +64,30 @@ jobs:
           python scripts/m23_7_r3_2_semantic_payload_repair.py \
             --output .artifacts/m23/r3-2-b.json
           cmp .artifacts/m23/r3-2-a.json .artifacts/m23/r3-2-b.json
-          cmp \
-            .artifacts/m23/r3-2-a.json \
-            pilot/m23/m23-7-r3-2-semantic-payload-repair-contract.json
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          generated = json.loads(
+              Path('.artifacts/m23/r3-2-a.json').read_text(encoding='utf-8')
+          )
+          committed = json.loads(
+              Path('pilot/m23/m23-7-r3-2-semantic-payload-repair-contract.json')
+              .read_text(encoding='utf-8')
+          )
+          assert generated == committed
+          unsigned = dict(committed)
+          digest = unsigned.pop('contract_sha256')
+          canonical = json.dumps(
+              unsigned,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          )
+          assert hashlib.sha256(canonical.encode('utf-8')).hexdigest() == digest
+          PY
       - name: Privacy and authority scan
         run: |
           python - <<'PY'
