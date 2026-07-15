@@ -12,6 +12,7 @@ from urllib.parse import quote
 import httpx
 
 from .errors import IntegrityError
+from .m23_candidate_semantic_runtime import validate_embedding
 from .m23_cloudflare_qdrant import (
     CloudflareConfig,
     QdrantConfig,
@@ -19,7 +20,6 @@ from .m23_cloudflare_qdrant import (
     embed_sections,
     validate_qdrant_collection_response,
 )
-from .m23_candidate_semantic_runtime import validate_embedding
 
 SCHEMA_VERSION = "knowledge-engine-m23-7-5-live-shadow/v1"
 ENGINE_ENTRY_SHA = "21386886105b5a44130f713b4e92d04f3bfd247d"
@@ -149,8 +149,7 @@ class HttpLiveShadowClient:
         try:
             with httpx.Client(timeout=self.qdrant.timeout_seconds) as client:
                 response = client.get(
-                    f"{self.qdrant.base_url.rstrip('/')}/collections/"
-                    f"{quote(COLLECTION, safe='')}",
+                    f"{self.qdrant.base_url.rstrip('/')}/collections/{quote(COLLECTION, safe='')}",
                     headers={"api-key": self.qdrant.api_key},
                 )
                 response.raise_for_status()
@@ -170,7 +169,10 @@ class HttpLiveShadowClient:
         body = {
             "filter": {
                 "must": [
-                    {"key": "source_membership", "match": {"value": "evaluation-only-pending-proposal"}},
+                    {
+                        "key": "source_membership",
+                        "match": {"value": "evaluation-only-pending-proposal"},
+                    },
                     {"key": "release_id", "match": {"value": QDRANT_RELEASE}},
                     {"key": "release_manifest_sha256", "match": {"value": QDRANT_MANIFEST}},
                     {"key": "canonical_knowledge", "match": {"value": False}},
@@ -222,7 +224,10 @@ class HttpLiveShadowClient:
             "using": VECTOR_NAME,
             "filter": {
                 "must": [
-                    {"key": "source_membership", "match": {"value": "evaluation-only-pending-proposal"}},
+                    {
+                        "key": "source_membership",
+                        "match": {"value": "evaluation-only-pending-proposal"},
+                    },
                     {"key": "release_id", "match": {"value": QDRANT_RELEASE}},
                     {"key": "release_manifest_sha256", "match": {"value": QDRANT_MANIFEST}},
                     {"key": "canonical_knowledge", "match": {"value": False}},
@@ -346,7 +351,9 @@ def _parse_point(raw: Mapping[str, Any]) -> dict[str, str]:
     section_id = payload.get("section_id")
     point_id = raw.get("id")
     _require(isinstance(section_id, str) and bool(section_id), 113, "section_id missing")
-    _require(isinstance(point_id, (str, int)) and not isinstance(point_id, bool), 114, "point id missing")
+    _require(
+        isinstance(point_id, (str, int)) and not isinstance(point_id, bool), 114, "point id missing"
+    )
     return {"point_id": str(point_id), "section_id": section_id, "audience": audience}
 
 
@@ -355,7 +362,9 @@ def _parse_ranked_points(points: Sequence[Mapping[str, Any]]) -> list[str]:
     for raw in points:
         parsed = _parse_point(raw)
         score = raw.get("score")
-        _require(isinstance(score, (int, float)) and not isinstance(score, bool), 115, "score invalid")
+        _require(
+            isinstance(score, (int, float)) and not isinstance(score, bool), 115, "score invalid"
+        )
         numeric = float(score)
         _require(math.isfinite(numeric) and -1.0 <= numeric <= 1.0, 116, "score invalid")
         output.append((numeric, parsed["section_id"]))
