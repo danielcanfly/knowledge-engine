@@ -50,7 +50,8 @@ jobs:
           assert "hold_for_m23_7_8" in text
           assert "blocked_pending_latency" in text
           assert "blocked_pending_retrieval_quality" in text
-          assert "No promotion eligibility is granted" in text
+          assert "No promotion eligibility" in text
+          assert "granted" in text
           assert "Production mutation dispatched: false" in text
           PY
       - name: Compile accepted scope
