@@ -30,17 +30,25 @@ jobs:
           cache: pip
       - name: Install Python package
         run: python -m pip install -e '.[dev]'
-      - name: Print executable M23.7.3 replay identity
+      - name: Record executable M23.7.3 replay identity
         run: |
-          python - <<'PY'
+          mkdir -p .artifacts/m23
+          python - <<'PY' > .artifacts/m23/executable-m23-7-3-sha.txt
           from knowledge_engine.m23_7_3_shadow_replay import (
               build_shadow_replay_report,
               canonical_shadow_replay_payload,
           )
 
           report = build_shadow_replay_report(canonical_shadow_replay_payload())
-          print("EXECUTABLE_M23_7_3_SHA=" + report["shadow_replay_sha256"])
+          print(report["shadow_replay_sha256"])
           PY
+          cat .artifacts/m23/executable-m23-7-3-sha.txt
+      - name: Upload executable identity diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-7-4-executable-identity
+          path: .artifacts/m23/executable-m23-7-3-sha.txt
+          retention-days: 1
       - name: Quality gates
         run: |
           ruff check \
