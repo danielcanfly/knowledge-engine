@@ -1,0 +1,151 @@
+name: M23.7.5 Bounded Live Shadow
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_5_live_shadow.py"
+      - "tests/test_m23_7_5_live_shadow.py"
+      - "scripts/m23_7_5_live_shadow.py"
+      - "docs/architecture/m23-7-5-bounded-live-shadow.md"
+      - ".github/workflows/m23-7-5-bounded-live-shadow.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Python package
+        run: python -m pip install -e '.[dev]'
+      - name: Quality gates
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_7_5_live_shadow.py \
+            tests/test_m23_7_5_live_shadow.py \
+            scripts/m23_7_5_live_shadow.py
+          pytest -q \
+            tests/test_m23_7_1_acceptance_contract.py \
+            tests/test_m23_7_3_shadow_replay.py \
+            tests/test_m23_7_4_candidate_answer.py \
+            tests/test_m23_7_5_live_shadow.py
+      - name: Deterministic privacy-safe fixture
+        run: |
+          mkdir -p .artifacts/m23
+          python scripts/m23_7_5_live_shadow.py \
+            --mode fixture \
+            --output .artifacts/m23/m23-7-5-fixture-a.json
+          python scripts/m23_7_5_live_shadow.py \
+            --mode fixture \
+            --output .artifacts/m23/m23-7-5-fixture-b.json
+          cmp \
+            .artifacts/m23/m23-7-5-fixture-a.json \
+            .artifacts/m23/m23-7-5-fixture-b.json
+      - name: Privacy and authority scan
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(
+              Path(".artifacts/m23/m23-7-5-fixture-a.json").read_text()
+          )
+          assert report["status"] == "pass"
+          assert report["metrics"]["sample_count"] == 8
+          assert report["raw_queries_persisted"] is False
+          assert report["raw_answers_persisted"] is False
+          assert report["candidate_outputs_served"] is False
+          assert report["production_response_authority"] is False
+          assert report["protected_mutations_dispatched"] is False
+          encoded = json.dumps(report, sort_keys=True)
+          for forbidden in (
+              "query_text",
+              "answer_text",
+              "api_key",
+              "Authorization",
+              "https://",
+          ):
+              assert forbidden not in encoded
+          PY
+      - name: Compile accepted scope
+        run: python -m compileall -q src tests scripts
+
+  bounded-live-observation:
+    runs-on: ubuntu-24.04
+    needs: deterministic-contract
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      QDRANT_URL: ${{ secrets.QDRANT_URL }}
+      QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Python package
+        run: python -m pip install -e '.[dev]'
+      - name: Verify governed live credentials exist
+        run: |
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$QDRANT_URL"
+          test -n "$QDRANT_API_KEY"
+      - name: Execute bounded non-production live shadow
+        run: |
+          mkdir -p .artifacts/m23
+          python scripts/m23_7_5_live_shadow.py \
+            --mode live \
+            --output .artifacts/m23/m23-7-5-live-shadow.json
+      - name: Verify redacted live evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path(".artifacts/m23/m23-7-5-live-shadow.json")
+          report = json.loads(path.read_text())
+          assert report["status"] == "pass"
+          assert 1 <= report["metrics"]["sample_count"] <= 8
+          assert report["metrics"]["error_rate"] == 0.0
+          assert report["metrics"]["acl_violation_rate"] == 0.0
+          assert report["metrics"]["output_influence_rate"] == 0.0
+          assert report["raw_queries_persisted"] is False
+          assert report["raw_answers_persisted"] is False
+          assert report["candidate_outputs_served"] is False
+          assert report["production_response_authority"] is False
+          assert report["protected_mutations_dispatched"] is False
+          encoded = path.read_text()
+          for forbidden in (
+              "query_text",
+              "answer_text",
+              "api_key",
+              "Authorization",
+              "https://",
+          ):
+              assert forbidden not in encoded
+          PY
+      - name: Upload redacted live shadow evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-7-5-live-shadow-report
+          path: .artifacts/m23/m23-7-5-live-shadow.json
+          retention-days: 7
