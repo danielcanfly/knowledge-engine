@@ -139,12 +139,17 @@ function validateCollection(payload) {
   const params = isObject(config) ? config.params : undefined;
   const vectors = isObject(params) ? params.vectors : undefined;
   const vector = isObject(vectors) ? vectors[VECTOR_NAME] : undefined;
+  const sparseVectors = isObject(params) ? params.sparse_vectors : undefined;
   assertCondition(result.status === "green", "collection-not-green", 502);
   assertCondition(result.points_count === EXPECTED_POINTS, "point-count-drift", 502);
   assertCondition(isObject(vector), "named-vector-missing", 502);
   assertCondition(vector.size === VECTOR_DIMENSION, "collection-dimension-drift", 502);
   assertCondition(vector.distance === "Cosine", "collection-distance-drift", 502);
-  assertCondition(params.sparse_vectors === null || isEmptyObject(params.sparse_vectors), "sparse-vector-drift", 502);
+  assertCondition(
+    sparseVectors === undefined || sparseVectors === null || isEmptyObject(sparseVectors),
+    "sparse-vector-drift",
+    502,
+  );
   assertCondition(Number.isInteger(result.indexed_vectors_count) && result.indexed_vectors_count >= 0, "indexed-count-invalid", 502);
   return {
     status: "green",
