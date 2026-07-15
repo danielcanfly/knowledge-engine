@@ -14,12 +14,17 @@ Production mutation dispatched: false.
 
 ## Entry identities
 
-- Engine entry: `0f7e667b5e7e434434e136c5db999761f6d2d4b8`
+- Engine entry: `e63c3da543ae425798b0fb43b8c1e0a6ce20bc4b`
 - M23.7.1 contract: `7dbaca446fa7a7eccd5f072ab71ffaa8bd601ba8c3140afae3d80d81ce0ad8c1`
 - M23.7.2 evaluation: `9d39f4c90392a0ae56f758b26b7b080bd03872aa1ccce596e8762087896f08ce`
-- M23.7.3 replay: `47df7595ffc27d320c3a70d00c90fcb3a682b315f6b67eefb57497c99865fbf3`
+- M23.7.3 cross-runtime replay: `b4048b3ac29fcad50ba7f43bf932b6b188068efdbf58abb2ef36f76070a0eee2`
+- M23.7.3 identity repair implementation: `04388c63e269dbe0e21be56df85e8090e9ef84cb`
+- M23.7.3 identity repair reconciliation: `e63c3da543ae425798b0fb43b8c1e0a6ce20bc4b`
 - Candidate release: `m23cand-c7fbec7e945e79d05d3263b0`
 - Candidate manifest: `3303a1d54d448c96c724178b482dc73daed2712ba8d09b0e34fa96eb8761e560`
+
+Issue #425 is closed completed. The executable replay identity is permanently checked on
+Python 3.11 and 3.12 before M23.7.4 evidence may be accepted.
 
 ## Provider-neutral contract
 
@@ -31,9 +36,9 @@ through a separately governed milestone.
 
 ## Grounding and citations
 
-Each positive candidate answer contains one or more structured claims. Every claim must
-match an exact `supported_claim` from authorised evidence and must reference a citation
-whose section, parent, release, manifest, evidence digest and byte span exactly match the
+Each positive candidate answer contains structured claims. Every claim must match an
+exact `supported_claim` from authorised evidence and must reference a citation whose
+section, parent, release, manifest, evidence digest and byte span exactly match the
 evidence record. The human-readable citation marker is deterministic and appears in the
 answer text.
 
