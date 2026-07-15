@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import importlib.util
 import json
 from pathlib import Path
@@ -247,7 +246,7 @@ class FakeResponse:
 
 
 class FakeHttpClient:
-    instances: list["FakeHttpClient"] = []
+    instances: list[FakeHttpClient] = []
     payloads: list[dict[str, Any]] = []
 
     def __init__(self, *, timeout: float) -> None:
