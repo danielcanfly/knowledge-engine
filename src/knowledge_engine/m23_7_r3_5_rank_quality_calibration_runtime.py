@@ -57,3 +57,4 @@ build_calibration_candidate = _base.build_calibration_candidate
 redacted_candidate_artifact = _base.redacted_candidate_artifact
 calibrated_hybrid_ranking = _base.calibrated_hybrid_ranking
 evaluate_calibration_candidate = _base.evaluate_calibration_candidate
+_redacted_probe_plan = _base._redacted_probe_plan
