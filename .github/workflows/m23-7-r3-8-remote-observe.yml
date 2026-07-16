@@ -1,0 +1,132 @@
+name: M23.7 R3.8 Remote Observation
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_head:
+        description: Exact main SHA containing the accepted remote operator
+        required: true
+        type: string
+      confirmation:
+        description: Enter RUN_R3_8_REMOTE_ONCE
+        required: true
+        type: string
+      evidence_key:
+        description: Frozen private R2 evidence object key
+        required: true
+        default: diagnostic/m23-7/r3-8/M23.5_Cloudflare_BGE_M3_20260714T164215Z.zip
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m23-7-r3-8-remote-observation
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    environment: m23-r3-diagnostic
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      QDRANT_URL: ${{ secrets.QDRANT_URL }}
+      QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || 'llm-wiki-bucket' }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      EVIDENCE_DIR: .r3-8-remote-evidence
+    steps:
+      - name: Reject rerun attempts and non-main dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_RUN_ATTEMPT}" = "1"
+          test "${GITHUB_REF}" = "refs/heads/main"
+          test "${{ inputs.confirmation }}" = "RUN_R3_8_REMOTE_ONCE"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_head }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact accepted main head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ inputs.expected_head }}"
+          test "${GITHUB_SHA}" = "${{ inputs.expected_head }}"
+          git merge-base --is-ancestor 838a2e52c03d49f480ed111e42f1e705f2ba18d2 HEAD
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install exact Engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          test "$(npx --yes wrangler@4.111.0 --version | tr -d '\r')" = "4.111.0"
+
+      - name: Validate diagnostic secret presence without printing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN \
+            QDRANT_URL QDRANT_API_KEY \
+            R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
+            R2_BUCKET R2_ENDPOINT_URL; do
+            test -n "${!name:-}" || { echo "missing_secret_or_variable=$name"; exit 23; }
+          done
+          test "$R2_BUCKET" = "llm-wiki-bucket"
+
+      - name: Run one remote placed-Worker observation
+        id: operator
+        shell: bash
+        run: |
+          set +e
+          rm -rf "$EVIDENCE_DIR"
+          python scripts/m23_7_r3_8_remote_operator.py \
+            --expected-head "${{ inputs.expected_head }}" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --confirmation "${{ inputs.confirmation }}" \
+            --evidence-key "${{ inputs.evidence_key }}" \
+            --output-dir "$EVIDENCE_DIR"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload privacy-safe observation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-7-r3-8-remote-${{ github.run_id }}
+          path: .r3-8-remote-evidence/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
+
+      - name: Return governed operator result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="${{ steps.operator.outputs.exit_code }}"
+          case "$code" in
+            0|30) exit "$code" ;;
+            23) exit 23 ;;
+            *) exit 23 ;;
+          esac
