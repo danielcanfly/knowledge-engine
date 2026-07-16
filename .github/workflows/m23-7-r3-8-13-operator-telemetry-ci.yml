@@ -108,7 +108,7 @@ jobs:
           assert text.count("python -m scripts.m23_operator_status_comment") == 2
           assert "--phase accepted" in text
           assert "--phase final" in text
-          assert "m23-7-r3-8-13-post-delete-recovery-${{ github.run_id }}" in text
+          assert "ARTIFACT_NAME: m23-7-r3-8-13-post-delete-recovery-" in text
           assert "github.event.issue.number == 565" in text
           assert "startsWith(github.event.comment.body, 'M23_OPERATOR_COMMAND ')" in text
           PY
