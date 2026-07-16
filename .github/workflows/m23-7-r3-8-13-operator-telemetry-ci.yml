@@ -91,7 +91,7 @@ jobs:
           assert contract["authority"]["production_retrieval"] == "lexical"
           PY
 
-      - name: Verify workflow reports accepted and final status only to fixed bus
+      - name: Verify telemetry identity or directly observable successor
         shell: bash
         run: |
           python - <<'PY'
@@ -101,23 +101,30 @@ jobs:
           path = Path(".github/workflows/m23-operator-command-bus.yml")
           payload = yaml.safe_load(path.read_text(encoding="utf-8"))
           assert payload["permissions"]["contents"] == "read"
-          assert payload["permissions"]["issues"] == "write"
           assert "workflow_dispatch" not in payload[True]
-          assert set(payload[True]).issubset({"issue_comment", "push"})
           text = path.read_text(encoding="utf-8")
-          assert (
-              "Report accepted command identity" in text
-              or "Report accepted request identity" in text
-          )
-          assert "Report final governed route result" in text
-          assert text.count("python -m scripts.m23_operator_status_comment") == 2
-          assert "--phase accepted" in text
-          assert "--phase final" in text
-          assert "ARTIFACT_NAME: m23-7-r3-8-" in text
-          assert "post-delete-recovery-" in text
+          if payload["permissions"].get("issues") == "write":
+              assert (
+                  "Report accepted command identity" in text
+                  or "Report accepted request identity" in text
+              )
+              assert "Report final governed route result" in text
+              assert text.count("python -m scripts.m23_operator_status_comment") == 2
+              assert "--phase accepted" in text
+              assert "--phase final" in text
+          else:
+              assert set(payload[True]) == {"pull_request"}
+              pull_request = payload[True]["pull_request"]
+              assert pull_request["types"] == ["synchronize"]
+              assert pull_request["paths"] == ["operator_permits/m23/**"]
+              assert "python -m scripts.m23_operator_pr_permit" in text
+              assert "execution_permitted" in text
+              assert "actions/upload-artifact@v4" in text
+              assert "m23-7-r3-8-16-pr-permit-recovery-" in text
+              assert "scripts.m23_operator_status_comment" not in text
           PY
 
-      - name: Verify status writer has fixed destination and non-command body
+      - name: Verify historical status writer remains fixed and non-command
         shell: bash
         run: |
           python - <<'PY'
