@@ -11,6 +11,7 @@ on:
       - "docs/architecture/m23-7-r3-8-8-artifact-recovery.md"
       - ".github/workflows/m23-7-r3-8-remote-observe.yml"
       - ".github/workflows/m23-7-r3-8-remote-delete.yml"
+      - ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml"
       - ".github/workflows/m23-7-r3-8-8-recovery-probe.yml"
       - ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml"
   workflow_dispatch:
@@ -113,6 +114,7 @@ jobs:
           observe = Path(".github/workflows/m23-7-r3-8-remote-observe.yml")
           delete = Path(".github/workflows/m23-7-r3-8-remote-delete.yml")
           recovery = Path(".github/workflows/m23-7-r3-8-8-recovery-probe.yml")
+          remote_ci = Path(".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml")
           for path in (observe, delete, recovery):
               payload = yaml.safe_load(path.read_text(encoding="utf-8"))
               assert "workflow_dispatch" in payload[True]
@@ -120,6 +122,7 @@ jobs:
           observe_text = observe.read_text(encoding="utf-8")
           delete_text = delete.read_text(encoding="utf-8")
           recovery_text = recovery.read_text(encoding="utf-8")
+          remote_ci_text = remote_ci.read_text(encoding="utf-8")
           assert ".r3-8-remote-evidence" not in observe_text
           assert "path: r3-8-remote-evidence/" in observe_text
           assert "m23_7_r3_8_remote_entrypoint" in observe_text
@@ -129,6 +132,7 @@ jobs:
           assert "path: r3-8-recovery-evidence/" in recovery_text
           assert "wrangler deploy" not in recovery_text
           assert "wrangler delete" not in recovery_text
+          assert "accepted core runtime preservation" in remote_ci_text
           PY
       - name: Verify recovery script method and protected-state boundaries
         shell: bash
@@ -164,6 +168,7 @@ jobs:
               "docs/architecture/m23-7-r3-8-8-artifact-recovery.md",
               ".github/workflows/m23-7-r3-8-remote-observe.yml",
               ".github/workflows/m23-7-r3-8-remote-delete.yml",
+              ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
               ".github/workflows/m23-7-r3-8-8-recovery-probe.yml",
               ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml",
           }
