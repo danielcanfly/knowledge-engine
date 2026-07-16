@@ -4,7 +4,12 @@ import hashlib
 import inspect
 import math
 
-from knowledge_engine import m23_7_r3_5_rank_quality_calibration_runtime as r35
+from knowledge_engine import (
+    m23_7_r3_5_rank_quality_calibration as base_r35,
+)
+from knowledge_engine import (
+    m23_7_r3_5_rank_quality_calibration_runtime as r35,
+)
 
 
 def _unit(values: dict[int, float]) -> list[float]:
@@ -139,6 +144,15 @@ def test_perfect_vectors_pass_all_gates() -> None:
     assert report["maximum_top10_hub_frequency"] <= 6
     assert report["external_calls"]["qdrant_reads"] == 0
     assert report["external_calls"]["qdrant_writes"] == 0
+
+
+def test_runtime_compatibility_restores_base_state() -> None:
+    old_bm25 = base_r35._bm25_ranking
+    old_ranker = base_r35.calibrated_hybrid_ranking
+    candidate, query_vectors = _candidate()
+    r35.evaluate_calibration_candidate(candidate, query_vectors)
+    assert base_r35._bm25_ranking is old_bm25
+    assert base_r35.calibrated_hybrid_ranking is old_ranker
 
 
 def test_query_visible_lexical_fusion_recovers_dense_hard_case() -> None:
