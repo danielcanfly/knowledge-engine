@@ -1,0 +1,154 @@
+name: M23.7 Repair R3.8.12 Operator Command Bus
+
+on:
+  pull_request:
+    paths:
+      - "scripts/m23_operator_command_bus.py"
+      - "scripts/m23_7_r3_8_post_delete_recovery.py"
+      - "tests/test_m23_operator_command_bus.py"
+      - "tests/test_m23_7_r3_8_post_delete_recovery.py"
+      - ".github/workflows/m23-operator-command-bus.yml"
+      - ".github/workflows/m23-7-r3-8-12-operator-command-bus-ci.yml"
+      - "operator_authorizations/m23/r3-8/post-delete-recovery-29521901629.json"
+      - "pilot/m23/m23-7-r3-8-12-operator-command-bus-contract.json"
+      - "docs/architecture/m23-7-r3-8-12-operator-command-bus.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operator-command-bus-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact head and accepted deletion-repair ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 542907fa0cfae47addd6d777c1708ae62155aea4 HEAD
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install development dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Ruff and compile bounded operator scope
+        run: |
+          ruff check scripts/m23_operator_command_bus.py scripts/m23_7_r3_8_post_delete_recovery.py tests/test_m23_operator_command_bus.py tests/test_m23_7_r3_8_post_delete_recovery.py
+          python -m py_compile scripts/m23_operator_command_bus.py scripts/m23_7_r3_8_post_delete_recovery.py
+
+      - name: Operator command and post-delete recovery adversarial tests
+        run: pytest -q tests/test_m23_operator_command_bus.py tests/test_m23_7_r3_8_post_delete_recovery.py tests/test_m23_7_r3_8_remote_recovery_probe.py tests/test_m23_7_r3_8_remote_delete.py
+
+      - name: Verify authorization and contract digests
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          def verify(path: str, digest_key: str, expected: str) -> dict:
+              value = json.loads(Path(path).read_text(encoding="utf-8"))
+              digest = value.pop(digest_key)
+              encoded = json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  allow_nan=False,
+              ).encode()
+              assert hashlib.sha256(encoded).hexdigest() == digest
+              assert digest == expected
+              return value
+
+          auth = verify(
+              "operator_authorizations/m23/r3-8/"
+              "post-delete-recovery-29521901629.json",
+              "authorization_sha256",
+              "b2b247181bbdd276ef4cd393e9b91655a0460b764a89d9a7c9c8a8408a5ee357",
+          )
+          assert auth["command_type"] == "r3_8_post_delete_recovery"
+          assert auth["bus_issue_number"] == 565
+          assert auth["actor_login"] == "huaihsuanbusiness"
+          assert auth["authority"]["control_plane_read_authorized"] is True
+          assert auth["authority"]["worker_delete_authorized"] is False
+
+          contract = verify(
+              "pilot/m23/m23-7-r3-8-12-operator-command-bus-contract.json",
+              "contract_sha256",
+              "9d3e7392a8bb6a65fa5f1fa66f225ee0a9414a78cc1896c99d867ddfd53914c6",
+          )
+          assert contract["incident"]["run_id"] == "29521901629"
+          assert contract["incident"]["deletion_step_conclusion"] == "success"
+          assert contract["incident"]["destructive_rerun_authorized"] is False
+          assert contract["bus"]["static_routes"] == ["r3_8_post_delete_recovery"]
+          assert contract["authority"]["production_retrieval"] == "lexical"
+          PY
+
+      - name: Verify command bus is owner-only, static and non-destructive
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          path = Path(".github/workflows/m23-operator-command-bus.yml")
+          payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+          assert "issue_comment" in payload[True]
+          assert "workflow_dispatch" not in payload[True]
+          text = path.read_text(encoding="utf-8")
+          for required in (
+              "github.event.issue.number == 565",
+              "github.event.comment.user.login == 'huaihsuanbusiness'",
+              "github.event.comment.author_association == 'OWNER'",
+              'test "$GITHUB_RUN_ATTEMPT" = "1"',
+              "command_body_not_single_use",
+              "r3_8_post_delete_recovery",
+          ):
+              assert required in text
+          for forbidden in (
+              "wrangler delete",
+              "wrangler deploy",
+              "QDRANT_URL",
+              "QDRANT_API_KEY",
+              "R2_ACCESS_KEY_ID",
+              "R2_SECRET_ACCESS_KEY",
+          ):
+              assert forbidden not in text
+          PY
+
+      - name: Verify recovery source has only official control-plane GETs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          text = Path(
+              "scripts/m23_7_r3_8_post_delete_recovery.py"
+          ).read_text(encoding="utf-8")
+          assert text.count("client.get(") == 2
+          for forbidden in (
+              "client.post(",
+              "client.put(",
+              "client.patch(",
+              "client.delete(",
+              "wrangler delete",
+              "QDRANT_URL",
+              "QDRANT_API_KEY",
+              "R2_ACCESS_KEY_ID",
+              "R2_SECRET_ACCESS_KEY",
+          ):
+              assert forbidden not in text
+          PY
+
+      - name: Preserve accepted runtime, authorization and blocker identities
+        run: git diff --exit-code 542907fa0cfae47addd6d777c1708ae62155aea4 HEAD -- scripts/m23_7_r3_8_remote_operator.py scripts/m23_7_r3_8_remote_entrypoint.py scripts/m23_7_r3_8_remote_delete.py scripts/m23_7_r3_8_remote_recovery_probe.py workers/m23-7-r3-8-latency-repair/worker.mjs src/knowledge_engine/m23_7_r3_8_latency_repair.py deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29506217284.json
