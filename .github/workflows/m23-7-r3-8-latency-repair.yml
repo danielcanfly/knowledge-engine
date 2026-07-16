@@ -1,0 +1,125 @@
+name: M23.7 Repair R3.8 Placed Worker Latency
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_r3_8_latency_repair.py"
+      - "scripts/m23_7_r3_8_latency_repair_operator.py"
+      - "scripts/m23_7_r3_8_worker_config.py"
+      - "tests/test_m23_7_r3_8_latency_repair.py"
+      - "pilot/m23/m23-7-r3-8-latency-repair-contract.json"
+      - "docs/architecture/m23-7-r3-8-latency-repair.md"
+      - "workers/m23-7-r3-8-latency-repair/worker.mjs"
+      - "workers/m23-7-r3-8-latency-repair/worker.test.mjs"
+      - "workers/m23-7-r3-8-latency-repair/.gitignore"
+      - ".github/workflows/m23-7-r3-8-latency-repair.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  latency-repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Verify R3.7 reconciliation ancestry
+        run: git merge-base --is-ancestor 7793cd22092aca530ca48a3240a3c83ffd3d2894 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff accepted Python scope
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            scripts/m23_7_r3_8_latency_repair_operator.py \
+            scripts/m23_7_r3_8_worker_config.py \
+            tests/test_m23_7_r3_8_latency_repair.py
+      - name: R3.5 accepted regression
+        run: pytest -q tests/test_m23_7_r3_5_rank_quality_calibration.py
+      - name: R3.6 accepted regression
+        run: pytest -q tests/test_m23_7_r3_6_candidate_reingestion.py
+      - name: R3.7 accepted regression
+        run: pytest -q tests/test_m23_7_r3_7_live_acceptance.py
+      - name: R3.8 Python regressions
+        run: pytest -q tests/test_m23_7_r3_8_latency_repair.py
+      - name: R3.8 Worker regressions
+        working-directory: workers/m23-7-r3-8-latency-repair
+        run: node --test worker.test.mjs
+      - name: Verify deterministic contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from knowledge_engine import m23_7_r3_8_latency_repair as subject
+
+          expected = json.loads(
+              Path("pilot/m23/m23-7-r3-8-latency-repair-contract.json")
+              .read_text(encoding="utf-8")
+          )
+          assert subject.canonical_contract() == expected
+          assert subject.CONTRACT_SHA256 == "09a340c2145cffa8ee45de7725e157c864baf08f0cda5ade11fc5bcccb0e5a94"
+          assert expected["entry"]["engine_sha"] == "7793cd22092aca530ca48a3240a3c83ffd3d2894"
+          assert expected["latency"]["maximum_worker_internal_shadow_ms"] == 1200
+          assert expected["latency"]["threshold_changed"] is False
+          assert expected["queries"]["query_count"] == 24
+          assert expected["queries"]["workers_ai_binding_calls"] == 1
+          assert expected["queries"]["qdrant_query_batch_calls"] == 1
+          assert expected["authority"]["retrieval_quality_blocker_cleared"] is False
+          assert expected["authority"]["latency_blocker_cleared"] is False
+          PY
+      - name: Privacy and authority scan
+        run: |
+          python - <<'PY'
+          import inspect
+          import json
+          from pathlib import Path
+          from knowledge_engine import m23_7_r3_8_latency_repair as subject
+
+          contract = subject.canonical_contract()
+          source = inspect.getsource(subject)
+          assert contract["authority"]["qdrant_read_authorized"] is True
+          assert contract["authority"]["qdrant_write_authorized"] is False
+          assert contract["authority"]["qdrant_delete_authorized"] is False
+          assert contract["authority"]["qdrant_reindex_authorized"] is False
+          assert contract["authority"]["production_retrieval"] == "lexical"
+          assert contract["latency"]["threshold_inflation_allowed"] is False
+          assert "target_section_id" not in inspect.getsource(subject.build_worker_request)
+          worker = Path(
+              "workers/m23-7-r3-8-latency-repair/worker.mjs"
+          ).read_text(encoding="utf-8")
+          assert 'method: "PUT"' not in worker
+          assert 'method: "DELETE"' not in worker
+          assert "/points/query/batch" in worker
+          assert "with_vector: false" in worker
+          assert not list(Path("workers/m23-7-r3-8-latency-repair").glob("wrangler.local.jsonc"))
+          text = "\n".join(
+              path.read_text(encoding="utf-8")
+              for path in (
+                  Path("pilot/m23/m23-7-r3-8-latency-repair-contract.json"),
+                  Path("docs/architecture/m23-7-r3-8-latency-repair.md"),
+              )
+          )
+          for forbidden in ("QDRANT_API_KEY", "M23_R3_8_OPERATOR_TOKEN", "https://"):
+              assert forbidden not in text
+          assert all(value is False for value in contract["privacy"].values())
+          PY
+      - name: Compile accepted scope
+        run: |
+          python -m py_compile \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            scripts/m23_7_r3_8_latency_repair_operator.py \
+            scripts/m23_7_r3_8_worker_config.py \
+            tests/test_m23_7_r3_8_latency_repair.py
+          node --check workers/m23-7-r3-8-latency-repair/worker.mjs
+          node --check workers/m23-7-r3-8-latency-repair/worker.test.mjs
