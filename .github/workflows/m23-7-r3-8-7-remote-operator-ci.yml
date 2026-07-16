@@ -4,8 +4,10 @@ on:
   pull_request:
     paths:
       - "scripts/m23_7_r3_8_remote_operator.py"
+      - "scripts/m23_7_r3_8_remote_entrypoint.py"
       - "scripts/m23_7_r3_8_remote_delete.py"
       - "tests/test_m23_7_r3_8_remote_operator.py"
+      - "tests/test_m23_7_r3_8_remote_entrypoint.py"
       - "tests/test_m23_7_r3_8_remote_delete.py"
       - "pilot/m23/m23-7-r3-8-7-remote-operator-contract.json"
       - "docs/architecture/m23-7-r3-8-7-remote-operator.md"
@@ -25,12 +27,12 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - name: Verify exact workflow head and R3.8.6 ancestry
+      - name: Verify exact workflow head and accepted remote-operator ancestry
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          git merge-base --is-ancestor 838a2e52c03d49f480ed111e42f1e705f2ba18d2 HEAD
+          git merge-base --is-ancestor 771538d3b95fccefc3f32bd568770e08ce3552ac HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -46,8 +48,10 @@ jobs:
           set +e
           ruff check \
             scripts/m23_7_r3_8_remote_operator.py \
+            scripts/m23_7_r3_8_remote_entrypoint.py \
             scripts/m23_7_r3_8_remote_delete.py \
             tests/test_m23_7_r3_8_remote_operator.py \
+            tests/test_m23_7_r3_8_remote_entrypoint.py \
             tests/test_m23_7_r3_8_remote_delete.py \
             --output-format=concise \
             > r3-8-7-ruff.txt 2>&1
@@ -66,9 +70,14 @@ jobs:
         run: |
           python -m py_compile \
             scripts/m23_7_r3_8_remote_operator.py \
+            scripts/m23_7_r3_8_remote_entrypoint.py \
             scripts/m23_7_r3_8_remote_delete.py
       - name: Remote operator adversarial tests
-        run: pytest -q tests/test_m23_7_r3_8_remote_operator.py tests/test_m23_7_r3_8_remote_delete.py
+        run: |
+          pytest -q \
+            tests/test_m23_7_r3_8_remote_operator.py \
+            tests/test_m23_7_r3_8_remote_entrypoint.py \
+            tests/test_m23_7_r3_8_remote_delete.py
       - name: Preserve accepted R3.8 regressions
         shell: bash
         run: |
@@ -124,35 +133,23 @@ jobs:
           assert "GITHUB_RUN_ATTEMPT" in observe_text
           assert "actions/upload-artifact@v4" in observe_text
           assert "wrangler delete" not in observe_text
-          assert "python -m scripts.m23_7_r3_8_remote_operator" in observe_text
+          assert "python -m scripts.m23_7_r3_8_remote_entrypoint" in observe_text
+          assert "path: r3-8-remote-evidence/" in observe_text
           delete_text = delete.read_text(encoding="utf-8")
           assert "DELETE_RECONCILED_R3_8_WORKER" in delete_text
           assert "deletion_authorizations/m23-7/r3-8/" in delete_text
           assert "python -m scripts.m23_7_r3_8_remote_delete" in delete_text
+          assert "path: r3-8-deletion-evidence/" in delete_text
           PY
-      - name: Verify change scope and preserved accepted runtime
+      - name: Verify accepted core runtime preservation
         shell: bash
         run: |
-          python - <<'PY'
-          import subprocess
-          allowed = {
-              "scripts/m23_7_r3_8_remote_operator.py",
-              "scripts/m23_7_r3_8_remote_delete.py",
-              "tests/test_m23_7_r3_8_remote_operator.py",
-              "tests/test_m23_7_r3_8_remote_delete.py",
-              "pilot/m23/m23-7-r3-8-7-remote-operator-contract.json",
-              "docs/architecture/m23-7-r3-8-7-remote-operator.md",
-              ".github/workflows/m23-7-r3-8-remote-observe.yml",
-              ".github/workflows/m23-7-r3-8-remote-delete.yml",
-              ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
-          }
-          changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "a611a8d996392d06b3db40db20feb16157afc1af", "HEAD"],
-              text=True,
-          ).splitlines())
-          assert changed == allowed, (changed, allowed)
-          PY
-          git diff --exit-code a611a8d996392d06b3db40db20feb16157afc1af HEAD -- \
+          git diff --exit-code 771538d3b95fccefc3f32bd568770e08ce3552ac HEAD -- \
+            scripts/m23_7_r3_8_remote_operator.py \
+            scripts/m23_7_r3_8_remote_delete.py \
+            tests/test_m23_7_r3_8_remote_operator.py \
+            tests/test_m23_7_r3_8_remote_delete.py \
+            pilot/m23/m23-7-r3-8-7-remote-operator-contract.json \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
             workers/m23-7-r3-8-latency-repair/worker.mjs \
             pilot/m23/m23-7-r3-8-latency-repair-contract.json \
