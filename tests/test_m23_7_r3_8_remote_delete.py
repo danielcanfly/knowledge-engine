@@ -13,9 +13,17 @@ from scripts.m23_7_r3_8_remote_operator import canonical_sha256
 def _authorization() -> dict[str, Any]:
     value: dict[str, Any] = {
         "schema_version": subject.AUTH_SCHEMA,
-        "worker_name": "knowledge-engine-r3-8-29499115739",
-        "worker_version_id": "version-123",
-        "observation_run_id": "29499115739",
+        "worker_name": "knowledge-engine-r3-8-29506217284",
+        "observation_run_id": "29506217284",
+        "recovery_run_id": "29513606007",
+        "worker_version_ids": [
+            "1e8ec806-4cf2-40d4-bdd0-578602493cc3",
+            "56d7bac1-f169-411a-a8f1-e79c1c793664",
+        ],
+        "worker_deployment_ids": [
+            "035ceb79-0c55-4e1f-aa51-13a41b81ab6d",
+            "47749012-1242-48d3-a79e-d09d6308fcb5",
+        ],
         "receipt_sha256": "1" * 64,
         "evidence_seal_sha256": "2" * 64,
         "independent_reconciliation_sha256": "3" * 64,
@@ -32,11 +40,19 @@ def _authorization() -> dict[str, Any]:
     return value
 
 
-def test_deletion_authorization_validates(tmp_path: Path) -> None:
+def _rewrite_digest(value: dict[str, Any]) -> None:
+    unsigned = dict(value)
+    unsigned.pop("authorization_sha256", None)
+    value["authorization_sha256"] = canonical_sha256(unsigned)
+
+
+def test_deletion_authorization_validates_full_identity_sets(tmp_path: Path) -> None:
     path = tmp_path / "authorization.json"
     path.write_text(json.dumps(_authorization()), encoding="utf-8")
     value = subject.validate_authorization(path)
-    assert value["worker_name"] == "knowledge-engine-r3-8-29499115739"
+    assert value["worker_name"] == "knowledge-engine-r3-8-29506217284"
+    assert len(value["worker_version_ids"]) == 2
+    assert len(value["worker_deployment_ids"]) == 2
 
 
 @pytest.mark.parametrize(
@@ -45,6 +61,24 @@ def test_deletion_authorization_validates(tmp_path: Path) -> None:
         lambda value: value.update(worker_name="knowledge-engine-m23-7-r3-8-latency"),
         lambda value: value["authority"].update(production_mutation_authorized=True),
         lambda value: value.update(receipt_sha256="bad"),
+        lambda value: value.update(observation_run_id="run-1"),
+        lambda value: value.update(extra_field=True),
+        lambda value: value.update(worker_version_ids=[]),
+        lambda value: value.update(worker_deployment_ids=[]),
+        lambda value: value.update(worker_version_ids=["not-a-uuid"]),
+        lambda value: value.update(worker_deployment_ids=["not-a-uuid"]),
+        lambda value: value.update(
+            worker_version_ids=[
+                "56d7bac1-f169-411a-a8f1-e79c1c793664",
+                "1e8ec806-4cf2-40d4-bdd0-578602493cc3",
+            ]
+        ),
+        lambda value: value.update(
+            worker_deployment_ids=[
+                "035ceb79-0c55-4e1f-aa51-13a41b81ab6d",
+                "035ceb79-0c55-4e1f-aa51-13a41b81ab6d",
+            ]
+        ),
         lambda value: value.update(authorization_sha256="0" * 64),
     ),
 )
@@ -55,18 +89,18 @@ def test_deletion_authorization_rejects_drift(
     value = _authorization()
     mutation(value)
     if value.get("authorization_sha256") != "0" * 64:
-        unsigned = dict(value)
-        unsigned.pop("authorization_sha256", None)
-        value["authorization_sha256"] = canonical_sha256(unsigned)
+        _rewrite_digest(value)
     path = tmp_path / "authorization.json"
     path.write_text(json.dumps(value), encoding="utf-8")
     with pytest.raises(subject.RemoteOperatorError):
         subject.validate_authorization(path)
 
 
-def test_deletion_source_requires_committed_authorization() -> None:
+def test_deletion_source_requires_full_identity_binding() -> None:
     text = Path("scripts/m23_7_r3_8_remote_delete.py").read_text(encoding="utf-8")
     assert "authorization_sha256" in text
     assert "independent_reconciliation_sha256" in text
+    assert "worker_version_ids" in text
+    assert "worker_deployment_ids" in text
     assert "DELETE_RECONCILED_R3_8_WORKER" in text
     assert "production_mutation_authorized" in text
