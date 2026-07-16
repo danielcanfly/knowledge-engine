@@ -54,7 +54,7 @@ jobs:
           digest = value.pop("reconciliation_sha256")
           encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
           assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "241a9754de2856634300a4e3db1b4c01550446da24a5a59409140f784471b938"
+          assert digest == "19dfff13918546d0362d7eceef11ab6ae9a7904d6152686bf76c9b42f322952f"
           implementation = value["implementation"]
           assert implementation["accepted_head"] == "5d43e1523807d06d50743efa40117eb1f8132b7d"
           assert implementation["merge_sha"] == "8faaede87af9e8fde62c48ba52ee1219abb4aecb"
