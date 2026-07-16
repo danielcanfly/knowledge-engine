@@ -9,6 +9,7 @@ on:
       - "pilot/m23/m23-7-r3-5-rank-quality-calibration-contract.json"
       - "docs/architecture/m23-7-r3-5-rank-quality-calibration.md"
       - ".github/workflows/m23-7-r3-5-rank-quality-calibration.yml"
+      - "ruff.toml"
   workflow_dispatch:
 
 permissions:
