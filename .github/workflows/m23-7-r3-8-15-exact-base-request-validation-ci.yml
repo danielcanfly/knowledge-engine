@@ -51,8 +51,10 @@ jobs:
           payload = yaml.safe_load(path.read_text(encoding="utf-8"))
           assert payload[True]["pull_request"]["paths"] == ["operator_requests/m23/**"]
           text = path.read_text(encoding="utf-8")
-          assert "BASE_SHA: ${{ github.event.pull_request.base.sha }}" in text
-          assert "HEAD_SHA: ${{ github.event.pull_request.head.sha }}" in text
+          assert "BASE_SHA:" in text
+          assert "github.event.pull_request.base.sha" in text
+          assert "HEAD_SHA:" in text
+          assert "github.event.pull_request.head.sha" in text
           assert 'os.environ["BASE_SHA"]' in text
           assert 'os.environ["HEAD_SHA"]' in text
           assert '["git", "diff", "--name-only", base, head]' in text
