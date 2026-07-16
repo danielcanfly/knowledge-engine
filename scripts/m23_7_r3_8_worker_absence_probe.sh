@@ -85,10 +85,27 @@ print(len(value))
     return 0
   fi
 
-  local not_found_pattern='(^|[^0-9])10007([^0-9]|$)'
-  if [[ "$probe_output" =~ $not_found_pattern ]]; then
-    printf 'absent\n'
-    return 0
+  local absence_classification=""
+  if absence_classification="$(
+    printf '%s' "$probe_output" | "$M23_R3_8_PYTHON_BIN" -c '
+import re
+import sys
+
+text = sys.stdin.read()
+if re.search(r"(?<!\d)403(?!\d)", text):
+    raise SystemExit(2)
+if re.search(r"\b(?:forbidden|unauthori[sz]ed|authentication)\b", text, re.I):
+    raise SystemExit(3)
+codes = set(re.findall(r"(?<!\d)1\d{4}(?!\d)", text))
+if codes != {"10007"}:
+    raise SystemExit(4)
+print("absent")
+'
+  )"; then
+    if [[ "$absence_classification" == "absent" ]]; then
+      printf 'absent\n'
+      return 0
+    fi
   fi
 
   m23_r3_8_absence_probe_error \
