@@ -33,10 +33,22 @@ jobs:
         run: python -m pip install -e '.[dev]'
       - name: Ruff accepted scope
         run: |
+          set +e
           ruff check \
             src/knowledge_engine/m23_7_r3_7_live_acceptance.py \
             scripts/m23_7_r3_7_live_acceptance_operator.py \
-            tests/test_m23_7_r3_7_live_acceptance.py
+            tests/test_m23_7_r3_7_live_acceptance.py \
+            --output-format=json > r3-7-ruff-diagnostics.json
+          status=$?
+          cat r3-7-ruff-diagnostics.json
+          exit "$status"
+      - name: Upload Ruff diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r3-7-ruff-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}
+          path: r3-7-ruff-diagnostics.json
+          retention-days: 1
       - name: R3.5 accepted regression
         run: pytest -q tests/test_m23_7_r3_5_rank_quality_calibration.py
       - name: R3.6 accepted regression
