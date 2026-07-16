@@ -8,9 +8,9 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from knowledge_engine.errors import IntegrityError
 
 from knowledge_engine import m23_7_r3_3_offline_rebuild_evaluation as r33
+from knowledge_engine.errors import IntegrityError
 
 
 def _canonical_bytes(value: object) -> bytes:
