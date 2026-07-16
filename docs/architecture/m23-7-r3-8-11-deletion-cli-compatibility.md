@@ -28,6 +28,20 @@ Both the manual deletion workflow and pull-request CI now validate the exact pin
 
 Adversarial tests verify the exact argument vector, reject malformed Worker identities, exercise the deletion and control-plane absence calls, and require a privacy-safe receipt only after absence is proven.
 
+## Historical regression compatibility
+
+Two historical workflows also required correction. Their original gates compared every later pull request against the exact file set of their own implementation PR. That converted a useful regression into a permanent freeze and rejected this bounded repair even though the accepted identity contracts and runtime were unchanged.
+
+The R3.8.8 and R3.8.10 gates now preserve:
+
+- their deterministic contract digests;
+- recovery and full identity semantics;
+- observation, recovery and Worker runtime ancestry;
+- schema-v2 authorization validation and the exact four-version/four-deployment identity set;
+- read-only and lexical-production boundaries.
+
+They no longer require all future changes to match a stale historical file list, and the artifact-recovery workflow no longer treats the separately governed deletion workflow as immutable implementation content.
+
 ## Preserved identities and authority
 
 This repair does not change:
