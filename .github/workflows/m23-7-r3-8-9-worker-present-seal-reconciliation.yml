@@ -1,0 +1,98 @@
+name: M23.7 R3.8.9 Worker-Present Seal Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-9/worker-present-seal-reconciliation.json"
+      - "docs/architecture/m23-7-r3-8-9-worker-present-seal-reconciliation.md"
+      - ".github/workflows/m23-7-r3-8-9-worker-present-seal-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and seal merge ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor e082420e62a2845516188bd6a9384499a908995a HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic reconciliation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          path = Path(".github/evidence/m23-7-r3-8-9/worker-present-seal-reconciliation.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("reconciliation_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "5f664464031ede3bbd832f7c8659b55b4584eb23aef574f3b0329a340b6fbcec"
+          assert value["seal"]["accepted_head"] == "ffed9285e01096402d2038ae522da85b0ae15ba9"
+          assert value["seal"]["merge_sha"] == "e082420e62a2845516188bd6a9384499a908995a"
+          assert value["seal"]["seal_sha256"] == "14e107b32df40140471fc46e56ad15a6e2a9ef93bf1a803ab12f3c2c7ba36eb5"
+          assert value["worker"]["name"] == "knowledge-engine-r3-8-29506217284"
+          assert value["worker"]["state"] == "worker_present"
+          assert len(value["worker"]["version_identities"]) == 4
+          assert len(value["worker"]["deployment_identities"]) == 4
+          assert len(set(value["worker"]["version_identities"])) == 4
+          assert len(set(value["worker"]["deployment_identities"])) == 4
+          assert all(flag is False for flag in value["strict_zero"].values())
+          assert value["authority"]["deletion_authorization_record_may_be_created"] is True
+          assert value["authority"]["worker_deletion_executed"] is False
+          assert value["authority"]["production_retrieval"] == "lexical"
+          assert value["authority"]["maximum_worker_internal_shadow_ms"] == 1200
+          PY
+      - name: Verify exact reconciliation scope and seal preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              ".github/evidence/m23-7-r3-8-9/worker-present-seal-reconciliation.json",
+              "docs/architecture/m23-7-r3-8-9-worker-present-seal-reconciliation.md",
+              ".github/workflows/m23-7-r3-8-9-worker-present-seal-reconciliation.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "e082420e62a2845516188bd6a9384499a908995a", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code e082420e62a2845516188bd6a9384499a908995a HEAD -- \
+            .github/evidence/m23-7-r3-8-9/worker-present-recovery-seal.json \
+            scripts/m23_7_r3_8_remote_recovery_probe.py \
+            .github/workflows/m23-7-r3-8-9-recovery-probe.yml \
+            scripts/m23_7_r3_8_remote_delete.py
+      - name: Verify next gate is authorization record only
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path(
+              ".github/evidence/m23-7-r3-8-9/worker-present-seal-reconciliation.json"
+          ).read_text(encoding="utf-8"))
+          authority = value["authority"]
+          assert authority["deletion_authorization_record_may_be_created"] is True
+          for field in (
+              "worker_deletion_executed",
+              "fresh_observation_authorized",
+              "blocker_clearance_authorized",
+              "parent_closure_authorized",
+          ):
+              assert authority[field] is False
+          PY
