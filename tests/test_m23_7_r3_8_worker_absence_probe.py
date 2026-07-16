@@ -94,6 +94,9 @@ def test_present_only_on_nonempty_json_versions_array(tmp_path: Path) -> None:
     ("body", "exit_code"),
     (
         ("printf 'HTTP 403 secret-sentinel\\n' >&2", 1),
+        ("printf 'Forbidden [code: 10007]\\n' >&2", 1),
+        ("printf 'HTTP 403 [code: 10007]\\n' >&2", 1),
+        ("printf '[code: 10007] [code: 10008]\\n' >&2", 1),
         ("printf 'Cloudflare API error [code: 10008]\\n' >&2", 1),
         ("printf 'not-json\\n'", 0),
         ("printf '{}\\n'", 0),
@@ -166,5 +169,11 @@ def test_probe_source_uses_bash32_arrays_and_never_eval() -> None:
     assert "--json" in shell
     assert "10007" in shell
     assert "eval " not in shell
-    for forbidden in ("declare -g", "declare -A", "local -n", "mapfile", "readarray"):
+    for forbidden in (
+        "declare -g",
+        "declare -A",
+        "local -n",
+        "mapfile",
+        "readarray",
+    ):
         assert forbidden not in shell
