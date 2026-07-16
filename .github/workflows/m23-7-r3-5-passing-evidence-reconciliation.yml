@@ -1,0 +1,111 @@
+name: M23.7 Repair R3.5 Passing Evidence Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-5-passing-evidence-reconciliation.json"
+      - "docs/architecture/m23-7-r3-5-passing-evidence-reconciliation.md"
+      - ".github/workflows/m23-7-r3-5-passing-evidence-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Verify evidence-seal ancestry
+        run: git merge-base --is-ancestor 2c76a93b200681c392b9a422c6b8e4418c6cdf7f HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify reconciliation record
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-5-passing-evidence-reconciliation.json")
+          record = json.loads(path.read_text(encoding="utf-8"))
+          digest = record.pop("reconciliation_record_sha256")
+          canonical = json.dumps(
+              record,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+              allow_nan=False,
+          )
+          assert hashlib.sha256(canonical.encode("utf-8")).hexdigest() == digest
+          assert digest == "fcb9cff2332865a0f2b5cd5b1ee27fbf488980fa343d16e117e9c3d4dd8cfc5d"
+          assert record["issue"] == 506
+          assert record["implementation_issue"] == 502
+          assert record["seal_issue"] == 504
+          assert record["parent_issue"] == 474
+          assert record["implementation"] == {
+              "pr": 503,
+              "accepted_head_sha": "61b467ec22a74e7a42ebccb4626931a6dcfd3915",
+              "merge_sha": "dd10d66083a3a4b81546467f26f0f3253b3a8a22",
+          }
+          seal = record["evidence_seal"]
+          assert seal["pr"] == 505
+          assert seal["head_sha"] == "fc4bf8d6ef6beaf213b0d6522997dac633831692"
+          assert seal["merge_sha"] == "2c76a93b200681c392b9a422c6b8e4418c6cdf7f"
+          assert seal["seal_sha256"] == "811942ecb900daba1fdde8ebd4baa33e6e31e8dd5e69ecbd44115f5b79dcf3a8"
+          assert len(record["exact_head_workflows"]) == 4
+          assert all(item["conclusion"] == "success" for item in record["exact_head_workflows"])
+          result = record["operator_result"]
+          assert result["status"] == "pass_rank_quality_calibration"
+          assert result["metrics"] == {
+              "recall_at_5": 0.875,
+              "mrr_at_10": 0.807291666667,
+              "ndcg_at_10": 0.851933109598,
+          }
+          assert result["thresholds"] == {
+              "recall_at_5": 0.82,
+              "mrr_at_10": 0.68,
+              "ndcg_at_10": 0.72,
+          }
+          assert result["r3_5_target_ranks"] == [1, 8, 3, 1, 1, 1, 1, 1]
+          assert result["query_variant_identity_count"] == 24
+          assert result["maximum_top10_hub_frequency"] == 3
+          findings = record["reconciled_findings"]
+          assert all(value is True for value in findings.values())
+          authority = record["authority"]
+          assert authority["production_retrieval"] == "lexical"
+          assert authority["candidate_reingestion_authorized"] is False
+          assert authority["live_acceptance_authorized"] is False
+          assert authority["retrieval_quality_blocker_cleared"] is False
+          assert authority["qdrant_reads"] == 0
+          assert authority["qdrant_writes"] == 0
+          assert record["remaining_blockers"] == ["blocked_pending_retrieval_quality"]
+          exit_state = record["exit"]
+          assert exit_state["r3_5_complete"] is True
+          assert exit_state["r3_5_disposition"] == "completed_passed"
+          assert exit_state["issue_502_may_close"] is True
+          assert exit_state["issue_504_may_close"] is True
+          assert exit_state["issue_506_may_close"] is True
+          assert exit_state["issue_474_must_remain_open"] is True
+          assert exit_state["next_legal_action"] == "separately_governed_candidate_reingestion_proposal"
+          PY
+      - name: Privacy and authority scan
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = "\n".join(
+              path.read_text(encoding="utf-8")
+              for path in (
+                  Path("pilot/m23/m23-7-r3-5-passing-evidence-reconciliation.json"),
+                  Path("docs/architecture/m23-7-r3-5-passing-evidence-reconciliation.md"),
+              )
+          )
+          for forbidden in ("CLOUDFLARE_API_TOKEN", "QDRANT_API_KEY", "https://"):
+              assert forbidden not in text
+          PY
