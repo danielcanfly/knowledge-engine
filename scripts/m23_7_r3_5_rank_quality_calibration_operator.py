@@ -4,7 +4,7 @@ import argparse
 import os
 from pathlib import Path
 
-from knowledge_engine.m23_7_r3_5_rank_quality_calibration import (
+from knowledge_engine.m23_7_r3_5_rank_quality_calibration_runtime import (
     build_calibration_candidate,
     canonical_json,
     evaluate_calibration_candidate,
