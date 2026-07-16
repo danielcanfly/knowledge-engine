@@ -8,6 +8,7 @@ on:
       - ".github/workflows/m23-7-r3-8-remote-delete.yml"
       - ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml"
       - ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml"
+      - ".github/workflows/m23-7-r3-8-9-recovery-schema-ci.yml"
       - ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml"
       - ".github/workflows/m23-7-r3-8-11-deletion-cli-compatibility.yml"
       - "pilot/m23/m23-7-r3-8-11-deletion-cli-compatibility-contract.json"
@@ -129,11 +130,16 @@ jobs:
           recovery = Path(
               ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml"
           ).read_text(encoding="utf-8")
+          schema = Path(
+              ".github/workflows/m23-7-r3-8-9-recovery-schema-ci.yml"
+          ).read_text(encoding="utf-8")
           assert "changed == allowed" not in identity
           assert "validate_authorization(path)" in identity
           assert ".github/workflows/m23-7-r3-8-remote-delete.yml" not in recovery.split(
               "Verify accepted recovery core remains exact", 1
           )[1]
+          assert "changed == allowed" not in schema
+          assert "500d61c3b05385d7fd05ec976fa6bf54043bdf77" in schema
           PY
       - name: Verify mutation and closure boundaries
         shell: bash
