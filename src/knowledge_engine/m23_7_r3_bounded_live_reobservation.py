@@ -59,6 +59,7 @@ MIN_RECALL_AT_5 = 0.82
 MIN_MRR_AT_10 = 0.68
 MIN_NDCG_AT_10 = 0.72
 MAX_WORKER_RESPONSE_BYTES = 160_000
+BOUNDED_WORKER_ERROR_RE = re.compile(r"[a-z][a-z0-9-]{2,63}")
 
 PROTECTED_MUTATIONS = (
     "answer_serving",
@@ -303,6 +304,30 @@ class R3WorkerInvoker(Protocol):
     ) -> dict[str, Any]: ...
 
 
+class DiagnosticWorkerFailure(IntegrityError):
+    def __init__(
+        self,
+        *,
+        http_status: int,
+        worker_error_code: str,
+        operator_round_trip_ms: int,
+    ) -> None:
+        _require(
+            400 <= http_status <= 599,
+            160,
+            "diagnostic Worker HTTP status invalid",
+        )
+        _require(
+            bool(BOUNDED_WORKER_ERROR_RE.fullmatch(worker_error_code)),
+            161,
+            "diagnostic Worker error code invalid",
+        )
+        self.http_status = http_status
+        self.worker_error_code = worker_error_code
+        self.operator_round_trip_ms = operator_round_trip_ms
+        super().__init__("M23.7-R3-162 diagnostic Worker returned bounded failure")
+
+
 class HttpR3WorkerInvoker:
     def __init__(
         self,
@@ -368,7 +393,6 @@ class HttpR3WorkerInvoker:
                 },
                 content=canonical_json(body).encode(),
             )
-            response.raise_for_status()
         except httpx.TimeoutException as exc:
             raise IntegrityError("M23.7-R3-123 diagnostic Worker timed out") from exc
         except httpx.HTTPError as exc:
@@ -381,6 +405,27 @@ class HttpR3WorkerInvoker:
             125,
             "Worker response too large",
         )
+        if not response.is_success:
+            try:
+                failure_payload = response.json()
+            except ValueError as exc:
+                raise IntegrityError(
+                    "M23.7-R3-124 diagnostic Worker unavailable"
+                ) from exc
+            failure = _mapping(failure_payload, "Worker failure response")
+            worker_error_code = failure.get("code")
+            _require(
+                failure.get("status") == "error"
+                and isinstance(worker_error_code, str)
+                and bool(BOUNDED_WORKER_ERROR_RE.fullmatch(worker_error_code)),
+                163,
+                "Worker failure response is unbounded",
+            )
+            raise DiagnosticWorkerFailure(
+                http_status=response.status_code,
+                worker_error_code=worker_error_code,
+                operator_round_trip_ms=_elapsed_ms(started, finished),
+            )
         try:
             payload = response.json()
         except ValueError as exc:
@@ -701,6 +746,93 @@ def build_report(
     return report
 
 
+def build_diagnostic_failure_report(
+    *,
+    contract: Mapping[str, Any],
+    worker_origin: str,
+    placement_config: Mapping[str, Any],
+    failure: DiagnosticWorkerFailure,
+) -> dict[str, Any]:
+    validated_contract = validate_contract(contract)
+    gates = {
+        "recall_at_5": False,
+        "mrr_at_10": False,
+        "ndcg_at_10": False,
+        "worker_internal_shadow": False,
+        "error_rate": False,
+        "acl_violation_rate": True,
+        "output_influence_rate": True,
+    }
+    report: dict[str, Any] = {
+        "schema_version": REPORT_SCHEMA_VERSION,
+        "status": "rejected_diagnostic_worker_failure",
+        "milestone": "M23.7-R3",
+        "workstream": "bounded_live_reobservation",
+        "contract_sha256": validated_contract["contract_sha256"],
+        "placement_config": dict(placement_config),
+        "path": {
+            "id": "workers-ai-binding-qdrant-placement-top-10",
+            "origin_label": _bounded_label(worker_origin, "Worker origin"),
+            "data_plane_requests": 1,
+            "operator_round_trip_ms": failure.operator_round_trip_ms,
+            "worker_http_status": failure.http_status,
+            "worker_error_code": failure.worker_error_code,
+        },
+        "cases": [],
+        "metrics": {
+            "recall_at_5": 0.0,
+            "mrr_at_10": 0.0,
+            "ndcg_at_10": 0.0,
+            "worker_internal_shadow_ms": MAX_SHADOW_P95_MS + 1,
+            "error_rate": 1.0,
+            "acl_violation_rate": 0.0,
+            "output_influence_rate": 0.0,
+        },
+        "thresholds": {
+            "min_recall_at_5": MIN_RECALL_AT_5,
+            "min_mrr_at_10": MIN_MRR_AT_10,
+            "min_ndcg_at_10": MIN_NDCG_AT_10,
+            "max_worker_internal_shadow_ms": MAX_SHADOW_P95_MS,
+            "max_error_rate": 0.0,
+            "max_acl_violation_rate": 0.0,
+            "max_output_influence_rate": 0.0,
+        },
+        "gates": gates,
+        "privacy": {
+            "compiled_raw_queries_persisted": False,
+            "raw_answers_persisted": False,
+            "credentials_persisted": False,
+            "service_urls_persisted": False,
+            "service_hostnames_persisted": False,
+            "arbitrary_exception_text_persisted": False,
+        },
+        "exit": {
+            "r3_complete": False,
+            "retrieval_quality_blocker_cleared": False,
+            "all_repair_blockers_cleared": False,
+            "diagnostic_worker_delete_after_reconciliation": True,
+            "new_explicit_promotion_decision_required": True,
+            "promotion_eligibility_granted": False,
+        },
+        "remaining_blockers": ["blocked_pending_retrieval_quality"],
+        "authority": {
+            "production_retrieval": "lexical",
+            "candidate_mode_enabled": False,
+            "semantic_output_served": False,
+            "production_authority": False,
+            "protected_mutations_dispatched": False,
+        },
+        "external_calls": {
+            "workers_ai_binding": 0,
+            "qdrant_collection_reads": 0,
+            "qdrant_query_batch": 0,
+            "qdrant_write": 0,
+        },
+    }
+    report["report_sha256"] = canonical_sha256(report)
+    return report
+
+
 def validate_report(payload: Mapping[str, Any]) -> dict[str, Any]:
     root = dict(_mapping(payload, "report"))
     digest = root.pop("report_sha256", None)
@@ -716,6 +848,7 @@ def validate_report(payload: Mapping[str, Any]) -> dict[str, Any]:
         in {
             "pass_bounded_live_reobservation",
             "rejected_bounded_live_reobservation",
+            "rejected_diagnostic_worker_failure",
         },
         153,
         "unsupported report status",
@@ -736,13 +869,32 @@ def validate_report(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
     _require(dict(gates) == expected_gates, 154, "gate evaluation drifted")
     passed = all(expected_gates.values())
-    _require(
-        (status == "pass_bounded_live_reobservation") is passed,
-        155,
-        "status drifted",
-    )
+    if status == "rejected_diagnostic_worker_failure":
+        path = _mapping(root.get("path"), "path")
+        _require(
+            isinstance(path.get("worker_http_status"), int)
+            and 400 <= path["worker_http_status"] <= 599,
+            155,
+            "diagnostic Worker HTTP status invalid",
+        )
+        _require(
+            isinstance(path.get("worker_error_code"), str)
+            and bool(BOUNDED_WORKER_ERROR_RE.fullmatch(path["worker_error_code"])),
+            155,
+            "diagnostic Worker error code invalid",
+        )
+        passed = False
+    else:
+        _require(
+            (status == "pass_bounded_live_reobservation") is passed,
+            155,
+            "status drifted",
+        )
     cases = list(_sequence(root.get("cases"), "cases"))
-    _require(len(cases) == SAMPLE_CAP, 156, "case count drifted")
+    expected_case_count = (
+        0 if status == "rejected_diagnostic_worker_failure" else SAMPLE_CAP
+    )
+    _require(len(cases) == expected_case_count, 156, "case count drifted")
     _require(
         all(case.get("raw_query_persisted") is False for case in cases),
         157,
