@@ -1,0 +1,212 @@
+name: M23.7 R3.8.12 Operator Command Bus Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-8-12-operator-command-bus-reconciliation.json"
+      - "docs/architecture/m23-7-r3-8-12-operator-command-bus-reconciliation.md"
+      - ".github/workflows/m23-7-r3-8-12-operator-command-bus-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact head and implementation ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 75065a0d278fb0a82ffc9852f8af7cd2e268a3ac HEAD
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install development dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Re-run bounded command bus tests
+        run: |
+          ruff check scripts/m23_operator_command_bus.py scripts/m23_7_r3_8_post_delete_recovery.py tests/test_m23_operator_command_bus.py tests/test_m23_7_r3_8_post_delete_recovery.py
+          python -m py_compile scripts/m23_operator_command_bus.py scripts/m23_7_r3_8_post_delete_recovery.py
+          pytest -q tests/test_m23_operator_command_bus.py tests/test_m23_7_r3_8_post_delete_recovery.py tests/test_m23_7_r3_8_remote_recovery_probe.py tests/test_m23_7_r3_8_remote_delete.py
+
+      - name: Verify reconciliation digest and implementation identities
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path(
+              "pilot/m23/"
+              "m23-7-r3-8-12-operator-command-bus-reconciliation.json"
+          )
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("reconciliation_sha256")
+          encoded = json.dumps(
+              value,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "f13f527b479f8691aec3f8dfd0bc7b06723298fe6acbf51d727cea45e87cbd37"
+          implementation = value["implementation"]
+          assert implementation["accepted_head"] == "c912aa51cdc9bb030c9f42a0de340dc067583078"
+          assert implementation["merge_sha"] == "75065a0d278fb0a82ffc9852f8af7cd2e268a3ac"
+          assert implementation["authorization_sha256"] == "b2b247181bbdd276ef4cd393e9b91655a0460b764a89d9a7c9c8a8408a5ee357"
+          assert implementation["contract_sha256"] == "9d3e7392a8bb6a65fa5f1fa66f225ee0a9414a78cc1896c99d867ddfd53914c6"
+          assert len(implementation["changed_files"]) == 9
+          assert all(
+              item["conclusion"] == "success"
+              for item in value["exact_head_workflows"].values()
+          )
+          findings = value["findings"]
+          assert findings["command_bus_issue"] == 565
+          assert findings["issue_locked"] is True
+          assert findings["nonce_bits"] == 256
+          assert findings["arbitrary_workflow_allowed"] is False
+          assert findings["arbitrary_shell_allowed"] is False
+          assert findings["static_routes"] == ["r3_8_post_delete_recovery"]
+          assert findings["worker_delete_replayed"] is False
+          assert findings["qdrant_access_dispatched"] is False
+          assert findings["r2_access_dispatched"] is False
+          authority = value["authority"]
+          assert authority["production_retrieval"] == "lexical"
+          assert authority["retrieval_quality_blocker"] == "active"
+          assert authority["latency_blocker"] == "active"
+          assert authority["blocker_clearance_authorized"] is False
+          PY
+
+      - name: Verify exact implementation file set
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          expected = {
+              ".github/workflows/m23-7-r3-8-12-operator-command-bus-ci.yml",
+              ".github/workflows/m23-operator-command-bus.yml",
+              "docs/architecture/m23-7-r3-8-12-operator-command-bus.md",
+              "operator_authorizations/m23/r3-8/post-delete-recovery-29521901629.json",
+              "pilot/m23/m23-7-r3-8-12-operator-command-bus-contract.json",
+              "scripts/m23_7_r3_8_post_delete_recovery.py",
+              "scripts/m23_operator_command_bus.py",
+              "tests/test_m23_7_r3_8_post_delete_recovery.py",
+              "tests/test_m23_operator_command_bus.py",
+          }
+          changed = set(
+              subprocess.check_output(
+                  [
+                      "git",
+                      "diff",
+                      "--name-only",
+                      "542907fa0cfae47addd6d777c1708ae62155aea4",
+                      "75065a0d278fb0a82ffc9852f8af7cd2e268a3ac",
+                  ],
+                  text=True,
+              ).splitlines()
+          )
+          assert changed == expected, (changed, expected)
+          PY
+
+      - name: Verify command bus issue is locked
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          url = (
+              "https://api.github.com/repos/"
+              f"{os.environ['GITHUB_REPOSITORY']}/issues/565"
+          )
+          request = urllib.request.Request(
+              url,
+              headers={
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "Accept": "application/vnd.github+json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              issue = json.load(response)
+          assert issue["number"] == 565
+          assert issue["state"] == "open"
+          assert issue["locked"] is True
+          PY
+
+      - name: Verify static routing and mutation boundaries
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          workflow = Path(".github/workflows/m23-operator-command-bus.yml")
+          payload = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+          assert "issue_comment" in payload[True]
+          assert "workflow_dispatch" not in payload[True]
+          text = workflow.read_text(encoding="utf-8")
+          assert "r3_8_post_delete_recovery" in text
+          assert "command_body_not_single_use" in text
+          source = Path(
+              "scripts/m23_7_r3_8_post_delete_recovery.py"
+          ).read_text(encoding="utf-8")
+          assert source.count("client.get(") == 2
+          for forbidden in (
+              "client.post(",
+              "client.put(",
+              "client.patch(",
+              "client.delete(",
+              "wrangler delete",
+              "wrangler deploy",
+              "QDRANT_URL",
+              "QDRANT_API_KEY",
+              "R2_ACCESS_KEY_ID",
+              "R2_SECRET_ACCESS_KEY",
+          ):
+              assert forbidden not in source
+          PY
+
+      - name: Verify reconciliation-only change scope
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          expected = {
+              ".github/workflows/m23-7-r3-8-12-operator-command-bus-reconciliation.yml",
+              "docs/architecture/m23-7-r3-8-12-operator-command-bus-reconciliation.md",
+              "pilot/m23/m23-7-r3-8-12-operator-command-bus-reconciliation.json",
+          }
+          changed = set(
+              subprocess.check_output(
+                  [
+                      "git",
+                      "diff",
+                      "--name-only",
+                      "75065a0d278fb0a82ffc9852f8af7cd2e268a3ac",
+                      "HEAD",
+                  ],
+                  text=True,
+              ).splitlines()
+          )
+          assert changed == expected, (changed, expected)
+          PY
+          git diff --exit-code 75065a0d278fb0a82ffc9852f8af7cd2e268a3ac HEAD -- scripts/m23_operator_command_bus.py scripts/m23_7_r3_8_post_delete_recovery.py tests/test_m23_operator_command_bus.py tests/test_m23_7_r3_8_post_delete_recovery.py .github/workflows/m23-operator-command-bus.yml operator_authorizations/m23/r3-8/post-delete-recovery-29521901629.json pilot/m23/m23-7-r3-8-12-operator-command-bus-contract.json
