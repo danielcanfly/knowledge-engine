@@ -1,0 +1,110 @@
+name: M23.7 Repair R3.4 Rejected Evidence Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-4-rejected-evidence-reconciliation.json"
+      - "docs/architecture/m23-7-r3-4-rejected-evidence-reconciliation.md"
+      - ".github/workflows/m23-7-r3-4-rejected-evidence-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Verify evidence-seal ancestry
+        run: git merge-base --is-ancestor e212b97e6ab1237de81c042905b20c61afc8bcb4 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify reconciliation record
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path('pilot/m23/m23-7-r3-4-rejected-evidence-reconciliation.json')
+          record = json.loads(path.read_text(encoding='utf-8'))
+          digest = record.pop('reconciliation_record_sha256')
+          canonical = json.dumps(
+              record,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          )
+          assert hashlib.sha256(canonical.encode('utf-8')).hexdigest() == digest
+          assert digest == 'f4b243b9c90cb7eb361b398414db25d1e9627b0d01d945306c2eb1a9c4853689'
+          assert record['issue'] == 499
+          assert record['implementation_issue'] == 497
+          assert record['parent_issue'] == 474
+          assert record['evidence_seal']['pr'] == 500
+          assert record['evidence_seal']['head_sha'] == 'f6ddd9b95f52ed600899c367717662c8f65e8377'
+          assert record['evidence_seal']['merge_sha'] == 'e212b97e6ab1237de81c042905b20c61afc8bcb4'
+          assert record['evidence_seal']['seal_sha256'] == '3dc6cc5d23f6c4a7767571663a9ccdae9f2c24fdc21553b1676ac844b8ba496c'
+          assert len(record['exact_head_workflows']) == 4
+          assert all(item['conclusion'] == 'success' for item in record['exact_head_workflows'])
+          result = record['operator_result']
+          assert result['status'] == 'rejected_target_discrimination_repair'
+          assert result['metrics'] == {
+              'recall_at_5': 0.875,
+              'mrr_at_10': 0.566666666667,
+              'ndcg_at_10': 0.643589039297,
+          }
+          assert result['thresholds'] == {
+              'recall_at_5': 0.82,
+              'mrr_at_10': 0.68,
+              'ndcg_at_10': 0.72,
+          }
+          assert result['final_target_ranks'] == [2, 21, 3, 1, 1, 5, 2, 1]
+          assert result['query_variant_identity_count'] == 24
+          assert result['maximum_top10_hub_frequency'] == 3
+          diagnosis = record['reconciled_diagnosis']
+          assert diagnosis['query_collision_repaired'] is True
+          assert diagnosis['target_discrimination_materially_improved'] is True
+          assert diagnosis['hubness_materially_reduced'] is True
+          assert diagnosis['recall_gate_passed'] is True
+          assert diagnosis['ranking_quality_gates_passed'] is False
+          assert diagnosis['best_ranking_quality_ablation'] == 'multi_query_rrf'
+          assert diagnosis['remaining_primary'] == 'rank_quality_calibration'
+          assert diagnosis['remaining_hard_case'] == 'm23q-02'
+          authority = record['authority']
+          assert authority['production_retrieval'] == 'lexical'
+          assert authority['candidate_reingestion_authorized'] is False
+          assert authority['live_acceptance_authorized'] is False
+          assert authority['retrieval_quality_blocker_cleared'] is False
+          assert authority['qdrant_reads'] == 0
+          assert authority['qdrant_writes'] == 0
+          assert record['remaining_blockers'] == ['blocked_pending_retrieval_quality']
+          exit_state = record['exit']
+          assert exit_state['r3_4_complete'] is True
+          assert exit_state['r3_4_disposition'] == 'completed_rejected'
+          assert exit_state['issue_499_may_close'] is True
+          assert exit_state['issue_497_may_close'] is True
+          assert exit_state['issue_474_must_remain_open'] is True
+          assert exit_state['next_legal_action'] == 'separately_governed_r3_5_rank_quality_calibration_repair'
+          PY
+      - name: Privacy and authority scan
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = '\n'.join(
+              path.read_text(encoding='utf-8')
+              for path in (
+                  Path('pilot/m23/m23-7-r3-4-rejected-evidence-reconciliation.json'),
+                  Path('docs/architecture/m23-7-r3-4-rejected-evidence-reconciliation.md'),
+              )
+          )
+          for forbidden in ('CLOUDFLARE_API_TOKEN', 'QDRANT_API_KEY', 'https://'):
+              assert forbidden not in text
+          PY
