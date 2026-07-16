@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "src/knowledge_engine/m23_7_r3_5_rank_quality_calibration.py"
+      - "src/knowledge_engine/m23_7_r3_5_rank_quality_calibration_runtime.py"
       - "scripts/m23_7_r3_5_rank_quality_calibration_operator.py"
       - "tests/test_m23_7_r3_5_rank_quality_calibration.py"
       - "pilot/m23/m23-7-r3-5-rank-quality-calibration-contract.json"
@@ -38,6 +39,7 @@ jobs:
         run: |
           ruff check \
             src/knowledge_engine/m23_7_r3_5_rank_quality_calibration.py \
+            src/knowledge_engine/m23_7_r3_5_rank_quality_calibration_runtime.py \
             scripts/m23_7_r3_5_rank_quality_calibration_operator.py \
             tests/test_m23_7_r3_5_rank_quality_calibration.py
 
@@ -55,7 +57,7 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          from knowledge_engine.m23_7_r3_5_rank_quality_calibration import (
+          from knowledge_engine.m23_7_r3_5_rank_quality_calibration_runtime import (
               canonical_contract,
               canonical_json,
           )
@@ -97,5 +99,6 @@ jobs:
         run: |
           python -m compileall -q \
             src/knowledge_engine/m23_7_r3_5_rank_quality_calibration.py \
+            src/knowledge_engine/m23_7_r3_5_rank_quality_calibration_runtime.py \
             scripts/m23_7_r3_5_rank_quality_calibration_operator.py \
             tests/test_m23_7_r3_5_rank_quality_calibration.py
