@@ -33,12 +33,18 @@ def _run(
         f'source "{SCRIPT.resolve()}"; '
         f'M23_R3_8_WRANGLER_CMD=("{shim}"); '
         f'M23_R3_8_PYTHON_BIN="{sys.executable}"; '
-        f'm23_r3_8_probe_worker_absence "{worker_name}" "{config}"'
+        'm23_r3_8_probe_worker_absence "$TEST_WORKER_NAME" "$TEST_CONFIG"'
     )
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "HOME": str(tmp_path),
+        "TEST_WORKER_NAME": worker_name,
+        "TEST_CONFIG": str(config),
+    }
     return subprocess.run(
         ["/bin/bash", "--noprofile", "--norc", "-c", command],
         cwd=Path.cwd(),
-        env={"PATH": os.environ.get("PATH", ""), "HOME": str(tmp_path)},
+        env=env,
         text=True,
         capture_output=True,
         check=False,
