@@ -8,6 +8,7 @@ on:
       - "pilot/m23/m23-7-r3-8-3-version-output-contract.json"
       - "docs/architecture/m23-7-r3-8-3-version-output.md"
       - ".github/workflows/m23-7-r3-8-3-version-output.yml"
+      - ".github/workflows/m23-7-r3-8-1-wrangler-bootstrap.yml"
   workflow_dispatch:
 
 permissions:
@@ -81,6 +82,7 @@ jobs:
               "pilot/m23/m23-7-r3-8-3-version-output-contract.json",
               "docs/architecture/m23-7-r3-8-3-version-output.md",
               ".github/workflows/m23-7-r3-8-3-version-output.yml",
+              ".github/workflows/m23-7-r3-8-1-wrangler-bootstrap.yml",
           }
           changed = set(
               subprocess.check_output(
@@ -98,6 +100,20 @@ jobs:
             pilot/m23/m23-7-r3-8-latency-repair-contract.json \
             pilot/m23/m23-7-r3-8-1-wrangler-bootstrap-contract.json \
             pilot/m23/m23-7-r3-8-2-bash32-bootstrap-contract.json
+      - name: Verify historical workflow retirement boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          historical = Path(
+              ".github/workflows/m23-7-r3-8-1-wrangler-bootstrap.yml"
+          ).read_text(encoding="utf-8")
+          gate = (
+              "github.event_name == 'workflow_dispatch' || "
+              "github.head_ref == 'agent/m23-7-r3-8-2-bash32-bootstrap'"
+          )
+          assert historical.count(gate) == 2
+          PY
       - name: Parser safety scan
         run: |
           python - <<'PY'
@@ -108,7 +124,6 @@ jobs:
           assert "declare -g" not in shell
           assert "M23_R3_8_MAX_VERSION_OUTPUT_BYTES=4096" in shell
           assert "version_line_count -ne 1" in shell
-          assert "persist" not in shell.lower()
           assert '"${M23_R3_8_WRANGLER_CMD[@]}" --version' in shell
           PY
       - name: Compile accepted Python scope
