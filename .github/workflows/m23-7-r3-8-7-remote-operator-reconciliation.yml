@@ -1,0 +1,112 @@
+name: M23.7 R3.8.7 Remote Operator Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-7/remote-operator-reconciliation.json"
+      - "docs/architecture/m23-7-r3-8-7-remote-operator-reconciliation.md"
+      - ".github/workflows/m23-7-r3-8-7-remote-operator-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and implementation merge ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 771538d3b95fccefc3f32bd568770e08ce3552ac HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic reconciliation and frozen conclusions
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path(".github/evidence/m23-7-r3-8-7/remote-operator-reconciliation.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("reconciliation_sha256")
+          encoded = json.dumps(
+              value,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "12dbb326e9f76c6541016561789f34020faf1f2978c24660882c7b9c29c3a103"
+          assert value["implementation"]["accepted_head"] == "9cfbbb4a942b265ab4b81934e54262adf7e4687a"
+          assert value["implementation"]["merge_sha"] == "771538d3b95fccefc3f32bd568770e08ce3552ac"
+          assert len(value["implementation"]["changed_files"]) == 9
+          assert value["contract"]["maximum_worker_internal_shadow_ms"] == 1200
+          assert value["contract"]["production_retrieval"] == "lexical"
+          assert value["implementation_observation"] == {
+              "diagnostic_worker_deployed": False,
+              "protected_mutations_dispatched": False,
+              "qdrant_mutation_dispatched": False,
+              "qdrant_read_dispatched": False,
+              "r2_evidence_read": False,
+              "real_remote_observation_executed": False,
+              "worker_secrets_mutated": False,
+          }
+          assert value["authority"]["blockers_cleared"] is False
+          assert value["retained_blockers"] == [
+              "blocked_pending_retrieval_quality",
+              "blocked_pending_latency",
+          ]
+          PY
+      - name: Verify reconciliation scope and implementation preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          allowed = {
+              ".github/evidence/m23-7-r3-8-7/remote-operator-reconciliation.json",
+              "docs/architecture/m23-7-r3-8-7-remote-operator-reconciliation.md",
+              ".github/workflows/m23-7-r3-8-7-remote-operator-reconciliation.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "771538d3b95fccefc3f32bd568770e08ce3552ac", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code 771538d3b95fccefc3f32bd568770e08ce3552ac HEAD -- \
+            scripts/m23_7_r3_8_remote_operator.py \
+            scripts/m23_7_r3_8_remote_delete.py \
+            .github/workflows/m23-7-r3-8-remote-observe.yml \
+            .github/workflows/m23-7-r3-8-remote-delete.yml \
+            pilot/m23/m23-7-r3-8-7-remote-operator-contract.json
+      - name: Privacy and authority scan
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path(".github/evidence/m23-7-r3-8-7/remote-operator-reconciliation.json"),
+              Path("docs/architecture/m23-7-r3-8-7-remote-operator-reconciliation.md"),
+          ]
+          text = "\n".join(path.read_text(encoding="utf-8") for path in paths)
+          for forbidden in (
+              "api.cloudflare.com",
+              "QDRANT_API_KEY=",
+              "CLOUDFLARE_API_TOKEN=",
+              "R2_SECRET_ACCESS_KEY=",
+          ):
+              assert forbidden not in text
+          PY
