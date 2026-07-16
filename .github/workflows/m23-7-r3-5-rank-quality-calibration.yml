@@ -43,14 +43,16 @@ jobs:
             scripts/m23_7_r3_5_rank_quality_calibration_operator.py \
             tests/test_m23_7_r3_5_rank_quality_calibration.py
 
-      - name: R3.5 and historical repair regressions
+      - name: Historical repair regressions in isolated process
         run: |
           pytest -q \
-            tests/test_m23_7_r3_5_rank_quality_calibration.py \
             tests/test_m23_7_r3_4_target_discrimination_repair.py \
             tests/test_m23_7_r3_3_offline_rebuild_evaluation.py \
             tests/test_m23_7_r3_3_offline_rebuild_evaluation_real.py \
             tests/test_m23_7_r3_2_semantic_payload_repair.py
+
+      - name: R3.5 calibration regressions in isolated process
+        run: pytest -q tests/test_m23_7_r3_5_rank_quality_calibration.py
 
       - name: Verify deterministic contract
         run: |
