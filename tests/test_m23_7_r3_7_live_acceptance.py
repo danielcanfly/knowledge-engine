@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import pytest
+
 from knowledge_engine import m23_7_r3_7_live_acceptance as subject
 
 OFFLINE_CASES = (
