@@ -108,3 +108,33 @@ def test_live_observation_receipt_is_privacy_safe(
     encoded = canonical_json(receipt)
     assert "workers.dev" not in encoded
     assert "QDRANT_API_KEY" not in encoded
+
+    diagnostic_report = {
+        "status": "rejected_diagnostic_worker_failure",
+        "metrics": {
+            "recall_at_5": 0.0,
+            "mrr_at_10": 0.0,
+            "ndcg_at_10": 0.0,
+            "worker_internal_shadow_ms": 1201,
+            "error_rate": 1.0,
+            "acl_violation_rate": 0.0,
+            "output_influence_rate": 0.0,
+        },
+        "gates": {
+            "recall_at_5": False,
+            "mrr_at_10": False,
+            "ndcg_at_10": False,
+            "worker_internal_shadow": False,
+            "error_rate": False,
+            "acl_violation_rate": True,
+            "output_influence_rate": True,
+        },
+        "remaining_blockers": ["blocked_pending_retrieval_quality"],
+    }
+    diagnostic_report["report_sha256"] = canonical_sha256(diagnostic_report)
+    report_path.write_text(canonical_json(diagnostic_report) + "\n", encoding="utf-8")
+    diagnostic_receipt = subject.build_receipt(args)
+    assert diagnostic_receipt["status"] == (
+        "rejected_live_observation_pending_reconciliation"
+    )
+    assert diagnostic_receipt["blockers_cleared"] is False

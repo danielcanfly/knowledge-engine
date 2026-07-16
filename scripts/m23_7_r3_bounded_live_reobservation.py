@@ -7,8 +7,11 @@ from pathlib import Path
 from knowledge_engine.m23_7_5_live_shadow import COLLECTION
 from knowledge_engine.m23_7_r2_latency_path import StrictModeSafeBatchLatencyClient
 from knowledge_engine.m23_7_r3_bounded_live_reobservation import (
+    DiagnosticWorkerFailure,
     HttpR3WorkerInvoker,
+    build_diagnostic_failure_report,
     canonical_fixture_report,
+    canonical_contract,
     canonical_json,
     run_bounded_live_reobservation,
     validate_wrangler_config,
@@ -66,12 +69,20 @@ def main() -> int:
             _required_env("M23_R3_WORKER_URL"),
             _required_env("M23_R3_OPERATOR_TOKEN"),
         ) as invoker:
-            report = run_bounded_live_reobservation(
-                invoker,
-                samples=samples,
-                worker_origin=args.worker_origin,
-                placement_config=placement_config,
-            )
+            try:
+                report = run_bounded_live_reobservation(
+                    invoker,
+                    samples=samples,
+                    worker_origin=args.worker_origin,
+                    placement_config=placement_config,
+                )
+            except DiagnosticWorkerFailure as exc:
+                report = build_diagnostic_failure_report(
+                    contract=canonical_contract(),
+                    worker_origin=args.worker_origin,
+                    placement_config=placement_config,
+                    failure=exc,
+                )
 
     _write(output, report)
     print(

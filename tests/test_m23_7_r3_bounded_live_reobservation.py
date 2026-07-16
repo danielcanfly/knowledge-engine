@@ -7,9 +7,16 @@ from pathlib import Path
 import pytest
 
 from knowledge_engine.errors import IntegrityError
-from knowledge_engine.m23_7_r1_semantic_alignment import canonical_fixture_samples
+from knowledge_engine.m23_7_r1_semantic_alignment import (
+    canonical_fixture_samples,
+    canonical_manifest,
+    compile_probe_plan,
+)
 from knowledge_engine.m23_7_r3_bounded_live_reobservation import (
+    DiagnosticWorkerFailure,
     FixtureWorkerInvoker,
+    HttpR3WorkerInvoker,
+    build_diagnostic_failure_report,
     build_report,
     canonical_contract,
     canonical_fixture_report,
@@ -243,3 +250,49 @@ def test_worker_payload_call_count_or_authority_drift_fails_closed() -> None:
             worker_origin="fixture-placement-worker",
             placement_config=placement(),
         )
+
+
+class _FakeHttpClient:
+    def __init__(self, response: object) -> None:
+        self.response = response
+        self.closed = False
+
+    def post(self, *_args: object, **_kwargs: object) -> object:
+        return self.response
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_http_worker_bounded_failure_becomes_diagnostic_report() -> None:
+    import httpx
+
+    response = httpx.Response(
+        500,
+        json={"status": "error", "code": "operator-secret-missing"},
+    )
+    invoker = HttpR3WorkerInvoker("https://worker.example/v1/m23-7-r3/observe", "t" * 32)
+    invoker._http = _FakeHttpClient(response)  # type: ignore[assignment]
+    probes = compile_probe_plan(canonical_manifest(), canonical_fixture_samples())
+
+    with pytest.raises(DiagnosticWorkerFailure) as raised:
+        invoker.invoke(probes, nonce="e" * 32, clock_ns=iter([0, 2_000_000]).__next__)
+
+    failure = raised.value
+    assert failure.http_status == 500
+    assert failure.worker_error_code == "operator-secret-missing"
+    assert failure.operator_round_trip_ms == 2
+
+    report = build_diagnostic_failure_report(
+        contract=canonical_contract(),
+        worker_origin="fixture-placement-worker",
+        placement_config=placement(),
+        failure=failure,
+    )
+    assert report["status"] == "rejected_diagnostic_worker_failure"
+    assert report["path"]["worker_http_status"] == 500
+    assert report["path"]["worker_error_code"] == "operator-secret-missing"
+    assert report["privacy"]["service_urls_persisted"] is False
+    assert report["privacy"]["arbitrary_exception_text_persisted"] is False
+    assert report["remaining_blockers"] == ["blocked_pending_retrieval_quality"]
+    validate_report(report)
