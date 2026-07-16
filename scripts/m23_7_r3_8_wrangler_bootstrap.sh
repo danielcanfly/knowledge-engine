@@ -23,14 +23,16 @@ m23_r3_8_parse_wrangler_version() {
   local actual_version=""
   local version_line_count=0
   local escape_character=$'\033'
+  local ansi_pattern="${escape_character}\\[[0-9;]*[[:alpha:]]"
+  local version_pattern='^[^[:alnum:]]*(wrangler[[:space:]]+)?([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]*$'
 
   while IFS= read -r line || [[ -n "$line" ]]; do
-    while [[ "$line" =~ ${escape_character}\[[0-9;]*[[:alpha:]] ]]; do
+    while [[ "$line" =~ $ansi_pattern ]]; do
       ansi_sequence="${BASH_REMATCH[0]}"
       line="${line/"$ansi_sequence"/}"
     done
 
-    if [[ "$line" =~ ^[^[:alnum:]]*(wrangler[[:space:]]+)?([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]*$ ]]; then
+    if [[ "$line" =~ $version_pattern ]]; then
       version_line_count=$((version_line_count + 1))
       actual_version="${BASH_REMATCH[2]}"
     fi
