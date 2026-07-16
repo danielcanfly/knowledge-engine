@@ -34,13 +34,30 @@ def _run(
     if override is not None:
         env["WRANGLER_BIN"] = override
     return subprocess.run(
-        ["/bin/bash", "-c", command],
+        ["/bin/bash", "--noprofile", "--norc", "-c", command],
         cwd=Path.cwd(),
         env=env,
         text=True,
         capture_output=True,
         check=False,
     )
+
+
+def test_resolver_uses_only_bash32_compatible_array_features() -> None:
+    shell = SCRIPT.read_text(encoding="utf-8")
+
+    assert "declare -a M23_R3_8_WRANGLER_CMD=()" in shell
+    for forbidden in (
+        "declare -g",
+        "declare -A",
+        "local -n",
+        "mapfile",
+        "readarray",
+        "${!M23_R3_8_WRANGLER_CMD",
+    ):
+        assert forbidden not in shell
+    assert "eval " not in shell
+    assert '"${M23_R3_8_WRANGLER_CMD[@]}" --version' in shell
 
 
 def test_global_wrangler_is_preferred_over_npx(tmp_path: Path) -> None:
