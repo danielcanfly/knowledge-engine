@@ -1,0 +1,102 @@
+name: M23.7 Repair R3.4 Target Discrimination
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_r3_4_target_discrimination_repair.py"
+      - "scripts/m23_7_r3_4_target_discrimination_operator.py"
+      - "tests/test_m23_7_r3_4_target_discrimination_repair.py"
+      - "pilot/m23/m23-7-r3-4-target-discrimination-repair-contract.json"
+      - "docs/architecture/m23-7-r3-4-target-discrimination-repair.md"
+      - ".github/workflows/m23-7-r3-4-target-discrimination-repair.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  target-discrimination-repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff accepted scope
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_7_r3_4_target_discrimination_repair.py \
+            scripts/m23_7_r3_4_target_discrimination_operator.py \
+            tests/test_m23_7_r3_4_target_discrimination_repair.py
+      - name: R3.4 and historical repair regressions
+        run: |
+          pytest -q \
+            tests/test_m23_7_r3_2_semantic_payload_repair.py \
+            tests/test_m23_7_r3_3_offline_rebuild_evaluation.py \
+            tests/test_m23_7_r3_3a_real_evidence_compat.py \
+            tests/test_m23_7_r3_4_target_discrimination_repair.py
+      - name: Verify deterministic contract
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          from knowledge_engine.m23_7_r3_4_target_discrimination_repair import (
+              canonical_contract,
+          )
+
+          path = Path('pilot/m23/m23-7-r3-4-target-discrimination-repair-contract.json')
+          committed = json.loads(path.read_text(encoding='utf-8'))
+          assert committed == canonical_contract()
+          unsigned = dict(committed)
+          digest = unsigned.pop('contract_sha256')
+          canonical = json.dumps(
+              unsigned,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          )
+          assert hashlib.sha256(canonical.encode('utf-8')).hexdigest() == digest
+          assert digest == 'd847010fd48bd6cd6fed40036b50ed7d454aade9d98fd1823df35ef74ce98357'
+          PY
+      - name: Privacy and authority scan
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          contract = json.loads(
+              Path('pilot/m23/m23-7-r3-4-target-discrimination-repair-contract.json')
+              .read_text(encoding='utf-8')
+          )
+          assert contract['implementation_issue'] == 497
+          assert contract['repair']['total_query_variants'] == 24
+          assert contract['repair']['target_aware_reranking'] is False
+          assert contract['thresholds']['thresholds_changed'] is False
+          assert contract['authority']['production_retrieval'] == 'lexical'
+          assert contract['authority']['qdrant_read_authorized'] is False
+          assert contract['authority']['qdrant_write_authorized'] is False
+          assert contract['authority']['candidate_reingestion_authorized'] is False
+          assert contract['authority']['live_acceptance_authorized'] is False
+          text = '\n'.join(
+              path.read_text(encoding='utf-8')
+              for path in (
+                  Path('pilot/m23/m23-7-r3-4-target-discrimination-repair-contract.json'),
+                  Path('docs/architecture/m23-7-r3-4-target-discrimination-repair.md'),
+              )
+          )
+          for forbidden in ('CLOUDFLARE_API_TOKEN', 'QDRANT_API_KEY', 'https://'):
+              assert forbidden not in text
+          PY
+      - name: Compile accepted Python scope
+        run: python -m compileall -q src tests scripts
