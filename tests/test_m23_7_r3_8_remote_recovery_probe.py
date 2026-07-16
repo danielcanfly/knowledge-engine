@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from scripts import m23_7_r3_8_remote_recovery_probe as subject
 
 
 def test_absent_responses_reconcile_to_absent() -> None:
     payload = {"success": False, "errors": [{"code": 10090}]}
     versions = subject.classify_control_plane_response(
-        404, payload, identity_fields=("id",)
+        404,
+        payload,
+        identity_fields=("id",),
     )
     deployments = subject.classify_control_plane_response(
-        404, {"success": False, "errors": [{"code": 10007}]}, identity_fields=("id",)
+        404,
+        {"success": False, "errors": [{"code": 10007}]},
+        identity_fields=("id",),
     )
     assert versions["state"] == "absent"
     assert deployments["state"] == "absent"
@@ -19,7 +25,10 @@ def test_absent_responses_reconcile_to_absent() -> None:
 def test_present_responses_bind_sorted_unique_identities() -> None:
     versions = subject.classify_control_plane_response(
         200,
-        {"success": True, "result": [{"id": "v2"}, {"id": "v1"}, {"id": "v2"}]},
+        {
+            "success": True,
+            "result": [{"id": "v2"}, {"id": "v1"}, {"id": "v2"}],
+        },
         identity_fields=("id", "version_id"),
     )
     deployments = subject.classify_control_plane_response(
@@ -46,7 +55,10 @@ def test_ambiguous_or_auth_responses_fail_closed() -> None:
     )
     assert auth["state"] == "indeterminate"
     assert malformed["state"] == "indeterminate"
-    assert subject.reconcile_worker_state(auth, malformed) == "worker_state_indeterminate"
+    assert (
+        subject.reconcile_worker_state(auth, malformed)
+        == "worker_state_indeterminate"
+    )
 
 
 def test_mixed_absent_and_present_is_inconsistent() -> None:
@@ -64,13 +76,16 @@ def test_mixed_absent_and_present_is_inconsistent() -> None:
         "identity_count": 1,
         "identities": ["v1"],
     }
-    assert subject.reconcile_worker_state(absent, present) == "worker_state_inconsistent"
+    assert (
+        subject.reconcile_worker_state(absent, present)
+        == "worker_state_inconsistent"
+    )
 
 
 def test_probe_source_has_no_mutating_cloudflare_methods() -> None:
-    source = open(
-        "scripts/m23_7_r3_8_remote_recovery_probe.py", encoding="utf-8"
-    ).read()
+    source = Path(
+        "scripts/m23_7_r3_8_remote_recovery_probe.py"
+    ).read_text(encoding="utf-8")
     assert "client.get(" in source
     assert "client.post(" not in source
     assert "client.put(" not in source
