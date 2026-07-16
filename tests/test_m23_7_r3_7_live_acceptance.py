@@ -29,6 +29,16 @@ def _unit(index: int) -> list[float]:
     return vector
 
 
+def _query_vector(index: int) -> list[float]:
+    vector = [0.0] * subject.VECTOR_DIMENSION
+    vector[index] = 0.95
+    start = 8 + index * 12
+    for offset, row in enumerate(range(start, start + 9)):
+        vector[row] = 0.1 - offset * 0.005
+    norm = math.sqrt(math.fsum(value * value for value in vector))
+    return [value / norm for value in vector]
+
+
 def _fixtures() -> tuple[dict[str, Any], dict[str, Any], list[list[float]]]:
     points: list[dict[str, Any]] = []
     documents: list[dict[str, Any]] = []
@@ -88,7 +98,7 @@ def _fixtures() -> tuple[dict[str, Any], dict[str, Any], list[list[float]]]:
                     "query_text_sha256": hashlib.sha256(text.encode()).hexdigest(),
                 }
             )
-            query_vectors.append(_unit(index))
+            query_vectors.append(_query_vector(index))
         probes.append(
             {
                 "probe_id": f"r1-probe-{index + 1:02d}",
@@ -268,8 +278,8 @@ def test_full_live_acceptance_passes_with_exact_parity(
         clock_ns=_clock(),
     )
 
-    assert report["status"] == "pass_live_acceptance"
     assert all(report["gates"].values()), report["gates"]
+    assert report["status"] == "pass_live_acceptance"
     assert report["query_count"] == 24
     assert report["query_identity_count"] == 24
     assert report["metrics"] == {
