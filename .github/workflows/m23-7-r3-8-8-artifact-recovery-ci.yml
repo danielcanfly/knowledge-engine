@@ -1,0 +1,162 @@
+name: M23.7 Repair R3.8.8 Artifact Recovery
+
+on:
+  pull_request:
+    paths:
+      - "scripts/m23_7_r3_8_remote_entrypoint.py"
+      - "scripts/m23_7_r3_8_remote_recovery_probe.py"
+      - "tests/test_m23_7_r3_8_remote_entrypoint.py"
+      - "tests/test_m23_7_r3_8_remote_recovery_probe.py"
+      - "pilot/m23/m23-7-r3-8-8-artifact-recovery-contract.json"
+      - "docs/architecture/m23-7-r3-8-8-artifact-recovery.md"
+      - ".github/workflows/m23-7-r3-8-remote-observe.yml"
+      - ".github/workflows/m23-7-r3-8-remote-delete.yml"
+      - ".github/workflows/m23-7-r3-8-8-recovery-probe.yml"
+      - ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  artifact-recovery-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head and incident ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 090db324939a4272b90d212fa462674b371b2e6d HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff and compile recovery scope
+        shell: bash
+        run: |
+          ruff check \
+            scripts/m23_7_r3_8_remote_entrypoint.py \
+            scripts/m23_7_r3_8_remote_recovery_probe.py \
+            tests/test_m23_7_r3_8_remote_entrypoint.py \
+            tests/test_m23_7_r3_8_remote_recovery_probe.py
+          python -m py_compile \
+            scripts/m23_7_r3_8_remote_entrypoint.py \
+            scripts/m23_7_r3_8_remote_recovery_probe.py
+      - name: Recovery adversarial tests
+        run: |
+          pytest -q \
+            tests/test_m23_7_r3_8_remote_entrypoint.py \
+            tests/test_m23_7_r3_8_remote_recovery_probe.py
+      - name: Preserve accepted remote-operator regressions
+        run: |
+          pytest -q \
+            tests/test_m23_7_r3_8_remote_operator.py \
+            tests/test_m23_7_r3_8_remote_delete.py
+      - name: Verify deterministic recovery contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-8-8-artifact-recovery-contract.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("contract_sha256")
+          encoded = json.dumps(
+              value,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "508111abd2d6291f1b13b44956811d9028b4832d26caeb8ec6905e693928dc33"
+          assert value["incident"]["run_id"] == "29506217284"
+          assert value["incident"]["worker_name"] == "knowledge-engine-r3-8-29506217284"
+          assert value["repair"]["hidden_artifact_directories_allowed"] is False
+          assert value["recovery_probe"]["worker_deploy_authorized"] is False
+          assert value["recovery_probe"]["worker_delete_authorized"] is False
+          assert value["authority"]["workflow_rerun_authorized"] is False
+          assert value["authority"]["production_retrieval"] == "lexical"
+          PY
+      - name: Validate non-hidden artifacts and read-only recovery workflow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          observe = Path(".github/workflows/m23-7-r3-8-remote-observe.yml")
+          delete = Path(".github/workflows/m23-7-r3-8-remote-delete.yml")
+          recovery = Path(".github/workflows/m23-7-r3-8-8-recovery-probe.yml")
+          for path in (observe, delete, recovery):
+              payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+              assert "workflow_dispatch" in payload[True]
+              assert "pull_request" not in payload[True]
+          observe_text = observe.read_text(encoding="utf-8")
+          delete_text = delete.read_text(encoding="utf-8")
+          recovery_text = recovery.read_text(encoding="utf-8")
+          assert ".r3-8-remote-evidence" not in observe_text
+          assert "path: r3-8-remote-evidence/" in observe_text
+          assert "m23_7_r3_8_remote_entrypoint" in observe_text
+          assert ".r3-8-deletion-evidence" not in delete_text
+          assert "path: r3-8-deletion-evidence/" in delete_text
+          assert "PROBE_R3_8_RUN_29506217284" in recovery_text
+          assert "path: r3-8-recovery-evidence/" in recovery_text
+          assert "wrangler deploy" not in recovery_text
+          assert "wrangler delete" not in recovery_text
+          PY
+      - name: Verify recovery script method and protected-state boundaries
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          text = Path("scripts/m23_7_r3_8_remote_recovery_probe.py").read_text(encoding="utf-8")
+          assert text.count("client.get(") == 2
+          for forbidden in (
+              "client.post(",
+              "client.put(",
+              "client.patch(",
+              "client.delete(",
+              "QDRANT_URL",
+              "QDRANT_API_KEY",
+              "R2_ACCESS_KEY_ID",
+              "R2_SECRET_ACCESS_KEY",
+          ):
+              assert forbidden not in text
+          PY
+      - name: Verify exact change scope and accepted runtime preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              "scripts/m23_7_r3_8_remote_entrypoint.py",
+              "scripts/m23_7_r3_8_remote_recovery_probe.py",
+              "tests/test_m23_7_r3_8_remote_entrypoint.py",
+              "tests/test_m23_7_r3_8_remote_recovery_probe.py",
+              "pilot/m23/m23-7-r3-8-8-artifact-recovery-contract.json",
+              "docs/architecture/m23-7-r3-8-8-artifact-recovery.md",
+              ".github/workflows/m23-7-r3-8-remote-observe.yml",
+              ".github/workflows/m23-7-r3-8-remote-delete.yml",
+              ".github/workflows/m23-7-r3-8-8-recovery-probe.yml",
+              ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "090db324939a4272b90d212fa462674b371b2e6d", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code 090db324939a4272b90d212fa462674b371b2e6d HEAD -- \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            workers/m23-7-r3-8-latency-repair/worker.mjs \
+            pilot/m23/m23-7-r3-8-latency-repair-contract.json
