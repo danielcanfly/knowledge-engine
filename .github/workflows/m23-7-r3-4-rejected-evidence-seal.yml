@@ -1,0 +1,100 @@
+name: M23.7 Repair R3.4 Rejected Evidence Seal
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-4-rejected-evidence-seal.json"
+      - "docs/architecture/m23-7-r3-4-rejected-evidence-seal.md"
+      - ".github/workflows/m23-7-r3-4-rejected-evidence-seal.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seal-rejected-evidence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify rejected evidence seal
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path('pilot/m23/m23-7-r3-4-rejected-evidence-seal.json')
+          seal = json.loads(path.read_text(encoding='utf-8'))
+          digest = seal.pop('seal_sha256')
+          canonical = json.dumps(
+              seal,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          )
+          assert hashlib.sha256(canonical.encode('utf-8')).hexdigest() == digest
+          assert digest == '3dc6cc5d23f6c4a7767571663a9ccdae9f2c24fdc21553b1676ac844b8ba496c'
+          assert seal['seal_issue'] == 499
+          assert seal['implementation_issue'] == 497
+          assert seal['parent_issue'] == 474
+          assert seal['operator_engine_head'] == '0b463c9cc4920b6300e1b461a11f828042114e92'
+          assert seal['operator_report_file_sha256'] == '9dde5d63f7b43ae8078cdd1a20d9c62bafa2e1d710ab03eba97f6796f838c292'
+          assert seal['operator_report_sha256'] == '2464a6cc2aaf708cfad1b8bf3a8f16322a17c78e72af331176a98d8e349be225'
+          assert seal['operator_status'] == 'rejected_target_discrimination_repair'
+          assert seal['metrics'] == {
+              'recall_at_5': 0.875,
+              'mrr_at_10': 0.566666666667,
+              'ndcg_at_10': 0.643589039297,
+          }
+          assert seal['thresholds'] == {
+              'recall_at_5': 0.82,
+              'mrr_at_10': 0.68,
+              'ndcg_at_10': 0.72,
+          }
+          assert seal['ablations']['multi_query_rrf'] == {
+              'recall_at_5': 0.75,
+              'mrr_at_10': 0.645833333333,
+              'ndcg_at_10': 0.702258336781,
+          }
+          assert seal['target_ranks']['final_rerank'] == [2, 21, 3, 1, 1, 5, 2, 1]
+          assert seal['query_variant_identity_count'] == 24
+          assert seal['maximum_top10_hub_frequency'] == 3
+          assert all(value is True for value in seal['confirmed'].values())
+          assert all(value is False for value in seal['failed_quality_gates'].values())
+          assert seal['diagnosis']['best_ranking_quality_ablation'] == 'multi_query_rrf'
+          assert seal['diagnosis']['remaining_primary'] == 'rank_quality_calibration'
+          assert seal['diagnosis']['remaining_hard_case'] == 'm23q-02'
+          assert seal['diagnosis']['remaining_hard_case_final_rank'] == 21
+          assert seal['authority']['production_retrieval'] == 'lexical'
+          assert seal['authority']['candidate_reingestion_authorized'] is False
+          assert seal['authority']['live_acceptance_authorized'] is False
+          assert seal['authority']['retrieval_quality_blocker_cleared'] is False
+          assert seal['authority']['qdrant_reads'] == 0
+          assert seal['authority']['qdrant_writes'] == 0
+          assert seal['exit']['r3_4_complete'] is True
+          assert seal['exit']['r3_4_disposition'] == 'completed_rejected'
+          assert seal['exit']['next_legal_action'] == 'separately_governed_r3_5_rank_quality_calibration_repair'
+          PY
+      - name: Privacy and authority scan
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = '\n'.join(
+              path.read_text(encoding='utf-8')
+              for path in (
+                  Path('pilot/m23/m23-7-r3-4-rejected-evidence-seal.json'),
+                  Path('docs/architecture/m23-7-r3-4-rejected-evidence-seal.md'),
+              )
+          )
+          for forbidden in ('CLOUDFLARE_API_TOKEN', 'QDRANT_API_KEY', 'https://'):
+              assert forbidden not in text
+          PY
