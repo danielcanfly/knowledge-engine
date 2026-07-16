@@ -1,0 +1,151 @@
+name: M23.7 Repair R3.8.14 Operator Request Ledger
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m23-operator-command-bus.yml"
+      - ".github/workflows/m23-operator-request-ci.yml"
+      - ".github/workflows/m23-7-r3-8-14-operator-request-ledger-ci.yml"
+      - "scripts/m23_operator_request_bus.py"
+      - "tests/test_m23_operator_request_bus.py"
+      - "operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v3.json"
+      - "pilot/m23/m23-7-r3-8-14-operator-request-ledger-contract.json"
+      - "docs/architecture/m23-7-r3-8-14-operator-request-ledger.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  request-ledger-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact head and accepted telemetry ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 9d346573057e9fe3b5960a938784451d7c84bd5f HEAD
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install development dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Ruff, compile and request-ledger adversarial tests
+        run: |
+          ruff check scripts/m23_operator_request_bus.py tests/test_m23_operator_request_bus.py
+          python -m py_compile scripts/m23_operator_request_bus.py
+          pytest -q tests/test_m23_operator_request_bus.py tests/test_m23_operator_status_comment.py tests/test_m23_7_r3_8_post_delete_recovery.py
+
+      - name: Verify v3 authorization and request-ledger contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          def verify(path: str, key: str, expected: str) -> dict:
+              value = json.loads(Path(path).read_text(encoding="utf-8"))
+              digest = value.pop(key)
+              encoded = json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  allow_nan=False,
+              ).encode()
+              assert hashlib.sha256(encoded).hexdigest() == digest
+              assert digest == expected
+              return value
+
+          auth = verify(
+              "operator_authorizations/m23/r3-8/"
+              "post-delete-recovery-29521901629-v3.json",
+              "authorization_sha256",
+              "ccafc925c4db5f6398d3ac1fa45d63831e6eaa047cc3d09e725ceef8833a56ff",
+          )
+          assert auth["authorization_id"].endswith("-v3")
+          assert len(auth["nonce"]) == 64
+          assert auth["authority"]["control_plane_read_authorized"] is True
+          assert auth["authority"]["worker_delete_authorized"] is False
+
+          contract = verify(
+              "pilot/m23/m23-7-r3-8-14-operator-request-ledger-contract.json",
+              "contract_sha256",
+              "039eee1a7a3731bb5942b5c556fe3db038a68d7c816b505de905c2683161fb29",
+          )
+          assert contract["trigger"]["event"] == "push"
+          assert contract["trigger"]["branch"] == "main"
+          assert contract["trigger"]["issue_comment_trigger_active"] is False
+          assert contract["request"]["single_added_file_required"] is True
+          assert contract["request"]["modification_or_deletion_allowed"] is False
+          assert contract["request"]["static_routes"] == ["r3_8_post_delete_recovery"]
+          assert contract["authority"]["production_retrieval"] == "lexical"
+          PY
+
+      - name: Verify push-only execution and request PR validation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          execute_path = Path(".github/workflows/m23-operator-command-bus.yml")
+          execute = yaml.safe_load(execute_path.read_text(encoding="utf-8"))
+          assert "push" in execute[True]
+          assert "issue_comment" not in execute[True]
+          push = execute[True]["push"]
+          assert push["branches"] == ["main"]
+          assert push["paths"] == ["operator_requests/m23/**"]
+          text = execute_path.read_text(encoding="utf-8")
+          assert "python -m scripts.m23_operator_request_bus" in text
+          assert "github.event.before" in text
+          assert "github.event.after" in text
+          assert "Report accepted request identity" in text
+          assert "Report final governed route result" in text
+
+          request_path = Path(".github/workflows/m23-operator-request-ci.yml")
+          request = yaml.safe_load(request_path.read_text(encoding="utf-8"))
+          assert "pull_request" in request[True]
+          assert request[True]["pull_request"]["paths"] == ["operator_requests/m23/**"]
+          request_text = request_path.read_text(encoding="utf-8")
+          assert "Validate single immutable request and authorization" in request_text
+          assert "Verify request-only PR scope" in request_text
+          PY
+
+      - name: Verify request validator has no execution surfaces
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          text = Path("scripts/m23_operator_request_bus.py").read_text(encoding="utf-8")
+          assert 'REQUEST_ROOT = "operator_requests/m23/"' in text
+          assert 'ALLOWED_COMMAND_TYPES = {"r3_8_post_delete_recovery"}' in text
+          assert 'parts[0] != "A"' in text
+          for forbidden in (
+              "client.post(",
+              "client.put(",
+              "client.delete(",
+              "wrangler delete",
+              "wrangler deploy",
+              "QDRANT_URL",
+              "R2_ACCESS_KEY_ID",
+              "shell_command",
+              "workflow_name",
+          ):
+              assert forbidden not in text
+          PY
+
+      - name: Preserve recovery runtime, telemetry writer and prior authorizations
+        run: |
+          git diff --exit-code 9d346573057e9fe3b5960a938784451d7c84bd5f HEAD -- scripts/m23_7_r3_8_post_delete_recovery.py scripts/m23_operator_status_comment.py tests/test_m23_7_r3_8_post_delete_recovery.py tests/test_m23_operator_status_comment.py operator_authorizations/m23/r3-8/post-delete-recovery-29521901629.json operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v2.json deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29506217284.json
