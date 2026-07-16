@@ -73,14 +73,11 @@ def main(argv: list[str] | None = None) -> int:
         from scripts import m23_7_r3_8_remote_operator as operator
 
         return operator.execute(args)
-    except (Exception, SystemExit) as exc:
-        failure_code = "bounded_remote_entrypoint_failure"
-        if isinstance(exc, SystemExit):
-            failure_code = "bounded_remote_entrypoint_system_exit"
+    except Exception:
         failure = {
             "schema_version": ENTRY_SCHEMA,
             "status": "rejected_incomplete_remote_observation",
-            "failure_code": failure_code,
+            "failure_code": "bounded_remote_entrypoint_failure",
             "failure_stage": "remote_entrypoint",
             "github_run_id": args.run_id,
             "github_run_attempt": args.run_attempt,
