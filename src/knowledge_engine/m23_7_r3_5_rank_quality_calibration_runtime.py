@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from typing import Any
 
 from . import m23_7_r3_5_rank_quality_calibration as _base
 
@@ -133,8 +134,20 @@ def calibrated_hybrid_ranking(
     return ranking, diagnostics
 
 
-_base._bm25_ranking = _bm25_ranking
-_base.calibrated_hybrid_ranking = calibrated_hybrid_ranking
+def evaluate_calibration_candidate(
+    candidate: Mapping[str, Any],
+    query_vectors: Sequence[Sequence[Any]],
+) -> dict[str, Any]:
+    old_bm25 = _base._bm25_ranking
+    old_ranker = _base.calibrated_hybrid_ranking
+    try:
+        _base._bm25_ranking = _bm25_ranking
+        _base.calibrated_hybrid_ranking = calibrated_hybrid_ranking
+        return _base.evaluate_calibration_candidate(candidate, query_vectors)
+    finally:
+        _base._bm25_ranking = old_bm25
+        _base.calibrated_hybrid_ranking = old_ranker
+
 
 r34 = _base.r34
 canonical_json = _base.canonical_json
@@ -142,5 +155,4 @@ canonical_sha256 = _base.canonical_sha256
 canonical_contract = _base.canonical_contract
 build_calibration_candidate = _base.build_calibration_candidate
 redacted_candidate_artifact = _base.redacted_candidate_artifact
-evaluate_calibration_candidate = _base.evaluate_calibration_candidate
 _redacted_probe_plan = _base._redacted_probe_plan
