@@ -7,6 +7,8 @@ on:
       - "tests/test_m23_7_r3_8_remote_delete.py"
       - ".github/workflows/m23-7-r3-8-remote-delete.yml"
       - ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml"
+      - ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml"
+      - ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml"
       - ".github/workflows/m23-7-r3-8-11-deletion-cli-compatibility.yml"
       - "pilot/m23/m23-7-r3-8-11-deletion-cli-compatibility-contract.json"
       - "docs/architecture/m23-7-r3-8-11-deletion-cli-compatibility.md"
@@ -95,9 +97,10 @@ jobs:
               allow_nan=False,
           ).encode()
           assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "7fc40f41779cea8890920ae422246df082053d653788de884d5ec744e6a0120a"
+          assert digest == "67a00f84c59a5477e529a5760254aa0981619054bd571ee6111761dc6469c0ee"
           assert stored["wrangler"]["delete_name_form"] == "positional"
           assert stored["wrangler"]["forbidden_delete_options"] == ["--name"]
+          assert stored["implementation"]["historical_regression_workflows_forward_compatible"] is True
           assert stored["authority"]["workflow_dispatch_authorized"] is False
           assert stored["preservation"]["production_retrieval"] == "lexical"
           assert stored["preservation"]["retrieval_quality_blocker"] == "active"
@@ -113,6 +116,25 @@ jobs:
             workers/m23-7-r3-8-latency-repair/worker.mjs \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
             deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29506217284.json
+      - name: Verify historical regression gates preserve identities, not stale file sets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          identity = Path(
+              ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml"
+          ).read_text(encoding="utf-8")
+          recovery = Path(
+              ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml"
+          ).read_text(encoding="utf-8")
+          assert "changed == allowed" not in identity
+          assert "validate_authorization(path)" in identity
+          assert ".github/workflows/m23-7-r3-8-remote-delete.yml" not in recovery.split(
+              "Verify accepted recovery core remains exact", 1
+          )[1]
+          PY
       - name: Verify mutation and closure boundaries
         shell: bash
         run: |
