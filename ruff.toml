@@ -1,0 +1,4 @@
+extend = "pyproject.toml"
+
+[lint.extend-per-file-ignores]
+"src/knowledge_engine/m23_7_r3_5_rank_quality_calibration.py" = ["I001"]
