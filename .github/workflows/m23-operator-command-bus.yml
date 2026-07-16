@@ -259,7 +259,7 @@ jobs:
           python scripts/m23_7_r3_bounded_live_reobservation.py \
             --mode live \
             --wrangler-config workers/m23-7-r3-observation/wrangler.local.jsonc \
-            --worker-origin "$M23_R3_TRANSIENT_WORKER_NAME" \
+            --worker-origin r3-live-worker \
             --output "$EVIDENCE_DIR/live-observation-report.json"
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
