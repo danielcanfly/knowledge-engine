@@ -216,10 +216,15 @@ def validate_authorization(
         ):
             raise OperatorCommandError("authorization_lineage")
     else:
-        if value.get("source_issue_number") != 595:
-            raise OperatorCommandError("authorization_source_issue")
-        if value.get("source_engine_sha") != "ddac861f648a130db6af5a293c6d5af291226382":
-            raise OperatorCommandError("authorization_source_engine")
+        source_pair = (
+            value.get("source_issue_number"),
+            value.get("source_engine_sha"),
+        )
+        if source_pair not in {
+            (595, "ddac861f648a130db6af5a293c6d5af291226382"),
+            (599, "8205c9fb2b3d58e91eec8b631b6d9caf46b047ca"),
+        }:
+            raise OperatorCommandError("authorization_source_lineage")
         if value.get("worker_name_prefix") != "knowledge-engine-m23-7-r3-live":
             raise OperatorCommandError("authorization_worker_prefix")
     return value

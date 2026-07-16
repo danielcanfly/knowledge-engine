@@ -213,8 +213,11 @@ jobs:
             --keep-vars 2>&1 | tee "$RUNNER_TEMP/r3-live-deploy.log"
           url="$(grep -Eo 'https://[^ ]+workers.dev[^ ]*' "$RUNNER_TEMP/r3-live-deploy.log" | tail -n 1)"
           test -n "$url"
+          endpoint="${url%/}/v1/m23-7-r3/observe"
           echo "::add-mask::$url"
+          echo "::add-mask::$endpoint"
           echo "worker_url=$url" >> "$GITHUB_OUTPUT"
+          echo "worker_endpoint=$endpoint" >> "$GITHUB_OUTPUT"
 
       - name: Install transient Worker secrets
         working-directory: workers/m23-7-r3-observation
@@ -239,7 +242,7 @@ jobs:
             --config wrangler.local.jsonc \
             --name "$M23_R3_TRANSIENT_WORKER_NAME" < "$RUNNER_TEMP/operator_token"
           {
-            echo "M23_R3_WORKER_URL=${{ steps.deploy.outputs.worker_url }}"
+            echo "M23_R3_WORKER_URL=${{ steps.deploy.outputs.worker_endpoint }}"
             echo -n "M23_R3_OPERATOR_TOKEN="
             cat "$RUNNER_TEMP/operator_token"
             echo

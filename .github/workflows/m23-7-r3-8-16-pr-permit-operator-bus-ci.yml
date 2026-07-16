@@ -227,7 +227,7 @@ jobs:
           python - <<'PY'
           import subprocess
 
-          expected = {
+          route_enablement = {
               ".github/workflows/m23-7-r3-8-12-operator-command-bus-ci.yml",
               ".github/workflows/m23-7-r3-8-13-operator-telemetry-ci.yml",
               ".github/workflows/m23-7-r3-8-14-operator-request-ledger-ci.yml",
@@ -249,6 +249,12 @@ jobs:
               "tests/test_m23_operator_pr_permit.py",
               "tests/test_m23_operator_request_bus.py",
           }
+          endpoint_hotfix = {
+              ".github/workflows/m23-7-r3-8-16-pr-permit-operator-bus-ci.yml",
+              ".github/workflows/m23-operator-command-bus.yml",
+              "operator_authorizations/m23/r3-live/r3-live-reobservation-v2.json",
+              "scripts/m23_operator_command_bus.py",
+          }
           base = "${{ github.event.pull_request.base.sha || '88ddd82cbfb93a6c6c9fe2aa98d34cf5e1e4ebe2' }}"
           changed = set(
               subprocess.check_output(
@@ -262,5 +268,12 @@ jobs:
                   text=True,
               ).splitlines()
           )
-          assert changed == expected, (changed, expected)
+          assert frozenset(changed) in {
+              frozenset(route_enablement),
+              frozenset(endpoint_hotfix),
+          }, (
+              changed,
+              route_enablement,
+              endpoint_hotfix,
+          )
           PY
