@@ -16,6 +16,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Verify exact request PR head and base ancestry
         shell: bash
@@ -37,27 +38,39 @@ jobs:
             --after "${{ github.event.pull_request.head.sha }}" \
             --github-output "$GITHUB_OUTPUT"
 
-      - name: Verify request-only PR scope
+      - name: Verify request-only PR scope against exact base SHA
         shell: bash
         env:
           REQUEST_PATH: ${{ steps.request.outputs.request_path }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           python - <<'PY'
           import os
+          import re
           import subprocess
 
+          hex40 = re.compile(r"^[0-9a-f]{40}$")
+          base = os.environ["BASE_SHA"]
+          head = os.environ["HEAD_SHA"]
+          request_path = os.environ["REQUEST_PATH"]
+          assert hex40.fullmatch(base), base
+          assert hex40.fullmatch(head), head
+          assert base != head
+          actual = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip()
+          assert actual == head, (actual, head)
+          subprocess.run(
+              ["git", "merge-base", "--is-ancestor", base, head],
+              check=True,
+          )
           changed = subprocess.check_output(
-              [
-                  "git",
-                  "diff",
-                  "--name-only",
-                  os.environ["GITHUB_BASE_REF"],
-                  "HEAD",
-              ],
+              ["git", "diff", "--name-only", base, head],
               text=True,
           ).splitlines()
-          assert changed == [os.environ["REQUEST_PATH"]], changed
+          assert changed == [request_path], changed
           PY
 
       - name: Verify request grants no new authority
