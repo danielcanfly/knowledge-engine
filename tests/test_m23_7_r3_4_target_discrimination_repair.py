@@ -179,9 +179,11 @@ def test_wrong_vectors_reject_repair() -> None:
 def test_redacted_candidate_removes_raw_queries() -> None:
     candidate, _ = _candidate()
     unsigned = {
-        **candidate,
-        "probe_plan": r34._redacted_probe_plan(candidate["probe_plan"]),
+        key: value
+        for key, value in candidate.items()
+        if key != "candidate_artifact_sha256"
     }
+    unsigned["probe_plan"] = r34._redacted_probe_plan(candidate["probe_plan"])
     candidate["candidate_artifact_sha256"] = r34.canonical_sha256(unsigned)
     redacted = r34.redacted_candidate_artifact(candidate)
     assert all(
