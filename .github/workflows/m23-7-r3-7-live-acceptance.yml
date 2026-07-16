@@ -54,7 +54,20 @@ jobs:
       - name: R3.6 accepted regression
         run: pytest -q tests/test_m23_7_r3_6_candidate_reingestion.py
       - name: R3.7 live acceptance regressions
-        run: pytest -q tests/test_m23_7_r3_7_live_acceptance.py
+        run: |
+          set +e
+          pytest -q tests/test_m23_7_r3_7_live_acceptance.py \
+            > r3-7-pytest-diagnostics.txt 2>&1
+          status=$?
+          cat r3-7-pytest-diagnostics.txt
+          exit "$status"
+      - name: Upload R3.7 pytest diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r3-7-pytest-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}
+          path: r3-7-pytest-diagnostics.txt
+          retention-days: 1
       - name: Verify deterministic contract
         run: |
           python - <<'PY'
