@@ -1,0 +1,141 @@
+name: M23.7 Repair R3.8.13 Operator Telemetry
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m23-operator-command-bus.yml"
+      - ".github/workflows/m23-7-r3-8-13-operator-telemetry-ci.yml"
+      - "scripts/m23_operator_status_comment.py"
+      - "tests/test_m23_operator_status_comment.py"
+      - "operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v2.json"
+      - "pilot/m23/m23-7-r3-8-13-operator-telemetry-contract.json"
+      - "docs/architecture/m23-7-r3-8-13-operator-telemetry.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operator-telemetry-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact head and command-bus reconciliation ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 498beca5893642b348f1ec6afe17529dc7197f44 HEAD
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install development dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Ruff, compile and telemetry adversarial tests
+        run: |
+          ruff check scripts/m23_operator_status_comment.py tests/test_m23_operator_status_comment.py
+          python -m py_compile scripts/m23_operator_status_comment.py
+          pytest -q tests/test_m23_operator_status_comment.py tests/test_m23_operator_command_bus.py tests/test_m23_7_r3_8_post_delete_recovery.py
+
+      - name: Verify fresh authorization and telemetry contract digests
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          def verify(path: str, key: str, expected: str) -> dict:
+              value = json.loads(Path(path).read_text(encoding="utf-8"))
+              digest = value.pop(key)
+              encoded = json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  allow_nan=False,
+              ).encode()
+              assert hashlib.sha256(encoded).hexdigest() == digest
+              assert digest == expected
+              return value
+
+          auth = verify(
+              "operator_authorizations/m23/r3-8/"
+              "post-delete-recovery-29521901629-v2.json",
+              "authorization_sha256",
+              "bd3b54dae6566aac70f521ac3ff3bedb7d3d2fa7b9ed915c8659ecb603e62496",
+          )
+          assert auth["authorization_id"].endswith("-v2")
+          assert len(auth["nonce"]) == 64
+          assert auth["authority"]["control_plane_read_authorized"] is True
+          assert auth["authority"]["worker_delete_authorized"] is False
+
+          contract = verify(
+              "pilot/m23/m23-7-r3-8-13-operator-telemetry-contract.json",
+              "contract_sha256",
+              "39849c636a825aacc55656db5b7c6359eeb89a5a7db0b386859942650e043149",
+          )
+          assert contract["trigger"]["first_command_comment_id"] == 4995226881
+          assert contract["trigger"]["first_command_repost_authorized"] is False
+          assert contract["telemetry"]["issue_number"] == 565
+          assert contract["telemetry"]["status_prefix"] == "M23_OPERATOR_STATUS "
+          assert contract["telemetry"]["status_triggers_command"] is False
+          assert contract["authority"]["issues_write_authorized_for_status_only"] is True
+          assert contract["authority"]["production_retrieval"] == "lexical"
+          PY
+
+      - name: Verify workflow reports accepted and final status only to fixed bus
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          path = Path(".github/workflows/m23-operator-command-bus.yml")
+          payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+          assert payload["permissions"]["contents"] == "read"
+          assert payload["permissions"]["issues"] == "write"
+          text = path.read_text(encoding="utf-8")
+          assert "Report accepted command identity" in text
+          assert "Report final governed route result" in text
+          assert text.count("python -m scripts.m23_operator_status_comment") == 2
+          assert "--phase accepted" in text
+          assert "--phase final" in text
+          assert "m23-7-r3-8-13-post-delete-recovery-${{ github.run_id }}" in text
+          assert "github.event.issue.number == 565" in text
+          assert "startsWith(github.event.comment.body, 'M23_OPERATOR_COMMAND ')" in text
+          PY
+
+      - name: Verify status writer has fixed destination and non-command body
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          text = Path("scripts/m23_operator_status_comment.py").read_text(encoding="utf-8")
+          assert 'REPOSITORY = "danielcanfly/knowledge-engine"' in text
+          assert "BUS_ISSUE_NUMBER = 565" in text
+          assert 'STATUS_PREFIX = "M23_OPERATOR_STATUS "' in text
+          assert 'COMMAND_PREFIX = "M23_OPERATOR_COMMAND "' in text
+          assert "f\"{BUS_ISSUE_NUMBER}/comments\"" in text
+          for forbidden in (
+              "wrangler delete",
+              "wrangler deploy",
+              "QDRANT_URL",
+              "QDRANT_API_KEY",
+              "R2_ACCESS_KEY_ID",
+              "R2_SECRET_ACCESS_KEY",
+          ):
+              assert forbidden not in text
+          PY
+
+      - name: Preserve command validator, recovery route and first authorization
+        run: |
+          git diff --exit-code 498beca5893642b348f1ec6afe17529dc7197f44 HEAD -- scripts/m23_operator_command_bus.py scripts/m23_7_r3_8_post_delete_recovery.py tests/test_m23_operator_command_bus.py tests/test_m23_7_r3_8_post_delete_recovery.py operator_authorizations/m23/r3-8/post-delete-recovery-29521901629.json deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29506217284.json
