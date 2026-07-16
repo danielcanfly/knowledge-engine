@@ -1,100 +1,95 @@
-name: M23 Governed Operator Request Bus
+name: M23 PR Permit Read-Only Recovery
 
 on:
-  push:
-    branches: [main]
+  pull_request:
+    types: [synchronize]
     paths:
-      - "operator_requests/m23/**"
+      - "operator_permits/m23/**"
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
-  group: m23-operator-request-${{ github.sha }}
+  group: m23-pr-permit-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
   cancel-in-progress: false
 
 jobs:
-  validate:
+  validate-permit:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == 'huaihsuanbusiness'
     runs-on: ubuntu-24.04
     outputs:
-      request_path: ${{ steps.request.outputs.request_path }}
-      request_sha256: ${{ steps.request.outputs.request_sha256 }}
-      authorization_path: ${{ steps.request.outputs.authorization_path }}
-      authorization_sha256: ${{ steps.request.outputs.authorization_sha256 }}
-      expected_head: ${{ steps.request.outputs.expected_head }}
-      nonce: ${{ steps.request.outputs.nonce }}
-      command_type: ${{ steps.request.outputs.command_type }}
+      stage: ${{ steps.operator.outputs.stage }}
+      request_path: ${{ steps.operator.outputs.request_path }}
+      request_sha256: ${{ steps.operator.outputs.request_sha256 }}
+      permit_path: ${{ steps.operator.outputs.permit_path }}
+      permit_sha256: ${{ steps.operator.outputs.permit_sha256 }}
+      authorization_path: ${{ steps.operator.outputs.authorization_path }}
+      authorization_sha256: ${{ steps.operator.outputs.authorization_sha256 }}
+      nonce: ${{ steps.operator.outputs.nonce }}
+      command_type: ${{ steps.operator.outputs.command_type }}
+      expected_head: ${{ steps.operator.outputs.expected_head }}
     steps:
-      - name: Reject rerun attempts and wrong push surface
+      - name: Reject rerun and untrusted pull-request surfaces
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = "1"
-          test "$GITHUB_EVENT_NAME" = "push"
-          test "$GITHUB_REF" = "refs/heads/main"
-          test "$GITHUB_SHA" = "${{ github.event.after }}"
-          test "${{ github.event.before }}" != "0000000000000000000000000000000000000000"
-          test "${{ github.event.before }}" != "${{ github.event.after }}"
+          test "$GITHUB_EVENT_NAME" = "pull_request"
+          test "${{ github.event.action }}" = "synchronize"
+          test "${{ github.event.pull_request.head.repo.full_name }}" = "$GITHUB_REPOSITORY"
+          test "${{ github.event.pull_request.user.login }}" = "huaihsuanbusiness"
 
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.after }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Validate single immutable request and authorization
-        id: request
+      - name: Validate exact two-stage request and permit
+        id: operator
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${{ github.event.after }}"
-          python -m scripts.m23_operator_request_bus \
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          python -m scripts.m23_operator_pr_permit \
             --repo-root . \
-            --before "${{ github.event.before }}" \
-            --after "${{ github.event.after }}" \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
             --github-output "$GITHUB_OUTPUT"
-
-      - name: Report accepted request identity
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          python -m scripts.m23_operator_status_comment \
-            --phase accepted \
-            --command-type "${{ steps.request.outputs.command_type }}" \
-            --expected-head "${{ steps.request.outputs.expected_head }}" \
-            --authorization-sha256 "${{ steps.request.outputs.authorization_sha256 }}"
+          test "$(cat "$GITHUB_OUTPUT" | sed -n 's/^stage=//p' | tail -n 1)" = "execution_permitted"
 
   r3-8-post-delete-recovery:
-    needs: validate
-    if: needs.validate.outputs.command_type == 'r3_8_post_delete_recovery'
+    needs: validate-permit
+    if: >-
+      needs.validate-permit.outputs.stage == 'execution_permitted' &&
+      needs.validate-permit.outputs.command_type == 'r3_8_post_delete_recovery'
     runs-on: ubuntu-24.04
     environment: m23-r3-diagnostic
     timeout-minutes: 10
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      EVIDENCE_DIR: r3-8-14-post-delete-recovery-evidence
-      ARTIFACT_NAME: m23-7-r3-8-14-post-delete-recovery-${{ github.run_id }}
+      EVIDENCE_DIR: r3-8-16-pr-permit-recovery-evidence
+      ARTIFACT_NAME: m23-7-r3-8-16-pr-permit-recovery-${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.validate.outputs.expected_head }}
+          ref: ${{ needs.validate-permit.outputs.expected_head }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify exact routed head and immutable request identity
+      - name: Verify exact execution head and immutable permit identities
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = "1"
-          test "$(git rev-parse HEAD)" = "${{ needs.validate.outputs.expected_head }}"
-          test "$GITHUB_SHA" = "${{ needs.validate.outputs.expected_head }}"
-          test "${{ needs.validate.outputs.command_type }}" = "r3_8_post_delete_recovery"
-          test -f "${{ needs.validate.outputs.request_path }}"
-          test -f "${{ needs.validate.outputs.authorization_path }}"
+          test "$(git rev-parse HEAD)" = "${{ needs.validate-permit.outputs.expected_head }}"
+          test "${{ needs.validate-permit.outputs.stage }}" = "execution_permitted"
+          test -f "${{ needs.validate-permit.outputs.request_path }}"
+          test -f "${{ needs.validate-permit.outputs.permit_path }}"
+          test -f "${{ needs.validate-permit.outputs.authorization_path }}"
 
       - uses: actions/setup-python@v5
         with:
@@ -114,42 +109,25 @@ jobs:
           set +e
           rm -rf "$EVIDENCE_DIR"
           python -m scripts.m23_7_r3_8_post_delete_recovery \
-            --authorization-path "${{ needs.validate.outputs.authorization_path }}" \
-            --expected-head "${{ needs.validate.outputs.expected_head }}" \
-            --nonce "${{ needs.validate.outputs.nonce }}" \
+            --authorization-path "${{ needs.validate-permit.outputs.authorization_path }}" \
+            --expected-head "${{ needs.validate-permit.outputs.expected_head }}" \
+            --nonce "${{ needs.validate-permit.outputs.nonce }}" \
             --repo-root . \
             --output-dir "$EVIDENCE_DIR"
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Upload governed post-delete recovery evidence
+      - name: Upload governed PR-permit recovery evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: r3-8-14-post-delete-recovery-evidence/
+          path: r3-8-16-pr-permit-recovery-evidence/
           if-no-files-found: error
           include-hidden-files: false
           retention-days: 30
           compression-level: 9
-
-      - name: Report final governed route result
-        if: always()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          code="${{ steps.recovery.outputs.exit_code }}"
-          test -n "$code" || code=23
-          python -m scripts.m23_operator_status_comment \
-            --phase final \
-            --command-type "${{ needs.validate.outputs.command_type }}" \
-            --expected-head "${{ needs.validate.outputs.expected_head }}" \
-            --authorization-sha256 "${{ needs.validate.outputs.authorization_sha256 }}" \
-            --exit-code "$code" \
-            --artifact-name "$ARTIFACT_NAME"
 
       - name: Return governed recovery result
         if: always()
