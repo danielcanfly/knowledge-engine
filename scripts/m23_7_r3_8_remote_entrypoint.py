@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import subprocess
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -45,12 +46,10 @@ def main(argv: list[str] | None = None) -> int:
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     actual_head = "unknown"
-    try:
+    with suppress(OSError, subprocess.SubprocessError):
         actual_head = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], text=True
         ).strip()
-    except (OSError, subprocess.SubprocessError):
-        pass
 
     entry = {
         "schema_version": ENTRY_SCHEMA,
