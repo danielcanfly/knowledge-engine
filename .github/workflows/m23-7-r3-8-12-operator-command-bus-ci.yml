@@ -94,7 +94,7 @@ jobs:
           assert contract["authority"]["production_retrieval"] == "lexical"
           PY
 
-      - name: Verify operator surface remains static and non-destructive
+      - name: Verify current operator successor remains static and non-destructive
         shell: bash
         run: |
           python - <<'PY'
@@ -105,8 +105,8 @@ jobs:
           payload = yaml.safe_load(path.read_text(encoding="utf-8"))
           triggers = payload[True]
           assert "workflow_dispatch" not in triggers
-          assert set(triggers).issubset({"issue_comment", "push"})
           assert len(triggers) == 1
+          assert set(triggers).issubset({"issue_comment", "push", "pull_request"})
           text = path.read_text(encoding="utf-8")
           assert 'test "$GITHUB_RUN_ATTEMPT" = "1"' in text
           assert "r3_8_post_delete_recovery" in text
@@ -114,12 +114,20 @@ jobs:
               assert "github.event.issue.number == 565" in text
               assert "command_body_not_single_use" in text
               assert "python -m scripts.m23_operator_command_bus" in text
-          else:
+          elif "push" in triggers:
               assert triggers["push"]["branches"] == ["main"]
               assert triggers["push"]["paths"] == ["operator_requests/m23/**"]
               assert "python -m scripts.m23_operator_request_bus" in text
               assert "github.event.before" in text
               assert "github.event.after" in text
+          else:
+              pull_request = triggers["pull_request"]
+              assert pull_request["types"] == ["synchronize"]
+              assert pull_request["paths"] == ["operator_permits/m23/**"]
+              assert "github.event.pull_request.head.repo.full_name == github.repository" in text
+              assert "github.event.pull_request.user.login == 'huaihsuanbusiness'" in text
+              assert "python -m scripts.m23_operator_pr_permit" in text
+              assert "execution_permitted" in text
           for forbidden in (
               "wrangler delete",
               "wrangler deploy",
