@@ -1,0 +1,103 @@
+name: M23.7 R3.8.10 Deletion Identity Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-10/deletion-identity-reconciliation.json"
+      - "docs/architecture/m23-7-r3-8-10-deletion-identity-reconciliation.md"
+      - ".github/workflows/m23-7-r3-8-10-deletion-identity-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and implementation merge ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 0b919b1340245ad057a6d99e56200ae49784ef9b HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic reconciliation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          path = Path(".github/evidence/m23-7-r3-8-10/deletion-identity-reconciliation.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("reconciliation_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "6a00c41436a613685fc444b3387bf34a11e7ff0739dac4739edf0d417a416c4d"
+          implementation = value["implementation"]
+          assert implementation["accepted_head"] == "af9bb4b07e63724c7bd8a6b0ed2e58a8f2d41491"
+          assert implementation["merge_sha"] == "0b919b1340245ad057a6d99e56200ae49784ef9b"
+          assert implementation["contract_sha256"] == "cb3c00d0dd0ae814abdb952f001a56c3f5c152ed14ce884d7c42a99f28188e9c"
+          assert len(implementation["changed_files"]) == 6
+          schema = value["schema"]
+          assert schema["authorization"].endswith("/v2")
+          assert schema["receipt"].endswith("/v2")
+          assert schema["full_version_identity_set_required"] is True
+          assert schema["full_deployment_identity_set_required"] is True
+          assert schema["sorted_unique_lowercase_uuid_required"] is True
+          assert schema["unexpected_keys_rejected"] is True
+          assert len(value["worker"]["version_ids"]) == 4
+          assert len(value["worker"]["deployment_ids"]) == 4
+          authority = value["authority"]
+          assert authority["deletion_authorization_record_may_be_created"] is True
+          assert authority["worker_deletion_executed"] is False
+          assert authority["production_retrieval"] == "lexical"
+          assert authority["maximum_worker_internal_shadow_ms"] == 1200
+          PY
+      - name: Verify exact reconciliation scope and implementation preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              ".github/evidence/m23-7-r3-8-10/deletion-identity-reconciliation.json",
+              "docs/architecture/m23-7-r3-8-10-deletion-identity-reconciliation.md",
+              ".github/workflows/m23-7-r3-8-10-deletion-identity-reconciliation.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "0b919b1340245ad057a6d99e56200ae49784ef9b", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code 0b919b1340245ad057a6d99e56200ae49784ef9b HEAD -- \
+            scripts/m23_7_r3_8_remote_delete.py \
+            tests/test_m23_7_r3_8_remote_delete.py \
+            pilot/m23/m23-7-r3-8-10-deletion-identity-contract.json \
+            .github/workflows/m23-7-r3-8-remote-delete.yml
+      - name: Verify next gate is authorization record only
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path(
+              ".github/evidence/m23-7-r3-8-10/deletion-identity-reconciliation.json"
+          ).read_text(encoding="utf-8"))
+          authority = value["authority"]
+          assert authority["deletion_authorization_record_may_be_created"] is True
+          for field in (
+              "worker_deletion_executed",
+              "fresh_observation_authorized",
+              "blocker_clearance_authorized",
+              "parent_closure_authorized",
+          ):
+              assert authority[field] is False
+          PY
