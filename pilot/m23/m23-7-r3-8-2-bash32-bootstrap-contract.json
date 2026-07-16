@@ -1,0 +1,62 @@
+{
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "pointer_mutation_authorized": false,
+    "production_mutation_authorized": false,
+    "promotion_eligibility_granted": false,
+    "qdrant_delete_authorized": false,
+    "qdrant_read_authorized": false,
+    "qdrant_reindex_authorized": false,
+    "qdrant_write_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deployment_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "contract_sha256": "2cb83d916e2fed4fe8add4e89d8712ebf925479de880725226fd8b238a992e74",
+  "entry": {
+    "engine_sha": "042e648cad8373026e76fd92f7c2314408019427",
+    "live_observation_started": false,
+    "qdrant_accessed": false,
+    "secrets_mutated": false,
+    "trigger_code": "declare_g_unsupported",
+    "trigger_status": "pre_deployment_bash32_incompatibility",
+    "worker_deployed": false
+  },
+  "implementation_issue": 524,
+  "milestone": "M23.7-R3.8.2",
+  "parent_issue": 520,
+  "preservation": {
+    "authority_changed": false,
+    "canonical_max_worker_internal_shadow_ms": 1200,
+    "latency_threshold_changed": false,
+    "quality_threshold_changed": false,
+    "query_identity_changed": false,
+    "r3_8_contract_changed": false,
+    "r3_8_runtime_changed": false,
+    "r3_8_worker_changed": false
+  },
+  "privacy": {
+    "credentials_persisted": false,
+    "raw_queries_persisted": false,
+    "service_hostnames_persisted": false,
+    "service_urls_persisted": false
+  },
+  "schema_version": "knowledge-engine-m23-7-r3-8-2-bash32-bootstrap/v1",
+  "tooling": {
+    "command_representation": "bash_indexed_array",
+    "eval_used": false,
+    "forbidden_bash4_features": [
+      "declare -g",
+      "declare -A",
+      "local -n",
+      "mapfile",
+      "readarray"
+    ],
+    "global_array_declaration": "declare -a at file scope",
+    "macos_runner_regression_required": true,
+    "minimum_bash_version": "3.2",
+    "npx_package": "wrangler@4.111.0",
+    "pinned_wrangler_version": "4.111.0"
+  }
+}
