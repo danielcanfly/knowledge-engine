@@ -3,7 +3,6 @@ name: M23.7 Repair R3.3 Rejected Evidence Seal
 on:
   pull_request:
     paths:
-      - "pilot/m23/m23-7-r3-3-offline-retrieval-evaluation.json"
       - "pilot/m23/m23-7-r3-3-rejected-evidence-seal.json"
       - "docs/architecture/m23-7-r3-3-rejected-evidence-seal.md"
       - ".github/workflows/m23-7-r3-3-rejected-evidence-seal.yml"
@@ -25,51 +24,70 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Verify operator receipt and seal
+      - name: Verify rejected evidence seal
         run: |
           python - <<'PY'
           import hashlib
           import json
           from pathlib import Path
 
-          report_path = Path('pilot/m23/m23-7-r3-3-offline-retrieval-evaluation.json')
-          report_bytes = report_path.read_bytes()
-          assert hashlib.sha256(report_bytes).hexdigest() == 'c7650e9ba8708d01b48d3d0b80d14e55598d32659e1827ad4b782f510377a732'
-          report = json.loads(report_bytes)
-          report_digest = report.pop('report_sha256')
-          canonical = json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)
-          assert hashlib.sha256(canonical.encode()).hexdigest() == report_digest
-          assert report_digest == 'a71c36456ff0fb7a00d084c5f89364d9d37c42e6f252af925dc92856733c13ff'
-          assert report['status'] == 'rejected_offline_rebuild_evaluation'
-          assert report['metrics'] == {'recall_at_5': 0.375, 'mrr_at_10': 0.23125, 'ndcg_at_10': 0.293833892245}
-          assert [case['target_rank'] for case in report['cases']] == [4, 79, 14, 17, 2, 1, 15, 10]
-          assert len({case['query_text_sha256'] for case in report['cases']}) == 8
-          assert all(report['gates'][key] is False for key in ('recall_at_5', 'mrr_at_10', 'ndcg_at_10'))
-          assert report['external_calls'] == {'workers_ai_bge_m3_batches': 1, 'qdrant_reads': 0, 'qdrant_writes': 0}
-
-          seal = json.loads(Path('pilot/m23/m23-7-r3-3-rejected-evidence-seal.json').read_text())
+          path = Path('pilot/m23/m23-7-r3-3-rejected-evidence-seal.json')
+          seal = json.loads(path.read_text(encoding='utf-8'))
           seal_digest = seal.pop('seal_sha256')
-          canonical = json.dumps(seal, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)
-          assert hashlib.sha256(canonical.encode()).hexdigest() == seal_digest
+          canonical = json.dumps(
+              seal,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          )
+          assert hashlib.sha256(canonical.encode('utf-8')).hexdigest() == seal_digest
           assert seal_digest == '09ea9d1bcfb7cc01a449c5ab52a3afb335ccbba5e9a3388c6b38b1d2d93ae3ed'
           assert seal['seal_issue'] == 494
+          assert seal['parent_issue'] == 487
+          assert seal['parent_r3_issue'] == 474
           assert seal['operator_engine_head'] == '18163acc42f4a378957740f5acf82533fc282a0b'
-          assert seal['exit']['r3_3_disposition'] == 'completed_rejected'
-          assert seal['exit']['next_legal_action'] == 'separately_governed_r3_4_repair_iteration'
+          assert seal['operator_report_file_sha256'] == 'c7650e9ba8708d01b48d3d0b80d14e55598d32659e1827ad4b782f510377a732'
+          assert seal['operator_report_sha256'] == 'a71c36456ff0fb7a00d084c5f89364d9d37c42e6f252af925dc92856733c13ff'
+          assert seal['operator_status'] == 'rejected_offline_rebuild_evaluation'
+          assert seal['metrics'] == {
+              'recall_at_5': 0.375,
+              'mrr_at_10': 0.23125,
+              'ndcg_at_10': 0.293833892245,
+          }
+          assert seal['thresholds'] == {
+              'recall_at_5': 0.82,
+              'mrr_at_10': 0.68,
+              'ndcg_at_10': 0.72,
+          }
+          assert seal['target_ranks'] == [4, 79, 14, 17, 2, 1, 15, 10]
+          assert seal['query_text_identity_count'] == 8
+          assert seal['maximum_top10_hub_frequency'] == 6
+          assert all(value is True for value in seal['confirmed'].values())
+          assert all(value is False for value in seal['failed_quality_gates'].values())
+          assert seal['diagnosis']['query_collision_repaired'] is True
+          assert seal['diagnosis']['remaining_primary'] == 'weak_target_specific_semantic_discrimination'
           assert seal['authority']['production_retrieval'] == 'lexical'
           assert seal['authority']['candidate_reingestion_authorized'] is False
           assert seal['authority']['live_acceptance_authorized'] is False
+          assert seal['authority']['retrieval_quality_blocker_cleared'] is False
+          assert seal['authority']['qdrant_reads'] == 0
+          assert seal['authority']['qdrant_writes'] == 0
+          assert seal['exit']['r3_3_complete'] is True
+          assert seal['exit']['r3_3_disposition'] == 'completed_rejected'
+          assert seal['exit']['next_legal_action'] == 'separately_governed_r3_4_repair_iteration'
           PY
       - name: Privacy and authority scan
         run: |
           python - <<'PY'
           from pathlib import Path
-          paths = (
-              Path('pilot/m23/m23-7-r3-3-offline-retrieval-evaluation.json'),
-              Path('pilot/m23/m23-7-r3-3-rejected-evidence-seal.json'),
-              Path('docs/architecture/m23-7-r3-3-rejected-evidence-seal.md'),
+          text = '\n'.join(
+              path.read_text(encoding='utf-8')
+              for path in (
+                  Path('pilot/m23/m23-7-r3-3-rejected-evidence-seal.json'),
+                  Path('docs/architecture/m23-7-r3-3-rejected-evidence-seal.md'),
+              )
           )
-          text = '\n'.join(path.read_text(encoding='utf-8') for path in paths)
           for forbidden in ('CLOUDFLARE_API_TOKEN', 'QDRANT_API_KEY', 'https://'):
               assert forbidden not in text
           PY

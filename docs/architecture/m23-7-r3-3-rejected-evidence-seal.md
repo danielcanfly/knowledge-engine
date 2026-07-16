@@ -13,8 +13,10 @@ The result is a valid quality rejection:
 - Query text identities: `8/8` unique
 - Maximum top-10 hub frequency: `6/8`
 - Report SHA-256: `a71c36456ff0fb7a00d084c5f89364d9d37c42e6f252af925dc92856733c13ff`
-- Raw file SHA-256: `c7650e9ba8708d01b48d3d0b80d14e55598d32659e1827ad4b782f510377a732`
+- Raw report file SHA-256: `c7650e9ba8708d01b48d3d0b80d14e55598d32659e1827ad4b782f510377a732`
 - Seal SHA-256: `09ea9d1bcfb7cc01a449c5ab52a3afb335ccbba5e9a3388c6b38b1d2d93ae3ed`
+
+The privacy-safe operator receipt was validated before sealing. The repository stores the compact self-digested seal and binds the original receipt by its file SHA-256 and internal report SHA-256. The raw 12 KB receipt is not reserialised through the text connector because that transport changed characters during the first sealing attempt.
 
 ## What passed
 
