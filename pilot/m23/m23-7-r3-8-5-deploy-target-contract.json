@@ -1,0 +1,53 @@
+{
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "promotion_authorized": false,
+    "protected_mutation_authorized": false,
+    "qdrant_access_authorized": false,
+    "worker_deployment_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "contract_sha256": "b488da9d454a23356c2f65b623f9b1ae128fb54581f52eb34e12ccd297a91fcf",
+  "deploy_record": {
+    "exact_record_count": 1,
+    "exact_worker_name_required": true,
+    "type": "deploy",
+    "version": 1,
+    "version_id_required": true,
+    "worker_name_overridden": false
+  },
+  "entry": {
+    "engine_sha": "8bbfe09f43fa2c556d65e4d6cc071c62012a515f",
+    "issue": 530,
+    "parent_issue": 520
+  },
+  "output": {
+    "environment_variable": "WRANGLER_OUTPUT_FILE_PATH",
+    "format": "json_lines",
+    "maximum_bytes": 65536,
+    "temporary_only": true
+  },
+  "preservation": {
+    "absence_probe_changed": false,
+    "latency_threshold_changed": false,
+    "quality_thresholds_changed": false,
+    "query_fixture_changed": false,
+    "r3_8_runtime_changed": false,
+    "worker_changed": false
+  },
+  "privacy": {
+    "raw_output_persisted_after_cleanup": false,
+    "target_persisted_in_git": false,
+    "target_persisted_in_receipt": false
+  },
+  "target": {
+    "credentials_allowed": false,
+    "exact_target_count": 1,
+    "fragment_allowed": false,
+    "hostname_shape": "<worker>.<account-subdomain>.workers.dev",
+    "non_root_path_allowed": false,
+    "port_allowed": false,
+    "query_allowed": false,
+    "scheme": "https"
+  }
+}

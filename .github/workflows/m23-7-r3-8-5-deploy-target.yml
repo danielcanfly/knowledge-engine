@@ -1,0 +1,126 @@
+name: M23.7 Repair R3.8.5 Deploy Target
+
+on:
+  pull_request:
+    paths:
+      - "scripts/m23_7_r3_8_deploy_target.py"
+      - "tests/test_m23_7_r3_8_deploy_target.py"
+      - "pilot/m23/m23-7-r3-8-5-deploy-target-contract.json"
+      - "docs/architecture/m23-7-r3-8-5-deploy-target.md"
+      - ".github/workflows/m23-7-r3-8-5-deploy-target.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-target:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Verify R3.8.4 ancestry
+        run: git merge-base --is-ancestor 8bbfe09f43fa2c556d65e4d6cc071c62012a515f HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff deploy-target scope
+        run: |
+          ruff check \
+            scripts/m23_7_r3_8_deploy_target.py \
+            tests/test_m23_7_r3_8_deploy_target.py
+      - name: Deploy-target adversarial tests
+        run: pytest -q tests/test_m23_7_r3_8_deploy_target.py
+      - name: Preserve accepted R3.8 regressions
+        run: |
+          pytest -q tests/test_m23_7_r3_8_latency_repair.py
+          pytest -q tests/test_m23_7_r3_8_wrangler_bootstrap.py
+          pytest -q tests/test_m23_7_r3_8_worker_absence_probe.py
+          node --test workers/m23-7-r3-8-latency-repair/worker.test.mjs
+      - name: Verify deterministic deploy-target contract
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-8-5-deploy-target-contract.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          digest = payload.pop("contract_sha256")
+          encoded = json.dumps(
+              payload,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "b488da9d454a23356c2f65b623f9b1ae128fb54581f52eb34e12ccd297a91fcf"
+          assert payload["entry"]["engine_sha"] == "8bbfe09f43fa2c556d65e4d6cc071c62012a515f"
+          assert payload["output"]["environment_variable"] == "WRANGLER_OUTPUT_FILE_PATH"
+          assert payload["deploy_record"]["exact_record_count"] == 1
+          assert payload["target"]["exact_target_count"] == 1
+          assert payload["target"]["hostname_shape"].endswith(".workers.dev")
+          assert payload["privacy"]["target_persisted_in_receipt"] is False
+          assert payload["preservation"]["latency_threshold_changed"] is False
+          assert payload["authority"]["worker_deployment_authorized"] is False
+          PY
+      - name: Verify hotfix scope and accepted file preservation
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          allowed = {
+              "scripts/m23_7_r3_8_deploy_target.py",
+              "tests/test_m23_7_r3_8_deploy_target.py",
+              "pilot/m23/m23-7-r3-8-5-deploy-target-contract.json",
+              "docs/architecture/m23-7-r3-8-5-deploy-target.md",
+              ".github/workflows/m23-7-r3-8-5-deploy-target.yml",
+          }
+          changed = set(
+              subprocess.check_output(
+                  [
+                      "git",
+                      "diff",
+                      "--name-only",
+                      "8bbfe09f43fa2c556d65e4d6cc071c62012a515f",
+                      "HEAD",
+                  ],
+                  text=True,
+              ).splitlines()
+          )
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code 8bbfe09f43fa2c556d65e4d6cc071c62012a515f HEAD -- \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            scripts/m23_7_r3_8_latency_repair_operator.py \
+            scripts/m23_7_r3_8_worker_config.py \
+            scripts/m23_7_r3_8_wrangler_bootstrap.sh \
+            scripts/m23_7_r3_8_worker_absence_probe.sh \
+            tests/test_m23_7_r3_8_latency_repair.py \
+            tests/test_m23_7_r3_8_wrangler_bootstrap.py \
+            tests/test_m23_7_r3_8_worker_absence_probe.py \
+            workers/m23-7-r3-8-latency-repair/worker.mjs \
+            workers/m23-7-r3-8-latency-repair/worker.test.mjs \
+            pilot/m23/m23-7-r3-8-latency-repair-contract.json \
+            pilot/m23/m23-7-r3-8-latency-repair-fixture-report.json \
+            pilot/m23/m23-7-r3-8-3-version-output-contract.json \
+            pilot/m23/m23-7-r3-8-4-worker-absence-probe-contract.json
+      - name: Verify Wrangler deploy output contract exists upstream
+        run: |
+          npx --yes wrangler@4.111.0 deploy --help > "$RUNNER_TEMP/deploy-help.txt"
+          test -s "$RUNNER_TEMP/deploy-help.txt"
+      - name: Compile parser scope
+        run: |
+          python -m py_compile \
+            scripts/m23_7_r3_8_deploy_target.py \
+            tests/test_m23_7_r3_8_deploy_target.py
