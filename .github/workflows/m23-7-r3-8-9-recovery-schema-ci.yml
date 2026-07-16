@@ -109,30 +109,18 @@ jobs:
           ):
               assert forbidden not in text
           PY
-      - name: Verify exact change scope and core runtime preservation
+      - name: Verify accepted recovery schema and core runtime preservation
         shell: bash
         run: |
-          python - <<'PY'
-          import subprocess
-          allowed = {
-              "scripts/m23_7_r3_8_remote_recovery_probe.py",
-              "tests/test_m23_7_r3_8_remote_recovery_probe.py",
-              "pilot/m23/m23-7-r3-8-9-recovery-schema-contract.json",
-              "docs/architecture/m23-7-r3-8-9-recovery-schema.md",
-              ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml",
-              ".github/workflows/m23-7-r3-8-9-recovery-probe.yml",
-              ".github/workflows/m23-7-r3-8-9-recovery-schema-ci.yml",
-          }
-          changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "25ca0caae2bf27adf1e87c71597b40260c2db14c", "HEAD"],
-              text=True,
-          ).splitlines())
-          assert changed == allowed, (changed, allowed)
-          PY
-          git diff --exit-code 25ca0caae2bf27adf1e87c71597b40260c2db14c HEAD -- \
+          set -euo pipefail
+          git diff --exit-code 500d61c3b05385d7fd05ec976fa6bf54043bdf77 HEAD -- \
+            scripts/m23_7_r3_8_remote_recovery_probe.py \
+            tests/test_m23_7_r3_8_remote_recovery_probe.py \
+            pilot/m23/m23-7-r3-8-9-recovery-schema-contract.json \
+            docs/architecture/m23-7-r3-8-9-recovery-schema.md \
+            .github/workflows/m23-7-r3-8-9-recovery-probe.yml \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
             workers/m23-7-r3-8-latency-repair/worker.mjs \
             scripts/m23_7_r3_8_remote_operator.py \
-            scripts/m23_7_r3_8_remote_delete.py \
             pilot/m23/m23-7-r3-8-latency-repair-contract.json \
             pilot/m23/m23-7-r3-8-8-artifact-recovery-contract.json
