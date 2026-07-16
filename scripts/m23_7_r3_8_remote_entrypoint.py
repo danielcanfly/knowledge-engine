@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         from scripts import m23_7_r3_8_remote_operator as operator
 
         return operator.execute(args)
-    except BaseException as exc:
+    except (Exception, SystemExit) as exc:
         failure_code = "bounded_remote_entrypoint_failure"
         if isinstance(exc, SystemExit):
             failure_code = "bounded_remote_entrypoint_system_exit"
