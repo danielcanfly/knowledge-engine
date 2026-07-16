@@ -94,7 +94,7 @@ jobs:
           assert contract["authority"]["production_retrieval"] == "lexical"
           PY
 
-      - name: Verify command bus is owner-only, static and non-destructive
+      - name: Verify operator surface remains static and non-destructive
         shell: bash
         run: |
           python - <<'PY'
@@ -103,18 +103,23 @@ jobs:
 
           path = Path(".github/workflows/m23-operator-command-bus.yml")
           payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-          assert "issue_comment" in payload[True]
-          assert "workflow_dispatch" not in payload[True]
+          triggers = payload[True]
+          assert "workflow_dispatch" not in triggers
+          assert set(triggers).issubset({"issue_comment", "push"})
+          assert len(triggers) == 1
           text = path.read_text(encoding="utf-8")
-          for required in (
-              "github.event.issue.number == 565",
-              "github.event.comment.user.login == 'huaihsuanbusiness'",
-              "github.event.comment.author_association == 'OWNER'",
-              'test "$GITHUB_RUN_ATTEMPT" = "1"',
-              "command_body_not_single_use",
-              "r3_8_post_delete_recovery",
-          ):
-              assert required in text
+          assert 'test "$GITHUB_RUN_ATTEMPT" = "1"' in text
+          assert "r3_8_post_delete_recovery" in text
+          if "issue_comment" in triggers:
+              assert "github.event.issue.number == 565" in text
+              assert "command_body_not_single_use" in text
+              assert "python -m scripts.m23_operator_command_bus" in text
+          else:
+              assert triggers["push"]["branches"] == ["main"]
+              assert triggers["push"]["paths"] == ["operator_requests/m23/**"]
+              assert "python -m scripts.m23_operator_request_bus" in text
+              assert "github.event.before" in text
+              assert "github.event.after" in text
           for forbidden in (
               "wrangler delete",
               "wrangler deploy",

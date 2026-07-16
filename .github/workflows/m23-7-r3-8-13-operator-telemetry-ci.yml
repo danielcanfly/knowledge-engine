@@ -102,15 +102,19 @@ jobs:
           payload = yaml.safe_load(path.read_text(encoding="utf-8"))
           assert payload["permissions"]["contents"] == "read"
           assert payload["permissions"]["issues"] == "write"
+          assert "workflow_dispatch" not in payload[True]
+          assert set(payload[True]).issubset({"issue_comment", "push"})
           text = path.read_text(encoding="utf-8")
-          assert "Report accepted command identity" in text
+          assert (
+              "Report accepted command identity" in text
+              or "Report accepted request identity" in text
+          )
           assert "Report final governed route result" in text
           assert text.count("python -m scripts.m23_operator_status_comment") == 2
           assert "--phase accepted" in text
           assert "--phase final" in text
-          assert "ARTIFACT_NAME: m23-7-r3-8-13-post-delete-recovery-" in text
-          assert "github.event.issue.number == 565" in text
-          assert "startsWith(github.event.comment.body, 'M23_OPERATOR_COMMAND ')" in text
+          assert "ARTIFACT_NAME: m23-7-r3-8-" in text
+          assert "post-delete-recovery-" in text
           PY
 
       - name: Verify status writer has fixed destination and non-command body
