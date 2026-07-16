@@ -5,7 +5,6 @@ import json
 import os
 import re
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -50,8 +49,7 @@ def validate_authorization(path: Path) -> dict[str, Any]:
         raise RemoteOperatorError("deletion_worker_name")
     if not isinstance(value.get("worker_version_id"), str) or not value["worker_version_id"]:
         raise RemoteOperatorError("deletion_worker_version")
-    authority = value.get("authority")
-    expected = {
+    expected_authority = {
         "diagnostic_worker_deletion_authorized": True,
         "production_mutation_authorized": False,
         "qdrant_mutation_authorized": False,
@@ -59,7 +57,7 @@ def validate_authorization(path: Path) -> dict[str, Any]:
         "pointer_mutation_authorized": False,
         "source_mutation_authorized": False,
     }
-    if authority != expected:
+    if value.get("authority") != expected_authority:
         raise RemoteOperatorError("deletion_authority_boundary")
     return value
 
@@ -73,18 +71,21 @@ def execute(args: argparse.Namespace) -> int:
     auth = validate_authorization(Path(args.authorization_path))
     for name in ("CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN", "QDRANT_URL"):
         required_env(name)
+
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
     worker_name = auth["worker_name"]
+    worker_dir = Path("workers/m23-7-r3-8-latency-repair").resolve()
+    config = worker_dir / f"wrangler.delete.{worker_name}.jsonc"
     env = os.environ.copy()
-    with tempfile.TemporaryDirectory(prefix="m23-r3-8-delete-") as temp_name:
-        temp = Path(temp_name)
-        config = temp / "wrangler.delete.jsonc"
+    command = ["npx", "--yes", f"wrangler@{WRANGLER_VERSION}"]
+
+    try:
         generate_wrangler_config(required_env("QDRANT_URL"), worker_name, config)
-        command = ["npx", "--yes", f"wrangler@{WRANGLER_VERSION}"]
         deleted = subprocess.run(
-            command + ["delete", "--name", worker_name, "--config", str(config), "--force"],
-            cwd=Path("workers/m23-7-r3-8-latency-repair"),
+            command
+            + ["delete", "--name", worker_name, "--config", str(config), "--force"],
+            cwd=worker_dir,
             env=env,
             text=True,
             capture_output=True,
@@ -95,8 +96,17 @@ def execute(args: argparse.Namespace) -> int:
                 "delete_" + classify_wrangler_error(deleted.stdout + deleted.stderr)
             )
         probe = subprocess.run(
-            command + ["versions", "list", "--name", worker_name, "--config", str(config), "--json"],
-            cwd=Path("workers/m23-7-r3-8-latency-repair"),
+            command
+            + [
+                "versions",
+                "list",
+                "--name",
+                worker_name,
+                "--config",
+                str(config),
+                "--json",
+            ],
+            cwd=worker_dir,
             env=env,
             text=True,
             capture_output=True,
@@ -105,6 +115,9 @@ def execute(args: argparse.Namespace) -> int:
         classification = classify_wrangler_error(probe.stdout + probe.stderr)
         if probe.returncode == 0 or classification != "worker_not_found":
             raise RemoteOperatorError("delete_absence_not_proven")
+    finally:
+        config.unlink(missing_ok=True)
+
     receipt = {
         "schema_version": RECEIPT_SCHEMA,
         "status": "diagnostic_worker_deleted_and_absence_proven",
