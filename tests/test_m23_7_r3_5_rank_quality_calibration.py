@@ -4,7 +4,7 @@ import hashlib
 import inspect
 import math
 
-from knowledge_engine import m23_7_r3_5_rank_quality_calibration as r35
+from knowledge_engine import m23_7_r3_5_rank_quality_calibration_runtime as r35
 
 
 def _unit(values: dict[int, float]) -> list[float]:
