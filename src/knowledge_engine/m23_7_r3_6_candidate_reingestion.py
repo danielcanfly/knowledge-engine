@@ -224,7 +224,11 @@ def _escaped_collection() -> str:
     return urllib.parse.quote(EXPECTED_COLLECTION, safe="")
 
 
-def collection_snapshot(client: QdrantClient, *, allow_absent: bool = False) -> dict[str, Any] | None:
+def collection_snapshot(
+    client: QdrantClient,
+    *,
+    allow_absent: bool = False,
+) -> dict[str, Any] | None:
     response = client.request(
         "GET",
         f"/collections/{_escaped_collection()}",
@@ -263,7 +267,11 @@ def validate_collection_schema(snapshot: Mapping[str, Any], expected_count: int)
 
 
 def create_collection(client: QdrantClient) -> None:
-    _require(EXPECTED_COLLECTION != HISTORICAL_PILOT_COLLECTION, "collection_alias", "candidate aliases pilot")
+    _require(
+        EXPECTED_COLLECTION != HISTORICAL_PILOT_COLLECTION,
+        "collection_alias",
+        "candidate aliases pilot",
+    )
     response = client.request(
         "PUT",
         f"/collections/{_escaped_collection()}",
