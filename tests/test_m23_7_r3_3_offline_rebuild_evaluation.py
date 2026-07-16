@@ -8,9 +8,8 @@ import zipfile
 from pathlib import Path
 
 import pytest
-
-from knowledge_engine.errors import IntegrityError
 from knowledge_engine import m23_7_r3_3_offline_rebuild_evaluation as r33
+from knowledge_engine.errors import IntegrityError
 
 
 def _canonical_bytes(value: object) -> bytes:
@@ -266,5 +265,5 @@ def test_tampered_evidence_fails_closed(
     digest, _ = _evidence(evidence)
     monkeypatch.setattr(r33, "EXPECTED_EVIDENCE_SHA256", digest)
     evidence.write_bytes(evidence.read_bytes() + b"tamper")
-    with pytest.raises(IntegrityError, match="evidence ZIP identity drifted"):
+    with pytest.raises(IntegrityError, match="evidence ZIP drifted"):
         r33.build_offline_candidate(evidence)
