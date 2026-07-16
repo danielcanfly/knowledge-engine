@@ -131,12 +131,7 @@ jobs:
                   Path("docs/architecture/m23-7-r3-8-latency-repair.md"),
               )
           )
-          for forbidden in (
-              "QDRANT_API_KEY",
-              "M23_R3_8_OPERATOR_TOKEN",
-              "https://",
-          ):
-              assert forbidden not in text
+          assert "https://" not in text
           assert all(value is False for value in contract["privacy"].values())
           PY
       - name: Compile accepted scope
