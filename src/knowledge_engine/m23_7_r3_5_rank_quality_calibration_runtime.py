@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from typing import Any
 
 from . import m23_7_r3_5_rank_quality_calibration as _base
 
