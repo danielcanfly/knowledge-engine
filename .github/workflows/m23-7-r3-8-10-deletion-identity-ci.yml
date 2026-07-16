@@ -1,0 +1,112 @@
+name: M23.7 Repair R3.8.10 Deletion Identity Set
+
+on:
+  pull_request:
+    paths:
+      - "scripts/m23_7_r3_8_remote_delete.py"
+      - "tests/test_m23_7_r3_8_remote_delete.py"
+      - "pilot/m23/m23-7-r3-8-10-deletion-identity-contract.json"
+      - "docs/architecture/m23-7-r3-8-10-deletion-identity-set.md"
+      - ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml"
+      - ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deletion-identity-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and Worker-present reconciliation ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor a018bd270fcae6f1591555a17e849c97ced7b968 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff and compile deletion scope
+        run: |
+          ruff check scripts/m23_7_r3_8_remote_delete.py tests/test_m23_7_r3_8_remote_delete.py
+          python -m py_compile scripts/m23_7_r3_8_remote_delete.py
+      - name: Full identity-set adversarial tests
+        run: pytest -q tests/test_m23_7_r3_8_remote_delete.py
+      - name: Preserve accepted remote and Worker regressions
+        run: |
+          pytest -q \
+            tests/test_m23_7_r3_8_remote_operator.py \
+            tests/test_m23_7_r3_8_remote_entrypoint.py \
+            tests/test_m23_7_r3_8_remote_recovery_probe.py \
+            tests/test_m23_7_r3_8_latency_repair.py
+          node --test workers/m23-7-r3-8-latency-repair/worker.test.mjs
+      - name: Verify deterministic deletion identity contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          path = Path("pilot/m23/m23-7-r3-8-10-deletion-identity-contract.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("contract_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "cb3c00d0dd0ae814abdb952f001a56c3f5c152ed14ce884d7c42a99f28188e9c"
+          assert value["schema"]["authorization"] == "knowledge-engine-m23-7-r3-8-remote-deletion-authorization/v2"
+          assert value["schema"]["receipt"] == "knowledge-engine-m23-7-r3-8-remote-deletion-receipt/v2"
+          assert value["schema"]["version_ids_required"] == 4
+          assert value["schema"]["deployment_ids_required"] == 4
+          assert value["schema"]["identity_order"] == "sorted_unique"
+          assert value["authority"]["worker_deletion_execution_authorized"] is False
+          assert value["authority"]["authorization_record_creation_authorized_after_reconciliation"] is True
+          assert value["authority"]["production_retrieval"] == "lexical"
+          assert value["authority"]["maximum_worker_internal_shadow_ms"] == 1200
+          PY
+      - name: Verify v2 source and receipt identity propagation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path("scripts/m23_7_r3_8_remote_delete.py").read_text(encoding="utf-8")
+          assert 'AUTH_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-deletion-authorization/v2"' in text
+          assert 'RECEIPT_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-deletion-receipt/v2"' in text
+          assert text.count('"worker_version_ids"') >= 3
+          assert text.count('"worker_deployment_ids"') >= 3
+          assert "set(value) != _AUTH_KEYS" in text
+          assert "value != sorted(value)" in text
+          assert "len(value) != len(set(value))" in text
+          PY
+      - name: Verify exact change scope and runtime preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              "scripts/m23_7_r3_8_remote_delete.py",
+              "tests/test_m23_7_r3_8_remote_delete.py",
+              "pilot/m23/m23-7-r3-8-10-deletion-identity-contract.json",
+              "docs/architecture/m23-7-r3-8-10-deletion-identity-set.md",
+              ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
+              ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "a018bd270fcae6f1591555a17e849c97ced7b968", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code a018bd270fcae6f1591555a17e849c97ced7b968 HEAD -- \
+            scripts/m23_7_r3_8_remote_operator.py \
+            scripts/m23_7_r3_8_remote_entrypoint.py \
+            scripts/m23_7_r3_8_remote_recovery_probe.py \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            workers/m23-7-r3-8-latency-repair/worker.mjs \
+            .github/workflows/m23-7-r3-8-remote-delete.yml
