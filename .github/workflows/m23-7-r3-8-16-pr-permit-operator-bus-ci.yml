@@ -156,7 +156,8 @@ jobs:
               "github.event.pull_request.head.repo.full_name == github.repository",
               "github.event.pull_request.user.login == 'huaihsuanbusiness'",
               'test "$GITHUB_RUN_ATTEMPT" = "1"',
-              'test "${{ github.event.action }}" = "synchronize"',
+              "github.event.action",
+              '"synchronize"',
               "python -m scripts.m23_operator_pr_permit",
               "execution_permitted",
               "environment: m23-r3-diagnostic",
@@ -228,6 +229,10 @@ jobs:
           import subprocess
 
           expected = {
+              ".github/workflows/m23-7-r3-8-12-operator-command-bus-ci.yml",
+              ".github/workflows/m23-7-r3-8-13-operator-telemetry-ci.yml",
+              ".github/workflows/m23-7-r3-8-14-operator-request-ledger-ci.yml",
+              ".github/workflows/m23-7-r3-8-15-exact-base-request-validation-ci.yml",
               ".github/workflows/m23-7-r3-8-16-pr-permit-operator-bus-ci.yml",
               ".github/workflows/m23-operator-command-bus.yml",
               ".github/workflows/m23-operator-request-ci.yml",
