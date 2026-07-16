@@ -1,0 +1,108 @@
+name: M23.7 Repair R3.6 Passing Evidence Seal
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-6-passing-evidence-seal.json"
+      - "docs/architecture/m23-7-r3-6-passing-evidence-seal.md"
+      - ".github/workflows/m23-7-r3-6-passing-evidence-seal.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seal-passing-evidence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Verify implementation ancestry
+        run: git merge-base --is-ancestor 3633cd1e67f1ad489ffcfdce8f9fe90455986114 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify passing evidence seal
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-6-passing-evidence-seal.json")
+          seal = json.loads(path.read_text(encoding="utf-8"))
+          digest = seal.pop("seal_sha256")
+          canonical = json.dumps(
+              seal,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+              allow_nan=False,
+          )
+          assert hashlib.sha256(canonical.encode("utf-8")).hexdigest() == digest
+          assert digest == "26094a68c808f084938d4dd40b842bf8ac433a0bafa7e4e156ff004f3a84d704"
+          assert seal["seal_issue"] == 510
+          assert seal["implementation_issue"] == 508
+          assert seal["parent_issue"] == 474
+          assert seal["implementation_pr"] == 509
+          assert seal["implementation_accepted_head"] == "bb560fce06af035bfb132a1d1e6960762fc6a07b"
+          assert seal["implementation_merge"] == "3633cd1e67f1ad489ffcfdce8f9fe90455986114"
+          assert seal["operator_status"] == "pass_candidate_reingestion"
+          assert seal["collection"] == "llm_wiki_m23_r3_5_candidate_8eed54902c73"
+          assert seal["historical_pilot_collection"] == "llm_wiki_m23_pilot_bge_m3_1024"
+          assert seal["receipt_file_sha256"] == "0ef4a0017ee1574d40f32c0eb11049512b78163ffc4302e34be30299817e96c6"
+          assert seal["receipt_sha256"] == "e59569d429b61dab516a47a4922a8b767f81e789f42b28105793276b643baaa8"
+          assert seal["contract_sha256"] == "c888e10741d402f5214dbfe0191ff8a77730b7f8cc5f57b42bdef2efa28809ca"
+          assert seal["candidate_manifest_sha256"] == "41c24b3103f5358874c665d6c58c4e8d6dd16efc1a254eb3a44f4932227bf345"
+          assert seal["aggregate_fingerprint_sha256"] == "ce5ebc12f2f353a45b5a1f3a2f19c2b67dc88b91d77b11550a8b271a4bcc5df6"
+          assert seal["ids_sha256"] == "907e3020819ac6fd1c50ff45a4e266f97494b1aee312a1adb00547955245d0d8"
+          assert seal["point_count"] == 107
+          assert seal["network_calls"] == 9
+          assert seal["operation_accounting"] == {
+              "collection_absence_reads": 1,
+              "collection_create_writes": 1,
+              "collection_schema_reads": 2,
+              "point_upsert_writes": 1,
+              "full_readback_batches": 4,
+              "total": 9,
+          }
+          assert all(seal["gates"].values())
+          assert seal["rollback"] == {
+              "dispatched": False,
+              "complete": False,
+              "required": False,
+          }
+          assert all(value is False for value in seal["privacy"].values())
+          authority = seal["authority"]
+          assert authority["candidate_collection_present_for_live_acceptance"] is True
+          assert authority["further_qdrant_mutation_authorized"] is False
+          assert authority["live_acceptance_authorized"] is False
+          assert authority["production_retrieval"] == "lexical"
+          assert authority["promotion_eligibility_granted"] is False
+          assert authority["retrieval_quality_blocker_cleared"] is False
+          exit_state = seal["exit"]
+          assert exit_state["r3_6_disposition"] == "completed_passed_pending_reconciliation"
+          assert exit_state["parent_issue_must_remain_open"] is True
+          assert exit_state["next_legal_action"] == "independent_r3_6_passing_evidence_reconciliation"
+          PY
+      - name: Privacy and authority scan
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = "\n".join(
+              path.read_text(encoding="utf-8")
+              for path in (
+                  Path("pilot/m23/m23-7-r3-6-passing-evidence-seal.json"),
+                  Path("docs/architecture/m23-7-r3-6-passing-evidence-seal.md"),
+              )
+          )
+          for forbidden in ("QDRANT_API_KEY", "CLOUDFLARE_API_TOKEN", "https://"):
+              assert forbidden not in text
+          assert '"further_qdrant_mutation_authorized":false' in text
+          assert '"live_acceptance_authorized":false' in text
+          assert '"retrieval_quality_blocker_cleared":false' in text
+          PY
