@@ -268,8 +268,9 @@ def _distinctive_signature(
 
 def _bounded(value: str) -> str:
     compact = " ".join(value.split())
-    _require(len(compact) <= MAXIMUM_QUERY_CHARACTERS, 105, "query variant exceeds limit")
-    return compact
+    bounded = compact[:MAXIMUM_QUERY_CHARACTERS].rstrip(" ,;:")
+    _require(bool(bounded), 105, "query variant is empty")
+    return bounded
 
 
 def _query_variants(
@@ -375,7 +376,10 @@ def compile_discriminative_probe_plan(
                     [
                         slot[0],
                         target,
-                        [item["query_text_sha256"] for item in variant_records],
+                        [
+                            item["query_text_sha256"]
+                            for item in variant_records
+                        ],
                     ]
                 ),
                 "payload_schema_version": PAYLOAD_SCHEMA_V2,
