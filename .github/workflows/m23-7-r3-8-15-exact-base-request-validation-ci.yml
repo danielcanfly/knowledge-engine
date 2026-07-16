@@ -154,4 +154,4 @@ jobs:
 
       - name: Preserve recovery, telemetry and prior authorization identities
         run: |
-          git diff --exit-code ee8b7ce4d87f54a8eb2167a5a803ff4af1419fbc HEAD -- scripts/m23_operator_request_bus.py scripts/m23_7_r3_8_post_delete_recovery.py scripts/m23_operator_status_comment.py operator_authorizations/m23/r3-8/post-delete-recovery-29521901629.json operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v2.json operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v3.json deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29506217284.json
+          git diff --exit-code ee8b7ce4d87f54a8eb2167a5a803ff4af1419fbc HEAD -- scripts/m23_7_r3_8_post_delete_recovery.py scripts/m23_operator_status_comment.py operator_authorizations/m23/r3-8/post-delete-recovery-29521901629.json operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v2.json operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v3.json deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29506217284.json

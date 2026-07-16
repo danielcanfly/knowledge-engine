@@ -22,7 +22,7 @@ def _auth(nonce: str) -> dict:
             "deletion_authorizations/m23-7/r3-8/"
             "knowledge-engine-r3-8-29506217284.json"
         ),
-        "authority": dict(subject._EXPECTED_AUTHORITY),
+        "authority": dict(subject._RECOVERY_AUTHORITY),
     }
     value["authorization_sha256"] = subject.canonical_sha256(value)
     return value
@@ -130,3 +130,33 @@ def test_validate_command_requires_exact_head_and_repo_bound_path(tmp_path: Path
             repo_root=tmp_path,
             actual_head="f" * 40,
         )
+
+
+def test_validate_live_authorization_binds_issue_and_transient_scope(tmp_path: Path) -> None:
+    nonce = "1" * 64
+    auth = {
+        "schema_version": subject.AUTH_SCHEMA,
+        "authorization_id": "m23-r3-live-001",
+        "command_type": subject.R3_LIVE_COMMAND,
+        "nonce": nonce,
+        "bus_issue_number": subject.BUS_ISSUE_NUMBER,
+        "actor_login": subject.OWNER_LOGIN,
+        "source_issue_number": 595,
+        "source_engine_sha": "ddac861f648a130db6af5a293c6d5af291226382",
+        "worker_name_prefix": "knowledge-engine-m23-7-r3-live",
+        "authority": dict(subject._R3_LIVE_AUTHORITY),
+    }
+    auth["authorization_sha256"] = subject.canonical_sha256(auth)
+    path = tmp_path / "live-auth.json"
+    path.write_text(subject.canonical_json(auth) + "\n", encoding="utf-8")
+    assert subject.validate_authorization(path, expected_nonce=nonce)[
+        "command_type"
+    ] == subject.R3_LIVE_COMMAND
+
+    auth["authority"]["qdrant_mutation_authorized"] = True
+    unsigned = dict(auth)
+    unsigned.pop("authorization_sha256")
+    auth["authorization_sha256"] = subject.canonical_sha256(unsigned)
+    path.write_text(subject.canonical_json(auth) + "\n", encoding="utf-8")
+    with pytest.raises(subject.OperatorCommandError, match="authorization_boundary"):
+        subject.validate_authorization(path, expected_nonce=nonce)

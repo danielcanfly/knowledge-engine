@@ -121,6 +121,8 @@ jobs:
               assert "execution_permitted" in text
               assert "actions/upload-artifact@v4" in text
               assert "m23-7-r3-8-16-pr-permit-recovery-" in text
+              assert "r3_live_reobservation" in text
+              assert "m23-7-r3-live-observation-" in text
               assert "scripts.m23_operator_status_comment" not in text
           PY
 
@@ -147,6 +149,6 @@ jobs:
               assert forbidden not in text
           PY
 
-      - name: Preserve command validator, recovery route and first authorization
+      - name: Preserve recovery route and first authorization
         run: |
-          git diff --exit-code 498beca5893642b348f1ec6afe17529dc7197f44 HEAD -- scripts/m23_operator_command_bus.py scripts/m23_7_r3_8_post_delete_recovery.py tests/test_m23_operator_command_bus.py tests/test_m23_7_r3_8_post_delete_recovery.py operator_authorizations/m23/r3-8/post-delete-recovery-29521901629.json deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29506217284.json
+          git diff --exit-code 498beca5893642b348f1ec6afe17529dc7197f44 HEAD -- scripts/m23_7_r3_8_post_delete_recovery.py tests/test_m23_7_r3_8_post_delete_recovery.py operator_authorizations/m23/r3-8/post-delete-recovery-29521901629.json deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29506217284.json

@@ -16,7 +16,7 @@ from scripts.m23_operator_command_bus import (
 
 REQUEST_SCHEMA = "knowledge-engine-m23-operator-request/v1"
 REQUEST_ROOT = "operator_requests/m23/"
-ALLOWED_COMMAND_TYPES = {"r3_8_post_delete_recovery"}
+ALLOWED_COMMAND_TYPES = {"r3_8_post_delete_recovery", "r3_live_reobservation"}
 BUS_ISSUE_NUMBER = 565
 _HEX_40 = re.compile(r"^[0-9a-f]{40}$")
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")

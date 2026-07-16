@@ -11,13 +11,15 @@ BUS_ISSUE_NUMBER = 565
 OWNER_LOGIN = "huaihsuanbusiness"
 COMMAND_PREFIX = "M23_OPERATOR_COMMAND "
 AUTH_SCHEMA = "knowledge-engine-m23-operator-command-authorization/v1"
-ALLOWED_COMMAND_TYPES = {"r3_8_post_delete_recovery"}
+RECOVERY_COMMAND = "r3_8_post_delete_recovery"
+R3_LIVE_COMMAND = "r3_live_reobservation"
+ALLOWED_COMMAND_TYPES = {RECOVERY_COMMAND, R3_LIVE_COMMAND}
 _HEX_40 = re.compile(r"^[0-9a-f]{40}$")
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
 _AUTH_PATH = re.compile(
     r"^operator_authorizations/m23/[a-z0-9][a-z0-9/_-]{0,180}\.json$"
 )
-_AUTH_KEYS = {
+_RECOVERY_AUTH_KEYS = {
     "schema_version",
     "authorization_id",
     "command_type",
@@ -31,14 +33,43 @@ _AUTH_KEYS = {
     "authority",
     "authorization_sha256",
 }
+_R3_LIVE_AUTH_KEYS = {
+    "schema_version",
+    "authorization_id",
+    "command_type",
+    "nonce",
+    "bus_issue_number",
+    "actor_login",
+    "source_issue_number",
+    "source_engine_sha",
+    "worker_name_prefix",
+    "authority",
+    "authorization_sha256",
+}
 _COMMAND_KEYS = {"authorization_path", "expected_head", "nonce"}
-_EXPECTED_AUTHORITY = {
+_RECOVERY_AUTHORITY = {
     "control_plane_read_authorized": True,
     "worker_delete_authorized": False,
     "worker_deploy_authorized": False,
     "worker_secret_mutation_authorized": False,
     "worker_route_invocation_authorized": False,
     "qdrant_read_authorized": False,
+    "qdrant_mutation_authorized": False,
+    "r2_read_authorized": False,
+    "r2_mutation_authorized": False,
+    "pointer_mutation_authorized": False,
+    "source_mutation_authorized": False,
+    "blocker_clearance_authorized": False,
+    "parent_closure_authorized": False,
+    "m23_7_closure_authorized": False,
+}
+_R3_LIVE_AUTHORITY = {
+    "control_plane_read_authorized": True,
+    "worker_delete_authorized": True,
+    "worker_deploy_authorized": True,
+    "worker_secret_mutation_authorized": True,
+    "worker_route_invocation_authorized": True,
+    "qdrant_read_authorized": True,
     "qdrant_mutation_authorized": False,
     "r2_read_authorized": False,
     "r2_mutation_authorized": False,
@@ -143,10 +174,19 @@ def validate_authorization(
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise OperatorCommandError("authorization_not_json") from exc
-    if not isinstance(value, dict) or set(value) != _AUTH_KEYS:
+    if not isinstance(value, dict):
         raise OperatorCommandError("authorization_keys")
     if value.get("schema_version") != AUTH_SCHEMA:
         raise OperatorCommandError("authorization_schema")
+    command_type = value.get("command_type")
+    if command_type == RECOVERY_COMMAND:
+        expected_keys = _RECOVERY_AUTH_KEYS
+    elif command_type == R3_LIVE_COMMAND:
+        expected_keys = _R3_LIVE_AUTH_KEYS
+    else:
+        raise OperatorCommandError("authorization_command_type")
+    if set(value) != expected_keys:
+        raise OperatorCommandError("authorization_keys")
     stored = value.get("authorization_sha256")
     unsigned = dict(value)
     unsigned.pop("authorization_sha256", None)
@@ -158,21 +198,30 @@ def validate_authorization(
         raise OperatorCommandError("authorization_issue")
     if value.get("actor_login") != OWNER_LOGIN:
         raise OperatorCommandError("authorization_actor")
-    if value.get("command_type") not in ALLOWED_COMMAND_TYPES:
-        raise OperatorCommandError("authorization_command_type")
-    if value.get("authority") != _EXPECTED_AUTHORITY:
+    expected_authority = (
+        _RECOVERY_AUTHORITY if command_type == RECOVERY_COMMAND else _R3_LIVE_AUTHORITY
+    )
+    if value.get("authority") != expected_authority:
         raise OperatorCommandError("authorization_boundary")
-    if value.get("source_run_id") != "29521901629":
-        raise OperatorCommandError("authorization_source_run")
-    if value.get("source_engine_sha") != "542907fa0cfae47addd6d777c1708ae62155aea4":
-        raise OperatorCommandError("authorization_source_engine")
-    if value.get("worker_name") != "knowledge-engine-r3-8-29506217284":
-        raise OperatorCommandError("authorization_worker")
-    if value.get("previous_deletion_authorization_path") != (
-        "deletion_authorizations/m23-7/r3-8/"
-        "knowledge-engine-r3-8-29506217284.json"
-    ):
-        raise OperatorCommandError("authorization_lineage")
+    if command_type == RECOVERY_COMMAND:
+        if value.get("source_run_id") != "29521901629":
+            raise OperatorCommandError("authorization_source_run")
+        if value.get("source_engine_sha") != "542907fa0cfae47addd6d777c1708ae62155aea4":
+            raise OperatorCommandError("authorization_source_engine")
+        if value.get("worker_name") != "knowledge-engine-r3-8-29506217284":
+            raise OperatorCommandError("authorization_worker")
+        if value.get("previous_deletion_authorization_path") != (
+            "deletion_authorizations/m23-7/r3-8/"
+            "knowledge-engine-r3-8-29506217284.json"
+        ):
+            raise OperatorCommandError("authorization_lineage")
+    else:
+        if value.get("source_issue_number") != 595:
+            raise OperatorCommandError("authorization_source_issue")
+        if value.get("source_engine_sha") != "ddac861f648a130db6af5a293c6d5af291226382":
+            raise OperatorCommandError("authorization_source_engine")
+        if value.get("worker_name_prefix") != "knowledge-engine-m23-7-r3-live":
+            raise OperatorCommandError("authorization_worker_prefix")
     return value
 
 

@@ -149,14 +149,13 @@ jobs:
 
           text = Path("scripts/m23_operator_request_bus.py").read_text(encoding="utf-8")
           assert 'REQUEST_ROOT = "operator_requests/m23/"' in text
-          assert 'ALLOWED_COMMAND_TYPES = {"r3_8_post_delete_recovery"}' in text
+          assert '"r3_8_post_delete_recovery"' in text
+          assert '"r3_live_reobservation"' in text
           assert 'parts[0] != "A"' in text
           for forbidden in (
               "client.post(",
               "client.put(",
               "client.delete(",
-              "wrangler delete",
-              "wrangler deploy",
               "QDRANT_URL",
               "R2_ACCESS_KEY_ID",
               "shell_command",

@@ -163,15 +163,14 @@ jobs:
               "environment: m23-r3-diagnostic",
               "m23-7-r3-8-16-pr-permit-recovery-",
               "python -m scripts.m23_7_r3_8_post_delete_recovery",
+              "r3_live_reobservation",
+              "m23-7-r3-live-observation-",
+              "python -m scripts.m23_7_r3_live_observation_receipt",
           ):
               assert required in text
           for forbidden in (
               "workflow_dispatch",
               "issue_comment",
-              "wrangler delete",
-              "wrangler deploy",
-              "QDRANT_URL",
-              "QDRANT_API_KEY",
               "R2_ACCESS_KEY_ID",
               "R2_SECRET_ACCESS_KEY",
           ):
@@ -188,10 +187,12 @@ jobs:
           for required in (
               'REQUEST_ROOT = "operator_requests/m23/"',
               'PERMIT_ROOT = "operator_permits/m23/"',
-              'ALLOWED_COMMAND_TYPES = {"r3_8_post_delete_recovery"}',
+              'R3_LIVE_COMMAND = "r3_live_reobservation"',
               '"validated_request_head_sha"',
               '"validation_runs"',
               '"read_only_recovery_execute_authorized": True',
+              '"worker_deploy_authorized": True',
+              '"qdrant_read_authorized": True',
               'raise OperatorPermitError("permit_parent_head_mismatch")',
               'raise OperatorPermitError("permit_commit_scope")',
               'raise OperatorPermitError("validated_request_head_scope")',
@@ -201,8 +202,6 @@ jobs:
               "workflow_name",
               "shell_command",
               "client.post(",
-              "wrangler delete",
-              "wrangler deploy",
               "QDRANT_URL",
               "R2_ACCESS_KEY_ID",
           ):
@@ -236,19 +235,28 @@ jobs:
               ".github/workflows/m23-7-r3-8-16-pr-permit-operator-bus-ci.yml",
               ".github/workflows/m23-operator-command-bus.yml",
               ".github/workflows/m23-operator-request-ci.yml",
-              "docs/architecture/m23-7-r3-8-16-pr-permit-operator-bus.md",
-              "operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v5.json",
-              "pilot/m23/m23-7-r3-8-16-pr-permit-operator-bus-contract.json",
+              "docs/architecture/m23-7-r3-live-observation-pr-permit-route.md",
+              "operator_authorizations/m23/r3-live/r3-live-reobservation-v1.json",
+              "scripts/m23_7_r3_live_observation_receipt.py",
+              "scripts/m23_7_r3_worker_config.py",
+              "scripts/m23_operator_command_bus.py",
               "scripts/m23_operator_pr_permit.py",
+              "scripts/m23_operator_request_bus.py",
+              "src/knowledge_engine/m23_7_r3_bounded_live_reobservation.py",
+              "tests/test_m23_7_r3_bounded_live_reobservation.py",
+              "tests/test_m23_7_r3_live_observation_receipt.py",
+              "tests/test_m23_operator_command_bus.py",
               "tests/test_m23_operator_pr_permit.py",
+              "tests/test_m23_operator_request_bus.py",
           }
+          base = "${{ github.event.pull_request.base.sha || '88ddd82cbfb93a6c6c9fe2aa98d34cf5e1e4ebe2' }}"
           changed = set(
               subprocess.check_output(
                   [
                       "git",
                       "diff",
                       "--name-only",
-                      "88ddd82cbfb93a6c6c9fe2aa98d34cf5e1e4ebe2",
+                      base,
                       "HEAD",
                   ],
                   text=True,
