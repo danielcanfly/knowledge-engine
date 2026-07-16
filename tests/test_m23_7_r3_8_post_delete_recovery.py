@@ -5,7 +5,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from scripts import m23_7_r3_8_post_delete_recovery as subject
 
 
@@ -24,7 +23,7 @@ class _Client:
         self.responses = responses
         self.calls: list[str] = []
 
-    def __enter__(self) -> "_Client":
+    def __enter__(self) -> _Client:
         return self
 
     def __exit__(self, *args: object) -> None:
