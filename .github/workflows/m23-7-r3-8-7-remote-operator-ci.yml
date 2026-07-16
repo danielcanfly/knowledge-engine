@@ -140,6 +140,8 @@ jobs:
           assert "deletion_authorizations/m23-7/r3-8/" in delete_text
           assert "python -m scripts.m23_7_r3_8_remote_delete" in delete_text
           assert "path: r3-8-deletion-evidence/" in delete_text
+          assert "wrangler delete[[:space:]]+\\[name\\]" in delete_text
+          assert "! grep -q -- '--name'" in delete_text
           PY
       - name: Verify accepted observation core runtime preservation
         shell: bash
@@ -155,7 +157,11 @@ jobs:
       - name: Verify pinned Wrangler command surfaces
         shell: bash
         run: |
+          set -euo pipefail
           test "$(npx --yes wrangler@4.111.0 --version | tr -d '\r')" = "4.111.0"
           npx --yes wrangler@4.111.0 deploy --help >/dev/null
           npx --yes wrangler@4.111.0 secret put --help >/dev/null
-          npx --yes wrangler@4.111.0 delete --help | grep -q -- '--force'
+          npx --yes wrangler@4.111.0 delete --help > wrangler-delete-help.txt
+          grep -Eq 'wrangler delete[[:space:]]+\[name\]' wrangler-delete-help.txt
+          grep -q -- '--force' wrangler-delete-help.txt
+          ! grep -q -- '--name' wrangler-delete-help.txt

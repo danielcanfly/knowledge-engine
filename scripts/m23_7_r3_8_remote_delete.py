@@ -99,6 +99,21 @@ def validate_authorization(path: Path) -> dict[str, Any]:
     return value
 
 
+def build_delete_command(worker_name: str, config: Path) -> list[str]:
+    if not _WORKER.fullmatch(worker_name):
+        raise RemoteOperatorError("deletion_worker_name")
+    return [
+        "npx",
+        "--yes",
+        f"wrangler@{WRANGLER_VERSION}",
+        "delete",
+        worker_name,
+        "--config",
+        str(config),
+        "--force",
+    ]
+
+
 def execute(args: argparse.Namespace) -> int:
     if args.confirmation != "DELETE_RECONCILED_R3_8_WORKER":
         raise RemoteOperatorError("deletion_confirmation_mismatch")
@@ -120,8 +135,7 @@ def execute(args: argparse.Namespace) -> int:
     try:
         generate_wrangler_config(required_env("QDRANT_URL"), worker_name, config)
         deleted = subprocess.run(
-            command
-            + ["delete", "--name", worker_name, "--config", str(config), "--force"],
+            build_delete_command(worker_name, config),
             cwd=worker_dir,
             env=env,
             text=True,

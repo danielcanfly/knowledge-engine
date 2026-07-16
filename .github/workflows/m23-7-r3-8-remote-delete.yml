@@ -76,8 +76,20 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .
           test "$(npx --yes wrangler@4.111.0 --version | tr -d '\r')" = "4.111.0"
-          npx --yes wrangler@4.111.0 delete --help | grep -q -- '--name'
-          npx --yes wrangler@4.111.0 delete --help | grep -q -- '--force'
+          npx --yes wrangler@4.111.0 delete --help > wrangler-delete-help.txt
+          grep -Eq 'wrangler delete[[:space:]]+\[name\]' wrangler-delete-help.txt
+          grep -q -- '--force' wrangler-delete-help.txt
+          ! grep -q -- '--name' wrangler-delete-help.txt
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.m23_7_r3_8_remote_delete import build_delete_command
+
+          worker = "knowledge-engine-r3-8-29506217284"
+          command = build_delete_command(worker, Path("wrangler.delete.test.jsonc"))
+          assert command[3:5] == ["delete", worker]
+          assert "--name" not in command
+          assert command[-1] == "--force"
+          PY
 
       - name: Delete only the independently reconciled diagnostic Worker
         id: deletion
