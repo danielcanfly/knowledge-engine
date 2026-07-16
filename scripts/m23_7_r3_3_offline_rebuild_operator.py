@@ -4,7 +4,7 @@ import argparse
 import os
 from pathlib import Path
 
-from knowledge_engine.m23_7_r3_3_offline_rebuild_evaluation import (
+from knowledge_engine.m23_7_r3_3_offline_rebuild_evaluation_real import (
     build_offline_candidate,
     canonical_json,
     evaluate_offline_candidate,
