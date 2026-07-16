@@ -1,0 +1,87 @@
+name: M23.7 Repair R3.3a Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-3a-reconciliation.json"
+      - "docs/architecture/m23-7-r3-3a-reconciliation.md"
+      - ".github/workflows/m23-7-r3-3a-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Verify implementation ancestry
+        run: git merge-base --is-ancestor 23578e610012f3e2db10814368e0b72a1675a424 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Verify reconciliation record
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path('pilot/m23/m23-7-r3-3a-reconciliation.json')
+          record = json.loads(path.read_text(encoding='utf-8'))
+          digest = record.pop('reconciliation_record_sha256')
+          canonical = json.dumps(
+              record,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          )
+          assert hashlib.sha256(canonical.encode('utf-8')).hexdigest() == digest
+          assert digest == '528a224ea4ba9f4f902ac6690f9092e8792ade993069b55a3990738f2019a02d'
+          assert record['issue'] == 489
+          assert record['parent_issue'] == 487
+          assert record['parent_r3_issue'] == 474
+          assert record['implementation']['pr'] == 492
+          assert record['implementation']['head_sha'] == '239b7ed7f42e039b6b84bca2f509e441467e8d8c'
+          assert record['implementation']['merge_sha'] == '23578e610012f3e2db10814368e0b72a1675a424'
+          assert len(record['exact_head_workflows']) == 6
+          assert all(item['conclusion'] == 'success' for item in record['exact_head_workflows'])
+          assert record['accepted_repair']['ranking_vector_source'] == 'pilot-document-vectors.f32'
+          assert record['accepted_repair']['semantic_vectors_validated_independently'] is True
+          assert record['authority']['production_retrieval'] == 'lexical'
+          assert record['authority']['qdrant_read_dispatched'] is False
+          assert record['authority']['qdrant_write_dispatched'] is False
+          assert record['remaining_blockers'] == ['blocked_pending_retrieval_quality']
+          assert record['exit']['r3_3a_complete'] is True
+          assert record['exit']['issue_487_must_remain_open'] is True
+          PY
+      - name: Compatibility regression
+        run: |
+          pytest -q \
+            tests/test_m23_6_2a_real_evidence_compat.py \
+            tests/test_m23_7_r3_3a_real_evidence_compat.py
+      - name: Privacy and authority scan
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          encoded = '\n'.join(
+              path.read_text(encoding='utf-8')
+              for path in (
+                  Path('pilot/m23/m23-7-r3-3a-reconciliation.json'),
+                  Path('docs/architecture/m23-7-r3-3a-reconciliation.md'),
+              )
+          )
+          for forbidden in ('CLOUDFLARE_API_TOKEN', 'QDRANT_API_KEY', 'https://'):
+              assert forbidden not in encoded
+          PY
