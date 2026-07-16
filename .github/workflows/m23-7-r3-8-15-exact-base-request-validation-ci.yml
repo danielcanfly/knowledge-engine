@@ -1,0 +1,141 @@
+name: M23.7 Repair R3.8.15 Exact Base Request Validation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m23-operator-request-ci.yml"
+      - ".github/workflows/m23-7-r3-8-15-exact-base-request-validation-ci.yml"
+      - "operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v4.json"
+      - "pilot/m23/m23-7-r3-8-15-exact-base-request-validation-contract.json"
+      - "docs/architecture/m23-7-r3-8-15-exact-base-request-validation.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-base-request-validation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact head and request-ledger reconciliation ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor ee8b7ce4d87f54a8eb2167a5a803ff4af1419fbc HEAD
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install development dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Preserve request validator and execution regressions
+        run: |
+          pytest -q tests/test_m23_operator_request_bus.py tests/test_m23_operator_status_comment.py tests/test_m23_7_r3_8_post_delete_recovery.py
+
+      - name: Verify exact-base workflow structure
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          path = Path(".github/workflows/m23-operator-request-ci.yml")
+          payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+          assert payload[True]["pull_request"]["paths"] == ["operator_requests/m23/**"]
+          text = path.read_text(encoding="utf-8")
+          assert "BASE_SHA: ${{ github.event.pull_request.base.sha }}" in text
+          assert "HEAD_SHA: ${{ github.event.pull_request.head.sha }}" in text
+          assert 'os.environ["BASE_SHA"]' in text
+          assert 'os.environ["HEAD_SHA"]' in text
+          assert '["git", "diff", "--name-only", base, head]' in text
+          assert '["git", "merge-base", "--is-ancestor", base, head]' in text
+          assert "GITHUB_BASE_REF" not in text
+          assert 'persist-credentials: false' in text
+          PY
+
+      - name: Prove detached HEAD exact-base diff without local main
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="$(mktemp -d)"
+          trap 'rm -rf "$temp"' EXIT
+          cd "$temp"
+          git init -q
+          git config user.name test
+          git config user.email test@example.invalid
+          mkdir -p operator_requests/m23/r3-8
+          printf 'base\n' > baseline.txt
+          git add baseline.txt
+          git commit -qm base
+          base="$(git rev-parse HEAD)"
+          printf '{}\n' > operator_requests/m23/r3-8/request.json
+          git add operator_requests/m23/r3-8/request.json
+          git commit -qm request
+          head="$(git rev-parse HEAD)"
+          git checkout -q --detach "$head"
+          test "$(git branch --show-current)" = ""
+          ! git show-ref --verify --quiet refs/heads/main
+          git merge-base --is-ancestor "$base" "$head"
+          changed="$(git diff --name-only "$base" "$head")"
+          test "$changed" = "operator_requests/m23/r3-8/request.json"
+
+      - name: Verify v4 authorization and repair contract digests
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          def verify(path: str, key: str, expected: str) -> dict:
+              value = json.loads(Path(path).read_text(encoding="utf-8"))
+              digest = value.pop(key)
+              encoded = json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  allow_nan=False,
+              ).encode()
+              assert hashlib.sha256(encoded).hexdigest() == digest
+              assert digest == expected
+              return value
+
+          auth = verify(
+              "operator_authorizations/m23/r3-8/"
+              "post-delete-recovery-29521901629-v4.json",
+              "authorization_sha256",
+              "1375bf49d53ce7b8cc63bfc83c2e409e8458e40bdde3bc22952e0750f96de8a8",
+          )
+          assert auth["authorization_id"].endswith("-v4")
+          assert len(auth["nonce"]) == 64
+          assert auth["authority"]["control_plane_read_authorized"] is True
+          assert auth["authority"]["worker_delete_authorized"] is False
+
+          contract = verify(
+              "pilot/m23/m23-7-r3-8-15-exact-base-request-validation-contract.json",
+              "contract_sha256",
+              "a3edc3cd607d3a71eea48db7bfcccf1a8f9c5f4500cd5abd06595f5f5786e032",
+          )
+          assert contract["trigger"]["failed_request_pr"] == 579
+          assert contract["trigger"]["failed_request_validation_run"] == 29525799714
+          assert contract["trigger"]["request_or_authorization_rejected"] is False
+          assert contract["trigger"]["cloudflare_access_dispatched"] is False
+          assert contract["repair"]["base_identity_source"] == "github.event.pull_request.base.sha"
+          assert contract["repair"]["branch_name_diff_forbidden"] is True
+          assert contract["repair"]["detached_head_supported"] is True
+          assert contract["authorization"]["prior_request_nonce_reused"] is False
+          assert contract["preservation"]["production_retrieval"] == "lexical"
+          PY
+
+      - name: Preserve execution, recovery, telemetry and prior authorization identities
+        run: |
+          git diff --exit-code ee8b7ce4d87f54a8eb2167a5a803ff4af1419fbc HEAD -- .github/workflows/m23-operator-command-bus.yml scripts/m23_operator_request_bus.py scripts/m23_7_r3_8_post_delete_recovery.py scripts/m23_operator_status_comment.py operator_authorizations/m23/r3-8/post-delete-recovery-29521901629.json operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v2.json operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v3.json deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29506217284.json
