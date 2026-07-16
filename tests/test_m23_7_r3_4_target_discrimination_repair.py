@@ -140,7 +140,7 @@ def test_compiler_builds_24_unique_target_specific_variants() -> None:
         documents,
     )
     assert len(probes) == 8
-    assert len(specificity) == 8
+    assert len(specificity) == 107
     variants = [variant for probe in probes for variant in probe["variants"]]
     assert len(variants) == 24
     assert len({variant["query_text_sha256"] for variant in variants}) == 24
