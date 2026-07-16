@@ -14,8 +14,8 @@ import httpx
 AFFECTED_RUN_ID = "29506217284"
 AFFECTED_ENGINE_SHA = "090db324939a4272b90d212fa462674b371b2e6d"
 AFFECTED_WORKER = "knowledge-engine-r3-8-29506217284"
-CONFIRMATION = "PROBE_R3_8_RUN_29506217284"
-SCHEMA_VERSION = "knowledge-engine-m23-7-r3-8-8-recovery-probe/v1"
+CONFIRMATION = "PROBE_R3_8_RUN_29506217284_SCHEMA_V2"
+SCHEMA_VERSION = "knowledge-engine-m23-7-r3-8-9-recovery-probe/v2"
 MAX_RESPONSE_BYTES = 1_000_000
 NOT_FOUND_CODES = {10007, 10090}
 _HEX_40 = re.compile(r"^[0-9a-f]{40}$")
@@ -70,60 +70,73 @@ def _bounded_json(response: httpx.Response) -> Any:
         raise RecoveryProbeError("cloudflare_response_not_json") from exc
 
 
+def _state(
+    state: str,
+    status_code: int,
+    codes: list[int],
+    collection_key: str,
+    identities: list[str] | None = None,
+) -> dict[str, Any]:
+    bounded = identities or []
+    return {
+        "state": state,
+        "http_status": status_code,
+        "error_codes": codes,
+        "collection_key": collection_key,
+        "identity_count": len(bounded),
+        "identities": bounded,
+    }
+
+
 def classify_control_plane_response(
     status_code: int,
     payload: Any,
     *,
+    collection_key: str,
     identity_fields: tuple[str, ...],
 ) -> dict[str, Any]:
     codes = _error_codes(payload)
     if status_code == 404 and codes and set(codes).issubset(NOT_FOUND_CODES):
-        return {
-            "state": "absent",
-            "http_status": status_code,
-            "error_codes": codes,
-            "identity_count": 0,
-            "identities": [],
-        }
+        return _state("absent", status_code, codes, collection_key)
     valid_success = (
         status_code == 200
         and isinstance(payload, dict)
         and payload.get("success") is True
+        and not codes
     )
     if not valid_success:
-        return {
-            "state": "indeterminate",
-            "http_status": status_code,
-            "error_codes": codes,
-            "identity_count": 0,
-            "identities": [],
-        }
+        return _state("indeterminate", status_code, codes, collection_key)
     result = payload.get("result")
-    if not isinstance(result, list):
-        return {
-            "state": "indeterminate",
-            "http_status": status_code,
-            "error_codes": codes,
-            "identity_count": 0,
-            "identities": [],
-        }
+    if not isinstance(result, dict) or set(result) != {collection_key}:
+        return _state("indeterminate", status_code, codes, collection_key)
+    collection = result.get(collection_key)
+    if not isinstance(collection, list):
+        return _state("indeterminate", status_code, codes, collection_key)
+    if not collection:
+        return _state("absent", status_code, codes, collection_key)
+
     identities: list[str] = []
-    for item in result:
+    for item in collection:
         if not isinstance(item, dict):
-            continue
+            return _state("indeterminate", status_code, codes, collection_key)
+        identity = ""
         for field in identity_fields:
             value = item.get(field)
             if isinstance(value, str) and value.strip():
-                identities.append(value.strip())
+                identity = value.strip()
                 break
-    identities = sorted(set(identities))
-    return {
-        "state": "present",
-        "http_status": status_code,
-        "error_codes": codes,
-        "identity_count": len(identities),
-        "identities": identities,
-    }
+        if not identity:
+            return _state("indeterminate", status_code, codes, collection_key)
+        identities.append(identity)
+    if len(set(identities)) != len(identities):
+        return _state("indeterminate", status_code, codes, collection_key)
+    return _state(
+        "present",
+        status_code,
+        codes,
+        collection_key,
+        sorted(identities),
+    )
 
 
 def reconcile_worker_state(
@@ -170,12 +183,14 @@ def execute(args: argparse.Namespace) -> int:
     versions = classify_control_plane_response(
         versions_response.status_code,
         _bounded_json(versions_response),
-        identity_fields=("id", "version_id"),
+        collection_key="items",
+        identity_fields=("id",),
     )
     deployments = classify_control_plane_response(
         deployments_response.status_code,
         _bounded_json(deployments_response),
-        identity_fields=("id", "deployment_id"),
+        collection_key="deployments",
+        identity_fields=("id",),
     )
     state = reconcile_worker_state(versions, deployments)
     receipt = {
@@ -190,6 +205,10 @@ def execute(args: argparse.Namespace) -> int:
         "worker_state": state,
         "versions": versions,
         "deployments": deployments,
+        "response_schema": {
+            "versions_collection": "result.items",
+            "deployments_collection": "result.deployments",
+        },
         "observation_replayed": False,
         "worker_deploy_dispatched": False,
         "worker_secret_mutation_dispatched": False,
@@ -217,7 +236,7 @@ def execute(args: argparse.Namespace) -> int:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Read-only recovery probe for R3.8 run 29506217284"
+        description="Read-only schema-v2 recovery probe for R3.8 run 29506217284"
     )
     parser.add_argument("--expected-head", required=True)
     parser.add_argument("--affected-run-id", required=True)
