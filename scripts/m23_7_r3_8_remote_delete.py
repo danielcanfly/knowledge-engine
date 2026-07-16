@@ -18,10 +18,40 @@ from scripts.m23_7_r3_8_remote_operator import (
     required_env,
 )
 
-AUTH_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-deletion-authorization/v1"
-RECEIPT_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-deletion-receipt/v1"
+AUTH_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-deletion-authorization/v2"
+RECEIPT_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-deletion-receipt/v2"
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
 _WORKER = re.compile(r"^knowledge-engine-r3-8-[0-9]{1,20}$")
+_RUN_ID = re.compile(r"^[0-9]{1,20}$")
+_CONTROL_PLANE_ID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+_AUTH_KEYS = {
+    "schema_version",
+    "worker_name",
+    "observation_run_id",
+    "recovery_run_id",
+    "receipt_sha256",
+    "evidence_seal_sha256",
+    "independent_reconciliation_sha256",
+    "worker_version_ids",
+    "worker_deployment_ids",
+    "authority",
+    "authorization_sha256",
+}
+
+
+def _validate_identity_list(value: Any, failure_code: str) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise RemoteOperatorError(failure_code)
+    if any(
+        not isinstance(identity, str) or not _CONTROL_PLANE_ID.fullmatch(identity)
+        for identity in value
+    ):
+        raise RemoteOperatorError(failure_code)
+    if value != sorted(value) or len(value) != len(set(value)):
+        raise RemoteOperatorError(failure_code)
+    return value
 
 
 def validate_authorization(path: Path) -> dict[str, Any]:
@@ -31,6 +61,8 @@ def validate_authorization(path: Path) -> dict[str, Any]:
     value = json.loads(raw)
     if not isinstance(value, dict) or value.get("schema_version") != AUTH_SCHEMA:
         raise RemoteOperatorError("deletion_authorization_schema")
+    if set(value) != _AUTH_KEYS:
+        raise RemoteOperatorError("deletion_authorization_keys")
     stored = value.get("authorization_sha256")
     unsigned = dict(value)
     unsigned.pop("authorization_sha256", None)
@@ -47,8 +79,13 @@ def validate_authorization(path: Path) -> dict[str, Any]:
         value["worker_name"]
     ):
         raise RemoteOperatorError("deletion_worker_name")
-    if not isinstance(value.get("worker_version_id"), str) or not value["worker_version_id"]:
-        raise RemoteOperatorError("deletion_worker_version")
+    for field in ("observation_run_id", "recovery_run_id"):
+        if not isinstance(value.get(field), str) or not _RUN_ID.fullmatch(value[field]):
+            raise RemoteOperatorError("deletion_run_identity")
+    _validate_identity_list(value.get("worker_version_ids"), "deletion_worker_versions")
+    _validate_identity_list(
+        value.get("worker_deployment_ids"), "deletion_worker_deployments"
+    )
     expected_authority = {
         "diagnostic_worker_deletion_authorized": True,
         "production_mutation_authorized": False,
@@ -123,7 +160,10 @@ def execute(args: argparse.Namespace) -> int:
         "status": "diagnostic_worker_deleted_and_absence_proven",
         "engine_sha": actual,
         "worker_name": worker_name,
-        "worker_version_id": auth["worker_version_id"],
+        "observation_run_id": auth["observation_run_id"],
+        "recovery_run_id": auth["recovery_run_id"],
+        "worker_version_ids": auth["worker_version_ids"],
+        "worker_deployment_ids": auth["worker_deployment_ids"],
         "receipt_sha256": auth["receipt_sha256"],
         "evidence_seal_sha256": auth["evidence_seal_sha256"],
         "independent_reconciliation_sha256": auth[
