@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
-from scripts import m23_7_r3_8_deploy_target as subject
+SCRIPT = Path("scripts/m23_7_r3_8_deploy_target.py")
+SPEC = importlib.util.spec_from_file_location("m23_7_r3_8_deploy_target", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+subject = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = subject
+SPEC.loader.exec_module(subject)
 
 WORKER = "knowledge-engine-m23-7-r3-8-latency"
 VALID_TARGET = f"https://{WORKER}.daniel-lab.workers.dev"
