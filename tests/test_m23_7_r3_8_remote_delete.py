@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from scripts import m23_7_r3_8_remote_delete as subject
 from scripts.m23_7_r3_8_remote_operator import canonical_sha256
 
