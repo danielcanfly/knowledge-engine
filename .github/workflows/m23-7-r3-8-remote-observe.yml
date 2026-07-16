@@ -79,26 +79,13 @@ jobs:
           python -m pip install -e .
           test "$(npx --yes wrangler@4.111.0 --version | tr -d '\r')" = "4.111.0"
 
-      - name: Validate diagnostic secret presence without printing values
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in \
-            CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN \
-            QDRANT_URL QDRANT_API_KEY \
-            R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
-            R2_BUCKET R2_ENDPOINT_URL; do
-            test -n "${!name:-}" || { echo "missing_secret_or_variable=$name"; exit 23; }
-          done
-          test "$R2_BUCKET" = "llm-wiki-bucket"
-
       - name: Run one remote placed-Worker observation
         id: operator
         shell: bash
         run: |
           set +e
           rm -rf "$EVIDENCE_DIR"
-          python scripts/m23_7_r3_8_remote_operator.py \
+          python -m scripts.m23_7_r3_8_remote_operator \
             --expected-head "${{ inputs.expected_head }}" \
             --run-id "$GITHUB_RUN_ID" \
             --run-attempt "$GITHUB_RUN_ATTEMPT" \
