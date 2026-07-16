@@ -32,7 +32,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       QDRANT_URL: ${{ secrets.QDRANT_URL }}
-      EVIDENCE_DIR: .r3-8-deletion-evidence
+      EVIDENCE_DIR: r3-8-deletion-evidence
     steps:
       - name: Reject rerun attempts and unconfirmed deletion
         shell: bash
@@ -99,8 +99,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: m23-7-r3-8-deletion-${{ github.run_id }}
-          path: .r3-8-deletion-evidence/
+          path: r3-8-deletion-evidence/
           if-no-files-found: error
+          include-hidden-files: false
           retention-days: 30
           compression-level: 9
 
