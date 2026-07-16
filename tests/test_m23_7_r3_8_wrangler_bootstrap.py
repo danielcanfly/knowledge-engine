@@ -15,6 +15,11 @@ def _write_executable(path: Path, body: str) -> None:
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
 
 
+def _version_executable(path: Path, output: str) -> None:
+    escaped = output.replace("\\", "\\\\").replace("'", "'\\''")
+    _write_executable(path, f"#!/bin/sh\nprintf '%b' '{escaped}'\n")
+
+
 def _run(
     tmp_path: Path,
     *,
@@ -43,6 +48,13 @@ def _run(
     )
 
 
+def _run_global_output(tmp_path: Path, output: str) -> subprocess.CompletedProcess[str]:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _version_executable(bin_dir / "wrangler", output)
+    return _run(tmp_path, path_entries=[bin_dir])
+
+
 def test_resolver_uses_only_bash32_compatible_array_features() -> None:
     shell = SCRIPT.read_text(encoding="utf-8")
 
@@ -60,13 +72,31 @@ def test_resolver_uses_only_bash32_compatible_array_features() -> None:
     assert '"${M23_R3_8_WRANGLER_CMD[@]}" --version' in shell
 
 
+@pytest.mark.parametrize(
+    "output",
+    (
+        "4.111.0\n",
+        "  4.111.0  \n",
+        "wrangler 4.111.0\n",
+        "⛅️ wrangler 4.111.0\n",
+        "\x1b[36m4.111.0\x1b[0m\n",
+        "\x1b[36m⛅️ wrangler 4.111.0\x1b[0m\n",
+    ),
+)
+def test_realistic_version_output_forms_are_accepted(
+    tmp_path: Path,
+    output: str,
+) -> None:
+    result = _run_global_output(tmp_path, output)
+
+    assert result.returncode == 0, result.stderr
+    assert "source=global version=4.111.0" in result.stdout
+
+
 def test_global_wrangler_is_preferred_over_npx(tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    _write_executable(
-        bin_dir / "wrangler",
-        "#!/bin/sh\nprintf 'wrangler 4.111.0\\n'\n",
-    )
+    _version_executable(bin_dir / "wrangler", "4.111.0\n")
     _write_executable(
         bin_dir / "npx",
         "#!/bin/sh\nprintf 'unexpected npx use\\n' >&2\nexit 88\n",
@@ -79,7 +109,9 @@ def test_global_wrangler_is_preferred_over_npx(tmp_path: Path) -> None:
     assert f"CMD={bin_dir / 'wrangler'}" in result.stdout
 
 
-def test_npx_fallback_uses_exact_pinned_package(tmp_path: Path) -> None:
+def test_npx_fallback_uses_exact_pinned_package_and_bare_semver(
+    tmp_path: Path,
+) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     _write_executable(
@@ -88,7 +120,7 @@ def test_npx_fallback_uses_exact_pinned_package(tmp_path: Path) -> None:
 if [ "$1" != "--yes" ] || [ "$2" != "wrangler@4.111.0" ] || [ "$3" != "--version" ]; then
   exit 77
 fi
-printf 'wrangler 4.111.0\n'
+printf '4.111.0\n'
 """,
     )
 
@@ -103,7 +135,7 @@ def test_explicit_single_token_override_is_supported(tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     custom = bin_dir / "pinned-wrangler"
-    _write_executable(custom, "#!/bin/sh\nprintf 'wrangler 4.111.0\\n'\n")
+    _version_executable(custom, "4.111.0\n")
 
     result = _run(
         tmp_path,
@@ -117,17 +149,36 @@ def test_explicit_single_token_override_is_supported(tmp_path: Path) -> None:
 
 
 def test_wrong_version_is_rejected(tmp_path: Path) -> None:
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    _write_executable(
-        bin_dir / "wrangler",
-        "#!/bin/sh\nprintf 'wrangler 4.112.0\\n'\n",
-    )
-
-    result = _run(tmp_path, path_entries=[bin_dir])
+    result = _run_global_output(tmp_path, "4.112.0\n")
 
     assert result.returncode != 0
     assert "version drifted" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "output",
+    (
+        "4.111.0\n4.111.0\n",
+        "4.111.0\n4.112.0\n",
+        "4.111.0-beta.1\n",
+        "wrangler version unknown\n",
+    ),
+)
+def test_ambiguous_or_non_release_output_is_rejected(
+    tmp_path: Path,
+    output: str,
+) -> None:
+    result = _run_global_output(tmp_path, output)
+
+    assert result.returncode != 0
+    assert "expected exactly one bounded Wrangler version line" in result.stderr
+
+
+def test_oversized_version_output_is_rejected(tmp_path: Path) -> None:
+    result = _run_global_output(tmp_path, "x" * 4097 + "\n4.111.0\n")
+
+    assert result.returncode != 0
+    assert "exceeded the bounded limit" in result.stderr
 
 
 @pytest.mark.parametrize(

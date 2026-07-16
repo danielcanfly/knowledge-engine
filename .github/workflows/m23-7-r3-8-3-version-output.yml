@@ -1,0 +1,161 @@
+name: M23.7 Repair R3.8.3 Wrangler Version Output
+
+on:
+  pull_request:
+    paths:
+      - "scripts/m23_7_r3_8_wrangler_bootstrap.sh"
+      - "tests/test_m23_7_r3_8_wrangler_bootstrap.py"
+      - "pilot/m23/m23-7-r3-8-3-version-output-contract.json"
+      - "docs/architecture/m23-7-r3-8-3-version-output.md"
+      - ".github/workflows/m23-7-r3-8-3-version-output.yml"
+      - ".github/workflows/m23-7-r3-8-1-wrangler-bootstrap.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version-output-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Verify R3.8.2 ancestry
+        run: git merge-base --is-ancestor c75eb9b64821507ddbe683b22868df587ec4b403 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff version-output tests
+        run: ruff check tests/test_m23_7_r3_8_wrangler_bootstrap.py
+      - name: Parse bootstrap shell
+        run: bash -n scripts/m23_7_r3_8_wrangler_bootstrap.sh
+      - name: Version-output adversarial tests
+        run: pytest -q tests/test_m23_7_r3_8_wrangler_bootstrap.py
+      - name: Preserve accepted R3.8 regressions
+        run: |
+          pytest -q tests/test_m23_7_r3_8_latency_repair.py
+          node --test workers/m23-7-r3-8-latency-repair/worker.test.mjs
+      - name: Verify deterministic compatibility contract
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-8-3-version-output-contract.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          digest = payload.pop("contract_sha256")
+          encoded = json.dumps(
+              payload,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "16c30f2bcf1983d57cfaa061f0f14916621c77d8e41baa2d7bb134df10222a11"
+          assert payload["entry"]["engine_sha"] == "c75eb9b64821507ddbe683b22868df587ec4b403"
+          assert payload["parser"]["exact_version"] == "4.111.0"
+          assert payload["parser"]["exact_version_line_count"] == 1
+          assert payload["parser"]["max_output_bytes"] == 4096
+          assert payload["validation"]["real_network_npx_version_probe"] is True
+          assert payload["preservation"]["latency_threshold_changed"] is False
+          assert payload["authority"]["worker_deployment_authorized"] is False
+          PY
+      - name: Verify hotfix scope and accepted file preservation
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          allowed = {
+              "scripts/m23_7_r3_8_wrangler_bootstrap.sh",
+              "tests/test_m23_7_r3_8_wrangler_bootstrap.py",
+              "pilot/m23/m23-7-r3-8-3-version-output-contract.json",
+              "docs/architecture/m23-7-r3-8-3-version-output.md",
+              ".github/workflows/m23-7-r3-8-3-version-output.yml",
+              ".github/workflows/m23-7-r3-8-1-wrangler-bootstrap.yml",
+          }
+          changed = set(
+              subprocess.check_output(
+                  ["git", "diff", "--name-only", "c75eb9b64821507ddbe683b22868df587ec4b403", "HEAD"],
+                  text=True,
+              ).splitlines()
+          )
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code c75eb9b64821507ddbe683b22868df587ec4b403 HEAD -- \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            scripts/m23_7_r3_8_latency_repair_operator.py \
+            scripts/m23_7_r3_8_worker_config.py \
+            workers/m23-7-r3-8-latency-repair/worker.mjs \
+            pilot/m23/m23-7-r3-8-latency-repair-contract.json \
+            pilot/m23/m23-7-r3-8-1-wrangler-bootstrap-contract.json \
+            pilot/m23/m23-7-r3-8-2-bash32-bootstrap-contract.json
+      - name: Verify historical workflow retirement boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          historical = Path(
+              ".github/workflows/m23-7-r3-8-1-wrangler-bootstrap.yml"
+          ).read_text(encoding="utf-8")
+          gate = (
+              "github.event_name == 'workflow_dispatch' || "
+              "github.head_ref == 'agent/m23-7-r3-8-2-bash32-bootstrap'"
+          )
+          assert historical.count(gate) == 2
+          PY
+      - name: Parser safety scan
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          shell = Path("scripts/m23_7_r3_8_wrangler_bootstrap.sh").read_text(encoding="utf-8")
+          assert "eval " not in shell
+          assert "declare -g" not in shell
+          assert "M23_R3_8_MAX_VERSION_OUTPUT_BYTES=4096" in shell
+          assert "version_line_count -ne 1" in shell
+          assert '"${M23_R3_8_WRANGLER_CMD[@]}" --version' in shell
+          PY
+      - name: Compile accepted Python scope
+        run: python -m py_compile tests/test_m23_7_r3_8_wrangler_bootstrap.py
+
+  real-npx-macos-bash32:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify macOS system Bash 3.2
+        run: /bin/bash --version | head -1 | grep 'version 3\.2'
+      - name: Exercise resolver with real pinned npx output
+        run: |
+          NODE_BIN="$(dirname "$(command -v node)")"
+          TEST_PATH="$NODE_BIN:/usr/bin:/bin"
+          test -x "$NODE_BIN/npx"
+          if PATH="$TEST_PATH" command -v wrangler >/dev/null 2>&1; then
+            echo "unexpected global wrangler in isolated test path" >&2
+            exit 1
+          fi
+          PATH="$TEST_PATH" /bin/bash --noprofile --norc -c '
+            source scripts/m23_7_r3_8_wrangler_bootstrap.sh
+            m23_r3_8_resolve_wrangler
+            test "$M23_R3_8_WRANGLER_SOURCE" = "npx-pinned"
+            test "${M23_R3_8_WRANGLER_CMD[1]}" = "--yes"
+            test "${M23_R3_8_WRANGLER_CMD[2]}" = "wrangler@4.111.0"
+          '
