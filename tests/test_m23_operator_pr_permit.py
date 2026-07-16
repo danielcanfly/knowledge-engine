@@ -27,7 +27,7 @@ def _authorization(nonce: str) -> dict:
         "bus_issue_number": 565,
         "actor_login": "huaihsuanbusiness",
         "source_run_id": "29521901629",
-        "source_engine_sha": "542907fa0cfae6f1591555a17e849c97ced7b968",
+        "source_engine_sha": "542907fa0cfae47addd6d777c1708ae62155aea4",
         "worker_name": "knowledge-engine-r3-8-29506217284",
         "previous_deletion_authorization_path": (
             "deletion_authorizations/m23-7/r3-8/"
