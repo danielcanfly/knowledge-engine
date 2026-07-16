@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "milestone": "M23.7-R3.8.6",
+  "entry": {
+    "engine_sha": "37e093b28b1cf11d47e95edaa59bd6a9f2b91765",
+    "parent_issue": 520,
+    "repair_issue": 532
+  },
+  "probe": {
+    "official_not_found_codes": [
+      10007,
+      10090
+    ],
+    "accepted_code_cardinality": 1,
+    "duplicate_code_records_rejected": true,
+    "mixed_not_found_codes_rejected": true,
+    "present_only_on_nonempty_json_array": true,
+    "empty_json_array_is_ambiguous": true,
+    "raw_output_persisted": false
+  },
+  "safety": {
+    "http_403_allows_deploy": false,
+    "authentication_error_allows_deploy": false,
+    "unknown_error_allows_deploy": false,
+    "existing_worker_overwrite_authorized": false
+  },
+  "preservation": {
+    "r3_8_runtime_changed": false,
+    "worker_changed": false,
+    "query_fixture_changed": false,
+    "latency_threshold_changed": false,
+    "deploy_target_parser_changed": false
+  },
+  "authority": {
+    "worker_deployment_authorized": false,
+    "secret_mutation_authorized": false,
+    "qdrant_access_authorized": false,
+    "blocker_clearance_authorized": false,
+    "production_mutation_authorized": false
+  },
+  "contract_sha256": "69edbcbb9fcde5fe6384c4855b930f0cd722919986eb57dbcb418621acf63862"
+}
