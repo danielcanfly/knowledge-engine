@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from scripts import m23_7_r3_8_remote_operator as subject
 
 
