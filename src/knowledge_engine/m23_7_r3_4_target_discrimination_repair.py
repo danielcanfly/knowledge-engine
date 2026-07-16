@@ -214,7 +214,7 @@ def _document_statistics(
         _require(bool(counts), 103, f"document {section_id} has no semantic terms")
         term_counts[section_id] = counts
         title_terms[section_id] = title_tokens
-        document_frequency.update(counts)
+        document_frequency.update(counts.keys())
     return dict(document_frequency), term_counts, title_terms
 
 
@@ -225,6 +225,7 @@ def _distinctive_signature(
     term_counts: Mapping[str, Counter[str]],
     title_terms: Mapping[str, set[str]],
     document_count: int,
+    minimum_terms: int = MINIMUM_SIGNATURE_TERMS,
 ) -> tuple[list[str], float]:
     counts = term_counts[section_id]
     title = title_terms[section_id]
@@ -245,13 +246,17 @@ def _distinctive_signature(
     ]
     unique = list(dict.fromkeys(ordered))[:MAXIMUM_SIGNATURE_TERMS]
     _require(
-        len(unique) >= MINIMUM_SIGNATURE_TERMS,
+        len(unique) >= minimum_terms,
         104,
         f"section {section_id} lacks target-specific signature terms",
     )
+    selected_count = max(
+        1,
+        min(len(unique), max(minimum_terms, MINIMUM_SIGNATURE_TERMS)),
+    )
     selected_idf = [
         math.log((document_count + 1) / (document_frequency[token] + 0.5))
-        for token in unique[:MINIMUM_SIGNATURE_TERMS]
+        for token in unique[:selected_count]
     ]
     maximum_idf = math.log((document_count + 1) / 1.5)
     specificity = min(
@@ -274,19 +279,21 @@ def _query_variants(
     query_class: str,
     terms: Sequence[str],
 ) -> list[str]:
-    joined = ", ".join(terms[:8])
-    triad = ", ".join(terms[:3])
+    bounded_title = title[:96].rstrip()
+    bounded_terms = [term[:24] for term in terms]
+    joined = ", ".join(bounded_terms[:8])
+    triad = ", ".join(bounded_terms[:3])
     if language.casefold().startswith("zh"):
         variants = [
-            f"哪個段落專門討論「{title}」？關鍵概念：{joined}",
-            f"請找出同時說明 {triad} 之間關係的段落，主題是「{title}」。",
-            f"哪一段內容提供「{title}」的具體{query_class}資訊？聚焦：{joined}",
+            f"哪個段落專門討論「{bounded_title}」？關鍵概念：{joined}",
+            f"請找出同時說明 {triad} 之間關係的段落，主題是「{bounded_title}」。",
+            f"哪一段內容提供「{bounded_title}」的具體{query_class}資訊？聚焦：{joined}",
         ]
     else:
         variants = [
-            f"Find the specific section about {title}. Distinctive concepts: {joined}.",
-            f"Which passage explains how {triad} relate in the context of {title}?",
-            f"Identify the section providing {query_class} evidence for {title}; focus on {joined}.",
+            f"Find the specific section about {bounded_title}. Distinctive concepts: {joined}.",
+            f"Which passage explains how {triad} relate in the context of {bounded_title}?",
+            f"Identify the section providing {query_class} evidence for {bounded_title}; focus on {joined}.",
         ]
     return [_bounded(value) for value in variants]
 
@@ -302,10 +309,21 @@ def compile_discriminative_probe_plan(
     _require(len(by_section) == EXPECTED_POINT_COUNT, 108, "document section identities drifted")
     df, term_counts, title_terms = _document_statistics(documents)
 
+    specificity: dict[str, float] = {}
+    for section_id in sorted(by_section):
+        _, score = _distinctive_signature(
+            section_id,
+            document_frequency=df,
+            term_counts=term_counts,
+            title_terms=title_terms,
+            document_count=len(documents),
+            minimum_terms=1,
+        )
+        specificity[section_id] = score
+
     probes: list[dict[str, Any]] = []
     all_variant_digests: set[str] = set()
     target_ids: set[str] = set()
-    specificity: dict[str, float] = {}
     for slot, sample in zip(SLOTS, ordered, strict=True):
         payload = sample.get("payload")
         _require(isinstance(payload, Mapping), 109, "sample payload missing")
@@ -635,9 +653,12 @@ def evaluate_repair_candidate(
                 rrf_scores[section_id] += 1 / (RRF_K + rank)
         fused = sorted(rrf_scores.items(), key=lambda item: (-item[1], item[0]))
         fused_rank = next(
-            rank
-            for rank, (section_id, _) in enumerate(fused, start=1)
-            if section_id == target
+            (
+                rank
+                for rank, (section_id, _) in enumerate(fused, start=1)
+                if section_id == target
+            ),
+            EXPECTED_POINT_COUNT + 1,
         )
         repaired_scores: dict[str, float] = {}
         for section_id, score in fused:
@@ -655,9 +676,12 @@ def evaluate_repair_candidate(
             key=lambda item: (-item[1], item[0]),
         )
         repaired_rank = next(
-            rank
-            for rank, (section_id, _) in enumerate(repaired, start=1)
-            if section_id == target
+            (
+                rank
+                for rank, (section_id, _) in enumerate(repaired, start=1)
+                if section_id == target
+            ),
+            EXPECTED_POINT_COUNT + 1,
         )
         ranked_ids = [section_id for section_id, _ in repaired[:TOP_K]]
         final_top_10.append(ranked_ids)
