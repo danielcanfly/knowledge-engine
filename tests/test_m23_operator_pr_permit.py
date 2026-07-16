@@ -27,7 +27,7 @@ def _authorization(nonce: str) -> dict:
         "bus_issue_number": 565,
         "actor_login": "huaihsuanbusiness",
         "source_run_id": "29521901629",
-        "source_engine_sha": "542907fa0cfae47addd6d777c1708ae62155aea4",
+        "source_engine_sha": "542907fa0cfae6f1591555a17e849c97ced7b968",
         "worker_name": "knowledge-engine-r3-8-29506217284",
         "previous_deletion_authorization_path": (
             "deletion_authorizations/m23-7/r3-8/"
@@ -65,14 +65,17 @@ def _build_repo(tmp_path: Path) -> tuple[Path, str, str, str, str]:
         check=True,
     )
     nonce = "a" * 64
-    auth_path = (
-        repo
-        / "operator_authorizations/m23/r3-8/"
-        / "post-delete-recovery-29521901629-v5.json"
+    auth_relative = (
+        "operator_authorizations/m23/r3-8/"
+        "post-delete-recovery-29521901629-v5.json"
     )
+    auth_path = repo / auth_relative
     auth_path.parent.mkdir(parents=True)
-    auth = _authorization(nonce)
-    auth_path.write_text(subject.canonical_json(auth) + "\n", encoding="utf-8")
+    authorization = _authorization(nonce)
+    auth_path.write_text(
+        subject.canonical_json(authorization) + "\n",
+        encoding="utf-8",
+    )
     (repo / "baseline.txt").write_text("base\n", encoding="utf-8")
     base = _commit(repo, "base")
 
@@ -82,10 +85,7 @@ def _build_repo(tmp_path: Path) -> tuple[Path, str, str, str, str]:
         "schema_version": "knowledge-engine-m23-operator-request/v1",
         "request_id": request_id,
         "command_type": "r3_8_post_delete_recovery",
-        "authorization_path": (
-            "operator_authorizations/m23/r3-8/"
-            "post-delete-recovery-29521901629-v5.json"
-        ),
+        "authorization_path": auth_relative,
         "nonce": nonce,
         "expected_base_sha": base,
         "status_issue_number": 565,
@@ -93,10 +93,13 @@ def _build_repo(tmp_path: Path) -> tuple[Path, str, str, str, str]:
     request["request_sha256"] = subject.canonical_sha256(request)
     request_path = repo / request_relative
     request_path.parent.mkdir(parents=True)
-    request_path.write_text(subject.canonical_json(request) + "\n", encoding="utf-8")
+    request_path.write_text(
+        subject.canonical_json(request) + "\n",
+        encoding="utf-8",
+    )
     request_head = _commit(repo, "request")
 
-    permit_id = "r3-8-post-delete-recovery-29521901629-v5"
+    permit_id = request_id
     permit_relative = f"operator_permits/m23/r3-8/{permit_id}.json"
     permit = {
         "schema_version": subject.PERMIT_SCHEMA,
@@ -106,7 +109,7 @@ def _build_repo(tmp_path: Path) -> tuple[Path, str, str, str, str]:
         "request_sha256": request["request_sha256"],
         "validated_request_head_sha": request_head,
         "expected_base_sha": base,
-        "authorization_sha256": auth["authorization_sha256"],
+        "authorization_sha256": authorization["authorization_sha256"],
         "permit_nonce": "b" * 64,
         "validation_runs": {
             "request_validation": 101,
@@ -118,14 +121,21 @@ def _build_repo(tmp_path: Path) -> tuple[Path, str, str, str, str]:
     permit["permit_sha256"] = subject.canonical_sha256(permit)
     permit_path = repo / permit_relative
     permit_path.parent.mkdir(parents=True)
-    permit_path.write_text(subject.canonical_json(permit) + "\n", encoding="utf-8")
+    permit_path.write_text(
+        subject.canonical_json(permit) + "\n",
+        encoding="utf-8",
+    )
     permit_head = _commit(repo, "permit")
     return repo, base, request_head, permit_head, permit_relative
 
 
 def test_request_and_permit_stages_validate(tmp_path: Path) -> None:
     repo, base, request_head, permit_head, permit_relative = _build_repo(tmp_path)
-    subprocess.run(["git", "checkout", "-q", "--detach", request_head], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "checkout", "-q", "--detach", request_head],
+        cwd=repo,
+        check=True,
+    )
     stage, request_result = subject.validate_pr_stage(
         repo_root=repo,
         base=base,
@@ -134,7 +144,11 @@ def test_request_and_permit_stages_validate(tmp_path: Path) -> None:
     assert stage == "request_validated"
     assert request_result["permit_path"] == ""
 
-    subprocess.run(["git", "checkout", "-q", "--detach", permit_head], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "checkout", "-q", "--detach", permit_head],
+        cwd=repo,
+        check=True,
+    )
     stage, permit_result = subject.validate_pr_stage(
         repo_root=repo,
         base=base,
@@ -150,26 +164,40 @@ def test_permit_commit_rejects_extra_file(tmp_path: Path) -> None:
     subprocess.run(["git", "checkout", "-q", permit_head], cwd=repo, check=True)
     (repo / "extra.txt").write_text("not allowed\n", encoding="utf-8")
     bad_head = _commit(repo, "extra")
-    subprocess.run(["git", "checkout", "-q", "--detach", bad_head], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "checkout", "-q", "--detach", bad_head],
+        cwd=repo,
+        check=True,
+    )
     with pytest.raises(subject.OperatorPermitError, match="pr_contains_non_operator_changes"):
         subject.validate_pr_stage(repo_root=repo, base=base, head=bad_head)
 
 
 def test_permit_rejects_parent_binding_drift(tmp_path: Path) -> None:
     repo, base, request_head, permit_head, permit_relative = _build_repo(tmp_path)
-    subprocess.run(["git", "checkout", "-q", permit_head], cwd=repo, check=True)
-    path = repo / permit_relative
-    value = json.loads(path.read_text(encoding="utf-8"))
+    raw = _git(repo, "show", f"{permit_head}:{permit_relative}")
+    value = json.loads(raw)
     value["validated_request_head_sha"] = "c" * 40
     unsigned = dict(value)
     unsigned.pop("permit_sha256")
     value["permit_sha256"] = subject.canonical_sha256(unsigned)
+
+    subprocess.run(
+        ["git", "checkout", "-q", "-B", "drift", request_head],
+        cwd=repo,
+        check=True,
+    )
+    path = repo / permit_relative
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(subject.canonical_json(value) + "\n", encoding="utf-8")
-    amended = _commit(repo, "drift")
-    subprocess.run(["git", "checkout", "-q", "--detach", amended], cwd=repo, check=True)
-    assert request_head != "c" * 40
+    drift_head = _commit(repo, "drift")
+    subprocess.run(
+        ["git", "checkout", "-q", "--detach", drift_head],
+        cwd=repo,
+        check=True,
+    )
     with pytest.raises(subject.OperatorPermitError, match="permit_parent_head_mismatch"):
-        subject.validate_pr_stage(repo_root=repo, base=base, head=amended)
+        subject.validate_pr_stage(repo_root=repo, base=base, head=drift_head)
 
 
 def test_source_forbids_arbitrary_execution_surfaces() -> None:
