@@ -1,0 +1,119 @@
+name: M23.7 R3.7 Fail-Closed Live Acceptance Evidence Seal
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-7-fail-closed-live-acceptance-evidence-seal.json"
+      - "docs/architecture/m23-7-r3-7-fail-closed-live-acceptance-evidence-seal.md"
+      - ".github/workflows/m23-7-r3-7-fail-closed-live-acceptance-evidence-seal.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Verify implementation ancestry
+        run: git merge-base --is-ancestor 068d2968a6d60b44328b96908cfc4ce29f919a2f HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify compact seal digest and disposition
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-7-fail-closed-live-acceptance-evidence-seal.json")
+          seal = json.loads(path.read_text(encoding="utf-8"))
+          claimed = seal.pop("seal_sha256")
+          canonical = json.dumps(
+              seal,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+          ).encode("utf-8")
+          assert hashlib.sha256(canonical).hexdigest() == claimed
+          assert claimed == "e5c35247dd10be17dfa526842e3f9dd27d875278d31c5537786e25bf0b17ecdd"
+
+          assert seal["receipt"]["file_sha256"] == "72c8d9cc6a9262960659c75e87ac9cf6f6e73008633bc255f3c944681abcf4c2"
+          assert seal["receipt"]["canonical_self_digest_sha256"] == "55ccb6ccdb7f02fcc9ba7302c37021d6cd747af49ec8250c955e924979a3509a"
+          assert seal["receipt"]["status"] == "completed_fail_closed_live_acceptance"
+          assert seal["implementation"]["contract_sha256"] == "11faa597fe15e39f2589963b30e00e3b1580d6f7bb186ffe9ef180139d427d8d"
+          assert seal["candidate"]["point_count"] == 107
+          assert seal["candidate"]["pre_post_point_identity_equal"] is True
+          assert seal["query_evidence"]["query_count"] == 24
+          assert seal["query_evidence"]["query_identity_count"] == 24
+          assert len(seal["query_evidence"]["cases"]) == 24
+          assert len({row[0] for row in seal["query_evidence"]["cases"]}) == 24
+          assert len({row[1] for row in seal["query_evidence"]["cases"]}) == 24
+
+          assert seal["quality_evidence"]["metrics"] == seal["quality_evidence"]["accepted_metrics"]
+          assert seal["quality_evidence"]["target_ranks"] == seal["quality_evidence"]["accepted_target_ranks"]
+          assert seal["quality_evidence"]["maximum_top10_hub_frequency"] == 3
+          assert seal["latency"]["live_p95_ms"] == 1739
+          assert seal["latency"]["maximum_live_p95_ms"] == 1200
+          assert seal["failed_gates"] == ["live_p95_latency"]
+          assert [key for key, value in seal["gates"].items() if value is not True] == ["live_p95_latency"]
+          assert seal["retained_blockers"] == [
+              "blocked_pending_retrieval_quality",
+              "blocked_pending_latency",
+          ]
+          assert seal["disposition"]["status"] == "completed_fail_closed"
+          assert seal["disposition"]["result_complete"] is True
+          assert seal["disposition"]["result_passed"] is False
+          assert seal["disposition"]["thresholds_changed"] is False
+          assert seal["disposition"]["rerun_authorized"] is False
+          assert seal["disposition"]["blocker_clearance_eligible"] is False
+          PY
+      - name: Verify privacy and authority boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          seal_path = Path("pilot/m23/m23-7-r3-7-fail-closed-live-acceptance-evidence-seal.json")
+          doc_path = Path("docs/architecture/m23-7-r3-7-fail-closed-live-acceptance-evidence-seal.md")
+          seal = json.loads(seal_path.read_text(encoding="utf-8"))
+
+          assert all(value is False for value in seal["privacy"].values())
+          authority = seal["authority"]
+          assert authority["qdrant_read_dispatched"] is True
+          for key in (
+              "qdrant_write_dispatched",
+              "qdrant_delete_dispatched",
+              "qdrant_reindex_dispatched",
+              "historical_pilot_mutation_dispatched",
+              "production_collection_mutation_dispatched",
+              "r2_mutation_dispatched",
+              "pointer_mutation_dispatched",
+              "source_mutation_dispatched",
+              "production_mutation_dispatched",
+              "serving_dispatched",
+              "promotion_eligibility_granted",
+              "retrieval_quality_blocker_cleared",
+              "live_acceptance_gate_passed",
+          ):
+              assert authority[key] is False
+          assert authority["production_retrieval"] == "lexical"
+
+          text = seal_path.read_text(encoding="utf-8") + "\n" + doc_path.read_text(encoding="utf-8")
+          for forbidden in (
+              "CLOUDFLARE_API_TOKEN",
+              "QDRANT_API_KEY",
+              "QDRANT_URL",
+              "https://",
+              "raw_query\":",
+              "document_text\":",
+          ):
+              assert forbidden not in text
+          PY
