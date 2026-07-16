@@ -1,0 +1,122 @@
+name: M23.7 R3.8.15 Exact Base Request Validation Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-8-15-exact-base-request-validation-reconciliation.json"
+      - "docs/architecture/m23-7-r3-8-15-exact-base-request-validation-reconciliation.md"
+      - ".github/workflows/m23-7-r3-8-15-exact-base-request-validation-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact head and implementation ancestry
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 4ccc139a73dcae18bd904222f115e533c73cada4 HEAD
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install development dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Re-run request and recovery regressions
+        run: pytest -q tests/test_m23_operator_request_bus.py tests/test_m23_operator_status_comment.py tests/test_m23_7_r3_8_post_delete_recovery.py
+
+      - name: Verify reconciliation digest and exact identities
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-8-15-exact-base-request-validation-reconciliation.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("reconciliation_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "3730591f57c17c16d735c5f400ef5f2a09addb8e2a3769cdecd9023128fac522"
+          implementation = value["implementation"]
+          assert implementation["accepted_head"] == "119955c0f41fbdb4a0408a26b86531bbfbb2094c"
+          assert implementation["merge_sha"] == "4ccc139a73dcae18bd904222f115e533c73cada4"
+          assert implementation["authorization_sha256"] == "1375bf49d53ce7b8cc63bfc83c2e409e8458e40bdde3bc22952e0750f96de8a8"
+          assert implementation["contract_sha256"] == "a3edc3cd607d3a71eea48db7bfcccf1a8f9c5f4500cd5abd06595f5f5786e032"
+          assert len(implementation["changed_files"]) == 5
+          assert all(item["conclusion"] == "success" for item in value["exact_head_workflows"].values())
+          findings = value["findings"]
+          assert findings["failed_request_not_merged"] is True
+          assert findings["request_schema_passed"] is True
+          assert findings["authorization_validation_passed"] is True
+          assert findings["exact_base_event_identity_used"] is True
+          assert findings["detached_head_without_local_main_proven"] is True
+          assert findings["github_base_ref_dependency_removed"] is True
+          assert findings["v3_nonce_reused"] is False
+          assert value["authority"]["production_retrieval"] == "lexical"
+          assert value["authority"]["blocker_clearance_authorized"] is False
+          PY
+
+      - name: Verify exact implementation file set
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          expected = {
+              ".github/workflows/m23-7-r3-8-15-exact-base-request-validation-ci.yml",
+              ".github/workflows/m23-operator-request-ci.yml",
+              "docs/architecture/m23-7-r3-8-15-exact-base-request-validation.md",
+              "operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v4.json",
+              "pilot/m23/m23-7-r3-8-15-exact-base-request-validation-contract.json",
+          }
+          changed = set(subprocess.check_output([
+              "git", "diff", "--name-only",
+              "ee8b7ce4d87f54a8eb2167a5a803ff4af1419fbc",
+              "4ccc139a73dcae18bd904222f115e533c73cada4",
+          ], text=True).splitlines())
+          assert changed == expected, (changed, expected)
+          PY
+
+      - name: Verify repaired exact-base workflow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path(".github/workflows/m23-operator-request-ci.yml").read_text(encoding="utf-8")
+          assert "github.event.pull_request.base.sha" in text
+          assert "github.event.pull_request.head.sha" in text
+          assert 'os.environ["BASE_SHA"]' in text
+          assert 'os.environ["HEAD_SHA"]' in text
+          assert '["git", "diff", "--name-only", base, head]' in text
+          assert "GITHUB_BASE_REF" not in text
+          PY
+
+      - name: Verify reconciliation-only change scope
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          expected = {
+              ".github/workflows/m23-7-r3-8-15-exact-base-request-validation-reconciliation.yml",
+              "docs/architecture/m23-7-r3-8-15-exact-base-request-validation-reconciliation.md",
+              "pilot/m23/m23-7-r3-8-15-exact-base-request-validation-reconciliation.json",
+          }
+          changed = set(subprocess.check_output([
+              "git", "diff", "--name-only",
+              "4ccc139a73dcae18bd904222f115e533c73cada4", "HEAD",
+          ], text=True).splitlines())
+          assert changed == expected, (changed, expected)
+          PY
+          git diff --exit-code 4ccc139a73dcae18bd904222f115e533c73cada4 HEAD -- .github/workflows/m23-operator-request-ci.yml .github/workflows/m23-operator-command-bus.yml scripts/m23_operator_request_bus.py scripts/m23_7_r3_8_post_delete_recovery.py scripts/m23_operator_status_comment.py operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v4.json
