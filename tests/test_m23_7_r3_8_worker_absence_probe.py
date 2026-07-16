@@ -64,11 +64,15 @@ exit {exit_code}
 """
 
 
-def test_absent_only_on_exact_worker_not_found_code(tmp_path: Path) -> None:
+@pytest.mark.parametrize("code", ("10007", "10090"))
+def test_absent_on_each_official_singleton_not_found_code(
+    tmp_path: Path,
+    code: str,
+) -> None:
     result = _run(
         tmp_path,
         shim_body=_checking_shim(
-            "printf 'Cloudflare API error [code: 10007]\\n' >&2",
+            f"printf 'Cloudflare API error [code: {code}]\\n' >&2",
             exit_code=1,
         ),
     )
@@ -95,8 +99,12 @@ def test_present_only_on_nonempty_json_versions_array(tmp_path: Path) -> None:
     (
         ("printf 'HTTP 403 secret-sentinel\\n' >&2", 1),
         ("printf 'Forbidden [code: 10007]\\n' >&2", 1),
-        ("printf 'HTTP 403 [code: 10007]\\n' >&2", 1),
-        ("printf '[code: 10007] [code: 10008]\\n' >&2", 1),
+        ("printf 'Authentication failed [code: 10090]\\n' >&2", 1),
+        ("printf 'HTTP 403 [code: 10090]\\n' >&2", 1),
+        ("printf '[code: 10007] [code: 10090]\\n' >&2", 1),
+        ("printf '[code: 10007] [code: 10007]\\n' >&2", 1),
+        ("printf '[code: 10090] [code: 10090]\\n' >&2", 1),
+        ("printf '[code: 10090] [code: 10008]\\n' >&2", 1),
         ("printf 'Cloudflare API error [code: 10008]\\n' >&2", 1),
         ("printf 'not-json\\n'", 0),
         ("printf '{}\\n'", 0),
@@ -167,7 +175,8 @@ def test_probe_source_uses_bash32_arrays_and_never_eval() -> None:
     assert '"${M23_R3_8_WRANGLER_CMD[@]}"' in shell
     assert "versions list" in shell
     assert "--json" in shell
-    assert "10007" in shell
+    assert 'codes[0] not in {"10007", "10090"}' in shell
+    assert "len(codes) != 1" in shell
     assert "eval " not in shell
     for forbidden in (
         "declare -g",

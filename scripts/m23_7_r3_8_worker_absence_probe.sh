@@ -96,8 +96,8 @@ if re.search(r"(?<!\d)403(?!\d)", text):
     raise SystemExit(2)
 if re.search(r"\b(?:forbidden|unauthori[sz]ed|authentication)\b", text, re.I):
     raise SystemExit(3)
-codes = set(re.findall(r"(?<!\d)1\d{4}(?!\d)", text))
-if codes != {"10007"}:
+codes = re.findall(r"(?<!\d)1\d{4}(?!\d)", text)
+if len(codes) != 1 or codes[0] not in {"10007", "10090"}:
     raise SystemExit(4)
 print("absent")
 '
