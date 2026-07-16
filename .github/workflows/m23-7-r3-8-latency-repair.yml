@@ -8,6 +8,7 @@ on:
       - "scripts/m23_7_r3_8_worker_config.py"
       - "tests/test_m23_7_r3_8_latency_repair.py"
       - "pilot/m23/m23-7-r3-8-latency-repair-contract.json"
+      - "pilot/m23/m23-7-r3-8-latency-repair-fixture-report.json"
       - "docs/architecture/m23-7-r3-8-latency-repair.md"
       - "workers/m23-7-r3-8-latency-repair/worker.mjs"
       - "workers/m23-7-r3-8-latency-repair/worker.test.mjs"
@@ -56,9 +57,10 @@ jobs:
       - name: R3.8 Worker regressions
         working-directory: workers/m23-7-r3-8-latency-repair
         run: node --test worker.test.mjs
-      - name: Verify deterministic contract
+      - name: Verify deterministic contract and fixture
         run: |
           python - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
           from knowledge_engine import m23_7_r3_8_latency_repair as subject
@@ -77,17 +79,31 @@ jobs:
           assert expected["queries"]["qdrant_query_batch_calls"] == 1
           assert expected["authority"]["retrieval_quality_blocker_cleared"] is False
           assert expected["authority"]["latency_blocker_cleared"] is False
+
+          fixture = json.loads(
+              Path("pilot/m23/m23-7-r3-8-latency-repair-fixture-report.json")
+              .read_text(encoding="utf-8")
+          )
+          fixture_digest = fixture.pop("report_sha256")
+          encoded = json.dumps(
+              fixture,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+          ).encode()
+          assert hashlib.sha256(encoded).hexdigest() == fixture_digest
+          assert fixture_digest == "7d377a288db73b776c364913a658df1c30b162d55ba2f171b3eccd9fd06c5f93"
+          assert fixture["fixture_only"] is True
+          assert fixture["live_receipt_required"] is True
           PY
       - name: Privacy and authority scan
         run: |
           python - <<'PY'
           import inspect
-          import json
           from pathlib import Path
           from knowledge_engine import m23_7_r3_8_latency_repair as subject
 
           contract = subject.canonical_contract()
-          source = inspect.getsource(subject)
           assert contract["authority"]["qdrant_read_authorized"] is True
           assert contract["authority"]["qdrant_write_authorized"] is False
           assert contract["authority"]["qdrant_delete_authorized"] is False
@@ -102,15 +118,24 @@ jobs:
           assert 'method: "DELETE"' not in worker
           assert "/points/query/batch" in worker
           assert "with_vector: false" in worker
-          assert not list(Path("workers/m23-7-r3-8-latency-repair").glob("wrangler.local.jsonc"))
+          assert not list(
+              Path("workers/m23-7-r3-8-latency-repair").glob(
+                  "wrangler.local.jsonc"
+              )
+          )
           text = "\n".join(
               path.read_text(encoding="utf-8")
               for path in (
                   Path("pilot/m23/m23-7-r3-8-latency-repair-contract.json"),
+                  Path("pilot/m23/m23-7-r3-8-latency-repair-fixture-report.json"),
                   Path("docs/architecture/m23-7-r3-8-latency-repair.md"),
               )
           )
-          for forbidden in ("QDRANT_API_KEY", "M23_R3_8_OPERATOR_TOKEN", "https://"):
+          for forbidden in (
+              "QDRANT_API_KEY",
+              "M23_R3_8_OPERATOR_TOKEN",
+              "https://",
+          ):
               assert forbidden not in text
           assert all(value is False for value in contract["privacy"].values())
           PY
