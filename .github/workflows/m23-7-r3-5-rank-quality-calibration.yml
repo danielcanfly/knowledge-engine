@@ -1,0 +1,100 @@
+name: M23.7 Repair R3.5 Rank Quality Calibration
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_r3_5_rank_quality_calibration.py"
+      - "scripts/m23_7_r3_5_rank_quality_calibration_operator.py"
+      - "tests/test_m23_7_r3_5_rank_quality_calibration.py"
+      - "pilot/m23/m23-7-r3-5-rank-quality-calibration-contract.json"
+      - "docs/architecture/m23-7-r3-5-rank-quality-calibration.md"
+      - ".github/workflows/m23-7-r3-5-rank-quality-calibration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rank-quality-calibration:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+
+      - name: Ruff accepted scope
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_7_r3_5_rank_quality_calibration.py \
+            scripts/m23_7_r3_5_rank_quality_calibration_operator.py \
+            tests/test_m23_7_r3_5_rank_quality_calibration.py
+
+      - name: R3.5 and historical repair regressions
+        run: |
+          pytest -q \
+            tests/test_m23_7_r3_5_rank_quality_calibration.py \
+            tests/test_m23_7_r3_4_target_discrimination_repair.py \
+            tests/test_m23_7_r3_3_offline_rebuild_evaluation.py \
+            tests/test_m23_7_r3_3_offline_rebuild_evaluation_real.py \
+            tests/test_m23_7_r3_2_semantic_payload_repair.py
+
+      - name: Verify deterministic contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from knowledge_engine.m23_7_r3_5_rank_quality_calibration import (
+              canonical_contract,
+              canonical_json,
+          )
+
+          path = Path(
+              "pilot/m23/m23-7-r3-5-rank-quality-calibration-contract.json"
+          )
+          stored = json.loads(path.read_text(encoding="utf-8"))
+          generated = canonical_contract()
+          assert stored == generated
+          assert canonical_json(generated) + "\n" == path.read_text(encoding="utf-8")
+          assert generated["contract_sha256"] == (
+              "3b486845009926842662fbefb197086ce6658641e27ec5bc6cc239f0506ae2bc"
+          )
+          PY
+
+      - name: Privacy and authority scan
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = (
+              Path("pilot/m23/m23-7-r3-5-rank-quality-calibration-contract.json"),
+              Path("docs/architecture/m23-7-r3-5-rank-quality-calibration.md"),
+          )
+          text = "\n".join(path.read_text(encoding="utf-8") for path in paths)
+          for forbidden in (
+              "CLOUDFLARE_API_TOKEN",
+              "QDRANT_API_KEY",
+              "https://",
+          ):
+              assert forbidden not in text
+          assert '"qdrant_read_authorized":false' in text
+          assert '"qdrant_write_authorized":false' in text
+          assert '"target_aware_reranking":false' in text
+          PY
+
+      - name: Compile accepted Python scope
+        run: |
+          python -m compileall -q \
+            src/knowledge_engine/m23_7_r3_5_rank_quality_calibration.py \
+            scripts/m23_7_r3_5_rank_quality_calibration_operator.py \
+            tests/test_m23_7_r3_5_rank_quality_calibration.py
