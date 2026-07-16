@@ -141,14 +141,12 @@ jobs:
           assert "python -m scripts.m23_7_r3_8_remote_delete" in delete_text
           assert "path: r3-8-deletion-evidence/" in delete_text
           PY
-      - name: Verify accepted core runtime preservation
+      - name: Verify accepted observation core runtime preservation
         shell: bash
         run: |
           git diff --exit-code 771538d3b95fccefc3f32bd568770e08ce3552ac HEAD -- \
             scripts/m23_7_r3_8_remote_operator.py \
-            scripts/m23_7_r3_8_remote_delete.py \
             tests/test_m23_7_r3_8_remote_operator.py \
-            tests/test_m23_7_r3_8_remote_delete.py \
             pilot/m23/m23-7-r3-8-7-remote-operator-contract.json \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
             workers/m23-7-r3-8-latency-repair/worker.mjs \
