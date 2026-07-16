@@ -5,6 +5,7 @@ import sys
 import types
 from pathlib import Path
 
+import scripts
 from scripts import m23_7_r3_8_remote_entrypoint as subject
 
 
@@ -25,9 +26,19 @@ def _args(output_dir: Path) -> list[str]:
     ]
 
 
+def _install_fake_operator(monkeypatch, fake: object) -> None:
+    monkeypatch.setitem(sys.modules, "scripts.m23_7_r3_8_remote_operator", fake)
+    monkeypatch.setattr(
+        scripts,
+        "m23_7_r3_8_remote_operator",
+        fake,
+        raising=False,
+    )
+
+
 def test_entrypoint_writes_evidence_before_operator(monkeypatch, tmp_path: Path) -> None:
     fake = types.SimpleNamespace(execute=lambda args: 0)
-    monkeypatch.setitem(sys.modules, "scripts.m23_7_r3_8_remote_operator", fake)
+    _install_fake_operator(monkeypatch, fake)
     monkeypatch.setattr(
         subject.subprocess,
         "check_output",
@@ -48,7 +59,7 @@ def test_entrypoint_converts_import_or_execution_failure_to_artifact(
         raise RuntimeError("secret-shaped text must not be persisted")
 
     fake = types.SimpleNamespace(execute=fail)
-    monkeypatch.setitem(sys.modules, "scripts.m23_7_r3_8_remote_operator", fake)
+    _install_fake_operator(monkeypatch, fake)
     monkeypatch.setattr(
         subject.subprocess,
         "check_output",
