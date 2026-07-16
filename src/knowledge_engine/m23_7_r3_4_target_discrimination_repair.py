@@ -294,7 +294,10 @@ def _query_variants(
         variants = [
             f"Find the specific section about {bounded_title}. Distinctive concepts: {joined}.",
             f"Which passage explains how {triad} relate in the context of {bounded_title}?",
-            f"Identify the section providing {query_class} evidence for {bounded_title}; focus on {joined}.",
+            (
+                f"Identify the section providing {query_class} evidence "
+                f"for {bounded_title}; focus on {joined}."
+            ),
         ]
     return [_bounded(value) for value in variants]
 
