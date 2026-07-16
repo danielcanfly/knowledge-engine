@@ -85,7 +85,12 @@ def classify_control_plane_response(
             "identity_count": 0,
             "identities": [],
         }
-    if status_code != 200 or not isinstance(payload, dict) or payload.get("success") is not True:
+    valid_success = (
+        status_code == 200
+        and isinstance(payload, dict)
+        and payload.get("success") is True
+    )
+    if not valid_success:
         return {
             "state": "indeterminate",
             "http_status": status_code,
@@ -122,7 +127,8 @@ def classify_control_plane_response(
 
 
 def reconcile_worker_state(
-    versions: dict[str, Any], deployments: dict[str, Any]
+    versions: dict[str, Any],
+    deployments: dict[str, Any],
 ) -> str:
     states = {versions["state"], deployments["state"]}
     if states == {"absent"}:
@@ -137,7 +143,9 @@ def reconcile_worker_state(
 def execute(args: argparse.Namespace) -> int:
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    actual_head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    actual_head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], text=True
+    ).strip()
     if args.confirmation != CONFIRMATION:
         raise RecoveryProbeError("confirmation_mismatch")
     if not _HEX_40.fullmatch(args.expected_head) or args.expected_head != actual_head:
@@ -147,8 +155,14 @@ def execute(args: argparse.Namespace) -> int:
 
     account_id = required_env("CLOUDFLARE_ACCOUNT_ID")
     token = required_env("CLOUDFLARE_API_TOKEN")
-    base = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/workers/scripts/{AFFECTED_WORKER}"
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    base = (
+        "https://api.cloudflare.com/client/v4/accounts/"
+        f"{account_id}/workers/scripts/{AFFECTED_WORKER}"
+    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
 
     with httpx.Client(headers=headers, timeout=30.0) as client:
         versions_response = client.get(base + "/versions")
@@ -191,7 +205,8 @@ def execute(args: argparse.Namespace) -> int:
     }
     receipt["recovery_probe_sha256"] = canonical_sha256(receipt)
     (output_dir / "remote-recovery-probe.json").write_text(
-        canonical_json(receipt) + "\n", encoding="utf-8"
+        canonical_json(receipt) + "\n",
+        encoding="utf-8",
     )
     if state in {"worker_absent", "worker_present"}:
         return 0
@@ -201,7 +216,9 @@ def execute(args: argparse.Namespace) -> int:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Read-only recovery probe for R3.8 run 29506217284")
+    parser = argparse.ArgumentParser(
+        description="Read-only recovery probe for R3.8 run 29506217284"
+    )
     parser.add_argument("--expected-head", required=True)
     parser.add_argument("--affected-run-id", required=True)
     parser.add_argument("--confirmation", required=True)
@@ -216,7 +233,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return execute(args)
     except Exception as exc:
-        code = exc.code if isinstance(exc, RecoveryProbeError) else "bounded_recovery_probe_failure"
+        code = (
+            exc.code
+            if isinstance(exc, RecoveryProbeError)
+            else "bounded_recovery_probe_failure"
+        )
         failure = {
             "schema_version": SCHEMA_VERSION,
             "status": "rejected_incomplete_recovery_probe",
@@ -242,7 +263,8 @@ def main(argv: list[str] | None = None) -> int:
         }
         failure["recovery_probe_sha256"] = canonical_sha256(failure)
         (output_dir / "remote-recovery-probe-failure.json").write_text(
-            canonical_json(failure) + "\n", encoding="utf-8"
+            canonical_json(failure) + "\n",
+            encoding="utf-8",
         )
         return 23
 
