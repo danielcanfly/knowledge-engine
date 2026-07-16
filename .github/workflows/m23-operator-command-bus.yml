@@ -141,3 +141,185 @@ jobs:
             30) exit 30 ;;
             *) exit 23 ;;
           esac
+
+  r3-live-reobservation:
+    needs: validate-permit
+    if: >-
+      needs.validate-permit.outputs.stage == 'execution_permitted' &&
+      needs.validate-permit.outputs.command_type == 'r3_live_reobservation'
+    runs-on: ubuntu-24.04
+    environment: m23-r3-diagnostic
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      QDRANT_URL: ${{ secrets.QDRANT_URL }}
+      QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+      EVIDENCE_DIR: r3-live-observation-evidence
+      ARTIFACT_NAME: m23-7-r3-live-observation-${{ github.run_id }}
+      M23_R3_TRANSIENT_WORKER_NAME: knowledge-engine-m23-7-r3-live-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-permit.outputs.expected_head }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact execution head and live permit identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          test "$(git rev-parse HEAD)" = "${{ needs.validate-permit.outputs.expected_head }}"
+          test "${{ needs.validate-permit.outputs.stage }}" = "execution_permitted"
+          test "${{ needs.validate-permit.outputs.command_type }}" = "r3_live_reobservation"
+          test -f "${{ needs.validate-permit.outputs.request_path }}"
+          test -f "${{ needs.validate-permit.outputs.permit_path }}"
+          test -f "${{ needs.validate-permit.outputs.authorization_path }}"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install exact Engine
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Generate untracked transient Worker config
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/m23_7_r3_worker_config.py \
+            --worker-name "$M23_R3_TRANSIENT_WORKER_NAME" \
+            --output workers/m23-7-r3-observation/wrangler.local.jsonc
+          test -f workers/m23-7-r3-observation/wrangler.local.jsonc
+
+      - name: Deploy transient R3 observation Worker
+        id: deploy
+        working-directory: workers/m23-7-r3-observation
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@latest deploy \
+            --config wrangler.local.jsonc \
+            --name "$M23_R3_TRANSIENT_WORKER_NAME" \
+            --keep-vars 2>&1 | tee "$RUNNER_TEMP/r3-live-deploy.log"
+          url="$(grep -Eo 'https://[^ ]+workers.dev[^ ]*' "$RUNNER_TEMP/r3-live-deploy.log" | tail -n 1)"
+          test -n "$url"
+          echo "::add-mask::$url"
+          echo "worker_url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Install transient Worker secrets
+        working-directory: workers/m23-7-r3-observation
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf "%s" "$QDRANT_URL" > "$RUNNER_TEMP/qdrant_url"
+          printf "%s" "$QDRANT_API_KEY" > "$RUNNER_TEMP/qdrant_api_key"
+          python - <<'PY' > "$RUNNER_TEMP/operator_token"
+          import secrets
+          print(secrets.token_hex(32), end="")
+          PY
+          echo "::add-mask::$(cat "$RUNNER_TEMP/operator_token")"
+          npx --yes wrangler@latest secret put QDRANT_URL \
+            --config wrangler.local.jsonc \
+            --name "$M23_R3_TRANSIENT_WORKER_NAME" < "$RUNNER_TEMP/qdrant_url"
+          npx --yes wrangler@latest secret put QDRANT_API_KEY \
+            --config wrangler.local.jsonc \
+            --name "$M23_R3_TRANSIENT_WORKER_NAME" < "$RUNNER_TEMP/qdrant_api_key"
+          npx --yes wrangler@latest secret put M23_R3_OPERATOR_TOKEN \
+            --config wrangler.local.jsonc \
+            --name "$M23_R3_TRANSIENT_WORKER_NAME" < "$RUNNER_TEMP/operator_token"
+          {
+            echo "M23_R3_WORKER_URL=${{ steps.deploy.outputs.worker_url }}"
+            echo -n "M23_R3_OPERATOR_TOKEN="
+            cat "$RUNNER_TEMP/operator_token"
+            echo
+          } >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/qdrant_url" "$RUNNER_TEMP/qdrant_api_key" "$RUNNER_TEMP/operator_token"
+
+      - name: Run governed R3 live observation
+        id: observation
+        shell: bash
+        run: |
+          set +e
+          rm -rf "$EVIDENCE_DIR"
+          mkdir -p "$EVIDENCE_DIR"
+          python scripts/m23_7_r3_bounded_live_reobservation.py \
+            --mode live \
+            --wrangler-config workers/m23-7-r3-observation/wrangler.local.jsonc \
+            --worker-origin "$M23_R3_TRANSIENT_WORKER_NAME" \
+            --output "$EVIDENCE_DIR/live-observation-report.json"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Delete transient R3 observation Worker
+        id: delete_worker
+        if: always()
+        working-directory: workers/m23-7-r3-observation
+        shell: bash
+        run: |
+          set +e
+          npx --yes wrangler@latest delete \
+            --config wrangler.local.jsonc \
+            --name "$M23_R3_TRANSIENT_WORKER_NAME" \
+            --force
+          code=$?
+          if [ "$code" = "0" ]; then
+            echo "completed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "completed=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Build privacy-safe live observation receipt
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p "$EVIDENCE_DIR"
+          if [ ! -f "$EVIDENCE_DIR/live-observation-report.json" ]; then
+            printf '{}\n' > "$EVIDENCE_DIR/live-observation-report.json"
+          fi
+          python -m scripts.m23_7_r3_live_observation_receipt \
+            --authorization-path "${{ needs.validate-permit.outputs.authorization_path }}" \
+            --expected-head "${{ needs.validate-permit.outputs.expected_head }}" \
+            --nonce "${{ needs.validate-permit.outputs.nonce }}" \
+            --repo-root . \
+            --report-path "$EVIDENCE_DIR/live-observation-report.json" \
+            --deletion-completed "${{ steps.delete_worker.outputs.completed || 'false' }}" \
+            --output "$EVIDENCE_DIR/live-observation-receipt.json"
+          exit 0
+
+      - name: Upload governed R3 live observation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: r3-live-observation-evidence/
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 30
+          compression-level: 9
+
+      - name: Return governed R3 live observation result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="${{ steps.observation.outputs.exit_code }}"
+          test -n "$code" || code=23
+          case "$code" in
+            0) exit 0 ;;
+            2) exit 30 ;;
+            *) exit 23 ;;
+          esac

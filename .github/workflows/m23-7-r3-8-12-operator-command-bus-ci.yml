@@ -128,11 +128,9 @@ jobs:
               assert "github.event.pull_request.user.login == 'huaihsuanbusiness'" in text
               assert "python -m scripts.m23_operator_pr_permit" in text
               assert "execution_permitted" in text
+              assert "r3_live_reobservation" in text
+              assert "m23-7-r3-live-observation-" in text
           for forbidden in (
-              "wrangler delete",
-              "wrangler deploy",
-              "QDRANT_URL",
-              "QDRANT_API_KEY",
               "R2_ACCESS_KEY_ID",
               "R2_SECRET_ACCESS_KEY",
           ):

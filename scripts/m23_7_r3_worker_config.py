@@ -20,7 +20,20 @@ def main() -> int:
         description="Generate the untracked M23.7 R3 Wrangler placement config"
     )
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--worker-name",
+        default="knowledge-engine-m23-7-r3-observation",
+    )
     args = parser.parse_args()
+    if not (
+        args.worker_name == "knowledge-engine-m23-7-r3-observation"
+        or (
+            args.worker_name.startswith("knowledge-engine-m23-7-r3-live-")
+            and len(args.worker_name) <= 63
+            and args.worker_name.replace("-", "").isalnum()
+        )
+    ):
+        raise SystemExit("M23.7-R3 worker name is outside the governed prefix")
 
     qdrant_url = _required_env("QDRANT_URL")
     parsed = urlparse(qdrant_url)
@@ -29,7 +42,7 @@ def main() -> int:
 
     config = {
         "$schema": "node_modules/wrangler/config-schema.json",
-        "name": "knowledge-engine-m23-7-r3-observation",
+        "name": args.worker_name,
         "main": "worker.mjs",
         "compatibility_date": "2026-07-15",
         "compatibility_flags": ["nodejs_compat"],

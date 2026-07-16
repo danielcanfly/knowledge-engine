@@ -233,8 +233,18 @@ def validate_wrangler_config(path: Path, qdrant_url: str) -> dict[str, Any]:
     root = _mapping(json.loads(raw), "Wrangler config")
     placement = _mapping(root.get("placement"), "Wrangler placement")
     ai = _mapping(root.get("ai"), "Wrangler AI binding")
+    worker_name = root.get("name")
     _require(
-        root.get("name") == "knowledge-engine-m23-7-r3-observation",
+        worker_name == "knowledge-engine-m23-7-r3-observation"
+        or (
+            isinstance(worker_name, str)
+            and bool(
+                re.fullmatch(
+                    r"knowledge-engine-m23-7-r3-live-[a-z0-9-]{6,24}",
+                    worker_name,
+                )
+            )
+        ),
         111,
         "Worker name drifted",
     )

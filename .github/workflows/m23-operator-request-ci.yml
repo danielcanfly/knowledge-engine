@@ -61,7 +61,10 @@ jobs:
           COMMAND_TYPE: ${{ steps.operator.outputs.command_type }}
         run: |
           set -euo pipefail
-          test "$COMMAND_TYPE" = "r3_8_post_delete_recovery"
+          case "$COMMAND_TYPE" in
+            r3_8_post_delete_recovery|r3_live_reobservation) ;;
+            *) exit 23 ;;
+          esac
           case "$STAGE" in
             request_validated)
               test -n "$REQUEST_PATH"
@@ -82,8 +85,28 @@ jobs:
               Path(os.environ["AUTHORIZATION_PATH"]).read_text(encoding="utf-8")
           )
           authority = value["authority"]
-          assert authority["control_plane_read_authorized"] is True
-          for key, enabled in authority.items():
-              if key != "control_plane_read_authorized":
-                  assert enabled is False, (key, enabled)
+          if value["command_type"] == "r3_8_post_delete_recovery":
+              assert authority["control_plane_read_authorized"] is True
+              for key, enabled in authority.items():
+                  if key != "control_plane_read_authorized":
+                      assert enabled is False, (key, enabled)
+          else:
+              assert value["command_type"] == "r3_live_reobservation"
+              assert authority["control_plane_read_authorized"] is True
+              assert authority["worker_deploy_authorized"] is True
+              assert authority["worker_secret_mutation_authorized"] is True
+              assert authority["worker_route_invocation_authorized"] is True
+              assert authority["worker_delete_authorized"] is True
+              assert authority["qdrant_read_authorized"] is True
+              for key in (
+                  "qdrant_mutation_authorized",
+                  "r2_read_authorized",
+                  "r2_mutation_authorized",
+                  "pointer_mutation_authorized",
+                  "source_mutation_authorized",
+                  "blocker_clearance_authorized",
+                  "parent_closure_authorized",
+                  "m23_7_closure_authorized",
+              ):
+                  assert authority[key] is False, (key, authority[key])
           PY

@@ -83,13 +83,11 @@ def test_find_single_added_request_accepts_only_one_addition(
 def test_source_rejects_arbitrary_execution_surfaces() -> None:
     text = Path(subject.__file__).read_text(encoding="utf-8")
     assert 'REQUEST_ROOT = "operator_requests/m23/"' in text
-    assert 'ALLOWED_COMMAND_TYPES = {"r3_8_post_delete_recovery"}' in text
+    assert '"r3_live_reobservation"' in text
     for forbidden in (
         "shell_command",
         "workflow_name",
         "client.post(",
-        "wrangler delete",
-        "wrangler deploy",
         "QDRANT_URL",
         "R2_ACCESS_KEY_ID",
     ):

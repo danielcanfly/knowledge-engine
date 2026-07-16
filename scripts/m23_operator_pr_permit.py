@@ -18,7 +18,9 @@ from scripts.m23_operator_request_bus import validate_request
 REQUEST_ROOT = "operator_requests/m23/"
 PERMIT_ROOT = "operator_permits/m23/"
 PERMIT_SCHEMA = "knowledge-engine-m23-operator-permit/v1"
-ALLOWED_COMMAND_TYPES = {"r3_8_post_delete_recovery"}
+RECOVERY_COMMAND = "r3_8_post_delete_recovery"
+R3_LIVE_COMMAND = "r3_live_reobservation"
+ALLOWED_COMMAND_TYPES = {RECOVERY_COMMAND, R3_LIVE_COMMAND}
 _HEX_40 = re.compile(r"^[0-9a-f]{40}$")
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
 _REQUEST_PATH = re.compile(
@@ -43,13 +45,29 @@ _PERMIT_KEYS = {
     "permit_sha256",
 }
 _RUN_KEYS = {"request_validation", "ci", "m18"}
-_EXPECTED_PERMIT_AUTHORITY = {
+_RECOVERY_PERMIT_AUTHORITY = {
     "read_only_recovery_execute_authorized": True,
     "worker_delete_authorized": False,
     "worker_deploy_authorized": False,
     "worker_secret_mutation_authorized": False,
     "worker_route_invocation_authorized": False,
     "qdrant_read_authorized": False,
+    "qdrant_mutation_authorized": False,
+    "r2_read_authorized": False,
+    "r2_mutation_authorized": False,
+    "pointer_mutation_authorized": False,
+    "source_mutation_authorized": False,
+    "blocker_clearance_authorized": False,
+    "parent_closure_authorized": False,
+    "m23_7_closure_authorized": False,
+}
+_R3_LIVE_PERMIT_AUTHORITY = {
+    "read_only_recovery_execute_authorized": False,
+    "worker_delete_authorized": True,
+    "worker_deploy_authorized": True,
+    "worker_secret_mutation_authorized": True,
+    "worker_route_invocation_authorized": True,
+    "qdrant_read_authorized": True,
     "qdrant_mutation_authorized": False,
     "r2_read_authorized": False,
     "r2_mutation_authorized": False,
@@ -186,7 +204,12 @@ def validate_permit(
     if not isinstance(permit_nonce, str) or not _HEX_64.fullmatch(permit_nonce):
         raise OperatorPermitError("permit_nonce")
     _validate_runs(value.get("validation_runs"))
-    if value.get("authority") != _EXPECTED_PERMIT_AUTHORITY:
+    expected_authority = (
+        _RECOVERY_PERMIT_AUTHORITY
+        if value.get("command_type") == RECOVERY_COMMAND
+        else _R3_LIVE_PERMIT_AUTHORITY
+    )
+    if value.get("authority") != expected_authority:
         raise OperatorPermitError("permit_authority")
     stored = value.get("permit_sha256")
     unsigned = dict(value)

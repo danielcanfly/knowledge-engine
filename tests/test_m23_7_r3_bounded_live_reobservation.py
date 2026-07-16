@@ -195,6 +195,21 @@ def test_wrangler_config_is_placement_bound_and_secret_free(
         validate_wrangler_config(path, "https://qdrant.example")
 
 
+def test_unique_transient_worker_name_is_allowed_in_untracked_config(
+    tmp_path: Path,
+) -> None:
+    config = {
+        "name": "knowledge-engine-m23-7-r3-live-29599999999",
+        "main": "worker.mjs",
+        "ai": {"binding": "AI"},
+        "placement": {"hostname": "qdrant.example"},
+    }
+    path = tmp_path / "wrangler.local.jsonc"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    result = validate_wrangler_config(path, "https://qdrant.example")
+    assert result["generated_config_committed"] is False
+
+
 def test_worker_payload_call_count_or_authority_drift_fails_closed() -> None:
     from knowledge_engine.m23_7_r1_semantic_alignment import (
         canonical_manifest,
