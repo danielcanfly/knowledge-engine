@@ -1,0 +1,117 @@
+{
+  "authority": {
+    "historical_pilot_mutation_authorized": false,
+    "latency_blocker_cleared": false,
+    "pointer_mutation_authorized": false,
+    "production_collection_mutation_authorized": false,
+    "production_mutation_authorized": false,
+    "production_retrieval": "lexical",
+    "promotion_eligibility_granted": false,
+    "qdrant_delete_authorized": false,
+    "qdrant_read_authorized": true,
+    "qdrant_reindex_authorized": false,
+    "qdrant_write_authorized": false,
+    "r2_mutation_authorized": false,
+    "retrieval_quality_blocker_cleared": false,
+    "serving_authorized": false,
+    "source_mutation_authorized": false,
+    "transient_diagnostic_worker_deploy_authorized": true
+  },
+  "collection": {
+    "distance": "Cosine",
+    "historical_pilot": "llm_wiki_m23_pilot_bge_m3_1024",
+    "name": "llm_wiki_m23_r3_5_candidate_8eed54902c73",
+    "payload_schema_version": "knowledge-engine-m23-qdrant-payload/v2",
+    "point_count": 107,
+    "schema_pre_post_exact": true,
+    "vector_dimension": 1024,
+    "vector_name": "default"
+  },
+  "contract_sha256": "09a340c2145cffa8ee45de7725e157c864baf08f0cda5ade11fc5bcccb0e5a94",
+  "entry": {
+    "engine_sha": "7793cd22092aca530ca48a3240a3c83ffd3d2894",
+    "r3_7_contract_sha256": "11faa597fe15e39f2589963b30e00e3b1580d6f7bb186ffe9ef180139d427d8d",
+    "r3_7_evidence_seal_sha256": "e5c35247dd10be17dfa526842e3f9dd27d875278d31c5537786e25bf0b17ecdd",
+    "r3_7_receipt_file_sha256": "72c8d9cc6a9262960659c75e87ac9cf6f6e73008633bc255f3c944681abcf4c2",
+    "r3_7_receipt_sha256": "55ccb6ccdb7f02fcc9ba7302c37021d6cd747af49ec8250c955e924979a3509a",
+    "r3_7_reconciliation_sha256": "861a0156aba827d4c6eb62ee13e8025cba466fdbe28c60328056c2ec0b88c918",
+    "trigger_live_p95_ms": 1739,
+    "trigger_maximum_live_p95_ms": 1200,
+    "trigger_status": "completed_fail_closed_live_acceptance"
+  },
+  "implementation_issue": 520,
+  "latency": {
+    "applies_to": "single_worker_invocation_workers_ai_binding_plus_qdrant_batch",
+    "maximum_worker_internal_shadow_ms": 1200,
+    "operator_round_trip_informational": true,
+    "threshold_changed": false,
+    "threshold_inflation_allowed": false
+  },
+  "milestone": "M23.7-R3.8",
+  "parent_issue": 474,
+  "privacy": {
+    "arbitrary_exception_text_persisted": false,
+    "credentials_persisted": false,
+    "document_text_persisted": false,
+    "raw_answer_persisted": false,
+    "raw_query_persisted": false,
+    "service_hostname_persisted": false,
+    "service_url_persisted": false
+  },
+  "quality": {
+    "accepted_metrics": {
+      "mrr_at_10": 0.807291666667,
+      "ndcg_at_10": 0.851933109598,
+      "recall_at_5": 0.875
+    },
+    "accepted_target_ranks": {
+      "m23q-01": 1,
+      "m23q-02": 8,
+      "m23q-03": 3,
+      "m23q-04": 1,
+      "m23q-07": 1,
+      "m23q-08": 1,
+      "m23q-09": 1,
+      "m23q-10": 1
+    },
+    "exact_metric_parity": true,
+    "exact_target_rank_parity": true,
+    "max_top10_hub_frequency": 6,
+    "min_mrr_at_10": 0.68,
+    "min_ndcg_at_10": 0.72,
+    "min_recall_at_5": 0.82
+  },
+  "queries": {
+    "probe_count": 8,
+    "qdrant_dense_limit": 50,
+    "qdrant_query_batch_calls": 1,
+    "query_count": 24,
+    "target_aware_inputs": false,
+    "unique_query_identities": 24,
+    "variants_per_probe": 3,
+    "workers_ai_binding_calls": 1
+  },
+  "schema_version": "knowledge-engine-m23-7-r3-8-latency-repair/v1",
+  "strict_zero": {
+    "acl_violation_rate": 0.0,
+    "output_influence_rate": 0.0,
+    "protected_mutations": 0,
+    "qdrant_deletes": 0,
+    "qdrant_reindex": 0,
+    "qdrant_writes": 0,
+    "query_error_rate": 0.0
+  },
+  "worker": {
+    "ai_binding": "AI",
+    "diagnostic_deployment_delete_after_reconciliation": true,
+    "generated_config_committed": false,
+    "maximum_body_bytes": 65536,
+    "model": "@cf/baai/bge-m3",
+    "name": "knowledge-engine-m23-7-r3-8-latency",
+    "placement": "hostname-generated-at-operator-time",
+    "request_auth": "timing-safe-bearer-secret",
+    "request_schema": "knowledge-engine-m23-7-r3-8-worker-request/v1",
+    "response_schema": "knowledge-engine-m23-7-r3-8-worker-response/v1",
+    "route": "/v1/m23-7-r3-8/observe"
+  }
+}

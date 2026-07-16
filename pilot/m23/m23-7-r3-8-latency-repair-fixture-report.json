@@ -1,0 +1,65 @@
+{
+  "authority": {
+    "latency_blocker_cleared": false,
+    "production_retrieval": "lexical",
+    "promotion_eligibility_granted": false,
+    "protected_mutations_dispatched": false,
+    "retrieval_quality_blocker_cleared": false
+  },
+  "contract_sha256": "09a340c2145cffa8ee45de7725e157c864baf08f0cda5ade11fc5bcccb0e5a94",
+  "fixture_only": true,
+  "gates": {
+    "accepted_metric_parity": true,
+    "exact_target_rank_parity": true,
+    "protected_mutations_zero": true,
+    "strict_zero": true,
+    "worker_internal_shadow": true
+  },
+  "live_receipt_required": true,
+  "maximum_top10_hub_frequency": 3,
+  "metrics": {
+    "mrr_at_10": 0.807291666667,
+    "ndcg_at_10": 0.851933109598,
+    "recall_at_5": 0.875
+  },
+  "milestone": "M23.7-R3.8",
+  "privacy": {
+    "arbitrary_exception_text_persisted": false,
+    "credentials_persisted": false,
+    "document_text_persisted": false,
+    "raw_answer_persisted": false,
+    "raw_query_persisted": false,
+    "service_hostname_persisted": false,
+    "service_url_persisted": false
+  },
+  "probe_count": 8,
+  "query_count": 24,
+  "query_identity_count": 24,
+  "report_sha256": "7d377a288db73b776c364913a658df1c30b162d55ba2f171b3eccd9fd06c5f93",
+  "schema_version": "knowledge-engine-m23-7-r3-8-latency-repair-fixture-report/v1",
+  "status": "pass_fixture_latency_repair",
+  "target_ranks": {
+    "m23q-01": 1,
+    "m23q-02": 8,
+    "m23q-03": 3,
+    "m23q-04": 1,
+    "m23q-07": 1,
+    "m23q-08": 1,
+    "m23q-09": 1,
+    "m23q-10": 1
+  },
+  "worker": {
+    "external_calls": {
+      "qdrant_collection_reads": 2,
+      "qdrant_delete": 0,
+      "qdrant_query_batch": 1,
+      "qdrant_reindex": 0,
+      "qdrant_write": 0,
+      "workers_ai_binding": 1
+    },
+    "maximum_shadow_ms": 1200,
+    "provider_ms": 431,
+    "qdrant_ms": 350,
+    "shadow_ms": 781
+  }
+}
