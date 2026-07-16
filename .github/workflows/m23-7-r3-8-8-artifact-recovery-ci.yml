@@ -37,14 +37,31 @@ jobs:
           python-version: "3.12"
       - name: Install package
         run: python -m pip install -e '.[dev]'
-      - name: Ruff and compile recovery scope
+      - name: Ruff recovery scope
+        id: ruff
         shell: bash
         run: |
+          set +e
           ruff check \
             scripts/m23_7_r3_8_remote_entrypoint.py \
             scripts/m23_7_r3_8_remote_recovery_probe.py \
             tests/test_m23_7_r3_8_remote_entrypoint.py \
-            tests/test_m23_7_r3_8_remote_recovery_probe.py
+            tests/test_m23_7_r3_8_remote_recovery_probe.py \
+            --output-format=concise \
+            > r3-8-8-ruff.txt 2>&1
+          code=$?
+          cat r3-8-8-ruff.txt
+          exit "$code"
+      - name: Upload Ruff diagnostic
+        if: failure() && steps.ruff.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-7-r3-8-8-ruff-${{ github.run_id }}
+          path: r3-8-8-ruff.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Compile recovery scope
+        run: |
           python -m py_compile \
             scripts/m23_7_r3_8_remote_entrypoint.py \
             scripts/m23_7_r3_8_remote_recovery_probe.py
