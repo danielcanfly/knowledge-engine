@@ -188,6 +188,8 @@ def _patch_synthetic_identities(
     monkeypatch: pytest.MonkeyPatch,
     manifest: dict[str, Any],
 ) -> None:
+    frozen_contract = subject.canonical_contract()
+    monkeypatch.setattr(subject, "canonical_contract", lambda: frozen_contract)
     monkeypatch.setattr(subject, "R3_6_MANIFEST_SHA256", manifest["manifest_sha256"])
     monkeypatch.setattr(
         subject,
