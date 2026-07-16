@@ -9,6 +9,7 @@ on:
       - "pilot/m23/m23-7-r3-4-target-discrimination-repair-contract.json"
       - "docs/architecture/m23-7-r3-4-target-discrimination-repair.md"
       - ".github/workflows/m23-7-r3-4-target-discrimination-repair.yml"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -32,24 +33,10 @@ jobs:
         run: python -m pip install -e '.[dev]'
       - name: Ruff accepted scope
         run: |
-          mkdir -p .artifacts/m23
-          set +e
-          set -o pipefail
           ruff check \
             src/knowledge_engine/m23_7_r3_4_target_discrimination_repair.py \
             scripts/m23_7_r3_4_target_discrimination_operator.py \
-            tests/test_m23_7_r3_4_target_discrimination_repair.py \
-            --output-format=concise 2>&1 | tee .artifacts/m23/r3-4-ruff.txt
-          printf '%s\n' "${PIPESTATUS[0]}" > .artifacts/m23/r3-4-ruff-status.txt
-          exit 0
-      - name: Upload Ruff diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: m23-7-r3-4-ruff-${{ github.event.pull_request.head.sha || github.sha }}
-          path: .artifacts/m23/r3-4-ruff*.txt
-          if-no-files-found: error
-          retention-days: 3
+            tests/test_m23_7_r3_4_target_discrimination_repair.py
       - name: R3.4 and historical repair regressions
         run: |
           pytest -q \
@@ -114,6 +101,3 @@ jobs:
           PY
       - name: Compile accepted Python scope
         run: python -m compileall -q src tests scripts
-      - name: Enforce Ruff result
-        if: always()
-        run: test "$(cat .artifacts/m23/r3-4-ruff-status.txt)" = "0"
