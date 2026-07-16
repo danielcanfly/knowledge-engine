@@ -1,0 +1,146 @@
+name: M23.7 R3.8.8 Artifact Recovery Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-8/artifact-recovery-reconciliation.json"
+      - "docs/architecture/m23-7-r3-8-8-artifact-recovery-reconciliation.md"
+      - ".github/workflows/m23-7-r3-8-8-artifact-recovery-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and implementation merge ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor e29591e3603b528e13662f7956b852f1da3594a8 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic reconciliation and frozen incident state
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path(".github/evidence/m23-7-r3-8-8/artifact-recovery-reconciliation.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("reconciliation_sha256")
+          encoded = json.dumps(
+              value,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "0b8108e29057f8817994ffba63e5724be18db83bd38e386304fdc403fb872b4f"
+          assert value["implementation"]["accepted_head"] == "15acedbeaf0fd0ad2857ea8365ac23b0f311e22e"
+          assert value["implementation"]["merge_sha"] == "e29591e3603b528e13662f7956b852f1da3594a8"
+          assert len(value["implementation"]["changed_files"]) == 11
+          incident = value["incident"]
+          assert incident["affected_run_id"] == "29506217284"
+          assert incident["artifact_count"] == 0
+          assert incident["worker_state"] == "unknown"
+          assert incident["operator_exit_class_preserved"] is False
+          assert incident["latency_acceptance_result"] is False
+          assert incident["quality_acceptance_result"] is False
+          assert incident["workflow_rerun_authorized"] is False
+          assert value["repair_result"]["recovery_probe_executed"] is False
+          assert value["contract"]["production_retrieval"] == "lexical"
+          assert value["contract"]["maximum_worker_internal_shadow_ms"] == 1200
+          assert value["authority"]["blockers_cleared"] is False
+          assert value["retained_blockers"] == [
+              "blocked_pending_retrieval_quality",
+              "blocked_pending_latency",
+          ]
+          PY
+      - name: Verify reconciliation scope and repair preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          allowed = {
+              ".github/evidence/m23-7-r3-8-8/artifact-recovery-reconciliation.json",
+              "docs/architecture/m23-7-r3-8-8-artifact-recovery-reconciliation.md",
+              ".github/workflows/m23-7-r3-8-8-artifact-recovery-reconciliation.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "e29591e3603b528e13662f7956b852f1da3594a8", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code e29591e3603b528e13662f7956b852f1da3594a8 HEAD -- \
+            scripts/m23_7_r3_8_remote_entrypoint.py \
+            scripts/m23_7_r3_8_remote_recovery_probe.py \
+            .github/workflows/m23-7-r3-8-8-recovery-probe.yml \
+            .github/workflows/m23-7-r3-8-remote-observe.yml \
+            .github/workflows/m23-7-r3-8-remote-delete.yml \
+            pilot/m23/m23-7-r3-8-8-artifact-recovery-contract.json
+      - name: Verify next gate remains read-only and undispatched
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path(
+              ".github/evidence/m23-7-r3-8-8/artifact-recovery-reconciliation.json"
+          ).read_text(encoding="utf-8"))
+          assert value["next_gate"] == {
+              "affected_run_id": "29506217284",
+              "confirmation": "PROBE_R3_8_RUN_29506217284",
+              "exact_main_head_required": True,
+              "fresh_observation_authorized": False,
+              "orphan_deletion_authorized": False,
+              "read_only_cloudflare_control_plane_only": True,
+              "workflow": "M23.7 R3.8.8 Recovery Probe",
+          }
+          repair = value["repair_result"]
+          for field in (
+              "worker_delete_dispatched",
+              "worker_deploy_dispatched",
+              "worker_route_invoked",
+              "worker_secret_mutation_dispatched",
+              "qdrant_read_dispatched",
+              "qdrant_mutation_dispatched",
+              "r2_read_dispatched",
+              "r2_mutation_dispatched",
+              "protected_mutations_dispatched",
+          ):
+              assert repair[field] is False
+          PY
+      - name: Privacy scan
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path(".github/evidence/m23-7-r3-8-8/artifact-recovery-reconciliation.json"),
+              Path("docs/architecture/m23-7-r3-8-8-artifact-recovery-reconciliation.md"),
+          ]
+          text = "\n".join(path.read_text(encoding="utf-8") for path in paths)
+          for forbidden in (
+              "QDRANT_API_KEY=",
+              "CLOUDFLARE_API_TOKEN=",
+              "R2_SECRET_ACCESS_KEY=",
+              "r2.cloudflarestorage.com",
+          ):
+              assert forbidden not in text
+          PY
