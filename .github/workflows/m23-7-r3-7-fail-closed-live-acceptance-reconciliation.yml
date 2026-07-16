@@ -1,0 +1,104 @@
+name: M23.7 R3.7 Fail-Closed Live Acceptance Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-7-fail-closed-live-acceptance-reconciliation.json"
+      - "docs/architecture/m23-7-r3-7-fail-closed-live-acceptance-reconciliation.md"
+      - ".github/workflows/m23-7-r3-7-fail-closed-live-acceptance-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Verify evidence-seal ancestry
+        run: git merge-base --is-ancestor 880c88c86eedbba95906501ef5ad5b0866e7fd10 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify reconciliation digest and closure permissions
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-7-fail-closed-live-acceptance-reconciliation.json")
+          record = json.loads(path.read_text(encoding="utf-8"))
+          claimed = record.pop("reconciliation_sha256")
+          canonical = json.dumps(
+              record,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+          ).encode("utf-8")
+          assert hashlib.sha256(canonical).hexdigest() == claimed
+          assert claimed == "861a0156aba827d4c6eb62ee13e8025cba466fdbe28c60328056c2ec0b88c918"
+
+          assert record["merges"]["implementation"] == "068d2968a6d60b44328b96908cfc4ce29f919a2f"
+          assert record["merges"]["evidence_seal"] == "880c88c86eedbba95906501ef5ad5b0866e7fd10"
+          assert record["evidence"]["receipt_file_sha256"] == "72c8d9cc6a9262960659c75e87ac9cf6f6e73008633bc255f3c944681abcf4c2"
+          assert record["evidence"]["receipt_canonical_self_digest_sha256"] == "55ccb6ccdb7f02fcc9ba7302c37021d6cd747af49ec8250c955e924979a3509a"
+          assert record["evidence"]["seal_sha256"] == "e5c35247dd10be17dfa526842e3f9dd27d875278d31c5537786e25bf0b17ecdd"
+
+          result = record["result"]
+          assert result["result_complete"] is True
+          assert result["live_acceptance_passed"] is False
+          assert result["status"] == "completed_fail_closed_live_acceptance"
+          assert result["failed_gates"] == ["live_p95_latency"]
+          assert result["latency"]["live_p95_ms"] == 1739
+          assert result["latency"]["maximum_live_p95_ms"] == 1200
+          assert result["retained_blockers"] == [
+              "blocked_pending_retrieval_quality",
+              "blocked_pending_latency",
+          ]
+
+          closure = record["closure"]
+          assert closure["implementation_issue_514_close_completed"] is True
+          assert closure["evidence_issue_516_close_completed"] is True
+          assert closure["reconciliation_issue_518_close_completed"] is True
+          assert closure["parent_issue_474_remains_open"] is True
+          assert closure["r3_final_reconciliation_authorized"] is False
+          assert closure["m23_7_closure_authorized"] is False
+          assert closure["rerun_authorized"] is False
+          assert closure["threshold_change_authorized"] is False
+          assert record["next_gate"] == "separately_governed_latency_repair_iteration"
+          PY
+      - name: Verify authority boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-7-fail-closed-live-acceptance-reconciliation.json")
+          record = json.loads(path.read_text(encoding="utf-8"))
+          authority = record["authority"]
+          assert authority["qdrant_read_in_operator"] is True
+          assert authority["production_retrieval"] == "lexical"
+          for key in (
+              "qdrant_write",
+              "qdrant_delete",
+              "qdrant_reindex",
+              "historical_pilot_mutation",
+              "production_collection_mutation",
+              "r2_mutation",
+              "pointer_mutation",
+              "source_mutation",
+              "production_mutation",
+              "serving",
+              "promotion_eligibility",
+              "retrieval_quality_blocker_cleared",
+              "latency_blocker_cleared",
+          ):
+              assert authority[key] is False
+          PY
