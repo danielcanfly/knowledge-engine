@@ -1,0 +1,163 @@
+name: M23.7 R3.8.16 PR Permit Operator Bus Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-8-16-pr-permit-operator-bus-reconciliation.json"
+      - "docs/architecture/m23-7-r3-8-16-pr-permit-operator-bus-reconciliation.md"
+      - ".github/workflows/m23-7-r3-8-16-pr-permit-operator-bus-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact head and implementation ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 8faaede87af9e8fde62c48ba52ee1219abb4aecb HEAD
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install development dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Re-run permit and recovery adversarial tests
+        run: |
+          ruff check scripts/m23_operator_pr_permit.py tests/test_m23_operator_pr_permit.py
+          python -m py_compile scripts/m23_operator_pr_permit.py
+          pytest -q tests/test_m23_operator_pr_permit.py tests/test_m23_operator_request_bus.py tests/test_m23_operator_status_comment.py tests/test_m23_7_r3_8_post_delete_recovery.py
+
+      - name: Verify reconciliation digest and accepted identities
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-8-16-pr-permit-operator-bus-reconciliation.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("reconciliation_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "19dfff13918546d0362d7eceef11ab6ae9a7904d6152686bf76c9b42f322952f"
+          implementation = value["implementation"]
+          assert implementation["accepted_head"] == "5d43e1523807d06d50743efa40117eb1f8132b7d"
+          assert implementation["merge_sha"] == "8faaede87af9e8fde62c48ba52ee1219abb4aecb"
+          assert implementation["authorization_sha256"] == "1bf974d98d04be370efa82a3440399f6bc54999c68b5801f908bfc4350ce273a"
+          assert implementation["contract_sha256"] == "bf3101592c43a9a20cc06e5c87e6e05213ae9fdf595ee8e3e3634723ce055aa0"
+          assert len(implementation["changed_files"]) == 12
+          assert all(item["conclusion"] == "success" for item in value["exact_head_workflows"].values())
+          findings = value["findings"]
+          assert findings["request_only_head_executes"] is False
+          assert findings["permit_synchronize_executes"] is True
+          assert findings["permit_parent_binds_validated_request_head"] is True
+          assert findings["request_commit_only_adds_request"] is True
+          assert findings["permit_commit_only_adds_permit"] is True
+          assert findings["merge_commit_allowed"] is False
+          assert findings["extra_file_allowed"] is False
+          assert findings["pr_run_directly_observable"] is True
+          assert findings["cloudflare_access_dispatched"] is False
+          authority = value["authority"]
+          assert authority["production_retrieval"] == "lexical"
+          assert authority["retrieval_quality_blocker"] == "active"
+          assert authority["latency_blocker"] == "active"
+          assert authority["blocker_clearance_authorized"] is False
+          PY
+
+      - name: Verify exact implementation file set
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          expected = {
+              ".github/workflows/m23-7-r3-8-12-operator-command-bus-ci.yml",
+              ".github/workflows/m23-7-r3-8-13-operator-telemetry-ci.yml",
+              ".github/workflows/m23-7-r3-8-14-operator-request-ledger-ci.yml",
+              ".github/workflows/m23-7-r3-8-15-exact-base-request-validation-ci.yml",
+              ".github/workflows/m23-7-r3-8-16-pr-permit-operator-bus-ci.yml",
+              ".github/workflows/m23-operator-command-bus.yml",
+              ".github/workflows/m23-operator-request-ci.yml",
+              "docs/architecture/m23-7-r3-8-16-pr-permit-operator-bus.md",
+              "operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v5.json",
+              "pilot/m23/m23-7-r3-8-16-pr-permit-operator-bus-contract.json",
+              "scripts/m23_operator_pr_permit.py",
+              "tests/test_m23_operator_pr_permit.py",
+          }
+          changed = set(subprocess.check_output([
+              "git", "diff", "--name-only",
+              "88ddd82cbfb93a6c6c9fe2aa98d34cf5e1e4ebe2",
+              "8faaede87af9e8fde62c48ba52ee1219abb4aecb",
+          ], text=True).splitlines())
+          assert changed == expected, (changed, expected)
+          PY
+
+      - name: Verify two-stage workflow and static authority
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          validation_path = Path(".github/workflows/m23-operator-request-ci.yml")
+          validation = yaml.safe_load(validation_path.read_text(encoding="utf-8"))
+          assert validation[True]["pull_request"]["paths"] == [
+              "operator_requests/m23/**",
+              "operator_permits/m23/**",
+          ]
+          validation_text = validation_path.read_text(encoding="utf-8")
+          assert "python -m scripts.m23_operator_pr_permit" in validation_text
+          assert "request_validated" in validation_text
+          assert "execution_permitted" in validation_text
+
+          execute_path = Path(".github/workflows/m23-operator-command-bus.yml")
+          execute = yaml.safe_load(execute_path.read_text(encoding="utf-8"))
+          assert set(execute[True]) == {"pull_request"}
+          pull_request = execute[True]["pull_request"]
+          assert pull_request["types"] == ["synchronize"]
+          assert pull_request["paths"] == ["operator_permits/m23/**"]
+          execute_text = execute_path.read_text(encoding="utf-8")
+          assert "github.event.pull_request.head.repo.full_name == github.repository" in execute_text
+          assert "github.event.pull_request.user.login == 'huaihsuanbusiness'" in execute_text
+          assert 'test "$GITHUB_RUN_ATTEMPT" = "1"' in execute_text
+          assert "python -m scripts.m23_operator_pr_permit" in execute_text
+          assert "execution_permitted" in execute_text
+          assert "python -m scripts.m23_7_r3_8_post_delete_recovery" in execute_text
+          assert "m23-7-r3-8-16-pr-permit-recovery-" in execute_text
+          PY
+
+      - name: Verify implementation remains unchanged during reconciliation
+        run: |
+          git diff --exit-code 8faaede87af9e8fde62c48ba52ee1219abb4aecb HEAD -- .github/workflows/m23-operator-request-ci.yml .github/workflows/m23-operator-command-bus.yml scripts/m23_operator_pr_permit.py tests/test_m23_operator_pr_permit.py operator_authorizations/m23/r3-8/post-delete-recovery-29521901629-v5.json pilot/m23/m23-7-r3-8-16-pr-permit-operator-bus-contract.json
+
+      - name: Verify reconciliation-only change scope
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          expected = {
+              ".github/workflows/m23-7-r3-8-16-pr-permit-operator-bus-reconciliation.yml",
+              "docs/architecture/m23-7-r3-8-16-pr-permit-operator-bus-reconciliation.md",
+              "pilot/m23/m23-7-r3-8-16-pr-permit-operator-bus-reconciliation.json",
+          }
+          changed = set(subprocess.check_output([
+              "git", "diff", "--name-only",
+              "8faaede87af9e8fde62c48ba52ee1219abb4aecb", "HEAD",
+          ], text=True).splitlines())
+          assert changed == expected, (changed, expected)
+          PY
