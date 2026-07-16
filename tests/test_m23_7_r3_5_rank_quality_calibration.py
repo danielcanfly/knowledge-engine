@@ -128,6 +128,7 @@ def test_contract_freezes_thresholds_and_target_unaware_ranker() -> None:
 def test_perfect_vectors_pass_all_gates() -> None:
     candidate, query_vectors = _candidate()
     report = r35.evaluate_calibration_candidate(candidate, query_vectors)
+    assert all(report["gates"].values()), report["gates"]
     assert report["status"] == "pass_rank_quality_calibration"
     assert report["metrics"] == {
         "recall_at_5": 1.0,
