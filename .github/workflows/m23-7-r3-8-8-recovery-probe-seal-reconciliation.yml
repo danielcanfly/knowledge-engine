@@ -1,0 +1,73 @@
+name: M23.7 R3.8.8 Recovery Probe Seal Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-8/recovery-probe-seal-reconciliation.json"
+      - "docs/architecture/m23-7-r3-8-8-recovery-probe-seal-reconciliation.md"
+      - ".github/workflows/m23-7-r3-8-8-recovery-probe-seal-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and seal ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 7ee700375ed6df20d4254cb2a6e307edec52624d HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic reconciliation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          path = Path(".github/evidence/m23-7-r3-8-8/recovery-probe-seal-reconciliation.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("reconciliation_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "4b3380b2f76caa4e9eacc48cfab03f7cd09e25d1d5ce9c6db0b398d38fdce0d6"
+          assert value["result"]["worker_state"] == "worker_state_indeterminate"
+          assert value["result"]["worker_presence_inferred"] is False
+          assert value["result"]["worker_absence_inferred"] is False
+          assert value["schema_diagnosis"]["official_versions_result_path"] == "result.items"
+          assert value["schema_diagnosis"]["official_deployments_result_path"] == "result.deployments"
+          assert value["strict_zero_verified"] is True
+          assert value["authority"]["new_probe_authorized"] is False
+          assert value["authority"]["worker_deletion_authorized"] is False
+          assert value["authority"]["blockers_cleared"] is False
+          PY
+      - name: Verify scope and sealed evidence preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              ".github/evidence/m23-7-r3-8-8/recovery-probe-seal-reconciliation.json",
+              "docs/architecture/m23-7-r3-8-8-recovery-probe-seal-reconciliation.md",
+              ".github/workflows/m23-7-r3-8-8-recovery-probe-seal-reconciliation.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "7ee700375ed6df20d4254cb2a6e307edec52624d", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code 7ee700375ed6df20d4254cb2a6e307edec52624d HEAD -- \
+            .github/evidence/m23-7-r3-8-8/recovery-probe-29509724551-seal.json \
+            scripts/m23_7_r3_8_remote_recovery_probe.py \
+            .github/workflows/m23-7-r3-8-8-recovery-probe.yml
