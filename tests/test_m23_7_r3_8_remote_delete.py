@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -9,8 +11,8 @@ from scripts import m23_7_r3_8_remote_delete as subject
 from scripts.m23_7_r3_8_remote_operator import canonical_sha256
 
 
-def _authorization() -> dict[str, object]:
-    value: dict[str, object] = {
+def _authorization() -> dict[str, Any]:
+    value: dict[str, Any] = {
         "schema_version": subject.AUTH_SCHEMA,
         "worker_name": "knowledge-engine-r3-8-29499115739",
         "worker_version_id": "version-123",
@@ -48,7 +50,8 @@ def test_deletion_authorization_validates(tmp_path: Path) -> None:
     ),
 )
 def test_deletion_authorization_rejects_drift(
-    tmp_path: Path, mutation: object
+    tmp_path: Path,
+    mutation: Callable[[dict[str, Any]], None],
 ) -> None:
     value = _authorization()
     mutation(value)
@@ -58,7 +61,7 @@ def test_deletion_authorization_rejects_drift(
         value["authorization_sha256"] = canonical_sha256(unsigned)
     path = tmp_path / "authorization.json"
     path.write_text(json.dumps(value), encoding="utf-8")
-    with pytest.raises(Exception):
+    with pytest.raises(subject.RemoteOperatorError):
         subject.validate_authorization(path)
 
 
