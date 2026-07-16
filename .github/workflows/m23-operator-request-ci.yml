@@ -1,16 +1,26 @@
-name: M23 Operator Request Validation
+name: M23 Operator Request And Permit Validation
 
 on:
   pull_request:
     paths:
       - "operator_requests/m23/**"
+      - "operator_permits/m23/**"
 
 permissions:
   contents: read
 
 jobs:
-  validate-request:
+  validate-request-permit:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == 'huaihsuanbusiness'
     runs-on: ubuntu-24.04
+    outputs:
+      stage: ${{ steps.operator.outputs.stage }}
+      request_path: ${{ steps.operator.outputs.request_path }}
+      request_sha256: ${{ steps.operator.outputs.request_sha256 }}
+      permit_path: ${{ steps.operator.outputs.permit_path }}
+      permit_sha256: ${{ steps.operator.outputs.permit_sha256 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,69 +28,51 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify exact request PR head and base ancestry
+      - name: Verify exact same-repository request head and base ancestry
         shell: bash
         run: |
           set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = "1"
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "${{ github.event.pull_request.head.repo.full_name }}" = "$GITHUB_REPOSITORY"
+          test "${{ github.event.pull_request.user.login }}" = "huaihsuanbusiness"
           git merge-base --is-ancestor \
             "${{ github.event.pull_request.base.sha }}" \
             "${{ github.event.pull_request.head.sha }}"
 
-      - name: Validate single immutable request and authorization
-        id: request
+      - name: Validate immutable request and optional execution permit
+        id: operator
         shell: bash
         run: |
           set -euo pipefail
-          python -m scripts.m23_operator_request_bus \
+          python -m scripts.m23_operator_pr_permit \
             --repo-root . \
-            --before "${{ github.event.pull_request.base.sha }}" \
-            --after "${{ github.event.pull_request.head.sha }}" \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
             --github-output "$GITHUB_OUTPUT"
 
-      - name: Verify request-only PR scope against exact base SHA
+      - name: Verify validated stage grants no unbound authority
         shell: bash
         env:
-          REQUEST_PATH: ${{ steps.request.outputs.request_path }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import os
-          import re
-          import subprocess
-
-          hex40 = re.compile(r"^[0-9a-f]{40}$")
-          base = os.environ["BASE_SHA"]
-          head = os.environ["HEAD_SHA"]
-          request_path = os.environ["REQUEST_PATH"]
-          assert hex40.fullmatch(base), base
-          assert hex40.fullmatch(head), head
-          assert base != head
-          actual = subprocess.check_output(
-              ["git", "rev-parse", "HEAD"], text=True
-          ).strip()
-          assert actual == head, (actual, head)
-          subprocess.run(
-              ["git", "merge-base", "--is-ancestor", base, head],
-              check=True,
-          )
-          changed = subprocess.check_output(
-              ["git", "diff", "--name-only", base, head],
-              text=True,
-          ).splitlines()
-          assert changed == [request_path], changed
-          PY
-
-      - name: Verify request grants no new authority
-        shell: bash
-        env:
-          AUTHORIZATION_PATH: ${{ steps.request.outputs.authorization_path }}
-          COMMAND_TYPE: ${{ steps.request.outputs.command_type }}
+          STAGE: ${{ steps.operator.outputs.stage }}
+          REQUEST_PATH: ${{ steps.operator.outputs.request_path }}
+          PERMIT_PATH: ${{ steps.operator.outputs.permit_path }}
+          AUTHORIZATION_PATH: ${{ steps.operator.outputs.authorization_path }}
+          COMMAND_TYPE: ${{ steps.operator.outputs.command_type }}
         run: |
           set -euo pipefail
           test "$COMMAND_TYPE" = "r3_8_post_delete_recovery"
+          case "$STAGE" in
+            request_validated)
+              test -n "$REQUEST_PATH"
+              test -z "$PERMIT_PATH"
+              ;;
+            execution_permitted)
+              test -n "$REQUEST_PATH"
+              test -n "$PERMIT_PATH"
+              ;;
+            *) exit 23 ;;
+          esac
           python - <<'PY'
           import json
           import os
