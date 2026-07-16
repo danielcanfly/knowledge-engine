@@ -1,0 +1,84 @@
+name: M23 Operator Request Validation
+
+on:
+  pull_request:
+    paths:
+      - "operator_requests/m23/**"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-request:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact request PR head and base ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git merge-base --is-ancestor \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}"
+
+      - name: Validate single immutable request and authorization
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.m23_operator_request_bus \
+            --repo-root . \
+            --before "${{ github.event.pull_request.base.sha }}" \
+            --after "${{ github.event.pull_request.head.sha }}" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Verify request-only PR scope
+        shell: bash
+        env:
+          REQUEST_PATH: ${{ steps.request.outputs.request_path }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import subprocess
+
+          changed = subprocess.check_output(
+              [
+                  "git",
+                  "diff",
+                  "--name-only",
+                  os.environ["GITHUB_BASE_REF"],
+                  "HEAD",
+              ],
+              text=True,
+          ).splitlines()
+          assert changed == [os.environ["REQUEST_PATH"]], changed
+          PY
+
+      - name: Verify request grants no new authority
+        shell: bash
+        env:
+          AUTHORIZATION_PATH: ${{ steps.request.outputs.authorization_path }}
+          COMMAND_TYPE: ${{ steps.request.outputs.command_type }}
+        run: |
+          set -euo pipefail
+          test "$COMMAND_TYPE" = "r3_8_post_delete_recovery"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          value = json.loads(
+              Path(os.environ["AUTHORIZATION_PATH"]).read_text(encoding="utf-8")
+          )
+          authority = value["authority"]
+          assert authority["control_plane_read_authorized"] is True
+          for key, enabled in authority.items():
+              if key != "control_plane_read_authorized":
+                  assert enabled is False, (key, enabled)
+          PY
