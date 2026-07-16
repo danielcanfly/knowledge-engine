@@ -83,6 +83,8 @@ jobs:
           probe = Path("scripts/m23_7_r3_8_remote_recovery_probe.py").read_text(encoding="utf-8")
           assert "path: r3-8-remote-evidence/" in observe
           assert "path: r3-8-deletion-evidence/" in delete
+          assert "GITHUB_RUN_ATTEMPT" in delete
+          assert "DELETE_RECONCILED_R3_8_WORKER" in delete
           assert probe.count("client.get(") == 2
           for forbidden in (
               "client.post(", "client.put(", "client.patch(", "client.delete(",
@@ -90,7 +92,7 @@ jobs:
           ):
               assert forbidden not in probe
           PY
-      - name: Verify accepted core runtime preservation
+      - name: Verify accepted recovery core remains exact
         shell: bash
         run: |
           git diff --exit-code e29591e3603b528e13662f7956b852f1da3594a8 HEAD -- \
@@ -98,6 +100,5 @@ jobs:
             pilot/m23/m23-7-r3-8-8-artifact-recovery-contract.json \
             docs/architecture/m23-7-r3-8-8-artifact-recovery.md \
             .github/workflows/m23-7-r3-8-remote-observe.yml \
-            .github/workflows/m23-7-r3-8-remote-delete.yml \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
             workers/m23-7-r3-8-latency-repair/worker.mjs
