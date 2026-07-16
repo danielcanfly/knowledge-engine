@@ -153,6 +153,16 @@ def test_validate_live_authorization_binds_issue_and_transient_scope(tmp_path: P
         "command_type"
     ] == subject.R3_LIVE_COMMAND
 
+    auth["source_issue_number"] = 602
+    auth["source_engine_sha"] = "07118f15f6fc49f2fc80c38d090ac9a8ae44ddb1"
+    unsigned = dict(auth)
+    unsigned.pop("authorization_sha256")
+    auth["authorization_sha256"] = subject.canonical_sha256(unsigned)
+    path.write_text(subject.canonical_json(auth) + "\n", encoding="utf-8")
+    assert subject.validate_authorization(path, expected_nonce=nonce)[
+        "source_issue_number"
+    ] == 602
+
     auth["authority"]["qdrant_mutation_authorized"] = True
     unsigned = dict(auth)
     unsigned.pop("authorization_sha256")
