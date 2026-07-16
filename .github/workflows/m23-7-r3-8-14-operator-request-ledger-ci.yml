@@ -92,7 +92,7 @@ jobs:
           assert contract["authority"]["production_retrieval"] == "lexical"
           PY
 
-      - name: Verify push-only execution and request PR validation
+      - name: Verify request ledger or PR-permit successor surfaces
         shell: bash
         run: |
           python - <<'PY'
@@ -101,28 +101,47 @@ jobs:
 
           execute_path = Path(".github/workflows/m23-operator-command-bus.yml")
           execute = yaml.safe_load(execute_path.read_text(encoding="utf-8"))
-          assert "push" in execute[True]
-          assert "issue_comment" not in execute[True]
-          push = execute[True]["push"]
-          assert push["branches"] == ["main"]
-          assert push["paths"] == ["operator_requests/m23/**"]
-          text = execute_path.read_text(encoding="utf-8")
-          assert "python -m scripts.m23_operator_request_bus" in text
-          assert "github.event.before" in text
-          assert "github.event.after" in text
-          assert "Report accepted request identity" in text
-          assert "Report final governed route result" in text
+          triggers = execute[True]
+          assert "issue_comment" not in triggers
+          assert "workflow_dispatch" not in triggers
+          execute_text = execute_path.read_text(encoding="utf-8")
+          if "push" in triggers:
+              push = triggers["push"]
+              assert push["branches"] == ["main"]
+              assert push["paths"] == ["operator_requests/m23/**"]
+              assert "python -m scripts.m23_operator_request_bus" in execute_text
+              assert "github.event.before" in execute_text
+              assert "github.event.after" in execute_text
+          else:
+              assert set(triggers) == {"pull_request"}
+              pull_request = triggers["pull_request"]
+              assert pull_request["types"] == ["synchronize"]
+              assert pull_request["paths"] == ["operator_permits/m23/**"]
+              assert "python -m scripts.m23_operator_pr_permit" in execute_text
+              assert "execution_permitted" in execute_text
 
           request_path = Path(".github/workflows/m23-operator-request-ci.yml")
           request = yaml.safe_load(request_path.read_text(encoding="utf-8"))
           assert "pull_request" in request[True]
-          assert request[True]["pull_request"]["paths"] == ["operator_requests/m23/**"]
+          paths = request[True]["pull_request"]["paths"]
+          assert paths[0] == "operator_requests/m23/**"
+          assert set(paths).issubset(
+              {"operator_requests/m23/**", "operator_permits/m23/**"}
+          )
           request_text = request_path.read_text(encoding="utf-8")
-          assert "Validate single immutable request and authorization" in request_text
-          assert "Verify request-only PR scope" in request_text
+          if len(paths) == 1:
+              assert "python -m scripts.m23_operator_request_bus" in request_text
+          else:
+              assert paths == [
+                  "operator_requests/m23/**",
+                  "operator_permits/m23/**",
+              ]
+              assert "python -m scripts.m23_operator_pr_permit" in request_text
+              assert "request_validated" in request_text
+              assert "execution_permitted" in request_text
           PY
 
-      - name: Verify request validator has no execution surfaces
+      - name: Verify historical request validator has no execution surfaces
         shell: bash
         run: |
           python - <<'PY'
