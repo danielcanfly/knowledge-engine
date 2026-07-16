@@ -1,0 +1,98 @@
+name: M23.7 Repair R3.3 Offline Rebuild Evaluation
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m23_7_r3_3_offline_rebuild_evaluation.py"
+      - "scripts/m23_7_r3_3_offline_rebuild_operator.py"
+      - "tests/test_m23_7_r3_3_offline_rebuild_evaluation.py"
+      - "docs/architecture/m23-7-r3-3-offline-rebuild-evaluation.md"
+      - "pilot/m23/m23-7-r3-3-offline-rebuild-evaluation-contract.json"
+      - ".github/workflows/m23-7-r3-3-offline-rebuild-evaluation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-rebuild-evaluation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff accepted scope
+        run: |
+          ruff check \
+            src/knowledge_engine/m23_7_r3_3_offline_rebuild_evaluation.py \
+            scripts/m23_7_r3_3_offline_rebuild_operator.py \
+            tests/test_m23_7_r3_3_offline_rebuild_evaluation.py
+      - name: R3.3 and repair regression tests
+        run: |
+          pytest -q \
+            tests/test_m23_7_r3_1_root_cause.py \
+            tests/test_m23_7_r3_2_semantic_payload_repair.py \
+            tests/test_m23_7_r3_3_offline_rebuild_evaluation.py
+      - name: Verify deterministic contract
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          from knowledge_engine.m23_7_r3_3_offline_rebuild_evaluation import (
+              canonical_contract,
+          )
+
+          committed = json.loads(
+              Path('pilot/m23/m23-7-r3-3-offline-rebuild-evaluation-contract.json')
+              .read_text(encoding='utf-8')
+          )
+          generated = canonical_contract()
+          assert generated == committed
+          unsigned = dict(committed)
+          digest = unsigned.pop('contract_sha256')
+          canonical = json.dumps(
+              unsigned,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+              allow_nan=False,
+          )
+          assert hashlib.sha256(canonical.encode('utf-8')).hexdigest() == digest
+          assert digest == 'ff1cb565dbbd877cecdebfba29ba86ed2236e4b70467e14ec3059cde77a91e96'
+          PY
+      - name: Privacy and authority scan
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          contract = json.loads(
+              Path('pilot/m23/m23-7-r3-3-offline-rebuild-evaluation-contract.json')
+              .read_text(encoding='utf-8')
+          )
+          assert contract['implementation_issue'] == 487
+          assert contract['rebuild']['point_count'] == 107
+          assert contract['rebuild']['payload_schema'] == 'knowledge-engine-m23-qdrant-payload/v2'
+          assert contract['rebuild']['sample_count'] == 8
+          assert contract['thresholds']['thresholds_changed'] is False
+          assert contract['authority']['production_retrieval'] == 'lexical'
+          assert contract['authority']['qdrant_read_authorized'] is False
+          assert contract['authority']['qdrant_write_authorized'] is False
+          assert contract['exit']['live_acceptance_still_required'] is True
+          encoded = json.dumps(contract, sort_keys=True)
+          for forbidden in ('https://', 'CLOUDFLARE_API_TOKEN', 'QDRANT_API_KEY'):
+              assert forbidden not in encoded
+          PY
+      - name: Compile accepted Python scope
+        run: python -m compileall -q src tests scripts
