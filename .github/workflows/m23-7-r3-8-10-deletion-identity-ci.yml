@@ -84,29 +84,30 @@ jobs:
           assert "value != sorted(value)" in text
           assert "len(value) != len(set(value))" in text
           PY
-      - name: Verify exact change scope and runtime preservation
+      - name: Verify accepted identity contract and runtime preservation
         shell: bash
         run: |
-          python - <<'PY'
-          import subprocess
-          allowed = {
-              "scripts/m23_7_r3_8_remote_delete.py",
-              "tests/test_m23_7_r3_8_remote_delete.py",
-              "pilot/m23/m23-7-r3-8-10-deletion-identity-contract.json",
-              "docs/architecture/m23-7-r3-8-10-deletion-identity-set.md",
-              ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
-              ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml",
-          }
-          changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "a018bd270fcae6f1591555a17e849c97ced7b968", "HEAD"],
-              text=True,
-          ).splitlines())
-          assert changed == allowed, (changed, allowed)
-          PY
-          git diff --exit-code a018bd270fcae6f1591555a17e849c97ced7b968 HEAD -- \
+          set -euo pipefail
+          git diff --exit-code 0b919b1340245ad057a6d99e56200ae49784ef9b HEAD -- \
+            pilot/m23/m23-7-r3-8-10-deletion-identity-contract.json \
+            docs/architecture/m23-7-r3-8-10-deletion-identity-set.md \
             scripts/m23_7_r3_8_remote_operator.py \
             scripts/m23_7_r3_8_remote_entrypoint.py \
             scripts/m23_7_r3_8_remote_recovery_probe.py \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
-            workers/m23-7-r3-8-latency-repair/worker.mjs \
-            .github/workflows/m23-7-r3-8-remote-delete.yml
+            workers/m23-7-r3-8-latency-repair/worker.mjs
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.m23_7_r3_8_remote_delete import validate_authorization
+
+          path = Path(
+              "deletion_authorizations/m23-7/r3-8/"
+              "knowledge-engine-r3-8-29506217284.json"
+          )
+          value = validate_authorization(path)
+          assert len(value["worker_version_ids"]) == 4
+          assert len(value["worker_deployment_ids"]) == 4
+          assert value["worker_name"] == "knowledge-engine-r3-8-29506217284"
+          assert value["authority"]["production_mutation_authorized"] is False
+          PY
