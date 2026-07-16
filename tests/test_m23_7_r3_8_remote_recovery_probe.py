@@ -5,91 +5,139 @@ from pathlib import Path
 from scripts import m23_7_r3_8_remote_recovery_probe as subject
 
 
-def test_absent_responses_reconcile_to_absent() -> None:
-    payload = {"success": False, "errors": [{"code": 10090}]}
-    versions = subject.classify_control_plane_response(
-        404,
+def _classify(
+    payload: object,
+    *,
+    key: str = "items",
+    fields: tuple[str, ...] = ("id",),
+    status: int = 200,
+):
+    return subject.classify_control_plane_response(
+        status,
         payload,
-        identity_fields=("id",),
+        collection_key=key,
+        identity_fields=fields,
     )
-    deployments = subject.classify_control_plane_response(
-        404,
+
+
+def test_not_found_responses_reconcile_to_absent() -> None:
+    versions = _classify(
+        {"success": False, "errors": [{"code": 10090}]},
+        status=404,
+    )
+    deployments = _classify(
         {"success": False, "errors": [{"code": 10007}]},
-        identity_fields=("id",),
+        key="deployments",
+        status=404,
     )
     assert versions["state"] == "absent"
     assert deployments["state"] == "absent"
     assert subject.reconcile_worker_state(versions, deployments) == "worker_absent"
 
 
-def test_present_responses_bind_sorted_unique_identities() -> None:
-    versions = subject.classify_control_plane_response(
-        200,
+def test_official_nonempty_collections_reconcile_to_present() -> None:
+    versions = _classify(
         {
             "success": True,
-            "result": [{"id": "v2"}, {"id": "v1"}, {"id": "v2"}],
+            "errors": [],
+            "result": {"items": [{"id": "v2"}, {"id": "v1"}]},
+        }
+    )
+    deployments = _classify(
+        {
+            "success": True,
+            "errors": [],
+            "result": {"deployments": [{"id": "d1"}]},
         },
-        identity_fields=("id", "version_id"),
+        key="deployments",
     )
-    deployments = subject.classify_control_plane_response(
-        200,
-        {"success": True, "result": [{"deployment_id": "d1"}]},
-        identity_fields=("id", "deployment_id"),
-    )
+    assert versions["state"] == "present"
     assert versions["identities"] == ["v1", "v2"]
-    assert versions["identity_count"] == 2
+    assert versions["collection_key"] == "items"
+    assert deployments["state"] == "present"
     assert deployments["identities"] == ["d1"]
     assert subject.reconcile_worker_state(versions, deployments) == "worker_present"
 
 
-def test_ambiguous_or_auth_responses_fail_closed() -> None:
-    auth = subject.classify_control_plane_response(
-        403,
-        {"success": False, "errors": [{"code": 10000}]},
-        identity_fields=("id",),
+def test_official_empty_collections_reconcile_to_absent() -> None:
+    versions = _classify(
+        {"success": True, "errors": [], "result": {"items": []}}
     )
-    malformed = subject.classify_control_plane_response(
-        200,
-        {"success": True, "result": {}},
-        identity_fields=("id",),
+    deployments = _classify(
+        {
+            "success": True,
+            "errors": [],
+            "result": {"deployments": []},
+        },
+        key="deployments",
     )
-    assert auth["state"] == "indeterminate"
-    assert malformed["state"] == "indeterminate"
-    assert (
-        subject.reconcile_worker_state(auth, malformed)
-        == "worker_state_indeterminate"
-    )
+    assert versions["state"] == "absent"
+    assert deployments["state"] == "absent"
+    assert subject.reconcile_worker_state(versions, deployments) == "worker_absent"
+
+
+def test_wrong_or_legacy_collection_shapes_fail_closed() -> None:
+    for payload in (
+        {"success": True, "errors": [], "result": [{"id": "v1"}]},
+        {"success": True, "errors": [], "result": {"deployments": []}},
+        {"success": True, "errors": [], "result": {"items": [], "extra": []}},
+        {"success": True, "errors": [], "result": {"items": {}}},
+    ):
+        assert _classify(payload)["state"] == "indeterminate"
+
+
+def test_malformed_or_duplicate_identities_fail_closed() -> None:
+    for collection in (
+        [{}],
+        [{"id": ""}],
+        [{"id": "v1"}, {"id": "v1"}],
+        ["v1"],
+    ):
+        result = _classify(
+            {"success": True, "errors": [], "result": {"items": collection}}
+        )
+        assert result["state"] == "indeterminate"
+        assert result["identities"] == []
+
+
+def test_auth_mixed_errors_and_bad_success_fail_closed() -> None:
+    for status, payload in (
+        (403, {"success": False, "errors": [{"code": 10000}]}),
+        (404, {"success": False, "errors": [{"code": 10007}, {"code": 10000}]}),
+        (200, {"success": True, "errors": [{"code": 10000}], "result": {"items": []}}),
+        (200, {"success": False, "errors": [], "result": {"items": []}}),
+    ):
+        assert _classify(payload, status=status)["state"] == "indeterminate"
 
 
 def test_mixed_absent_and_present_is_inconsistent() -> None:
-    absent = {
-        "state": "absent",
-        "http_status": 404,
-        "error_codes": [10090],
-        "identity_count": 0,
-        "identities": [],
-    }
-    present = {
-        "state": "present",
-        "http_status": 200,
-        "error_codes": [],
-        "identity_count": 1,
-        "identities": ["v1"],
-    }
+    absent = _classify(
+        {"success": True, "errors": [], "result": {"items": []}}
+    )
+    present = _classify(
+        {
+            "success": True,
+            "errors": [],
+            "result": {"deployments": [{"id": "d1"}]},
+        },
+        key="deployments",
+    )
     assert (
         subject.reconcile_worker_state(absent, present)
         == "worker_state_inconsistent"
     )
 
 
-def test_probe_source_has_no_mutating_cloudflare_methods() -> None:
+def test_probe_source_has_only_read_methods_and_schema_v2_identity() -> None:
     source = Path(
         "scripts/m23_7_r3_8_remote_recovery_probe.py"
     ).read_text(encoding="utf-8")
-    assert "client.get(" in source
+    assert source.count("client.get(") == 2
     assert "client.post(" not in source
     assert "client.put(" not in source
     assert "client.patch(" not in source
     assert "client.delete(" not in source
     assert subject.AFFECTED_RUN_ID == "29506217284"
     assert subject.AFFECTED_WORKER == "knowledge-engine-r3-8-29506217284"
+    assert subject.CONFIRMATION == "PROBE_R3_8_RUN_29506217284_SCHEMA_V2"
+    assert subject.SCHEMA_VERSION.endswith("/v2")
