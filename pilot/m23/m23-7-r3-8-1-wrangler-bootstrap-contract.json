@@ -1,0 +1,54 @@
+{
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "pointer_mutation_authorized": false,
+    "production_mutation_authorized": false,
+    "production_retrieval": "lexical",
+    "qdrant_delete_authorized": false,
+    "qdrant_read_authorized": false,
+    "qdrant_reindex_authorized": false,
+    "qdrant_write_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deployment_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "contract_sha256": "77956b131c46dd96f83ed02369ca9e539095a509a2cee5d03fff82e63d420862",
+  "entry": {
+    "engine_sha": "4dabe44254450bc701f83629fa1bcf3f2b832037",
+    "live_observation_dispatched": false,
+    "qdrant_access_dispatched": false,
+    "r3_8_contract_sha256": "09a340c2145cffa8ee45de7725e157c864baf08f0cda5ade11fc5bcccb0e5a94",
+    "secrets_written": false,
+    "trigger": "wrangler_command_not_found",
+    "worker_deployed": false
+  },
+  "implementation_issue": 522,
+  "milestone": "M23.7-R3.8.1",
+  "parent_issue": 520,
+  "preservation": {
+    "authority_changed": false,
+    "latency_threshold_changed": false,
+    "quality_thresholds_changed": false,
+    "query_identity_changed": false,
+    "r3_8_runtime_changed": false,
+    "r3_8_worker_changed": false
+  },
+  "schema_version": "knowledge-engine-m23-7-r3-8-1-wrangler-bootstrap/v1",
+  "tooling": {
+    "command_representation": "bash_array",
+    "eval_used": false,
+    "multi_token_override_allowed": false,
+    "npx_package": "wrangler@4.111.0",
+    "operator_pack_rebuild_required": true,
+    "pinned_wrangler_version": "4.111.0",
+    "resolution_order": [
+      "explicit_single_token_WRANGLER_BIN",
+      "global_wrangler",
+      "npx_pinned_package"
+    ],
+    "version_drift_allowed": false
+  }
+}
