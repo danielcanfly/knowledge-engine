@@ -46,11 +46,11 @@ jobs:
       - name: R3.2 regression in isolated process
         run: pytest -q tests/test_m23_7_r3_2_semantic_payload_repair.py
 
-      - name: R3.3 regression in isolated process
-        run: pytest -q tests/test_m23_7_r3_3_offline_rebuild_evaluation.py
-
-      - name: R3.3 real-evidence regression in isolated process
-        run: pytest -q tests/test_m23_7_r3_3_offline_rebuild_evaluation_real.py
+      - name: R3.3 standard and real-evidence compatibility unit
+        run: |
+          pytest -q \
+            tests/test_m23_7_r3_3_offline_rebuild_evaluation.py \
+            tests/test_m23_7_r3_3_offline_rebuild_evaluation_real.py
 
       - name: R3.4 regression in isolated process
         run: pytest -q tests/test_m23_7_r3_4_target_discrimination_repair.py
