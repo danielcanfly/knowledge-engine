@@ -1,0 +1,131 @@
+name: M23.7 Repair R3.8.1 Wrangler Bootstrap
+
+on:
+  pull_request:
+    paths:
+      - "scripts/m23_7_r3_8_wrangler_bootstrap.sh"
+      - "tests/test_m23_7_r3_8_wrangler_bootstrap.py"
+      - "pilot/m23/m23-7-r3-8-1-wrangler-bootstrap-contract.json"
+      - "docs/architecture/m23-7-r3-8-1-wrangler-bootstrap.md"
+      - ".github/workflows/m23-7-r3-8-1-wrangler-bootstrap.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wrangler-bootstrap:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Verify R3.8 implementation ancestry
+        run: git merge-base --is-ancestor 4dabe44254450bc701f83629fa1bcf3f2b832037 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff bootstrap tests
+        run: ruff check tests/test_m23_7_r3_8_wrangler_bootstrap.py
+      - name: Parse bootstrap shell
+        run: bash -n scripts/m23_7_r3_8_wrangler_bootstrap.sh
+      - name: Wrangler bootstrap adversarial tests
+        run: pytest -q tests/test_m23_7_r3_8_wrangler_bootstrap.py
+      - name: Preserve accepted R3.8 regressions
+        run: |
+          pytest -q tests/test_m23_7_r3_8_latency_repair.py
+          node --test workers/m23-7-r3-8-latency-repair/worker.test.mjs
+      - name: Verify deterministic hotfix contract
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-8-1-wrangler-bootstrap-contract.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          digest = payload.pop("contract_sha256")
+          encoded = json.dumps(
+              payload,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "77956b131c46dd96f83ed02369ca9e539095a509a2cee5d03fff82e63d420862"
+          assert payload["entry"]["engine_sha"] == "4dabe44254450bc701f83629fa1bcf3f2b832037"
+          assert payload["tooling"]["pinned_wrangler_version"] == "4.111.0"
+          assert payload["tooling"]["npx_package"] == "wrangler@4.111.0"
+          assert payload["tooling"]["command_representation"] == "bash_array"
+          assert payload["tooling"]["eval_used"] is False
+          assert payload["preservation"]["latency_threshold_changed"] is False
+          assert payload["authority"]["worker_deployment_authorized"] is False
+          PY
+      - name: Verify hotfix scope and accepted file preservation
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          allowed = {
+              "scripts/m23_7_r3_8_wrangler_bootstrap.sh",
+              "tests/test_m23_7_r3_8_wrangler_bootstrap.py",
+              "pilot/m23/m23-7-r3-8-1-wrangler-bootstrap-contract.json",
+              "docs/architecture/m23-7-r3-8-1-wrangler-bootstrap.md",
+              ".github/workflows/m23-7-r3-8-1-wrangler-bootstrap.yml",
+          }
+          changed = set(
+              subprocess.check_output(
+                  [
+                      "git",
+                      "diff",
+                      "--name-only",
+                      "4dabe44254450bc701f83629fa1bcf3f2b832037",
+                      "HEAD",
+                  ],
+                  text=True,
+              ).splitlines()
+          )
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code 4dabe44254450bc701f83629fa1bcf3f2b832037 HEAD -- \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            scripts/m23_7_r3_8_latency_repair_operator.py \
+            scripts/m23_7_r3_8_worker_config.py \
+            workers/m23-7-r3-8-latency-repair/worker.mjs \
+            pilot/m23/m23-7-r3-8-latency-repair-contract.json
+      - name: Bootstrap safety scan
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          shell = Path("scripts/m23_7_r3_8_wrangler_bootstrap.sh").read_text(
+              encoding="utf-8"
+          )
+          assert "eval " not in shell
+          assert "M23_R3_8_WRANGLER_CMD=(" in shell
+          assert '"${M23_R3_8_WRANGLER_CMD[@]}" --version' in shell
+          assert "wrangler@${M23_R3_8_WRANGLER_VERSION}" in shell
+          assert "4.111.0" in shell
+          assert "^[A-Za-z0-9_./-]+$" in shell
+
+          contract = Path(
+              "pilot/m23/m23-7-r3-8-1-wrangler-bootstrap-contract.json"
+          ).read_text(encoding="utf-8")
+          docs = Path(
+              "docs/architecture/m23-7-r3-8-1-wrangler-bootstrap.md"
+          ).read_text(encoding="utf-8")
+          for text in (contract, docs):
+              assert "https://" not in text
+              assert "api-key" not in text.lower()
+          PY
+      - name: Compile accepted Python scope
+        run: python -m py_compile tests/test_m23_7_r3_8_wrangler_bootstrap.py
