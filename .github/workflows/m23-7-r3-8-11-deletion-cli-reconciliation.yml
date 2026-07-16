@@ -1,0 +1,142 @@
+name: M23.7 R3.8.11 Deletion CLI Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - "pilot/m23/m23-7-r3-8-11-deletion-cli-reconciliation.json"
+      - "docs/architecture/m23-7-r3-8-11-deletion-cli-reconciliation.md"
+      - ".github/workflows/m23-7-r3-8-11-deletion-cli-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and implementation ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 6498a53d952ccd271a2656179c5d86e3ecd90061 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Re-run bounded deletion compatibility tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruff check scripts/m23_7_r3_8_remote_delete.py tests/test_m23_7_r3_8_remote_delete.py
+          python -m py_compile scripts/m23_7_r3_8_remote_delete.py
+          pytest -q tests/test_m23_7_r3_8_remote_delete.py
+          test "$(npx --yes wrangler@4.111.0 --version | tr -d '\r')" = "4.111.0"
+          npx --yes wrangler@4.111.0 delete --help > wrangler-delete-help.txt
+          grep -Eq 'wrangler delete[[:space:]]+\[name\]' wrangler-delete-help.txt
+          grep -q -- '--force' wrangler-delete-help.txt
+          ! grep -q -- '--name' wrangler-delete-help.txt
+      - name: Verify reconciliation self-digest and implementation identities
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-8-11-deletion-cli-reconciliation.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("reconciliation_sha256")
+          encoded = json.dumps(
+              value,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "0ef82b6df851ec4a6219121b15e1876783d99a804646ce49ffd6bc93430709cf"
+          implementation = value["implementation"]
+          assert implementation["accepted_head"] == "6afe57bb34db222b278c95677cd078f986708e32"
+          assert implementation["merge_sha"] == "6498a53d952ccd271a2656179c5d86e3ecd90061"
+          assert implementation["contract_sha256"] == "67a00f84c59a5477e529a5760254aa0981619054bd571ee6111761dc6469c0ee"
+          assert len(implementation["changed_files"]) == 10
+          assert all(
+              item["conclusion"] == "success"
+              for item in value["exact_head_workflows"].values()
+          )
+          findings = value["findings"]
+          assert findings["delete_name_form"] == "positional"
+          assert findings["delete_name_option_forbidden"] is True
+          assert findings["worker_version_identity_count"] == 4
+          assert findings["worker_deployment_identity_count"] == 4
+          assert findings["deletion_dispatched"] is False
+          assert findings["deletion_evidence_created"] is False
+          authority = value["authority"]
+          assert authority["production_retrieval"] == "lexical"
+          assert authority["retrieval_quality_blocker"] == "active"
+          assert authority["latency_blocker"] == "active"
+          assert authority["workflow_dispatch_authorized"] is False
+          assert authority["blocker_clearance_authorized"] is False
+          PY
+      - name: Verify schema-v2 authorization and exact identity counts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.m23_7_r3_8_remote_delete import validate_authorization
+
+          path = Path(
+              "deletion_authorizations/m23-7/r3-8/"
+              "knowledge-engine-r3-8-29506217284.json"
+          )
+          value = validate_authorization(path)
+          assert value["worker_name"] == "knowledge-engine-r3-8-29506217284"
+          assert len(value["worker_version_ids"]) == 4
+          assert len(value["worker_deployment_ids"]) == 4
+          assert value["authority"]["diagnostic_worker_deletion_authorized"] is True
+          assert value["authority"]["production_mutation_authorized"] is False
+          PY
+      - name: Verify reconciliation-only change scope
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          expected = {
+              ".github/workflows/m23-7-r3-8-11-deletion-cli-reconciliation.yml",
+              "docs/architecture/m23-7-r3-8-11-deletion-cli-reconciliation.md",
+              "pilot/m23/m23-7-r3-8-11-deletion-cli-reconciliation.json",
+          }
+          changed = set(
+              subprocess.check_output(
+                  [
+                      "git",
+                      "diff",
+                      "--name-only",
+                      "6498a53d952ccd271a2656179c5d86e3ecd90061",
+                      "HEAD",
+                  ],
+                  text=True,
+              ).splitlines()
+          )
+          assert changed == expected, (changed, expected)
+          PY
+          git diff --exit-code 6498a53d952ccd271a2656179c5d86e3ecd90061 HEAD -- \
+            scripts/m23_7_r3_8_remote_delete.py \
+            tests/test_m23_7_r3_8_remote_delete.py \
+            .github/workflows/m23-7-r3-8-remote-delete.yml \
+            deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29506217284.json \
+            scripts/m23_7_r3_8_remote_operator.py \
+            scripts/m23_7_r3_8_remote_entrypoint.py \
+            scripts/m23_7_r3_8_remote_recovery_probe.py \
+            workers/m23-7-r3-8-latency-repair/worker.mjs
