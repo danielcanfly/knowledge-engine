@@ -42,7 +42,7 @@ _PERMIT_KEYS = {
     "authority",
     "permit_sha256",
 }
-_VALIDATION_RUN_KEYS = {"request_validation", "ci", "m18"}
+_RUN_KEYS = {"request_validation", "ci", "m18"}
 _EXPECTED_PERMIT_AUTHORITY = {
     "read_only_recovery_execute_authorized": True,
     "worker_delete_authorized": False,
@@ -67,10 +67,10 @@ class OperatorPermitError(RuntimeError):
         super().__init__(code)
 
 
-def _run_git(repo_root: Path, args: list[str]) -> str:
+def _git(repo: Path, args: list[str]) -> str:
     result = subprocess.run(
         ["git", *args],
-        cwd=repo_root,
+        cwd=repo,
         text=True,
         capture_output=True,
         check=False,
@@ -80,10 +80,10 @@ def _run_git(repo_root: Path, args: list[str]) -> str:
     return result.stdout.strip()
 
 
-def _safe_path(repo_root: Path, relative: str, pattern: re.Pattern[str]) -> Path:
+def _safe(repo: Path, relative: str, pattern: re.Pattern[str]) -> Path:
     if not pattern.fullmatch(relative):
         raise OperatorPermitError("bounded_path_invalid")
-    root = repo_root.resolve()
+    root = repo.resolve()
     path = (root / relative).resolve()
     try:
         path.relative_to(root)
@@ -94,9 +94,9 @@ def _safe_path(repo_root: Path, relative: str, pattern: re.Pattern[str]) -> Path
     return path
 
 
-def _diff_rows(repo_root: Path, base: str, head: str) -> list[tuple[str, str]]:
-    raw = _run_git(
-        repo_root,
+def _operator_rows(repo: Path, base: str, head: str) -> list[tuple[str, str]]:
+    raw = _git(
+        repo,
         [
             "diff",
             "--name-status",
@@ -119,17 +119,26 @@ def _diff_rows(repo_root: Path, base: str, head: str) -> list[tuple[str, str]]:
     return rows
 
 
-def _global_changed_paths(repo_root: Path, base: str, head: str) -> list[str]:
-    raw = _run_git(repo_root, ["diff", "--name-only", base, head])
-    return [line for line in raw.splitlines() if line.strip()]
+def _changed_paths(repo: Path, base: str, head: str) -> list[str]:
+    raw = _git(repo, ["diff", "--name-only", base, head])
+    return sorted(line for line in raw.splitlines() if line.strip())
 
 
-def _single_parent(repo_root: Path, head: str) -> str:
-    raw = _run_git(repo_root, ["rev-list", "--parents", "-n", "1", head])
-    parts = raw.split()
+def _single_parent(repo: Path, head: str) -> str:
+    parts = _git(repo, ["rev-list", "--parents", "-n", "1", head]).split()
     if len(parts) != 2 or parts[0] != head or not _HEX_40.fullmatch(parts[1]):
         raise OperatorPermitError("permit_head_not_single_parent")
     return parts[1]
+
+
+def _validate_runs(value: Any) -> None:
+    if not isinstance(value, dict) or set(value) != _RUN_KEYS:
+        raise OperatorPermitError("permit_validation_runs")
+    run_ids = list(value.values())
+    if any(not isinstance(run_id, int) or run_id <= 0 for run_id in run_ids):
+        raise OperatorPermitError("permit_validation_run_ids")
+    if len(set(run_ids)) != len(run_ids):
+        raise OperatorPermitError("permit_validation_run_ids")
 
 
 def validate_permit(
@@ -166,7 +175,9 @@ def validate_permit(
         raise OperatorPermitError("permit_request_digest")
     if value.get("expected_base_sha") != expected_base_sha:
         raise OperatorPermitError("permit_base_sha")
-    if value.get("authorization_sha256") != authorization.get("authorization_sha256"):
+    if value.get("authorization_sha256") != authorization.get(
+        "authorization_sha256"
+    ):
         raise OperatorPermitError("permit_authorization_digest")
     request_head = value.get("validated_request_head_sha")
     if not isinstance(request_head, str) or not _HEX_40.fullmatch(request_head):
@@ -174,15 +185,7 @@ def validate_permit(
     permit_nonce = value.get("permit_nonce")
     if not isinstance(permit_nonce, str) or not _HEX_64.fullmatch(permit_nonce):
         raise OperatorPermitError("permit_nonce")
-    runs = value.get("validation_runs")
-    if not isinstance(runs, dict) or set(runs) != _VALIDATION_RUN_KEYS:
-        raise OperatorPermitError("permit_validation_runs")
-    run_ids = list(runs.values())
-    if (
-        any(not isinstance(run_id, int) or run_id <= 0 for run_id in run_ids)
-        or len(set(run_ids)) != len(run_ids)
-    ):
-        raise OperatorPermitError("permit_validation_run_ids")
+    _validate_runs(value.get("validation_runs"))
     if value.get("authority") != _EXPECTED_PERMIT_AUTHORITY:
         raise OperatorPermitError("permit_authority")
     stored = value.get("permit_sha256")
@@ -193,43 +196,40 @@ def validate_permit(
     return value
 
 
+def _validate_identities(repo: Path, base: str, head: str) -> None:
+    if not _HEX_40.fullmatch(base) or not _HEX_40.fullmatch(head) or base == head:
+        raise OperatorPermitError("pr_identity")
+    if _git(repo, ["rev-parse", "HEAD"]) != head:
+        raise OperatorPermitError("pr_exact_head_mismatch")
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", base, head],
+        cwd=repo,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise OperatorPermitError("pr_base_not_ancestor")
+
+
 def validate_pr_stage(
     *,
     repo_root: Path,
     base: str,
     head: str,
 ) -> tuple[str, dict[str, Any]]:
-    if (
-        not _HEX_40.fullmatch(base)
-        or not _HEX_40.fullmatch(head)
-        or base == head
-    ):
-        raise OperatorPermitError("pr_identity")
-    actual = _run_git(repo_root, ["rev-parse", "HEAD"])
-    if actual != head:
-        raise OperatorPermitError("pr_exact_head_mismatch")
-    ancestor = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", base, head],
-        cwd=repo_root,
-        check=False,
-    )
-    if ancestor.returncode != 0:
-        raise OperatorPermitError("pr_base_not_ancestor")
-
-    rows = _diff_rows(repo_root, base, head)
+    _validate_identities(repo_root, base, head)
+    rows = _operator_rows(repo_root, base, head)
     if any(status != "A" for status, _ in rows):
         raise OperatorPermitError("operator_files_not_additions")
-    request_paths = [path for _, path in rows if _REQUEST_PATH.fullmatch(path)]
-    permit_paths = [path for _, path in rows if _PERMIT_PATH.fullmatch(path)]
-    if len(request_paths) != 1 or len(permit_paths) not in {0, 1}:
+    requests = [path for _, path in rows if _REQUEST_PATH.fullmatch(path)]
+    permits = [path for _, path in rows if _PERMIT_PATH.fullmatch(path)]
+    if len(requests) != 1 or len(permits) not in {0, 1}:
         raise OperatorPermitError("operator_file_counts")
-    expected_global = request_paths + permit_paths
-    if _global_changed_paths(repo_root, base, head) != expected_global:
+    if _changed_paths(repo_root, base, head) != sorted(requests + permits):
         raise OperatorPermitError("pr_contains_non_operator_changes")
 
-    request_path = request_paths[0]
+    request_path = requests[0]
     request = validate_request(
-        _safe_path(repo_root, request_path, _REQUEST_PATH),
+        _safe(repo_root, request_path, _REQUEST_PATH),
         expected_base_sha=base,
     )
     auth_relative = request.get("authorization_path")
@@ -262,12 +262,12 @@ def validate_pr_stage(
         "permit_path": "",
         "permit_sha256": "",
     }
-    if not permit_paths:
+    if not permits:
         return "request_validated", result
 
-    permit_path = permit_paths[0]
+    permit_path = permits[0]
     permit = validate_permit(
-        _safe_path(repo_root, permit_path, _PERMIT_PATH),
+        _safe(repo_root, permit_path, _PERMIT_PATH),
         expected_base_sha=base,
         request_path=request_path,
         request=request,
@@ -276,19 +276,14 @@ def validate_pr_stage(
     parent = _single_parent(repo_root, head)
     if parent != permit["validated_request_head_sha"]:
         raise OperatorPermitError("permit_parent_head_mismatch")
-    parent_rows = _diff_rows(repo_root, parent, head)
-    if parent_rows != [("A", permit_path)]:
+    if _operator_rows(repo_root, parent, head) != [("A", permit_path)]:
         raise OperatorPermitError("permit_commit_scope")
-    request_rows = _diff_rows(repo_root, base, parent)
-    if request_rows != [("A", request_path)]:
+    if _operator_rows(repo_root, base, parent) != [("A", request_path)]:
         raise OperatorPermitError("validated_request_head_scope")
-
     result.update(
-        {
-            "stage": "execution_permitted",
-            "permit_path": permit_path,
-            "permit_sha256": permit["permit_sha256"],
-        }
+        stage="execution_permitted",
+        permit_path=permit_path,
+        permit_sha256=permit["permit_sha256"],
     )
     return "execution_permitted", result
 
