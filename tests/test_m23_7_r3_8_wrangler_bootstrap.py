@@ -23,7 +23,7 @@ def _run(
 ) -> subprocess.CompletedProcess[str]:
     command = (
         f'source "{SCRIPT.resolve()}"; '
-        "m23_r3_8_resolve_wrangler; "
+        "m23_r3_8_resolve_wrangler || exit $?; "
         "printf 'SOURCE=%s\\n' \"$M23_R3_8_WRANGLER_SOURCE\"; "
         "printf 'CMD=%s\\n' \"${M23_R3_8_WRANGLER_CMD[*]}\""
     )
