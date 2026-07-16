@@ -67,7 +67,18 @@ def _candidate(*, hard_case: bool = False) -> tuple[dict[str, object], list[list
                 values[index] = 0.35
                 query_vectors.append(_unit(values))
             else:
-                query_vectors.append(_unit({index: 1.0}))
+                distractors = [8 + index * 10 + offset for offset in range(9)]
+                query_vectors.append(
+                    _unit(
+                        {
+                            index: 0.95,
+                            **{
+                                row: 0.1 - offset * 0.005
+                                for offset, row in enumerate(distractors)
+                            },
+                        }
+                    )
+                )
         probes.append(
             {
                 "probe_id": f"r1-probe-{index + 1:02d}",
