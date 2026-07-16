@@ -1,0 +1,135 @@
+name: M23.7 Repair R3.8.9 Recovery Schema
+
+on:
+  pull_request:
+    paths:
+      - "scripts/m23_7_r3_8_remote_recovery_probe.py"
+      - "tests/test_m23_7_r3_8_remote_recovery_probe.py"
+      - "pilot/m23/m23-7-r3-8-9-recovery-schema-contract.json"
+      - "docs/architecture/m23-7-r3-8-9-recovery-schema.md"
+      - ".github/workflows/m23-7-r3-8-9-recovery-probe.yml"
+      - ".github/workflows/m23-7-r3-8-9-recovery-schema-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  schema-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and fail-closed seal reconciliation ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 25ca0caae2bf27adf1e87c71597b40260c2db14c HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff and compile schema scope
+        shell: bash
+        run: |
+          ruff check \
+            scripts/m23_7_r3_8_remote_recovery_probe.py \
+            tests/test_m23_7_r3_8_remote_recovery_probe.py
+          python -m py_compile scripts/m23_7_r3_8_remote_recovery_probe.py
+      - name: Official-schema adversarial tests
+        run: pytest -q tests/test_m23_7_r3_8_remote_recovery_probe.py
+      - name: Preserve remote operator and R3.8 regressions
+        shell: bash
+        run: |
+          pytest -q \
+            tests/test_m23_7_r3_8_remote_operator.py \
+            tests/test_m23_7_r3_8_remote_entrypoint.py \
+            tests/test_m23_7_r3_8_remote_delete.py \
+            tests/test_m23_7_r3_8_latency_repair.py
+          node --test workers/m23-7-r3-8-latency-repair/worker.test.mjs
+      - name: Verify deterministic schema contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          path = Path("pilot/m23/m23-7-r3-8-9-recovery-schema-contract.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("contract_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "8a3134669359fa27817ca307487faae51670f1401c3b8d8e3232060b486097b3"
+          assert value["schema"]["versions_collection_path"] == "result.items"
+          assert value["schema"]["deployments_collection_path"] == "result.deployments"
+          assert value["schema"]["successful_empty_collection_state"] == "absent"
+          assert value["schema"]["duplicate_identity_state"] == "indeterminate"
+          assert value["workflow"]["confirmation"] == "PROBE_R3_8_RUN_29506217284_SCHEMA_V2"
+          assert value["authority"]["production_retrieval"] == "lexical"
+          assert value["authority"]["maximum_worker_internal_shadow_ms"] == 1200
+          assert value["authority"]["blocker_clearance_authorized"] is False
+          PY
+      - name: Verify workflow remains exact-head and read-only
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          path = Path(".github/workflows/m23-7-r3-8-9-recovery-probe.yml")
+          payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+          assert "workflow_dispatch" in payload[True]
+          assert "pull_request" not in payload[True]
+          text = path.read_text(encoding="utf-8")
+          assert "PROBE_R3_8_RUN_29506217284_SCHEMA_V2" in text
+          assert "GITHUB_RUN_ATTEMPT" in text
+          assert "environment: m23-r3-diagnostic" in text
+          assert "client.post" not in text
+          assert "wrangler deploy" not in text
+          assert "wrangler delete" not in text
+          assert "QDRANT" not in text
+          assert "R2_" not in text
+          PY
+      - name: Verify script has two GETs and no mutation surfaces
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path("scripts/m23_7_r3_8_remote_recovery_probe.py").read_text(encoding="utf-8")
+          assert text.count("client.get(") == 2
+          assert 'collection_key="items"' in text
+          assert 'collection_key="deployments"' in text
+          for forbidden in (
+              "client.post(", "client.put(", "client.patch(", "client.delete(",
+              "QDRANT_URL", "QDRANT_API_KEY", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY",
+          ):
+              assert forbidden not in text
+          PY
+      - name: Verify exact change scope and core runtime preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              "scripts/m23_7_r3_8_remote_recovery_probe.py",
+              "tests/test_m23_7_r3_8_remote_recovery_probe.py",
+              "pilot/m23/m23-7-r3-8-9-recovery-schema-contract.json",
+              "docs/architecture/m23-7-r3-8-9-recovery-schema.md",
+              ".github/workflows/m23-7-r3-8-9-recovery-probe.yml",
+              ".github/workflows/m23-7-r3-8-9-recovery-schema-ci.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "25ca0caae2bf27adf1e87c71597b40260c2db14c", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code 25ca0caae2bf27adf1e87c71597b40260c2db14c HEAD -- \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            workers/m23-7-r3-8-latency-repair/worker.mjs \
+            scripts/m23_7_r3_8_remote_operator.py \
+            scripts/m23_7_r3_8_remote_delete.py \
+            pilot/m23/m23-7-r3-8-latency-repair-contract.json
