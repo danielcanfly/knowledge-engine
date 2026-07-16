@@ -1,0 +1,49 @@
+{
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "protected_mutation_authorized": false,
+    "promotion_authorized": false,
+    "qdrant_access_authorized": false,
+    "worker_deployment_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "contract_sha256": "16b1045a0ed2e9b869efa553baa5b5f767c58a2886df67ae3bfe5956d96a1c8d",
+  "entry": {
+    "engine_sha": "e0d1baa6a02e7979a625eb8dca549f74f51ffd82",
+    "issue": 528,
+    "parent_issue": 520
+  },
+  "preservation": {
+    "latency_threshold_changed": false,
+    "quality_thresholds_changed": false,
+    "query_fixture_changed": false,
+    "r3_8_3_version_parser_changed": false,
+    "r3_8_runtime_changed": false,
+    "worker_changed": false
+  },
+  "probe": {
+    "absent_only_on_cloudflare_code": 10007,
+    "authentication_path": "accepted_pinned_wrangler",
+    "command": [
+      "versions",
+      "list",
+      "--name",
+      "<exact-worker-name>",
+      "--config",
+      "<generated-config>",
+      "--json"
+    ],
+    "empty_json_array_is_ambiguous": true,
+    "maximum_output_bytes": 65536,
+    "present_only_on_nonempty_json_array": true,
+    "raw_output_persisted": false
+  },
+  "safety": {
+    "ambiguous_probe_allows_deploy": false,
+    "bash_minimum": "3.2",
+    "command_representation": "bash_indexed_array",
+    "eval_used": false,
+    "existing_worker_overwrite_authorized": false,
+    "http_403_allows_deploy": false
+  }
+}
