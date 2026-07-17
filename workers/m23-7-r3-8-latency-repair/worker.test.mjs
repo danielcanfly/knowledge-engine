@@ -321,7 +321,7 @@ test("executeObservation falls back to read-only Qdrant scroll when query batch 
     );
     assert.equal(calls[2].body.limit, 107);
     assert.deepEqual(calls[2].body.filter, CANDIDATE_FILTER);
-    assert.deepEqual(calls[2].body.with_vector, ["default"]);
+    assert.equal(calls[2].body.with_vector, true);
     assert.equal(result.external_calls.qdrant_query_batch, 1);
     assert.equal(result.external_calls.qdrant_vector_scroll, 1);
     assert.equal(result.external_calls.qdrant_write, 0);
