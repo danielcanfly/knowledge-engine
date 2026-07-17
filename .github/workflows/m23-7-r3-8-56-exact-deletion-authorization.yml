@@ -1,0 +1,90 @@
+name: M23.7 R3.8.56 Exact Deletion Authorization
+
+on:
+  pull_request:
+    paths:
+      - "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29568576968.json"
+      - "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29568662778.json"
+      - "docs/architecture/m23-7-r3-8-56-exact-deletion-authorization.md"
+      - ".github/workflows/m23-7-r3-8-56-exact-deletion-authorization.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authorize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and reconciliation ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 73593cd01c61592df9cdd840bcfa1cdf2a4869d7 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Validate exact committed authorizations through production validator
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.m23_7_r3_8_remote_delete import validate_authorization
+
+          expected = {
+              "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29568576968.json": {
+                  "authorization_sha256": "e742ed635fe4ee8bd3926a0ee88d8245b72dc8adf7ce94a36da44245de3d899b",
+                  "worker_name": "knowledge-engine-r3-8-29568576968",
+                  "observation_run_id": "29568576968",
+                  "recovery_run_id": "29569671523",
+                  "receipt_sha256": "096ca1d0e6a74523b511d23c10c1b0054586579ce1de0c63e4ef888798844430",
+                  "evidence_seal_sha256": "526c62c49a7763122a8c9162bb75113fb48fe2df106770a71cde40183e5f3780",
+                  "independent_reconciliation_sha256": "6d4414d374867a65a3f6546edea8ef5d27afa181c12d29de3f9d8975f04e80b0",
+              },
+              "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29568662778.json": {
+                  "authorization_sha256": "6a4c008b64729bc98ad1f8a36d4229aca59da13047d0c3d312cf7414e6d42485",
+                  "worker_name": "knowledge-engine-r3-8-29568662778",
+                  "observation_run_id": "29568662778",
+                  "recovery_run_id": "29569675689",
+                  "receipt_sha256": "0adf0ae4da3e84e458de7ba4d20188ad41e76f7b92d18a2b576619d82e8576c7",
+                  "evidence_seal_sha256": "d21d83d9e8046f36c333a30ab709008ba606e4a46ad4f3b51396ce28271a2061",
+                  "independent_reconciliation_sha256": "6d4414d374867a65a3f6546edea8ef5d27afa181c12d29de3f9d8975f04e80b0",
+              },
+          }
+          for path, want in expected.items():
+              value = validate_authorization(Path(path))
+              for key, expected_value in want.items():
+                  assert value[key] == expected_value
+              assert len(value["worker_version_ids"]) == 4
+              assert len(value["worker_deployment_ids"]) == 4
+          PY
+      - name: Verify exact authorization scope and runtime preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29568576968.json",
+              "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29568662778.json",
+              "docs/architecture/m23-7-r3-8-56-exact-deletion-authorization.md",
+              ".github/workflows/m23-7-r3-8-56-exact-deletion-authorization.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "73593cd01c61592df9cdd840bcfa1cdf2a4869d7", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code 73593cd01c61592df9cdd840bcfa1cdf2a4869d7 HEAD -- \
+            scripts/m23_7_r3_8_remote_delete.py \
+            tests/test_m23_7_r3_8_remote_delete.py \
+            .github/workflows/m23-7-r3-8-remote-delete.yml \
+            scripts/m23_7_r3_8_remote_operator.py \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py
