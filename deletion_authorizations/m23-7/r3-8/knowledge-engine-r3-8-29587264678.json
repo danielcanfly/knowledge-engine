@@ -1,0 +1,30 @@
+{
+  "schema_version": "knowledge-engine-m23-7-r3-8-remote-deletion-authorization/v2",
+  "worker_name": "knowledge-engine-r3-8-29587264678",
+  "observation_run_id": "29587264678",
+  "recovery_run_id": "29587564980",
+  "receipt_sha256": "eaadc828b631564e0a51dd434572afde8824851f71a87ed5e0e2d8444bf2ad57",
+  "evidence_seal_sha256": "5a3e9b01940acb8b453f4cd3ebfd8622897a1dab9a1f897f1e67103a2480555f",
+  "independent_reconciliation_sha256": "0694d6bcf83051ccd7b0aa7e95c09d73426977a249188e0807d272014e2e52ef",
+  "worker_version_ids": [
+    "261e0c2f-a4d8-436f-a5c8-b10e2ca813c9",
+    "333a29e1-b9af-4f97-b527-2a53e9a97ee0",
+    "654cc3e8-5ca5-4b6a-bb12-320751c74f0a",
+    "a9e01db1-5ca1-4ca8-a032-56f62b46b84e"
+  ],
+  "worker_deployment_ids": [
+    "047afaa3-2eaf-46d3-9a81-002cebdb34f6",
+    "128e4c87-c667-4126-ac48-d8c3cb221164",
+    "afe583d0-d8cd-4c21-9489-90b2a62e6aee",
+    "d0a74ad6-472a-43d4-b0e7-eb82f84eb74f"
+  ],
+  "authority": {
+    "diagnostic_worker_deletion_authorized": true,
+    "production_mutation_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "pointer_mutation_authorized": false,
+    "source_mutation_authorized": false
+  },
+  "authorization_sha256": "3bdfdea12920380e5dc67f968f86314214de5c9114a30b485b026ea897045a52"
+}
