@@ -158,10 +158,11 @@ jobs:
         run: |
           python - <<'PY'
           import subprocess
-          baseline = "036ce2a1207ee3977f325a5a7763568c72dde3b5"
+          baseline = "df1e5491e140e32d2a25d0738a29c14c7f5608bf"
           allowed = {
               ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml",
               ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
+              ".github/workflows/m23-7-r3-8-latency-repair.yml",
               "docs/architecture/m23-7-r3-8-latency-repair.md",
               "workers/m23-7-r3-8-latency-repair/worker.mjs",
               "workers/m23-7-r3-8-latency-repair/worker.test.mjs",

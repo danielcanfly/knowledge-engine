@@ -16,35 +16,6 @@ const DENSE_LIMIT = 50;
 const COLLECTION = "llm_wiki_m23_r3_5_candidate_8eed54902c73";
 const CANDIDATE_ARTIFACT_SHA256 =
   "8eed54902c73314ac2e5d5e187a788e44941dae250d9823d45b71ec57d1e1371";
-const RANKING_PAYLOAD_FIELDS = [
-  "section_id",
-  "payload_schema_version",
-  "source_membership",
-  "candidate_collection",
-  "candidate_artifact_sha256",
-  "candidate_reingestion_issue",
-  "vector_name",
-  "vector_dimension",
-  "canonical_knowledge",
-  "candidate_release_eligible",
-  "production_authority",
-];
-const CANDIDATE_FILTER = {
-  must: [
-    {
-      key: "source_membership",
-      match: { value: "r3-6-candidate-live-acceptance-only" },
-    },
-    { key: "candidate_collection", match: { value: COLLECTION } },
-    {
-      key: "candidate_artifact_sha256",
-      match: { value: CANDIDATE_ARTIFACT_SHA256 },
-    },
-    { key: "canonical_knowledge", match: { value: false } },
-    { key: "candidate_release_eligible", match: { value: false } },
-    { key: "production_authority", match: { value: false } },
-  ],
-};
 
 test("contract digest matches the canonical R3.8 contract", () => {
   assert.equal(
@@ -178,7 +149,7 @@ test("validateBody rejects duplicate query identity", async () => {
   await assert.rejects(validateBody(request), /query-digest-duplicate/);
 });
 
-test("executeObservation performs one AI batch and one identity-filtered Qdrant query batch", async () => {
+test("executeObservation performs one AI batch and one R3.7-compatible Qdrant query batch", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
@@ -237,9 +208,8 @@ test("executeObservation performs one AI batch and one identity-filtered Qdrant 
       searches: Array.from({ length: QUERY_COUNT }, (_, index) => ({
         query: vector(index),
         using: "default",
-        filter: CANDIDATE_FILTER,
         limit: DENSE_LIMIT,
-        with_payload: RANKING_PAYLOAD_FIELDS,
+        with_payload: true,
         with_vector: false,
       })),
     });
