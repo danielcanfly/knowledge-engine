@@ -1,5 +1,27 @@
 # M23.7 R3.8.24 Fail-Closed Latency Evidence Reconciliation
 
+## Run 29613277172
+
+This reconciliation independently accepts the fail-closed evidence seal from
+PR #886 for remote observation run `29613277172`.
+
+The accepted seal digest is
+`d19bab9011be58c39bc9f0d8d86da5637b61e47993e4c2f33434dd8c557b76d3`, and this
+reconciliation digest is
+`a9e4b5e76f3fff61641fd4741413974eb0a6170da6056785b15fb7be4d38a67f`.
+
+The payload-selector repair restored quality parity: accepted metrics and
+target ranks matched the R3.7/R3.8 contract exactly, and strict-zero mutation
+gates remained accepted. The run still did not pass because
+`worker_internal_shadow` failed at `1641 ms` against the unchanged maximum of
+`1200 ms`.
+
+Diagnostic Worker `knowledge-engine-r3-8-29613277172` remains retained and
+requires separately governed cleanup before the next latency repair attempt.
+
+No blocker is eligible for clearance. Production retrieval remains `lexical`,
+and the next legal gate is retained worker cleanup.
+
 ## Run 29610393567
 
 This reconciliation independently accepts the fail-closed evidence seal from
