@@ -1,5 +1,38 @@
 # M23.7 R3.8.27 Exact Deletion Authorization
 
+## Worker knowledge-engine-r3-8-29607698618
+
+This record authorizes deletion of retained diagnostic worker
+`knowledge-engine-r3-8-29607698618`.
+
+The authorization is based on the worker-present recovery seal merged in PR #871
+and the independent reconciliation merged in PR #872. It binds deletion to the
+exact observed Worker version and deployment identity sets returned by recovery
+probe run `29608526669`.
+
+## Bound Evidence
+
+- Observation run: `29607698618`
+- Recovery run: `29608526669`
+- Recovery receipt SHA-256:
+  `62432f713ec0de751505697ff5002b75431839195e61eba6e16d5c34a1a11f09`
+- Evidence seal SHA-256:
+  `fea02c64c22ff1682c91c207e432c922b562625c17c36015b5bb957b3b92cbe1`
+- Independent reconciliation SHA-256:
+  `acf9f1f230226c50e2d741b03670bc9c1a63448e45fa7a254888f87988d9b0f5`
+- Authorization SHA-256:
+  `1d3c6196f52f67021e7efd3a1e8a54620cea1e6252608848586a6dd31c3480df`
+
+## Scope
+
+This PR creates the deletion authorization record only. It does not execute
+deletion and does not change production retrieval, Qdrant, R2, Source, pointer,
+or blocker state.
+
+Deletion execution remains gated by the separate remote-delete workflow with
+exact main head, this committed authorization path, and confirmation
+`DELETE_RECONCILED_R3_8_WORKER`.
+
 ## Worker knowledge-engine-r3-8-29604923286
 
 This record authorizes deletion of retained diagnostic worker
