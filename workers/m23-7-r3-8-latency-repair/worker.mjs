@@ -497,9 +497,8 @@ async function executeObservation(env, validated, now = () => performance.now())
             body: JSON.stringify({
               query: vector,
               using: VECTOR_NAME,
-              filter: CANDIDATE_FILTER,
               limit: DENSE_LIMIT,
-              with_payload: RANKING_PAYLOAD_FIELDS,
+              with_payload: true,
               with_vector: false,
             }),
           },

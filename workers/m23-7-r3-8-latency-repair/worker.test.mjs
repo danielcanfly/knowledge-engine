@@ -331,9 +331,8 @@ test("executeObservation falls back to bounded Qdrant single queries when query 
     assert.deepEqual(calls[2].body, {
       query: vector(0),
       using: "default",
-      filter: CANDIDATE_FILTER,
       limit: DENSE_LIMIT,
-      with_payload: RANKING_PAYLOAD_FIELDS,
+      with_payload: true,
       with_vector: false,
     });
     assert.equal(result.external_calls.qdrant_query_batch, 1);

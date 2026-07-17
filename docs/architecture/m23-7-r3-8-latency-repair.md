@@ -42,7 +42,7 @@ The Worker performs:
 1. one read-only candidate collection snapshot;
 2. one Workers AI binding call containing 24 texts;
 3. one Qdrant read-only query batch containing the 24 query vectors, `using: "default"`, and an explicit `section_id`-only payload-field allowlist;
-4. only if that batch endpoint is unavailable, 24 read-only single-query calls to `/points/query?consistency=all` with the same named vector, filter, limit, payload-field allowlist, and bounded fallback concurrency;
+4. only if that batch endpoint is unavailable, 24 read-only single-query calls to `/points/query?consistency=all` with the same named vector, limit, full payload readback, and bounded fallback concurrency, matching the accepted R3.7 live path;
 5. one read-only candidate collection snapshot.
 
 The pre/post collection snapshots preserve the exact candidate collection identity. Each ranked result returns only the section ID needed by the accepted target-unaware evaluator, and the operator rejects any ranked section outside the reconciled candidate artifact. The Worker returns only variant IDs, query hashes, ranked section IDs, bounded timings, collection identities and strict-zero authority fields.
