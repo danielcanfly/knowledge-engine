@@ -1,5 +1,32 @@
 # M23.7 R3.8.26 Worker-Present Seal Reconciliation
 
+## Run 29608526669
+
+This reconciliation independently accepts the worker-present recovery seal from
+PR #871 for recovery probe run `29608526669`, covering retained diagnostic
+worker `knowledge-engine-r3-8-29607698618`.
+
+The accepted seal merged at `fae5269c5d3672ff502748fa3ae7e9f20230d206`.
+Its exact head `3775185eb8a5387f74c3008206e46c9e1ea7c3ed` passed CI, M17,
+M18, and the dedicated worker-present recovery seal workflow. The accepted
+seal digest is
+`fea02c64c22ff1682c91c207e432c922b562625c17c36015b5bb957b3b92cbe1`.
+
+The reconciled fact remains worker-present, not worker-clean. Cloudflare
+returned four version identities and four deployment identities for the retained
+diagnostic worker. The recovery artifact ZIP SHA-256 is
+`859d6d49a5167a8445ac995e4f4ba04dd5b0693c274ebaebd6fdb9dd02d3ab12`, and the
+receipt self-digest is
+`62432f713ec0de751505697ff5002b75431839195e61eba6e16d5c34a1a11f09`.
+
+This reconciliation performs no worker deletion, deployment, secret mutation,
+route invocation, Qdrant access, R2 access, protected mutation, blocker
+clearance, fresh observation, promotion, parent closure, or M23.7 closure.
+
+Production retrieval remains `lexical`. Retrieval quality and latency blockers
+remain retained. The next legal gate is a separate exact deletion authorization
+for `knowledge-engine-r3-8-29607698618`.
+
 ## Run 29605835592
 
 This reconciliation independently accepts the worker-present recovery seal from
