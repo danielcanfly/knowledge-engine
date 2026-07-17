@@ -54,6 +54,23 @@ def test_compiler_replaces_raw_section_id_with_semantic_query() -> None:
         assert len(probe["query_digest"]) == 64
 
 
+def test_compiler_uses_full_path_chunk_discriminators() -> None:
+    samples = canonical_fixture_samples()
+    samples[0]["payload"] = {
+        **samples[0]["payload"],
+        "concept_id": "concept-001",
+        "article_id": "article-001",
+        "document_id": "document-001",
+        "source_path": "pilot/harness-theory-part-01-en/chunk-012.md",
+        "section_id": "pilot/harness-theory-part-01-en/chunk-012",
+    }
+
+    probe = compile_probe_plan(canonical_manifest(), samples)[0]
+
+    assert probe["query_text"] != probe["target_section_id"]
+    assert "harness theory part01 chunk012" in probe["query_text"]
+
+
 def test_compiler_is_deterministic_under_input_reordering() -> None:
     samples = canonical_fixture_samples()
     forward = compile_probe_plan(canonical_manifest(), samples)
@@ -170,7 +187,7 @@ def test_report_digest_is_stable() -> None:
         "ebff335d572461f4438ed06c4cc35288b0d0def8bbfc2b51e80bb262db12c576"
     )
     assert first["report_sha256"] == (
-        "7ee8ddf6bf955cf0c1a10dd5442aa60d0b4b791bc2f3f4deba386213adf815e1"
+        "22a9e361243758adc25c7572d1314706c7fa252a7190a3ceee91f1025d47ed19"
     )
 
 
