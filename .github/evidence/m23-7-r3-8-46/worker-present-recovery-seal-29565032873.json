@@ -1,0 +1,82 @@
+{
+  "artifact": {
+    "artifact_id": 8400766486,
+    "name": "m23-7-r3-8-9-recovery-29565032873",
+    "receipt_file_sha256": "34f34650414ed84204c3cf4bfa9cf65f60c9e8b9bc4ce6f23e7a58cfdbbe77d8",
+    "receipt_self_digest": "8576942d225bd82c3efd150c6aac0f93355386ab3c151ff98beff24e9b7cb779",
+    "zip_sha256": "2fd87bcabb0ef0046943dca732e190dafc828225e2acd79d426ebfb0b120e6ad"
+  },
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "evidence_seal_only": true,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deletion_authorized": false,
+    "worker_deploy_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "milestone": "M23.7-R3.8.46",
+  "parent_latency_issue": 520,
+  "parent_r3_issue": 474,
+  "receipt": {
+    "affected_engine_sha": "8cc41a192104d2361d7cf3b388f5fedb6bd1cf56",
+    "affected_run_id": "29564569280",
+    "blockers_cleared": false,
+    "deployments": {
+      "error_codes": [],
+      "http_status": 200,
+      "identities": [
+        "392e8661-a128-4d87-a163-858210573cc8",
+        "a965216a-e13d-4d5c-aed1-7c006d04277f",
+        "aec7ee14-f0ef-4027-b86b-ee487c379724",
+        "fec1bcff-9db6-455d-8b87-daa2a989f5e7"
+      ],
+      "identity_count": 4,
+      "state": "present"
+    },
+    "observation_replayed": false,
+    "probe_engine_sha": "7170e104e4fc5b59b19a19e0f3f770ed986a25f4",
+    "production_retrieval": "lexical",
+    "protected_mutations_dispatched": false,
+    "qdrant_mutation_dispatched": false,
+    "qdrant_read_dispatched": false,
+    "r2_mutation_dispatched": false,
+    "r2_read_dispatched": false,
+    "recovery_probe_sha256": "8576942d225bd82c3efd150c6aac0f93355386ab3c151ff98beff24e9b7cb779",
+    "schema_version": "knowledge-engine-m23-7-r3-8-9-recovery-probe/v2",
+    "status": "completed_read_only_recovery_probe",
+    "versions": {
+      "error_codes": [],
+      "http_status": 200,
+      "identities": [
+        "277442de-1558-4864-9ae2-facce7f093a4",
+        "52e60fee-485d-4b4a-b61e-97b19017bde7",
+        "b5fb22de-2f09-4b2a-a047-329f47410ff5",
+        "c3fbccc9-54e9-4af6-9ab8-f2b543c80567"
+      ],
+      "identity_count": 4,
+      "state": "present"
+    },
+    "worker_delete_dispatched": false,
+    "worker_deploy_dispatched": false,
+    "worker_name": "knowledge-engine-r3-8-29564569280",
+    "worker_route_invoked": false,
+    "worker_secret_mutation_dispatched": false,
+    "worker_state": "worker_present"
+  },
+  "recovery_authorization_issue": 735,
+  "recovery_authorization_merge_sha": "7170e104e4fc5b59b19a19e0f3f770ed986a25f4",
+  "recovery_authorization_pr": 736,
+  "recovery_run_id": "29565032873",
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-46-worker-present-recovery-seal/v1",
+  "seal_issue": 737,
+  "seal_sha256": "3a6e8e2d1bf8127aad0ef4b090528cb0dbe7997c488c6d681b68f503edcceb4f"
+}
