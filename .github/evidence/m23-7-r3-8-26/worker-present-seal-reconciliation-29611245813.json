@@ -1,0 +1,81 @@
+{
+  "artifact": {
+    "artifact_id": 8418795524,
+    "name": "m23-7-r3-8-9-recovery-29611245813",
+    "receipt_file_sha256": "c7c4ac0e2352d62a9e4c5ff577d3501db8b7f4c316c85e404630aed010e51aa7",
+    "receipt_self_digest": "679f8e2fbdaf0a139cdb5e360d4104523ea9257e2a9d3011573b49fbe02ca429",
+    "zip_sha256": "0622e7296ac3f7b59e3cd46074c7abd31e4096cddfc679b29242da0cea0c1dad"
+  },
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "evidence_reconciliation_only": true,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deletion_authorized": false,
+    "worker_deletion_replay_authorized": false,
+    "worker_deploy_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "issue": null,
+  "milestone": "M23.7-R3.8.26",
+  "parent_latency_issue": 520,
+  "parent_r3_issue": 474,
+  "recovery_authorization_issue": null,
+  "recovery_authorization_merge_sha": "7e596421f5c156a066b60d8983c7f675ed331420",
+  "recovery_authorization_pr": 879,
+  "recovery_run_id": "29611245813",
+  "result": {
+    "blocker_clearance_eligible": false,
+    "deletion_authorization_next_gate": true,
+    "next_gate": "separate_exact_deletion_authorization",
+    "production_retrieval": "lexical",
+    "worker_lifecycle_clean": false,
+    "worker_present_evidence_reconciled": true,
+    "worker_state": "worker_present"
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-26-worker-present-seal-reconciliation/v1",
+  "seal_accepted_head": "4235b0ded72f6c68ba80ca17fbbeb0b3579c2993",
+  "seal_exact_head_runs": {
+    "architecture_canon": 29611473105,
+    "ci": 29611473108,
+    "graph_v2": 29611473129,
+    "seal": 29611473095
+  },
+  "seal_issue": null,
+  "seal_merge_sha": "734c161dfbce906835a695fe717bb039792f0aa1",
+  "seal_pr": 880,
+  "seal_sha256": "3d8fc558375e7b27a6930cfa2490e045885b66f1b2e2ce80c0f45acbe68942a1",
+  "strict_zero_verified": true,
+  "worker": {
+    "deployments": {
+      "identities": [
+        "51db0f94-53e8-455d-93a5-b1f6841045bb",
+        "84cd49a9-a1eb-483b-9d82-5b0ae735801a",
+        "c9480253-5c2d-4743-b474-7dd19c00ddba",
+        "dfe02f99-af58-4af8-8532-9d1d471be7b5"
+      ],
+      "identity_count": 4,
+      "state": "present"
+    },
+    "name": "knowledge-engine-r3-8-29610393567",
+    "versions": {
+      "identities": [
+        "2b977efa-a837-4fd9-b52d-acb4792afab9",
+        "82247513-1864-46bc-b475-77e287d1c750",
+        "c3c4576d-efae-40fa-97e7-12f19f41422e",
+        "c60127ef-f347-4dac-a5a4-b862ae54d388"
+      ],
+      "identity_count": 4,
+      "state": "present"
+    }
+  },
+  "reconciliation_sha256": "b7a844c9ba2b401305b0ff46a970df28f3b8e8cac564be6168f2f5aee94c8b92"
+}
