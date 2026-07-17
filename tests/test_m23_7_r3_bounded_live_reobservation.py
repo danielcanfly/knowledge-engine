@@ -50,7 +50,7 @@ def test_contract_and_fixture_are_deterministic() -> None:
     assert canonical_json(report_a) == canonical_json(report_b)
     assert (
         report_a["report_sha256"]
-        == "676e4d1fa34ee85149294c20c7e3da0b3236215887c285d199a2a443eaed2a49"
+        == "1bc3641b16bc5e8552739d5046e9dd4335d91afe6a3f24bf846464f7e8d3af84"
     )
 
 

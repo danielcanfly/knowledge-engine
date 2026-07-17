@@ -231,10 +231,10 @@ def validate_manifest(payload: Mapping[str, Any]) -> dict[str, Any]:
 def _identifier_tokens(value: Any) -> list[str]:
     if not isinstance(value, str):
         return []
-    leaf = value.rsplit("/", 1)[-1]
-    leaf = re.sub(r"\.[A-Za-z0-9]{1,8}$", "", leaf)
-    leaf = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", leaf)
-    raw_tokens = re.findall(r"[A-Za-z][A-Za-z0-9]*", leaf)
+    cleaned = re.sub(r"\.[A-Za-z0-9]{1,8}$", "", value)
+    cleaned = re.sub(r"([A-Za-z]+)-([0-9]+)", r"\1\2", cleaned)
+    cleaned = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", cleaned)
+    raw_tokens = re.findall(r"[A-Za-z][A-Za-z0-9]*", cleaned)
     output: list[str] = []
     for raw in raw_tokens:
         token = raw.lower()
@@ -246,7 +246,7 @@ def _identifier_tokens(value: Any) -> list[str]:
         if numeric_suffix:
             prefix = numeric_suffix.group(1)
             if prefix not in GENERIC_TOKENS and len(prefix) >= 3:
-                output.append(prefix)
+                output.append(token)
             continue
         if len(token) >= 3:
             output.append(token)
