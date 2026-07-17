@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/evidence/m23-7-r3-8-26/worker-present-seal-reconciliation-29605835592.json"
+      - ".github/evidence/m23-7-r3-8-26/worker-present-seal-reconciliation-29608526669.json"
       - "docs/architecture/m23-7-r3-8-26-worker-present-seal-reconciliation.md"
       - ".github/workflows/m23-7-r3-8-26-worker-present-seal-reconciliation.yml"
   workflow_dispatch:
@@ -24,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          git merge-base --is-ancestor f5be4f2026af57132c73c7beaed208f77ea5bcfe HEAD
+          git merge-base --is-ancestor fae5269c5d3672ff502748fa3ae7e9f20230d206 HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -36,32 +37,32 @@ jobs:
           import json
           from pathlib import Path
 
-          path = Path(".github/evidence/m23-7-r3-8-26/worker-present-seal-reconciliation-29605835592.json")
+          path = Path(".github/evidence/m23-7-r3-8-26/worker-present-seal-reconciliation-29608526669.json")
           value = json.loads(path.read_text(encoding="utf-8"))
           digest = value.pop("reconciliation_sha256")
           encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
           assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "7e0a805a69cc299e77e8c3eaf9f0dfd1e42c5d16a37501e4fe61edf20b29dad2"
+          assert digest == "acf9f1f230226c50e2d741b03670bc9c1a63448e45fa7a254888f87988d9b0f5"
           assert value["issue"] is None
           assert value["seal_issue"] is None
-          assert value["seal_pr"] == 862
-          assert value["seal_accepted_head"] == "45b58d187fec1c9a6112a364dbd7374752864725"
-          assert value["seal_merge_sha"] == "f5be4f2026af57132c73c7beaed208f77ea5bcfe"
-          assert value["seal_sha256"] == "f14513676f6fdf10df67b81fc2086f9c96b94d838cd0e81e960ec81403894fa0"
+          assert value["seal_pr"] == 871
+          assert value["seal_accepted_head"] == "3775185eb8a5387f74c3008206e46c9e1ea7c3ed"
+          assert value["seal_merge_sha"] == "fae5269c5d3672ff502748fa3ae7e9f20230d206"
+          assert value["seal_sha256"] == "fea02c64c22ff1682c91c207e432c922b562625c17c36015b5bb957b3b92cbe1"
           assert value["seal_exact_head_runs"] == {
-              "architecture_canon": 29606074120,
-              "ci": 29606074066,
-              "graph_v2": 29606074094,
-              "seal": 29606074092,
+              "architecture_canon": 29608764958,
+              "ci": 29608764955,
+              "graph_v2": 29608765138,
+              "seal": 29608764974,
           }
           assert value["recovery_authorization_issue"] is None
-          assert value["recovery_authorization_pr"] == 861
-          assert value["recovery_authorization_merge_sha"] == "e4c2a22b6f67f990a969067bef5a12ea80f1f681"
-          assert value["recovery_run_id"] == "29605835592"
-          assert value["artifact"]["artifact_id"] == 8416804783
-          assert value["artifact"]["zip_sha256"] == "5ef21245a4761bbc3494c290d62abe7cd03359afb03d4a0260e7e34ef400f4c9"
-          assert value["artifact"]["receipt_file_sha256"] == "49c8367cdfad75c8f1f637fb04444a75c7083edb01fb136ea7af12cd47118938"
-          assert value["artifact"]["receipt_self_digest"] == "6a778e51cf82b2d50789d784adce66686bf2fe8e307a36a9377d5aeb0b35230f"
+          assert value["recovery_authorization_pr"] == 870
+          assert value["recovery_authorization_merge_sha"] == "7f780deb368f07b797a72e401ef09068d56dd04d"
+          assert value["recovery_run_id"] == "29608526669"
+          assert value["artifact"]["artifact_id"] == 8417812324
+          assert value["artifact"]["zip_sha256"] == "859d6d49a5167a8445ac995e4f4ba04dd5b0693c274ebaebd6fdb9dd02d3ab12"
+          assert value["artifact"]["receipt_file_sha256"] == "6be6426d899f82a4f8cbda85e38a2d2daba7268e63b7ea61aa6a929581cfeb4a"
+          assert value["artifact"]["receipt_self_digest"] == "62432f713ec0de751505697ff5002b75431839195e61eba6e16d5c34a1a11f09"
           result = value["result"]
           assert result["worker_present_evidence_reconciled"] is True
           assert result["worker_state"] == "worker_present"
@@ -71,18 +72,18 @@ jobs:
           assert result["blocker_clearance_eligible"] is False
           assert result["production_retrieval"] == "lexical"
           worker = value["worker"]
-          assert worker["name"] == "knowledge-engine-r3-8-29604923286"
+          assert worker["name"] == "knowledge-engine-r3-8-29607698618"
           assert worker["versions"]["identities"] == [
-              "594fcf19-0645-41f3-93e7-807eaec8beee",
-              "6f4e850b-1fb4-4464-9126-2a99b5b8a17e",
-              "b7d93221-a3ed-4f32-ac52-b05c24fbca1f",
-              "fc533e8e-b6eb-40a2-b33d-53d6973f1c1d",
+              "423166e8-19b8-4dfb-aa65-5b5d6a9d5495",
+              "8022cda9-d2bf-4018-9031-d5b67db1478e",
+              "93930eb3-1a8b-4c4d-8688-67105d94e2ed",
+              "f39035e3-9629-4377-949b-d0fd4b93d0db",
           ]
           assert worker["deployments"]["identities"] == [
-              "18c1fbdd-4d19-4460-8c8f-911569e32599",
-              "1d0dda0a-aa3c-40c4-93f3-d121a04dfbc1",
-              "53c71fff-6ff8-44e5-8a66-a7d3881a5c39",
-              "a0152c85-5705-487e-8299-1c9b4d961f79",
+              "5764fe7a-1513-4bed-9169-8e0d5c8ed3d4",
+              "89c3ccc1-f647-4899-86fb-21d6a7150e8c",
+              "a99588fb-9af7-4fde-a4ca-1e51a04bb245",
+              "e308a1da-0b2e-413f-abfd-516c8bacbad3",
           ]
           assert worker["versions"]["identity_count"] == 4
           assert worker["deployments"]["identity_count"] == 4
@@ -108,17 +109,17 @@ jobs:
           import subprocess
 
           allowed = {
-              ".github/evidence/m23-7-r3-8-26/worker-present-seal-reconciliation-29605835592.json",
+              ".github/evidence/m23-7-r3-8-26/worker-present-seal-reconciliation-29608526669.json",
               "docs/architecture/m23-7-r3-8-26-worker-present-seal-reconciliation.md",
               ".github/workflows/m23-7-r3-8-26-worker-present-seal-reconciliation.yml",
           }
           changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "f5be4f2026af57132c73c7beaed208f77ea5bcfe", "HEAD"],
+              ["git", "diff", "--name-only", "fae5269c5d3672ff502748fa3ae7e9f20230d206", "HEAD"],
               text=True,
           ).splitlines())
           assert changed == allowed, (changed, allowed)
           PY
-          git diff --exit-code f5be4f2026af57132c73c7beaed208f77ea5bcfe HEAD -- \
+          git diff --exit-code fae5269c5d3672ff502748fa3ae7e9f20230d206 HEAD -- \
             scripts/m23_7_r3_8_remote_recovery_probe.py \
             .github/workflows/m23-7-r3-8-9-recovery-probe.yml \
             scripts/m23_7_r3_8_remote_operator.py \
