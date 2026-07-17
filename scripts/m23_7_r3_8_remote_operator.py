@@ -253,6 +253,13 @@ def remote_failure_code(exc: Exception) -> str:
     return "bounded_unexpected_failure"
 
 
+def worker_ready_response(status_code: int, payload: object) -> bool:
+    return status_code == 400 and payload == {
+        "status": "error",
+        "code": "request-schema-drift",
+    }
+
+
 def execute(args: argparse.Namespace) -> int:
     from knowledge_engine import m23_7_r3_8_latency_repair as subject
 
@@ -349,11 +356,16 @@ def execute(args: argparse.Namespace) -> int:
             ready = False
             for _ in range(30):
                 try:
-                    response = httpx.get(endpoint, timeout=5.0)
-                    if response.status_code == 405 and response.json() == {
-                        "status": "error",
-                        "code": "method-not-allowed",
-                    }:
+                    response = httpx.post(
+                        endpoint,
+                        headers={
+                            "Authorization": f"Bearer {operator_token}",
+                            "Cache-Control": "no-store",
+                        },
+                        json={},
+                        timeout=5.0,
+                    )
+                    if worker_ready_response(response.status_code, response.json()):
                         ready = True
                         break
                 except (httpx.HTTPError, ValueError):
