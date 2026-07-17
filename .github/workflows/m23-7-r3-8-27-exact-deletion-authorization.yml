@@ -5,6 +5,7 @@ on:
     paths:
       - "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29604923286.json"
       - "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29607698618.json"
+      - "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29610393567.json"
       - "docs/architecture/m23-7-r3-8-27-exact-deletion-authorization.md"
       - ".github/workflows/m23-7-r3-8-27-exact-deletion-authorization.yml"
   workflow_dispatch:
@@ -25,7 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          git merge-base --is-ancestor 593168236eae43f488e64b31b2d2600803b5db30 HEAD
+          git merge-base --is-ancestor 78c81cd06adf12cf3b3bdad0fdbc81908b616602 HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -38,26 +39,26 @@ jobs:
           from pathlib import Path
           from scripts.m23_7_r3_8_remote_delete import validate_authorization
 
-          path = Path("deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29607698618.json")
+          path = Path("deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29610393567.json")
           value = validate_authorization(path)
-          assert value["authorization_sha256"] == "1d3c6196f52f67021e7efd3a1e8a54620cea1e6252608848586a6dd31c3480df"
-          assert value["worker_name"] == "knowledge-engine-r3-8-29607698618"
-          assert value["observation_run_id"] == "29607698618"
-          assert value["recovery_run_id"] == "29608526669"
-          assert value["receipt_sha256"] == "62432f713ec0de751505697ff5002b75431839195e61eba6e16d5c34a1a11f09"
-          assert value["evidence_seal_sha256"] == "fea02c64c22ff1682c91c207e432c922b562625c17c36015b5bb957b3b92cbe1"
-          assert value["independent_reconciliation_sha256"] == "acf9f1f230226c50e2d741b03670bc9c1a63448e45fa7a254888f87988d9b0f5"
+          assert value["authorization_sha256"] == "9c397501ef57dc7e925c5a8a125fe6881c3ef47657df5d5846d47b6f004e5f16"
+          assert value["worker_name"] == "knowledge-engine-r3-8-29610393567"
+          assert value["observation_run_id"] == "29610393567"
+          assert value["recovery_run_id"] == "29611245813"
+          assert value["receipt_sha256"] == "679f8e2fbdaf0a139cdb5e360d4104523ea9257e2a9d3011573b49fbe02ca429"
+          assert value["evidence_seal_sha256"] == "3d8fc558375e7b27a6930cfa2490e045885b66f1b2e2ce80c0f45acbe68942a1"
+          assert value["independent_reconciliation_sha256"] == "b7a844c9ba2b401305b0ff46a970df28f3b8e8cac564be6168f2f5aee94c8b92"
           assert value["worker_version_ids"] == [
-              "423166e8-19b8-4dfb-aa65-5b5d6a9d5495",
-              "8022cda9-d2bf-4018-9031-d5b67db1478e",
-              "93930eb3-1a8b-4c4d-8688-67105d94e2ed",
-              "f39035e3-9629-4377-949b-d0fd4b93d0db",
+              "2b977efa-a837-4fd9-b52d-acb4792afab9",
+              "82247513-1864-46bc-b475-77e287d1c750",
+              "c3c4576d-efae-40fa-97e7-12f19f41422e",
+              "c60127ef-f347-4dac-a5a4-b862ae54d388",
           ]
           assert value["worker_deployment_ids"] == [
-              "5764fe7a-1513-4bed-9169-8e0d5c8ed3d4",
-              "89c3ccc1-f647-4899-86fb-21d6a7150e8c",
-              "a99588fb-9af7-4fde-a4ca-1e51a04bb245",
-              "e308a1da-0b2e-413f-abfd-516c8bacbad3",
+              "51db0f94-53e8-455d-93a5-b1f6841045bb",
+              "84cd49a9-a1eb-483b-9d82-5b0ae735801a",
+              "c9480253-5c2d-4743-b474-7dd19c00ddba",
+              "dfe02f99-af58-4af8-8532-9d1d471be7b5",
           ]
           PY
       - name: Verify authority boundary
@@ -67,7 +68,7 @@ jobs:
           import json
           from pathlib import Path
           value = json.loads(Path(
-              "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29607698618.json"
+              "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29610393567.json"
           ).read_text(encoding="utf-8"))
           assert value["authority"] == {
               "diagnostic_worker_deletion_authorized": True,
@@ -84,17 +85,17 @@ jobs:
           python - <<'PY'
           import subprocess
           allowed = {
-              "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29607698618.json",
+              "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29610393567.json",
               "docs/architecture/m23-7-r3-8-27-exact-deletion-authorization.md",
               ".github/workflows/m23-7-r3-8-27-exact-deletion-authorization.yml",
           }
           changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "593168236eae43f488e64b31b2d2600803b5db30", "HEAD"],
+              ["git", "diff", "--name-only", "78c81cd06adf12cf3b3bdad0fdbc81908b616602", "HEAD"],
               text=True,
           ).splitlines())
           assert changed == allowed, (changed, allowed)
           PY
-          git diff --exit-code 593168236eae43f488e64b31b2d2600803b5db30 HEAD -- \
+          git diff --exit-code 78c81cd06adf12cf3b3bdad0fdbc81908b616602 HEAD -- \
             scripts/m23_7_r3_8_remote_delete.py \
             tests/test_m23_7_r3_8_remote_delete.py \
             .github/workflows/m23-7-r3-8-remote-delete.yml \
