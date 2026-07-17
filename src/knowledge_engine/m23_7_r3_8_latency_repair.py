@@ -28,7 +28,7 @@ WORKER_RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1"
 IMPLEMENTATION_ISSUE = 520
 PARENT_ISSUE = 474
 ENTRY_ENGINE_SHA = "7793cd22092aca530ca48a3240a3c83ffd3d2894"
-CONTRACT_SHA256 = "383247bbe062d0cafe25a4578c4eaa9e86aa73231024a1775e8bb739a47f96b4"
+CONTRACT_SHA256 = "f2c2dcbfe24324729d84e5b5fcd184203b178d6339a71b73651f38ee50c618a2"
 
 EXPECTED_COLLECTION = r37.EXPECTED_COLLECTION
 HISTORICAL_PILOT_COLLECTION = r37.HISTORICAL_PILOT_COLLECTION
@@ -144,10 +144,10 @@ def canonical_contract() -> dict[str, Any]:
             "unique_query_identities": QUERY_COUNT,
             "workers_ai_binding_calls": 1,
             "qdrant_query_batch_calls": 1,
-            "qdrant_vector_scroll_max_calls": 1,
-            "qdrant_vector_scroll_only_after_batch_unavailable": True,
-            "qdrant_batch_endpoint": "points/search/batch",
-            "qdrant_scroll_endpoint": "points/scroll",
+            "qdrant_vector_scroll_max_calls": 0,
+            "qdrant_vector_scroll_only_after_batch_unavailable": False,
+            "qdrant_batch_endpoint": "points/query/batch",
+            "qdrant_scroll_endpoint": None,
             "qdrant_dense_limit": DENSE_LIMIT,
             "target_aware_inputs": False,
         },
@@ -164,7 +164,7 @@ def canonical_contract() -> dict[str, Any]:
         "latency": {
             "maximum_worker_internal_shadow_ms": MAX_WORKER_SHADOW_MS,
             "applies_to": (
-                "single_worker_invocation_workers_ai_binding_plus_qdrant_batch_with_scroll_fallback"
+                "single_worker_invocation_workers_ai_binding_plus_qdrant_query_batch"
             ),
             "operator_round_trip_informational": True,
             "threshold_changed": False,

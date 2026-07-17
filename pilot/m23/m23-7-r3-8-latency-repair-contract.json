@@ -27,7 +27,7 @@
     "vector_dimension": 1024,
     "vector_name": "default"
   },
-  "contract_sha256": "383247bbe062d0cafe25a4578c4eaa9e86aa73231024a1775e8bb739a47f96b4",
+  "contract_sha256": "f2c2dcbfe24324729d84e5b5fcd184203b178d6339a71b73651f38ee50c618a2",
   "entry": {
     "engine_sha": "7793cd22092aca530ca48a3240a3c83ffd3d2894",
     "r3_7_contract_sha256": "11faa597fe15e39f2589963b30e00e3b1580d6f7bb186ffe9ef180139d427d8d",
@@ -41,7 +41,7 @@
   },
   "implementation_issue": 520,
   "latency": {
-    "applies_to": "single_worker_invocation_workers_ai_binding_plus_qdrant_batch_with_scroll_fallback",
+    "applies_to": "single_worker_invocation_workers_ai_binding_plus_qdrant_query_batch",
     "maximum_worker_internal_shadow_ms": 1200,
     "operator_round_trip_informational": true,
     "threshold_changed": false,
@@ -83,12 +83,12 @@
   },
   "queries": {
     "probe_count": 8,
-    "qdrant_batch_endpoint": "points/search/batch",
+    "qdrant_batch_endpoint": "points/query/batch",
     "qdrant_dense_limit": 50,
     "qdrant_query_batch_calls": 1,
-    "qdrant_scroll_endpoint": "points/scroll",
-    "qdrant_vector_scroll_max_calls": 1,
-    "qdrant_vector_scroll_only_after_batch_unavailable": true,
+    "qdrant_scroll_endpoint": null,
+    "qdrant_vector_scroll_max_calls": 0,
+    "qdrant_vector_scroll_only_after_batch_unavailable": false,
     "query_count": 24,
     "target_aware_inputs": false,
     "unique_query_identities": 24,

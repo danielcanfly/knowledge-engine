@@ -6,7 +6,7 @@
     "protected_mutations_dispatched": false,
     "retrieval_quality_blocker_cleared": false
   },
-  "contract_sha256": "383247bbe062d0cafe25a4578c4eaa9e86aa73231024a1775e8bb739a47f96b4",
+  "contract_sha256": "f2c2dcbfe24324729d84e5b5fcd184203b178d6339a71b73651f38ee50c618a2",
   "fixture_only": true,
   "gates": {
     "accepted_metric_parity": true,
@@ -35,7 +35,7 @@
   "probe_count": 8,
   "query_count": 24,
   "query_identity_count": 24,
-  "report_sha256": "f78c50fdbf6efba0dcacaf1ea6dffd74e0fd75d572d528e3933c61b3ad3531b1",
+  "report_sha256": "5ddb1ed90e664aaf1a92af41fae1d1c4949359bbc8286f019ba0f4fe98f48c36",
   "schema_version": "knowledge-engine-m23-7-r3-8-latency-repair-fixture-report/v1",
   "status": "pass_fixture_latency_repair",
   "target_ranks": {
