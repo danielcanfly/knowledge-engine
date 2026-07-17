@@ -1,0 +1,100 @@
+name: M23.7 R3.8.79 Deletion/Absence Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-79/deletion-absence-reconciliation-29577336087.json"
+      - "docs/architecture/m23-7-r3-8-79-deletion-absence-reconciliation.md"
+      - ".github/workflows/m23-7-r3-8-79-deletion-absence-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and seal ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 60704b3079d0a25324ed753f2c080231ab5e65f9 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic deletion/absence reconciliation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path(".github/evidence/m23-7-r3-8-79/deletion-absence-reconciliation-29577336087.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("reconciliation_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "e0c0e7c3a85adec28e69765b66c8de96d5fed3cfe581722c24f96f44baea036a"
+          assert value["issue"] == 757
+          assert value["seal_issue"] == 755
+          assert value["seal_pr"] == 778
+          assert value["seal_accepted_head"] == "8f8c74f8e3ded5677d59033a9c77204d4ead04e7"
+          assert value["seal_merge_sha"] == "60704b3079d0a25324ed753f2c080231ab5e65f9"
+          assert value["seal_sha256"] == "4aedeffa50cf692856e4d2ca3d748de2b2d7c8c420fe1ae612ede8a0995b5c32"
+          assert value["seal_exact_head_runs"] == {
+              "architecture_canon": 29577502426,
+              "ci": 29577502404,
+              "graph_v2": 29577502400,
+              "seal": 29577502440,
+          }
+          result = value["result"]
+          assert result["worker_lifecycle_clean"] is True
+          assert result["retained_worker_cleanup_complete"] is True
+          assert result["worker_state"] == "worker_absent"
+          assert result["next_gate"] == "contract_digest_drift_repair_iteration"
+          assert result["blocker_clearance_eligible"] is False
+          assert result["production_retrieval"] == "lexical"
+          workers = value["sealed_evidence"]["workers"]
+          assert len(workers) == 1
+          worker = workers[0]
+          assert worker["worker"]["name"] == "knowledge-engine-r3-8-29576200306"
+          assert worker["deletion"]["worker_delete_dispatched"] is True
+          assert worker["deletion"]["failure_code"] == "delete_absence_not_proven"
+          assert worker["post_delete_probe"]["worker_state"] == "worker_absent"
+          assert value["authority"]["fresh_observation_authorized"] is False
+          assert value["authority"]["m23_7_closure_authorized"] is False
+          assert value["retained_blockers"] == [
+              "blocked_pending_retrieval_quality",
+              "blocked_pending_latency",
+          ]
+          PY
+      - name: Verify exact reconciliation scope and runtime preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              ".github/evidence/m23-7-r3-8-79/deletion-absence-reconciliation-29577336087.json",
+              "docs/architecture/m23-7-r3-8-79-deletion-absence-reconciliation.md",
+              ".github/workflows/m23-7-r3-8-79-deletion-absence-reconciliation.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "60704b3079d0a25324ed753f2c080231ab5e65f9", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code 60704b3079d0a25324ed753f2c080231ab5e65f9 HEAD -- \
+            scripts/m23_7_r3_8_remote_delete.py \
+            scripts/m23_7_r3_8_remote_recovery_probe.py \
+            .github/workflows/m23-7-r3-8-remote-delete.yml \
+            .github/workflows/m23-7-r3-8-9-recovery-probe.yml \
+            scripts/m23_7_r3_8_remote_operator.py \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py
