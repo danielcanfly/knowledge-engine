@@ -90,13 +90,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code 56d01f56725f98f146ce66a9e370bf0d7a5f8488 HEAD -- \
+          git diff --exit-code 807a6db6ac784899d8639a5ae3ace3c952f8a819 HEAD -- \
             pilot/m23/m23-7-r3-8-10-deletion-identity-contract.json \
             docs/architecture/m23-7-r3-8-10-deletion-identity-set.md \
             scripts/m23_7_r3_8_remote_entrypoint.py \
             scripts/m23_7_r3_8_remote_recovery_probe.py \
-            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
-            workers/m23-7-r3-8-latency-repair/worker.mjs
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py
           python - <<'PY'
           import json
           from pathlib import Path

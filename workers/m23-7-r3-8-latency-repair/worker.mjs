@@ -11,7 +11,50 @@ const SEARCH_PARAMS = {
   hnsw_ef: DENSE_LIMIT,
   exact: false,
 };
-const RANKING_PAYLOAD_FIELDS = ["section_id"];
+const RANKING_PAYLOAD_FIELDS = [
+  "section_id",
+  "payload_schema_version",
+  "source_membership",
+  "candidate_collection",
+  "candidate_artifact_sha256",
+  "candidate_reingestion_issue",
+  "vector_name",
+  "vector_dimension",
+  "canonical_knowledge",
+  "candidate_release_eligible",
+  "production_authority",
+];
+const CANDIDATE_FILTER = {
+  must: [
+    {
+      key: "source_membership",
+      match: { value: "r3-6-candidate-live-acceptance-only" },
+    },
+    {
+      key: "candidate_collection",
+      match: { value: COLLECTION },
+    },
+    {
+      key: "candidate_artifact_sha256",
+      match: {
+        value:
+          "8eed54902c73314ac2e5d5e187a788e44941dae250d9823d45b71ec57d1e1371",
+      },
+    },
+    {
+      key: "canonical_knowledge",
+      match: { value: false },
+    },
+    {
+      key: "candidate_release_eligible",
+      match: { value: false },
+    },
+    {
+      key: "production_authority",
+      match: { value: false },
+    },
+  ],
+};
 const CONTRACT_SHA256 =
   "33b6717c1012b369956bddb798216d89aa41d65cc773acfb3bca321879a11af0";
 const REQUEST_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-request/v1";
@@ -308,14 +351,7 @@ function validateRankedPoint(raw) {
     "ranked-point-shape-drift",
     502,
   );
-  const sectionId = raw.payload.section_id;
-  assertCondition(
-    typeof sectionId === "string" &&
-      sectionId.length > 0 &&
-      sectionId.length <= 300,
-    "ranked-section-missing",
-    502,
-  );
+  const sectionId = validateCandidatePayload(raw);
   assertCondition(
     typeof raw.score === "number" &&
       Number.isFinite(raw.score) &&
@@ -445,6 +481,7 @@ async function executeObservation(env, validated, now = () => performance.now())
           query: vector,
           using: VECTOR_NAME,
           params: SEARCH_PARAMS,
+          filter: CANDIDATE_FILTER,
           limit: DENSE_LIMIT,
           with_payload: RANKING_PAYLOAD_FIELDS,
           with_vector: false,
