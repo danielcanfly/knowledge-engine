@@ -1,0 +1,84 @@
+{
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "evidence_seal_only": true,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deletion_replay_authorized": false,
+    "worker_deploy_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "deletion_authorization": {
+    "authorization_issue": 686,
+    "authorization_merge_sha": "821d233bd5b902773c3cbe18fd9ab55235afff1e",
+    "authorization_path": "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29553221650.json",
+    "authorization_pr": 687,
+    "authorization_sha256": "174d38fa83cfa9ea7b1df1e859f0e459ab9eacd4e43f53b1b7fe3b543bd22445"
+  },
+  "deletion_run": {
+    "artifact_id": 8397662759,
+    "artifact_name": "m23-7-r3-8-deletion-29556646408",
+    "artifact_zip_sha256": "3db1b7245965b41e3d16009268a9669c2e36d5291af2558ad3175a673c8bfc80",
+    "conclusion": "failure",
+    "engine_sha": "821d233bd5b902773c3cbe18fd9ab55235afff1e",
+    "exit_code": 23,
+    "failure_code": "delete_absence_not_proven",
+    "failure_file_sha256": "7ab5269e60a2a336c14b389db6978f120e9efc30db7abe01214df50b01384a02",
+    "failure_self_digest": "a0f2d5d0bcc90bf5f6717c69d972c16595b941089f47595260b2dd4760a583c8",
+    "failure_stage": "absence_probe",
+    "run_id": "29556646408",
+    "worker_delete_dispatched": true
+  },
+  "issue": 688,
+  "milestone": "M23.7-R3.8.28",
+  "parent_latency_issue": 520,
+  "parent_r3_issue": 474,
+  "post_delete_probe": {
+    "artifact_id": 8397685241,
+    "artifact_name": "m23-7-r3-8-9-recovery-29556712756",
+    "artifact_zip_sha256": "340fb2bfa4037f9a6e788d9690c8253f8c68269e8798dd5d8d05689e9e9fb88f",
+    "deployments": {
+      "error_codes": [
+        10007
+      ],
+      "http_status": 404,
+      "identity_count": 0,
+      "state": "absent"
+    },
+    "probe_engine_sha": "821d233bd5b902773c3cbe18fd9ab55235afff1e",
+    "receipt_file_sha256": "256ba352ba1ba4051024744507522363496a9c57731f58be7dc3c8ff8ad1bd80",
+    "receipt_self_digest": "1f518380554e7400c59317775f00e3c42f2690a5c00185df8749c721377ff172",
+    "run_id": "29556712756",
+    "versions": {
+      "error_codes": [
+        10007
+      ],
+      "http_status": 404,
+      "identity_count": 0,
+      "state": "absent"
+    },
+    "worker_state": "worker_absent"
+  },
+  "result": {
+    "blocker_clearance_eligible": false,
+    "deletion_dispatch_confirmed": true,
+    "post_delete_absence_observed": true,
+    "production_retrieval": "lexical",
+    "worker_lifecycle_clean_pending_reconciliation": true
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-28-deletion-absence-evidence-seal/v1",
+  "worker": {
+    "name": "knowledge-engine-r3-8-29553221650",
+    "observation_run_id": "29553221650",
+    "recovery_run_id": "29555974732"
+  },
+  "seal_sha256": "e4b485b5ec98438f0e2d0ac24b33f3c744edbfc0bd7362257e270dee6b96b0cb"
+}
