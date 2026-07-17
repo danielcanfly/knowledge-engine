@@ -3,7 +3,7 @@ name: M23.7 R3.8.25 Worker-Present Recovery Seal
 on:
   pull_request:
     paths:
-      - ".github/evidence/m23-7-r3-8-25/worker-present-recovery-seal-29555974732.json"
+      - ".github/evidence/m23-7-r3-8-25/worker-present-recovery-seal-29605835592.json"
       - "docs/architecture/m23-7-r3-8-25-worker-present-recovery-seal.md"
       - ".github/workflows/m23-7-r3-8-25-worker-present-recovery-seal.yml"
   workflow_dispatch:
@@ -24,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          git merge-base --is-ancestor 91fdefe2ee82d3113a11dd59c510befc877d5084 HEAD
+          git merge-base --is-ancestor e4c2a22b6f67f990a969067bef5a12ea80f1f681 HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -36,40 +36,40 @@ jobs:
           import json
           from pathlib import Path
 
-          path = Path(".github/evidence/m23-7-r3-8-25/worker-present-recovery-seal-29555974732.json")
+          path = Path(".github/evidence/m23-7-r3-8-25/worker-present-recovery-seal-29605835592.json")
           value = json.loads(path.read_text(encoding="utf-8"))
           digest = value.pop("seal_sha256")
           encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
           assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "9a5e154c9129ec76077bf87553bfa95246a6f302db025382087e00623174ecae"
-          assert value["seal_issue"] == 682
-          assert value["recovery_authorization_issue"] == 680
-          assert value["recovery_authorization_pr"] == 681
-          assert value["recovery_authorization_merge_sha"] == "91fdefe2ee82d3113a11dd59c510befc877d5084"
-          assert value["recovery_run_id"] == "29555974732"
-          assert value["artifact"]["artifact_id"] == 8397421144
-          assert value["artifact"]["zip_sha256"] == "bbb6768cc0a74ee4c6487629bbd86fc085d5a76d23ae1f302d16ef8baaed3412"
-          assert value["artifact"]["receipt_file_sha256"] == "2b499f45f808080acc34dce03b2ed6dd50ffd3900a8944cedd54a251b6364187"
-          assert value["artifact"]["receipt_self_digest"] == "09d2bc430b4343bcd5ce03e89a718339336dcd40f8fcabc8022f444c36440ff1"
+          assert digest == "f14513676f6fdf10df67b81fc2086f9c96b94d838cd0e81e960ec81403894fa0"
+          assert value["seal_issue"] is None
+          assert value["recovery_authorization_issue"] is None
+          assert value["recovery_authorization_pr"] == 861
+          assert value["recovery_authorization_merge_sha"] == "e4c2a22b6f67f990a969067bef5a12ea80f1f681"
+          assert value["recovery_run_id"] == "29605835592"
+          assert value["artifact"]["artifact_id"] == 8416804783
+          assert value["artifact"]["zip_sha256"] == "5ef21245a4761bbc3494c290d62abe7cd03359afb03d4a0260e7e34ef400f4c9"
+          assert value["artifact"]["receipt_file_sha256"] == "49c8367cdfad75c8f1f637fb04444a75c7083edb01fb136ea7af12cd47118938"
+          assert value["artifact"]["receipt_self_digest"] == "6a778e51cf82b2d50789d784adce66686bf2fe8e307a36a9377d5aeb0b35230f"
           receipt = value["receipt"]
           assert receipt["status"] == "completed_read_only_recovery_probe"
           assert receipt["worker_state"] == "worker_present"
-          assert receipt["worker_name"] == "knowledge-engine-r3-8-29553221650"
-          assert receipt["affected_run_id"] == "29553221650"
-          assert receipt["affected_engine_sha"] == "b7ff3c05e8eb2e2c7fcc56c206dd2da678256674"
-          assert receipt["probe_engine_sha"] == "91fdefe2ee82d3113a11dd59c510befc877d5084"
-          assert receipt["recovery_probe_sha256"] == "09d2bc430b4343bcd5ce03e89a718339336dcd40f8fcabc8022f444c36440ff1"
+          assert receipt["worker_name"] == "knowledge-engine-r3-8-29604923286"
+          assert receipt["affected_run_id"] == "29604923286"
+          assert receipt["affected_engine_sha"] == "3be9999b4ce0d721a29b92e9dbbfa17870ddc6e2"
+          assert receipt["probe_engine_sha"] == "e4c2a22b6f67f990a969067bef5a12ea80f1f681"
+          assert receipt["recovery_probe_sha256"] == "6a778e51cf82b2d50789d784adce66686bf2fe8e307a36a9377d5aeb0b35230f"
           assert receipt["versions"]["identities"] == [
-              "3fa873ae-325b-4365-8080-e34d4f9763d4",
-              "6bebabdc-b4f1-42fa-bf8d-6eebf0d0d8fd",
-              "95e078cc-6410-4c60-a4c4-e154917f6743",
-              "c9ce8c28-f4a3-4528-aabd-1e9b6716aaca",
+              "594fcf19-0645-41f3-93e7-807eaec8beee",
+              "6f4e850b-1fb4-4464-9126-2a99b5b8a17e",
+              "b7d93221-a3ed-4f32-ac52-b05c24fbca1f",
+              "fc533e8e-b6eb-40a2-b33d-53d6973f1c1d",
           ]
           assert receipt["deployments"]["identities"] == [
-              "10637331-edbe-4c80-aca6-1aa9c2066939",
-              "24ea5cd9-7629-47f8-a509-6d73d2c04877",
-              "7d5448e6-437d-482a-931f-1e91f4388249",
-              "da77e82c-1fc5-4d0a-ae26-780f9b23ea95",
+              "18c1fbdd-4d19-4460-8c8f-911569e32599",
+              "1d0dda0a-aa3c-40c4-93f3-d121a04dfbc1",
+              "53c71fff-6ff8-44e5-8a66-a7d3881a5c39",
+              "a0152c85-5705-487e-8299-1c9b4d961f79",
           ]
           assert receipt["versions"]["identity_count"] == 4
           assert receipt["deployments"]["identity_count"] == 4
@@ -100,17 +100,17 @@ jobs:
           python - <<'PY'
           import subprocess
           allowed = {
-              ".github/evidence/m23-7-r3-8-25/worker-present-recovery-seal-29555974732.json",
+              ".github/evidence/m23-7-r3-8-25/worker-present-recovery-seal-29605835592.json",
               "docs/architecture/m23-7-r3-8-25-worker-present-recovery-seal.md",
               ".github/workflows/m23-7-r3-8-25-worker-present-recovery-seal.yml",
           }
           changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "91fdefe2ee82d3113a11dd59c510befc877d5084", "HEAD"],
+              ["git", "diff", "--name-only", "e4c2a22b6f67f990a969067bef5a12ea80f1f681", "HEAD"],
               text=True,
           ).splitlines())
           assert changed == allowed, (changed, allowed)
           PY
-          git diff --exit-code 91fdefe2ee82d3113a11dd59c510befc877d5084 HEAD -- \
+          git diff --exit-code e4c2a22b6f67f990a969067bef5a12ea80f1f681 HEAD -- \
             scripts/m23_7_r3_8_remote_recovery_probe.py \
             .github/workflows/m23-7-r3-8-9-recovery-probe.yml \
             scripts/m23_7_r3_8_remote_operator.py \
