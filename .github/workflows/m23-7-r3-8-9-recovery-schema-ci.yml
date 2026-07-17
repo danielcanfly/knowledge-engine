@@ -87,7 +87,9 @@ jobs:
           text = path.read_text(encoding="utf-8")
           assert 'default: "29506217284"' in text
           assert "29506217284|29546336917" in text
-          assert "PROBE_R3_8_RUN_${{ inputs.affected_run_id }}_SCHEMA_V2" in text
+          assert "PROBE_R3_8_RUN_" in text
+          assert "inputs.affected_run_id" in text
+          assert "_SCHEMA_V2" in text
           assert "GITHUB_RUN_ATTEMPT" in text
           assert "environment: m23-r3-diagnostic" in text
           assert "client.post" not in text
