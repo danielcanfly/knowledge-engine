@@ -6,6 +6,7 @@ import inspect
 import json
 import math
 import os
+import re
 import secrets
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -44,6 +45,7 @@ MAXIMUM_HUB_FREQUENCY = r37.MAXIMUM_HUB_FREQUENCY
 EXPECTED_METRICS = r37.ACCEPTED_METRICS
 EXPECTED_TARGET_RANKS = r37.ACCEPTED_TARGET_RANKS
 MAX_RESPONSE_BYTES = 500_000
+_WORKER_ERROR_CODE = re.compile(r"^[a-z0-9-]{1,80}$")
 
 
 class LatencyRepairError(RuntimeError):
@@ -341,20 +343,43 @@ class HttpWorkerInvoker:
                 },
                 content=body,
             )
-            response.raise_for_status()
             _require(
                 len(response.content) <= MAX_RESPONSE_BYTES,
                 "worker_response_size",
                 "Worker response is too large",
             )
-            payload = response.json()
+            if response.status_code >= 400:
+                raise LatencyRepairError(
+                    worker_http_error_code(response),
+                    "Worker returned bounded error status",
+                )
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise LatencyRepairError(
+                    "worker_unavailable", "Worker response is invalid JSON"
+                ) from exc
         except httpx.TimeoutException as exc:
             raise LatencyRepairError("worker_timeout", "Worker request timed out") from exc
-        except (httpx.HTTPError, ValueError) as exc:
+        except httpx.HTTPError as exc:
             raise LatencyRepairError("worker_unavailable", "Worker request failed") from exc
         finished = clock_ns()
         _require(isinstance(payload, Mapping), "worker_shape", "Worker response is invalid")
         return payload, max(0, math.ceil((finished - started) / 1_000_000))
+
+
+def worker_http_error_code(response: httpx.Response) -> str:
+    base = f"worker_http_{response.status_code}"
+    try:
+        payload = response.json()
+    except ValueError:
+        return base
+    if not isinstance(payload, Mapping):
+        return base
+    code = payload.get("code")
+    if not isinstance(code, str) or not _WORKER_ERROR_CODE.fullmatch(code):
+        return base
+    return base + "_" + code.replace("-", "_")
 
 
 def _validate_snapshot(snapshot: Mapping[str, Any]) -> dict[str, Any]:
