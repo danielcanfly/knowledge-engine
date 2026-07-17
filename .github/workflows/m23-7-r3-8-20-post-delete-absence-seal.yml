@@ -1,0 +1,82 @@
+name: M23.7 R3.8.20 Post-Delete Absence Seal
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-20/post-delete-absence-seal-29550110285.json"
+      - "docs/architecture/m23-7-r3-8-20-post-delete-absence-seal.md"
+      - ".github/workflows/m23-7-r3-8-20-post-delete-absence-seal.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and deletion authorization ancestry
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor ef5b2bc1cde1c223bcd5cdf5a94d3dae5eec7860 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic post-delete absence seal
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          path = Path(".github/evidence/m23-7-r3-8-20/post-delete-absence-seal-29550110285.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("seal_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "e97cecb4b6fe8832bce60b48f05c6fc0ffee1ca5cab009475243cf4a90e73c51"
+          assert value["issue"] == 656
+          assert value["worker_name"] == "knowledge-engine-r3-8-29548837457"
+          assert value["deletion"]["run_id"] == "29549992572"
+          assert value["deletion"]["artifact"]["id"] == 8395381404
+          assert value["deletion"]["artifact"]["zip_sha256"] == "bf0791712956f4a96062ec6d17aaa13b274420841f498ec4a494e0790968a5ad"
+          assert value["deletion"]["artifact"]["receipt_file_sha256"] == "90d463330a3fe8fed22133c30a1754244e5a8722a01a7c1d6356a2ed90cfffff"
+          assert value["deletion"]["artifact"]["receipt_self_digest"] == "f088b6aa6a8ac172e236e834926b18f0c470d05246661e67c909734fb2b38fcd"
+          assert value["deletion"]["receipt"]["worker_delete_dispatched"] is True
+          assert value["deletion"]["receipt"]["absence_probe_dispatched"] is True
+          assert value["deletion"]["receipt"]["failure_code"] == "delete_absence_not_proven"
+          assert value["post_delete_recovery"]["run_id"] == "29550110285"
+          assert value["post_delete_recovery"]["artifact"]["id"] == 8395417278
+          assert value["post_delete_recovery"]["artifact"]["zip_sha256"] == "9ef122f81e54db770fde741551aa8cd7c46b2b31af59ecdd2a4f326d0960f1e3"
+          recovery = value["post_delete_recovery"]["receipt"]
+          assert recovery["worker_state"] == "worker_absent"
+          assert recovery["versions"]["error_codes"] == [10007]
+          assert recovery["deployments"]["error_codes"] == [10007]
+          assert recovery["versions"]["http_status"] == 404
+          assert recovery["deployments"]["http_status"] == 404
+          assert value["result"]["control_plane_absence_proven"] is True
+          assert value["result"]["post_delete_recovery_read_only"] is True
+          assert value["authority"]["production_retrieval"] == "lexical"
+          assert value["authority"]["worker_deletion_replay_authorized"] is False
+          assert value["authority"]["blockers_cleared"] is False
+          assert all(flag is False for flag in value["strict_zero"].values())
+          PY
+      - name: Verify exact seal scope
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              ".github/evidence/m23-7-r3-8-20/post-delete-absence-seal-29550110285.json",
+              "docs/architecture/m23-7-r3-8-20-post-delete-absence-seal.md",
+              ".github/workflows/m23-7-r3-8-20-post-delete-absence-seal.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "ef5b2bc1cde1c223bcd5cdf5a94d3dae5eec7860", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
