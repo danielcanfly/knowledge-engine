@@ -253,18 +253,7 @@ jobs:
                 "$endpoint"
             )"
             code="$(
-              python - <<'PY'
-              import json
-              import os
-
-              path = os.environ["RUNNER_TEMP"] + "/r3-secret-readiness.json"
-              try:
-                  payload = json.load(open(path, encoding="utf-8"))
-              except Exception:
-                  print("unreadable")
-              else:
-                  print(payload.get("code", "missing"))
-              PY
+              node -e 'const fs = require("fs"); try { const payload = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/r3-secret-readiness.json", "utf8")); console.log(payload.code || "missing"); } catch { console.log("unreadable"); }'
             )"
             if [ "$status" = "401" ] && [ "$code" = "unauthorized" ]; then
               break
