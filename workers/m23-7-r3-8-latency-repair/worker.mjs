@@ -504,7 +504,7 @@ async function executeObservation(env, validated, now = () => performance.now())
           filter: CANDIDATE_FILTER,
           limit: EXPECTED_POINTS,
           with_payload: RANKING_PAYLOAD_FIELDS,
-          with_vector: [VECTOR_NAME],
+          with_vector: true,
         }),
       },
     );
