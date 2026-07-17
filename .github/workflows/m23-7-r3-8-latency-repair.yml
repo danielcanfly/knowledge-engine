@@ -70,15 +70,16 @@ jobs:
               .read_text(encoding="utf-8")
           )
           assert subject.canonical_contract() == expected
-          assert subject.CONTRACT_SHA256 == "833f6e59748f6837ef96ef5d8cc212437e1fc2681d0a5ed1ee4a4388da386887"
+          assert subject.CONTRACT_SHA256 == "d5d0b276d9291fb1e3766215be8f544438cb31c98598b1b7659008beaae89835"
           assert expected["entry"]["engine_sha"] == "7793cd22092aca530ca48a3240a3c83ffd3d2894"
           assert expected["latency"]["maximum_worker_internal_shadow_ms"] == 1200
           assert expected["latency"]["threshold_changed"] is False
           assert expected["queries"]["query_count"] == 24
           assert expected["queries"]["workers_ai_binding_calls"] == 1
           assert expected["queries"]["qdrant_query_batch_calls"] == 1
-          assert expected["queries"]["qdrant_vector_scroll_max_calls"] == 1
-          assert expected["queries"]["qdrant_vector_scroll_only_after_batch_unavailable"] is True
+          assert expected["queries"]["qdrant_vector_scroll_max_calls"] == 0
+          assert expected["queries"]["qdrant_vector_scroll_only_after_batch_unavailable"] is False
+          assert expected["queries"]["qdrant_batch_endpoint"] == "points/search/batch"
           assert expected["authority"]["retrieval_quality_blocker_cleared"] is False
           assert expected["authority"]["latency_blocker_cleared"] is False
 
@@ -118,7 +119,8 @@ jobs:
           ).read_text(encoding="utf-8")
           assert 'method: "PUT"' not in worker
           assert 'method: "DELETE"' not in worker
-          assert "/points/query/batch" in worker
+          assert "/points/search/batch" in worker
+          assert "/points/scroll" not in worker
           assert '"section_id"' in worker
           assert '"candidate_artifact_sha256"' in worker
           assert "CANDIDATE_FILTER" in worker
