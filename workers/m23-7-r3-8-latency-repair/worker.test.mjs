@@ -12,15 +12,28 @@ import {
 
 const VECTOR_DIMENSION = 1024;
 const QUERY_COUNT = 24;
-const DENSE_LIMIT = 10;
+const DENSE_LIMIT = 50;
 const COLLECTION = "llm_wiki_m23_r3_5_candidate_8eed54902c73";
 const CANDIDATE_ARTIFACT_SHA256 =
   "8eed54902c73314ac2e5d5e187a788e44941dae250d9823d45b71ec57d1e1371";
+const PAYLOAD_FIELDS = [
+  "payload_schema_version",
+  "source_membership",
+  "candidate_collection",
+  "candidate_artifact_sha256",
+  "candidate_reingestion_issue",
+  "vector_name",
+  "vector_dimension",
+  "canonical_knowledge",
+  "candidate_release_eligible",
+  "production_authority",
+  "section_id",
+];
 
 test("contract digest matches the canonical R3.8 contract", () => {
   assert.equal(
     CONTRACT_SHA256,
-    "6de822f163dc5f4f0fa62ce6d8f7a0a0fe9752065997ac53c8a47668ab7da930",
+    "d0a8e5f597ecd2cdf27e385b861153e052742ecb8e60d4f86ddd5e7758e0a5ff",
   );
 });
 
@@ -209,10 +222,14 @@ test("executeObservation performs one AI batch and one R3.7-compatible Qdrant qu
         query: vector(index),
         using: "default",
         limit: DENSE_LIMIT,
-        with_payload: true,
+        with_payload: PAYLOAD_FIELDS,
         with_vector: false,
       })),
     });
+    assert.equal(
+      batch.searches.some((search) => search.with_payload === true),
+      false,
+    );
     assert.equal(result.external_calls.workers_ai_binding, 1);
     assert.equal(result.external_calls.qdrant_query_batch, 1);
     assert.equal(result.external_calls.qdrant_single_query, 0);
@@ -302,7 +319,7 @@ test("executeObservation falls back to bounded Qdrant single queries when query 
       query: vector(0),
       using: "default",
       limit: DENSE_LIMIT,
-      with_payload: true,
+      with_payload: PAYLOAD_FIELDS,
       with_vector: false,
     });
     assert.equal(result.external_calls.qdrant_query_batch, 1);

@@ -5,11 +5,24 @@ const VECTOR_NAME = "default";
 const VECTOR_DIMENSION = 1024;
 const EXPECTED_POINTS = 107;
 const QUERY_COUNT = 24;
-const DENSE_LIMIT = 10;
+const DENSE_LIMIT = 50;
 const MAX_BODY_BYTES = 65536;
 const SINGLE_QUERY_CONCURRENCY = 6;
 const CONTRACT_SHA256 =
-  "6de822f163dc5f4f0fa62ce6d8f7a0a0fe9752065997ac53c8a47668ab7da930";
+  "d0a8e5f597ecd2cdf27e385b861153e052742ecb8e60d4f86ddd5e7758e0a5ff";
+const PAYLOAD_FIELDS = Object.freeze([
+  "payload_schema_version",
+  "source_membership",
+  "candidate_collection",
+  "candidate_artifact_sha256",
+  "candidate_reingestion_issue",
+  "vector_name",
+  "vector_dimension",
+  "canonical_knowledge",
+  "candidate_release_eligible",
+  "production_authority",
+  "section_id",
+]);
 const REQUEST_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-request/v1";
 const RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1";
 const ROUTE = "/v1/m23-7-r3-8/observe";
@@ -427,7 +440,7 @@ async function executeObservation(env, validated, now = () => performance.now())
           query: vector,
           using: VECTOR_NAME,
           limit: DENSE_LIMIT,
-          with_payload: true,
+          with_payload: PAYLOAD_FIELDS,
           with_vector: false,
         })),
       }),
@@ -453,7 +466,7 @@ async function executeObservation(env, validated, now = () => performance.now())
               query: vector,
               using: VECTOR_NAME,
               limit: DENSE_LIMIT,
-              with_payload: true,
+              with_payload: PAYLOAD_FIELDS,
               with_vector: false,
             }),
           },

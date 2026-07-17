@@ -28,7 +28,7 @@ WORKER_RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1"
 IMPLEMENTATION_ISSUE = 520
 PARENT_ISSUE = 474
 ENTRY_ENGINE_SHA = "7793cd22092aca530ca48a3240a3c83ffd3d2894"
-CONTRACT_SHA256 = "6de822f163dc5f4f0fa62ce6d8f7a0a0fe9752065997ac53c8a47668ab7da930"
+CONTRACT_SHA256 = "d0a8e5f597ecd2cdf27e385b861153e052742ecb8e60d4f86ddd5e7758e0a5ff"
 
 EXPECTED_COLLECTION = r37.EXPECTED_COLLECTION
 HISTORICAL_PILOT_COLLECTION = r37.HISTORICAL_PILOT_COLLECTION
@@ -39,12 +39,25 @@ PAYLOAD_SCHEMA = r37.PAYLOAD_SCHEMA
 PROBE_COUNT = r37.PROBE_COUNT
 VARIANTS_PER_PROBE = r37.VARIANTS_PER_PROBE
 QUERY_COUNT = r37.QUERY_COUNT
-DENSE_LIMIT = r37.base_r35.r34.TOP_K
+DENSE_LIMIT = r37.DENSE_LIMIT
 MAX_WORKER_SHADOW_MS = r37.MAX_LIVE_P95_MS
 MAXIMUM_HUB_FREQUENCY = r37.MAXIMUM_HUB_FREQUENCY
 EXPECTED_METRICS = r37.ACCEPTED_METRICS
 EXPECTED_TARGET_RANKS = r37.ACCEPTED_TARGET_RANKS
 MAX_RESPONSE_BYTES = 500_000
+PAYLOAD_SELECTOR_FIELDS = (
+    "payload_schema_version",
+    "source_membership",
+    "candidate_collection",
+    "candidate_artifact_sha256",
+    "candidate_reingestion_issue",
+    "vector_name",
+    "vector_dimension",
+    "canonical_knowledge",
+    "candidate_release_eligible",
+    "production_authority",
+    "section_id",
+)
 _WORKER_ERROR_CODE = re.compile(r"^[a-z0-9-]{1,80}$")
 
 
@@ -152,6 +165,8 @@ def canonical_contract() -> dict[str, Any]:
             "qdrant_single_query_endpoint": "points/query?consistency=all",
             "qdrant_scroll_endpoint": None,
             "qdrant_dense_limit": DENSE_LIMIT,
+            "qdrant_payload_selector_fields": list(PAYLOAD_SELECTOR_FIELDS),
+            "qdrant_full_payload_returned": False,
             "target_aware_inputs": False,
         },
         "quality": {
