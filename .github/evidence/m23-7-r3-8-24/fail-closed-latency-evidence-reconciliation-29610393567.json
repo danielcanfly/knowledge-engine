@@ -1,0 +1,62 @@
+{
+  "authority": {
+    "blockers_cleared": false,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "production_retrieval": "lexical",
+    "promotion_eligibility_granted": false,
+    "worker_deletion_authorized": false,
+    "worker_deletion_replay_authorized": false
+  },
+  "issue": null,
+  "observation": {
+    "artifact_id": 8418494326,
+    "artifact_zip_sha256": "c82dcf8c8763879c9fc1d0ff9f2b39fc1d6ad597ae5ac792f0975cafd6c6bb05",
+    "engine_sha": "fd00b915c8a9e906ec96fe3f55c859ee3565afd2",
+    "receipt_file_sha256": "4d4d61cc5b770f3b50c08e9ac8f4b5dd7a0ec7605b0360eecefa9a37b321a743",
+    "receipt_self_digest": "7bf003232f9d275d1e90eabb276bfceb8e40f76b36fa7d08ec9e95bb8c0ff130",
+    "remote_lifecycle_file_sha256": "24eb964866cc9d25d1e662af08fa940324ae995092a914df81925d4385439040",
+    "remote_lifecycle_self_digest": "6284cfe9e78247754c44d2c02aeffcda4a5c558e5e4449bd7694f02cfa89be1a",
+    "run_id": "29610393567"
+  },
+  "result": {
+    "blocker_clearance_eligible": false,
+    "failed_gate": "quality_parity_and_worker_internal_shadow",
+    "latency_evidence_complete": true,
+    "latency_repair_passed": false,
+    "maximum_shadow_ms": 1200,
+    "next_gate": "separately_governed_retained_worker_cleanup",
+    "provider_ms": 589,
+    "qdrant_ms": 2423,
+    "quality_metrics_accepted": false,
+    "retained_worker_cleanup_required": true,
+    "shadow_ms": 3012,
+    "strict_zero_mutation_gates_accepted": true,
+    "worker_lifecycle_clean": false
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-24-fail-closed-latency-evidence-reconciliation/v1",
+  "seal_accepted_head": "d3b44deafc749ee05cc9c3cab091bd3af5195502",
+  "seal_exact_head_runs": {
+    "architecture_canon": 29610715572,
+    "ci": 29610715705,
+    "graph_v2": 29610715643,
+    "seal": 29610715683
+  },
+  "seal_issue": null,
+  "seal_merge_sha": "d78e24a995f7b917ba24cd1b745e237ab54003cb",
+  "seal_pr": 877,
+  "seal_sha256": "df97373c519c138c254965a6f91bed8c76af238b85ce7cbcc3dd51867c8669d6",
+  "strict_zero_verified": true,
+  "worker": {
+    "deletion_authorization_required": true,
+    "name": "knowledge-engine-r3-8-29610393567",
+    "retained": true,
+    "version_id": "82247513-1864-46bc-b475-77e287d1c750"
+  },
+  "reconciliation_sha256": "56b8093a6df72d678faf381f4ddf95d6a11131d82ce25bc5ab6cb541b2d374c3"
+}
