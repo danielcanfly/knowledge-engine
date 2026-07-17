@@ -1,5 +1,28 @@
 # M23.7 R3.8.29 Deletion/Absence Reconciliation
 
+## Worker knowledge-engine-r3-8-29613277172
+
+This reconciliation independently accepts the deletion/absence evidence seal
+from PR #892 for retained diagnostic worker
+`knowledge-engine-r3-8-29613277172`.
+
+The accepted seal merged at `f50bec7c33a7d21ebc4060cab17aacde90e3d939`.
+Its exact head `f1a5408f46cbc79236096b61c5fc3d99d5a1ce10` passed CI, M17,
+M18, and the dedicated deletion/absence seal workflow. The accepted seal digest
+is `b2292a42710ea2fd75eed43ab983a57d897981511c9afa4fc4a0149f14c07f9f`.
+
+Deletion dispatch is reconciled from remote-delete run `29615245988`, and
+post-delete absence is reconciled from recovery probe run `29615309013`.
+The worker lifecycle is clean: the diagnostic worker is absent from both
+Cloudflare versions and deployments control-plane collections.
+
+This reconciliation does not clear blockers, grant promotion eligibility,
+authorize fresh observation, close the parent issue, or close M23.7.
+Production retrieval remains `lexical`. Retrieval quality and latency blockers
+remain retained.
+
+The next legal gate is latency root-cause repair and a fresh remote observation.
+
 ## Worker knowledge-engine-r3-8-29610393567
 
 This reconciliation independently accepts the deletion/absence evidence seal
