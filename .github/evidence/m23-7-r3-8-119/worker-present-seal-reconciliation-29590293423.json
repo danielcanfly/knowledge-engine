@@ -1,0 +1,88 @@
+{
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "evidence_reconciliation_only": true,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deletion_authorized": false,
+    "worker_deletion_replay_authorized": false,
+    "worker_deploy_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "issue": null,
+  "milestone": "M23.7-R3.8.119",
+  "parent_latency_issue": 520,
+  "parent_r3_issue": 474,
+  "recovery_authorization_merge_sha": "ce5f7c08b97069f7cd21792b8aee53b89d5c49fe",
+  "recovery_authorization_prs": [
+    816,
+    817
+  ],
+  "result": {
+    "blocker_clearance_eligible": false,
+    "deletion_authorization_next_gate": true,
+    "next_gate": "separate_exact_deletion_authorization",
+    "production_retrieval": "lexical",
+    "worker_lifecycle_clean": false,
+    "worker_present_evidence_reconciled": true,
+    "worker_state": "worker_present"
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-119-worker-present-seal-reconciliation/v1",
+  "seal_accepted_head": "f8766022dd1b6cd1d16ad65457ac023841b3fb68",
+  "seal_exact_head_runs": {
+    "architecture_canon": 29590506967,
+    "ci": 29590507105,
+    "graph_v2": 29590506749,
+    "seal": 29590509164
+  },
+  "seal_issue": null,
+  "seal_merge_sha": "ce5cfa8e83a221f0cbc2f08f69584f393e32d9f7",
+  "seal_pr": 818,
+  "seal_sha256s": {
+    "29590293423": "b34286308c12dea081d4b972918d08f23c1ea24cac5b7ea3ba9bad780eecaaff"
+  },
+  "strict_zero_verified": true,
+  "workers": [
+    {
+      "artifact": {
+        "artifact_id": 8410760455,
+        "name": "m23-7-r3-8-9-recovery-29590293423",
+        "receipt_file_sha256": "ab709f563e7a752c00b3e301b9f5bd286c973123c6e4370cb73b1d6d33bee441",
+        "receipt_self_digest": "548bac0618d5f8295794888b9a92a79004ac764fc88fb7308200ade164df71a8",
+        "zip_sha256": "ea258d8908744777f2de74a511a5e242129a24ed165b9dd07e6872e11f018e1a"
+      },
+      "deployments": {
+        "identities": [
+          "15526b93-584c-41c4-a9d6-03e68eec2aaa",
+          "53cc5f67-0062-4512-9fc9-7548a9414fef",
+          "69cce379-c3d5-4357-a2cc-965ba3e9d64f",
+          "8cc54ef1-62e1-4657-8ac4-0d9c1340fd66"
+        ],
+        "identity_count": 4,
+        "state": "present"
+      },
+      "name": "knowledge-engine-r3-8-29589719171",
+      "observation_run_id": "29589719171",
+      "recovery_run_id": "29590293423",
+      "versions": {
+        "identities": [
+          "2c9db4fc-c3c4-47d7-9cba-082cd5f0ea0b",
+          "54738f97-2238-452b-8829-a3d71db08252",
+          "7deb01ed-b88d-4af6-896f-68a10c23742e",
+          "e4026e55-fddc-47d4-8757-61506b7ae4fa"
+        ],
+        "identity_count": 4,
+        "state": "present"
+      }
+    }
+  ],
+  "reconciliation_sha256": "540ee4fdccb4d38efe643ba8199c9c619a977e6d898e2ef42f7d6c9c0c057cf8"
+}
