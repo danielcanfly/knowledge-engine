@@ -55,7 +55,7 @@ const CANDIDATE_FILTER = {
   ],
 };
 const CONTRACT_SHA256 =
-  "833f6e59748f6837ef96ef5d8cc212437e1fc2681d0a5ed1ee4a4388da386887";
+  "d5d0b276d9291fb1e3766215be8f544438cb31c98598b1b7659008beaae89835";
 const REQUEST_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-request/v1";
 const RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1";
 const ROUTE = "/v1/m23-7-r3-8/observe";
@@ -371,14 +371,13 @@ function parseBatchResults(payload) {
     502,
   );
   return payload.result.map((item) => {
+    const points = Array.isArray(item) ? item : item.points;
     assertCondition(
-      isObject(item) &&
-        Array.isArray(item.points) &&
-        item.points.length === DENSE_LIMIT,
+      Array.isArray(points) && points.length === DENSE_LIMIT,
       "batch-points-shape-drift",
       502,
     );
-    const ranked = item.points.map(validateRankedPoint);
+    const ranked = points.map(validateRankedPoint);
     ranked.sort(
       (left, right) =>
         right.score - left.score ||
@@ -471,14 +470,13 @@ async function executeObservation(env, validated, now = () => performance.now())
   const qdrantStarted = now();
   const batchResponse = await qdrantFetch(
     env,
-    `/collections/${encodeURIComponent(COLLECTION)}/points/query/batch`,
+    `/collections/${encodeURIComponent(COLLECTION)}/points/search/batch`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         searches: vectors.map((vector) => ({
-          query: vector,
-          using: VECTOR_NAME,
+          vector: { name: VECTOR_NAME, vector },
           params: SEARCH_PARAMS,
           filter: CANDIDATE_FILTER,
           limit: DENSE_LIMIT,
@@ -488,30 +486,8 @@ async function executeObservation(env, validated, now = () => performance.now())
       }),
     },
   );
-  let rankings;
-  let qdrantVectorScroll = 0;
-  if (batchResponse.ok) {
-    rankings = parseBatchResults(await batchResponse.json());
-  } else {
-    const scrollResponse = await qdrantFetch(
-      env,
-      `/collections/${encodeURIComponent(COLLECTION)}/points/scroll`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filter: CANDIDATE_FILTER,
-          limit: EXPECTED_POINTS,
-          with_payload: RANKING_PAYLOAD_FIELDS,
-          with_vector: true,
-        }),
-      },
-    );
-    assertCondition(scrollResponse.ok, "qdrant-scroll-unavailable", 502);
-    qdrantVectorScroll = 1;
-    const candidates = parseScrollResults(await scrollResponse.json());
-    rankings = vectors.map((vector) => rankCandidates(vector, candidates));
-  }
+  assertCondition(batchResponse.ok, "qdrant-batch-unavailable", 502);
+  const rankings = parseBatchResults(await batchResponse.json());
   const qdrantFinished = now();
   const shadowFinished = now();
 
@@ -572,7 +548,7 @@ async function executeObservation(env, validated, now = () => performance.now())
       workers_ai_binding: 1,
       qdrant_collection_reads: 2,
       qdrant_query_batch: 1,
-      qdrant_vector_scroll: qdrantVectorScroll,
+      qdrant_vector_scroll: 0,
       qdrant_write: 0,
       qdrant_delete: 0,
       qdrant_reindex: 0,

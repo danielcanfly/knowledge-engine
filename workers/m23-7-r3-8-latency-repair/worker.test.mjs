@@ -49,7 +49,7 @@ const CANDIDATE_FILTER = {
 test("contract digest matches the canonical R3.8 contract", () => {
   assert.equal(
     CONTRACT_SHA256,
-    "833f6e59748f6837ef96ef5d8cc212437e1fc2681d0a5ed1ee4a4388da386887",
+    "d5d0b276d9291fb1e3766215be8f544438cb31c98598b1b7659008beaae89835",
   );
 });
 
@@ -119,12 +119,12 @@ function rankedPoint(index, score) {
 function batchPayload() {
   return {
     status: "ok",
-    result: Array.from({ length: QUERY_COUNT }, () => ({
-      points: Array.from(
+    result: Array.from({ length: QUERY_COUNT }, () =>
+      Array.from(
         { length: DENSE_LIMIT },
         (_, index) => rankedPoint(index, 1 - index / 1000),
       ),
-    })),
+    ),
   };
 }
 
@@ -181,7 +181,7 @@ test("validateBody rejects duplicate query identity", async () => {
   await assert.rejects(validateBody(request), /query-digest-duplicate/);
 });
 
-test("executeObservation performs one AI batch and one identity-filtered Qdrant query batch", async () => {
+test("executeObservation performs one AI batch and one identity-filtered Qdrant search batch", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
@@ -190,7 +190,7 @@ test("executeObservation performs one AI batch and one identity-filtered Qdrant 
       method: init.method || "GET",
       body: init.body ? JSON.parse(init.body) : null,
     });
-    if (String(url).endsWith("/points/query/batch")) {
+    if (String(url).endsWith("/points/search/batch")) {
       return new Response(JSON.stringify(batchPayload()), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -238,8 +238,7 @@ test("executeObservation performs one AI batch and one identity-filtered Qdrant 
     assert.equal(batch.searches.length, QUERY_COUNT);
     assert.deepEqual(batch, {
       searches: Array.from({ length: QUERY_COUNT }, (_, index) => ({
-        query: vector(index),
-        using: "default",
+        vector: { name: "default", vector: vector(index) },
         params: {
           exact: true,
         },
@@ -268,7 +267,7 @@ test("executeObservation performs one AI batch and one identity-filtered Qdrant 
   }
 });
 
-test("executeObservation falls back to read-only Qdrant scroll when query batch is unavailable", async () => {
+test("executeObservation rejects unavailable Qdrant search batch without scroll fallback", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
@@ -277,15 +276,9 @@ test("executeObservation falls back to read-only Qdrant scroll when query batch 
       method: init.method || "GET",
       body: init.body ? JSON.parse(init.body) : null,
     });
-    if (String(url).endsWith("/points/query/batch")) {
+    if (String(url).endsWith("/points/search/batch")) {
       return new Response(JSON.stringify({ status: "error" }), {
         status: 502,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-    if (String(url).endsWith("/points/scroll")) {
-      return new Response(JSON.stringify(scrollPayload()), {
-        status: 200,
         headers: { "Content-Type": "application/json" },
       });
     }
@@ -313,19 +306,11 @@ test("executeObservation falls back to read-only Qdrant scroll when query batch 
     })),
   };
   try {
-    const result = await executeObservation(env, validated);
-    assert.deepEqual(
-      calls.map((item) => item.method),
-      ["GET", "POST", "POST", "GET"],
+    await assert.rejects(
+      executeObservation(env, validated),
+      /qdrant-batch-unavailable/,
     );
-    assert.equal(calls[2].body.limit, 107);
-    assert.deepEqual(calls[2].body.filter, CANDIDATE_FILTER);
-    assert.equal(calls[2].body.with_vector, true);
-    assert.equal(result.external_calls.qdrant_query_batch, 1);
-    assert.equal(result.external_calls.qdrant_vector_scroll, 1);
-    assert.equal(result.external_calls.qdrant_write, 0);
-    assert.equal(result.variants.length, QUERY_COUNT);
-    assert.equal(result.variants[0].ranked_section_ids[0], "section-000");
+    assert.deepEqual(calls.map((item) => item.method), ["GET", "POST"]);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -334,9 +319,9 @@ test("executeObservation falls back to read-only Qdrant scroll when query batch 
 test("executeObservation rejects ranked points outside candidate identity", async () => {
   const originalFetch = globalThis.fetch;
   const drifted = batchPayload();
-  drifted.result[0].points[0].payload.candidate_artifact_sha256 = "0".repeat(64);
+  drifted.result[0][0].payload.candidate_artifact_sha256 = "0".repeat(64);
   globalThis.fetch = async (url) => {
-    if (String(url).endsWith("/points/query/batch")) {
+    if (String(url).endsWith("/points/search/batch")) {
       return new Response(JSON.stringify(drifted), {
         status: 200,
         headers: { "Content-Type": "application/json" },

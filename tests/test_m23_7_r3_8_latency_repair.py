@@ -165,8 +165,9 @@ def test_contract_freezes_placed_worker_and_unchanged_budget() -> None:
     assert contract["latency"]["threshold_changed"] is False
     assert contract["queries"]["workers_ai_binding_calls"] == 1
     assert contract["queries"]["qdrant_query_batch_calls"] == 1
-    assert contract["queries"]["qdrant_vector_scroll_max_calls"] == 1
-    assert contract["queries"]["qdrant_vector_scroll_only_after_batch_unavailable"] is True
+    assert contract["queries"]["qdrant_vector_scroll_max_calls"] == 0
+    assert contract["queries"]["qdrant_vector_scroll_only_after_batch_unavailable"] is False
+    assert contract["queries"]["qdrant_batch_endpoint"] == "points/search/batch"
     assert contract["authority"]["qdrant_write_authorized"] is False
     assert contract["authority"]["retrieval_quality_blocker_cleared"] is False
 
