@@ -7,6 +7,7 @@ const EXPECTED_POINTS = 107;
 const QUERY_COUNT = 24;
 const DENSE_LIMIT = 50;
 const MAX_BODY_BYTES = 65536;
+const SINGLE_QUERY_CONCURRENCY = 6;
 const RANKING_PAYLOAD_FIELDS = [
   "section_id",
   "payload_schema_version",
@@ -295,6 +296,22 @@ async function qdrantFetch(env, path, init = {}) {
   });
 }
 
+async function mapBounded(items, limit, callback) {
+  const results = Array(items.length);
+  let next = 0;
+  const workerCount = Math.min(limit, items.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (next < items.length) {
+        const index = next;
+        next += 1;
+        results[index] = await callback(items[index], index);
+      }
+    }),
+  );
+  return results;
+}
+
 async function collectionSnapshot(env) {
   const response = await qdrantFetch(
     env,
@@ -467,8 +484,10 @@ async function executeObservation(env, validated, now = () => performance.now())
   if (batchResponse.ok) {
     rankings = parseBatchResults(await batchResponse.json());
   } else {
-    const singleResponses = await Promise.all(
-      vectors.map((vector) =>
+    const singleResponses = await mapBounded(
+      vectors,
+      SINGLE_QUERY_CONCURRENCY,
+      (vector) =>
         qdrantFetch(
           env,
           `/collections/${encodeURIComponent(COLLECTION)}/points/query?consistency=all`,
@@ -485,7 +504,6 @@ async function executeObservation(env, validated, now = () => performance.now())
             }),
           },
         ),
-      ),
     );
     qdrantSingleQuery = QUERY_COUNT;
     assertCondition(

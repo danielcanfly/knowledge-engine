@@ -31,7 +31,7 @@ The generated local Wrangler config derives only `placement.hostname` from `QDRA
 - strict content-length and 65,536-byte request limit;
 - disabled invocation logs.
 
-The measured Worker-internal shadow begins immediately before the single Workers AI BGE-M3 binding call and ends after the Qdrant read path is parsed. The read path first uses the official `/points/query/batch` endpoint with the named vector `default`. If that batch endpoint is unavailable, it performs the same read-only search through 24 parallel `/points/query?consistency=all` calls, matching the single-query endpoint already used by the accepted R3.7 live path. Collection snapshots occur before and after that shadow. Operator-to-Worker round-trip latency is recorded separately and is informational only.
+The measured Worker-internal shadow begins immediately before the single Workers AI BGE-M3 binding call and ends after the Qdrant read path is parsed. The read path first uses the official `/points/query/batch` endpoint with the named vector `default`. If that batch endpoint is unavailable, it performs the same read-only search through 24 bounded-concurrency `/points/query?consistency=all` calls, matching the single-query endpoint already used by the accepted R3.7 live path without sending all fallback reads at once. Collection snapshots occur before and after that shadow. Operator-to-Worker round-trip latency is recorded separately and is informational only.
 
 ## Data plane
 
@@ -42,7 +42,7 @@ The Worker performs:
 1. one read-only candidate collection snapshot;
 2. one Workers AI binding call containing 24 texts;
 3. one Qdrant read-only query batch containing the 24 query vectors, `using: "default"`, and an explicit `section_id`-only payload-field allowlist;
-4. only if that batch endpoint is unavailable, 24 read-only single-query calls to `/points/query?consistency=all` with the same named vector, filter, limit, and payload-field allowlist;
+4. only if that batch endpoint is unavailable, 24 read-only single-query calls to `/points/query?consistency=all` with the same named vector, filter, limit, payload-field allowlist, and bounded fallback concurrency;
 5. one read-only candidate collection snapshot.
 
 The pre/post collection snapshots preserve the exact candidate collection identity. Each ranked result returns only the section ID needed by the accepted target-unaware evaluator, and the operator rejects any ranked section outside the reconciled candidate artifact. The Worker returns only variant IDs, query hashes, ranked section IDs, bounded timings, collection identities and strict-zero authority fields.
