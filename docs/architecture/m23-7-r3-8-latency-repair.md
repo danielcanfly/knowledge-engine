@@ -41,7 +41,8 @@ The Worker performs:
 
 1. one read-only candidate collection snapshot;
 2. one Workers AI binding call containing 24 texts;
-3. one Qdrant read-only batch containing 24 top-50 named-vector searches;
+3. one Qdrant read-only batch containing 24 top-50 named-vector searches with
+   an explicit payload-field allowlist for the validated payload-v2 metadata;
 4. one read-only candidate collection snapshot.
 
 Every ranked payload must remain payload-v2, candidate-only, noncanonical, nonproduction and bound to the exact candidate artifact. The Worker returns only variant IDs, query hashes, ranked section IDs, bounded timings, collection identities and strict-zero authority fields.
