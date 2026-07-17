@@ -94,7 +94,7 @@ jobs:
               separators=(",", ":"),
           ).encode()
           assert hashlib.sha256(encoded).hexdigest() == fixture_digest
-          assert fixture_digest == "8c5efb823361330cf7feb43c3f4ef75e6582a0fdf34cf68790f5affbd4d6664f"
+          assert fixture_digest == "98ced0983875e10699b1f50b98286133bcbf7e17f5e3419feb038fc59b3a4fa1"
           assert fixture["fixture_only"] is True
           assert fixture["live_receipt_required"] is True
           PY
