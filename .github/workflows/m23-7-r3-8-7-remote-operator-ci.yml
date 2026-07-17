@@ -162,12 +162,12 @@ jobs:
               ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml",
           }
           changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "3d2386f4eff8601dab7e1e881e87896b138f98dd", "HEAD"],
+              ["git", "diff", "--name-only", "1f55c303a55554fc2a8e076910e8f444ff5e2de4", "HEAD"],
               text=True,
           ).splitlines())
           assert changed == allowed, (changed, allowed)
           PY
-          git diff --exit-code 3d2386f4eff8601dab7e1e881e87896b138f98dd HEAD -- \
+          git diff --exit-code 1f55c303a55554fc2a8e076910e8f444ff5e2de4 HEAD -- \
             pilot/m23/m23-7-r3-8-7-remote-operator-contract.json
       - name: Verify pinned Wrangler command surfaces
         shell: bash
