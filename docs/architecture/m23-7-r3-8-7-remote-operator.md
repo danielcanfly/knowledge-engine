@@ -24,7 +24,7 @@ workflow_dispatch on main
 → pinned Wrangler 4.111.0 deploy
 → set three Worker secrets
 → readiness check
-→ one 24-query observation
+→ one 24-query observation, with bounded retry for deployment propagation 404s
 → privacy-safe receipt + lifecycle artifact
 → retain Worker for seal and reconciliation
 ```
@@ -95,6 +95,8 @@ control-plane absence and emits a separate artifact for deletion reconciliation.
 ## Frozen boundaries
 
 - Worker-internal shadow maximum remains `1200 ms`.
+- Live observation retries remain bounded to 9 attempts at 5 seconds each; a
+  persistent Worker HTTP 404 still fails closed and retains the Worker.
 - R3.5 metrics and target ranks remain exact.
 - Query count remains 24 with one Workers AI binding call and one Qdrant batch.
 - Qdrant writes, deletes and reindexing remain zero.

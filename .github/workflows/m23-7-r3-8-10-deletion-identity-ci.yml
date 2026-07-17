@@ -90,7 +90,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code 0686a5e43a6be78ac588d3d223e1052e9e54b37d HEAD -- \
+          git diff --exit-code 0a2aabdb2892a76112a48e3382f6653da9f36691 HEAD -- \
             pilot/m23/m23-7-r3-8-10-deletion-identity-contract.json \
             docs/architecture/m23-7-r3-8-10-deletion-identity-set.md \
             scripts/m23_7_r3_8_remote_entrypoint.py \
