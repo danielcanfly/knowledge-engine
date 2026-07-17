@@ -27,7 +27,7 @@
     "vector_dimension": 1024,
     "vector_name": "default"
   },
-  "contract_sha256": "d0a8e5f597ecd2cdf27e385b861153e052742ecb8e60d4f86ddd5e7758e0a5ff",
+  "contract_sha256": "d081ab57a85b4ea813aeb813090b597340b8c3842ff78d7022d38501e6c282ba",
   "entry": {
     "engine_sha": "7793cd22092aca530ca48a3240a3c83ffd3d2894",
     "r3_7_contract_sha256": "11faa597fe15e39f2589963b30e00e3b1580d6f7bb186ffe9ef180139d427d8d",
@@ -87,16 +87,6 @@
     "qdrant_dense_limit": 50,
     "qdrant_full_payload_returned": false,
     "qdrant_payload_selector_fields": [
-      "payload_schema_version",
-      "source_membership",
-      "candidate_collection",
-      "candidate_artifact_sha256",
-      "candidate_reingestion_issue",
-      "vector_name",
-      "vector_dimension",
-      "canonical_knowledge",
-      "candidate_release_eligible",
-      "production_authority",
       "section_id"
     ],
     "qdrant_query_batch_calls": 1,

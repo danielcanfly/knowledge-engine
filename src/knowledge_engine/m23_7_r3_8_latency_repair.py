@@ -28,7 +28,7 @@ WORKER_RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1"
 IMPLEMENTATION_ISSUE = 520
 PARENT_ISSUE = 474
 ENTRY_ENGINE_SHA = "7793cd22092aca530ca48a3240a3c83ffd3d2894"
-CONTRACT_SHA256 = "d0a8e5f597ecd2cdf27e385b861153e052742ecb8e60d4f86ddd5e7758e0a5ff"
+CONTRACT_SHA256 = "d081ab57a85b4ea813aeb813090b597340b8c3842ff78d7022d38501e6c282ba"
 
 EXPECTED_COLLECTION = r37.EXPECTED_COLLECTION
 HISTORICAL_PILOT_COLLECTION = r37.HISTORICAL_PILOT_COLLECTION
@@ -46,16 +46,6 @@ EXPECTED_METRICS = r37.ACCEPTED_METRICS
 EXPECTED_TARGET_RANKS = r37.ACCEPTED_TARGET_RANKS
 MAX_RESPONSE_BYTES = 500_000
 PAYLOAD_SELECTOR_FIELDS = (
-    "payload_schema_version",
-    "source_membership",
-    "candidate_collection",
-    "candidate_artifact_sha256",
-    "candidate_reingestion_issue",
-    "vector_name",
-    "vector_dimension",
-    "canonical_knowledge",
-    "candidate_release_eligible",
-    "production_authority",
     "section_id",
 )
 _WORKER_ERROR_CODE = re.compile(r"^[a-z0-9-]{1,80}$")

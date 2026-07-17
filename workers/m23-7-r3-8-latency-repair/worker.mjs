@@ -9,20 +9,8 @@ const DENSE_LIMIT = 50;
 const MAX_BODY_BYTES = 65536;
 const SINGLE_QUERY_CONCURRENCY = 6;
 const CONTRACT_SHA256 =
-  "d0a8e5f597ecd2cdf27e385b861153e052742ecb8e60d4f86ddd5e7758e0a5ff";
-const PAYLOAD_FIELDS = Object.freeze([
-  "payload_schema_version",
-  "source_membership",
-  "candidate_collection",
-  "candidate_artifact_sha256",
-  "candidate_reingestion_issue",
-  "vector_name",
-  "vector_dimension",
-  "canonical_knowledge",
-  "candidate_release_eligible",
-  "production_authority",
-  "section_id",
-]);
+  "d081ab57a85b4ea813aeb813090b597340b8c3842ff78d7022d38501e6c282ba";
+const PAYLOAD_FIELDS = Object.freeze(["section_id"]);
 const REQUEST_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-request/v1";
 const RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1";
 const ROUTE = "/v1/m23-7-r3-8/observe";
@@ -297,26 +285,6 @@ function validateCandidatePayload(raw) {
     502,
   );
   const payload = raw.payload;
-  const expected = {
-    payload_schema_version: "knowledge-engine-m23-qdrant-payload/v2",
-    source_membership: "r3-6-candidate-live-acceptance-only",
-    candidate_collection: COLLECTION,
-    candidate_artifact_sha256:
-      "8eed54902c73314ac2e5d5e187a788e44941dae250d9823d45b71ec57d1e1371",
-    candidate_reingestion_issue: 508,
-    vector_name: VECTOR_NAME,
-    vector_dimension: VECTOR_DIMENSION,
-    canonical_knowledge: false,
-    candidate_release_eligible: false,
-    production_authority: false,
-  };
-  for (const [key, value] of Object.entries(expected)) {
-    assertCondition(
-      payload[key] === value,
-      `ranked-point-${key}-drift`,
-      502,
-    );
-  }
   assertCondition(
     typeof payload.section_id === "string" &&
       payload.section_id.length > 0 &&

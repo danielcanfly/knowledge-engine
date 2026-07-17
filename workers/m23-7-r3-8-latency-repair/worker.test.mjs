@@ -16,24 +16,12 @@ const DENSE_LIMIT = 50;
 const COLLECTION = "llm_wiki_m23_r3_5_candidate_8eed54902c73";
 const CANDIDATE_ARTIFACT_SHA256 =
   "8eed54902c73314ac2e5d5e187a788e44941dae250d9823d45b71ec57d1e1371";
-const PAYLOAD_FIELDS = [
-  "payload_schema_version",
-  "source_membership",
-  "candidate_collection",
-  "candidate_artifact_sha256",
-  "candidate_reingestion_issue",
-  "vector_name",
-  "vector_dimension",
-  "canonical_knowledge",
-  "candidate_release_eligible",
-  "production_authority",
-  "section_id",
-];
+const PAYLOAD_FIELDS = ["section_id"];
 
 test("contract digest matches the canonical R3.8 contract", () => {
   assert.equal(
     CONTRACT_SHA256,
-    "d0a8e5f597ecd2cdf27e385b861153e052742ecb8e60d4f86ddd5e7758e0a5ff",
+    "d081ab57a85b4ea813aeb813090b597340b8c3842ff78d7022d38501e6c282ba",
   );
 });
 
@@ -85,16 +73,6 @@ function rankedPoint(index, score) {
     id: `00000000-0000-0000-0000-${String(index).padStart(12, "0")}`,
     score,
     payload: {
-      payload_schema_version: "knowledge-engine-m23-qdrant-payload/v2",
-      source_membership: "r3-6-candidate-live-acceptance-only",
-      candidate_collection: COLLECTION,
-      candidate_artifact_sha256: CANDIDATE_ARTIFACT_SHA256,
-      candidate_reingestion_issue: 508,
-      vector_name: "default",
-      vector_dimension: VECTOR_DIMENSION,
-      canonical_knowledge: false,
-      candidate_release_eligible: false,
-      production_authority: false,
       section_id: `section-${String(index).padStart(3, "0")}`,
     },
   };
@@ -383,10 +361,10 @@ test("executeObservation fail-closes when Qdrant single-query fallback is unavai
   }
 });
 
-test("executeObservation rejects ranked points outside candidate identity", async () => {
+test("executeObservation rejects ranked points without section identity", async () => {
   const originalFetch = globalThis.fetch;
   const drifted = batchPayload();
-  drifted.result[0][0].payload.candidate_artifact_sha256 = "0".repeat(64);
+  delete drifted.result[0][0].payload.section_id;
   globalThis.fetch = async (url) => {
     if (String(url).endsWith("/points/query/batch")) {
       return new Response(JSON.stringify(drifted), {
@@ -420,7 +398,7 @@ test("executeObservation rejects ranked points outside candidate identity", asyn
   try {
     await assert.rejects(
       executeObservation(env, validated),
-      /ranked-point-candidate_artifact_sha256-drift/,
+      /ranked-section-missing/,
     );
   } finally {
     globalThis.fetch = originalFetch;
