@@ -23,6 +23,9 @@ WORKER_PREFIX = "knowledge-engine-r3-8-"
 WORKER_ROUTE = "/v1/m23-7-r3-8/observe"
 MAX_EVIDENCE_BYTES = 20_000_000
 MAX_WRANGLER_OUTPUT_BYTES = 1_000_000
+READINESS_CONSECUTIVE_SUCCESSES = 2
+LIVE_OBSERVATION_ATTEMPTS = 3
+LIVE_OBSERVATION_RETRY_SECONDS = 5
 LIFECYCLE_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-lifecycle/v1"
 REMOTE_RECEIPT_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-observation/v1"
 
@@ -99,6 +102,7 @@ def generate_wrangler_config(
         "main": "worker.mjs",
         "compatibility_date": "2026-07-16",
         "compatibility_flags": ["nodejs_compat"],
+        "workers_dev": True,
         "ai": {"binding": "AI"},
         "placement": {"hostname": parsed.hostname},
         "observability": {
@@ -353,7 +357,7 @@ def execute(args: argparse.Namespace) -> int:
             import httpx
 
             endpoint = worker_origin + WORKER_ROUTE
-            ready = False
+            ready_successes = 0
             for _ in range(30):
                 try:
                     response = httpx.post(
@@ -366,18 +370,37 @@ def execute(args: argparse.Namespace) -> int:
                         timeout=5.0,
                     )
                     if worker_ready_response(response.status_code, response.json()):
-                        ready = True
-                        break
+                        ready_successes += 1
+                        if ready_successes >= READINESS_CONSECUTIVE_SUCCESSES:
+                            break
+                    else:
+                        ready_successes = 0
                 except (httpx.HTTPError, ValueError):
-                    pass
-                time.sleep(2)
-            if not ready:
+                    ready_successes = 0
+                if ready_successes < READINESS_CONSECUTIVE_SUCCESSES:
+                    time.sleep(2)
+            if ready_successes < READINESS_CONSECUTIVE_SUCCESSES:
                 raise RemoteOperatorError("worker_not_ready")
 
             stage = "live_observation"
             candidate = subject.r35.build_calibration_candidate(evidence)
-            with subject.HttpWorkerInvoker(endpoint, operator_token, 60.0) as invoker:
-                receipt = subject.run_latency_repair(candidate, invoker, placement)
+            for attempt in range(LIVE_OBSERVATION_ATTEMPTS):
+                try:
+                    with subject.HttpWorkerInvoker(
+                        endpoint, operator_token, 60.0
+                    ) as invoker:
+                        receipt = subject.run_latency_repair(
+                            candidate, invoker, placement
+                        )
+                    break
+                except subject.LatencyRepairError as exc:
+                    if (
+                        exc.code == "worker_http_404"
+                        and attempt + 1 < LIVE_OBSERVATION_ATTEMPTS
+                    ):
+                        time.sleep(LIVE_OBSERVATION_RETRY_SECONDS)
+                        continue
+                    raise
             receipt["started_at"] = started_at
             receipt["completed_at"] = subject.utc_now()
             receipt["remote_operator"] = {

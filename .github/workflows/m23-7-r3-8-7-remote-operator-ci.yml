@@ -155,12 +155,12 @@ jobs:
               ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml",
           }
           changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "7d852b746fba4fc5f538c5a5c4c4dc62dc631803", "HEAD"],
+              ["git", "diff", "--name-only", "56d01f56725f98f146ce66a9e370bf0d7a5f8488", "HEAD"],
               text=True,
           ).splitlines())
           assert changed == allowed, (changed, allowed)
           PY
-          git diff --exit-code 7d852b746fba4fc5f538c5a5c4c4dc62dc631803 HEAD -- \
+          git diff --exit-code 56d01f56725f98f146ce66a9e370bf0d7a5f8488 HEAD -- \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
             workers/m23-7-r3-8-latency-repair/worker.mjs \
             pilot/m23/m23-7-r3-8-7-remote-operator-contract.json \

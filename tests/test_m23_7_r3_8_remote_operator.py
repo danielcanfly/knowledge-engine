@@ -46,6 +46,7 @@ def test_wrangler_config_uses_unique_name_and_no_secret(tmp_path: Path) -> None:
     )
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["name"] == "knowledge-engine-r3-8-12345"
+    assert payload["workers_dev"] is True
     assert payload["placement"] == {"hostname": "qdrant.example.test"}
     assert payload["ai"] == {"binding": "AI"}
     assert "QDRANT_API_KEY" not in output.read_text(encoding="utf-8")
@@ -158,4 +159,7 @@ def test_source_has_no_fixed_worker_absence_probe() -> None:
     assert "derive_worker_name" in text
     assert "worker_retained" in text
     assert "R2_BUCKET" in text
+    assert "READINESS_CONSECUTIVE_SUCCESSES = 2" in text
+    assert "LIVE_OBSERVATION_ATTEMPTS = 3" in text
+    assert 'exc.code == "worker_http_404"' in text
     assert "delete" not in text.split("def execute", 1)[1].split("def parse_args", 1)[0]
