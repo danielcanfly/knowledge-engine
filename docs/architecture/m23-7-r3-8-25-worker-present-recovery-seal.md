@@ -1,5 +1,27 @@
 # M23.7 R3.8.25 Worker-Present Recovery Seal
 
+## Run 29611245813
+
+This seal binds schema-v2 recovery probe run `29611245813` for diagnostic worker
+`knowledge-engine-r3-8-29610393567`.
+
+The probe was authorized by PR #879 and ran at exact head
+`7e596421f5c156a066b60d8983c7f675ed331420`. It performed only the official
+Cloudflare control-plane read requests for Worker versions and deployments.
+
+The worker is present. Cloudflare returned four unique version identities and
+four unique deployment identities. The recovery receipt self-digest is
+`679f8e2fbdaf0a139cdb5e360d4104523ea9257e2a9d3011573b49fbe02ca429`, and the
+artifact ZIP SHA-256 is
+`0622e7296ac3f7b59e3cd46074c7abd31e4096cddfc679b29242da0cea0c1dad`.
+
+No observation was replayed. No worker delete, deploy, secret mutation, route
+invocation, Qdrant access, R2 access, protected mutation, blocker clearance, or
+closure action occurred. Production retrieval remains `lexical`.
+
+The next legal step is independent reconciliation of this worker-present seal.
+Only after that may a separate deletion authorization be created.
+
 ## Run 29608526669
 
 This seal binds schema-v2 recovery probe run `29608526669` for diagnostic worker
