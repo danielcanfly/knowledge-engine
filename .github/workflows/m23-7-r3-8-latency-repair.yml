@@ -70,11 +70,12 @@ jobs:
               .read_text(encoding="utf-8")
           )
           assert subject.canonical_contract() == expected
-          assert subject.CONTRACT_SHA256 == "108e749661f47861472499475591eed2b5baf485920399bb48b6413658e287a0"
+          assert subject.CONTRACT_SHA256 == "6de822f163dc5f4f0fa62ce6d8f7a0a0fe9752065997ac53c8a47668ab7da930"
           assert expected["entry"]["engine_sha"] == "7793cd22092aca530ca48a3240a3c83ffd3d2894"
           assert expected["latency"]["maximum_worker_internal_shadow_ms"] == 1200
           assert expected["latency"]["threshold_changed"] is False
           assert expected["queries"]["query_count"] == 24
+          assert expected["queries"]["qdrant_dense_limit"] == 10
           assert expected["queries"]["workers_ai_binding_calls"] == 1
           assert expected["queries"]["qdrant_query_batch_calls"] == 1
           assert expected["queries"]["qdrant_single_query_fallback_max_calls"] == 24

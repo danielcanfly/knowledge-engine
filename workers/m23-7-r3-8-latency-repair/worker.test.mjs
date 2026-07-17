@@ -12,7 +12,7 @@ import {
 
 const VECTOR_DIMENSION = 1024;
 const QUERY_COUNT = 24;
-const DENSE_LIMIT = 50;
+const DENSE_LIMIT = 10;
 const COLLECTION = "llm_wiki_m23_r3_5_candidate_8eed54902c73";
 const CANDIDATE_ARTIFACT_SHA256 =
   "8eed54902c73314ac2e5d5e187a788e44941dae250d9823d45b71ec57d1e1371";
@@ -20,7 +20,7 @@ const CANDIDATE_ARTIFACT_SHA256 =
 test("contract digest matches the canonical R3.8 contract", () => {
   assert.equal(
     CONTRACT_SHA256,
-    "108e749661f47861472499475591eed2b5baf485920399bb48b6413658e287a0",
+    "6de822f163dc5f4f0fa62ce6d8f7a0a0fe9752065997ac53c8a47668ab7da930",
   );
 });
 

@@ -5,11 +5,11 @@ const VECTOR_NAME = "default";
 const VECTOR_DIMENSION = 1024;
 const EXPECTED_POINTS = 107;
 const QUERY_COUNT = 24;
-const DENSE_LIMIT = 50;
+const DENSE_LIMIT = 10;
 const MAX_BODY_BYTES = 65536;
 const SINGLE_QUERY_CONCURRENCY = 6;
 const CONTRACT_SHA256 =
-  "108e749661f47861472499475591eed2b5baf485920399bb48b6413658e287a0";
+  "6de822f163dc5f4f0fa62ce6d8f7a0a0fe9752065997ac53c8a47668ab7da930";
 const REQUEST_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-request/v1";
 const RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1";
 const ROUTE = "/v1/m23-7-r3-8/observe";
