@@ -1,5 +1,23 @@
 # M23.7 R3.8.24 Fail-Closed Latency Evidence Reconciliation
 
+## Run 29610393567
+
+This reconciliation independently accepts the fail-closed evidence seal from
+PR #877 for remote observation run `29610393567`.
+
+The accepted seal digest is
+`df97373c519c138c254965a6f91bed8c76af238b85ce7cbcc3dd51867c8669d6`, and this
+reconciliation digest is
+`56b8093a6df72d678faf381f4ddf95d6a11131d82ce25bc5ab6cb541b2d374c3`.
+
+The top-10 dense-limit attempt did not pass. It failed accepted metric parity,
+exact target-rank parity, and worker internal shadow latency. The diagnostic
+Worker `knowledge-engine-r3-8-29610393567` remains retained and requires
+separately governed cleanup.
+
+No blocker is eligible for clearance. Production retrieval remains `lexical`,
+and the next legal gate is retained worker cleanup.
+
 ## Run 29607698618
 
 This reconciliation independently accepts the fail-closed latency evidence seal
