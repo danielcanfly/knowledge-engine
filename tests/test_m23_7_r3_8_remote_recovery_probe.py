@@ -230,6 +230,10 @@ def test_probe_source_has_only_read_methods_and_schema_v2_identity() -> None:
             "engine_sha": "e9336e525a472387076a39c547d082acaf60b6cc",
             "worker_name": "knowledge-engine-r3-8-29597922646",
         },
+        "29600412694": {
+            "engine_sha": "55ee393543b68eb55c18f0177b7d7969f0936956",
+            "worker_name": "knowledge-engine-r3-8-29600412694",
+        },
     }
     assert subject.CONFIRMATION_SUFFIX == "_SCHEMA_V2"
     assert subject.SCHEMA_VERSION.endswith("/v2")
