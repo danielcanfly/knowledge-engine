@@ -7,6 +7,19 @@ const EXPECTED_POINTS = 107;
 const QUERY_COUNT = 24;
 const DENSE_LIMIT = 50;
 const MAX_BODY_BYTES = 65536;
+const PAYLOAD_FIELDS = [
+  "payload_schema_version",
+  "section_id",
+  "source_membership",
+  "candidate_collection",
+  "candidate_artifact_sha256",
+  "candidate_reingestion_issue",
+  "vector_name",
+  "vector_dimension",
+  "canonical_knowledge",
+  "candidate_release_eligible",
+  "production_authority",
+];
 const CONTRACT_SHA256 =
   "09a340c2145cffa8ee45de7725e157c864baf08f0cda5ade11fc5bcccb0e5a94";
 const REQUEST_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-request/v1";
@@ -369,7 +382,7 @@ async function executeObservation(env, validated, now = () => performance.now())
           query: vector,
           using: VECTOR_NAME,
           limit: DENSE_LIMIT,
-          with_payload: true,
+          with_payload: PAYLOAD_FIELDS,
           with_vector: false,
         })),
       }),

@@ -132,7 +132,11 @@ test("executeObservation performs one AI batch and one Qdrant query batch", asyn
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
-    calls.push({ url: String(url), method: init.method || "GET" });
+    calls.push({
+      url: String(url),
+      method: init.method || "GET",
+      body: init.body ? JSON.parse(init.body) : null,
+    });
     if (String(url).endsWith("/points/query/batch")) {
       return new Response(JSON.stringify(batchPayload()), {
         status: 200,
@@ -176,6 +180,32 @@ test("executeObservation performs one AI batch and one Qdrant query batch", asyn
     assert.deepEqual(
       calls.map((item) => item.method),
       ["GET", "POST", "GET"],
+    );
+    const batch = calls[1].body;
+    assert.equal(batch.searches.length, QUERY_COUNT);
+    assert.deepEqual(
+      batch.searches.map((search) => ({
+        limit: search.limit,
+        withPayload: search.with_payload,
+        withVector: search.with_vector,
+      })),
+      Array.from({ length: QUERY_COUNT }, () => ({
+        limit: DENSE_LIMIT,
+        withPayload: [
+          "payload_schema_version",
+          "section_id",
+          "source_membership",
+          "candidate_collection",
+          "candidate_artifact_sha256",
+          "candidate_reingestion_issue",
+          "vector_name",
+          "vector_dimension",
+          "canonical_knowledge",
+          "candidate_release_eligible",
+          "production_authority",
+        ],
+        withVector: false,
+      })),
     );
     assert.equal(result.external_calls.workers_ai_binding, 1);
     assert.equal(result.external_calls.qdrant_query_batch, 1);
