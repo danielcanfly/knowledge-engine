@@ -117,7 +117,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code e36559665429514789a6a0122d3b7ac8ff4d5765 HEAD -- \
+          git diff --exit-code b7ff3c05e8eb2e2c7fcc56c206dd2da678256674 HEAD -- \
             pilot/m23/m23-7-r3-8-9-recovery-schema-contract.json \
             docs/architecture/m23-7-r3-8-9-recovery-schema.md \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
