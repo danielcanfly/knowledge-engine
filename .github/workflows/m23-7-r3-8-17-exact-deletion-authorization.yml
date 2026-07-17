@@ -1,0 +1,96 @@
+name: M23.7 R3.8.17 Exact Deletion Authorization
+
+on:
+  pull_request:
+    paths:
+      - "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29546336917.json"
+      - "docs/architecture/m23-7-r3-8-17-exact-deletion-authorization.md"
+      - ".github/workflows/m23-7-r3-8-17-exact-deletion-authorization.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authorize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and reconciliation ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor f710a4d7aa0b8e4f80dfd9169e5b4f9b36dcf743 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: python -m pip install -e '.[dev]'
+      - name: Validate exact committed authorization through production validator
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.m23_7_r3_8_remote_delete import validate_authorization
+
+          path = Path("deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29546336917.json")
+          value = validate_authorization(path)
+          assert value["authorization_sha256"] == "db28df9b60264bb55b4e26ceb4bdb5eabdb8a60e35ce80c82200c328406ae2df"
+          assert value["worker_name"] == "knowledge-engine-r3-8-29546336917"
+          assert value["observation_run_id"] == "29546336917"
+          assert value["recovery_run_id"] == "29546964620"
+          assert value["receipt_sha256"] == "2262aaf3dacf7d964b7dc07f408aa391b5ab28f977bb7d5a17911221a4b28c55"
+          assert value["evidence_seal_sha256"] == "c7c98843d4016aa32c34b5793d7524b8f651c426d20dde104ea7d8795d6d7ca5"
+          assert value["independent_reconciliation_sha256"] == "6b806afa48f5faafd4c04f5cec261a8476414d76a407703911e891374abef725"
+          assert len(value["worker_version_ids"]) == 4
+          assert len(value["worker_deployment_ids"]) == 4
+          PY
+      - name: Verify authority boundary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path(
+              "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29546336917.json"
+          ).read_text(encoding="utf-8"))
+          assert value["authority"] == {
+              "diagnostic_worker_deletion_authorized": True,
+              "production_mutation_authorized": False,
+              "qdrant_mutation_authorized": False,
+              "r2_mutation_authorized": False,
+              "pointer_mutation_authorized": False,
+              "source_mutation_authorized": False,
+          }
+          PY
+      - name: Verify exact authorization scope and runtime preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29546336917.json",
+              "docs/architecture/m23-7-r3-8-17-exact-deletion-authorization.md",
+              ".github/workflows/m23-7-r3-8-17-exact-deletion-authorization.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "f710a4d7aa0b8e4f80dfd9169e5b4f9b36dcf743", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code f710a4d7aa0b8e4f80dfd9169e5b4f9b36dcf743 HEAD -- \
+            scripts/m23_7_r3_8_remote_delete.py \
+            tests/test_m23_7_r3_8_remote_delete.py \
+            .github/workflows/m23-7-r3-8-remote-delete.yml \
+            scripts/m23_7_r3_8_remote_operator.py \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py
+      - name: Verify authorization performs no deletion
+        shell: bash
+        run: |
+          test "$(git diff --name-only f710a4d7aa0b8e4f80dfd9169e5b4f9b36dcf743 HEAD | grep -c '^scripts/' || true)" = "0"
+          test "$(git diff --name-only f710a4d7aa0b8e4f80dfd9169e5b4f9b36dcf743 HEAD | grep -c '^workers/' || true)" = "0"
