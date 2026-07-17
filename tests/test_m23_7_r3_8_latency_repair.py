@@ -176,6 +176,11 @@ def test_contract_freezes_placed_worker_and_unchanged_budget() -> None:
     assert contract["queries"]["qdrant_batch_endpoint"] == "points/query/batch"
     assert contract["queries"]["qdrant_single_query_endpoint"] == "points/query?consistency=all"
     assert contract["queries"]["qdrant_scroll_endpoint"] is None
+    assert contract["queries"]["qdrant_dense_limit"] == 50
+    assert contract["queries"]["qdrant_payload_selector_fields"] == list(
+        subject.PAYLOAD_SELECTOR_FIELDS
+    )
+    assert contract["queries"]["qdrant_full_payload_returned"] is False
     assert contract["authority"]["qdrant_write_authorized"] is False
     assert contract["authority"]["retrieval_quality_blocker_cleared"] is False
 
