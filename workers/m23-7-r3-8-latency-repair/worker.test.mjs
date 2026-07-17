@@ -263,9 +263,11 @@ test("executeObservation performs one AI batch and one identity-filtered Qdrant 
   }
 });
 
-test("executeObservation falls back to parallel Qdrant single queries when query batch is unavailable", async () => {
+test("executeObservation falls back to bounded Qdrant single queries when query batch is unavailable", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
+  let inFlightSingleQueries = 0;
+  let maxInFlightSingleQueries = 0;
   globalThis.fetch = async (url, init = {}) => {
     calls.push({
       url: String(url),
@@ -279,6 +281,13 @@ test("executeObservation falls back to parallel Qdrant single queries when query
       });
     }
     if (String(url).endsWith("/points/query?consistency=all")) {
+      inFlightSingleQueries += 1;
+      maxInFlightSingleQueries = Math.max(
+        maxInFlightSingleQueries,
+        inFlightSingleQueries,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      inFlightSingleQueries -= 1;
       return new Response(JSON.stringify(singleQueryPayload()), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -318,6 +327,7 @@ test("executeObservation falls back to parallel Qdrant single queries when query
         .length,
       QUERY_COUNT,
     );
+    assert.equal(maxInFlightSingleQueries, 6);
     assert.deepEqual(calls[2].body, {
       query: vector(0),
       using: "default",
