@@ -233,6 +233,13 @@ test("executeObservation performs one AI batch and one identity-filtered Qdrant 
     assert.equal(result.external_calls.qdrant_vector_scroll, 0);
     assert.equal(result.external_calls.qdrant_write, 0);
     assert.equal(result.variants.length, QUERY_COUNT);
+    assert.deepEqual(
+      result.variants[0].ranked_section_ids,
+      Array.from(
+        { length: DENSE_LIMIT },
+        (_, index) => `section-${String(index).padStart(3, "0")}`,
+      ),
+    );
     assert.equal(result.timings.shadow_ms, 750);
     assert.equal(result.authority.protected_mutations_dispatched, false);
   } finally {

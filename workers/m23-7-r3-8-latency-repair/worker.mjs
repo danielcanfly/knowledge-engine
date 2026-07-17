@@ -490,9 +490,7 @@ async function executeObservation(env, validated, now = () => performance.now())
     },
   );
   assertCondition(batchResponse.ok, "qdrant-batch-unavailable", 502);
-  const rankings = parseBatchResults(await batchResponse.json()).map((ranking) =>
-    ranking.map((item) => item.sectionId),
-  );
+  const rankings = parseBatchResults(await batchResponse.json());
   const qdrantFinished = now();
   const shadowFinished = now();
 

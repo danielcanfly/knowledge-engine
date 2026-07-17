@@ -163,4 +163,5 @@ def test_source_has_no_fixed_worker_absence_probe() -> None:
     assert "LIVE_OBSERVATION_ATTEMPTS = 3" in text
     assert '"worker_http_404"' in text
     assert '"worker_http_500_operator_secret_missing"' in text
+    assert '"worker_http_502_qdrant_batch_unavailable"' in text
     assert "delete" not in text.split("def execute", 1)[1].split("def parse_args", 1)[0]
