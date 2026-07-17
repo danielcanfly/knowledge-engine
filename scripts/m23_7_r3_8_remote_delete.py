@@ -20,6 +20,7 @@ from scripts.m23_7_r3_8_remote_operator import (
 
 AUTH_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-deletion-authorization/v2"
 RECEIPT_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-deletion-receipt/v2"
+FAILURE_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-deletion-failure/v1"
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
 _WORKER = re.compile(r"^knowledge-engine-r3-8-[0-9]{1,20}$")
 _RUN_ID = re.compile(r"^[0-9]{1,20}$")
@@ -115,25 +116,33 @@ def build_delete_command(worker_name: str, config: Path) -> list[str]:
 
 
 def execute(args: argparse.Namespace) -> int:
-    if args.confirmation != "DELETE_RECONCILED_R3_8_WORKER":
-        raise RemoteOperatorError("deletion_confirmation_mismatch")
-    actual = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    if actual != args.expected_head:
-        raise RemoteOperatorError("deletion_exact_head_mismatch")
-    auth = validate_authorization(Path(args.authorization_path))
-    for name in ("CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN", "QDRANT_URL"):
-        required_env(name)
-
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
-    worker_name = auth["worker_name"]
-    worker_dir = Path("workers/m23-7-r3-8-latency-repair").resolve()
-    config = worker_dir / f"wrangler.delete.{worker_name}.jsonc"
-    env = os.environ.copy()
-    command = ["npx", "--yes", f"wrangler@{WRANGLER_VERSION}"]
-
+    actual = "unknown"
+    stage = "preflight"
+    worker_name = "unknown"
+    auth: dict[str, Any] | None = None
+    worker_delete_dispatched = False
+    absence_probe_dispatched = False
     try:
+        if args.confirmation != "DELETE_RECONCILED_R3_8_WORKER":
+            raise RemoteOperatorError("deletion_confirmation_mismatch")
+        actual = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        if actual != args.expected_head:
+            raise RemoteOperatorError("deletion_exact_head_mismatch")
+        auth = validate_authorization(Path(args.authorization_path))
+        worker_name = auth["worker_name"]
+        for name in ("CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN", "QDRANT_URL"):
+            required_env(name)
+
+        worker_dir = Path("workers/m23-7-r3-8-latency-repair").resolve()
+        config = worker_dir / f"wrangler.delete.{worker_name}.jsonc"
+        env = os.environ.copy()
+        command = ["npx", "--yes", f"wrangler@{WRANGLER_VERSION}"]
+
         generate_wrangler_config(required_env("QDRANT_URL"), worker_name, config)
+        stage = "worker_delete"
+        worker_delete_dispatched = True
         deleted = subprocess.run(
             build_delete_command(worker_name, config),
             cwd=worker_dir,
@@ -146,6 +155,8 @@ def execute(args: argparse.Namespace) -> int:
             raise RemoteOperatorError(
                 "delete_" + classify_wrangler_error(deleted.stdout + deleted.stderr)
             )
+        stage = "absence_probe"
+        absence_probe_dispatched = True
         probe = subprocess.run(
             command
             + [
@@ -166,36 +177,70 @@ def execute(args: argparse.Namespace) -> int:
         classification = classify_wrangler_error(probe.stdout + probe.stderr)
         if probe.returncode == 0 or classification != "worker_not_found":
             raise RemoteOperatorError("delete_absence_not_proven")
-    finally:
-        config.unlink(missing_ok=True)
 
-    receipt = {
-        "schema_version": RECEIPT_SCHEMA,
-        "status": "diagnostic_worker_deleted_and_absence_proven",
-        "engine_sha": actual,
-        "worker_name": worker_name,
-        "observation_run_id": auth["observation_run_id"],
-        "recovery_run_id": auth["recovery_run_id"],
-        "worker_version_ids": auth["worker_version_ids"],
-        "worker_deployment_ids": auth["worker_deployment_ids"],
-        "receipt_sha256": auth["receipt_sha256"],
-        "evidence_seal_sha256": auth["evidence_seal_sha256"],
-        "independent_reconciliation_sha256": auth[
-            "independent_reconciliation_sha256"
-        ],
-        "control_plane_absence_proven": True,
-        "production_retrieval": "lexical",
-        "protected_mutations_dispatched": False,
-        "qdrant_mutation_dispatched": False,
-        "r2_mutation_dispatched": False,
-        "pointer_mutation_dispatched": False,
-        "source_mutation_dispatched": False,
-    }
-    receipt["deletion_receipt_sha256"] = canonical_sha256(receipt)
-    (output / "remote-deletion-receipt.json").write_text(
-        canonical_json(receipt) + "\n", encoding="utf-8"
-    )
-    return 0
+        receipt = {
+            "schema_version": RECEIPT_SCHEMA,
+            "status": "diagnostic_worker_deleted_and_absence_proven",
+            "engine_sha": actual,
+            "worker_name": worker_name,
+            "observation_run_id": auth["observation_run_id"],
+            "recovery_run_id": auth["recovery_run_id"],
+            "worker_version_ids": auth["worker_version_ids"],
+            "worker_deployment_ids": auth["worker_deployment_ids"],
+            "receipt_sha256": auth["receipt_sha256"],
+            "evidence_seal_sha256": auth["evidence_seal_sha256"],
+            "independent_reconciliation_sha256": auth[
+                "independent_reconciliation_sha256"
+            ],
+            "control_plane_absence_proven": True,
+            "production_retrieval": "lexical",
+            "protected_mutations_dispatched": False,
+            "qdrant_mutation_dispatched": False,
+            "r2_mutation_dispatched": False,
+            "pointer_mutation_dispatched": False,
+            "source_mutation_dispatched": False,
+        }
+        receipt["deletion_receipt_sha256"] = canonical_sha256(receipt)
+        (output / "remote-deletion-receipt.json").write_text(
+            canonical_json(receipt) + "\n", encoding="utf-8"
+        )
+        return 0
+    except (RemoteOperatorError, OSError, json.JSONDecodeError) as exc:
+        code = exc.code if isinstance(exc, RemoteOperatorError) else "bounded_failure"
+        failure = {
+            "schema_version": FAILURE_SCHEMA,
+            "status": "rejected_remote_deletion_failure",
+            "failure_code": code,
+            "failure_stage": stage,
+            "engine_sha": actual,
+            "authorization_path": args.authorization_path,
+            "worker_name": worker_name,
+            "observation_run_id": auth.get("observation_run_id") if auth else None,
+            "recovery_run_id": auth.get("recovery_run_id") if auth else None,
+            "receipt_sha256": auth.get("receipt_sha256") if auth else None,
+            "evidence_seal_sha256": auth.get("evidence_seal_sha256") if auth else None,
+            "independent_reconciliation_sha256": (
+                auth.get("independent_reconciliation_sha256") if auth else None
+            ),
+            "worker_delete_dispatched": worker_delete_dispatched,
+            "absence_probe_dispatched": absence_probe_dispatched,
+            "control_plane_absence_proven": False,
+            "production_retrieval": "lexical",
+            "protected_mutations_dispatched": False,
+            "qdrant_mutation_dispatched": False,
+            "r2_mutation_dispatched": False,
+            "pointer_mutation_dispatched": False,
+            "source_mutation_dispatched": False,
+            "arbitrary_exception_text_persisted": False,
+        }
+        failure["deletion_failure_sha256"] = canonical_sha256(failure)
+        (output / "remote-deletion-failure.json").write_text(
+            canonical_json(failure) + "\n", encoding="utf-8"
+        )
+        return 23
+    finally:
+        if "config" in locals():
+            config.unlink(missing_ok=True)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -208,10 +253,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    try:
-        return execute(parse_args(argv))
-    except (RemoteOperatorError, OSError, json.JSONDecodeError):
-        return 23
+    return execute(parse_args(argv))
 
 
 if __name__ == "__main__":
