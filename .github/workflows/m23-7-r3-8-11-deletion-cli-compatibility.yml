@@ -111,7 +111,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code 3aca4b793a841858bd0682fe61cc0febe8b649cd HEAD -- \
+          git diff --exit-code cb7ecefa8f5a4ac31bdfb71d891b60f3aa51555d HEAD -- \
             scripts/m23_7_r3_8_remote_entrypoint.py \
             workers/m23-7-r3-8-latency-repair/worker.mjs \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
@@ -137,7 +137,7 @@ jobs:
               "Verify accepted recovery core remains exact", 1
           )[1]
           assert "changed == allowed" not in schema
-          assert "3aca4b793a841858bd0682fe61cc0febe8b649cd" in schema
+          assert "cb7ecefa8f5a4ac31bdfb71d891b60f3aa51555d" in schema
           PY
       - name: Verify mutation and closure boundaries
         shell: bash
