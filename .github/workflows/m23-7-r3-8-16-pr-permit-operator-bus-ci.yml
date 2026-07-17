@@ -263,6 +263,10 @@ jobs:
               ".github/workflows/m23-7-r3-8-16-pr-permit-operator-bus-ci.yml",
               ".github/workflows/m23-operator-command-bus.yml",
           }
+          readiness_shell_hotfix = {
+              ".github/workflows/m23-7-r3-8-16-pr-permit-operator-bus-ci.yml",
+              ".github/workflows/m23-operator-command-bus.yml",
+          }
           base = "${{ github.event.pull_request.base.sha || '88ddd82cbfb93a6c6c9fe2aa98d34cf5e1e4ebe2' }}"
           changed = set(
               subprocess.check_output(
@@ -281,11 +285,13 @@ jobs:
               frozenset(endpoint_hotfix),
               frozenset(origin_label_hotfix),
               frozenset(secret_readiness_hotfix),
+              frozenset(readiness_shell_hotfix),
           }, (
               changed,
               route_enablement,
               endpoint_hotfix,
               origin_label_hotfix,
               secret_readiness_hotfix,
+              readiness_shell_hotfix,
           )
           PY
