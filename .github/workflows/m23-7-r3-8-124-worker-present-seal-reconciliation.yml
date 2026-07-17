@@ -3,8 +3,8 @@ name: M23.7 R3.8.124 Worker-Present Seal Reconciliation
 on:
   pull_request:
     paths:
-      - ".github/evidence/m23-7-r3-8-124/worker-present-seal-reconciliation-29592989012.json"
-      - "docs/architecture/m23-7-r3-8-124-worker-present-seal-reconciliation.md"
+      - ".github/evidence/m23-7-r3-8-124/worker-present-seal-reconciliation-29595999331.json"
+      - "docs/architecture/m23-7-r3-8-124-worker-present-seal-reconciliation-29595999331.md"
       - ".github/workflows/m23-7-r3-8-124-worker-present-seal-reconciliation.yml"
   workflow_dispatch:
 
@@ -24,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          git merge-base --is-ancestor 81f3877e5a86d16864ce650da3a610f8652688d7 HEAD
+          git merge-base --is-ancestor 2e8051a37d407936ee53eaf28dd2417450817850 HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -34,15 +34,15 @@ jobs:
           python - <<'PY'
           import hashlib, json
           from pathlib import Path
-          path = Path(".github/evidence/m23-7-r3-8-124/worker-present-seal-reconciliation-29592989012.json")
+          path = Path(".github/evidence/m23-7-r3-8-124/worker-present-seal-reconciliation-29595999331.json")
           value = json.loads(path.read_text(encoding="utf-8"))
           digest = value.pop("reconciliation_sha256")
           encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
           assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "216be223077a6ffe0ffff34735e828680fc4c276c328af75ea760a5a200fb52f"
-          assert value["seal_pr"] == 825
-          assert value["seal_merge_sha"] == "81f3877e5a86d16864ce650da3a610f8652688d7"
-          assert value["seal_sha256s"]["29592989012"] == "8186d8cebcb263bd493974cbdafc979d25212d9c35c35e9ebd917e8cf4ed6021"
+          assert digest == "5626a6e653765e494ef63305693c7b04e1cae70ceff0fd4fa3421c1050492ce0"
+          assert value["seal_pr"] == 832
+          assert value["seal_merge_sha"] == "2e8051a37d407936ee53eaf28dd2417450817850"
+          assert value["seal_sha256s"]["29595999331"] == "4f4d4ec0221a12f15da4fda6c402b2bf8d087ffa639da90d97f56cf7a6a80d50"
           result = value["result"]
           assert result["worker_present_evidence_reconciled"] is True
           assert result["worker_state"] == "worker_present"
@@ -50,9 +50,9 @@ jobs:
           assert result["worker_lifecycle_clean"] is False
           assert result["blocker_clearance_eligible"] is False
           worker = value["workers"][0]
-          assert worker["name"] == "knowledge-engine-r3-8-29592583765"
-          assert worker["observation_run_id"] == "29592583765"
-          assert worker["recovery_run_id"] == "29592989012"
+          assert worker["name"] == "knowledge-engine-r3-8-29595625175"
+          assert worker["observation_run_id"] == "29595625175"
+          assert worker["recovery_run_id"] == "29595999331"
           assert worker["versions"]["identity_count"] == 4
           assert worker["deployments"]["identity_count"] == 4
           assert value["authority"]["worker_deletion_authorized"] is False
@@ -65,14 +65,14 @@ jobs:
           python - <<'PY'
           import subprocess
           allowed = {
-              ".github/evidence/m23-7-r3-8-124/worker-present-seal-reconciliation-29592989012.json",
-              "docs/architecture/m23-7-r3-8-124-worker-present-seal-reconciliation.md",
+              ".github/evidence/m23-7-r3-8-124/worker-present-seal-reconciliation-29595999331.json",
+              "docs/architecture/m23-7-r3-8-124-worker-present-seal-reconciliation-29595999331.md",
               ".github/workflows/m23-7-r3-8-124-worker-present-seal-reconciliation.yml",
           }
-          changed = set(subprocess.check_output(["git", "diff", "--name-only", "81f3877e5a86d16864ce650da3a610f8652688d7", "HEAD"], text=True).splitlines())
+          changed = set(subprocess.check_output(["git", "diff", "--name-only", "2e8051a37d407936ee53eaf28dd2417450817850", "HEAD"], text=True).splitlines())
           assert changed == allowed, (changed, allowed)
           PY
-          git diff --exit-code 81f3877e5a86d16864ce650da3a610f8652688d7 HEAD -- \
+          git diff --exit-code 2e8051a37d407936ee53eaf28dd2417450817850 HEAD -- \
             scripts/m23_7_r3_8_remote_recovery_probe.py \
             .github/workflows/m23-7-r3-8-9-recovery-probe.yml \
             scripts/m23_7_r3_8_remote_operator.py \
