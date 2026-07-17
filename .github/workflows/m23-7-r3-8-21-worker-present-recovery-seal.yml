@@ -1,0 +1,100 @@
+name: M23.7 R3.8.21 Worker-Present Recovery Seal
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-21/worker-present-recovery-seal-29551723834.json"
+      - "docs/architecture/m23-7-r3-8-21-worker-present-recovery-seal.md"
+      - ".github/workflows/m23-7-r3-8-21-worker-present-recovery-seal.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and recovery authorization ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 60d60b0dfb55bdecb9e6cd069cdef75fb097cc8a HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic worker-present evidence seal
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path(".github/evidence/m23-7-r3-8-21/worker-present-recovery-seal-29551723834.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("seal_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "308bc22893ff2fbf24ae3b2cf7030e30a9f7f0ade6c16912c42ab5d7510a608a"
+          assert value["seal_issue"] == 664
+          assert value["recovery_run_id"] == "29551723834"
+          assert value["artifact"]["artifact_id"] == 8395963532
+          assert value["artifact"]["zip_sha256"] == "4dc1d2b08d7bd626c9913062cb06b426497ac1977dae909b0592efdcf46ce890"
+          assert value["artifact"]["receipt_file_sha256"] == "920d256427c043798a2e38c7b76dc8d12d65e24199031eac98a3354caa0966d6"
+          assert value["artifact"]["receipt_self_digest"] == "b9a16f9bf9f8959e01daf739c821b76a71eea5fdecb7f76ab76d601d6533a3c2"
+          receipt = value["receipt"]
+          assert receipt["status"] == "completed_read_only_recovery_probe"
+          assert receipt["worker_state"] == "worker_present"
+          assert receipt["worker_name"] == "knowledge-engine-r3-8-29550965495"
+          assert receipt["affected_run_id"] == "29550965495"
+          assert receipt["affected_engine_sha"] == "e36559665429514789a6a0122d3b7ac8ff4d5765"
+          assert receipt["probe_engine_sha"] == "60d60b0dfb55bdecb9e6cd069cdef75fb097cc8a"
+          assert receipt["recovery_probe_sha256"] == "b9a16f9bf9f8959e01daf739c821b76a71eea5fdecb7f76ab76d601d6533a3c2"
+          assert receipt["versions"]["identity_count"] == 4
+          assert receipt["deployments"]["identity_count"] == 4
+          assert len(set(receipt["versions"]["identities"])) == 4
+          assert len(set(receipt["deployments"]["identities"])) == 4
+          assert receipt["production_retrieval"] == "lexical"
+          assert receipt["blockers_cleared"] is False
+          for field in (
+              "worker_delete_dispatched",
+              "worker_deploy_dispatched",
+              "worker_route_invoked",
+              "worker_secret_mutation_dispatched",
+              "qdrant_read_dispatched",
+              "qdrant_mutation_dispatched",
+              "r2_read_dispatched",
+              "r2_mutation_dispatched",
+              "protected_mutations_dispatched",
+          ):
+              assert receipt[field] is False
+          PY
+      - name: Verify exact seal scope and runtime preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              ".github/evidence/m23-7-r3-8-21/worker-present-recovery-seal-29551723834.json",
+              "docs/architecture/m23-7-r3-8-21-worker-present-recovery-seal.md",
+              ".github/workflows/m23-7-r3-8-21-worker-present-recovery-seal.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "60d60b0dfb55bdecb9e6cd069cdef75fb097cc8a", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code 60d60b0dfb55bdecb9e6cd069cdef75fb097cc8a HEAD -- \
+            scripts/m23_7_r3_8_remote_recovery_probe.py \
+            .github/workflows/m23-7-r3-8-9-recovery-probe.yml \
+            scripts/m23_7_r3_8_remote_operator.py \
+            scripts/m23_7_r3_8_remote_delete.py \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            workers/m23-7-r3-8-latency-repair/worker.mjs
