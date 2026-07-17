@@ -46,6 +46,13 @@ const CANDIDATE_FILTER = {
   ],
 };
 
+test("contract digest matches the canonical R3.8 contract", () => {
+  assert.equal(
+    CONTRACT_SHA256,
+    "833f6e59748f6837ef96ef5d8cc212437e1fc2681d0a5ed1ee4a4388da386887",
+  );
+});
+
 function digest(text) {
   return createHash("sha256").update(text).digest("hex");
 }

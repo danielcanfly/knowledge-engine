@@ -56,7 +56,7 @@ const CANDIDATE_FILTER = {
   ],
 };
 const CONTRACT_SHA256 =
-  "33b6717c1012b369956bddb798216d89aa41d65cc773acfb3bca321879a11af0";
+  "833f6e59748f6837ef96ef5d8cc212437e1fc2681d0a5ed1ee4a4388da386887";
 const REQUEST_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-request/v1";
 const RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1";
 const ROUTE = "/v1/m23-7-r3-8/observe";
