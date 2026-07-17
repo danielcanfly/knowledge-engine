@@ -11,10 +11,17 @@ from typing import Any
 
 import httpx
 
-AFFECTED_RUN_ID = "29506217284"
-AFFECTED_ENGINE_SHA = "090db324939a4272b90d212fa462674b371b2e6d"
-AFFECTED_WORKER = "knowledge-engine-r3-8-29506217284"
-CONFIRMATION = "PROBE_R3_8_RUN_29506217284_SCHEMA_V2"
+AUTHORIZED_RUNS = {
+    "29506217284": {
+        "engine_sha": "090db324939a4272b90d212fa462674b371b2e6d",
+        "worker_name": "knowledge-engine-r3-8-29506217284",
+    },
+    "29546336917": {
+        "engine_sha": "b6c60752741b7079d93b25ddbe16a6582f9db966",
+        "worker_name": "knowledge-engine-r3-8-29546336917",
+    },
+}
+CONFIRMATION_SUFFIX = "_SCHEMA_V2"
 SCHEMA_VERSION = "knowledge-engine-m23-7-r3-8-9-recovery-probe/v2"
 MAX_RESPONSE_BYTES = 1_000_000
 NOT_FOUND_CODES = {10007, 10090}
@@ -159,18 +166,21 @@ def execute(args: argparse.Namespace) -> int:
     actual_head = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], text=True
     ).strip()
-    if args.confirmation != CONFIRMATION:
+    authorized = AUTHORIZED_RUNS.get(args.affected_run_id)
+    if authorized is None:
+        raise RecoveryProbeError("affected_run_identity_mismatch")
+    expected_confirmation = f"PROBE_R3_8_RUN_{args.affected_run_id}{CONFIRMATION_SUFFIX}"
+    if args.confirmation != expected_confirmation:
         raise RecoveryProbeError("confirmation_mismatch")
     if not _HEX_40.fullmatch(args.expected_head) or args.expected_head != actual_head:
         raise RecoveryProbeError("exact_head_mismatch")
-    if args.affected_run_id != AFFECTED_RUN_ID:
-        raise RecoveryProbeError("affected_run_identity_mismatch")
 
     account_id = required_env("CLOUDFLARE_ACCOUNT_ID")
     token = required_env("CLOUDFLARE_API_TOKEN")
+    affected_worker = str(authorized["worker_name"])
     base = (
         "https://api.cloudflare.com/client/v4/accounts/"
-        f"{account_id}/workers/scripts/{AFFECTED_WORKER}"
+        f"{account_id}/workers/scripts/{affected_worker}"
     )
     headers = {
         "Authorization": f"Bearer {token}",
@@ -198,10 +208,10 @@ def execute(args: argparse.Namespace) -> int:
         "status": "completed_read_only_recovery_probe"
         if state in {"worker_absent", "worker_present"}
         else "completed_fail_closed_recovery_probe",
-        "affected_run_id": AFFECTED_RUN_ID,
-        "affected_engine_sha": AFFECTED_ENGINE_SHA,
+        "affected_run_id": args.affected_run_id,
+        "affected_engine_sha": authorized["engine_sha"],
         "probe_engine_sha": actual_head,
-        "worker_name": AFFECTED_WORKER,
+        "worker_name": affected_worker,
         "worker_state": state,
         "versions": versions,
         "deployments": deployments,
@@ -236,7 +246,7 @@ def execute(args: argparse.Namespace) -> int:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Read-only schema-v2 recovery probe for R3.8 run 29506217284"
+        description="Read-only schema-v2 recovery probe for authorized R3.8 runs"
     )
     parser.add_argument("--expected-head", required=True)
     parser.add_argument("--affected-run-id", required=True)
@@ -257,13 +267,14 @@ def main(argv: list[str] | None = None) -> int:
             if isinstance(exc, RecoveryProbeError)
             else "bounded_recovery_probe_failure"
         )
+        authorized = AUTHORIZED_RUNS.get(args.affected_run_id, {})
         failure = {
             "schema_version": SCHEMA_VERSION,
             "status": "rejected_incomplete_recovery_probe",
             "failure_code": code,
-            "affected_run_id": AFFECTED_RUN_ID,
-            "affected_engine_sha": AFFECTED_ENGINE_SHA,
-            "worker_name": AFFECTED_WORKER,
+            "affected_run_id": args.affected_run_id,
+            "affected_engine_sha": authorized.get("engine_sha"),
+            "worker_name": authorized.get("worker_name"),
             "arbitrary_exception_text_persisted": False,
             "credentials_persisted": False,
             "service_url_persisted": False,
