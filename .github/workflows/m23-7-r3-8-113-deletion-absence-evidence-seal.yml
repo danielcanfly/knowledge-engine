@@ -1,0 +1,72 @@
+name: M23.7 R3.8.113 Deletion/Absence Evidence Seal
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-113/deletion-absence-evidence-seal-29588356545.json"
+      - "docs/architecture/m23-7-r3-8-113-deletion-absence-evidence-seal.md"
+      - ".github/workflows/m23-7-r3-8-113-deletion-absence-evidence-seal.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and deletion authorization ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 2da7a5cd38e56301355279cedaa0d20a5980b20a HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic deletion/absence seal
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          path = Path(".github/evidence/m23-7-r3-8-113/deletion-absence-evidence-seal-29588356545.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("seal_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "fbd6344854747c1a6da6fd4a7e93874c67bd94f5e8b2cbc6fbb10a03709689bd"
+          item = value["workers"][0]
+          assert item["worker"]["name"] == "knowledge-engine-r3-8-29587264678"
+          assert item["deletion_run"]["run_id"] == "29588251006"
+          assert item["deletion_run"]["worker_delete_dispatched"] is True
+          assert item["deletion_run"]["failure_code"] == "delete_absence_not_proven"
+          assert item["deletion_run"]["failure_self_digest"] == "a6dc1437ea57ebf673ea49f0fc9aad40c818677555d69aded5c8f18ff69d7176"
+          probe = item["post_delete_probe"]
+          assert probe["run_id"] == "29588356545"
+          assert probe["worker_state"] == "worker_absent"
+          assert probe["receipt_self_digest"] == "37dcf0fa6b72335a184aa50b5b2304ce09abfe7265f073eea7199fd0f9954d97"
+          assert probe["versions"]["error_codes"] == [10007]
+          assert probe["deployments"]["error_codes"] == [10007]
+          assert value["result"]["worker_lifecycle_clean_pending_reconciliation"] is True
+          assert value["authority"]["fresh_observation_authorized"] is False
+          assert value["authority"]["m23_7_closure_authorized"] is False
+          PY
+      - name: Verify exact seal scope and runtime preservation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              ".github/evidence/m23-7-r3-8-113/deletion-absence-evidence-seal-29588356545.json",
+              "docs/architecture/m23-7-r3-8-113-deletion-absence-evidence-seal.md",
+              ".github/workflows/m23-7-r3-8-113-deletion-absence-evidence-seal.yml",
+          }
+          changed = set(subprocess.check_output(["git", "diff", "--name-only", "2da7a5cd38e56301355279cedaa0d20a5980b20a", "HEAD"], text=True).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code 2da7a5cd38e56301355279cedaa0d20a5980b20a HEAD --             scripts/m23_7_r3_8_remote_delete.py             scripts/m23_7_r3_8_remote_recovery_probe.py             .github/workflows/m23-7-r3-8-remote-delete.yml             .github/workflows/m23-7-r3-8-9-recovery-probe.yml             scripts/m23_7_r3_8_remote_operator.py             src/knowledge_engine/m23_7_r3_8_latency_repair.py
