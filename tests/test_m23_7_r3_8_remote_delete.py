@@ -168,6 +168,49 @@ def test_execute_dispatches_positional_delete_and_proves_absence(
     assert receipt["control_plane_absence_proven"] is True
 
 
+def test_execute_persists_privacy_safe_failure_before_delete(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    expected_head = "5" * 40
+    authorization = tmp_path / "authorization.json"
+    authorization.write_text(json.dumps(_authorization()), encoding="utf-8")
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(
+        subject.subprocess,
+        "check_output",
+        lambda *args, **kwargs: expected_head + "\n",
+    )
+    monkeypatch.setattr(subject, "required_env", lambda name: (_ for _ in ()).throw(
+        subject.RemoteOperatorError(f"missing_{name.lower()}")
+    ))
+    monkeypatch.setattr(subject.subprocess, "run", lambda command, **kwargs: calls.append(command))
+
+    output = tmp_path / "evidence"
+    result = subject.execute(
+        argparse.Namespace(
+            confirmation="DELETE_RECONCILED_R3_8_WORKER",
+            expected_head=expected_head,
+            authorization_path=str(authorization),
+            output_dir=str(output),
+        )
+    )
+    assert result == 23
+    assert calls == []
+    failure = json.loads((output / "remote-deletion-failure.json").read_text())
+    assert failure["schema_version"] == subject.FAILURE_SCHEMA
+    assert failure["status"] == "rejected_remote_deletion_failure"
+    assert failure["failure_code"] == "missing_cloudflare_account_id"
+    assert failure["failure_stage"] == "preflight"
+    assert failure["worker_delete_dispatched"] is False
+    assert failure["absence_probe_dispatched"] is False
+    assert failure["arbitrary_exception_text_persisted"] is False
+    assert failure["deletion_failure_sha256"] == subject.canonical_sha256(
+        {key: value for key, value in failure.items() if key != "deletion_failure_sha256"}
+    )
+
+
 def test_deletion_source_requires_full_identity_binding() -> None:
     text = Path("scripts/m23_7_r3_8_remote_delete.py").read_text(encoding="utf-8")
     assert "authorization_sha256" in text
@@ -176,5 +219,6 @@ def test_deletion_source_requires_full_identity_binding() -> None:
     assert "worker_deployment_ids" in text
     assert "DELETE_RECONCILED_R3_8_WORKER" in text
     assert "production_mutation_authorized" in text
+    assert "remote-deletion-failure.json" in text
     assert '"delete",\n        worker_name,' in text
     assert '["delete", "--name"' not in text

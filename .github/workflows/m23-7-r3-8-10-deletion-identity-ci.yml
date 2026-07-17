@@ -78,6 +78,8 @@ jobs:
           text = Path("scripts/m23_7_r3_8_remote_delete.py").read_text(encoding="utf-8")
           assert 'AUTH_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-deletion-authorization/v2"' in text
           assert 'RECEIPT_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-deletion-receipt/v2"' in text
+          assert 'FAILURE_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-deletion-failure/v1"' in text
+          assert "remote-deletion-failure.json" in text
           assert text.count('"worker_version_ids"') >= 3
           assert text.count('"worker_deployment_ids"') >= 3
           assert "set(value) != _AUTH_KEYS" in text
@@ -88,7 +90,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code 0b919b1340245ad057a6d99e56200ae49784ef9b HEAD -- \
+          git diff --exit-code e4d46d85b16ebba738c42cd19394791cc7c90789 HEAD -- \
             pilot/m23/m23-7-r3-8-10-deletion-identity-contract.json \
             docs/architecture/m23-7-r3-8-10-deletion-identity-set.md \
             scripts/m23_7_r3_8_remote_operator.py \
