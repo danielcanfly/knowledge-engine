@@ -1,0 +1,87 @@
+{
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "evidence_reconciliation_only": true,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deletion_authorized": false,
+    "worker_deletion_replay_authorized": false,
+    "worker_deploy_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "issue": 752,
+  "milestone": "M23.7-R3.8.111",
+  "parent_latency_issue": 520,
+  "parent_r3_issue": 474,
+  "reconciliation_sha256": "0694d6bcf83051ccd7b0aa7e95c09d73426977a249188e0807d272014e2e52ef",
+  "recovery_authorization_merge_sha": "fbbbf2afb6c9f35bc12bd9d4da589bb5e9695157",
+  "recovery_authorization_prs": [
+    809
+  ],
+  "result": {
+    "blocker_clearance_eligible": false,
+    "deletion_authorization_next_gate": true,
+    "next_gate": "separate_exact_deletion_authorization",
+    "production_retrieval": "lexical",
+    "worker_lifecycle_clean": false,
+    "worker_present_evidence_reconciled": true,
+    "worker_state": "worker_present"
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-111-worker-present-seal-reconciliation/v1",
+  "seal_accepted_head": "22accb1249f7a2eea948bc756441e5410a40ed8b",
+  "seal_exact_head_runs": {
+    "architecture_canon": 29587741637,
+    "ci": 29587741854,
+    "graph_v2": 29587742687,
+    "seal": 29587741879
+  },
+  "seal_issue": 750,
+  "seal_merge_sha": "cd631603c87e77c7761584f222bc1bf353853e07",
+  "seal_pr": 810,
+  "seal_sha256s": {
+    "29587564980": "5a3e9b01940acb8b453f4cd3ebfd8622897a1dab9a1f897f1e67103a2480555f"
+  },
+  "strict_zero_verified": true,
+  "workers": [
+    {
+      "artifact": {
+        "artifact_id": 8409646279,
+        "name": "m23-7-r3-8-9-recovery-29587564980",
+        "receipt_file_sha256": "308e6a51eb28d19c4849b235031f7d3c84fb82ec4b38a8543b22f85186ea5a9d",
+        "receipt_self_digest": "eaadc828b631564e0a51dd434572afde8824851f71a87ed5e0e2d8444bf2ad57",
+        "zip_sha256": "eba774747dbb9d4f9e41c8918112f9ed173e02c5b87ffa5fb588aa285f13c7d4"
+      },
+      "deployments": {
+        "identities": [
+          "047afaa3-2eaf-46d3-9a81-002cebdb34f6",
+          "128e4c87-c667-4126-ac48-d8c3cb221164",
+          "afe583d0-d8cd-4c21-9489-90b2a62e6aee",
+          "d0a74ad6-472a-43d4-b0e7-eb82f84eb74f"
+        ],
+        "identity_count": 4,
+        "state": "present"
+      },
+      "name": "knowledge-engine-r3-8-29587264678",
+      "observation_run_id": "29587264678",
+      "recovery_run_id": "29587564980",
+      "versions": {
+        "identities": [
+          "261e0c2f-a4d8-436f-a5c8-b10e2ca813c9",
+          "333a29e1-b9af-4f97-b527-2a53e9a97ee0",
+          "654cc3e8-5ca5-4b6a-bb12-320751c74f0a",
+          "a9e01db1-5ca1-4ca8-a032-56f62b46b84e"
+        ],
+        "identity_count": 4,
+        "state": "present"
+      }
+    }
+  ]
+}
