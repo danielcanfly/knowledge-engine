@@ -7,6 +7,10 @@ const EXPECTED_POINTS = 107;
 const QUERY_COUNT = 24;
 const DENSE_LIMIT = 50;
 const MAX_BODY_BYTES = 65536;
+const SEARCH_PARAMS = {
+  hnsw_ef: DENSE_LIMIT,
+  exact: false,
+};
 const PAYLOAD_FIELDS = [
   "payload_schema_version",
   "section_id",
@@ -381,6 +385,7 @@ async function executeObservation(env, validated, now = () => performance.now())
         searches: vectors.map((vector) => ({
           query: vector,
           using: VECTOR_NAME,
+          params: SEARCH_PARAMS,
           limit: DENSE_LIMIT,
           with_payload: PAYLOAD_FIELDS,
           with_vector: false,
