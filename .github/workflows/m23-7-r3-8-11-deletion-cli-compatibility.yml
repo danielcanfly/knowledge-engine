@@ -137,7 +137,7 @@ jobs:
               "Verify accepted recovery core remains exact", 1
           )[1]
           assert "changed == allowed" not in schema
-          assert "500d61c3b05385d7fd05ec976fa6bf54043bdf77" in schema
+          assert "47e16b4981698fb304af48377b93210e841c72e2" in schema
           PY
       - name: Verify mutation and closure boundaries
         shell: bash
