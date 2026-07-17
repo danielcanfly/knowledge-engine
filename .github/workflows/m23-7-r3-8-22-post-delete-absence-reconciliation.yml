@@ -1,0 +1,76 @@
+name: M23.7 R3.8.22 Post-Delete Absence Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-22/post-delete-absence-reconciliation-29552424982.json"
+      - "docs/architecture/m23-7-r3-8-22-post-delete-absence-reconciliation.md"
+      - ".github/workflows/m23-7-r3-8-22-post-delete-absence-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and seal ancestry
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 79bc691206a4e6d5fb064a593c6549a0e98602a7 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic reconciliation
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          path = Path(".github/evidence/m23-7-r3-8-22/post-delete-absence-reconciliation-29552424982.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("reconciliation_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "4c82a2f402d92a9a70928e70f2266920d77ce981cfa0ef8c5316522c0b88b4b1"
+          assert value["issue"] == 672
+          assert value["seal_pr"] == 671
+          assert value["seal_merge_sha"] == "79bc691206a4e6d5fb064a593c6549a0e98602a7"
+          assert value["seal_sha256"] == "3856b0a815ef4776b92e9ce34472d74985a47836671236e7add3c63a81e5d6a3"
+          assert value["deletion_run_id"] == "29552360089"
+          assert value["post_delete_recovery_run_id"] == "29552424982"
+          assert value["result"]["deletion_dispatched"] is True
+          assert value["result"]["deletion_success_receipt_emitted"] is False
+          assert value["result"]["post_delete_recovery_read_only"] is True
+          assert value["result"]["control_plane_absence_proven"] is True
+          assert value["result"]["deletion_lifecycle_clean"] is True
+          assert value["result"]["worker_state"] == "worker_absent"
+          assert value["result"]["worker_versions_error_codes"] == [10007]
+          assert value["result"]["worker_deployments_error_codes"] == [10007]
+          assert value["authority"]["production_retrieval"] == "lexical"
+          assert value["authority"]["worker_deletion_replay_authorized"] is False
+          assert value["authority"]["blockers_cleared"] is False
+          assert value["authority"]["m23_7_closure_authorized"] is False
+          assert value["strict_zero_verified"] is True
+          PY
+      - name: Verify exact reconciliation scope
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              ".github/evidence/m23-7-r3-8-22/post-delete-absence-reconciliation-29552424982.json",
+              "docs/architecture/m23-7-r3-8-22-post-delete-absence-reconciliation.md",
+              ".github/workflows/m23-7-r3-8-22-post-delete-absence-reconciliation.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "79bc691206a4e6d5fb064a593c6549a0e98602a7", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
