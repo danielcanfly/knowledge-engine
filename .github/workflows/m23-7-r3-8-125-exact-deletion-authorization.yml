@@ -3,8 +3,8 @@ name: M23.7 R3.8.125 Exact Deletion Authorization
 on:
   pull_request:
     paths:
-      - "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29600412694.json"
-      - "docs/architecture/m23-7-r3-8-125-exact-deletion-authorization-29600412694.md"
+      - "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29602737093.json"
+      - "docs/architecture/m23-7-r3-8-125-exact-deletion-authorization-29602737093.md"
       - ".github/workflows/m23-7-r3-8-125-exact-deletion-authorization.yml"
   workflow_dispatch:
 
@@ -24,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          git merge-base --is-ancestor 50b6de516bb39243b1af7b52020ec04e36edbad4 HEAD
+          git merge-base --is-ancestor 51a4ff17955b6e10c340865316b58dfcc289cfb1 HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -36,14 +36,14 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           from scripts.m23_7_r3_8_remote_delete import validate_authorization
-          value=validate_authorization(Path("deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29600412694.json"))
-          assert value["authorization_sha256"] == "6faf0b0f0cd5c4e4580a73fa4f2083b78c24035a61c90dea3b2a419b70efe5bf"
-          assert value["worker_name"] == "knowledge-engine-r3-8-29600412694"
-          assert value["observation_run_id"] == "29600412694"
-          assert value["recovery_run_id"] == "29600907404"
-          assert value["receipt_sha256"] == "df2ab8d6d854ea55a64943d4ed6849a5a5358455603526683ce66ff70fc8baeb"
-          assert value["evidence_seal_sha256"] == "fc5efeb8eded1e94b71dc8ae82e815010da0df7cb9d32244667dff67109c4d14"
-          assert value["independent_reconciliation_sha256"] == "8d3e053ccf9027270120bfa0c4caceb3fd534d8ec8271256991ba3e0ddd6ff10"
+          value=validate_authorization(Path("deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29602737093.json"))
+          assert value["authorization_sha256"] == "a17f1bc4389734992c41ba71cbf1adcfb969827900a451a8eb061979c826558e"
+          assert value["worker_name"] == "knowledge-engine-r3-8-29602737093"
+          assert value["observation_run_id"] == "29602737093"
+          assert value["recovery_run_id"] == "29603119791"
+          assert value["receipt_sha256"] == "f767d7ba906f487da970d1a27577c8521e8ff73308b1cb4565423be33982b792"
+          assert value["evidence_seal_sha256"] == "3ae42e3ddf43645b8302b6f96cce02aba7be7975443ccc4ce76b96914694ecd2"
+          assert value["independent_reconciliation_sha256"] == "dd127ab719e3578c4e7bb5e315c48385897a8c62c463ce335480953b59011aba"
           assert len(value["worker_version_ids"]) == 4
           assert len(value["worker_deployment_ids"]) == 4
           PY
@@ -52,11 +52,11 @@ jobs:
         run: |
           python - <<'PY'
           import subprocess
-          allowed={"deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29600412694.json","docs/architecture/m23-7-r3-8-125-exact-deletion-authorization-29600412694.md",".github/workflows/m23-7-r3-8-125-exact-deletion-authorization.yml"}
-          changed=set(subprocess.check_output(["git","diff","--name-only","50b6de516bb39243b1af7b52020ec04e36edbad4","HEAD"],text=True).splitlines())
+          allowed={"deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29602737093.json","docs/architecture/m23-7-r3-8-125-exact-deletion-authorization-29602737093.md",".github/workflows/m23-7-r3-8-125-exact-deletion-authorization.yml"}
+          changed=set(subprocess.check_output(["git","diff","--name-only","51a4ff17955b6e10c340865316b58dfcc289cfb1","HEAD"],text=True).splitlines())
           assert changed == allowed, (changed, allowed)
           PY
-          git diff --exit-code 50b6de516bb39243b1af7b52020ec04e36edbad4 HEAD -- \
+          git diff --exit-code 51a4ff17955b6e10c340865316b58dfcc289cfb1 HEAD -- \
             scripts/m23_7_r3_8_remote_delete.py \
             tests/test_m23_7_r3_8_remote_delete.py \
             .github/workflows/m23-7-r3-8-remote-delete.yml \
