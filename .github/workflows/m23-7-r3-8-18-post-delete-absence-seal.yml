@@ -1,0 +1,75 @@
+name: M23.7 R3.8.18 Post-Delete Absence Seal
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-18/post-delete-absence-seal-29548015150.json"
+      - "docs/architecture/m23-7-r3-8-18-post-delete-absence-seal.md"
+      - ".github/workflows/m23-7-r3-8-18-post-delete-absence-seal.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and deletion hotfix ancestry
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 558ad35ac29d78098061a636c8ac824175f13e1b HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic post-delete absence seal
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          path = Path(".github/evidence/m23-7-r3-8-18/post-delete-absence-seal-29548015150.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("seal_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "7e1701c62cc1b02d95fe85c1cde1707c946c7ed87b31fc89d3c5526e9dc4925c"
+          assert value["issue"] == 642
+          assert value["deletion"]["run_id"] == "29547955934"
+          assert value["deletion"]["receipt"]["worker_delete_dispatched"] is True
+          assert value["deletion"]["receipt"]["absence_probe_dispatched"] is False
+          assert value["deletion"]["receipt"]["failure_code"] == "delete_cloudflare_error_code"
+          assert value["post_delete_recovery"]["run_id"] == "29548015150"
+          recovery = value["post_delete_recovery"]["receipt"]
+          assert recovery["worker_state"] == "worker_absent"
+          assert recovery["versions"]["error_codes"] == [10007]
+          assert recovery["deployments"]["error_codes"] == [10007]
+          assert recovery["versions"]["http_status"] == 404
+          assert recovery["deployments"]["http_status"] == 404
+          assert value["result"]["control_plane_absence_proven"] is True
+          assert value["result"]["post_delete_recovery_read_only"] is True
+          assert value["authority"]["production_retrieval"] == "lexical"
+          assert value["authority"]["worker_deletion_replay_authorized"] is False
+          assert value["authority"]["blockers_cleared"] is False
+          assert all(flag is False for flag in value["strict_zero"].values())
+          PY
+      - name: Verify exact seal scope
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              ".github/evidence/m23-7-r3-8-18/post-delete-absence-seal-29548015150.json",
+              "docs/architecture/m23-7-r3-8-18-post-delete-absence-seal.md",
+              ".github/workflows/m23-7-r3-8-18-post-delete-absence-seal.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "558ad35ac29d78098061a636c8ac824175f13e1b", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
