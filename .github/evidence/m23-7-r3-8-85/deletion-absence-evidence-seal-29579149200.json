@@ -1,0 +1,87 @@
+{
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "evidence_seal_only": true,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deletion_replay_authorized": false,
+    "worker_deploy_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "issue": 755,
+  "milestone": "M23.7-R3.8.85",
+  "parent_latency_issue": 520,
+  "parent_r3_issue": 474,
+  "result": {
+    "blocker_clearance_eligible": false,
+    "deletion_dispatch_confirmed": true,
+    "post_delete_absence_observed": true,
+    "production_retrieval": "lexical",
+    "worker_lifecycle_clean_pending_reconciliation": true
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-85-deletion-absence-evidence-seal/v1",
+  "seal_sha256": "543aac69fa2f4ded2df368847e503274c1d3bf0babf151c66a95ae8c71f9907a",
+  "workers": [
+    {
+      "deletion_authorization": {
+        "authorization_merge_sha": "d7e598e397249a773087f20f153e5d3d52736c14",
+        "authorization_path": "deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29578234650.json",
+        "authorization_pr": 784,
+        "authorization_sha256": "3b06ef148bb5663269bf1005b278404f60ab98f1f8919af09c2ce8f025264cfd"
+      },
+      "deletion_run": {
+        "artifact_id": 8406240937,
+        "artifact_name": "m23-7-r3-8-deletion-29579069725",
+        "artifact_zip_sha256": "4721104778dc0243d0aec459c4d0924c6536c00b865f32208fa31d680bce4724",
+        "conclusion": "failure",
+        "engine_sha": "d7e598e397249a773087f20f153e5d3d52736c14",
+        "exit_code": 23,
+        "failure_code": "delete_absence_not_proven",
+        "failure_file_sha256": "6c8ec34726c052e49fa3a2aa6ea5c38b3b5c8dd8b4c15a72c411ea829aaff94f",
+        "failure_self_digest": "f34af5fc73034d495568aa27856977c5e50ce3e7a34494e3f5ad6418e5e54629",
+        "failure_stage": "absence_probe",
+        "run_id": "29579069725",
+        "worker_delete_dispatched": true
+      },
+      "post_delete_probe": {
+        "artifact_id": 8406265327,
+        "artifact_name": "m23-7-r3-8-9-recovery-29579149200",
+        "artifact_zip_sha256": "d21d2639f7907d54db21c598663608f4eb8d636fb7c600c9b91e1503b8caa3bb",
+        "deployments": {
+          "error_codes": [
+            10007
+          ],
+          "http_status": 404,
+          "identity_count": 0,
+          "state": "absent"
+        },
+        "probe_engine_sha": "d7e598e397249a773087f20f153e5d3d52736c14",
+        "receipt_file_sha256": "d8a0b2680ad501525b50f57fbfca503215a2ebb546d5649f12c8228f7da92769",
+        "receipt_self_digest": "7d100292d4d7e07871c1426284aa7d8c26b326a6e61ac3aabb575a804b2b0c70",
+        "run_id": "29579149200",
+        "versions": {
+          "error_codes": [
+            10007
+          ],
+          "http_status": 404,
+          "identity_count": 0,
+          "state": "absent"
+        },
+        "worker_state": "worker_absent"
+      },
+      "worker": {
+        "name": "knowledge-engine-r3-8-29578234650",
+        "observation_run_id": "29578234650",
+        "recovery_run_id": "29578467800"
+      }
+    }
+  ]
+}
