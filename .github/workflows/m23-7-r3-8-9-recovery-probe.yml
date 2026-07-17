@@ -8,12 +8,12 @@ on:
         required: true
         type: string
       affected_run_id:
-        description: Must be 29506217284
+        description: Authorized R3.8 observation run id
         required: true
         default: "29506217284"
         type: string
       confirmation:
-        description: Enter PROBE_R3_8_RUN_29506217284_SCHEMA_V2
+        description: Enter PROBE_R3_8_RUN_<affected_run_id>_SCHEMA_V2
         required: true
         type: string
 
@@ -40,8 +40,11 @@ jobs:
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = "1"
           test "$GITHUB_REF" = "refs/heads/main"
-          test "${{ inputs.affected_run_id }}" = "29506217284"
-          test "${{ inputs.confirmation }}" = "PROBE_R3_8_RUN_29506217284_SCHEMA_V2"
+          case "${{ inputs.affected_run_id }}" in
+            29506217284|29546336917) ;;
+            *) echo "affected_run_identity_mismatch"; exit 23 ;;
+          esac
+          test "${{ inputs.confirmation }}" = "PROBE_R3_8_RUN_${{ inputs.affected_run_id }}_SCHEMA_V2"
 
       - uses: actions/checkout@v4
         with:

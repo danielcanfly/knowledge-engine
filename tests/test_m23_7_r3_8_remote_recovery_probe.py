@@ -137,7 +137,15 @@ def test_probe_source_has_only_read_methods_and_schema_v2_identity() -> None:
     assert "client.put(" not in source
     assert "client.patch(" not in source
     assert "client.delete(" not in source
-    assert subject.AFFECTED_RUN_ID == "29506217284"
-    assert subject.AFFECTED_WORKER == "knowledge-engine-r3-8-29506217284"
-    assert subject.CONFIRMATION == "PROBE_R3_8_RUN_29506217284_SCHEMA_V2"
+    assert subject.AUTHORIZED_RUNS == {
+        "29506217284": {
+            "engine_sha": "090db324939a4272b90d212fa462674b371b2e6d",
+            "worker_name": "knowledge-engine-r3-8-29506217284",
+        },
+        "29546336917": {
+            "engine_sha": "b6c60752741b7079d93b25ddbe16a6582f9db966",
+            "worker_name": "knowledge-engine-r3-8-29546336917",
+        },
+    }
+    assert subject.CONFIRMATION_SUFFIX == "_SCHEMA_V2"
     assert subject.SCHEMA_VERSION.endswith("/v2")
