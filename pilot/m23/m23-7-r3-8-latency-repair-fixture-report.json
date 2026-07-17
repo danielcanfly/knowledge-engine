@@ -6,7 +6,7 @@
     "protected_mutations_dispatched": false,
     "retrieval_quality_blocker_cleared": false
   },
-  "contract_sha256": "2224bfe20772855181e5f8ada706be307d9e55c340f94c939366ef896c309e01",
+  "contract_sha256": "33b6717c1012b369956bddb798216d89aa41d65cc773acfb3bca321879a11af0",
   "fixture_only": true,
   "gates": {
     "accepted_metric_parity": true,
@@ -35,7 +35,7 @@
   "probe_count": 8,
   "query_count": 24,
   "query_identity_count": 24,
-  "report_sha256": "a2ac5d5e60cc51d6c4d0c02bafbb4e96465c4922ae1e8d2381bc41cb6c792712",
+  "report_sha256": "8c5efb823361330cf7feb43c3f4ef75e6582a0fdf34cf68790f5affbd4d6664f",
   "schema_version": "knowledge-engine-m23-7-r3-8-latency-repair-fixture-report/v1",
   "status": "pass_fixture_latency_repair",
   "target_ranks": {
@@ -52,9 +52,9 @@
     "external_calls": {
       "qdrant_collection_reads": 2,
       "qdrant_delete": 0,
-      "qdrant_query_batch": 0,
+      "qdrant_query_batch": 1,
       "qdrant_reindex": 0,
-      "qdrant_vector_scroll": 1,
+      "qdrant_vector_scroll": 0,
       "qdrant_write": 0,
       "workers_ai_binding": 1
     },

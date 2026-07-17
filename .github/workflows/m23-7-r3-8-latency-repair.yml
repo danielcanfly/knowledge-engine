@@ -70,14 +70,14 @@ jobs:
               .read_text(encoding="utf-8")
           )
           assert subject.canonical_contract() == expected
-          assert subject.CONTRACT_SHA256 == "2224bfe20772855181e5f8ada706be307d9e55c340f94c939366ef896c309e01"
+          assert subject.CONTRACT_SHA256 == "33b6717c1012b369956bddb798216d89aa41d65cc773acfb3bca321879a11af0"
           assert expected["entry"]["engine_sha"] == "7793cd22092aca530ca48a3240a3c83ffd3d2894"
           assert expected["latency"]["maximum_worker_internal_shadow_ms"] == 1200
           assert expected["latency"]["threshold_changed"] is False
           assert expected["queries"]["query_count"] == 24
           assert expected["queries"]["workers_ai_binding_calls"] == 1
-          assert expected["queries"]["qdrant_query_batch_calls"] == 0
-          assert expected["queries"]["qdrant_vector_scroll_calls"] == 1
+          assert expected["queries"]["qdrant_query_batch_calls"] == 1
+          assert expected["queries"]["qdrant_vector_scroll_calls"] == 0
           assert expected["authority"]["retrieval_quality_blocker_cleared"] is False
           assert expected["authority"]["latency_blocker_cleared"] is False
 
@@ -93,7 +93,7 @@ jobs:
               separators=(",", ":"),
           ).encode()
           assert hashlib.sha256(encoded).hexdigest() == fixture_digest
-          assert fixture_digest == "a2ac5d5e60cc51d6c4d0c02bafbb4e96465c4922ae1e8d2381bc41cb6c792712"
+          assert fixture_digest == "8c5efb823361330cf7feb43c3f4ef75e6582a0fdf34cf68790f5affbd4d6664f"
           assert fixture["fixture_only"] is True
           assert fixture["live_receipt_required"] is True
           PY
@@ -117,8 +117,9 @@ jobs:
           ).read_text(encoding="utf-8")
           assert 'method: "PUT"' not in worker
           assert 'method: "DELETE"' not in worker
-          assert "/points/scroll" in worker
-          assert "with_vector: [VECTOR_NAME]" in worker
+          assert "/points/query/batch" in worker
+          assert 'const RANKING_PAYLOAD_FIELDS = ["section_id"]' in worker
+          assert "with_vector: false" in worker
           assert not list(
               Path("workers/m23-7-r3-8-latency-repair").glob(
                   "wrangler.local.jsonc"
