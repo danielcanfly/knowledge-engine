@@ -60,6 +60,7 @@ MIN_MRR_AT_10 = 0.68
 MIN_NDCG_AT_10 = 0.72
 MAX_WORKER_RESPONSE_BYTES = 160_000
 BOUNDED_WORKER_ERROR_RE = re.compile(r"[a-z][a-z0-9-]{2,63}")
+BOUNDED_PLACEMENT_HEADER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
 
 PROTECTED_MUTATIONS = (
     "answer_serving",
@@ -130,6 +131,17 @@ def _bounded_label(value: str, label: str) -> str:
         105,
         f"{label} is unsafe",
     )
+    return candidate
+
+
+def _bounded_optional_placement_header(value: str | None) -> str | None:
+    if value is None:
+        return None
+    candidate = value.strip()
+    if not BOUNDED_PLACEMENT_HEADER_RE.fullmatch(candidate):
+        return None
+    if "http" in candidate.lower() or "token" in candidate.lower():
+        return None
     return candidate
 
 
@@ -440,13 +452,9 @@ class HttpR3WorkerInvoker:
                 127,
                 "Worker reflected raw query text",
             )
-        placement = response.headers.get("cf-placement")
-        if placement is not None:
-            _require(
-                bool(re.fullmatch(r"(?:local|remote)-[A-Z0-9]{3}", placement)),
-                128,
-                "placement header is invalid",
-            )
+        placement = _bounded_optional_placement_header(
+            response.headers.get("cf-placement")
+        )
         return {
             "payload": root,
             "operator_round_trip_ms": _elapsed_ms(started, finished),
