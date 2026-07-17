@@ -127,9 +127,9 @@ jobs:
           assert "/points/query?consistency=all" in worker
           assert "/points/search/batch" not in worker
           assert "/points/scroll" not in worker
-          assert '"section_id"' in worker
-          assert '"candidate_artifact_sha256"' in worker
-          assert "CANDIDATE_FILTER" in worker
+          assert "payload.section_id" in worker
+          assert "candidate_artifact_sha256:" in worker
+          assert "CANDIDATE_FILTER" not in worker
           assert "validateCandidatePayload(raw)" in worker
           assert "with_vector: false" in worker
           assert not list(

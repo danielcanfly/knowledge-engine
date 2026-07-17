@@ -8,50 +8,6 @@ const QUERY_COUNT = 24;
 const DENSE_LIMIT = 50;
 const MAX_BODY_BYTES = 65536;
 const SINGLE_QUERY_CONCURRENCY = 6;
-const RANKING_PAYLOAD_FIELDS = [
-  "section_id",
-  "payload_schema_version",
-  "source_membership",
-  "candidate_collection",
-  "candidate_artifact_sha256",
-  "candidate_reingestion_issue",
-  "vector_name",
-  "vector_dimension",
-  "canonical_knowledge",
-  "candidate_release_eligible",
-  "production_authority",
-];
-const CANDIDATE_FILTER = {
-  must: [
-    {
-      key: "source_membership",
-      match: { value: "r3-6-candidate-live-acceptance-only" },
-    },
-    {
-      key: "candidate_collection",
-      match: { value: COLLECTION },
-    },
-    {
-      key: "candidate_artifact_sha256",
-      match: {
-        value:
-          "8eed54902c73314ac2e5d5e187a788e44941dae250d9823d45b71ec57d1e1371",
-      },
-    },
-    {
-      key: "canonical_knowledge",
-      match: { value: false },
-    },
-    {
-      key: "candidate_release_eligible",
-      match: { value: false },
-    },
-    {
-      key: "production_authority",
-      match: { value: false },
-    },
-  ],
-};
 const CONTRACT_SHA256 =
   "108e749661f47861472499475591eed2b5baf485920399bb48b6413658e287a0";
 const REQUEST_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-request/v1";
@@ -470,9 +426,8 @@ async function executeObservation(env, validated, now = () => performance.now())
         searches: vectors.map((vector) => ({
           query: vector,
           using: VECTOR_NAME,
-          filter: CANDIDATE_FILTER,
           limit: DENSE_LIMIT,
-          with_payload: RANKING_PAYLOAD_FIELDS,
+          with_payload: true,
           with_vector: false,
         })),
       }),

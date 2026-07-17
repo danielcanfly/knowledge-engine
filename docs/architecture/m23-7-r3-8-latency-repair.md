@@ -41,7 +41,7 @@ The Worker performs:
 
 1. one read-only candidate collection snapshot;
 2. one Workers AI binding call containing 24 texts;
-3. one Qdrant read-only query batch containing the 24 query vectors, `using: "default"`, and an explicit `section_id`-only payload-field allowlist;
+3. one Qdrant read-only query batch containing the 24 query vectors, `using: "default"`, full payload return, and response-side candidate identity validation;
 4. only if that batch endpoint is unavailable, 24 read-only single-query calls to `/points/query?consistency=all` with the same named vector, limit, full payload readback, and bounded fallback concurrency, matching the accepted R3.7 live path;
 5. one read-only candidate collection snapshot.
 
