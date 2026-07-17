@@ -28,7 +28,7 @@ WORKER_RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1"
 IMPLEMENTATION_ISSUE = 520
 PARENT_ISSUE = 474
 ENTRY_ENGINE_SHA = "7793cd22092aca530ca48a3240a3c83ffd3d2894"
-CONTRACT_SHA256 = "33b6717c1012b369956bddb798216d89aa41d65cc773acfb3bca321879a11af0"
+CONTRACT_SHA256 = "833f6e59748f6837ef96ef5d8cc212437e1fc2681d0a5ed1ee4a4388da386887"
 
 EXPECTED_COLLECTION = r37.EXPECTED_COLLECTION
 HISTORICAL_PILOT_COLLECTION = r37.HISTORICAL_PILOT_COLLECTION
@@ -144,7 +144,8 @@ def canonical_contract() -> dict[str, Any]:
             "unique_query_identities": QUERY_COUNT,
             "workers_ai_binding_calls": 1,
             "qdrant_query_batch_calls": 1,
-            "qdrant_vector_scroll_calls": 0,
+            "qdrant_vector_scroll_max_calls": 1,
+            "qdrant_vector_scroll_only_after_batch_unavailable": True,
             "qdrant_dense_limit": DENSE_LIMIT,
             "target_aware_inputs": False,
         },
@@ -507,15 +508,22 @@ def _validate_worker_response(
         "strict-zero rates drifted",
     )
     _require(
-        external_calls
+        external_calls.get("workers_ai_binding") == 1
+        and external_calls.get("qdrant_collection_reads") == 2
+        and external_calls.get("qdrant_query_batch") == 1
+        and external_calls.get("qdrant_vector_scroll") in {0, 1}
+        and external_calls.get("qdrant_write") == 0
+        and external_calls.get("qdrant_delete") == 0
+        and external_calls.get("qdrant_reindex") == 0
+        and set(external_calls)
         == {
-            "workers_ai_binding": 1,
-            "qdrant_collection_reads": 2,
-            "qdrant_query_batch": 1,
-            "qdrant_vector_scroll": 0,
-            "qdrant_write": 0,
-            "qdrant_delete": 0,
-            "qdrant_reindex": 0,
+            "workers_ai_binding",
+            "qdrant_collection_reads",
+            "qdrant_query_batch",
+            "qdrant_vector_scroll",
+            "qdrant_write",
+            "qdrant_delete",
+            "qdrant_reindex",
         },
         "external_calls",
         "external call accounting drifted",
