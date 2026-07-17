@@ -1,0 +1,101 @@
+name: M23.7 R3.8.24 Fail-Closed Latency Evidence Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-24/fail-closed-latency-evidence-reconciliation-29553221650.json"
+      - "docs/architecture/m23-7-r3-8-24-fail-closed-latency-evidence-reconciliation.md"
+      - ".github/workflows/m23-7-r3-8-24-fail-closed-latency-evidence-reconciliation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and seal ancestry
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 0fc57a04793705f8dfbcd4c5ab4f85512a5f696e HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic reconciliation
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path(".github/evidence/m23-7-r3-8-24/fail-closed-latency-evidence-reconciliation-29553221650.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("reconciliation_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "5ad4fb9b51b135635cddabad05f65398b8f88bdafa4253ce5e6eb8c0fbc42932"
+          assert value["issue"] == 678
+          assert value["seal_issue"] == 676
+          assert value["seal_pr"] == 677
+          assert value["seal_accepted_head"] == "1f6d1182ba49f1d6448b25fd41552ac8499c3634"
+          assert value["seal_merge_sha"] == "0fc57a04793705f8dfbcd4c5ab4f85512a5f696e"
+          assert value["seal_sha256"] == "a4200b040642a7544d549d80b4e64fd88e996c9209a15e7285ffcb17397e2fab"
+          assert value["seal_exact_head_runs"] == {
+              "architecture_canon": 29555423967,
+              "ci": 29555423875,
+              "graph_v2": 29555423884,
+              "seal": 29555423892,
+          }
+          assert value["observation"]["run_id"] == "29553221650"
+          assert value["observation"]["artifact_id"] == 8396501993
+          assert value["observation"]["artifact_zip_sha256"] == "73537486d2ae9565805d1034e2b8a3205f6f60fcce19e1c62544bfbaa59fd855"
+          result = value["result"]
+          assert result["latency_evidence_complete"] is True
+          assert result["latency_repair_passed"] is False
+          assert result["failed_gate"] == "worker_internal_shadow"
+          assert result["shadow_ms"] == 1680
+          assert result["maximum_shadow_ms"] == 1200
+          assert result["quality_metrics_accepted"] is True
+          assert result["strict_zero_mutation_gates_accepted"] is True
+          assert result["blocker_clearance_eligible"] is False
+          assert result["worker_lifecycle_clean"] is False
+          assert result["retained_worker_cleanup_required"] is True
+          assert result["next_gate"] == "separately_governed_retained_worker_cleanup"
+          worker = value["worker"]
+          assert worker["name"] == "knowledge-engine-r3-8-29553221650"
+          assert worker["retained"] is True
+          assert worker["deletion_authorization_required"] is True
+          authority = value["authority"]
+          assert authority["production_retrieval"] == "lexical"
+          assert authority["blockers_cleared"] is False
+          assert authority["fresh_observation_authorized"] is False
+          assert authority["worker_deletion_authorized"] is False
+          assert authority["m23_7_closure_authorized"] is False
+          assert value["retained_blockers"] == [
+              "blocked_pending_retrieval_quality",
+              "blocked_pending_latency",
+          ]
+          assert value["strict_zero_verified"] is True
+          PY
+      - name: Verify exact reconciliation scope
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          allowed = {
+              ".github/evidence/m23-7-r3-8-24/fail-closed-latency-evidence-reconciliation-29553221650.json",
+              "docs/architecture/m23-7-r3-8-24-fail-closed-latency-evidence-reconciliation.md",
+              ".github/workflows/m23-7-r3-8-24-fail-closed-latency-evidence-reconciliation.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "0fc57a04793705f8dfbcd4c5ab4f85512a5f696e", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
