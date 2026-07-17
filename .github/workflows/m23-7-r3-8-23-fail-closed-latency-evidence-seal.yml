@@ -3,8 +3,8 @@ name: M23.7 R3.8.23 Fail-Closed Latency Evidence Seal
 on:
   pull_request:
     paths:
-      - ".github/evidence/m23-7-r3-8-23/fail-closed-latency-evidence-seal-29604923286.json"
-      - "docs/architecture/m23-7-r3-8-23-fail-closed-latency-evidence-seal-29604923286.md"
+      - ".github/evidence/m23-7-r3-8-23/fail-closed-latency-evidence-seal-29607698618.json"
+      - "docs/architecture/m23-7-r3-8-23-fail-closed-latency-evidence-seal-29607698618.md"
       - ".github/workflows/m23-7-r3-8-23-fail-closed-latency-evidence-seal.yml"
   workflow_dispatch:
 
@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          git merge-base --is-ancestor 3be9999b4ce0d721a29b92e9dbbfa17870ddc6e2 HEAD
+          git merge-base --is-ancestor 63184eb576dc756d9bfff6701a3f6907be0cab00 HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -34,23 +34,23 @@ jobs:
           import json
           from pathlib import Path
 
-          path = Path(".github/evidence/m23-7-r3-8-23/fail-closed-latency-evidence-seal-29604923286.json")
+          path = Path(".github/evidence/m23-7-r3-8-23/fail-closed-latency-evidence-seal-29607698618.json")
           value = json.loads(path.read_text(encoding="utf-8"))
           digest = value.pop("seal_sha256")
           encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
           assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "31e27077f5c1edf42bf10858032280e2edf6c61eac5668eb62d93fc1a2338f8f"
+          assert digest == "eb6c0ccadef07d0fae019a08dd1e5b67842f5895bb61cae5bd82b2a75c0f8112"
           assert value["issue"] is None
-          assert value["source"]["observation_run_id"] == "29604923286"
-          assert value["source"]["engine_sha"] == "3be9999b4ce0d721a29b92e9dbbfa17870ddc6e2"
-          assert value["artifact"]["id"] == 8416474811
-          assert value["artifact"]["zip_sha256"] == "205eb61df4ed888f00da4d7b754b30d0324a37dba613fae9d91470d201cce55e"
-          assert value["artifact"]["remote_entry_file_sha256"] == "06860ad8e9840ee36af50f4395260c3e2253bea88cee92322c548550ef2f0801"
-          assert value["artifact"]["remote_entry_self_digest"] == "b3ef5b039973e6746e23c764ce4703988b56e7ca13069c2f41582d2714672f6e"
-          assert value["artifact"]["receipt_file_sha256"] == "8b4b682e6930926b7fb559d302717c88b01e3a4daa27e4b163a05745334fa816"
-          assert value["artifact"]["receipt_self_digest"] == "ca5a1edff9ffcd3902d5667b8b428a57c8d9bd75b38f18a137d5da2d58d0a8f3"
-          assert value["artifact"]["remote_lifecycle_file_sha256"] == "89d2f004141bf5e5e99ce6ef55bb4bc201f8eaac5aa85eb0ae4e2a1e5dd1788c"
-          assert value["artifact"]["remote_lifecycle_self_digest"] == "88e7e925ed61787563631b8fbed742acbd28f8e5c2a4c463e7b889e69eb32597"
+          assert value["source"]["observation_run_id"] == "29607698618"
+          assert value["source"]["engine_sha"] == "63184eb576dc756d9bfff6701a3f6907be0cab00"
+          assert value["artifact"]["id"] == 8417524799
+          assert value["artifact"]["zip_sha256"] == "30a7f02ab7798e234aa9ea62e4f00cdf071604e091b80f61226e05070f6ed430"
+          assert value["artifact"]["remote_entry_file_sha256"] == "64a430632dd6ef4b074a1b55254973a073d8782956f280c9277723c70a30eef0"
+          assert value["artifact"]["remote_entry_self_digest"] == "e14a9ebf657407da4c063a4a8a8440068994c6ccee22db411b4008b656807378"
+          assert value["artifact"]["receipt_file_sha256"] == "bff07431ed90ab16afd97398335869c59db84da509d6f8e617b23bc1bdbe1c81"
+          assert value["artifact"]["receipt_self_digest"] == "39b1d49a338d5bd203ac39006df2f14c27197720f5d6c12dbb1cfc843ad5c029"
+          assert value["artifact"]["remote_lifecycle_file_sha256"] == "3789f471cdcdf99d660593dd38bc602e1043d105d10b53d313fd90f120771d80"
+          assert value["artifact"]["remote_lifecycle_self_digest"] == "ab386d281bdd8ecf72ce5ce14131510b7bb145b3bf104b0ee7932d036f296b89"
           receipt = value["receipt"]
           assert receipt["status"] == "completed_fail_closed_latency_repair"
           assert receipt["metrics"] == receipt["accepted_metrics"]
@@ -62,18 +62,18 @@ jobs:
           false_gates = [key for key, enabled in receipt["gates"].items() if enabled is not True]
           assert false_gates == ["worker_internal_shadow"], false_gates
           latency = value["latency"]
-          assert latency["shadow_ms"] == 4839
+          assert latency["shadow_ms"] == 2078
           assert latency["maximum_shadow_ms"] == 1200
-          assert latency["provider_ms"] == 1832
-          assert latency["qdrant_ms"] == 3007
+          assert latency["provider_ms"] == 547
+          assert latency["qdrant_ms"] == 1531
           assert latency["failed_gate"] == "worker_internal_shadow"
           worker = value["worker"]
-          assert worker["name"] == "knowledge-engine-r3-8-29604923286"
-          assert worker["version_id"] == "b7d93221-a3ed-4f32-ac52-b05c24fbca1f"
+          assert worker["name"] == "knowledge-engine-r3-8-29607698618"
+          assert worker["version_id"] == "f39035e3-9629-4377-949b-d0fd4b93d0db"
           assert worker["retained"] is True
           assert worker["deletion_authorization_required"] is True
           assert worker["external_calls"]["qdrant_query_batch"] == 1
-          assert worker["external_calls"]["qdrant_single_query"] == 24
+          assert worker["external_calls"]["qdrant_single_query"] == 0
           assert worker["external_calls"]["workers_ai_binding"] == 1
           assert value["result"]["latency_repair_result_complete"] is True
           assert value["result"]["latency_repair_passed"] is False
@@ -97,19 +97,19 @@ jobs:
           from pathlib import Path
 
           allowed = {
-              ".github/evidence/m23-7-r3-8-23/fail-closed-latency-evidence-seal-29604923286.json",
-              "docs/architecture/m23-7-r3-8-23-fail-closed-latency-evidence-seal-29604923286.md",
+              ".github/evidence/m23-7-r3-8-23/fail-closed-latency-evidence-seal-29607698618.json",
+              "docs/architecture/m23-7-r3-8-23-fail-closed-latency-evidence-seal-29607698618.md",
               ".github/workflows/m23-7-r3-8-23-fail-closed-latency-evidence-seal.yml",
           }
           changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "3be9999b4ce0d721a29b92e9dbbfa17870ddc6e2", "HEAD"],
+              ["git", "diff", "--name-only", "63184eb576dc756d9bfff6701a3f6907be0cab00", "HEAD"],
               text=True,
           ).splitlines())
           assert changed == allowed, (changed, allowed)
 
           privacy_checked = {
-              ".github/evidence/m23-7-r3-8-23/fail-closed-latency-evidence-seal-29604923286.json",
-              "docs/architecture/m23-7-r3-8-23-fail-closed-latency-evidence-seal-29604923286.md",
+              ".github/evidence/m23-7-r3-8-23/fail-closed-latency-evidence-seal-29607698618.json",
+              "docs/architecture/m23-7-r3-8-23-fail-closed-latency-evidence-seal-29607698618.md",
           }
           text = "\n".join(Path(path).read_text(encoding="utf-8") for path in privacy_checked)
           for forbidden in (
