@@ -13,6 +13,38 @@ import {
 const VECTOR_DIMENSION = 1024;
 const QUERY_COUNT = 24;
 const DENSE_LIMIT = 50;
+const COLLECTION = "llm_wiki_m23_r3_5_candidate_8eed54902c73";
+const CANDIDATE_ARTIFACT_SHA256 =
+  "8eed54902c73314ac2e5d5e187a788e44941dae250d9823d45b71ec57d1e1371";
+const RANKING_PAYLOAD_FIELDS = [
+  "section_id",
+  "payload_schema_version",
+  "source_membership",
+  "candidate_collection",
+  "candidate_artifact_sha256",
+  "candidate_reingestion_issue",
+  "vector_name",
+  "vector_dimension",
+  "canonical_knowledge",
+  "candidate_release_eligible",
+  "production_authority",
+];
+const CANDIDATE_FILTER = {
+  must: [
+    {
+      key: "source_membership",
+      match: { value: "r3-6-candidate-live-acceptance-only" },
+    },
+    { key: "candidate_collection", match: { value: COLLECTION } },
+    {
+      key: "candidate_artifact_sha256",
+      match: { value: CANDIDATE_ARTIFACT_SHA256 },
+    },
+    { key: "canonical_knowledge", match: { value: false } },
+    { key: "candidate_release_eligible", match: { value: false } },
+    { key: "production_authority", match: { value: false } },
+  ],
+};
 
 function digest(text) {
   return createHash("sha256").update(text).digest("hex");
@@ -62,6 +94,16 @@ function rankedPoint(index, score) {
     id: `00000000-0000-0000-0000-${String(index).padStart(12, "0")}`,
     score,
     payload: {
+      payload_schema_version: "knowledge-engine-m23-qdrant-payload/v2",
+      source_membership: "r3-6-candidate-live-acceptance-only",
+      candidate_collection: COLLECTION,
+      candidate_artifact_sha256: CANDIDATE_ARTIFACT_SHA256,
+      candidate_reingestion_issue: 508,
+      vector_name: "default",
+      vector_dimension: VECTOR_DIMENSION,
+      canonical_knowledge: false,
+      candidate_release_eligible: false,
+      production_authority: false,
       section_id: `section-${String(index).padStart(3, "0")}`,
     },
   };
@@ -117,7 +159,7 @@ test("validateBody rejects duplicate query identity", async () => {
   await assert.rejects(validateBody(request), /query-digest-duplicate/);
 });
 
-test("executeObservation performs one AI batch and one section-id-only Qdrant query batch", async () => {
+test("executeObservation performs one AI batch and one identity-filtered Qdrant query batch", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
@@ -180,8 +222,9 @@ test("executeObservation performs one AI batch and one section-id-only Qdrant qu
           hnsw_ef: DENSE_LIMIT,
           exact: false,
         },
+        filter: CANDIDATE_FILTER,
         limit: DENSE_LIMIT,
-        with_payload: ["section_id"],
+        with_payload: RANKING_PAYLOAD_FIELDS,
         with_vector: false,
       })),
     });
@@ -192,6 +235,50 @@ test("executeObservation performs one AI batch and one section-id-only Qdrant qu
     assert.equal(result.variants.length, QUERY_COUNT);
     assert.equal(result.timings.shadow_ms, 750);
     assert.equal(result.authority.protected_mutations_dispatched, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("executeObservation rejects ranked points outside candidate identity", async () => {
+  const originalFetch = globalThis.fetch;
+  const drifted = batchPayload();
+  drifted.result[0].points[0].payload.candidate_artifact_sha256 = "0".repeat(64);
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith("/points/query/batch")) {
+      return new Response(JSON.stringify(drifted), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify(collectionPayload()), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const env = {
+    QDRANT_URL: "https://qdrant.example",
+    QDRANT_API_KEY: "q".repeat(32),
+    AI: {
+      run: async (model, payload) => {
+        assert.ok(model);
+        return { data: payload.text.map((_text, index) => vector(index)) };
+      },
+    },
+  };
+  const validated = {
+    nonce: "0".repeat(32),
+    variants: requestBody().variants.map((item) => ({
+      variantId: item.variant_id,
+      queryDigest: item.query_sha256,
+      queryText: item.query_text,
+    })),
+  };
+  try {
+    await assert.rejects(
+      executeObservation(env, validated),
+      /ranked-point-candidate_artifact_sha256-drift/,
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

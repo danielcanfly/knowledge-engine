@@ -26,6 +26,12 @@ MAX_WRANGLER_OUTPUT_BYTES = 1_000_000
 READINESS_CONSECUTIVE_SUCCESSES = 2
 LIVE_OBSERVATION_ATTEMPTS = 3
 LIVE_OBSERVATION_RETRY_SECONDS = 5
+LIVE_OBSERVATION_RETRY_CODES = frozenset(
+    {
+        "worker_http_404",
+        "worker_http_500_operator_secret_missing",
+    }
+)
 LIFECYCLE_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-lifecycle/v1"
 REMOTE_RECEIPT_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-observation/v1"
 
@@ -394,9 +400,8 @@ def execute(args: argparse.Namespace) -> int:
                         )
                     break
                 except subject.LatencyRepairError as exc:
-                    if (
-                        exc.code == "worker_http_404"
-                        and attempt + 1 < LIVE_OBSERVATION_ATTEMPTS
+                    if exc.code in LIVE_OBSERVATION_RETRY_CODES and (
+                        attempt + 1 < LIVE_OBSERVATION_ATTEMPTS
                     ):
                         time.sleep(LIVE_OBSERVATION_RETRY_SECONDS)
                         continue

@@ -118,7 +118,10 @@ jobs:
           assert 'method: "PUT"' not in worker
           assert 'method: "DELETE"' not in worker
           assert "/points/query/batch" in worker
-          assert 'const RANKING_PAYLOAD_FIELDS = ["section_id"]' in worker
+          assert '"section_id"' in worker
+          assert '"candidate_artifact_sha256"' in worker
+          assert "CANDIDATE_FILTER" in worker
+          assert "validateCandidatePayload(raw)" in worker
           assert "with_vector: false" in worker
           assert not list(
               Path("workers/m23-7-r3-8-latency-repair").glob(

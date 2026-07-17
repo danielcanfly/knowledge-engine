@@ -100,5 +100,4 @@ jobs:
             pilot/m23/m23-7-r3-8-8-artifact-recovery-contract.json \
             docs/architecture/m23-7-r3-8-8-artifact-recovery.md \
             .github/workflows/m23-7-r3-8-remote-observe.yml \
-            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
-            workers/m23-7-r3-8-latency-repair/worker.mjs
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py

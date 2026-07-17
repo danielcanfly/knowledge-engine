@@ -9,11 +9,18 @@ on:
       - "tests/test_m23_7_r3_8_remote_operator.py"
       - "tests/test_m23_7_r3_8_remote_entrypoint.py"
       - "tests/test_m23_7_r3_8_remote_delete.py"
+      - "workers/m23-7-r3-8-latency-repair/worker.mjs"
+      - "workers/m23-7-r3-8-latency-repair/worker.test.mjs"
       - "pilot/m23/m23-7-r3-8-7-remote-operator-contract.json"
       - "docs/architecture/m23-7-r3-8-7-remote-operator.md"
       - ".github/workflows/m23-7-r3-8-remote-observe.yml"
       - ".github/workflows/m23-7-r3-8-remote-delete.yml"
       - ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml"
+      - ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml"
+      - ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml"
+      - ".github/workflows/m23-7-r3-8-11-deletion-cli-compatibility.yml"
+      - ".github/workflows/m23-7-r3-8-latency-repair.yml"
+      - ".github/workflows/m23-7-r3-8-9-recovery-schema-ci.yml"
   workflow_dispatch:
 
 permissions:
@@ -151,18 +158,23 @@ jobs:
           allowed = {
               "scripts/m23_7_r3_8_remote_operator.py",
               "tests/test_m23_7_r3_8_remote_operator.py",
+              "workers/m23-7-r3-8-latency-repair/worker.mjs",
+              "workers/m23-7-r3-8-latency-repair/worker.test.mjs",
               ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
               ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml",
+              ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml",
+              ".github/workflows/m23-7-r3-8-11-deletion-cli-compatibility.yml",
+              ".github/workflows/m23-7-r3-8-latency-repair.yml",
+              ".github/workflows/m23-7-r3-8-9-recovery-schema-ci.yml",
           }
           changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "56d01f56725f98f146ce66a9e370bf0d7a5f8488", "HEAD"],
+              ["git", "diff", "--name-only", "807a6db6ac784899d8639a5ae3ace3c952f8a819", "HEAD"],
               text=True,
           ).splitlines())
           assert changed == allowed, (changed, allowed)
           PY
-          git diff --exit-code 56d01f56725f98f146ce66a9e370bf0d7a5f8488 HEAD -- \
+          git diff --exit-code 807a6db6ac784899d8639a5ae3ace3c952f8a819 HEAD -- \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
-            workers/m23-7-r3-8-latency-repair/worker.mjs \
             pilot/m23/m23-7-r3-8-7-remote-operator-contract.json \
             pilot/m23/m23-7-r3-8-latency-repair-contract.json \
             pilot/m23/m23-7-r3-8-latency-repair-fixture-report.json
