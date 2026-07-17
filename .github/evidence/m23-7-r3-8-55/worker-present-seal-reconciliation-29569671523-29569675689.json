@@ -1,0 +1,121 @@
+{
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "evidence_reconciliation_only": true,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deletion_authorized": false,
+    "worker_deletion_replay_authorized": false,
+    "worker_deploy_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "issue": 752,
+  "milestone": "M23.7-R3.8.55",
+  "parent_latency_issue": 520,
+  "parent_r3_issue": 474,
+  "reconciliation_sha256": "6d4414d374867a65a3f6546edea8ef5d27afa181c12d29de3f9d8975f04e80b0",
+  "recovery_authorization_merge_sha": "009268230ab23f8b3b423ad904301fe7ac5893a3",
+  "recovery_authorization_prs": [
+    748,
+    749
+  ],
+  "result": {
+    "blocker_clearance_eligible": false,
+    "deletion_authorization_next_gate": true,
+    "next_gate": "separate_exact_deletion_authorization",
+    "production_retrieval": "lexical",
+    "worker_lifecycle_clean": false,
+    "worker_present_evidence_reconciled": true,
+    "worker_state": "worker_present"
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-55-worker-present-seal-reconciliation/v1",
+  "seal_accepted_head": "7d6295ef37c85fa2fefdf3c1fa54349ae0a00e24",
+  "seal_exact_head_runs": {
+    "architecture_canon": 29570299405,
+    "ci": 29570299547,
+    "graph_v2": 29570299472,
+    "seal": 29570299186
+  },
+  "seal_issue": 750,
+  "seal_merge_sha": "382953e32178e46f49a33fd01c5a13fba6ab62ab",
+  "seal_pr": 751,
+  "seal_sha256s": {
+    "29569671523": "526c62c49a7763122a8c9162bb75113fb48fe2df106770a71cde40183e5f3780",
+    "29569675689": "d21d83d9e8046f36c333a30ab709008ba606e4a46ad4f3b51396ce28271a2061"
+  },
+  "strict_zero_verified": true,
+  "workers": [
+    {
+      "artifact": {
+        "artifact_id": 8402542860,
+        "name": "m23-7-r3-8-9-recovery-29569671523",
+        "receipt_file_sha256": "7dd25daacc498ab2b8a0462d0ff0dd0c439cb350f1e2f2f26f29f6b9e1fb0196",
+        "receipt_self_digest": "096ca1d0e6a74523b511d23c10c1b0054586579ce1de0c63e4ef888798844430",
+        "zip_sha256": "009def7b019946819fa199cb91da0dca0140fa427b29eb6d7b5cb3c8927efad5"
+      },
+      "deployments": {
+        "identities": [
+          "0177c595-eae0-4227-b1fd-bfa353e82c65",
+          "8bdee58f-4b6e-4c8c-b413-3cbb1c2939b4",
+          "cf3fc398-790b-4522-9eb1-c5f64e63a625",
+          "e09e7464-c2e3-4ae0-834d-32a5218d6aaa"
+        ],
+        "identity_count": 4,
+        "state": "present"
+      },
+      "name": "knowledge-engine-r3-8-29568576968",
+      "observation_run_id": "29568576968",
+      "recovery_run_id": "29569671523",
+      "versions": {
+        "identities": [
+          "4ea751a5-29f8-4a24-af03-f9acfebdf006",
+          "a332a5a2-a503-4e6c-90ed-36b94625ef07",
+          "b1eed753-592d-4a1b-829d-e5703bbaabbd",
+          "e0a59b4e-0b28-4561-888c-cb7395b87387"
+        ],
+        "identity_count": 4,
+        "state": "present"
+      }
+    },
+    {
+      "artifact": {
+        "artifact_id": 8402551454,
+        "name": "m23-7-r3-8-9-recovery-29569675689",
+        "receipt_file_sha256": "df588d389038993b5d0a1c86e25ea7b497636af65acfdb9f2ff3fa4b0b853efc",
+        "receipt_self_digest": "0adf0ae4da3e84e458de7ba4d20188ad41e76f7b92d18a2b576619d82e8576c7",
+        "zip_sha256": "30ae791a2e8b0f01aff685f2487ebb8a4a3c3246820e22088c648b301654e374"
+      },
+      "deployments": {
+        "identities": [
+          "227ef8c4-ffdb-4081-a616-ac9657230dd9",
+          "27e3057f-3b34-49e1-807a-511001b96e4a",
+          "5aff7c1c-631d-498a-a5ea-30599677d650",
+          "fa038ae7-5a5a-4b72-9e16-f29598eb1d47"
+        ],
+        "identity_count": 4,
+        "state": "present"
+      },
+      "name": "knowledge-engine-r3-8-29568662778",
+      "observation_run_id": "29568662778",
+      "recovery_run_id": "29569675689",
+      "versions": {
+        "identities": [
+          "22e621ef-f50c-434b-a0b6-34e058a2d9c2",
+          "76a7118b-d33c-4f9b-a544-9b22ca90bc06",
+          "c4b045f6-a2ab-4652-a2bf-8c17db0c8d91",
+          "ee99c001-3438-419e-97bf-bf8427368ae7"
+        ],
+        "identity_count": 4,
+        "state": "present"
+      }
+    }
+  ]
+}
