@@ -86,7 +86,7 @@ jobs:
           assert "pull_request" not in payload[True]
           text = path.read_text(encoding="utf-8")
           assert 'default: "29506217284"' in text
-          assert "29506217284|29546336917|29548837457|29550965495" in text
+          assert "29506217284|29546336917|29548837457|29550965495|29553221650" in text
           assert "PROBE_R3_8_RUN_" in text
           assert "inputs.affected_run_id" in text
           assert "_SCHEMA_V2" in text
