@@ -1,5 +1,27 @@
 # M23.7 R3.8.24 Fail-Closed Latency Evidence Reconciliation
 
+## Run 29607698618
+
+This reconciliation independently accepts the fail-closed latency evidence seal
+from PR #868 for remote observation run `29607698618`.
+
+The seal merged at `6d9964bfdb7653e847cf537f5af9149db347e944` and bound seal
+digest `eb6c0ccadef07d0fae019a08dd1e5b67842f5895bb61cae5bd82b2a75c0f8112`.
+The seal head `280d14ddf69b3b381914e1ca75ec479264ca4973` passed CI, M17,
+M18, and the dedicated fail-closed latency evidence seal workflow.
+
+The accepted result remains a complete failure, not a pass. Retrieval quality
+and strict-zero mutation gates are accepted, but `worker_internal_shadow`
+failed at `2078 ms` against the unchanged maximum of `1200 ms`.
+
+Diagnostic worker `knowledge-engine-r3-8-29607698618` remains retained. Its
+cleanup is required through a separate governed lifecycle before R3.8 can move
+back to latency repair and fresh observation.
+
+Production retrieval remains `lexical`. This reconciliation does not clear
+blockers, authorize deletion, authorize fresh observation, authorize promotion,
+or authorize parent or M23.7 closure.
+
 ## Run 29604923286
 
 This reconciliation independently accepts the fail-closed latency evidence seal
