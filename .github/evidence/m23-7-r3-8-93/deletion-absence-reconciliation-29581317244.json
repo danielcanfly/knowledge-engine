@@ -1,0 +1,73 @@
+{
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "evidence_reconciliation_only": true,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "promotion_eligibility_granted": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deletion_replay_authorized": false,
+    "worker_deploy_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "issue": 757,
+  "milestone": "M23.7-R3.8.93",
+  "parent_latency_issue": 520,
+  "parent_r3_issue": 474,
+  "reconciliation_sha256": "8c83db7e9a841ed67d7b9d09d111e343fe76103efb22a1cb2af553c55373746e",
+  "result": {
+    "blocker_clearance_eligible": false,
+    "deletion_dispatch_reconciled": true,
+    "next_gate": "qdrant_scroll_unavailable_repair_iteration",
+    "post_delete_absence_reconciled": true,
+    "production_retrieval": "lexical",
+    "retained_worker_cleanup_complete": true,
+    "worker_lifecycle_clean": true,
+    "worker_state": "worker_absent"
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-93-deletion-absence-reconciliation/v1",
+  "seal_accepted_head": "8035726eaf3cbbadacc6b1e7dc05df4ca6ac6b13",
+  "seal_exact_head_runs": {
+    "architecture_canon": 29581541324,
+    "ci": 29581541360,
+    "graph_v2": 29581541294,
+    "seal": 29581541321
+  },
+  "seal_issue": 755,
+  "seal_merge_sha": "e7d7810ae3a4741028135becdd56dbafb0de2876",
+  "seal_pr": 792,
+  "seal_sha256": "1040762b090cf59282805205890e547f5ad9fe25a010caf2e0b575370c008a46",
+  "sealed_evidence": {
+    "workers": [
+      {
+        "deletion": {
+          "artifact_id": 8407080212,
+          "artifact_zip_sha256": "60f40651f892ecc6177e871d92fad44ebc33fc04562ea816718f743eca832b01",
+          "failure_code": "delete_absence_not_proven",
+          "failure_self_digest": "7bfaf9cc5291604500c88c3fbb799bd5a91a29e4b20ae9394234b2097be8e401",
+          "run_id": "29581204940",
+          "worker_delete_dispatched": true
+        },
+        "post_delete_probe": {
+          "artifact_id": 8407121401,
+          "artifact_zip_sha256": "1b2013d98d64f2c47b048fa34eea2bb2419564c717ba70538af602ecad5cf062",
+          "receipt_self_digest": "7f1f430858b55445039ccea24b42435e9dbfee74201ac068ecda2d47fc0291d8",
+          "run_id": "29581317244",
+          "worker_state": "worker_absent"
+        },
+        "worker": {
+          "name": "knowledge-engine-r3-8-29579965754",
+          "observation_run_id": "29579965754",
+          "recovery_run_id": "29580277257"
+        }
+      }
+    ]
+  }
+}
