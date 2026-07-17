@@ -1,0 +1,172 @@
+{
+  "artifact": {
+    "id": 8396501993,
+    "name": "m23-7-r3-8-remote-29553221650",
+    "receipt_file_sha256": "2245027d7cd0caffcabc3bd91de68b303b4f0035ef511e2d11c738be468611d7",
+    "receipt_self_digest": "4fa6da43b743677d47e127c9636732448d699a92ab7df83d95d90c5d7e4cdeb7",
+    "remote_entry_file_sha256": "dfa23ee32703e11f558fd048ce214bae75bf61093b2f321d597cbf1f57519e76",
+    "remote_entry_self_digest": "16be555b224430bd8a7f941ebabb28b1af01ae92773f633b987c52fd9a012ccd",
+    "remote_lifecycle_file_sha256": "25771225444c9d5bf1fe6cb4aefa79e053a4da2a04d7ef9c6987ffa97876dd92",
+    "remote_lifecycle_self_digest": "267c9d4a4ec3a93b6f6844b0d0d755ee7d425418a2ed1166f0675ecd50758bcd",
+    "zip_sha256": "73537486d2ae9565805d1034e2b8a3205f6f60fcce19e1c62544bfbaa59fd855"
+  },
+  "authority": {
+    "fresh_observation_authorized": false,
+    "latency_blocker_cleared": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "pointer_mutation_dispatched": false,
+    "production_mutation_dispatched": false,
+    "production_retrieval": "lexical",
+    "promotion_eligibility_granted": false,
+    "protected_mutations_dispatched": false,
+    "qdrant_delete_dispatched": false,
+    "qdrant_read_dispatched": true,
+    "qdrant_reindex_dispatched": false,
+    "qdrant_write_dispatched": false,
+    "r2_mutation_dispatched": false,
+    "retrieval_quality_blocker_cleared": false,
+    "serving_authorized": false,
+    "source_mutation_dispatched": false,
+    "worker_deletion_authorized_by_this_seal": false
+  },
+  "issue": 676,
+  "latency": {
+    "failed_gate": "worker_internal_shadow",
+    "maximum_shadow_ms": 1200,
+    "operator_round_trip_informational": true,
+    "operator_round_trip_ms": 3104,
+    "provider_ms": 461,
+    "qdrant_ms": 1219,
+    "shadow_ms": 1680
+  },
+  "privacy": {
+    "credentials_persisted": false,
+    "document_text_persisted": false,
+    "raw_evidence_persisted": false,
+    "raw_queries_persisted": false,
+    "service_url_persisted": false
+  },
+  "receipt": {
+    "accepted_metrics": {
+      "mrr_at_10": 0.807291666667,
+      "ndcg_at_10": 0.851933109598,
+      "recall_at_5": 0.875
+    },
+    "accepted_target_ranks": {
+      "m23q-01": 1,
+      "m23q-02": 8,
+      "m23q-03": 3,
+      "m23q-04": 1,
+      "m23q-07": 1,
+      "m23q-08": 1,
+      "m23q-09": 1,
+      "m23q-10": 1
+    },
+    "candidate_artifact_sha256": "8eed54902c73314ac2e5d5e187a788e44941dae250d9823d45b71ec57d1e1371",
+    "collection": "llm_wiki_m23_r3_5_candidate_8eed54902c73",
+    "contract_sha256": "09a340c2145cffa8ee45de7725e157c864baf08f0cda5ade11fc5bcccb0e5a94",
+    "gates": {
+      "accepted_metric_parity": true,
+      "acl_violation_rate_zero": true,
+      "candidate_identity": true,
+      "collection_schema_pre_post_exact": true,
+      "exact_target_rank_parity": true,
+      "hub_frequency": true,
+      "mrr_at_10": true,
+      "ndcg_at_10": true,
+      "output_influence_rate_zero": true,
+      "probe_count_8": true,
+      "protected_mutations_zero": true,
+      "qdrant_deletes_zero": true,
+      "qdrant_reindex_zero": true,
+      "qdrant_writes_zero": true,
+      "query_count_24": true,
+      "query_error_rate_zero": true,
+      "query_identity_unique": true,
+      "recall_at_5": true,
+      "worker_internal_shadow": false
+    },
+    "maximum_top10_hub_frequency": 3,
+    "metrics": {
+      "mrr_at_10": 0.807291666667,
+      "ndcg_at_10": 0.851933109598,
+      "recall_at_5": 0.875
+    },
+    "probe_count": 8,
+    "query_count": 24,
+    "query_identity_count": 24,
+    "schema_version": "knowledge-engine-m23-7-r3-8-latency-repair-receipt/v1",
+    "status": "completed_fail_closed_latency_repair",
+    "target_ranks": {
+      "m23q-01": 1,
+      "m23q-02": 8,
+      "m23q-03": 3,
+      "m23q-04": 1,
+      "m23q-07": 1,
+      "m23q-08": 1,
+      "m23q-09": 1,
+      "m23q-10": 1
+    }
+  },
+  "result": {
+    "blocker_clearance_eligible_after_reconciliation": false,
+    "evidence_seal_required": true,
+    "independent_reconciliation_required": true,
+    "latency_repair_passed": false,
+    "latency_repair_result_complete": true,
+    "next_gate": "separately_governed_r3_8_evidence_seal",
+    "receipt_says_diagnostic_worker_deletion_required_after_reconciliation": false,
+    "remote_lifecycle_says_worker_retained": true
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-23-fail-closed-latency-evidence-seal/v1",
+  "seal_sha256": "2d6b2ae1d5e7b02b3c476f8b527103433aca393456d4fb2e917662a385e57a7d",
+  "source": {
+    "bounded_http_error_classification_merge_sha": "b7ff3c05e8eb2e2c7fcc56c206dd2da678256674",
+    "engine_sha": "b7ff3c05e8eb2e2c7fcc56c206dd2da678256674",
+    "observation_run_id": "29553221650",
+    "observation_run_url": "https://github.com/danielcanfly/knowledge-engine/actions/runs/29553221650",
+    "workflow": "m23-7-r3-8-remote-observe.yml"
+  },
+  "worker": {
+    "collection_after": {
+      "indexed_vectors_count": 0,
+      "points_count": 107,
+      "read_only": true,
+      "sparse_vectors": null,
+      "status": "green",
+      "vector_distance": "Cosine",
+      "vector_name": "default",
+      "vector_size": 1024
+    },
+    "collection_before": {
+      "indexed_vectors_count": 0,
+      "points_count": 107,
+      "read_only": true,
+      "sparse_vectors": null,
+      "status": "green",
+      "vector_distance": "Cosine",
+      "vector_name": "default",
+      "vector_size": 1024
+    },
+    "deletion_authorization_required": true,
+    "deployed": true,
+    "external_calls": {
+      "qdrant_collection_reads": 2,
+      "qdrant_delete": 0,
+      "qdrant_query_batch": 1,
+      "qdrant_reindex": 0,
+      "qdrant_write": 0,
+      "workers_ai_binding": 1
+    },
+    "name": "knowledge-engine-r3-8-29553221650",
+    "placement_config_sha256": "90f915ce7e5469d41044ebba1c9d7affed277e8e5467632e1d6283253dc04555",
+    "placement_hostname_sha256": "71fa051c5d40b28df0a6bb5ba634d0afd9ae084f728a2425f5570c727aa223b7",
+    "retained": true,
+    "version_id": "6bebabdc-b4f1-42fa-bf8d-6eebf0d0d8fd"
+  }
+}
