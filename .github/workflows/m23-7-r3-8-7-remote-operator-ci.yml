@@ -158,23 +158,27 @@ jobs:
         run: |
           python - <<'PY'
           import subprocess
+          baseline = "af04789770c05b386125c71f678023a13fe48a25"
           allowed = {
-              "scripts/m23_7_r3_8_remote_operator.py",
-              "tests/test_m23_7_r3_8_remote_operator.py",
-              "pilot/m23/m23-7-r3-8-7-remote-operator-contract.json",
-              "docs/architecture/m23-7-r3-8-7-remote-operator.md",
               ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
               ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml",
+              ".github/workflows/m23-7-r3-8-latency-repair.yml",
+              "docs/architecture/m23-7-r3-8-latency-repair.md",
+              "pilot/m23/m23-7-r3-8-latency-repair-contract.json",
+              "pilot/m23/m23-7-r3-8-latency-repair-fixture-report.json",
+              "scripts/m23_7_r3_8_remote_operator.py",
+              "tests/test_m23_7_r3_8_remote_operator.py",
+              "src/knowledge_engine/m23_7_r3_8_latency_repair.py",
+              "tests/test_m23_7_r3_8_latency_repair.py",
+              "workers/m23-7-r3-8-latency-repair/worker.mjs",
+              "workers/m23-7-r3-8-latency-repair/worker.test.mjs",
           }
           changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "0a2aabdb2892a76112a48e3382f6653da9f36691", "HEAD"],
+              ["git", "diff", "--name-only", baseline, "HEAD"],
               text=True,
           ).splitlines())
           assert changed == allowed, (changed, allowed)
           PY
-          git diff --exit-code 0a2aabdb2892a76112a48e3382f6653da9f36691 HEAD -- \
-            pilot/m23/m23-7-r3-8-latency-repair-contract.json \
-            pilot/m23/m23-7-r3-8-latency-repair-fixture-report.json
       - name: Verify pinned Wrangler command surfaces
         shell: bash
         run: |

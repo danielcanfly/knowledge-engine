@@ -70,17 +70,17 @@ jobs:
               .read_text(encoding="utf-8")
           )
           assert subject.canonical_contract() == expected
-          assert subject.CONTRACT_SHA256 == "383247bbe062d0cafe25a4578c4eaa9e86aa73231024a1775e8bb739a47f96b4"
+          assert subject.CONTRACT_SHA256 == "f2c2dcbfe24324729d84e5b5fcd184203b178d6339a71b73651f38ee50c618a2"
           assert expected["entry"]["engine_sha"] == "7793cd22092aca530ca48a3240a3c83ffd3d2894"
           assert expected["latency"]["maximum_worker_internal_shadow_ms"] == 1200
           assert expected["latency"]["threshold_changed"] is False
           assert expected["queries"]["query_count"] == 24
           assert expected["queries"]["workers_ai_binding_calls"] == 1
           assert expected["queries"]["qdrant_query_batch_calls"] == 1
-          assert expected["queries"]["qdrant_vector_scroll_max_calls"] == 1
-          assert expected["queries"]["qdrant_vector_scroll_only_after_batch_unavailable"] is True
-          assert expected["queries"]["qdrant_batch_endpoint"] == "points/search/batch"
-          assert expected["queries"]["qdrant_scroll_endpoint"] == "points/scroll"
+          assert expected["queries"]["qdrant_vector_scroll_max_calls"] == 0
+          assert expected["queries"]["qdrant_vector_scroll_only_after_batch_unavailable"] is False
+          assert expected["queries"]["qdrant_batch_endpoint"] == "points/query/batch"
+          assert expected["queries"]["qdrant_scroll_endpoint"] is None
           assert expected["authority"]["retrieval_quality_blocker_cleared"] is False
           assert expected["authority"]["latency_blocker_cleared"] is False
 
@@ -96,7 +96,7 @@ jobs:
               separators=(",", ":"),
           ).encode()
           assert hashlib.sha256(encoded).hexdigest() == fixture_digest
-          assert fixture_digest == "f78c50fdbf6efba0dcacaf1ea6dffd74e0fd75d572d528e3933c61b3ad3531b1"
+          assert fixture_digest == "5ddb1ed90e664aaf1a92af41fae1d1c4949359bbc8286f019ba0f4fe98f48c36"
           assert fixture["fixture_only"] is True
           assert fixture["live_receipt_required"] is True
           PY
@@ -120,14 +120,14 @@ jobs:
           ).read_text(encoding="utf-8")
           assert 'method: "PUT"' not in worker
           assert 'method: "DELETE"' not in worker
-          assert "/points/search/batch" in worker
-          assert "/points/scroll" in worker
+          assert "/points/query/batch" in worker
+          assert "/points/search/batch" not in worker
+          assert "/points/scroll" not in worker
           assert '"section_id"' in worker
           assert '"candidate_artifact_sha256"' in worker
           assert "CANDIDATE_FILTER" in worker
           assert "validateCandidatePayload(raw)" in worker
           assert "with_vector: false" in worker
-          assert "with_vector: [VECTOR_NAME]" in worker
           assert not list(
               Path("workers/m23-7-r3-8-latency-repair").glob(
                   "wrangler.local.jsonc"
