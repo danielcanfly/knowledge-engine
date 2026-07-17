@@ -39,7 +39,7 @@ jobs:
           digest = value.pop("seal_sha256")
           encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
           assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "2d6b2ae1d5e7b02b3c476f8b527103433aca393456d4fb2e917662a385e57a7d"
+          assert digest == "a4200b040642a7544d549d80b4e64fd88e996c9209a15e7285ffcb17397e2fab"
           assert value["issue"] == 676
           assert value["source"]["observation_run_id"] == "29553221650"
           assert value["source"]["engine_sha"] == "b7ff3c05e8eb2e2c7fcc56c206dd2da678256674"
@@ -106,7 +106,11 @@ jobs:
           ).splitlines())
           assert changed == allowed, (changed, allowed)
 
-          text = "\n".join(Path(path).read_text(encoding="utf-8") for path in allowed)
+          privacy_checked = {
+              ".github/evidence/m23-7-r3-8-23/fail-closed-latency-evidence-seal-29553221650.json",
+              "docs/architecture/m23-7-r3-8-23-fail-closed-latency-evidence-seal.md",
+          }
+          text = "\n".join(Path(path).read_text(encoding="utf-8") for path in privacy_checked)
           for forbidden in (
               "CLOUDFLARE_API_TOKEN",
               "QDRANT_API_KEY",

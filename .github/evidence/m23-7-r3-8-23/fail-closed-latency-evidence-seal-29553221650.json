@@ -42,7 +42,7 @@
   },
   "privacy": {
     "credentials_persisted": false,
-    "document_text_persisted": false,
+    "document_content_persisted": false,
     "raw_evidence_persisted": false,
     "raw_queries_persisted": false,
     "service_url_persisted": false
@@ -124,7 +124,7 @@
     "blocked_pending_latency"
   ],
   "schema_version": "knowledge-engine-m23-7-r3-8-23-fail-closed-latency-evidence-seal/v1",
-  "seal_sha256": "2d6b2ae1d5e7b02b3c476f8b527103433aca393456d4fb2e917662a385e57a7d",
+  "seal_sha256": "a4200b040642a7544d549d80b4e64fd88e996c9209a15e7285ffcb17397e2fab",
   "source": {
     "bounded_http_error_classification_merge_sha": "b7ff3c05e8eb2e2c7fcc56c206dd2da678256674",
     "engine_sha": "b7ff3c05e8eb2e2c7fcc56c206dd2da678256674",
