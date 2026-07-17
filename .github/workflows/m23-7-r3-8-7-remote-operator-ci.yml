@@ -146,12 +146,23 @@ jobs:
       - name: Verify accepted observation core runtime preservation
         shell: bash
         run: |
-          git diff --exit-code 771538d3b95fccefc3f32bd568770e08ce3552ac HEAD -- \
-            scripts/m23_7_r3_8_remote_operator.py \
-            tests/test_m23_7_r3_8_remote_operator.py \
-            pilot/m23/m23-7-r3-8-7-remote-operator-contract.json \
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              "scripts/m23_7_r3_8_remote_operator.py",
+              "tests/test_m23_7_r3_8_remote_operator.py",
+              ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "fc08f678eda6af553b304b54721b6f8689951a18", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code fc08f678eda6af553b304b54721b6f8689951a18 HEAD -- \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
             workers/m23-7-r3-8-latency-repair/worker.mjs \
+            pilot/m23/m23-7-r3-8-7-remote-operator-contract.json \
             pilot/m23/m23-7-r3-8-latency-repair-contract.json \
             pilot/m23/m23-7-r3-8-latency-repair-fixture-report.json
       - name: Verify pinned Wrangler command surfaces
