@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/evidence/m23-7-r3-8-29/deletion-absence-reconciliation-29606750152.json"
+      - ".github/evidence/m23-7-r3-8-29/deletion-absence-reconciliation-29609464264.json"
       - "docs/architecture/m23-7-r3-8-29-deletion-absence-reconciliation.md"
       - ".github/workflows/m23-7-r3-8-29-deletion-absence-reconciliation.yml"
   workflow_dispatch:
@@ -24,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          git merge-base --is-ancestor a5ee4a99920209f67e984c45607983cede107b25 HEAD
+          git merge-base --is-ancestor 96e982b5526b7d991087e61d2d51faa3343626f1 HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -36,23 +37,23 @@ jobs:
           import json
           from pathlib import Path
 
-          path = Path(".github/evidence/m23-7-r3-8-29/deletion-absence-reconciliation-29606750152.json")
+          path = Path(".github/evidence/m23-7-r3-8-29/deletion-absence-reconciliation-29609464264.json")
           value = json.loads(path.read_text(encoding="utf-8"))
           digest = value.pop("reconciliation_sha256")
           encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
           assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "3216c75986dabe50ac7106d7d2ca36355a35f06436a28a6e1ac6b1176469dddb"
+          assert digest == "f9b41b9a18b78b3be8f37afc14ad051fa459fc03828ca66cff8251a757357e82"
           assert value["issue"] is None
           assert value["seal_issue"] is None
-          assert value["seal_pr"] == 865
-          assert value["seal_accepted_head"] == "07d68881e14fa5b4eee1b256b707b1b039419769"
-          assert value["seal_merge_sha"] == "a5ee4a99920209f67e984c45607983cede107b25"
-          assert value["seal_sha256"] == "cc77e5b9db928e91e334e198fd629741eba3ec2fc71c26da20b73831104b3f9b"
+          assert value["seal_pr"] == 874
+          assert value["seal_accepted_head"] == "a412bc52b3db899c2a107adfef756805d7291dc7"
+          assert value["seal_merge_sha"] == "96e982b5526b7d991087e61d2d51faa3343626f1"
+          assert value["seal_sha256"] == "2e07615ab9b3b950eebec5c831edd2856ffe2522e7f71f093c18fafc6cd31da4"
           assert value["seal_exact_head_runs"] == {
-              "architecture_canon": 29606963300,
-              "ci": 29606963308,
-              "graph_v2": 29606963437,
-              "seal": 29606963297,
+              "architecture_canon": 29609659070,
+              "ci": 29609658993,
+              "graph_v2": 29609659006,
+              "seal": 29609659050,
           }
           result = value["result"]
           assert result["worker_lifecycle_clean"] is True
@@ -64,13 +65,13 @@ jobs:
           assert result["blocker_clearance_eligible"] is False
           assert result["production_retrieval"] == "lexical"
           evidence = value["sealed_evidence"]
-          assert evidence["deletion"]["run_id"] == "29606674323"
+          assert evidence["deletion"]["run_id"] == "29609393351"
           assert evidence["deletion"]["worker_delete_dispatched"] is True
           assert evidence["deletion"]["failure_code"] == "delete_absence_not_proven"
-          assert evidence["deletion"]["failure_self_digest"] == "cd7399d4707a611c5ec8471fb830c7183f60e6146284c4821a540f6ed464f6b8"
-          assert evidence["post_delete_probe"]["run_id"] == "29606750152"
+          assert evidence["deletion"]["failure_self_digest"] == "2dda7315d40eedfb068bd35ed1b50a02547808f1fcbf776feecf1dac98ab2851"
+          assert evidence["post_delete_probe"]["run_id"] == "29609464264"
           assert evidence["post_delete_probe"]["worker_state"] == "worker_absent"
-          assert evidence["post_delete_probe"]["receipt_self_digest"] == "6a7cfb146c5378bef527b1e3e8f9df2ae781a61a42bfdff34e119e6bf00f758e"
+          assert evidence["post_delete_probe"]["receipt_self_digest"] == "2c8557e7b675057638512c22394c4f332a3f866b6ec1503a00614bdec347344e"
           authority = value["authority"]
           assert authority["evidence_reconciliation_only"] is True
           assert authority["fresh_observation_authorized"] is False
@@ -88,17 +89,17 @@ jobs:
           python - <<'PY'
           import subprocess
           allowed = {
-              ".github/evidence/m23-7-r3-8-29/deletion-absence-reconciliation-29606750152.json",
+              ".github/evidence/m23-7-r3-8-29/deletion-absence-reconciliation-29609464264.json",
               "docs/architecture/m23-7-r3-8-29-deletion-absence-reconciliation.md",
               ".github/workflows/m23-7-r3-8-29-deletion-absence-reconciliation.yml",
           }
           changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "a5ee4a99920209f67e984c45607983cede107b25", "HEAD"],
+              ["git", "diff", "--name-only", "96e982b5526b7d991087e61d2d51faa3343626f1", "HEAD"],
               text=True,
           ).splitlines())
           assert changed == allowed, (changed, allowed)
           PY
-          git diff --exit-code a5ee4a99920209f67e984c45607983cede107b25 HEAD -- \
+          git diff --exit-code 96e982b5526b7d991087e61d2d51faa3343626f1 HEAD -- \
             scripts/m23_7_r3_8_remote_delete.py \
             scripts/m23_7_r3_8_remote_recovery_probe.py \
             .github/workflows/m23-7-r3-8-remote-delete.yml \
