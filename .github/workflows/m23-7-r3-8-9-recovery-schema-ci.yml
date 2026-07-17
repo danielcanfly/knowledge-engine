@@ -86,7 +86,7 @@ jobs:
           assert "pull_request" not in payload[True]
           text = path.read_text(encoding="utf-8")
           assert 'default: "29506217284"' in text
-          assert "29506217284|29546336917|29548837457|29550965495|29553221650" in text
+          assert "29506217284|29546336917|29548837457|29550965495|29553221650|29557251118" in text
           assert "PROBE_R3_8_RUN_" in text
           assert "inputs.affected_run_id" in text
           assert "_SCHEMA_V2" in text
@@ -117,7 +117,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code b7ff3c05e8eb2e2c7fcc56c206dd2da678256674 HEAD -- \
+          git diff --exit-code 4729ee2264fdd3650770a9be227606e995973725 HEAD -- \
             pilot/m23/m23-7-r3-8-9-recovery-schema-contract.json \
             docs/architecture/m23-7-r3-8-9-recovery-schema.md \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
