@@ -6,7 +6,7 @@
     "protected_mutations_dispatched": false,
     "retrieval_quality_blocker_cleared": false
   },
-  "contract_sha256": "f2c2dcbfe24324729d84e5b5fcd184203b178d6339a71b73651f38ee50c618a2",
+  "contract_sha256": "108e749661f47861472499475591eed2b5baf485920399bb48b6413658e287a0",
   "fixture_only": true,
   "gates": {
     "accepted_metric_parity": true,
@@ -35,7 +35,7 @@
   "probe_count": 8,
   "query_count": 24,
   "query_identity_count": 24,
-  "report_sha256": "5ddb1ed90e664aaf1a92af41fae1d1c4949359bbc8286f019ba0f4fe98f48c36",
+  "report_sha256": "377a2ab7a1ccf0e57fe873e3a10d5dd61c145259479d6e9f20983829b8e87213",
   "schema_version": "knowledge-engine-m23-7-r3-8-latency-repair-fixture-report/v1",
   "status": "pass_fixture_latency_repair",
   "target_ranks": {
@@ -53,6 +53,7 @@
       "qdrant_collection_reads": 2,
       "qdrant_delete": 0,
       "qdrant_query_batch": 1,
+      "qdrant_single_query": 0,
       "qdrant_reindex": 0,
       "qdrant_vector_scroll": 0,
       "qdrant_write": 0,

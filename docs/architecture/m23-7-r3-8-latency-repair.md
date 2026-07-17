@@ -4,7 +4,7 @@
 
 R3.7 completed a real read-only live acceptance against the reconciled 107-point candidate collection. Quality, target-rank parity, identity, ACL, error-rate and strict-zero gates passed. The only failed gate was direct end-to-end p95 latency at 1739 ms against the unchanged 1200 ms maximum.
 
-R3.8 does not lower that threshold and does not treat a rerun as a repair. It restores the execution boundary already authorised by parent #474: a transient Cloudflare Worker placed by the Qdrant hostname, using an in-process Workers AI binding and one read-only Qdrant query-batch attempt.
+R3.8 does not lower that threshold and does not treat a rerun as a repair. It restores the execution boundary already authorised by parent #474: a transient Cloudflare Worker placed by the Qdrant hostname, using an in-process Workers AI binding, one read-only Qdrant query-batch attempt, and a read-only parallel single-query fallback only if that batch endpoint is unavailable.
 
 ## Frozen inputs
 
@@ -31,7 +31,7 @@ The generated local Wrangler config derives only `placement.hostname` from `QDRA
 - strict content-length and 65,536-byte request limit;
 - disabled invocation logs.
 
-The measured Worker-internal shadow begins immediately before the single Workers AI BGE-M3 binding call and ends after the Qdrant read path is parsed. The read path uses the official `/points/query/batch` endpoint with the named vector `default`. Collection snapshots occur before and after that shadow. Operator-to-Worker round-trip latency is recorded separately and is informational only.
+The measured Worker-internal shadow begins immediately before the single Workers AI BGE-M3 binding call and ends after the Qdrant read path is parsed. The read path first uses the official `/points/query/batch` endpoint with the named vector `default`. If that batch endpoint is unavailable, it performs the same read-only search through 24 parallel `/points/query?consistency=all` calls, matching the single-query endpoint already used by the accepted R3.7 live path. Collection snapshots occur before and after that shadow. Operator-to-Worker round-trip latency is recorded separately and is informational only.
 
 ## Data plane
 
@@ -42,7 +42,8 @@ The Worker performs:
 1. one read-only candidate collection snapshot;
 2. one Workers AI binding call containing 24 texts;
 3. one Qdrant read-only query batch containing the 24 query vectors, `using: "default"`, and an explicit `section_id`-only payload-field allowlist;
-4. one read-only candidate collection snapshot.
+4. only if that batch endpoint is unavailable, 24 read-only single-query calls to `/points/query?consistency=all` with the same named vector, filter, limit, and payload-field allowlist;
+5. one read-only candidate collection snapshot.
 
 The pre/post collection snapshots preserve the exact candidate collection identity. Each ranked result returns only the section ID needed by the accepted target-unaware evaluator, and the operator rejects any ranked section outside the reconciled candidate artifact. The Worker returns only variant IDs, query hashes, ranked section IDs, bounded timings, collection identities and strict-zero authority fields.
 
@@ -79,6 +80,6 @@ Until those steps complete:
 
 ## Authority boundary
 
-R3.8 authorises one isolated diagnostic Worker deployment, Workers AI binding calls, read-only Qdrant collection reads, one read-only query-batch attempt, one authenticated observation, evidence metadata and later deletion of only that exact Worker.
+R3.8 authorises one isolated diagnostic Worker deployment, Workers AI binding calls, read-only Qdrant collection reads, one read-only query-batch attempt, a read-only parallel single-query fallback only after batch unavailability, one authenticated observation, evidence metadata and later deletion of only that exact Worker.
 
 It does not authorise Qdrant writes, deletes or reindexing; candidate or historical collection mutation; R2, pointer, Source or production mutation; user traffic; semantic answer serving; threshold changes; promotion; blocker clearance before passing reconciliation; parent closure; or M23.7 closure.

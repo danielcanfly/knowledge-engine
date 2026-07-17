@@ -55,7 +55,7 @@ const CANDIDATE_FILTER = {
   ],
 };
 const CONTRACT_SHA256 =
-  "f2c2dcbfe24324729d84e5b5fcd184203b178d6339a71b73651f38ee50c618a2";
+  "108e749661f47861472499475591eed2b5baf485920399bb48b6413658e287a0";
 const REQUEST_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-request/v1";
 const RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1";
 const ROUTE = "/v1/m23-7-r3-8/observe";
@@ -393,6 +393,38 @@ function parseBatchResults(payload) {
   });
 }
 
+function parseSingleQueryResults(payloads) {
+  assertCondition(
+    Array.isArray(payloads) && payloads.length === QUERY_COUNT,
+    "single-query-response-count-drift",
+    502,
+  );
+  return payloads.map((payload) => {
+    const points =
+      isObject(payload) && isObject(payload.result)
+        ? payload.result.points
+        : undefined;
+    assertCondition(
+      Array.isArray(points) && points.length === DENSE_LIMIT,
+      "single-query-points-shape-drift",
+      502,
+    );
+    const ranked = points.map(validateRankedPoint);
+    ranked.sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.sectionId.localeCompare(right.sectionId),
+    );
+    const ids = ranked.map((item) => item.sectionId);
+    assertCondition(
+      new Set(ids).size === DENSE_LIMIT,
+      "ranked-section-duplicate",
+      502,
+    );
+    return ids;
+  });
+}
+
 async function executeObservation(env, validated, now = () => performance.now()) {
   assertCondition(
     env.AI && typeof env.AI.run === "function",
@@ -434,11 +466,41 @@ async function executeObservation(env, validated, now = () => performance.now())
     },
   );
   let qdrantVectorScroll = 0;
+  let qdrantSingleQuery = 0;
   let rankings;
   if (batchResponse.ok) {
     rankings = parseBatchResults(await batchResponse.json());
   } else {
-    throw new WorkerFailure("qdrant-query-batch-unavailable", 502);
+    const singleResponses = await Promise.all(
+      vectors.map((vector) =>
+        qdrantFetch(
+          env,
+          `/collections/${encodeURIComponent(COLLECTION)}/points/query?consistency=all`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: vector,
+              using: VECTOR_NAME,
+              params: SEARCH_PARAMS,
+              filter: CANDIDATE_FILTER,
+              limit: DENSE_LIMIT,
+              with_payload: RANKING_PAYLOAD_FIELDS,
+              with_vector: false,
+            }),
+          },
+        ),
+      ),
+    );
+    qdrantSingleQuery = QUERY_COUNT;
+    assertCondition(
+      singleResponses.every((response) => response.ok),
+      "qdrant-single-query-unavailable",
+      502,
+    );
+    rankings = parseSingleQueryResults(
+      await Promise.all(singleResponses.map((response) => response.json())),
+    );
   }
   const qdrantFinished = now();
   const shadowFinished = now();
@@ -500,6 +562,7 @@ async function executeObservation(env, validated, now = () => performance.now())
       workers_ai_binding: 1,
       qdrant_collection_reads: 2,
       qdrant_query_batch: 1,
+      qdrant_single_query: qdrantSingleQuery,
       qdrant_vector_scroll: qdrantVectorScroll,
       qdrant_write: 0,
       qdrant_delete: 0,
