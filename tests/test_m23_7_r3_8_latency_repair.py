@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 
 from knowledge_engine import m23_7_r3_8_latency_repair as subject
@@ -240,6 +241,36 @@ def test_latency_failure_is_complete_and_fail_closed(
         report["exit"]["blocker_clearance_eligible_after_reconciliation"]
         is False
     )
+
+
+def test_http_worker_invoker_preserves_bounded_worker_error_code() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            502,
+            json={"status": "error", "code": "qdrant-batch-unavailable"},
+        )
+
+    invoker = subject.HttpWorkerInvoker("https://worker.example.test/observe", "a" * 32)
+    invoker._http.close()
+    invoker._http = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(subject.LatencyRepairError) as exc:
+        invoker.invoke({"schema_version": "test"}, clock_ns=lambda: 1)
+    assert exc.value.code == "worker_http_502_qdrant_batch_unavailable"
+
+
+def test_http_worker_invoker_bounds_unsafe_worker_error_code() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            500,
+            json={"status": "error", "code": "secret shaped text"},
+        )
+
+    invoker = subject.HttpWorkerInvoker("https://worker.example.test/observe", "a" * 32)
+    invoker._http.close()
+    invoker._http = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(subject.LatencyRepairError) as exc:
+        invoker.invoke({"schema_version": "test"}, clock_ns=lambda: 1)
+    assert exc.value.code == "worker_http_500"
 
 
 def test_duplicate_worker_variant_is_rejected() -> None:
