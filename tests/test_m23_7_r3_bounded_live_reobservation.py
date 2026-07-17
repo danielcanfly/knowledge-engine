@@ -271,7 +271,10 @@ def test_http_worker_bounded_failure_becomes_diagnostic_report() -> None:
         500,
         json={"status": "error", "code": "operator-secret-missing"},
     )
-    invoker = HttpR3WorkerInvoker("https://worker.example/v1/m23-7-r3/observe", "t" * 32)
+    invoker = HttpR3WorkerInvoker(
+        "https://worker.example/v1/m23-7-r3/observe",
+        "t" * 32,
+    )
     invoker._http = _FakeHttpClient(response)  # type: ignore[assignment]
     probes = compile_probe_plan(canonical_manifest(), canonical_fixture_samples())
 
@@ -296,3 +299,29 @@ def test_http_worker_bounded_failure_becomes_diagnostic_report() -> None:
     assert report["privacy"]["arbitrary_exception_text_persisted"] is False
     assert report["remaining_blockers"] == ["blocked_pending_retrieval_quality"]
     validate_report(report)
+
+
+def test_http_worker_discards_unbounded_placement_header() -> None:
+    import httpx
+
+    probes = compile_probe_plan(canonical_manifest(), canonical_fixture_samples())
+    payload = FixtureWorkerInvoker().invoke(
+        probes,
+        nonce="f" * 32,
+        clock_ns=lambda: 0,
+    )["payload"]
+    response = httpx.Response(
+        200,
+        json=payload,
+        headers={"cf-placement": "https://placement.example/private"},
+    )
+    invoker = HttpR3WorkerInvoker("https://worker.example/v1/m23-7-r3/observe", "t" * 32)
+    invoker._http = _FakeHttpClient(response)  # type: ignore[assignment]
+
+    result = invoker.invoke(
+        probes,
+        nonce="f" * 32,
+        clock_ns=iter([0, 2_000_000]).__next__,
+    )
+
+    assert result["cf_placement"] is None
