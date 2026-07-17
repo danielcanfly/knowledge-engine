@@ -158,7 +158,7 @@ jobs:
         run: |
           python - <<'PY'
           import subprocess
-          baseline = "987ed9d201de752278e853f20a542e6827966f0d"
+          baseline = "036ce2a1207ee3977f325a5a7763568c72dde3b5"
           allowed = {
               ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml",
               ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
