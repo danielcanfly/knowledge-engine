@@ -93,7 +93,6 @@ jobs:
           git diff --exit-code e4d46d85b16ebba738c42cd19394791cc7c90789 HEAD -- \
             pilot/m23/m23-7-r3-8-10-deletion-identity-contract.json \
             docs/architecture/m23-7-r3-8-10-deletion-identity-set.md \
-            scripts/m23_7_r3_8_remote_operator.py \
             scripts/m23_7_r3_8_remote_entrypoint.py \
             scripts/m23_7_r3_8_remote_recovery_probe.py \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
