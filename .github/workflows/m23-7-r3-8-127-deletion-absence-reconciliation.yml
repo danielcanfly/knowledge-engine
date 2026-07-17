@@ -3,8 +3,8 @@ name: M23.7 R3.8.127 Deletion/Absence Reconciliation
 on:
   pull_request:
     paths:
-      - ".github/evidence/m23-7-r3-8-127/deletion-absence-reconciliation-29596921351.json"
-      - "docs/architecture/m23-7-r3-8-127-deletion-absence-reconciliation-29596921351.md"
+      - ".github/evidence/m23-7-r3-8-127/deletion-absence-reconciliation-29599255689.json"
+      - "docs/architecture/m23-7-r3-8-127-deletion-absence-reconciliation-29599255689.md"
       - ".github/workflows/m23-7-r3-8-127-deletion-absence-reconciliation.yml"
   workflow_dispatch:
 permissions:
@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          git merge-base --is-ancestor 79749a520ec5af5456b3da15cefd8812a5b50981 HEAD
+          git merge-base --is-ancestor 096d734d26fbac31109a0328d7f5044f22399e6e HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -30,21 +30,21 @@ jobs:
           python - <<'PY'
           import hashlib,json
           from pathlib import Path
-          path=Path(".github/evidence/m23-7-r3-8-127/deletion-absence-reconciliation-29596921351.json")
+          path=Path(".github/evidence/m23-7-r3-8-127/deletion-absence-reconciliation-29599255689.json")
           value=json.loads(path.read_text(encoding="utf-8")); digest=value.pop("reconciliation_sha256")
           encoded=json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(",",":"),allow_nan=False).encode()
           assert hashlib.sha256(encoded).hexdigest()==digest
-          assert digest=="2be71911afd90bd5b20204d091a5fcda02f482ae41c4574f08ee9ba7606f2756"
-          assert value["seal_pr"]==835
-          assert value["seal_sha256"]=="686c67efbd3938d43adb445a3191a1defd5f58aebdeadd8728224af84d83e316"
+          assert digest=="11347cf2fc16bb6e6bd0692301c7afd9ff971907b6aa03572df7da125a0c098b"
+          assert value["seal_pr"]==842
+          assert value["seal_sha256"]=="f85d5774f7df7698571b42f1807d0c50efb62b58347e96efe3146b6704b7d771"
           result=value["result"]
           assert result["retained_worker_cleanup_complete"] is True
           assert result["worker_lifecycle_clean"] is True
           assert result["worker_state"]=="worker_absent"
-          assert result["next_gate"]=="qdrant_query_batch_unavailable_repair_iteration"
+          assert result["next_gate"]=="qdrant_single_query_unavailable_repair_iteration"
           assert result["blocker_clearance_eligible"] is False
           worker=value["sealed_evidence"]["workers"][0]
-          assert worker["worker"]["name"]=="knowledge-engine-r3-8-29595625175"
+          assert worker["worker"]["name"]=="knowledge-engine-r3-8-29597922646"
           assert worker["deletion"]["worker_delete_dispatched"] is True
           assert worker["post_delete_probe"]["worker_state"]=="worker_absent"
           assert value["authority"]["fresh_observation_authorized"] is False
@@ -54,11 +54,11 @@ jobs:
         run: |
           python - <<'PY'
           import subprocess
-          allowed={".github/evidence/m23-7-r3-8-127/deletion-absence-reconciliation-29596921351.json","docs/architecture/m23-7-r3-8-127-deletion-absence-reconciliation-29596921351.md",".github/workflows/m23-7-r3-8-127-deletion-absence-reconciliation.yml"}
-          changed=set(subprocess.check_output(["git","diff","--name-only","79749a520ec5af5456b3da15cefd8812a5b50981","HEAD"],text=True).splitlines())
+          allowed={".github/evidence/m23-7-r3-8-127/deletion-absence-reconciliation-29599255689.json","docs/architecture/m23-7-r3-8-127-deletion-absence-reconciliation-29599255689.md",".github/workflows/m23-7-r3-8-127-deletion-absence-reconciliation.yml"}
+          changed=set(subprocess.check_output(["git","diff","--name-only","096d734d26fbac31109a0328d7f5044f22399e6e","HEAD"],text=True).splitlines())
           assert changed==allowed,(changed,allowed)
           PY
-          git diff --exit-code 79749a520ec5af5456b3da15cefd8812a5b50981 HEAD -- \
+          git diff --exit-code 096d734d26fbac31109a0328d7f5044f22399e6e HEAD -- \
             scripts/m23_7_r3_8_remote_delete.py \
             scripts/m23_7_r3_8_remote_recovery_probe.py \
             .github/workflows/m23-7-r3-8-remote-delete.yml \
