@@ -61,6 +61,9 @@ function point(index, score) {
   return {
     id: `00000000-0000-0000-0000-${String(index).padStart(12, "0")}`,
     score,
+    vector: {
+      default: vector(index),
+    },
     payload: {
       payload_schema_version: "knowledge-engine-m23-qdrant-payload/v2",
       section_id: `section-${String(index).padStart(3, "0")}`,
@@ -78,15 +81,16 @@ function point(index, score) {
   };
 }
 
-function batchPayload() {
+function scrollPayload() {
   return {
     status: "ok",
-    result: Array.from({ length: QUERY_COUNT }, () => ({
+    result: {
       points: Array.from(
-        { length: DENSE_LIMIT },
+        { length: 107 },
         (_, index) => point(index, 1 - index / 1000),
       ),
-    })),
+      next_page_offset: null,
+    },
   };
 }
 
@@ -128,7 +132,7 @@ test("validateBody rejects duplicate query identity", async () => {
   await assert.rejects(validateBody(request), /query-digest-duplicate/);
 });
 
-test("executeObservation performs one AI batch and one Qdrant query batch", async () => {
+test("executeObservation performs one AI batch and one Qdrant vector scroll", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
@@ -137,8 +141,8 @@ test("executeObservation performs one AI batch and one Qdrant query batch", asyn
       method: init.method || "GET",
       body: init.body ? JSON.parse(init.body) : null,
     });
-    if (String(url).endsWith("/points/query/batch")) {
-      return new Response(JSON.stringify(batchPayload()), {
+    if (String(url).endsWith("/points/scroll")) {
+      return new Response(JSON.stringify(scrollPayload()), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
@@ -182,38 +186,26 @@ test("executeObservation performs one AI batch and one Qdrant query batch", asyn
       ["GET", "POST", "GET"],
     );
     const batch = calls[1].body;
-    assert.equal(batch.searches.length, QUERY_COUNT);
-    assert.deepEqual(
-      batch.searches.map((search) => ({
-        limit: search.limit,
-        params: search.params,
-        withPayload: search.with_payload,
-        withVector: search.with_vector,
-      })),
-      Array.from({ length: QUERY_COUNT }, () => ({
-        limit: DENSE_LIMIT,
-        params: {
-          hnsw_ef: DENSE_LIMIT,
-          exact: false,
-        },
-        withPayload: [
-          "payload_schema_version",
-          "section_id",
-          "source_membership",
-          "candidate_collection",
-          "candidate_artifact_sha256",
-          "candidate_reingestion_issue",
-          "vector_name",
-          "vector_dimension",
-          "canonical_knowledge",
-          "candidate_release_eligible",
-          "production_authority",
-        ],
-        withVector: false,
-      })),
-    );
+    assert.deepEqual(batch, {
+      limit: 107,
+      with_payload: [
+        "payload_schema_version",
+        "section_id",
+        "source_membership",
+        "candidate_collection",
+        "candidate_artifact_sha256",
+        "candidate_reingestion_issue",
+        "vector_name",
+        "vector_dimension",
+        "canonical_knowledge",
+        "candidate_release_eligible",
+        "production_authority",
+      ],
+      with_vector: ["default"],
+    });
     assert.equal(result.external_calls.workers_ai_binding, 1);
-    assert.equal(result.external_calls.qdrant_query_batch, 1);
+    assert.equal(result.external_calls.qdrant_query_batch, 0);
+    assert.equal(result.external_calls.qdrant_vector_scroll, 1);
     assert.equal(result.external_calls.qdrant_write, 0);
     assert.equal(result.variants.length, QUERY_COUNT);
     assert.equal(result.timings.shadow_ms, 750);

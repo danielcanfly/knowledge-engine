@@ -7,10 +7,6 @@ const EXPECTED_POINTS = 107;
 const QUERY_COUNT = 24;
 const DENSE_LIMIT = 50;
 const MAX_BODY_BYTES = 65536;
-const SEARCH_PARAMS = {
-  hnsw_ef: DENSE_LIMIT,
-  exact: false,
-};
 const PAYLOAD_FIELDS = [
   "payload_schema_version",
   "section_id",
@@ -25,7 +21,7 @@ const PAYLOAD_FIELDS = [
   "production_authority",
 ];
 const CONTRACT_SHA256 =
-  "09a340c2145cffa8ee45de7725e157c864baf08f0cda5ade11fc5bcccb0e5a94";
+  "2224bfe20772855181e5f8ada706be307d9e55c340f94c939366ef896c309e01";
 const REQUEST_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-request/v1";
 const RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1";
 const ROUTE = "/v1/m23-7-r3-8/observe";
@@ -277,10 +273,10 @@ async function collectionSnapshot(env) {
   return validateCollection(await response.json());
 }
 
-function validateRankedPoint(raw) {
+function validateCandidatePayload(raw) {
   assertCondition(
     isObject(raw) && isObject(raw.payload),
-    "ranked-point-shape-drift",
+    "candidate-point-shape-drift",
     502,
   );
   const payload = raw.payload;
@@ -311,6 +307,11 @@ function validateRankedPoint(raw) {
     "ranked-section-missing",
     502,
   );
+  return payload.section_id;
+}
+
+function validateRankedPoint(raw) {
+  const sectionId = validateCandidatePayload(raw);
   assertCondition(
     typeof raw.score === "number" &&
       Number.isFinite(raw.score) &&
@@ -319,7 +320,7 @@ function validateRankedPoint(raw) {
     "ranked-score-invalid",
     502,
   );
-  return { score: raw.score, sectionId: payload.section_id };
+  return { score: raw.score, sectionId };
 }
 
 function parseBatchResults(payload) {
@@ -354,6 +355,60 @@ function parseBatchResults(payload) {
   });
 }
 
+function extractPointVector(raw) {
+  assertCondition(isObject(raw), "scroll-point-shape-drift", 502);
+  const vector = raw.vector;
+  if (Array.isArray(vector)) {
+    return validateVector(vector);
+  }
+  if (isObject(vector) && Array.isArray(vector[VECTOR_NAME])) {
+    return validateVector(vector[VECTOR_NAME]);
+  }
+  throw new WorkerFailure("scroll-vector-missing", 502);
+}
+
+function parseScrollResults(payload) {
+  assertCondition(
+    isObject(payload) && isObject(payload.result),
+    "scroll-response-shape-drift",
+    502,
+  );
+  const points = payload.result.points;
+  assertCondition(
+    Array.isArray(points) && points.length === EXPECTED_POINTS,
+    "scroll-points-shape-drift",
+    502,
+  );
+  const candidates = points.map((point) => ({
+    sectionId: validateCandidatePayload(point),
+    vector: extractPointVector(point),
+  }));
+  assertCondition(
+    new Set(candidates.map((item) => item.sectionId)).size === EXPECTED_POINTS,
+    "scroll-section-duplicate",
+    502,
+  );
+  return candidates;
+}
+
+function rankCandidates(queryVector, candidates) {
+  return candidates
+    .map((candidate) => {
+      let score = 0;
+      for (let index = 0; index < VECTOR_DIMENSION; index += 1) {
+        score += queryVector[index] * candidate.vector[index];
+      }
+      return { score, sectionId: candidate.sectionId };
+    })
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.sectionId.localeCompare(right.sectionId),
+    )
+    .slice(0, DENSE_LIMIT)
+    .map((item) => item.sectionId);
+}
+
 async function executeObservation(env, validated, now = () => performance.now()) {
   assertCondition(
     env.AI && typeof env.AI.run === "function",
@@ -375,26 +430,22 @@ async function executeObservation(env, validated, now = () => performance.now())
   const vectors = parseEmbeddingRows(embeddingPayload);
 
   const qdrantStarted = now();
-  const batchResponse = await qdrantFetch(
+  const scrollResponse = await qdrantFetch(
     env,
-    `/collections/${encodeURIComponent(COLLECTION)}/points/query/batch`,
+    `/collections/${encodeURIComponent(COLLECTION)}/points/scroll`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        searches: vectors.map((vector) => ({
-          query: vector,
-          using: VECTOR_NAME,
-          params: SEARCH_PARAMS,
-          limit: DENSE_LIMIT,
-          with_payload: PAYLOAD_FIELDS,
-          with_vector: false,
-        })),
+        limit: EXPECTED_POINTS,
+        with_payload: PAYLOAD_FIELDS,
+        with_vector: [VECTOR_NAME],
       }),
     },
   );
-  assertCondition(batchResponse.ok, "qdrant-batch-unavailable", 502);
-  const rankings = parseBatchResults(await batchResponse.json());
+  assertCondition(scrollResponse.ok, "qdrant-scroll-unavailable", 502);
+  const candidates = parseScrollResults(await scrollResponse.json());
+  const rankings = vectors.map((vector) => rankCandidates(vector, candidates));
   const qdrantFinished = now();
   const shadowFinished = now();
 
@@ -454,7 +505,8 @@ async function executeObservation(env, validated, now = () => performance.now())
     external_calls: {
       workers_ai_binding: 1,
       qdrant_collection_reads: 2,
-      qdrant_query_batch: 1,
+      qdrant_query_batch: 0,
+      qdrant_vector_scroll: 1,
       qdrant_write: 0,
       qdrant_delete: 0,
       qdrant_reindex: 0,
@@ -504,6 +556,7 @@ export {
   handleRequest,
   parseBatchResults,
   parseEmbeddingRows,
+  parseScrollResults,
   timingSafeEqualText,
   validateBody,
 };

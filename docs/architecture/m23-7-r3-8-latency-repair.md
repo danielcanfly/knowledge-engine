@@ -4,7 +4,7 @@
 
 R3.7 completed a real read-only live acceptance against the reconciled 107-point candidate collection. Quality, target-rank parity, identity, ACL, error-rate and strict-zero gates passed. The only failed gate was direct end-to-end p95 latency at 1739 ms against the unchanged 1200 ms maximum.
 
-R3.8 does not lower that threshold and does not treat a rerun as a repair. It restores the execution boundary already authorised by parent #474: a transient Cloudflare Worker placed by the Qdrant hostname, using an in-process Workers AI binding and one Qdrant query-batch read.
+R3.8 does not lower that threshold and does not treat a rerun as a repair. It restores the execution boundary already authorised by parent #474: a transient Cloudflare Worker placed by the Qdrant hostname, using an in-process Workers AI binding and one read-only Qdrant vector scroll.
 
 ## Frozen inputs
 
@@ -31,7 +31,7 @@ The generated local Wrangler config derives only `placement.hostname` from `QDRA
 - strict content-length and 65,536-byte request limit;
 - disabled invocation logs.
 
-The measured Worker-internal shadow begins immediately before the single Workers AI BGE-M3 binding call and ends after the single Qdrant `/points/query/batch` response is parsed. Collection snapshots occur before and after that shadow. Operator-to-Worker round-trip latency is recorded separately and is informational only.
+The measured Worker-internal shadow begins immediately before the single Workers AI BGE-M3 binding call and ends after the single Qdrant `/points/scroll` response is parsed and locally ranked. Collection snapshots occur before and after that shadow. Operator-to-Worker round-trip latency is recorded separately and is informational only.
 
 ## Data plane
 
@@ -41,12 +41,11 @@ The Worker performs:
 
 1. one read-only candidate collection snapshot;
 2. one Workers AI binding call containing 24 texts;
-3. one Qdrant read-only batch containing 24 top-50 named-vector searches with
-   an explicit payload-field allowlist for the validated payload-v2 metadata and
-   bounded HNSW params (`hnsw_ef=50`, `exact=false`);
+3. one Qdrant read-only vector scroll containing the 107 candidate vectors and
+   an explicit payload-field allowlist for the validated payload-v2 metadata;
 4. one read-only candidate collection snapshot.
 
-Every ranked payload must remain payload-v2, candidate-only, noncanonical, nonproduction and bound to the exact candidate artifact. The Worker returns only variant IDs, query hashes, ranked section IDs, bounded timings, collection identities and strict-zero authority fields.
+Every ranked payload must remain payload-v2, candidate-only, noncanonical, nonproduction and bound to the exact candidate artifact. The Worker computes the 24 top-50 cosine rankings locally from the scrolled named vectors, then returns only variant IDs, query hashes, ranked section IDs, bounded timings, collection identities and strict-zero authority fields.
 
 The operator reconstructs the accepted target-unaware R3.5 lexical plus dense-consensus ranker locally. It requires exact accepted metrics and target ranks before the latency gate can pass.
 
