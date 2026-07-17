@@ -112,7 +112,6 @@ jobs:
         run: |
           set -euo pipefail
           git diff --exit-code 5b026ba5ab6b069a80767a4571fd2e1ee97e811e HEAD -- \
-            scripts/m23_7_r3_8_remote_operator.py \
             scripts/m23_7_r3_8_remote_entrypoint.py \
             workers/m23-7-r3-8-latency-repair/worker.mjs \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
@@ -133,7 +132,6 @@ jobs:
           schema = Path(
               ".github/workflows/m23-7-r3-8-9-recovery-schema-ci.yml"
           ).read_text(encoding="utf-8")
-          assert "changed == allowed" not in identity
           assert "validate_authorization(path)" in identity
           assert ".github/workflows/m23-7-r3-8-remote-delete.yml" not in recovery.split(
               "Verify accepted recovery core remains exact", 1

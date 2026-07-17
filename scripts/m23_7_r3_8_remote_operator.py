@@ -244,6 +244,15 @@ def _write_json(path: Path, value: dict[str, Any]) -> None:
     path.write_text(canonical_json(value) + "\n", encoding="utf-8")
 
 
+def remote_failure_code(exc: Exception) -> str:
+    if isinstance(exc, RemoteOperatorError):
+        return exc.code
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and re.fullmatch(r"[a-z0-9_]{1,80}", code):
+        return "latency_repair_" + code
+    return "bounded_unexpected_failure"
+
+
 def execute(args: argparse.Namespace) -> int:
     from knowledge_engine import m23_7_r3_8_latency_repair as subject
 
@@ -398,7 +407,7 @@ def execute(args: argparse.Namespace) -> int:
         _write_json(lifecycle_path, lifecycle)
         return receipt_exit
     except Exception as exc:
-        code = exc.code if isinstance(exc, RemoteOperatorError) else "bounded_unexpected_failure"
+        code = remote_failure_code(exc)
         failure = {
             "schema_version": REMOTE_RECEIPT_SCHEMA,
             "status": "rejected_incomplete_remote_observation",

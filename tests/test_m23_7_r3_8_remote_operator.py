@@ -114,6 +114,29 @@ def test_wrangler_error_classification_is_bounded() -> None:
     assert subject.classify_wrangler_error("opaque error") == "wrangler_failure"
 
 
+def test_remote_failure_code_preserves_latency_repair_code() -> None:
+    class LatencyLikeError(RuntimeError):
+        code = "worker_status"
+
+    class UnsafeLatencyLikeError(RuntimeError):
+        code = "secret shaped text"
+
+    assert (
+        subject.remote_failure_code(subject.RemoteOperatorError("worker_not_ready"))
+        == "worker_not_ready"
+    )
+    assert (
+        subject.remote_failure_code(LatencyLikeError("do not persist this message"))
+        == "latency_repair_worker_status"
+    )
+    assert subject.remote_failure_code(UnsafeLatencyLikeError("x")) == (
+        "bounded_unexpected_failure"
+    )
+    assert subject.remote_failure_code(RuntimeError("opaque")) == (
+        "bounded_unexpected_failure"
+    )
+
+
 def test_source_has_no_fixed_worker_absence_probe() -> None:
     text = Path("scripts/m23_7_r3_8_remote_operator.py").read_text(encoding="utf-8")
     assert "versions list" not in text
