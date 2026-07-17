@@ -1,5 +1,31 @@
 # M23.7 R3.8.28 Deletion/Absence Evidence Seal
 
+## Worker knowledge-engine-r3-8-29607698618
+
+This seal binds the governed deletion attempt and subsequent read-only absence
+probe for retained diagnostic worker `knowledge-engine-r3-8-29607698618`.
+
+Deletion authorization merged in PR #873 at
+`de790debf9a7e4a39a39320ef1292b3b79f41f4f`, binding authorization digest
+`1d3c6196f52f67021e7efd3a1e8a54620cea1e6252608848586a6dd31c3480df`.
+
+Remote-delete run `29609393351` dispatched the Worker delete and then failed
+closed at `absence_probe` with `delete_absence_not_proven`. Its failure receipt
+is privacy-safe, records `worker_delete_dispatched=true`, and has self-digest
+`2dda7315d40eedfb068bd35ed1b50a02547808f1fcbf776feecf1dac98ab2851`.
+
+Post-delete recovery probe run `29609464264` then performed read-only
+Cloudflare control-plane checks. Versions and deployments both returned
+404/10007 with zero identities, yielding `worker_absent`. Its receipt
+self-digest is `2c8557e7b675057638512c22394c4f332a3f866b6ec1503a00614bdec347344e`.
+
+This seal does not authorize replaying deletion, fresh observation, blocker
+clearance, promotion, parent closure, or M23.7 closure. Production retrieval
+remains `lexical`; retrieval quality and latency blockers remain retained.
+
+The next legal step is independent reconciliation of this deletion/absence
+evidence.
+
 ## Worker knowledge-engine-r3-8-29604923286
 
 This seal binds the governed deletion attempt and subsequent read-only absence
