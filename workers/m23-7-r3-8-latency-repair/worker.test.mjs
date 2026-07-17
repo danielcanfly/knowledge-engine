@@ -186,11 +186,16 @@ test("executeObservation performs one AI batch and one Qdrant query batch", asyn
     assert.deepEqual(
       batch.searches.map((search) => ({
         limit: search.limit,
+        params: search.params,
         withPayload: search.with_payload,
         withVector: search.with_vector,
       })),
       Array.from({ length: QUERY_COUNT }, () => ({
         limit: DENSE_LIMIT,
+        params: {
+          hnsw_ef: DENSE_LIMIT,
+          exact: false,
+        },
         withPayload: [
           "payload_schema_version",
           "section_id",
