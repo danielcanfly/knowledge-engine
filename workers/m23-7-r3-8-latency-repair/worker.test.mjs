@@ -49,7 +49,7 @@ const CANDIDATE_FILTER = {
 test("contract digest matches the canonical R3.8 contract", () => {
   assert.equal(
     CONTRACT_SHA256,
-    "f2c2dcbfe24324729d84e5b5fcd184203b178d6339a71b73651f38ee50c618a2",
+    "108e749661f47861472499475591eed2b5baf485920399bb48b6413658e287a0",
   );
 });
 
@@ -125,6 +125,18 @@ function batchPayload() {
         (_, index) => rankedPoint(index, 1 - index / 1000),
       ),
     ),
+  };
+}
+
+function singleQueryPayload() {
+  return {
+    status: "ok",
+    result: {
+      points: Array.from(
+        { length: DENSE_LIMIT },
+        (_, index) => rankedPoint(index, 1 - index / 1000),
+      ),
+    },
   };
 }
 
@@ -236,6 +248,7 @@ test("executeObservation performs one AI batch and one identity-filtered Qdrant 
     });
     assert.equal(result.external_calls.workers_ai_binding, 1);
     assert.equal(result.external_calls.qdrant_query_batch, 1);
+    assert.equal(result.external_calls.qdrant_single_query, 0);
     assert.equal(result.external_calls.qdrant_vector_scroll, 0);
     assert.equal(result.external_calls.qdrant_write, 0);
     assert.equal(result.variants.length, QUERY_COUNT);
@@ -253,12 +266,95 @@ test("executeObservation performs one AI batch and one identity-filtered Qdrant 
   }
 });
 
-test("executeObservation fail-closes when Qdrant query batch is unavailable", async () => {
+test("executeObservation falls back to parallel Qdrant single queries when query batch is unavailable", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
-    calls.push(String(url));
+    calls.push({
+      url: String(url),
+      method: init.method || "GET",
+      body: init.body ? JSON.parse(init.body) : null,
+    });
     if (String(url).endsWith("/points/query/batch")) {
+      return new Response(JSON.stringify({ status: "error" }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (String(url).endsWith("/points/query?consistency=all")) {
+      return new Response(JSON.stringify(singleQueryPayload()), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify(collectionPayload()), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const env = {
+    QDRANT_URL: "https://qdrant.example",
+    QDRANT_API_KEY: "q".repeat(32),
+    AI: {
+      run: async (_model, payload) => {
+        assert.equal(payload.text.length, QUERY_COUNT);
+        return { data: payload.text.map((_text, index) => vector(index)) };
+      },
+    },
+  };
+  const validated = {
+    nonce: "0".repeat(32),
+    variants: requestBody().variants.map((item) => ({
+      variantId: item.variant_id,
+      queryDigest: item.query_sha256,
+      queryText: item.query_text,
+    })),
+  };
+  try {
+    const result = await executeObservation(env, validated);
+    assert.equal(
+      calls.filter((call) => call.url.endsWith("/points/query/batch")).length,
+      1,
+    );
+    assert.equal(
+      calls.filter((call) => call.url.endsWith("/points/query?consistency=all"))
+        .length,
+      QUERY_COUNT,
+    );
+    assert.deepEqual(calls[2].body, {
+      query: vector(0),
+      using: "default",
+      params: {
+        exact: true,
+      },
+      filter: CANDIDATE_FILTER,
+      limit: DENSE_LIMIT,
+      with_payload: RANKING_PAYLOAD_FIELDS,
+      with_vector: false,
+    });
+    assert.equal(result.external_calls.qdrant_query_batch, 1);
+    assert.equal(result.external_calls.qdrant_single_query, QUERY_COUNT);
+    assert.equal(result.external_calls.qdrant_vector_scroll, 0);
+    assert.deepEqual(
+      result.variants[0].ranked_section_ids.slice(0, 3),
+      ["section-000", "section-001", "section-002"],
+    );
+    assert.equal(
+      calls.some((call) => call.url.endsWith("/points/scroll")),
+      false,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("executeObservation fail-closes when Qdrant single-query fallback is unavailable", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (
+      String(url).endsWith("/points/query/batch") ||
+      String(url).endsWith("/points/query?consistency=all")
+    ) {
       return new Response(JSON.stringify({ status: "error" }), {
         status: 502,
         headers: { "Content-Type": "application/json" },
@@ -290,11 +386,7 @@ test("executeObservation fail-closes when Qdrant query batch is unavailable", as
   try {
     await assert.rejects(
       executeObservation(env, validated),
-      /qdrant-query-batch-unavailable/,
-    );
-    assert.equal(
-      calls.some((url) => url.endsWith("/points/scroll")),
-      false,
+      /qdrant-single-query-unavailable/,
     );
   } finally {
     globalThis.fetch = originalFetch;

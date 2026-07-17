@@ -28,7 +28,7 @@ WORKER_RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1"
 IMPLEMENTATION_ISSUE = 520
 PARENT_ISSUE = 474
 ENTRY_ENGINE_SHA = "7793cd22092aca530ca48a3240a3c83ffd3d2894"
-CONTRACT_SHA256 = "f2c2dcbfe24324729d84e5b5fcd184203b178d6339a71b73651f38ee50c618a2"
+CONTRACT_SHA256 = "108e749661f47861472499475591eed2b5baf485920399bb48b6413658e287a0"
 
 EXPECTED_COLLECTION = r37.EXPECTED_COLLECTION
 HISTORICAL_PILOT_COLLECTION = r37.HISTORICAL_PILOT_COLLECTION
@@ -144,9 +144,12 @@ def canonical_contract() -> dict[str, Any]:
             "unique_query_identities": QUERY_COUNT,
             "workers_ai_binding_calls": 1,
             "qdrant_query_batch_calls": 1,
+            "qdrant_single_query_fallback_max_calls": QUERY_COUNT,
+            "qdrant_single_query_fallback_only_after_batch_unavailable": True,
             "qdrant_vector_scroll_max_calls": 0,
             "qdrant_vector_scroll_only_after_batch_unavailable": False,
             "qdrant_batch_endpoint": "points/query/batch",
+            "qdrant_single_query_endpoint": "points/query?consistency=all",
             "qdrant_scroll_endpoint": None,
             "qdrant_dense_limit": DENSE_LIMIT,
             "target_aware_inputs": False,
@@ -164,7 +167,7 @@ def canonical_contract() -> dict[str, Any]:
         "latency": {
             "maximum_worker_internal_shadow_ms": MAX_WORKER_SHADOW_MS,
             "applies_to": (
-                "single_worker_invocation_workers_ai_binding_plus_qdrant_query_batch"
+                "single_worker_invocation_workers_ai_binding_plus_qdrant_query_batch_or_parallel_query_fallback"
             ),
             "operator_round_trip_informational": True,
             "threshold_changed": False,
@@ -513,7 +516,8 @@ def _validate_worker_response(
         external_calls.get("workers_ai_binding") == 1
         and external_calls.get("qdrant_collection_reads") == 2
         and external_calls.get("qdrant_query_batch") == 1
-        and external_calls.get("qdrant_vector_scroll") in (0, 1)
+        and external_calls.get("qdrant_single_query") in (0, QUERY_COUNT)
+        and external_calls.get("qdrant_vector_scroll") == 0
         and external_calls.get("qdrant_write") == 0
         and external_calls.get("qdrant_delete") == 0
         and external_calls.get("qdrant_reindex") == 0
@@ -522,6 +526,7 @@ def _validate_worker_response(
             "workers_ai_binding",
             "qdrant_collection_reads",
             "qdrant_query_batch",
+            "qdrant_single_query",
             "qdrant_vector_scroll",
             "qdrant_write",
             "qdrant_delete",

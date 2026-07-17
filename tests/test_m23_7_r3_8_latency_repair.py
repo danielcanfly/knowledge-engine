@@ -124,6 +124,7 @@ def _worker_payload(
             "workers_ai_binding": 1,
             "qdrant_collection_reads": 2,
             "qdrant_query_batch": 1,
+            "qdrant_single_query": 0,
             "qdrant_vector_scroll": 0,
             "qdrant_write": 0,
             "qdrant_delete": 0,
@@ -165,9 +166,15 @@ def test_contract_freezes_placed_worker_and_unchanged_budget() -> None:
     assert contract["latency"]["threshold_changed"] is False
     assert contract["queries"]["workers_ai_binding_calls"] == 1
     assert contract["queries"]["qdrant_query_batch_calls"] == 1
+    assert contract["queries"]["qdrant_single_query_fallback_max_calls"] == 24
+    assert (
+        contract["queries"]["qdrant_single_query_fallback_only_after_batch_unavailable"]
+        is True
+    )
     assert contract["queries"]["qdrant_vector_scroll_max_calls"] == 0
     assert contract["queries"]["qdrant_vector_scroll_only_after_batch_unavailable"] is False
     assert contract["queries"]["qdrant_batch_endpoint"] == "points/query/batch"
+    assert contract["queries"]["qdrant_single_query_endpoint"] == "points/query?consistency=all"
     assert contract["queries"]["qdrant_scroll_endpoint"] is None
     assert contract["authority"]["qdrant_write_authorized"] is False
     assert contract["authority"]["retrieval_quality_blocker_cleared"] is False

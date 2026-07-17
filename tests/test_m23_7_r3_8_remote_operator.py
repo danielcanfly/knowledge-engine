@@ -165,4 +165,5 @@ def test_source_has_no_fixed_worker_absence_probe() -> None:
     assert '"worker_http_500_operator_secret_missing"' in text
     assert '"worker_http_502_qdrant_batch_unavailable"' in text
     assert '"worker_http_502_qdrant_query_batch_unavailable"' in text
+    assert '"worker_http_502_qdrant_single_query_unavailable"' in text
     assert "delete" not in text.split("def execute", 1)[1].split("def parse_args", 1)[0]

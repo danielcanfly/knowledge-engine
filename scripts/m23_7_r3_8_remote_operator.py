@@ -32,6 +32,7 @@ LIVE_OBSERVATION_RETRY_CODES = frozenset(
         "worker_http_500_operator_secret_missing",
         "worker_http_502_qdrant_batch_unavailable",
         "worker_http_502_qdrant_query_batch_unavailable",
+        "worker_http_502_qdrant_single_query_unavailable",
     }
 )
 LIFECYCLE_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-lifecycle/v1"
