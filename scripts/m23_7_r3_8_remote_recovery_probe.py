@@ -96,6 +96,10 @@ AUTHORIZED_RUNS = {
         "engine_sha": "e7e10cf1cbd7e2ea5f8562dbde2cba791564f8a2",
         "worker_name": "knowledge-engine-r3-8-29592583765",
     },
+    "29595625175": {
+        "engine_sha": "c555ac8322bc4558157f643c2931410d3eb2e680",
+        "worker_name": "knowledge-engine-r3-8-29595625175",
+    },
 }
 CONFIRMATION_SUFFIX = "_SCHEMA_V2"
 SCHEMA_VERSION = "knowledge-engine-m23-7-r3-8-9-recovery-probe/v2"
