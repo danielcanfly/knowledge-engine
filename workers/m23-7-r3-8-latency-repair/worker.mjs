@@ -7,9 +7,6 @@ const EXPECTED_POINTS = 107;
 const QUERY_COUNT = 24;
 const DENSE_LIMIT = 50;
 const MAX_BODY_BYTES = 65536;
-const SEARCH_PARAMS = {
-  exact: true,
-};
 const RANKING_PAYLOAD_FIELDS = [
   "section_id",
   "payload_schema_version",
@@ -456,7 +453,6 @@ async function executeObservation(env, validated, now = () => performance.now())
         searches: vectors.map((vector) => ({
           query: vector,
           using: VECTOR_NAME,
-          params: SEARCH_PARAMS,
           filter: CANDIDATE_FILTER,
           limit: DENSE_LIMIT,
           with_payload: RANKING_PAYLOAD_FIELDS,
@@ -482,7 +478,6 @@ async function executeObservation(env, validated, now = () => performance.now())
             body: JSON.stringify({
               query: vector,
               using: VECTOR_NAME,
-              params: SEARCH_PARAMS,
               filter: CANDIDATE_FILTER,
               limit: DENSE_LIMIT,
               with_payload: RANKING_PAYLOAD_FIELDS,

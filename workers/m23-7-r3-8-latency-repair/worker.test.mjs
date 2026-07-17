@@ -237,9 +237,6 @@ test("executeObservation performs one AI batch and one identity-filtered Qdrant 
       searches: Array.from({ length: QUERY_COUNT }, (_, index) => ({
         query: vector(index),
         using: "default",
-        params: {
-          exact: true,
-        },
         filter: CANDIDATE_FILTER,
         limit: DENSE_LIMIT,
         with_payload: RANKING_PAYLOAD_FIELDS,
@@ -324,9 +321,6 @@ test("executeObservation falls back to parallel Qdrant single queries when query
     assert.deepEqual(calls[2].body, {
       query: vector(0),
       using: "default",
-      params: {
-        exact: true,
-      },
       filter: CANDIDATE_FILTER,
       limit: DENSE_LIMIT,
       with_payload: RANKING_PAYLOAD_FIELDS,
