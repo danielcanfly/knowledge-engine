@@ -55,7 +55,7 @@ const CANDIDATE_FILTER = {
   ],
 };
 const CONTRACT_SHA256 =
-  "d5d0b276d9291fb1e3766215be8f544438cb31c98598b1b7659008beaae89835";
+  "383247bbe062d0cafe25a4578c4eaa9e86aa73231024a1775e8bb739a47f96b4";
 const REQUEST_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-request/v1";
 const RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1";
 const ROUTE = "/v1/m23-7-r3-8/observe";
@@ -486,8 +486,30 @@ async function executeObservation(env, validated, now = () => performance.now())
       }),
     },
   );
-  assertCondition(batchResponse.ok, "qdrant-batch-unavailable", 502);
-  const rankings = parseBatchResults(await batchResponse.json());
+  let qdrantVectorScroll = 0;
+  let rankings;
+  if (batchResponse.ok) {
+    rankings = parseBatchResults(await batchResponse.json());
+  } else {
+    const scrollResponse = await qdrantFetch(
+      env,
+      `/collections/${encodeURIComponent(COLLECTION)}/points/scroll`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filter: CANDIDATE_FILTER,
+          limit: EXPECTED_POINTS,
+          with_payload: RANKING_PAYLOAD_FIELDS,
+          with_vector: [VECTOR_NAME],
+        }),
+      },
+    );
+    qdrantVectorScroll = 1;
+    assertCondition(scrollResponse.ok, "qdrant-scroll-unavailable", 502);
+    const candidates = parseScrollResults(await scrollResponse.json());
+    rankings = vectors.map((vector) => rankCandidates(vector, candidates));
+  }
   const qdrantFinished = now();
   const shadowFinished = now();
 
@@ -548,7 +570,7 @@ async function executeObservation(env, validated, now = () => performance.now())
       workers_ai_binding: 1,
       qdrant_collection_reads: 2,
       qdrant_query_batch: 1,
-      qdrant_vector_scroll: 0,
+      qdrant_vector_scroll: qdrantVectorScroll,
       qdrant_write: 0,
       qdrant_delete: 0,
       qdrant_reindex: 0,
