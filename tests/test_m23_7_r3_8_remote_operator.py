@@ -137,6 +137,21 @@ def test_remote_failure_code_preserves_latency_repair_code() -> None:
     )
 
 
+def test_worker_readiness_requires_authorized_schema_probe() -> None:
+    assert subject.worker_ready_response(
+        400, {"status": "error", "code": "request-schema-drift"}
+    )
+    assert not subject.worker_ready_response(
+        405, {"status": "error", "code": "method-not-allowed"}
+    )
+    assert not subject.worker_ready_response(
+        500, {"status": "error", "code": "operator-secret-missing"}
+    )
+    assert not subject.worker_ready_response(
+        401, {"status": "error", "code": "unauthorized"}
+    )
+
+
 def test_source_has_no_fixed_worker_absence_probe() -> None:
     text = Path("scripts/m23_7_r3_8_remote_operator.py").read_text(encoding="utf-8")
     assert "versions list" not in text
