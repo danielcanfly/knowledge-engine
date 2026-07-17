@@ -241,8 +241,7 @@ test("executeObservation performs one AI batch and one identity-filtered Qdrant 
         query: vector(index),
         using: "default",
         params: {
-          hnsw_ef: DENSE_LIMIT,
-          exact: false,
+          exact: true,
         },
         filter: CANDIDATE_FILTER,
         limit: DENSE_LIMIT,

@@ -8,8 +8,7 @@ const QUERY_COUNT = 24;
 const DENSE_LIMIT = 50;
 const MAX_BODY_BYTES = 65536;
 const SEARCH_PARAMS = {
-  hnsw_ef: DENSE_LIMIT,
-  exact: false,
+  exact: true,
 };
 const RANKING_PAYLOAD_FIELDS = [
   "section_id",
