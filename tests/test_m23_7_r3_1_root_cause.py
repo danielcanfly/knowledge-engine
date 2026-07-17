@@ -16,13 +16,12 @@ from knowledge_engine.m23_7_r3_1_root_cause import (
 )
 
 
-def test_four_exact_query_text_collision_pairs_are_visible() -> None:
+def test_repaired_query_texts_remain_probe_unique() -> None:
     fixture = canonical_fixture()
     records, collisions = reconstruct_query_identities(fixture["samples"])
-    assert len(collisions) == 4
-    assert sorted(item["size"] for item in collisions) == [2, 2, 2, 2]
+    assert collisions == []
     assert len({item["compiler_query_digest"] for item in records}) == 8
-    assert len({item["query_text_sha256"] for item in records}) == 4
+    assert len({item["query_text_sha256"] for item in records}) == 8
     assert all("query_text" not in item for item in records)
 
 
@@ -36,9 +35,9 @@ def test_preliminary_report_is_fail_closed_and_non_authoritative() -> None:
     fixture = canonical_fixture()
     report = build_preliminary_report(fixture["samples"], fixture["cases"])
     assert report["status"] == "phase_a_b_complete_vector_diagnostics_pending"
-    assert report["root_cause"]["primary"] == "identifier_humanisation_query_collision"
+    assert report["root_cause"]["primary"] is None
     assert report["root_cause"]["final_seal"] is False
-    assert report["query_identity"]["probe_bound_digest_masks_text_collision"] is True
+    assert report["query_identity"]["probe_bound_digest_masks_text_collision"] is False
     assert report["exit"]["r3_1_complete"] is False
     assert report["authority"]["production_retrieval"] == "lexical"
     assert report["authority"]["qdrant_write"] == 0
