@@ -227,6 +227,7 @@ def validate_authorization(
             (607, "dee2a17adabb158fff20027e9a282c46a7f5c5d5"),
             (612, "e9d24cbbe742c19942086dcda53f7295ff0a1be2"),
             (617, "11d2cb0bb349303f154248b0d3500dd98cf40a96"),
+            (622, "169169c9cdcf62592c1c83e513815aff5925ebfe"),
         }:
             raise OperatorCommandError("authorization_source_lineage")
         if value.get("worker_name_prefix") != "knowledge-engine-m23-7-r3-live":
