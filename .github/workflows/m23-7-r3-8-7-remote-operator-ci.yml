@@ -113,10 +113,13 @@ jobs:
               allow_nan=False,
           ).encode()
           assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "97a6b71aa3093cdd57788f1c189f41592a85106952284f476ca2fb4c985529e2"
+          assert digest == "5c7ae99cf9892b9f76a917cf691fd2ce4d4f7f0f255e04f48c90af9d7ea6b67b"
           assert stored["execution"]["local_terminal_operator_supported"] is False
           assert stored["worker"]["fixed_name_probe_required"] is False
           assert stored["worker"]["unique_per_run"] is True
+          assert stored["observation"]["live_observation_attempts"] == 9
+          assert stored["observation"]["live_observation_retry_seconds"] == 5
+          assert stored["observation"]["worker_http_404_retry_authorized"] is True
           assert stored["observation"]["maximum_worker_internal_shadow_ms"] == 1200
           assert stored["authority"]["production_retrieval"] == "lexical"
           assert stored["authority"]["blocker_clearance_authorized"] is False
@@ -156,25 +159,22 @@ jobs:
           python - <<'PY'
           import subprocess
           allowed = {
-              "src/knowledge_engine/m23_7_r3_8_latency_repair.py",
-              "tests/test_m23_7_r3_8_latency_repair.py",
-              "workers/m23-7-r3-8-latency-repair/worker.mjs",
-              "workers/m23-7-r3-8-latency-repair/worker.test.mjs",
-              "pilot/m23/m23-7-r3-8-latency-repair-contract.json",
-              "pilot/m23/m23-7-r3-8-latency-repair-fixture-report.json",
-              "docs/architecture/m23-7-r3-8-latency-repair.md",
-              ".github/workflows/m23-7-r3-8-latency-repair.yml",
+              "scripts/m23_7_r3_8_remote_operator.py",
+              "tests/test_m23_7_r3_8_remote_operator.py",
+              "pilot/m23/m23-7-r3-8-7-remote-operator-contract.json",
+              "docs/architecture/m23-7-r3-8-7-remote-operator.md",
               ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
               ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml",
           }
           changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "0686a5e43a6be78ac588d3d223e1052e9e54b37d", "HEAD"],
+              ["git", "diff", "--name-only", "0a2aabdb2892a76112a48e3382f6653da9f36691", "HEAD"],
               text=True,
           ).splitlines())
           assert changed == allowed, (changed, allowed)
           PY
-          git diff --exit-code 0686a5e43a6be78ac588d3d223e1052e9e54b37d HEAD -- \
-            pilot/m23/m23-7-r3-8-7-remote-operator-contract.json
+          git diff --exit-code 0a2aabdb2892a76112a48e3382f6653da9f36691 HEAD -- \
+            pilot/m23/m23-7-r3-8-latency-repair-contract.json \
+            pilot/m23/m23-7-r3-8-latency-repair-fixture-report.json
       - name: Verify pinned Wrangler command surfaces
         shell: bash
         run: |
