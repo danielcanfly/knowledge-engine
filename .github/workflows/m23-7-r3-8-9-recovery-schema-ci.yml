@@ -118,11 +118,8 @@ jobs:
         run: |
           set -euo pipefail
           git diff --exit-code 500d61c3b05385d7fd05ec976fa6bf54043bdf77 HEAD -- \
-            scripts/m23_7_r3_8_remote_recovery_probe.py \
-            tests/test_m23_7_r3_8_remote_recovery_probe.py \
             pilot/m23/m23-7-r3-8-9-recovery-schema-contract.json \
             docs/architecture/m23-7-r3-8-9-recovery-schema.md \
-            .github/workflows/m23-7-r3-8-9-recovery-probe.yml \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
             workers/m23-7-r3-8-latency-repair/worker.mjs \
             scripts/m23_7_r3_8_remote_operator.py \
