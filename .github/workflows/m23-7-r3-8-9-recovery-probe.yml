@@ -41,7 +41,7 @@ jobs:
           test "$GITHUB_RUN_ATTEMPT" = "1"
           test "$GITHUB_REF" = "refs/heads/main"
           case "${{ inputs.affected_run_id }}" in
-            29506217284|29546336917|29548837457|29550965495|29553221650) ;;
+            29506217284|29546336917|29548837457|29550965495|29553221650|29557251118) ;;
             *) echo "affected_run_identity_mismatch"; exit 23 ;;
           esac
           test "${{ inputs.confirmation }}" = "PROBE_R3_8_RUN_${{ inputs.affected_run_id }}_SCHEMA_V2"

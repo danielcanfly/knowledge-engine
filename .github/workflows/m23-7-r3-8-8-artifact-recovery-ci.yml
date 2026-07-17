@@ -95,7 +95,7 @@ jobs:
       - name: Verify accepted recovery core remains exact
         shell: bash
         run: |
-          git diff --exit-code b7ff3c05e8eb2e2c7fcc56c206dd2da678256674 HEAD -- \
+          git diff --exit-code 4729ee2264fdd3650770a9be227606e995973725 HEAD -- \
             scripts/m23_7_r3_8_remote_entrypoint.py \
             pilot/m23/m23-7-r3-8-8-artifact-recovery-contract.json \
             docs/architecture/m23-7-r3-8-8-artifact-recovery.md \
