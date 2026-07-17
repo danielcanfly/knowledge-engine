@@ -49,7 +49,7 @@ const CANDIDATE_FILTER = {
 test("contract digest matches the canonical R3.8 contract", () => {
   assert.equal(
     CONTRACT_SHA256,
-    "d5d0b276d9291fb1e3766215be8f544438cb31c98598b1b7659008beaae89835",
+    "383247bbe062d0cafe25a4578c4eaa9e86aa73231024a1775e8bb739a47f96b4",
   );
 });
 
@@ -267,7 +267,7 @@ test("executeObservation performs one AI batch and one identity-filtered Qdrant 
   }
 });
 
-test("executeObservation rejects unavailable Qdrant search batch without scroll fallback", async () => {
+test("executeObservation falls back to one read-only scroll when Qdrant search batch is unavailable", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
@@ -279,6 +279,12 @@ test("executeObservation rejects unavailable Qdrant search batch without scroll 
     if (String(url).endsWith("/points/search/batch")) {
       return new Response(JSON.stringify({ status: "error" }), {
         status: 502,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (String(url).endsWith("/points/scroll")) {
+      return new Response(JSON.stringify(scrollPayload()), {
+        status: 200,
         headers: { "Content-Type": "application/json" },
       });
     }
@@ -306,11 +312,24 @@ test("executeObservation rejects unavailable Qdrant search batch without scroll 
     })),
   };
   try {
-    await assert.rejects(
-      executeObservation(env, validated),
-      /qdrant-batch-unavailable/,
+    const result = await executeObservation(env, validated);
+    assert.deepEqual(
+      calls.map((item) => item.method),
+      ["GET", "POST", "POST", "GET"],
     );
-    assert.deepEqual(calls.map((item) => item.method), ["GET", "POST"]);
+    assert.deepEqual(calls[2].body, {
+      filter: CANDIDATE_FILTER,
+      limit: 107,
+      with_payload: RANKING_PAYLOAD_FIELDS,
+      with_vector: ["default"],
+    });
+    assert.equal(result.external_calls.qdrant_query_batch, 1);
+    assert.equal(result.external_calls.qdrant_vector_scroll, 1);
+    assert.equal(result.external_calls.qdrant_write, 0);
+    assert.deepEqual(
+      result.variants[0].ranked_section_ids.slice(0, 3),
+      ["section-000", "section-001", "section-002"],
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
