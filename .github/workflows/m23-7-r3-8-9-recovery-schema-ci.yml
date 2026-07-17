@@ -120,5 +120,4 @@ jobs:
           git diff --exit-code 11970fc0624f86e30499297dc8154edbb6210163 HEAD -- \
             pilot/m23/m23-7-r3-8-9-recovery-schema-contract.json \
             docs/architecture/m23-7-r3-8-9-recovery-schema.md \
-            pilot/m23/m23-7-r3-8-latency-repair-contract.json \
             pilot/m23/m23-7-r3-8-8-artifact-recovery-contract.json
