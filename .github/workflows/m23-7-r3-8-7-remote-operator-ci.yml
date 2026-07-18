@@ -5,18 +5,24 @@ on:
     paths:
       - "scripts/m23_7_r3_8_remote_operator.py"
       - "scripts/m23_7_r3_8_remote_entrypoint.py"
+      - "scripts/m23_7_r3_8_remote_operator_placement_v2.py"
+      - "scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py"
       - "scripts/m23_7_r3_8_remote_delete.py"
       - "tests/test_m23_7_r3_8_remote_operator.py"
       - "tests/test_m23_7_r3_8_remote_entrypoint.py"
+      - "tests/test_m23_7_r3_8_placement_semantics_v2.py"
       - "tests/test_m23_7_r3_8_remote_delete.py"
       - "workers/m23-7-r3-8-latency-repair/worker.mjs"
       - "workers/m23-7-r3-8-latency-repair/worker.test.mjs"
       - "workers/m23-7-r3-8-latency-repair/worker.parallel.test.mjs"
       - "pilot/m23/m23-7-r3-8-7-remote-operator-contract.json"
+      - "pilot/m23/m23-7-r3-8-placement-semantics-v2-contract.json"
       - "docs/architecture/m23-7-r3-8-7-remote-operator.md"
+      - "docs/architecture/m23-7-r3-8-placement-semantics-v2.md"
       - ".github/workflows/m23-7-r3-8-remote-observe.yml"
       - ".github/workflows/m23-7-r3-8-remote-delete.yml"
       - ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml"
+      - ".github/workflows/m23-7-r3-8-placement-semantics-v2-ci.yml"
       - ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml"
       - ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml"
       - ".github/workflows/m23-7-r3-8-11-deletion-cli-compatibility.yml"
@@ -40,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          git merge-base --is-ancestor a98030daf0fd7760c38fa62b46683df63197dc9b HEAD
+          git merge-base --is-ancestor 9c71b34fdad1d6341418c389570b8a88634ecae8 HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -57,9 +63,12 @@ jobs:
           ruff check \
             scripts/m23_7_r3_8_remote_operator.py \
             scripts/m23_7_r3_8_remote_entrypoint.py \
+            scripts/m23_7_r3_8_remote_operator_placement_v2.py \
+            scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py \
             scripts/m23_7_r3_8_remote_delete.py \
             tests/test_m23_7_r3_8_remote_operator.py \
             tests/test_m23_7_r3_8_remote_entrypoint.py \
+            tests/test_m23_7_r3_8_placement_semantics_v2.py \
             tests/test_m23_7_r3_8_remote_delete.py \
             --output-format=concise \
             > r3-8-7-ruff.txt 2>&1
@@ -79,12 +88,15 @@ jobs:
           python -m py_compile \
             scripts/m23_7_r3_8_remote_operator.py \
             scripts/m23_7_r3_8_remote_entrypoint.py \
+            scripts/m23_7_r3_8_remote_operator_placement_v2.py \
+            scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py \
             scripts/m23_7_r3_8_remote_delete.py
       - name: Remote operator adversarial tests
         run: |
           pytest -q \
             tests/test_m23_7_r3_8_remote_operator.py \
             tests/test_m23_7_r3_8_remote_entrypoint.py \
+            tests/test_m23_7_r3_8_placement_semantics_v2.py \
             tests/test_m23_7_r3_8_remote_delete.py
       - name: Preserve accepted R3.8 regressions
         shell: bash
@@ -97,7 +109,7 @@ jobs:
           node --test \
             workers/m23-7-r3-8-latency-repair/worker.test.mjs \
             workers/m23-7-r3-8-latency-repair/worker.parallel.test.mjs
-      - name: Verify deterministic remote contract
+      - name: Verify deterministic historical remote contract
         shell: bash
         run: |
           python - <<'PY'
@@ -132,10 +144,7 @@ jobs:
           assert stored["observation"]["placement_readiness_attempts"] == 120
           assert stored["observation"]["placement_readiness_retry_seconds"] == 5
           assert stored["observation"]["placement_remote_consecutive_successes"] == 2
-          assert (
-              stored["observation"]["placement_remote_header_required_on_observation"]
-              is True
-          )
+          assert stored["observation"]["placement_remote_header_required_on_observation"] is True
           assert stored["observation"]["placement_location_persisted"] is False
           assert stored["observation"]["worker_placement_retry_authorized"] is True
           assert stored["observation"]["worker_http_404_retry_authorized"] is True
@@ -148,6 +157,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+
           import yaml
 
           observe = Path(".github/workflows/m23-7-r3-8-remote-observe.yml")
@@ -162,7 +172,7 @@ jobs:
           assert "GITHUB_RUN_ATTEMPT" in observe_text
           assert "actions/upload-artifact@v4" in observe_text
           assert "wrangler delete" not in observe_text
-          assert "python -m scripts.m23_7_r3_8_remote_entrypoint" in observe_text
+          assert "python -m scripts.m23_7_r3_8_remote_entrypoint_placement_v2" in observe_text
           assert "path: r3-8-remote-evidence/" in observe_text
           delete_text = delete.read_text(encoding="utf-8")
           assert "DELETE_RECONCILED_R3_8_WORKER" in delete_text
@@ -172,32 +182,25 @@ jobs:
           assert "wrangler delete[[:space:]]+\\[name\\]" in delete_text
           assert "! grep -q -- '--name'" in delete_text
           PY
-      - name: Verify exact placement-proof repair scope
+      - name: Verify accepted remote core remains exact
         shell: bash
         run: |
-          python - <<'PY'
-          import subprocess
-
-          baseline = "a98030daf0fd7760c38fa62b46683df63197dc9b"
-          allowed = {
-              ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
-              "docs/architecture/m23-7-r3-8-7-remote-operator.md",
-              "pilot/m23/m23-7-r3-8-7-remote-operator-contract.json",
-              "scripts/m23_7_r3_8_remote_operator.py",
-              "src/knowledge_engine/m23_7_r3_8_latency_repair.py",
-              "tests/test_m23_7_r3_8_latency_repair.py",
-              "tests/test_m23_7_r3_8_remote_operator.py",
-              "workers/m23-7-r3-8-latency-repair/worker.mjs",
-              "workers/m23-7-r3-8-latency-repair/worker.test.mjs",
-          }
-          changed = set(
-              subprocess.check_output(
-                  ["git", "diff", "--name-only", baseline, "HEAD"],
-                  text=True,
-              ).splitlines()
-          )
-          assert changed == allowed, (changed, allowed)
-          PY
+          set -euo pipefail
+          accepted_merge="a5fca48683567b48a196e67657bd7dc4a4b9c554"
+          git merge-base --is-ancestor "$accepted_merge" HEAD
+          git diff --exit-code "$accepted_merge" HEAD -- \
+            docs/architecture/m23-7-r3-8-7-remote-operator.md \
+            pilot/m23/m23-7-r3-8-7-remote-operator-contract.json \
+            scripts/m23_7_r3_8_remote_operator.py \
+            scripts/m23_7_r3_8_remote_entrypoint.py \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            tests/test_m23_7_r3_8_latency_repair.py \
+            tests/test_m23_7_r3_8_remote_operator.py \
+            workers/m23-7-r3-8-latency-repair/worker.mjs \
+            workers/m23-7-r3-8-latency-repair/worker.test.mjs
+          test -f scripts/m23_7_r3_8_remote_operator_placement_v2.py
+          test -f scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py
+          test -f pilot/m23/m23-7-r3-8-placement-semantics-v2-contract.json
       - name: Verify pinned Wrangler command surfaces
         shell: bash
         run: |
