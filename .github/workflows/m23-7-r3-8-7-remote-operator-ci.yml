@@ -186,9 +186,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          accepted_head="9092c9a09f42ed5f2aedf3b9bf8bf2500a9811ea"
-          git merge-base --is-ancestor "$accepted_head" HEAD
-          git diff --exit-code "$accepted_head" HEAD -- \
+          accepted_merge="a5fca48683567b48a196e67657bd7dc4a4b9c554"
+          git merge-base --is-ancestor "$accepted_merge" HEAD
+          git diff --exit-code "$accepted_merge" HEAD -- \
             docs/architecture/m23-7-r3-8-7-remote-operator.md \
             pilot/m23/m23-7-r3-8-7-remote-operator-contract.json \
             scripts/m23_7_r3_8_remote_operator.py \
