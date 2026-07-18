@@ -1,0 +1,62 @@
+{
+  "authority": {
+    "blockers_cleared": false,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "production_retrieval": "lexical",
+    "promotion_eligibility_granted": false,
+    "worker_deletion_authorized": false,
+    "worker_deletion_replay_authorized": false
+  },
+  "issue": 899,
+  "observation": {
+    "artifact_id": 8427348020,
+    "artifact_zip_sha256": "21fb4a9421e1e3cd73608d0b8a5c234a5f1776b39f6938dc851197c42e247c3c",
+    "engine_sha": "fc1dca7186fa66db153489a90a7b369ca053db61",
+    "receipt_file_sha256": "1f9a88e07ab69b3afa347f83de40e7003e52c351f7b489772ed77515605d87fd",
+    "receipt_self_digest": "71a1ddf50c497e9c59dd4d16895d4e8123f92c3e947b4b4ea1cca2a122bfb5d3",
+    "remote_lifecycle_file_sha256": "8023d86bc7f1d233adf625a07fab012b717dd394803d17125dd01464fafeb3e2",
+    "remote_lifecycle_self_digest": "fe5209667c0e98221180c5c1cb169d4953786a5f3ab8520605da84470aa108fa",
+    "run_id": "29636761264"
+  },
+  "reconciliation_sha256": "70325edd680242225a48b4331718ce0f68cc7401b87bc89cd55b22fa79868949",
+  "result": {
+    "blocker_clearance_eligible": false,
+    "failed_gate": "worker_internal_shadow",
+    "latency_evidence_complete": true,
+    "latency_repair_passed": false,
+    "maximum_shadow_ms": 1200,
+    "next_gate": "separately_governed_retained_worker_cleanup",
+    "provider_ms": 991,
+    "qdrant_ms": 899,
+    "quality_metrics_accepted": true,
+    "retained_worker_cleanup_required": true,
+    "shadow_ms": 1890,
+    "strict_zero_mutation_gates_accepted": true,
+    "worker_lifecycle_clean": false
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-24-fail-closed-latency-evidence-reconciliation/v1",
+  "seal_accepted_head": "17c55a1b2bed93be29dd4b587977cc37e7e0d6ab",
+  "seal_exact_head_runs": {
+    "architecture_canon": 29636992370,
+    "ci": 29636992328,
+    "graph_v2": 29636992332,
+    "seal": 29636992347
+  },
+  "seal_issue": 897,
+  "seal_merge_sha": "5236e23e10fc58a7ffff83adabe80e58cf18081e",
+  "seal_pr": 898,
+  "seal_sha256": "054686bb456797a6fa3017a96a0496075d2f0efa7f96b2b85664c30ff76b88d4",
+  "strict_zero_verified": true,
+  "worker": {
+    "deletion_authorization_required": true,
+    "name": "knowledge-engine-r3-8-29636761264",
+    "retained": true,
+    "version_id": "03522a60-0bcc-42c0-b315-e845891538b2"
+  }
+}
