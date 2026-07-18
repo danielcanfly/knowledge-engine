@@ -35,33 +35,33 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Install and produce exact Ruff fix
+      - name: Install and lint bounded scope
         shell: bash
         run: |
           set -euo pipefail
           python -m pip install -e '.[dev]'
-          ruff check --fix \
+          set +e
+          ruff check \
             scripts/m23_7_r3_8_remote_operator_placement_v2.py \
             scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py \
             tests/test_m23_7_r3_8_placement_semantics_v2.py \
             > ruff-placement-v2.log 2>&1
+          code=$?
+          set -e
           cat ruff-placement-v2.log
-          ruff check \
-            scripts/m23_7_r3_8_remote_operator_placement_v2.py \
-            scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py \
-            tests/test_m23_7_r3_8_placement_semantics_v2.py
+          if [ "$code" -ne 0 ]; then
+            exit "$code"
+          fi
           python -m py_compile \
             scripts/m23_7_r3_8_remote_operator_placement_v2.py \
             scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py
-      - name: Upload exact Ruff-fixed source
+      - name: Upload bounded lint diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m23-7-r3-8-placement-v2-ruff-fix-${{ github.run_id }}
-          path: |
-            ruff-placement-v2.log
-            tests/test_m23_7_r3_8_placement_semantics_v2.py
-          if-no-files-found: error
+          name: m23-7-r3-8-placement-v2-lint-${{ github.run_id }}
+          path: ruff-placement-v2.log
+          if-no-files-found: ignore
           include-hidden-files: false
           retention-days: 7
           compression-level: 9
