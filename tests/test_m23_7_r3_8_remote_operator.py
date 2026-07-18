@@ -138,18 +138,22 @@ def test_remote_failure_code_preserves_latency_repair_code() -> None:
     )
 
 
-def test_worker_readiness_requires_authorized_schema_probe() -> None:
-    assert subject.worker_ready_response(
-        400, {"status": "error", "code": "request-schema-drift"}
+def test_worker_readiness_requires_authorized_remote_schema_probe() -> None:
+    payload = {"status": "error", "code": "request-schema-drift"}
+    assert subject.worker_ready_response(400, payload, "remote")
+    assert not subject.worker_ready_response(400, payload, "local")
+    assert not subject.worker_ready_response(400, payload, "absent")
+    assert not subject.worker_ready_response(400, payload, None)
+    assert not subject.worker_ready_response(
+        405, {"status": "error", "code": "method-not-allowed"}, "remote"
     )
     assert not subject.worker_ready_response(
-        405, {"status": "error", "code": "method-not-allowed"}
+        500,
+        {"status": "error", "code": "operator-secret-missing"},
+        "remote",
     )
     assert not subject.worker_ready_response(
-        500, {"status": "error", "code": "operator-secret-missing"}
-    )
-    assert not subject.worker_ready_response(
-        401, {"status": "error", "code": "unauthorized"}
+        401, {"status": "error", "code": "unauthorized"}, "remote"
     )
 
 
@@ -160,10 +164,14 @@ def test_source_has_no_fixed_worker_absence_probe() -> None:
     assert "worker_retained" in text
     assert "R2_BUCKET" in text
     assert "READINESS_CONSECUTIVE_SUCCESSES = 2" in text
+    assert "PLACEMENT_READINESS_ATTEMPTS = 120" in text
+    assert "PLACEMENT_READINESS_RETRY_SECONDS = 5" in text
+    assert "PLACEMENT_RESPONSE_HEADER" in text
     assert "LIVE_OBSERVATION_ATTEMPTS = 9" in text
     assert '"worker_http_404"' in text
     assert '"worker_http_500_operator_secret_missing"' in text
     assert '"worker_http_502_qdrant_batch_unavailable"' in text
     assert '"worker_http_502_qdrant_query_batch_unavailable"' in text
     assert '"worker_http_502_qdrant_single_query_unavailable"' in text
+    assert '"worker_placement_not_remote"' in text
     assert "delete" not in text.split("def execute", 1)[1].split("def parse_args", 1)[0]

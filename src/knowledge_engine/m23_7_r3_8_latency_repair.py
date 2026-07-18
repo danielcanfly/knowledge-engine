@@ -49,6 +49,7 @@ PAYLOAD_SELECTOR_FIELDS = (
     "section_id",
 )
 _WORKER_ERROR_CODE = re.compile(r"^[a-z0-9-]{1,80}$")
+PLACEMENT_RESPONSE_HEADER = "X-M23-R3-8-Placement"
 
 
 class LatencyRepairError(RuntimeError):
@@ -365,6 +366,11 @@ class HttpWorkerInvoker:
                     worker_http_error_code(response),
                     "Worker returned bounded error status",
                 )
+            _require(
+                response.headers.get(PLACEMENT_RESPONSE_HEADER) == "remote",
+                "worker_placement_not_remote",
+                "Worker invocation did not prove remote placement",
+            )
             try:
                 payload = response.json()
             except ValueError as exc:
