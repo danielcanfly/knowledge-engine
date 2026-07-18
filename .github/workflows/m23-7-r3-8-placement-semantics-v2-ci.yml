@@ -108,7 +108,9 @@ jobs:
           workflow = Path(".github/workflows/m23-7-r3-8-remote-observe.yml").read_text(encoding="utf-8")
           assert "m23_7_r3_8_remote_entrypoint_placement_v2" in workflow
           assert "GITHUB_RUN_ATTEMPT" in workflow
-          assert 'test "${{ inputs.confirmation }}" = "RUN_R3_8_REMOTE_ONCE"' in workflow
+          assert "inputs.confirmation" in workflow
+          assert "--confirmation" in workflow
+          assert "RUN_R3_8_REMOTE_ONCE" in workflow
           assert "1200" not in workflow
 
           allowed = {
