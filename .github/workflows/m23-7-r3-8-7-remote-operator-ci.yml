@@ -35,12 +35,12 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - name: Verify exact workflow head and accepted remote-operator ancestry
+      - name: Verify exact workflow head and lifecycle-clean ancestry
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          git merge-base --is-ancestor 771538d3b95fccefc3f32bd568770e08ce3552ac HEAD
+          git merge-base --is-ancestor a98030daf0fd7760c38fa62b46683df63197dc9b HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -116,12 +116,28 @@ jobs:
               allow_nan=False,
           ).encode()
           assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "5c7ae99cf9892b9f76a917cf691fd2ce4d4f7f0f255e04f48c90af9d7ea6b67b"
+          assert digest == "7299d8daef8a4dda227a5491384c0abffbe427de0ffc8352a38c2acb27a4c840"
           assert stored["execution"]["local_terminal_operator_supported"] is False
           assert stored["worker"]["fixed_name_probe_required"] is False
           assert stored["worker"]["unique_per_run"] is True
+          assert stored["worker"]["placement_response_header"] == "X-M23-R3-8-Placement"
+          assert stored["worker"]["placement_response_values"] == [
+              "absent",
+              "local",
+              "remote",
+          ]
+          assert stored["worker"]["placement_location_persisted"] is False
           assert stored["observation"]["live_observation_attempts"] == 9
           assert stored["observation"]["live_observation_retry_seconds"] == 5
+          assert stored["observation"]["placement_readiness_attempts"] == 120
+          assert stored["observation"]["placement_readiness_retry_seconds"] == 5
+          assert stored["observation"]["placement_remote_consecutive_successes"] == 2
+          assert (
+              stored["observation"]["placement_remote_header_required_on_observation"]
+              is True
+          )
+          assert stored["observation"]["placement_location_persisted"] is False
+          assert stored["observation"]["worker_placement_retry_authorized"] is True
           assert stored["observation"]["worker_http_404_retry_authorized"] is True
           assert stored["observation"]["maximum_worker_internal_shadow_ms"] == 1200
           assert stored["authority"]["production_retrieval"] == "lexical"
@@ -156,27 +172,30 @@ jobs:
           assert "wrangler delete[[:space:]]+\\[name\\]" in delete_text
           assert "! grep -q -- '--name'" in delete_text
           PY
-      - name: Verify accepted observation core runtime preservation
+      - name: Verify exact placement-proof repair scope
         shell: bash
         run: |
           python - <<'PY'
           import subprocess
-          baseline = "4e7c7a10345aab63ed84b429ae2c360c02985810"
+
+          baseline = "a98030daf0fd7760c38fa62b46683df63197dc9b"
           allowed = {
-              ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml",
               ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
-              ".github/workflows/m23-7-r3-8-latency-repair.yml",
-              "pilot/m23/m23-7-r3-8-latency-repair-contract.json",
+              "docs/architecture/m23-7-r3-8-7-remote-operator.md",
+              "pilot/m23/m23-7-r3-8-7-remote-operator-contract.json",
+              "scripts/m23_7_r3_8_remote_operator.py",
               "src/knowledge_engine/m23_7_r3_8_latency_repair.py",
               "tests/test_m23_7_r3_8_latency_repair.py",
+              "tests/test_m23_7_r3_8_remote_operator.py",
               "workers/m23-7-r3-8-latency-repair/worker.mjs",
               "workers/m23-7-r3-8-latency-repair/worker.test.mjs",
-              "workers/m23-7-r3-8-latency-repair/worker.parallel.test.mjs",
           }
-          changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", baseline, "HEAD"],
-              text=True,
-          ).splitlines())
+          changed = set(
+              subprocess.check_output(
+                  ["git", "diff", "--name-only", baseline, "HEAD"],
+                  text=True,
+              ).splitlines()
+          )
           assert changed == allowed, (changed, allowed)
           PY
       - name: Verify pinned Wrangler command surfaces

@@ -7,6 +7,7 @@ import {
   REQUEST_SCHEMA,
   executeObservation,
   handleRequest,
+  placementClass,
   validateBody,
 } from "./worker.mjs";
 
@@ -107,6 +108,20 @@ function vector(index) {
   output[index % VECTOR_DIMENSION] = 1;
   return output;
 }
+
+test("placement header is reduced to a bounded class", () => {
+  for (const [value, expected] of [
+    ["remote-LHR", "remote"],
+    ["local-EWR", "local"],
+    ["remote-lhr", "absent"],
+    ["remote-LONDON", "absent"],
+    [null, "absent"],
+  ]) {
+    const headers = value === null ? {} : { "cf-placement": value };
+    const request = new Request("https://worker.example/", { headers });
+    assert.equal(placementClass(request), expected);
+  }
+});
 
 test("validateBody accepts exactly 24 unique digests", async () => {
   const body = requestBody();
@@ -414,6 +429,7 @@ test("handleRequest rejects an invalid bearer token", async () => {
       Authorization: "Bearer wrong",
       "Content-Type": "application/json",
       "Content-Length": String(Buffer.byteLength(raw)),
+      "cf-placement": "remote-LHR",
     },
     body: raw,
   });
@@ -421,6 +437,7 @@ test("handleRequest rejects an invalid bearer token", async () => {
     M23_R3_8_OPERATOR_TOKEN: "s".repeat(32),
   });
   assert.equal(response.status, 401);
+  assert.equal(response.headers.get("X-M23-R3-8-Placement"), "remote");
   assert.deepEqual(await response.json(), {
     status: "error",
     code: "unauthorized",

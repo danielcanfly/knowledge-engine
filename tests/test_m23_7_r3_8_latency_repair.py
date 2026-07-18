@@ -293,6 +293,47 @@ def test_http_worker_invoker_bounds_unsafe_worker_error_code() -> None:
     assert exc.value.code == "worker_http_500"
 
 
+@pytest.mark.parametrize("placement", [None, "absent", "local"])
+def test_http_worker_invoker_requires_remote_placement(
+    placement: str | None,
+) -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        headers = (
+            {}
+            if placement is None
+            else {subject.PLACEMENT_RESPONSE_HEADER: placement}
+        )
+        return httpx.Response(200, json={"status": "ok"}, headers=headers)
+
+    invoker = subject.HttpWorkerInvoker(
+        "https://worker.example.test/observe", "a" * 32
+    )
+    invoker._http.close()
+    invoker._http = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(subject.LatencyRepairError) as exc:
+        invoker.invoke({"schema_version": "test"}, clock_ns=lambda: 1)
+    assert exc.value.code == "worker_placement_not_remote"
+
+
+def test_http_worker_invoker_accepts_remote_placement() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"status": "ok"},
+            headers={subject.PLACEMENT_RESPONSE_HEADER: "remote"},
+        )
+
+    invoker = subject.HttpWorkerInvoker(
+        "https://worker.example.test/observe", "a" * 32
+    )
+    invoker._http.close()
+    invoker._http = httpx.Client(transport=httpx.MockTransport(handler))
+    payload, _elapsed = invoker.invoke(
+        {"schema_version": "test"}, clock_ns=lambda: 1
+    )
+    assert payload == {"status": "ok"}
+
+
 def test_duplicate_worker_variant_is_rejected() -> None:
     candidate = _candidate()
     request = subject.build_worker_request(candidate, nonce="3" * 32)

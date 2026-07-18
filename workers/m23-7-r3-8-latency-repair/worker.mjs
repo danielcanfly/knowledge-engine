@@ -15,6 +15,18 @@ const PAYLOAD_FIELDS = Object.freeze(["section_id"]);
 const REQUEST_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-request/v1";
 const RESPONSE_SCHEMA = "knowledge-engine-m23-7-r3-8-worker-response/v1";
 const ROUTE = "/v1/m23-7-r3-8/observe";
+const PLACEMENT_RESPONSE_HEADER = "X-M23-R3-8-Placement";
+
+function placementClass(request) {
+  const value = request.headers.get("cf-placement") || "";
+  if (/^remote-[A-Z]{3}$/.test(value)) return "remote";
+  if (/^local-[A-Z]{3}$/.test(value)) return "local";
+  return "absent";
+}
+
+function placementResponseHeaders(request) {
+  return { [PLACEMENT_RESPONSE_HEADER]: placementClass(request) };
+}
 
 class WorkerFailure extends Error {
   constructor(code, status = 400) {
@@ -484,6 +496,7 @@ async function executeParallelObservation(env, validated, now = () => performanc
 }
 
 async function handleRequest(request, env) {
+  const placementHeaders = placementResponseHeaders(request);
   try {
     const url = new URL(request.url);
     assertCondition(request.method === "POST", "method-not-allowed", 405);
@@ -500,6 +513,7 @@ async function handleRequest(request, env) {
     const validated = await validateBody(request);
     const result = await executeParallelObservation(env, validated);
     return responseJson(result, 200, {
+      ...placementHeaders,
       "Server-Timing":
         `workers-ai;dur=${result.timings.provider_ms}, ` +
         `qdrant;dur=${result.timings.qdrant_ms}, ` +
@@ -507,9 +521,17 @@ async function handleRequest(request, env) {
     });
   } catch (error) {
     if (error instanceof WorkerFailure) {
-      return responseJson({ status: "error", code: error.code }, error.status);
+      return responseJson(
+        { status: "error", code: error.code },
+        error.status,
+        placementHeaders,
+      );
     }
-    return responseJson({ status: "error", code: "internal-failure" }, 500);
+    return responseJson(
+      { status: "error", code: "internal-failure" },
+      500,
+      placementHeaders,
+    );
   }
 }
 
@@ -522,6 +544,7 @@ export {
   handleRequest,
   parseBatchResults,
   parseEmbeddingRows,
+  placementClass,
   timingSafeEqualText,
   validateBody,
 };

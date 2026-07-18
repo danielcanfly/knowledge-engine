@@ -109,3 +109,20 @@ control-plane absence and emits a separate artifact for deletion reconciliation.
 
 All R3.8 local operator ZIPs are unsupported after this workflow merges. They are
 historical failed bootstrap/control-plane attempts and must not be rerun.
+
+## Remote placement proof gate
+
+After observation run `29636761264` passed exact retrieval-quality parity but
+failed the immutable Worker-internal latency gate, the operator was hardened to
+prove that Cloudflare actually routed requests with placement before measuring.
+
+The Worker reduces the inbound `cf-placement` value to one of `remote`, `local`,
+or `absent` in `X-M23-R3-8-Placement`. It never returns or persists the airport
+code. Readiness now requires two consecutive authenticated schema probes with
+`remote`, within 120 bounded attempts separated by five seconds. A successful
+formal observation response must also prove `remote`; otherwise the operator
+fails closed with `worker_placement_not_remote` and may retry only within the
+existing bounded observation loop.
+
+This repair does not alter the 24 frozen query identities, ranking semantics,
+quality thresholds, Qdrant read-only surface, or the 1200 ms latency maximum.

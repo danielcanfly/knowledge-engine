@@ -24,6 +24,9 @@ WORKER_ROUTE = "/v1/m23-7-r3-8/observe"
 MAX_EVIDENCE_BYTES = 20_000_000
 MAX_WRANGLER_OUTPUT_BYTES = 1_000_000
 READINESS_CONSECUTIVE_SUCCESSES = 2
+PLACEMENT_READINESS_ATTEMPTS = 120
+PLACEMENT_READINESS_RETRY_SECONDS = 5
+PLACEMENT_RESPONSE_HEADER = "X-M23-R3-8-Placement"
 LIVE_OBSERVATION_ATTEMPTS = 9
 LIVE_OBSERVATION_RETRY_SECONDS = 5
 LIVE_OBSERVATION_RETRY_CODES = frozenset(
@@ -33,6 +36,7 @@ LIVE_OBSERVATION_RETRY_CODES = frozenset(
         "worker_http_502_qdrant_batch_unavailable",
         "worker_http_502_qdrant_query_batch_unavailable",
         "worker_http_502_qdrant_single_query_unavailable",
+        "worker_placement_not_remote",
     }
 )
 LIFECYCLE_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-lifecycle/v1"
@@ -266,11 +270,15 @@ def remote_failure_code(exc: Exception) -> str:
     return "bounded_unexpected_failure"
 
 
-def worker_ready_response(status_code: int, payload: object) -> bool:
-    return status_code == 400 and payload == {
-        "status": "error",
-        "code": "request-schema-drift",
-    }
+def worker_ready_response(
+    status_code: int, payload: object, placement: str | None
+) -> bool:
+    return (
+        status_code == 400
+        and payload
+        == {"status": "error", "code": "request-schema-drift"}
+        and placement == "remote"
+    )
 
 
 def execute(args: argparse.Namespace) -> int:
@@ -367,7 +375,7 @@ def execute(args: argparse.Namespace) -> int:
 
             endpoint = worker_origin + WORKER_ROUTE
             ready_successes = 0
-            for _ in range(30):
+            for _ in range(PLACEMENT_READINESS_ATTEMPTS):
                 try:
                     response = httpx.post(
                         endpoint,
@@ -378,7 +386,11 @@ def execute(args: argparse.Namespace) -> int:
                         json={},
                         timeout=5.0,
                     )
-                    if worker_ready_response(response.status_code, response.json()):
+                    if worker_ready_response(
+                        response.status_code,
+                        response.json(),
+                        response.headers.get(PLACEMENT_RESPONSE_HEADER),
+                    ):
                         ready_successes += 1
                         if ready_successes >= READINESS_CONSECUTIVE_SUCCESSES:
                             break
@@ -387,7 +399,7 @@ def execute(args: argparse.Namespace) -> int:
                 except (httpx.HTTPError, ValueError):
                     ready_successes = 0
                 if ready_successes < READINESS_CONSECUTIVE_SUCCESSES:
-                    time.sleep(2)
+                    time.sleep(PLACEMENT_READINESS_RETRY_SECONDS)
             if ready_successes < READINESS_CONSECUTIVE_SUCCESSES:
                 raise RemoteOperatorError("worker_not_ready")
 
@@ -420,6 +432,9 @@ def execute(args: argparse.Namespace) -> int:
                 "worker_version_id": worker_version_id,
                 "worker_retained": True,
                 "local_terminal_operator_used": False,
+                "placement_remote_readiness_verified": True,
+                "placement_response_class": "remote",
+                "placement_location_persisted": False,
                 "evidence_sha256": EXPECTED_EVIDENCE_SHA256,
                 "evidence_key_sha256": hashlib.sha256(key.encode()).hexdigest(),
                 "evidence_size_bytes": evidence_size,
