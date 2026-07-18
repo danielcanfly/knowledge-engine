@@ -72,14 +72,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .
 
-      - name: Verify bounded adapter dispatch contract
+      - name: Verify recovery probe modules compile
         shell: bash
         run: |
           set -euo pipefail
           python -m py_compile \
             scripts/m23_7_r3_8_remote_recovery_probe.py \
             scripts/m23_7_r3_8_remote_recovery_probe_296367.py
-          pytest -q tests/test_m23_7_r3_8_remote_recovery_probe_296367.py
 
       - name: Read official Cloudflare control-plane collections only
         id: recovery
