@@ -1,0 +1,69 @@
+{
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "evidence_reconciliation_only": true,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "promotion_eligibility_granted": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deletion_replay_authorized": false,
+    "worker_deploy_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "issue": 933,
+  "milestone": "M23.7-R3.8.36",
+  "parent_latency_issue": 520,
+  "parent_r3_issue": 474,
+  "result": {
+    "blocker_clearance_eligible": false,
+    "deletion_dispatch_reconciled": true,
+    "next_gate": "placement_strategy_repair_and_fresh_observation",
+    "post_delete_absence_reconciled": true,
+    "production_retrieval": "lexical",
+    "retained_worker_cleanup_complete": true,
+    "worker_lifecycle_clean": true,
+    "worker_state": "worker_absent"
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-36-deletion-absence-reconciliation/v1",
+  "seal_accepted_head": "9ebb45db8fc494d151edc889350d0efb9d86bf4f",
+  "seal_exact_head_runs": {
+    "architecture_canon": 29651323643,
+    "ci": 29651323583,
+    "graph_v2": 29651323582,
+    "seal": 29651323606
+  },
+  "seal_issue": 931,
+  "seal_merge_sha": "cbeda021622fcdec9b72c8ae29e9ab3ba948c903",
+  "seal_pr": 932,
+  "seal_sha256": "565fbfdd2a836477741975c86b45ea03795e919d20e4a0fb3d55780fb7ead110",
+  "sealed_evidence": {
+    "deletion": {
+      "artifact_id": 8431267592,
+      "artifact_zip_sha256": "c94819f6b10f8b3ef125abb2499753b3d4c238daf207bfb0142db109c9f217f7",
+      "failure_code": "delete_absence_not_proven",
+      "failure_self_digest": "fdb74abf9ab676ad15ff4938c8306490700de47cf5eed26877eadd6dae1dec09",
+      "run_id": "29650306710",
+      "worker_delete_dispatched": true
+    },
+    "post_delete_probe": {
+      "artifact_id": 8431415918,
+      "artifact_zip_sha256": "d71e413f1b0ce0e8803c64693146a1e5861633f8434975cbf21558441d49a9dd",
+      "receipt_self_digest": "94c87be559817580b4365170dac17a220212fe15ff8a78860cb94af36a865188",
+      "run_id": "29650833651",
+      "worker_state": "worker_absent"
+    }
+  },
+  "worker": {
+    "name": "knowledge-engine-r3-8-29646853002",
+    "observation_run_id": "29646853002",
+    "recovery_run_id": "29649737557"
+  },
+  "reconciliation_sha256": "6c27c3205de02d77d2eeee453a3b61d313d708f6f44fd615996872b525a86656"
+}
