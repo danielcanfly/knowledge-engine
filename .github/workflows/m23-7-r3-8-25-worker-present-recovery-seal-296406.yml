@@ -1,0 +1,107 @@
+name: M23.7 R3.8.25 Worker-Present Recovery Seal 296406
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-25/worker-present-recovery-seal-29640614146.json"
+      - "docs/architecture/m23-7-r3-8-25-worker-present-recovery-seal-29640614146.md"
+      - ".github/workflows/m23-7-r3-8-25-worker-present-recovery-seal-296406.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and recovery ancestry
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor f59e071cb3aa4717ce789f3fed5dcd81c9e34d1b HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic worker-present seal
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path('.github/evidence/m23-7-r3-8-25/worker-present-recovery-seal-29640614146.json')
+          value = json.loads(path.read_text(encoding='utf-8'))
+          digest = value.pop('seal_sha256')
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == 'bba9f426db0c18696684a9ecf124a4c5dfa0cacccd55d0efd2686eddcab90331'
+          assert value['recovery_authorization_pr'] == 906
+          assert value['recovery_authorization_merge_sha'] == 'f59e071cb3aa4717ce789f3fed5dcd81c9e34d1b'
+          assert value['recovery_run_id'] == '29640614146'
+          assert value['artifact']['artifact_id'] == 8428488630
+          assert value['artifact']['zip_sha256'] == '83792a08e9a5cbf16c31f918bbbdf7b5ba77430dc5f0cc009463ce41ed0bd6bb'
+          assert value['artifact']['receipt_file_sha256'] == 'fb588208aadc4118adf264772944865abad7f26cca1f4835b3ed240b1257e2aa'
+          assert value['artifact']['receipt_self_digest'] == 'e9b793da99657cb14e9a7602297e2847462826baa213e6c45742b0dd59dce4a7'
+          receipt = value['receipt']
+          assert receipt['status'] == 'completed_read_only_recovery_probe'
+          assert receipt['worker_state'] == 'worker_present'
+          assert receipt['worker_name'] == 'knowledge-engine-r3-8-29636761264'
+          assert receipt['affected_run_id'] == '29636761264'
+          assert receipt['affected_engine_sha'] == 'fc1dca7186fa66db153489a90a7b369ca053db61'
+          assert receipt['probe_engine_sha'] == 'f59e071cb3aa4717ce789f3fed5dcd81c9e34d1b'
+          assert receipt['versions']['identities'] == [
+              '03522a60-0bcc-42c0-b315-e845891538b2',
+              '99252e17-2ef7-4daa-bf34-8afb1ce65c44',
+              'b5e1ec43-4c05-4864-ac3b-4644c6c0ed78',
+              'c15c3d0b-6899-4571-a3f1-3c375fa13155',
+          ]
+          assert receipt['deployments']['identities'] == [
+              '2e704d9e-d759-4467-9584-eb141f04a5cd',
+              '62521795-e3c0-4470-ad6d-23c9cf592411',
+              '79f02d41-48aa-42cb-868d-b8efb053fd48',
+              '857a7b3a-5be5-4418-b103-09896670a7cb',
+          ]
+          assert receipt['versions']['identity_count'] == 4
+          assert receipt['deployments']['identity_count'] == 4
+          assert receipt['production_retrieval'] == 'lexical'
+          assert receipt['blockers_cleared'] is False
+          for field in (
+              'worker_delete_dispatched', 'worker_deploy_dispatched',
+              'worker_route_invoked', 'worker_secret_mutation_dispatched',
+              'qdrant_read_dispatched', 'qdrant_mutation_dispatched',
+              'r2_read_dispatched', 'r2_mutation_dispatched',
+              'protected_mutations_dispatched',
+          ):
+              assert receipt[field] is False
+          authority = value['authority']
+          assert authority['evidence_seal_only'] is True
+          assert authority['worker_deletion_authorized'] is False
+          assert authority['blocker_clearance_authorized'] is False
+          assert authority['m23_7_closure_authorized'] is False
+          PY
+      - name: Verify exact three-file scope and runtime preservation
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              '.github/evidence/m23-7-r3-8-25/worker-present-recovery-seal-29640614146.json',
+              'docs/architecture/m23-7-r3-8-25-worker-present-recovery-seal-29640614146.md',
+              '.github/workflows/m23-7-r3-8-25-worker-present-recovery-seal-296406.yml',
+          }
+          changed = set(subprocess.check_output(
+              ['git', 'diff', '--name-only', 'f59e071cb3aa4717ce789f3fed5dcd81c9e34d1b', 'HEAD'], text=True
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code f59e071cb3aa4717ce789f3fed5dcd81c9e34d1b HEAD -- \
+            scripts/m23_7_r3_8_remote_recovery_probe.py \
+            .github/workflows/m23-7-r3-8-9-recovery-probe.yml \
+            scripts/m23_7_r3_8_remote_operator.py \
+            scripts/m23_7_r3_8_remote_delete.py \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            workers/m23-7-r3-8-latency-repair/worker.mjs
