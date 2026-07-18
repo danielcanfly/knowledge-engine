@@ -11,6 +11,7 @@ on:
       - "tests/test_m23_7_r3_8_remote_delete.py"
       - "workers/m23-7-r3-8-latency-repair/worker.mjs"
       - "workers/m23-7-r3-8-latency-repair/worker.test.mjs"
+      - "workers/m23-7-r3-8-latency-repair/worker.parallel.test.mjs"
       - "pilot/m23/m23-7-r3-8-7-remote-operator-contract.json"
       - "docs/architecture/m23-7-r3-8-7-remote-operator.md"
       - ".github/workflows/m23-7-r3-8-remote-observe.yml"
@@ -93,7 +94,9 @@ jobs:
             tests/test_m23_7_r3_8_wrangler_bootstrap.py \
             tests/test_m23_7_r3_8_worker_absence_probe.py \
             tests/test_m23_7_r3_8_deploy_target.py
-          node --test workers/m23-7-r3-8-latency-repair/worker.test.mjs
+          node --test \
+            workers/m23-7-r3-8-latency-repair/worker.test.mjs \
+            workers/m23-7-r3-8-latency-repair/worker.parallel.test.mjs
       - name: Verify deterministic remote contract
         shell: bash
         run: |
@@ -168,6 +171,7 @@ jobs:
               "tests/test_m23_7_r3_8_latency_repair.py",
               "workers/m23-7-r3-8-latency-repair/worker.mjs",
               "workers/m23-7-r3-8-latency-repair/worker.test.mjs",
+              "workers/m23-7-r3-8-latency-repair/worker.parallel.test.mjs",
           }
           changed = set(subprocess.check_output(
               ["git", "diff", "--name-only", baseline, "HEAD"],
