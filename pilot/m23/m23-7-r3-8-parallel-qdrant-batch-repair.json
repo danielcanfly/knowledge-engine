@@ -1,0 +1,19 @@
+{
+  "schema_version": "knowledge-engine-m23-7-r3-8-parallel-qdrant-batch-repair/v1",
+  "milestone": "M23.7-R3.8",
+  "trigger_run_id": "29628930603",
+  "trigger_engine_sha": "7b167fa5a925b758eabc7dfe3252c02801802372",
+  "trigger_qdrant_ms": 1835,
+  "trigger_shadow_ms": 2371,
+  "maximum_shadow_ms": 1200,
+  "query_count": 24,
+  "parallel_batch_size": 6,
+  "parallel_batch_count": 4,
+  "logical_qdrant_batch_operations": 1,
+  "ranking_order_preserved": true,
+  "quality_threshold_changed": false,
+  "latency_threshold_changed": false,
+  "collection_mutation_authorized": false,
+  "production_mutation_authorized": false,
+  "production_retrieval": "lexical"
+}
