@@ -1,0 +1,76 @@
+{
+  "artifact": {
+    "id": 8430386116,
+    "name": "m23-7-r3-8-remote-29646853002",
+    "remote_entry_file_sha256": "8aa0a12316575b4db0a777b2dfc350567fc9136520488b3a1e83e5390c2a000c",
+    "remote_entry_self_digest": "f438a8f21662572058b819418debbab26256fbdbc2fbff6c07eac85e97fd35b4",
+    "remote_failure_file_sha256": "96c1a4d0401c33313f81aae5a6691284d5465c46d12c378c89c3bf681240184e",
+    "remote_failure_self_digest": "24e5d79b67927860380606c7e7a4d43c74f5d357951bbe537540bce58ad6fa5b",
+    "remote_lifecycle_file_sha256": "98eba661c1350de0f551c3d96a7b4c21eac6048ae9cd27365883223fcdbe151e",
+    "remote_lifecycle_self_digest": "4c5c2aeb59acb8bd10f9f2e7377f2838c06421bbe920b57678ebbcd14a9ac637",
+    "zip_sha256": "2b44366f151d8f673427f9b2b6caf560b61d52d764aa59ff73494625cbbb0828"
+  },
+  "authority": {
+    "evidence_seal_only": true,
+    "fresh_observation_authorized": false,
+    "latency_blocker_cleared": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "production_mutation_dispatched": false,
+    "production_retrieval": "lexical",
+    "promotion_eligibility_granted": false,
+    "qdrant_mutation_dispatched": false,
+    "r2_mutation_dispatched": false,
+    "retrieval_quality_blocker_cleared": false,
+    "source_mutation_dispatched": false,
+    "worker_deletion_authorized_by_this_seal": false
+  },
+  "failure": {
+    "evidence_size_bytes": 893429,
+    "failure_code": "worker_not_ready",
+    "failure_stage": "worker_readiness",
+    "formal_observation_started": false,
+    "placement_remote_readiness_proven": false,
+    "qdrant_observation_call_dispatched": false,
+    "status": "rejected_incomplete_remote_observation",
+    "workers_ai_observation_call_dispatched": false
+  },
+  "issue": 919,
+  "privacy": {
+    "arbitrary_exception_text_persisted": false,
+    "credentials_persisted": false,
+    "document_content_persisted": false,
+    "placement_location_persisted": false,
+    "raw_evidence_persisted": false,
+    "raw_queries_persisted": false,
+    "service_url_persisted": false
+  },
+  "result": {
+    "blocker_clearance_eligible_after_reconciliation": false,
+    "independent_reconciliation_required": true,
+    "latency_repair_result_available": false,
+    "next_gate": "independent_failure_reconciliation_then_governed_worker_cleanup",
+    "observation_complete": false,
+    "retained_worker_cleanup_required": true
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-30-placement-readiness-failure-seal/v1",
+  "seal_sha256": "4a01e8363e6c2d4092b7e5909ab939824f700e54e5fa02904eea0ac7fc3e1b23",
+  "source": {
+    "engine_sha": "a5fca48683567b48a196e67657bd7dc4a4b9c554",
+    "observation_run_id": "29646853002",
+    "observation_run_url": "https://github.com/danielcanfly/knowledge-engine/actions/runs/29646853002",
+    "run_attempt": 1,
+    "workflow": "m23-7-r3-8-remote-observe.yml"
+  },
+  "worker": {
+    "deletion_authorization_required": true,
+    "deployed": true,
+    "name": "knowledge-engine-r3-8-29646853002",
+    "retained": true,
+    "version_id": "d12b9b33-c4a6-4a7e-ae69-fcf7f48b79b0"
+  }
+}
