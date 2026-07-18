@@ -1,0 +1,133 @@
+name: M23.7 R3.8.30 Placement Readiness Failure Seal
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-30/placement-readiness-failure-seal-29646853002.json"
+      - "docs/architecture/m23-7-r3-8-30-placement-readiness-failure-seal-29646853002.md"
+      - ".github/workflows/m23-7-r3-8-30-placement-readiness-failure-seal-296468.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and observation ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor a5fca48683567b48a196e67657bd7dc4a4b9c554 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic placement-readiness failure seal
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path(".github/evidence/m23-7-r3-8-30/placement-readiness-failure-seal-29646853002.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("seal_sha256")
+          encoded = json.dumps(
+              value,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(",", ":"),
+              allow_nan=False,
+          ).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "4a01e8363e6c2d4092b7e5909ab939824f700e54e5fa02904eea0ac7fc3e1b23"
+          assert value["issue"] == 919
+          assert value["source"] == {
+              "engine_sha": "a5fca48683567b48a196e67657bd7dc4a4b9c554",
+              "observation_run_id": "29646853002",
+              "observation_run_url": "https://github.com/danielcanfly/knowledge-engine/actions/runs/29646853002",
+              "run_attempt": 1,
+              "workflow": "m23-7-r3-8-remote-observe.yml",
+          }
+          artifact = value["artifact"]
+          assert artifact["id"] == 8430386116
+          assert artifact["zip_sha256"] == "2b44366f151d8f673427f9b2b6caf560b61d52d764aa59ff73494625cbbb0828"
+          assert artifact["remote_entry_file_sha256"] == "8aa0a12316575b4db0a777b2dfc350567fc9136520488b3a1e83e5390c2a000c"
+          assert artifact["remote_entry_self_digest"] == "f438a8f21662572058b819418debbab26256fbdbc2fbff6c07eac85e97fd35b4"
+          assert artifact["remote_failure_file_sha256"] == "96c1a4d0401c33313f81aae5a6691284d5465c46d12c378c89c3bf681240184e"
+          assert artifact["remote_failure_self_digest"] == "24e5d79b67927860380606c7e7a4d43c74f5d357951bbe537540bce58ad6fa5b"
+          assert artifact["remote_lifecycle_file_sha256"] == "98eba661c1350de0f551c3d96a7b4c21eac6048ae9cd27365883223fcdbe151e"
+          assert artifact["remote_lifecycle_self_digest"] == "4c5c2aeb59acb8bd10f9f2e7377f2838c06421bbe920b57678ebbcd14a9ac637"
+          failure = value["failure"]
+          assert failure["status"] == "rejected_incomplete_remote_observation"
+          assert failure["failure_code"] == "worker_not_ready"
+          assert failure["failure_stage"] == "worker_readiness"
+          assert failure["formal_observation_started"] is False
+          assert failure["workers_ai_observation_call_dispatched"] is False
+          assert failure["qdrant_observation_call_dispatched"] is False
+          assert failure["placement_remote_readiness_proven"] is False
+          worker = value["worker"]
+          assert worker["name"] == "knowledge-engine-r3-8-29646853002"
+          assert worker["version_id"] == "d12b9b33-c4a6-4a7e-ae69-fcf7f48b79b0"
+          assert worker["deployed"] is True
+          assert worker["retained"] is True
+          assert worker["deletion_authorization_required"] is True
+          result = value["result"]
+          assert result["observation_complete"] is False
+          assert result["latency_repair_result_available"] is False
+          assert result["blocker_clearance_eligible_after_reconciliation"] is False
+          assert result["retained_worker_cleanup_required"] is True
+          authority = value["authority"]
+          assert authority["evidence_seal_only"] is True
+          assert authority["fresh_observation_authorized"] is False
+          assert authority["worker_deletion_authorized_by_this_seal"] is False
+          assert authority["retrieval_quality_blocker_cleared"] is False
+          assert authority["latency_blocker_cleared"] is False
+          assert authority["production_retrieval"] == "lexical"
+          assert value["retained_blockers"] == [
+              "blocked_pending_retrieval_quality",
+              "blocked_pending_latency",
+          ]
+          PY
+      - name: Verify privacy and exact seal scope
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          baseline = "a5fca48683567b48a196e67657bd7dc4a4b9c554"
+          allowed = {
+              ".github/evidence/m23-7-r3-8-30/placement-readiness-failure-seal-29646853002.json",
+              "docs/architecture/m23-7-r3-8-30-placement-readiness-failure-seal-29646853002.md",
+              ".github/workflows/m23-7-r3-8-30-placement-readiness-failure-seal-296468.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", baseline, "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+
+          text = "\n".join(
+              Path(path).read_text(encoding="utf-8")
+              for path in allowed
+              if not path.endswith(".yml")
+          )
+          for forbidden in (
+              "CLOUDFLARE_API_TOKEN",
+              "QDRANT_API_KEY",
+              "QDRANT_URL",
+              "raw_query",
+              "document_text",
+              "remote-LHR",
+              "local-EWR",
+          ):
+              assert forbidden not in text
+          PY
