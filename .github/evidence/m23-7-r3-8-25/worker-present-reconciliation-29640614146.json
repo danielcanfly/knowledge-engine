@@ -1,0 +1,67 @@
+{
+  "artifact": {
+    "artifact_id": 8428488630,
+    "receipt_file_sha256": "fb588208aadc4118adf264772944865abad7f26cca1f4835b3ed240b1257e2aa",
+    "receipt_self_digest": "e9b793da99657cb14e9a7602297e2847462826baa213e6c45742b0dd59dce4a7",
+    "zip_sha256": "83792a08e9a5cbf16c31f918bbbdf7b5ba77430dc5f0cc009463ce41ed0bd6bb"
+  },
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "promotion_eligibility_granted": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deletion_authorized": false,
+    "worker_deploy_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "observation": {
+    "affected_engine_sha": "fc1dca7186fa66db153489a90a7b369ca053db61",
+    "affected_run_id": "29636761264",
+    "probe_engine_sha": "f59e071cb3aa4717ce789f3fed5dcd81c9e34d1b",
+    "recovery_run_id": "29640614146"
+  },
+  "reconciliation_sha256": "2be146bc3821a0fa3eacb44cf840fd546614fee4694b5edb85614cb7fbd2aa57",
+  "result": {
+    "next_gate": "separately_governed_exact_worker_deletion_authorization",
+    "production_retrieval": "lexical",
+    "reconciliation_accepted": true,
+    "retained_worker_cleanup_required": true,
+    "worker_state": "worker_present"
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-25-worker-present-reconciliation/v1",
+  "seal": {
+    "accepted_head": "46746b941c44e13f7f951b548e1e9e4affb222c9",
+    "exact_head_runs": {
+      "architecture_canon": 29641507229,
+      "ci": 29641507244,
+      "graph_v2": 29641507273,
+      "seal": 29641507266
+    },
+    "merge_sha": "fd2aa64f8a4f9eb88c0a78acbef1d108d7fc7615",
+    "pr": 908,
+    "sha256": "bba9f426db0c18696684a9ecf124a4c5dfa0cacccd55d0efd2686eddcab90331"
+  },
+  "worker": {
+    "deployment_identities": [
+      "2e704d9e-d759-4467-9584-eb141f04a5cd",
+      "62521795-e3c0-4470-ad6d-23c9cf592411",
+      "79f02d41-48aa-42cb-868d-b8efb053fd48",
+      "857a7b3a-5be5-4418-b103-09896670a7cb"
+    ],
+    "name": "knowledge-engine-r3-8-29636761264",
+    "version_identities": [
+      "03522a60-0bcc-42c0-b315-e845891538b2",
+      "99252e17-2ef7-4daa-bf34-8afb1ce65c44",
+      "b5e1ec43-4c05-4864-ac3b-4644c6c0ed78",
+      "c15c3d0b-6899-4571-a3f1-3c375fa13155"
+    ]
+  }
+}
