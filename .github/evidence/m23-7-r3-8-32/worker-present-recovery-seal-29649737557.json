@@ -1,0 +1,88 @@
+{
+  "artifact": {
+    "artifact_id": 8431100289,
+    "name": "m23-7-r3-8-9-recovery-29649737557",
+    "receipt_file_sha256": "302bb62f8607d874bbecb7943184a4e16933d87f7a845adbe32d1e819a0d7d85",
+    "receipt_self_digest": "58162b70bd2bf6a97e57aba6b33c7620334f9be556a511a671dac06eeea69800",
+    "zip_sha256": "45cb3d874feced81bcb12e70318f938dab55f5bddae837b158304b5fc811bae7"
+  },
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "evidence_seal_only": true,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deletion_authorized": false,
+    "worker_deploy_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "milestone": "M23.7-R3.8.32",
+  "parent_latency_issue": 520,
+  "parent_r3_issue": 474,
+  "receipt": {
+    "affected_engine_sha": "a5fca48683567b48a196e67657bd7dc4a4b9c554",
+    "affected_run_id": "29646853002",
+    "blockers_cleared": false,
+    "deployments": {
+      "collection_key": "deployments",
+      "error_codes": [],
+      "http_status": 200,
+      "identities": [
+        "3686ffea-920e-4a92-8517-df74a8f78800",
+        "63ff8a06-e86c-4c02-8c1f-c74e7415d000",
+        "7d93535f-3521-4846-8f16-c8a0b2c3076e",
+        "eade21c1-2500-49af-84aa-8fdcae35112c"
+      ],
+      "identity_count": 4,
+      "state": "present"
+    },
+    "observation_replayed": false,
+    "probe_engine_sha": "8e341bc076e6b800f43323952d2dc409ef1da76b",
+    "production_retrieval": "lexical",
+    "protected_mutations_dispatched": false,
+    "qdrant_mutation_dispatched": false,
+    "qdrant_read_dispatched": false,
+    "r2_mutation_dispatched": false,
+    "r2_read_dispatched": false,
+    "recovery_probe_sha256": "58162b70bd2bf6a97e57aba6b33c7620334f9be556a511a671dac06eeea69800",
+    "response_schema": {
+      "deployments_collection": "result.deployments",
+      "versions_collection": "result.items"
+    },
+    "schema_version": "knowledge-engine-m23-7-r3-8-9-recovery-probe/v2",
+    "status": "completed_read_only_recovery_probe",
+    "versions": {
+      "collection_key": "items",
+      "error_codes": [],
+      "http_status": 200,
+      "identities": [
+        "25bed085-df91-4442-aa0f-f4e396bf0428",
+        "2f634b53-c76f-40eb-be27-1ff528d4c5fe",
+        "d12b9b33-c4a6-4a7e-ae69-fcf7f48b79b0",
+        "deb508b4-033e-4a8a-9ce2-3a150e263de1"
+      ],
+      "identity_count": 4,
+      "state": "present"
+    },
+    "worker_delete_dispatched": false,
+    "worker_deploy_dispatched": false,
+    "worker_name": "knowledge-engine-r3-8-29646853002",
+    "worker_route_invoked": false,
+    "worker_secret_mutation_dispatched": false,
+    "worker_state": "worker_present"
+  },
+  "recovery_authorization_issue": 923,
+  "recovery_authorization_merge_sha": "8e341bc076e6b800f43323952d2dc409ef1da76b",
+  "recovery_authorization_pr": 924,
+  "recovery_run_id": "29649737557",
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-32-recovery-probe-evidence-seal/v1",
+  "seal_issue": 925,
+  "seal_sha256": "4d3f47c70e907c3b2ac32ea69e8a6f9c37be2e18bfc274b69431add1fce01202"
+}
