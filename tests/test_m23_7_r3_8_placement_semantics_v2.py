@@ -7,12 +7,12 @@ from pathlib import Path
 
 import httpx
 import pytest
-
-from knowledge_engine import m23_7_r3_8_latency_repair as latency
 import scripts
 from scripts import m23_7_r3_8_remote_entrypoint_placement_v2 as entrypoint
 from scripts import m23_7_r3_8_remote_operator as base
 from scripts import m23_7_r3_8_remote_operator_placement_v2 as subject
+
+from knowledge_engine import m23_7_r3_8_latency_repair as latency
 
 
 def test_readiness_accepts_only_present_sanitized_placement_classes() -> None:
