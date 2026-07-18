@@ -1,0 +1,43 @@
+name: M23.7 R3.8 Parallel Qdrant Batch CI
+
+on:
+  pull_request:
+    paths:
+      - "workers/m23-7-r3-8-latency-repair/worker.mjs"
+      - "workers/m23-7-r3-8-latency-repair/worker.parallel.test.mjs"
+      - "docs/architecture/m23-7-r3-8-parallel-qdrant-batch-repair.md"
+      - "pilot/m23/m23-7-r3-8-parallel-qdrant-batch-repair.json"
+      - ".github/workflows/m23-7-r3-8-parallel-qdrant-batch-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check worker syntax
+        run: node --check workers/m23-7-r3-8-latency-repair/worker.mjs
+      - name: Run established worker tests
+        run: node --test workers/m23-7-r3-8-latency-repair/worker.test.mjs
+      - name: Run parallel batch tests
+        run: node --test workers/m23-7-r3-8-latency-repair/worker.parallel.test.mjs
+      - name: Verify bounded repair contract
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const receipt = JSON.parse(fs.readFileSync('pilot/m23/m23-7-r3-8-parallel-qdrant-batch-repair.json', 'utf8'));
+          if (receipt.query_count !== 24) throw new Error('query count drift');
+          if (receipt.parallel_batch_size !== 6) throw new Error('batch size drift');
+          if (receipt.parallel_batch_count !== 4) throw new Error('batch count drift');
+          if (receipt.maximum_shadow_ms !== 1200) throw new Error('latency threshold drift');
+          if (receipt.quality_threshold_changed !== false) throw new Error('quality threshold drift');
+          if (receipt.latency_threshold_changed !== false) throw new Error('latency threshold drift');
+          if (receipt.collection_mutation_authorized !== false) throw new Error('collection authority drift');
+          if (receipt.production_mutation_authorized !== false) throw new Error('production authority drift');
+          NODE
