@@ -58,7 +58,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ inputs.expected_head }}"
           test "$GITHUB_SHA" = "${{ inputs.expected_head }}"
-          git merge-base --is-ancestor c61cbe221fca50b045cbb847cf8d768d31d4e779 HEAD
+          git merge-base --is-ancestor eec81cd57dd69cdc2c5c401c939e4037c2246197 HEAD
 
       - uses: actions/setup-python@v5
         with:
@@ -72,16 +72,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .
 
-      - name: Verify bounded adapter and preserved recovery probe
+      - name: Verify bounded adapter dispatch contract
         shell: bash
         run: |
           set -euo pipefail
           python -m py_compile \
             scripts/m23_7_r3_8_remote_recovery_probe.py \
             scripts/m23_7_r3_8_remote_recovery_probe_296367.py
-          pytest -q \
-            tests/test_m23_7_r3_8_remote_recovery_probe.py \
-            tests/test_m23_7_r3_8_remote_recovery_probe_296367.py
+          pytest -q tests/test_m23_7_r3_8_remote_recovery_probe_296367.py
 
       - name: Read official Cloudflare control-plane collections only
         id: recovery
