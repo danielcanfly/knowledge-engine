@@ -22,13 +22,28 @@ jobs:
         with:
           python-version: "3.12"
       - name: Apply exact placement proof repair and remove bootstrap
+        id: apply
         shell: bash
         run: |
+          set +e
+          python scripts/bootstrap_m23_7_r3_8_placement_proof.py > bootstrap-output.txt 2>&1
+          code=$?
+          cat bootstrap-output.txt
+          if [ "$code" -ne 0 ]; then
+            exit "$code"
+          fi
           set -euo pipefail
-          python scripts/bootstrap_m23_7_r3_8_placement_proof.py
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "Require remote placement proof for R3.8 observation"
           git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+      - name: Upload bootstrap diagnostic
+        if: failure() && steps.apply.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: m23-7-r3-8-placement-bootstrap-${{ github.run_id }}
+          path: bootstrap-output.txt
+          if-no-files-found: error
+          retention-days: 7
