@@ -26,19 +26,30 @@ jobs:
         shell: bash
         run: |
           set +e
-          python scripts/bootstrap_m23_7_r3_8_placement_proof.py > bootstrap-output.txt 2>&1
+          log="$RUNNER_TEMP/bootstrap-output.txt"
+          : > "$log"
+          python scripts/bootstrap_m23_7_r3_8_placement_proof.py >> "$log" 2>&1
           code=$?
-          cat bootstrap-output.txt
+          if [ "$code" -eq 0 ]; then
+            git diff --check >> "$log" 2>&1
+            code=$?
+          fi
+          if [ "$code" -eq 0 ]; then
+            git config user.name "github-actions[bot]" >> "$log" 2>&1
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com" >> "$log" 2>&1
+            git add -A >> "$log" 2>&1
+            git commit -m "Require remote placement proof for R3.8 observation" >> "$log" 2>&1
+            code=$?
+          fi
+          if [ "$code" -eq 0 ]; then
+            git push origin "HEAD:${{ github.event.pull_request.head.ref }}" >> "$log" 2>&1
+            code=$?
+          fi
+          cat "$log"
           if [ "$code" -ne 0 ]; then
+            cp "$log" bootstrap-output.txt
             exit "$code"
           fi
-          set -euo pipefail
-          git diff --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Require remote placement proof for R3.8 observation"
-          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
       - name: Upload bootstrap diagnostic
         if: failure() && steps.apply.outcome == 'failure'
         uses: actions/upload-artifact@v4
