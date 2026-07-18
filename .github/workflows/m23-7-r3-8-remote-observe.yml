@@ -60,7 +60,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ inputs.expected_head }}"
           test "${GITHUB_SHA}" = "${{ inputs.expected_head }}"
-          git merge-base --is-ancestor 090db324939a4272b90d212fa462674b371b2e6d HEAD
+          git merge-base --is-ancestor 9c71b34fdad1d6341418c389570b8a88634ecae8 HEAD
 
       - uses: actions/setup-python@v5
         with:
@@ -77,15 +77,18 @@ jobs:
           set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install -e .
+          python -m py_compile \
+            scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py \
+            scripts/m23_7_r3_8_remote_operator_placement_v2.py
           test "$(npx --yes wrangler@4.111.0 --version | tr -d '\r')" = "4.111.0"
 
-      - name: Run one remote placed-Worker observation
+      - name: Run one targeted placed-Worker observation
         id: operator
         shell: bash
         run: |
           set +e
           rm -rf "$EVIDENCE_DIR"
-          python -m scripts.m23_7_r3_8_remote_entrypoint \
+          python -m scripts.m23_7_r3_8_remote_entrypoint_placement_v2 \
             --expected-head "${{ inputs.expected_head }}" \
             --run-id "$GITHUB_RUN_ID" \
             --run-attempt "$GITHUB_RUN_ATTEMPT" \
