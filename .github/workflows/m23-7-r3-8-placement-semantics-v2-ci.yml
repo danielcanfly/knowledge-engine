@@ -10,6 +10,8 @@ on:
       - "docs/architecture/m23-7-r3-8-placement-semantics-v2.md"
       - ".github/workflows/m23-7-r3-8-placement-semantics-v2-ci.yml"
       - ".github/workflows/m23-7-r3-8-remote-observe.yml"
+      - ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml"
+      - ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml"
   workflow_dispatch:
 
 permissions:
@@ -121,6 +123,8 @@ jobs:
               "docs/architecture/m23-7-r3-8-placement-semantics-v2.md",
               ".github/workflows/m23-7-r3-8-placement-semantics-v2-ci.yml",
               ".github/workflows/m23-7-r3-8-remote-observe.yml",
+              ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
+              ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml",
           }
           changed = set(subprocess.check_output(
               ["git", "diff", "--name-only", "9c71b34fdad1d6341418c389570b8a88634ecae8", "HEAD"],
