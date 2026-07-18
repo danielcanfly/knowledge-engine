@@ -8,8 +8,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-import scripts
 from knowledge_engine import m23_7_r3_8_latency_repair as latency
+import scripts
 from scripts import m23_7_r3_8_remote_entrypoint_placement_v2 as entrypoint
 from scripts import m23_7_r3_8_remote_operator as base
 from scripts import m23_7_r3_8_remote_operator_placement_v2 as subject
@@ -175,7 +175,7 @@ def test_adapter_restores_canonical_runtime_after_execution(
     assert base.worker_ready_response is original_ready
     assert latency.HttpWorkerInvoker is original_invoker
     assert base._write_json is original_write
-    assert base.LIVE_OBSERVATION_RETRY_CODES == original_codes
+    assert original_codes == base.LIVE_OBSERVATION_RETRY_CODES
 
 
 def test_source_preserves_mutation_and_privacy_boundaries() -> None:
