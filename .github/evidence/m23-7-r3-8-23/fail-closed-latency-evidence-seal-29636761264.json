@@ -1,0 +1,90 @@
+{
+  "artifact": {
+    "id": 8427348020,
+    "name": "m23-7-r3-8-remote-29636761264",
+    "receipt_file_sha256": "1f9a88e07ab69b3afa347f83de40e7003e52c351f7b489772ed77515605d87fd",
+    "receipt_self_digest": "71a1ddf50c497e9c59dd4d16895d4e8123f92c3e947b4b4ea1cca2a122bfb5d3",
+    "remote_entry_file_sha256": "48112153928c62e60bb15286db592a220fba9eb3c6e08908d24a570a3269588a",
+    "remote_entry_self_digest": "63a62c27ab4781a79bac96745d3e1c0400895270d9efee865c3d53fc10647862",
+    "remote_lifecycle_file_sha256": "8023d86bc7f1d233adf625a07fab012b717dd394803d17125dd01464fafeb3e2",
+    "remote_lifecycle_self_digest": "fe5209667c0e98221180c5c1cb169d4953786a5f3ab8520605da84470aa108fa",
+    "zip_sha256": "21fb4a9421e1e3cd73608d0b8a5c234a5f1776b39f6938dc851197c42e247c3c"
+  },
+  "authority": {
+    "fresh_observation_authorized": false,
+    "latency_blocker_cleared": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "production_mutation_dispatched": false,
+    "production_retrieval": "lexical",
+    "promotion_eligibility_granted": false,
+    "protected_mutations_dispatched": false,
+    "retrieval_quality_blocker_cleared": false,
+    "serving_authorized": false,
+    "worker_deletion_authorized_by_this_seal": false
+  },
+  "issue": 897,
+  "latency": {
+    "failed_gate": "worker_internal_shadow",
+    "maximum_shadow_ms": 1200,
+    "operator_round_trip_informational": true,
+    "operator_round_trip_ms": 3256,
+    "provider_ms": 991,
+    "qdrant_ms": 899,
+    "shadow_ms": 1890
+  },
+  "privacy": {
+    "credentials_persisted": false,
+    "document_content_persisted": false,
+    "raw_evidence_persisted": false,
+    "raw_queries_persisted": false,
+    "service_url_persisted": false
+  },
+  "receipt": {
+    "accepted_metrics": {"mrr_at_10": 0.807291666667, "ndcg_at_10": 0.851933109598, "recall_at_5": 0.875},
+    "accepted_target_ranks": {"m23q-01": 1, "m23q-02": 8, "m23q-03": 3, "m23q-04": 1, "m23q-07": 1, "m23q-08": 1, "m23q-09": 1, "m23q-10": 1},
+    "candidate_artifact_sha256": "8eed54902c73314ac2e5d5e187a788e44941dae250d9823d45b71ec57d1e1371",
+    "collection": "llm_wiki_m23_r3_5_candidate_8eed54902c73",
+    "contract_sha256": "d081ab57a85b4ea813aeb813090b597340b8c3842ff78d7022d38501e6c282ba",
+    "gates": {"accepted_metric_parity": true, "acl_violation_rate_zero": true, "candidate_identity": true, "collection_schema_pre_post_exact": true, "exact_target_rank_parity": true, "hub_frequency": true, "mrr_at_10": true, "ndcg_at_10": true, "output_influence_rate_zero": true, "probe_count_8": true, "protected_mutations_zero": true, "qdrant_deletes_zero": true, "qdrant_reindex_zero": true, "qdrant_writes_zero": true, "query_count_24": true, "query_error_rate_zero": true, "query_identity_unique": true, "recall_at_5": true, "worker_internal_shadow": false},
+    "maximum_top10_hub_frequency": 3,
+    "metrics": {"mrr_at_10": 0.807291666667, "ndcg_at_10": 0.851933109598, "recall_at_5": 0.875},
+    "probe_count": 8,
+    "query_count": 24,
+    "query_identity_count": 24,
+    "schema_version": "knowledge-engine-m23-7-r3-8-latency-repair-receipt/v1",
+    "status": "completed_fail_closed_latency_repair",
+    "target_ranks": {"m23q-01": 1, "m23q-02": 8, "m23q-03": 3, "m23q-04": 1, "m23q-07": 1, "m23q-08": 1, "m23q-09": 1, "m23q-10": 1}
+  },
+  "result": {
+    "blocker_clearance_eligible_after_reconciliation": false,
+    "evidence_seal_required": true,
+    "independent_reconciliation_required": true,
+    "latency_repair_passed": false,
+    "latency_repair_result_complete": true,
+    "next_gate": "separately_governed_r3_8_evidence_seal",
+    "receipt_says_diagnostic_worker_deletion_required_after_reconciliation": false,
+    "remote_lifecycle_says_worker_retained": true
+  },
+  "retained_blockers": ["blocked_pending_retrieval_quality", "blocked_pending_latency"],
+  "schema_version": "knowledge-engine-m23-7-r3-8-23-fail-closed-latency-evidence-seal/v1",
+  "seal_sha256": "054686bb456797a6fa3017a96a0496075d2f0efa7f96b2b85664c30ff76b88d4",
+  "source": {
+    "engine_sha": "fc1dca7186fa66db153489a90a7b369ca053db61",
+    "observation_run_id": "29636761264",
+    "observation_run_url": "https://github.com/danielcanfly/knowledge-engine/actions/runs/29636761264",
+    "workflow": "m23-7-r3-8-remote-observe.yml"
+  },
+  "worker": {
+    "collection_after": {"indexed_vectors_count": 0, "points_count": 107, "read_only": true, "sparse_vectors": null, "status": "green", "vector_distance": "Cosine", "vector_name": "default", "vector_size": 1024},
+    "collection_before": {"indexed_vectors_count": 0, "points_count": 107, "read_only": true, "sparse_vectors": null, "status": "green", "vector_distance": "Cosine", "vector_name": "default", "vector_size": 1024},
+    "deletion_authorization_required": true,
+    "deployed": true,
+    "external_calls": {"qdrant_collection_reads": 2, "qdrant_delete": 0, "qdrant_query_batch": 1, "qdrant_reindex": 0, "qdrant_single_query": 0, "qdrant_vector_scroll": 0, "qdrant_write": 0, "workers_ai_binding": 1},
+    "name": "knowledge-engine-r3-8-29636761264",
+    "placement_config_sha256": "531232dce2ca75b9e0ea11eb08d5c02fc1c26ac2d7928b609c2b26dd150e3afe",
+    "placement_hostname_sha256": "71fa051c5d40b28df0a6bb5ba634d0afd9ae084f728a2425f5570c727aa223b7",
+    "retained": true,
+    "version_id": "03522a60-0bcc-42c0-b315-e845891538b2"
+  }
+}
