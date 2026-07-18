@@ -1,0 +1,34 @@
+name: M23.7 R3.8 Placement Proof Bootstrap
+
+on:
+  pull_request:
+    paths:
+      - "scripts/bootstrap_m23_7_r3_8_placement_proof.py"
+      - ".github/workflows/m23-7-r3-8-placement-proof-bootstrap.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Apply exact placement proof repair and remove bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/bootstrap_m23_7_r3_8_placement_proof.py
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Require remote placement proof for R3.8 observation"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
