@@ -27,7 +27,7 @@ jobs:
         run: |
           set +e
           log="$RUNNER_TEMP/bootstrap-output.txt"
-          temp_script="$RUNNER_TEMP/placement-proof-patch.py"
+          temp_script="/tmp/placement-proof-patch.py"
           : > "$log"
           python - <<'PY' >> "$log" 2>&1
           from pathlib import Path
@@ -38,7 +38,11 @@ jobs:
           start = source.index("# Dedicated CI:")
           end = source.index("append_once(", start)
           source = source[:start] + source[end:]
-          cleanup = '''\n# Bootstrap files must not survive the patch commit.\nPath("scripts/bootstrap_m23_7_r3_8_placement_proof.py").unlink()\nPath(".github/workflows/m23-7-r3-8-placement-proof-bootstrap.yml").unlink()\n'''
+          cleanup = '''
+# Bootstrap files must not survive the patch commit.
+Path("scripts/bootstrap_m23_7_r3_8_placement_proof.py").unlink()
+Path(".github/workflows/m23-7-r3-8-placement-proof-bootstrap.yml").unlink()
+'''
           if cleanup not in source:
               raise RuntimeError("bootstrap cleanup anchor missing")
           source = source.replace(cleanup, "\n")
