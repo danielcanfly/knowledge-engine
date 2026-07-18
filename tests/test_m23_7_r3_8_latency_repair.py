@@ -161,7 +161,10 @@ def _evaluation() -> dict[str, Any]:
 
 def test_contract_freezes_placed_worker_and_unchanged_budget() -> None:
     contract = subject.canonical_contract()
-    assert contract["contract_sha256"] == subject.CONTRACT_SHA256
+    assert (
+        contract["contract_sha256"]
+        == "d081ab57a85b4ea813aeb813090b597340b8c3842ff78d7022d38501e6c282ba"
+    )
     assert contract["latency"]["maximum_worker_internal_shadow_ms"] == 1200
     assert contract["latency"]["threshold_changed"] is False
     assert contract["queries"]["workers_ai_binding_calls"] == 1
