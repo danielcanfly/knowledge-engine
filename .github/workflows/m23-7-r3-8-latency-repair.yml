@@ -12,6 +12,7 @@ on:
       - "docs/architecture/m23-7-r3-8-latency-repair.md"
       - "workers/m23-7-r3-8-latency-repair/worker.mjs"
       - "workers/m23-7-r3-8-latency-repair/worker.test.mjs"
+      - "workers/m23-7-r3-8-latency-repair/worker.parallel.test.mjs"
       - "workers/m23-7-r3-8-latency-repair/.gitignore"
       - ".github/workflows/m23-7-r3-8-latency-repair.yml"
   workflow_dispatch:
@@ -56,7 +57,7 @@ jobs:
         run: pytest -q tests/test_m23_7_r3_8_latency_repair.py
       - name: R3.8 Worker regressions
         working-directory: workers/m23-7-r3-8-latency-repair
-        run: node --test worker.test.mjs
+        run: node --test worker.test.mjs worker.parallel.test.mjs
       - name: Verify deterministic contract and fixture
         run: |
           python - <<'PY'
@@ -132,10 +133,12 @@ jobs:
           assert "/points/scroll" not in worker
           assert "with_payload: true" not in worker
           assert "with_payload: PAYLOAD_FIELDS" in worker
-          assert "payload.section_id" in worker
+          assert "raw.payload.section_id" in worker
           assert "CANDIDATE_FILTER" not in worker
-          assert "validateCandidatePayload(raw)" in worker
+          assert "validateRankedPoint(raw)" in worker
           assert "with_vector: false" in worker
+          assert "PARALLEL_BATCH_SIZE = 6" in worker
+          assert "executeParallelObservation" in worker
           assert not list(
               Path("workers/m23-7-r3-8-latency-repair").glob(
                   "wrangler.local.jsonc"
@@ -161,3 +164,4 @@ jobs:
             tests/test_m23_7_r3_8_latency_repair.py
           node --check workers/m23-7-r3-8-latency-repair/worker.mjs
           node --check workers/m23-7-r3-8-latency-repair/worker.test.mjs
+          node --check workers/m23-7-r3-8-latency-repair/worker.parallel.test.mjs
