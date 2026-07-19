@@ -11,7 +11,7 @@ from scripts import m23_7_r3_8_remote_operator as base
 from scripts import m23_7_r3_8_remote_operator_placement_v2 as placement_v2
 
 REGION_CONTRACT_SHA256 = (
-    "6ef848fdfe1ac1379f2522e814605efce3bdd48169e6b23c744ec18c3312930b"
+    "0d9bf346f4e98f0dd63863b08edb693698e9d0e76c9b11b9ef8e261646b1e1b2"
 )
 _PROVIDER_MAP = {"aws": "aws", "gcp": "gcp", "azure": "azure"}
 _AWS_REGION = re.compile(r"^[a-z]{2}(?:-[a-z0-9]+)+-\d+$")
