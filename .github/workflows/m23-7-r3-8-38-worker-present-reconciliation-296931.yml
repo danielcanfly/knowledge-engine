@@ -1,0 +1,106 @@
+name: M23.7 R3.8.38 Worker-Present Reconciliation 296931
+
+on:
+  pull_request:
+    paths:
+      - ".github/evidence/m23-7-r3-8-38/worker-present-reconciliation-29693171225.json"
+      - "docs/architecture/m23-7-r3-8-38-worker-present-reconciliation-29693171225.md"
+      - ".github/workflows/m23-7-r3-8-38-worker-present-reconciliation-296931.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and seal ancestry
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor f7e0e7fe33d4d327685cc862bc6605b76600d289 HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify deterministic independent reconciliation
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path('.github/evidence/m23-7-r3-8-38/worker-present-reconciliation-29693171225.json')
+          value = json.loads(path.read_text(encoding='utf-8'))
+          digest = value.pop('reconciliation_sha256')
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == '0bf9ec2941636550ade2b857e28218009f545aa800ad1964713b1929188e552a'
+          assert value['reconciliation_issue'] == 943
+          seal = value['seal']
+          assert seal['pr'] == 942
+          assert seal['accepted_head'] == '6ec46d418da8aaa0e25474afac8fe769fc1d7f48'
+          assert seal['merge_sha'] == 'f7e0e7fe33d4d327685cc862bc6605b76600d289'
+          assert seal['sha256'] == '67952491ef6fe004ddb33ca9672b0385ce207d5c21c69ff02b49bf6f69218983'
+          assert seal['exact_head_runs'] == {
+              'architecture_canon': 29693437686,
+              'ci': 29693437707,
+              'graph_v2': 29693437694,
+              'seal': 29693437683,
+          }
+          assert value['artifact']['artifact_id'] == 8444193996
+          assert value['result']['reconciliation_accepted'] is True
+          assert value['result']['worker_state'] == 'worker_present'
+          assert value['result']['retained_worker_cleanup_required'] is True
+          assert value['result']['next_gate'] == 'separately_governed_exact_worker_deletion_authorization'
+          assert value['worker']['name'] == 'knowledge-engine-r3-8-29667556969'
+          assert value['worker']['target_version_identity'] == 'd8e7a3c5-1c14-4ae8-8ff1-ea8e6f80afda'
+          assert value['worker']['version_identities'] == [
+              '2db04b30-6e49-4bd2-9b58-13eda5b3968d',
+              '6612f564-7ef0-4e10-93b0-039142e5929f',
+              'a92db2fe-6ccd-4c4a-8c4e-1f8832e49dad',
+              'd8e7a3c5-1c14-4ae8-8ff1-ea8e6f80afda',
+          ]
+          assert value['worker']['deployment_identities'] == [
+              '190b3ad3-e9d5-4229-ae60-95f0a1dd6f8f',
+              '2beff67b-6122-4cb2-a1f5-ebb6387f01c4',
+              '33933e68-38f2-4f57-988c-86a452544abb',
+              '9434bcd7-dc05-4f70-9d35-fcaa61b67d48',
+          ]
+          authority = value['authority']
+          assert authority['worker_deletion_authorized'] is False
+          assert authority['blocker_clearance_authorized'] is False
+          assert authority['fresh_observation_authorized'] is False
+          assert authority['m23_7_closure_authorized'] is False
+          assert value['retained_blockers'] == [
+              'blocked_pending_retrieval_quality',
+              'blocked_pending_latency',
+          ]
+          PY
+      - name: Verify exact three-file scope and runtime preservation
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {
+              '.github/evidence/m23-7-r3-8-38/worker-present-reconciliation-29693171225.json',
+              'docs/architecture/m23-7-r3-8-38-worker-present-reconciliation-29693171225.md',
+              '.github/workflows/m23-7-r3-8-38-worker-present-reconciliation-296931.yml',
+          }
+          changed = set(subprocess.check_output(
+              ['git', 'diff', '--name-only', 'f7e0e7fe33d4d327685cc862bc6605b76600d289', 'HEAD'], text=True
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code f7e0e7fe33d4d327685cc862bc6605b76600d289 HEAD -- \
+            scripts/m23_7_r3_8_remote_recovery_probe.py \
+            scripts/m23_7_r3_8_remote_recovery_probe_296675.py \
+            .github/workflows/m23-7-r3-8-9-recovery-probe.yml \
+            scripts/m23_7_r3_8_remote_operator.py \
+            scripts/m23_7_r3_8_remote_operator_region_v3.py \
+            scripts/m23_7_r3_8_remote_delete.py \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            workers/m23-7-r3-8-latency-repair/worker.mjs
