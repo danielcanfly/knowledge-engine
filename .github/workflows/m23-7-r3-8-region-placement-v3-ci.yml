@@ -1,0 +1,111 @@
+name: M23.7 Repair R3.8 Region Placement v3
+
+on:
+  pull_request:
+    paths:
+      - "scripts/m23_7_r3_8_remote_operator_region_v3.py"
+      - "scripts/m23_7_r3_8_remote_entrypoint_region_v3.py"
+      - "tests/test_m23_7_r3_8_region_placement_v3.py"
+      - "pilot/m23/m23-7-r3-8-region-placement-v3-contract.json"
+      - "docs/architecture/m23-7-r3-8-region-placement-v3.md"
+      - ".github/workflows/m23-7-r3-8-region-placement-v3-ci.yml"
+      - ".github/workflows/m23-7-r3-8-remote-observe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  region-placement:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify exact head and v2 ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor d0459fee41f747fb79cd32feaa673ef6fcf9e58a HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install and lint bounded scope
+        run: |
+          python -m pip install -e '.[dev]'
+          ruff check \
+            scripts/m23_7_r3_8_remote_operator_region_v3.py \
+            scripts/m23_7_r3_8_remote_entrypoint_region_v3.py \
+            tests/test_m23_7_r3_8_region_placement_v3.py
+          python -m py_compile \
+            scripts/m23_7_r3_8_remote_operator_region_v3.py \
+            scripts/m23_7_r3_8_remote_entrypoint_region_v3.py
+      - name: Run region and preserved placement regressions
+        run: |
+          pytest -q \
+            tests/test_m23_7_r3_8_region_placement_v3.py \
+            tests/test_m23_7_r3_8_placement_semantics_v2.py \
+            tests/test_m23_7_r3_8_remote_operator.py \
+            tests/test_m23_7_r3_8_remote_entrypoint.py \
+            tests/test_m23_7_r3_8_latency_repair.py
+          node --test workers/m23-7-r3-8-latency-repair/worker.test.mjs
+      - name: Verify deterministic region contract
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m23/m23-7-r3-8-region-placement-v3-contract.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          digest = value.pop("contract_sha256")
+          encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == digest
+          assert digest == "0d9bf346f4e98f0dd63863b08edb693698e9d0e76c9b11b9ef8e261646b1e1b2"
+          assert value["issue"] == 937
+          assert value["trigger_run_id"] == "29667556969"
+          assert value["placement"]["target_type"] == "region"
+          assert value["placement"]["raw_hostname_persisted"] is False
+          assert value["placement"]["derived_region_persisted"] is False
+          assert value["preservation"]["maximum_worker_internal_shadow_ms"] == 1200
+          assert value["preservation"]["blocker_clearance_authorized"] is False
+          assert value["preservation"]["m23_7_closure_authorized"] is False
+          PY
+      - name: Verify dispatch and exact repair scope
+        run: |
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          workflow = Path(".github/workflows/m23-7-r3-8-remote-observe.yml").read_text(encoding="utf-8")
+          assert "m23_7_r3_8_remote_entrypoint_region_v3" in workflow
+          assert "Run one region-placed Worker observation" in workflow
+          assert "GITHUB_RUN_ATTEMPT" in workflow
+          allowed = {
+              "scripts/m23_7_r3_8_remote_operator_region_v3.py",
+              "scripts/m23_7_r3_8_remote_entrypoint_region_v3.py",
+              "tests/test_m23_7_r3_8_region_placement_v3.py",
+              "pilot/m23/m23-7-r3-8-region-placement-v3-contract.json",
+              "docs/architecture/m23-7-r3-8-region-placement-v3.md",
+              ".github/workflows/m23-7-r3-8-region-placement-v3-ci.yml",
+              ".github/workflows/m23-7-r3-8-remote-observe.yml",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "d0459fee41f747fb79cd32feaa673ef6fcf9e58a", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --exit-code d0459fee41f747fb79cd32feaa673ef6fcf9e58a HEAD -- \
+            scripts/m23_7_r3_8_remote_operator.py \
+            scripts/m23_7_r3_8_remote_entrypoint.py \
+            scripts/m23_7_r3_8_remote_operator_placement_v2.py \
+            scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py \
+            src/knowledge_engine/m23_7_r3_8_latency_repair.py \
+            workers/m23-7-r3-8-latency-repair/worker.mjs \
+            pilot/m23/m23-7-r3-8-latency-repair-contract.json
