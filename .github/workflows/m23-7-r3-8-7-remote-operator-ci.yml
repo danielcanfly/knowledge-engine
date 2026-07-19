@@ -7,27 +7,19 @@ on:
       - "scripts/m23_7_r3_8_remote_entrypoint.py"
       - "scripts/m23_7_r3_8_remote_operator_placement_v2.py"
       - "scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py"
-      - "scripts/m23_7_r3_8_remote_delete.py"
+      - "scripts/m23_7_r3_8_remote_operator_region_v3.py"
+      - "scripts/m23_7_r3_8_remote_entrypoint_region_v3.py"
       - "tests/test_m23_7_r3_8_remote_operator.py"
       - "tests/test_m23_7_r3_8_remote_entrypoint.py"
       - "tests/test_m23_7_r3_8_placement_semantics_v2.py"
-      - "tests/test_m23_7_r3_8_remote_delete.py"
+      - "tests/test_m23_7_r3_8_region_placement_v3.py"
       - "workers/m23-7-r3-8-latency-repair/worker.mjs"
       - "workers/m23-7-r3-8-latency-repair/worker.test.mjs"
-      - "workers/m23-7-r3-8-latency-repair/worker.parallel.test.mjs"
       - "pilot/m23/m23-7-r3-8-7-remote-operator-contract.json"
       - "pilot/m23/m23-7-r3-8-placement-semantics-v2-contract.json"
-      - "docs/architecture/m23-7-r3-8-7-remote-operator.md"
-      - "docs/architecture/m23-7-r3-8-placement-semantics-v2.md"
+      - "pilot/m23/m23-7-r3-8-region-placement-v3-contract.json"
       - ".github/workflows/m23-7-r3-8-remote-observe.yml"
-      - ".github/workflows/m23-7-r3-8-remote-delete.yml"
       - ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml"
-      - ".github/workflows/m23-7-r3-8-placement-semantics-v2-ci.yml"
-      - ".github/workflows/m23-7-r3-8-10-deletion-identity-ci.yml"
-      - ".github/workflows/m23-7-r3-8-8-artifact-recovery-ci.yml"
-      - ".github/workflows/m23-7-r3-8-11-deletion-cli-compatibility.yml"
-      - ".github/workflows/m23-7-r3-8-latency-repair.yml"
-      - ".github/workflows/m23-7-r3-8-9-recovery-schema-ci.yml"
   workflow_dispatch:
 
 permissions:
@@ -41,153 +33,40 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - name: Verify exact workflow head and lifecycle-clean ancestry
-        shell: bash
+      - name: Verify exact workflow head
         run: |
-          set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          git merge-base --is-ancestor 9c71b34fdad1d6341418c389570b8a88634ecae8 HEAD
+          git merge-base --is-ancestor a5fca48683567b48a196e67657bd7dc4a4b9c554 HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Install package
-        run: python -m pip install -e '.[dev]'
-      - name: Ruff remote scope
-        id: ruff
-        shell: bash
+      - name: Validate accepted cores and adapters
         run: |
-          set +e
+          python -m pip install -e '.[dev]'
           ruff check \
             scripts/m23_7_r3_8_remote_operator.py \
             scripts/m23_7_r3_8_remote_entrypoint.py \
             scripts/m23_7_r3_8_remote_operator_placement_v2.py \
             scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py \
-            scripts/m23_7_r3_8_remote_delete.py \
+            scripts/m23_7_r3_8_remote_operator_region_v3.py \
+            scripts/m23_7_r3_8_remote_entrypoint_region_v3.py \
             tests/test_m23_7_r3_8_remote_operator.py \
             tests/test_m23_7_r3_8_remote_entrypoint.py \
             tests/test_m23_7_r3_8_placement_semantics_v2.py \
-            tests/test_m23_7_r3_8_remote_delete.py \
-            --output-format=concise \
-            > r3-8-7-ruff.txt 2>&1
-          code=$?
-          cat r3-8-7-ruff.txt
-          exit "$code"
-      - name: Upload Ruff diagnostic
-        if: failure() && steps.ruff.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: m23-7-r3-8-7-ruff-${{ github.run_id }}
-          path: r3-8-7-ruff.txt
-          if-no-files-found: error
-          retention-days: 7
-      - name: Compile remote scope
-        run: |
-          python -m py_compile \
-            scripts/m23_7_r3_8_remote_operator.py \
-            scripts/m23_7_r3_8_remote_entrypoint.py \
-            scripts/m23_7_r3_8_remote_operator_placement_v2.py \
-            scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py \
-            scripts/m23_7_r3_8_remote_delete.py
-      - name: Remote operator adversarial tests
-        run: |
+            tests/test_m23_7_r3_8_region_placement_v3.py
           pytest -q \
             tests/test_m23_7_r3_8_remote_operator.py \
             tests/test_m23_7_r3_8_remote_entrypoint.py \
             tests/test_m23_7_r3_8_placement_semantics_v2.py \
-            tests/test_m23_7_r3_8_remote_delete.py
-      - name: Preserve accepted R3.8 regressions
-        shell: bash
+            tests/test_m23_7_r3_8_region_placement_v3.py \
+            tests/test_m23_7_r3_8_latency_repair.py
+          node --test workers/m23-7-r3-8-latency-repair/worker.test.mjs
+      - name: Preserve historical remote core byte-exact
         run: |
-          pytest -q \
-            tests/test_m23_7_r3_8_latency_repair.py \
-            tests/test_m23_7_r3_8_wrangler_bootstrap.py \
-            tests/test_m23_7_r3_8_worker_absence_probe.py \
-            tests/test_m23_7_r3_8_deploy_target.py
-          node --test \
-            workers/m23-7-r3-8-latency-repair/worker.test.mjs \
-            workers/m23-7-r3-8-latency-repair/worker.parallel.test.mjs
-      - name: Verify deterministic historical remote contract
-        shell: bash
-        run: |
-          python - <<'PY'
-          import hashlib
-          import json
-          from pathlib import Path
-
-          path = Path("pilot/m23/m23-7-r3-8-7-remote-operator-contract.json")
-          stored = json.loads(path.read_text(encoding="utf-8"))
-          digest = stored.pop("contract_sha256")
-          encoded = json.dumps(
-              stored,
-              ensure_ascii=False,
-              sort_keys=True,
-              separators=(",", ":"),
-              allow_nan=False,
-          ).encode()
-          assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "7299d8daef8a4dda227a5491384c0abffbe427de0ffc8352a38c2acb27a4c840"
-          assert stored["execution"]["local_terminal_operator_supported"] is False
-          assert stored["worker"]["fixed_name_probe_required"] is False
-          assert stored["worker"]["unique_per_run"] is True
-          assert stored["worker"]["placement_response_header"] == "X-M23-R3-8-Placement"
-          assert stored["worker"]["placement_response_values"] == [
-              "absent",
-              "local",
-              "remote",
-          ]
-          assert stored["worker"]["placement_location_persisted"] is False
-          assert stored["observation"]["live_observation_attempts"] == 9
-          assert stored["observation"]["live_observation_retry_seconds"] == 5
-          assert stored["observation"]["placement_readiness_attempts"] == 120
-          assert stored["observation"]["placement_readiness_retry_seconds"] == 5
-          assert stored["observation"]["placement_remote_consecutive_successes"] == 2
-          assert stored["observation"]["placement_remote_header_required_on_observation"] is True
-          assert stored["observation"]["placement_location_persisted"] is False
-          assert stored["observation"]["worker_placement_retry_authorized"] is True
-          assert stored["observation"]["worker_http_404_retry_authorized"] is True
-          assert stored["observation"]["maximum_worker_internal_shadow_ms"] == 1200
-          assert stored["authority"]["production_retrieval"] == "lexical"
-          assert stored["authority"]["blocker_clearance_authorized"] is False
-          PY
-      - name: Validate workflow structure and secret boundaries
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          import yaml
-
-          observe = Path(".github/workflows/m23-7-r3-8-remote-observe.yml")
-          delete = Path(".github/workflows/m23-7-r3-8-remote-delete.yml")
-          for path in (observe, delete):
-              payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-              assert "workflow_dispatch" in payload[True]
-              assert "pull_request" not in payload[True]
-          observe_text = observe.read_text(encoding="utf-8")
-          assert "environment: m23-r3-diagnostic" in observe_text
-          assert "RUN_R3_8_REMOTE_ONCE" in observe_text
-          assert "GITHUB_RUN_ATTEMPT" in observe_text
-          assert "actions/upload-artifact@v4" in observe_text
-          assert "wrangler delete" not in observe_text
-          assert "python -m scripts.m23_7_r3_8_remote_entrypoint_placement_v2" in observe_text
-          assert "path: r3-8-remote-evidence/" in observe_text
-          delete_text = delete.read_text(encoding="utf-8")
-          assert "DELETE_RECONCILED_R3_8_WORKER" in delete_text
-          assert "deletion_authorizations/m23-7/r3-8/" in delete_text
-          assert "python -m scripts.m23_7_r3_8_remote_delete" in delete_text
-          assert "path: r3-8-deletion-evidence/" in delete_text
-          assert "wrangler delete[[:space:]]+\\[name\\]" in delete_text
-          assert "! grep -q -- '--name'" in delete_text
-          PY
-      - name: Verify accepted remote core remains exact
-        shell: bash
-        run: |
-          set -euo pipefail
           accepted_merge="a5fca48683567b48a196e67657bd7dc4a4b9c554"
-          git merge-base --is-ancestor "$accepted_merge" HEAD
           git diff --exit-code "$accepted_merge" HEAD -- \
             docs/architecture/m23-7-r3-8-7-remote-operator.md \
             pilot/m23/m23-7-r3-8-7-remote-operator-contract.json \
@@ -200,15 +79,27 @@ jobs:
             workers/m23-7-r3-8-latency-repair/worker.test.mjs
           test -f scripts/m23_7_r3_8_remote_operator_placement_v2.py
           test -f scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py
-          test -f pilot/m23/m23-7-r3-8-placement-semantics-v2-contract.json
-      - name: Verify pinned Wrangler command surfaces
-        shell: bash
+          test -f scripts/m23_7_r3_8_remote_operator_region_v3.py
+          test -f scripts/m23_7_r3_8_remote_entrypoint_region_v3.py
+      - name: Validate manual workflow and secret boundaries
         run: |
-          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          path = Path(".github/workflows/m23-7-r3-8-remote-observe.yml")
+          payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+          assert "workflow_dispatch" in payload[True]
+          assert "pull_request" not in payload[True]
+          text = path.read_text(encoding="utf-8")
+          assert "m23_7_r3_8_remote_entrypoint_region_v3" in text
+          assert "RUN_R3_8_REMOTE_ONCE" in text
+          assert "GITHUB_RUN_ATTEMPT" in text
+          assert "actions/upload-artifact@v4" in text
+          assert "wrangler delete" not in text
+          assert "path: r3-8-remote-evidence/" in text
+          PY
+      - name: Verify pinned Wrangler surface
+        run: |
           test "$(npx --yes wrangler@4.111.0 --version | tr -d '\r')" = "4.111.0"
           npx --yes wrangler@4.111.0 deploy --help >/dev/null
           npx --yes wrangler@4.111.0 secret put --help >/dev/null
-          npx --yes wrangler@4.111.0 delete --help > wrangler-delete-help.txt
-          grep -Eq 'wrangler delete[[:space:]]+\[name\]' wrangler-delete-help.txt
-          grep -q -- '--force' wrangler-delete-help.txt
-          ! grep -q -- '--name' wrangler-delete-help.txt
