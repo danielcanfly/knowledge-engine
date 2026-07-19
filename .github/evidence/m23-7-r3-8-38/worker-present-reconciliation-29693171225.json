@@ -1,0 +1,69 @@
+{
+  "artifact": {
+    "artifact_id": 8444193996,
+    "receipt_file_sha256": "a71010a194e7e27ba5178b506a80fcc0ce6e41f5572a870c966943dfd3c38c95",
+    "receipt_self_digest": "95cad3e49f8fc925a055d64b9c974340d5f6d5369109d993d9b75c4d7dccf35e",
+    "zip_sha256": "8814cc61ef129646f3e70992b193ec8f3c01b9b19e7ee8783b93fe425f3e9e13"
+  },
+  "authority": {
+    "blocker_clearance_authorized": false,
+    "fresh_observation_authorized": false,
+    "m23_7_closure_authorized": false,
+    "parent_closure_authorized": false,
+    "promotion_eligibility_granted": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "worker_deletion_authorized": false,
+    "worker_deploy_authorized": false,
+    "worker_secret_mutation_authorized": false
+  },
+  "observation": {
+    "affected_engine_sha": "d0459fee41f747fb79cd32feaa673ef6fcf9e58a",
+    "affected_run_id": "29667556969",
+    "probe_engine_sha": "9faa0e300f68f51650bcc469d7b1284e98800e26",
+    "recovery_run_id": "29693171225"
+  },
+  "reconciliation_issue": 943,
+  "reconciliation_sha256": "0bf9ec2941636550ade2b857e28218009f545aa800ad1964713b1929188e552a",
+  "result": {
+    "next_gate": "separately_governed_exact_worker_deletion_authorization",
+    "production_retrieval": "lexical",
+    "reconciliation_accepted": true,
+    "retained_worker_cleanup_required": true,
+    "worker_state": "worker_present"
+  },
+  "retained_blockers": [
+    "blocked_pending_retrieval_quality",
+    "blocked_pending_latency"
+  ],
+  "schema_version": "knowledge-engine-m23-7-r3-8-38-worker-present-reconciliation/v1",
+  "seal": {
+    "accepted_head": "6ec46d418da8aaa0e25474afac8fe769fc1d7f48",
+    "exact_head_runs": {
+      "architecture_canon": 29693437686,
+      "ci": 29693437707,
+      "graph_v2": 29693437694,
+      "seal": 29693437683
+    },
+    "merge_sha": "f7e0e7fe33d4d327685cc862bc6605b76600d289",
+    "pr": 942,
+    "sha256": "67952491ef6fe004ddb33ca9672b0385ce207d5c21c69ff02b49bf6f69218983"
+  },
+  "worker": {
+    "deployment_identities": [
+      "190b3ad3-e9d5-4229-ae60-95f0a1dd6f8f",
+      "2beff67b-6122-4cb2-a1f5-ebb6387f01c4",
+      "33933e68-38f2-4f57-988c-86a452544abb",
+      "9434bcd7-dc05-4f70-9d35-fcaa61b67d48"
+    ],
+    "name": "knowledge-engine-r3-8-29667556969",
+    "target_version_identity": "d8e7a3c5-1c14-4ae8-8ff1-ea8e6f80afda",
+    "version_identities": [
+      "2db04b30-6e49-4bd2-9b58-13eda5b3968d",
+      "6612f564-7ef0-4e10-93b0-039142e5929f",
+      "a92db2fe-6ccd-4c4a-8c4e-1f8832e49dad",
+      "d8e7a3c5-1c14-4ae8-8ff1-ea8e6f80afda"
+    ]
+  }
+}
