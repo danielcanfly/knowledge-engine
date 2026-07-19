@@ -70,13 +70,11 @@ jobs:
       - name: Verify canonical delete validator accepts authorization
         run: |
           python - <<'PY'
-          import json
           from pathlib import Path
           from scripts.m23_7_r3_8_remote_delete import validate_authorization
 
           path = Path('deletion_authorizations/m23-7/r3-8/knowledge-engine-r3-8-29667556969.json')
-          value = json.loads(path.read_text(encoding='utf-8'))
-          validated = validate_authorization(value)
+          validated = validate_authorization(path)
           assert validated['worker_name'] == 'knowledge-engine-r3-8-29667556969'
           PY
       - name: Verify exact three-file scope and runtime preservation
