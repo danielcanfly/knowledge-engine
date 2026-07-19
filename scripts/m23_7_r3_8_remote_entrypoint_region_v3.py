@@ -10,7 +10,7 @@ from typing import Any
 
 ENTRY_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-entrypoint-region-v3/v1"
 REGION_CONTRACT_SHA256 = (
-    "6ef848fdfe1ac1379f2522e814605efce3bdd48169e6b23c744ec18c3312930b"
+    "0d9bf346f4e98f0dd63863b08edb693698e9d0e76c9b11b9ef8e261646b1e1b2"
 )
 
 
