@@ -112,10 +112,13 @@ jobs:
           assert "GITHUB_RUN_ATTEMPT" in workflow
           allowed = {
               ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
+              ".github/workflows/m23-7-r3-8-placement-semantics-v2-ci.yml",
               ".github/workflows/m23-7-r3-8-region-placement-v3-ci.yml",
               ".github/workflows/m23-7-r3-8-remote-observe.yml",
               "scripts/m23_7_r3_8_remote_operator.py",
+              "scripts/m23_7_r3_8_remote_operator_placement_v2.py",
               "tests/test_m23_7_r3_8_remote_operator.py",
+              "tests/test_m23_7_r3_8_placement_semantics_v2.py",
           }
           changed = set(subprocess.check_output(
               ["git", "diff", "--name-only", scope_base, "HEAD"],
@@ -125,7 +128,6 @@ jobs:
           PY
           git diff --exit-code "${{ github.event.pull_request.base.sha || '3a25fbde6b1b16061478632abd0844968790f84e' }}" HEAD -- \
             scripts/m23_7_r3_8_remote_entrypoint.py \
-            scripts/m23_7_r3_8_remote_operator_placement_v2.py \
             scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py \
             scripts/m23_7_r3_8_remote_operator_region_v3.py \
             scripts/m23_7_r3_8_remote_entrypoint_region_v3.py \

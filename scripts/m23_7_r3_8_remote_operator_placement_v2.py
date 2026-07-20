@@ -28,7 +28,6 @@ def worker_ready_response(
     return (
         status_code == 400
         and payload == {"status": "error", "code": "request-schema-drift"}
-        and placement in ALLOWED_PLACEMENT_CLASSES
     )
 
 
