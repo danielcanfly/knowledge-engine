@@ -45,6 +45,14 @@ WORKER_PRESENT_BUNDLES = (
         ),
     ),
 )
+ABSENCE_SEAL_PATH = Path(
+    ".github/evidence/m23-7-r3-8-governed-defer/"
+    "deferred-workers-absence-seal-29713746890-29713753482.json"
+)
+ABSENCE_RECONCILIATION_PATH = Path(
+    ".github/evidence/m23-7-r3-8-governed-defer/"
+    "deferred-workers-absence-reconciliation-29713746890-29713753482.json"
+)
 
 
 def _load(path: Path) -> dict:
@@ -147,3 +155,40 @@ def test_worker_present_recovery_seals_authorize_exact_deletion() -> None:
         assert authorization["worker_deployment_ids"] == receipt["deployments"][
             "identities"
         ]
+
+
+def test_deferred_workers_absence_proof_cleans_lifecycle_without_closure() -> None:
+    seal = _load(ABSENCE_SEAL_PATH)
+    reconciliation = _load(ABSENCE_RECONCILIATION_PATH)
+    _assert_self_digest(seal, "seal_sha256")
+    _assert_self_digest(reconciliation, "reconciliation_sha256")
+
+    assert reconciliation["seal_sha256"] == seal["seal_sha256"]
+    assert seal["result"] == {
+        "worker_lifecycle_clean": True,
+        "control_plane_absence_proven": True,
+        "delete_dispatched_once_per_worker": True,
+        "destructive_deletion_replayed": False,
+        "production_retrieval": "lexical",
+        "semantic_live_acceptance_complete": False,
+        "m23_7_closure_authorized": False,
+        "blocker_clearance_eligible": False,
+    }
+    assert reconciliation["result"] == {
+        "post_delete_absence_reconciled": True,
+        "worker_lifecycle_clean": True,
+        "control_plane_absence_proven": True,
+        "production_retrieval": "lexical",
+        "semantic_live_acceptance_complete": False,
+        "m23_7_closure_authorized": False,
+        "next_gate": "product_lane_or_future_stable_harness_revisit",
+    }
+    for worker in seal["workers"]:
+        probe = worker["post_delete_probe"]
+        assert probe["worker_state"] == "worker_absent"
+        assert probe["versions"]["http_status"] == 404
+        assert probe["versions"]["error_codes"] == [10007]
+        assert probe["versions"]["identity_count"] == 0
+        assert probe["deployments"]["http_status"] == 404
+        assert probe["deployments"]["error_codes"] == [10007]
+        assert probe["deployments"]["identity_count"] == 0
