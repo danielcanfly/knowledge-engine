@@ -47,10 +47,11 @@ def test_generated_config_uses_region_hint_and_no_hostname(tmp_path: Path) -> No
     output = tmp_path / "wrangler.jsonc"
     identity = subject.generate_wrangler_config(
         "https://cluster.us-east-1-1.aws.cloud.qdrant.io:6333",
-        "knowledge-engine-r3-8-12345",
+        base.STABLE_DIAGNOSTIC_WORKER_NAME,
         output,
     )
     payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["name"] == base.STABLE_DIAGNOSTIC_WORKER_NAME
     assert payload["placement"] == {"region": "aws:us-east-1"}
     assert "hostname" not in payload["placement"]
     assert "cluster.us-east-1-1.aws.cloud.qdrant.io" not in output.read_text(

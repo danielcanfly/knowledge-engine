@@ -87,6 +87,7 @@ jobs:
               "scripts/m23_7_r3_8_remote_operator_placement_v2.py",
               "tests/test_m23_7_r3_8_remote_operator.py",
               "tests/test_m23_7_r3_8_placement_semantics_v2.py",
+              "tests/test_m23_7_r3_8_region_placement_v3.py",
           }
           changed = set(subprocess.check_output(
               ["git", "diff", "--name-only", "${{ github.event.pull_request.base.sha || '3a25fbde6b1b16061478632abd0844968790f84e' }}", "HEAD"],

@@ -21,6 +21,7 @@ DEFAULT_EVIDENCE_KEY = (
 EXPECTED_BUCKET = "llm-wiki-bucket"
 WRANGLER_VERSION = "4.111.0"
 WORKER_PREFIX = "knowledge-engine-r3-8-"
+STABLE_DIAGNOSTIC_WORKER_NAME = "knowledge-engine-r3-8-diagnostic"
 WORKER_ROUTE = "/v1/m23-7-r3-8/observe"
 MAX_EVIDENCE_BYTES = 20_000_000
 MAX_WRANGLER_OUTPUT_BYTES = 1_000_000
@@ -50,7 +51,9 @@ ATOMIC_SECRET_BINDINGS = (
 )
 
 _HEX_40 = re.compile(r"^[0-9a-f]{40}$")
-_WORKER = re.compile(r"^knowledge-engine-r3-8-[0-9]{1,20}$")
+_WORKER = re.compile(
+    rf"^(?:{re.escape(STABLE_DIAGNOSTIC_WORKER_NAME)}|knowledge-engine-r3-8-[0-9]{{1,20}})$"
+)
 
 
 class RemoteOperatorError(RuntimeError):
@@ -85,10 +88,7 @@ def derive_worker_name(run_id: str, run_attempt: int) -> str:
         raise RemoteOperatorError("invalid_run_id")
     if run_attempt != 1:
         raise RemoteOperatorError("rerun_attempt_forbidden")
-    name = f"{WORKER_PREFIX}{run_id}"
-    if not _WORKER.fullmatch(name) or len(name) > 63:
-        raise RemoteOperatorError("invalid_worker_name")
-    return name
+    return STABLE_DIAGNOSTIC_WORKER_NAME
 
 
 def validate_evidence_key(value: str) -> str:
@@ -193,6 +193,15 @@ def wrangler_deploy_command(
         str(secrets_file),
         "--keep-vars",
     ]
+
+
+def stable_worker_lifecycle(worker_deployed: bool) -> dict[str, Any]:
+    return {
+        "stable_diagnostic_service": True,
+        "per_run_worker_created": False,
+        "diagnostic_service_retained": worker_deployed,
+        "per_run_deletion_authorization_required": False,
+    }
 
 
 def parse_deploy_identity(output_file: Path, worker_name: str) -> dict[str, str]:
@@ -577,6 +586,9 @@ def execute(args: argparse.Namespace) -> int:
                     raise
             receipt["started_at"] = started_at
             receipt["completed_at"] = subject.utc_now()
+            receipt["authority"]["transient_diagnostic_worker_deployed"] = False
+            receipt["authority"]["stable_diagnostic_worker_deployed"] = True
+            receipt["exit"]["diagnostic_worker_deletion_required_after_reconciliation"] = False
             receipt["remote_operator"] = {
                 "schema_version": REMOTE_RECEIPT_SCHEMA,
                 "github_run_id": args.run_id,
@@ -584,7 +596,8 @@ def execute(args: argparse.Namespace) -> int:
                 "engine_sha": expected_head,
                 "worker_name": worker_name,
                 "worker_version_id": worker_version_id,
-                "worker_retained": True,
+                "worker_retained": False,
+                "stable_worker_lifecycle": stable_worker_lifecycle(worker_deployed),
                 "local_terminal_operator_used": False,
                 "readiness": readiness_summary(
                     readiness_timeline,
@@ -614,8 +627,9 @@ def execute(args: argparse.Namespace) -> int:
             "worker_name": worker_name,
             "worker_version_id": worker_version_id,
             "worker_deployed": worker_deployed,
-            "worker_retained": True,
-            "deletion_authorization_required": True,
+            "worker_retained": False,
+            "stable_worker_lifecycle": stable_worker_lifecycle(worker_deployed),
+            "deletion_authorization_required": False,
             "atomic_deploy": atomic_secrets,
             "receipt_file_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
             "readiness": readiness_summary(
@@ -643,7 +657,8 @@ def execute(args: argparse.Namespace) -> int:
             "worker_name": worker_name or None,
             "worker_version_id": worker_version_id or None,
             "worker_deployed": worker_deployed,
-            "worker_retained": worker_deployed,
+            "worker_retained": False,
+            "stable_worker_lifecycle": stable_worker_lifecycle(worker_deployed),
             "evidence_size_bytes": evidence_size,
             "arbitrary_exception_text_persisted": False,
             "credentials_persisted": False,
@@ -669,8 +684,9 @@ def execute(args: argparse.Namespace) -> int:
             "worker_name": worker_name or None,
             "worker_version_id": worker_version_id or None,
             "worker_deployed": worker_deployed,
-            "worker_retained": worker_deployed,
-            "deletion_authorization_required": worker_deployed,
+            "worker_retained": False,
+            "stable_worker_lifecycle": stable_worker_lifecycle(worker_deployed),
+            "deletion_authorization_required": False,
             "atomic_deploy": atomic_secrets,
             "failure_code": code,
             "failure_stage": stage,
