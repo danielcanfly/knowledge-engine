@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import threading
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -295,7 +295,7 @@ class Runtime:
             "non_answer_reason": not_found_reason,
         }
 
-    def query(
+    def _query_lexical_envelope(
         self,
         query: str,
         allowed_audiences: set[str],
@@ -345,7 +345,78 @@ class Runtime:
             "not_found_reason": retrieved["not_found_reason"],
             "non_answer_reason": retrieved["not_found_reason"],
         }
+        return lexical_result
+
+    def query(
+        self,
+        query: str,
+        allowed_audiences: set[str],
+        *,
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        lexical_result = self._query_lexical_envelope(
+            query,
+            allowed_audiences,
+            limit=limit,
+        )
         return apply_m24_flagged_retrieval(
             lexical_result,
             M24RetrievalRuntimeSettings.from_env(channel_default=self.channel),
         )
+
+    def query_m24_shadow_preview(
+        self,
+        query: str,
+        allowed_audiences: set[str],
+        *,
+        query_vector: Sequence[float],
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        settings = M24RetrievalRuntimeSettings.from_env(channel_default=self.channel)
+        if not settings.shadow_requested:
+            raise IntegrityError(
+                "M24-RUNTIME-113 shadow preview requires semantic/hybrid shadow mode"
+            )
+
+        lexical_result = self._query_lexical_envelope(
+            query,
+            allowed_audiences,
+            limit=limit,
+        )
+        semantic = self.query_vector_diagnostic(
+            query_vector,
+            allowed_audiences,
+            limit=limit,
+        )
+        if _release_pair(lexical_result) != _release_pair(semantic):
+            raise IntegrityError(
+                "M24-RUNTIME-114 lexical and semantic release identities differ"
+            )
+
+        result = apply_m24_flagged_retrieval(
+            lexical_result,
+            settings,
+            shadow_result={
+                "status": semantic.get("status"),
+                "results": semantic.get("results", []),
+                "authority": {},
+            },
+        )
+        result["retrieval"].update(
+            {
+                "shadow_payload_source": "runtime_vector_diagnostic",
+                "semantic_diagnostic_invoked": True,
+            }
+        )
+        return result
+
+
+def _release_pair(result: Mapping[str, Any]) -> tuple[str, str]:
+    release = result.get("release")
+    if not isinstance(release, Mapping):
+        raise IntegrityError("M24-RUNTIME-115 retrieval result lacks release identity")
+    release_id = release.get("release_id")
+    manifest_sha256 = release.get("manifest_sha256")
+    if not isinstance(release_id, str) or not isinstance(manifest_sha256, str):
+        raise IntegrityError("M24-RUNTIME-115 retrieval result lacks release identity")
+    return release_id, manifest_sha256
