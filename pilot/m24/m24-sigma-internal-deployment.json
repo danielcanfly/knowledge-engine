@@ -1,0 +1,98 @@
+{
+  "schema_version": "knowledge-engine-m24-sigma-internal-deployment/v1",
+  "lane": "sigma_internal_deployment",
+  "issue": 973,
+  "url": "https://github.com/danielcanfly/knowledge-engine/issues/973",
+  "status": "internal_deployment_ready",
+  "deployment_target": {
+    "surface": "internal_review",
+    "audience": "internal",
+    "production_serving": false,
+    "public_indexing": false,
+    "shareable_public_url": false
+  },
+  "package": {
+    "name": "@knowledge-os/graph-explorer",
+    "path": "packages/graph-explorer",
+    "sigma_version": "3.0.3",
+    "graphology_version": "0.26.0",
+    "node_engine": ">=24.0.0",
+    "lockfile": "packages/graph-explorer/package-lock.json",
+    "runtime_cdn": false
+  },
+  "graph_data_contract": {
+    "api_schema": "knowledge-engine-graph-api/v1",
+    "graph_schema": "knowledge-os-graph/v2",
+    "source": "server_side_acl_filtered_read_only_graph_api",
+    "allowed_methods": [
+      "GET"
+    ],
+    "required_routes": [
+      "/v1/graph/capabilities",
+      "/v1/graph/release",
+      "/v1/graph/search",
+      "/v1/graph/node/{concept_id}",
+      "/v1/graph/neighborhood/{concept_id}",
+      "/v1/graph/overview"
+    ],
+    "renderer_neutral_input": true,
+    "client_side_acl_broadening": false,
+    "mutation_routes": []
+  },
+  "access_boundary": {
+    "same_origin_internal_access": true,
+    "anonymous_public_access": false,
+    "credential_rotation_authorized": false,
+    "source_mutation_authorized": false,
+    "pointer_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "production_mutation_authorized": false
+  },
+  "production_state": {
+    "retrieval": "lexical",
+    "semantic_promotion_enabled": false,
+    "semantic_answer_serving_enabled": false,
+    "hybrid_retrieval_enabled": false
+  },
+  "visual_qa": {
+    "required_checks": [
+      "nonblank_canvas_or_textual_fallback",
+      "keyboard_selection",
+      "camera_reset",
+      "color_independent_relations",
+      "bounded_selected_node_text",
+      "teardown_restores_container_attributes"
+    ],
+    "existing_package_tests": [
+      "packages/graph-explorer/test/explorer.test.ts",
+      "packages/graph-explorer/test/acceptance.test.ts",
+      "packages/graph-explorer/test/details.test.ts",
+      "packages/graph-explorer/test/scale.test.ts"
+    ]
+  },
+  "performance_checks": {
+    "commands": [
+      "npm --prefix packages/graph-explorer test",
+      "npm --prefix packages/graph-explorer run performance:fixtures",
+      "npm --prefix packages/graph-explorer run acceptance:scan"
+    ],
+    "max_text_fallback_nodes": 500,
+    "max_search_results": 100,
+    "max_filter_values": 50
+  },
+  "forbidden": [
+    "production_semantic_retrieval",
+    "production_hybrid_retrieval",
+    "semantic_answer_serving",
+    "semantic_promotion",
+    "production_pointer_change",
+    "source_write",
+    "qdrant_write",
+    "r2_write",
+    "credential_rotation",
+    "runtime_cdn_import",
+    "client_side_acl_broadening"
+  ],
+  "manifest_sha256": "c93ef790fe8b895f82ec44c0e014cc593435b24f3b218dccd17aff7d7ffdfb00"
+}
