@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; connect-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <title>LLM Wiki Internal Product</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <p class="eyebrow">Authenticated internal preview</p>
+    <h1>LLM Wiki</h1>
+    <p class="release">Release 20260720T160000Z-46137c97263e</p>
+    <p class="digest">Manifest ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877</p>
+  </header>
+  <main>
+    <section>
+      <h2>Surfaces</h2>
+      <ul>
+        <li><a href="data/concept-wiki-harness.json">Concept Wiki</a></li>
+        <li><a href="data/search-harness.json">Lexical Search</a></li>
+        <li><a href="data/graph-navigation.json">Sigma Graph Explorer Payload</a></li>
+        <li><a href="data/source-viewers.json">Provenance Source Viewer</a></li>
+        <li><a href="data/query-answer-acceptance.json">Citation-Grounded Answers</a></li>
+        <li><a href="data/release-viewer.json">Release Viewer</a></li>
+        <li><a href="data/obsidian-export-manifest.json">Obsidian Export Manifest</a></li>
+      </ul>
+    </section>
+    <section>
+      <h2>Authority</h2>
+      <p>Read-only internal product. Production retrieval remains lexical. Semantic
+      promotion, semantic serving, hybrid retrieval, and production answer serving
+      remain disabled.</p>
+    </section>
+    <section>
+      <h2>Error States</h2>
+      <ul>
+        <li>Unauthenticated requests must return 403.</li>
+        <li>Release identity mismatch must block rendering.</li>
+        <li>Missing canonical artifact must show a release unavailable state.</li>
+        <li>Source/provenance viewer mismatch must show citation unavailable.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

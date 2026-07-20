@@ -1,0 +1,588 @@
+{
+  "authority": {
+    "graph_authority": "read_only",
+    "hybrid_retrieval_enabled": false,
+    "production_retrieval": "lexical",
+    "renderer_mutation_authorized": false,
+    "retrieval_authority": "lexical",
+    "semantic_promotion_enabled": false,
+    "semantic_serving_enabled": false,
+    "source_mutation_authorized": false
+  },
+  "available_actions": [
+    "select_node",
+    "open_concept",
+    "open_source_viewer"
+  ],
+  "edges": [
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_c76ecf628fb58c6ecffa469a890bb3c3",
+      "focus_edge": false,
+      "generated_inverse": false,
+      "relation_type": "part_of",
+      "source": "concepts/agent-execution-paths",
+      "target": "concepts/six-dimensional-map-of-llm-agent-architectures"
+    },
+    {
+      "confidence": 0.9,
+      "directed": false,
+      "edge_id": "edge_f55a979c704bddcf552b4e9e713428db",
+      "focus_edge": false,
+      "generated_inverse": false,
+      "relation_type": "complements",
+      "source": "concepts/agent-planning-strategies",
+      "target": "concepts/agent-execution-paths"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_6dbbd2c45c9883118e69bd7e5b7ca0b1",
+      "focus_edge": false,
+      "generated_inverse": false,
+      "relation_type": "part_of",
+      "source": "concepts/agent-planning-strategies",
+      "target": "concepts/six-dimensional-map-of-llm-agent-architectures"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_139461a6402df8395db031c0a59bd784",
+      "focus_edge": true,
+      "generated_inverse": false,
+      "relation_type": "part_of",
+      "source": "concepts/canonical-run-authority",
+      "target": "concepts/harness"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_084795f2903ed7f23e4fac24d77268d9",
+      "focus_edge": true,
+      "generated_inverse": false,
+      "relation_type": "part_of",
+      "source": "concepts/completion-gate",
+      "target": "concepts/harness"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_58a5c4aadc5e6b143d47b21948843ee5",
+      "focus_edge": false,
+      "generated_inverse": false,
+      "relation_type": "supports",
+      "source": "concepts/durable-thread-state",
+      "target": "concepts/headless-harness-service"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_0b6e57164714ea5ebe3c7f07d8335b17",
+      "focus_edge": true,
+      "generated_inverse": true,
+      "relation_type": "has_part",
+      "source": "concepts/harness",
+      "target": "concepts/canonical-run-authority"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_7b29c36189b05f61353fc892f262e78f",
+      "focus_edge": true,
+      "generated_inverse": true,
+      "relation_type": "has_part",
+      "source": "concepts/harness",
+      "target": "concepts/completion-gate"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_eafc77f881e58dff4e3efc4be45fcdba",
+      "focus_edge": true,
+      "generated_inverse": false,
+      "relation_type": "supports",
+      "source": "concepts/harness",
+      "target": "concepts/harness-agent-loop"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_0cc19496d16008c4250c1ddf5c91ad9d",
+      "focus_edge": true,
+      "generated_inverse": false,
+      "relation_type": "requires",
+      "source": "concepts/harness",
+      "target": "concepts/harness-verification"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_031cae2bae121631b03da2052295d22c",
+      "focus_edge": true,
+      "generated_inverse": true,
+      "relation_type": "implemented_by",
+      "source": "concepts/harness",
+      "target": "concepts/headless-harness-service"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_58e21088f0d8d98eec1793248238ff6d",
+      "focus_edge": true,
+      "generated_inverse": true,
+      "relation_type": "has_part",
+      "source": "concepts/harness",
+      "target": "concepts/request-boundary"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_f3ee310788e2874f2e4ab5442342ebfc",
+      "focus_edge": true,
+      "generated_inverse": true,
+      "relation_type": "has_part",
+      "source": "concepts/harness",
+      "target": "concepts/task-contract"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_995c1e17667d0bc941e1427c8d66d7a0",
+      "focus_edge": true,
+      "generated_inverse": true,
+      "relation_type": "supported_by",
+      "source": "concepts/harness-agent-loop",
+      "target": "concepts/harness"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_c93c1c93882c5387f5d0fef34664d20b",
+      "focus_edge": false,
+      "generated_inverse": true,
+      "relation_type": "supported_by",
+      "source": "concepts/harness-agent-loop",
+      "target": "concepts/item-turn-thread-protocol"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_066cda73130d3f1a7cc6dde6ac4897c5",
+      "focus_edge": false,
+      "generated_inverse": false,
+      "relation_type": "requires",
+      "source": "concepts/harness-agent-loop",
+      "target": "concepts/stopping-policy"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_1869cb30f4f88eb07662581bbccbeb89",
+      "focus_edge": false,
+      "generated_inverse": true,
+      "relation_type": "has_part",
+      "source": "concepts/harness-agent-loop",
+      "target": "concepts/tool-call-proposal"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_8c13f75feffc2949e09aa00a880c9afd",
+      "focus_edge": true,
+      "generated_inverse": true,
+      "relation_type": "required_by",
+      "source": "concepts/harness-verification",
+      "target": "concepts/harness"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_b4cf706c86fb0d0d5156a2b5c8375e73",
+      "focus_edge": false,
+      "generated_inverse": true,
+      "relation_type": "supported_by",
+      "source": "concepts/headless-harness-service",
+      "target": "concepts/durable-thread-state"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_0b8cb73b1690049c9bd39f1333ac2fdc",
+      "focus_edge": true,
+      "generated_inverse": false,
+      "relation_type": "implements",
+      "source": "concepts/headless-harness-service",
+      "target": "concepts/harness"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_d6a2aeea0d896900bf0e3247a99e9d04",
+      "focus_edge": false,
+      "generated_inverse": false,
+      "relation_type": "supports",
+      "source": "concepts/item-turn-thread-protocol",
+      "target": "concepts/harness-agent-loop"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_1399113ce4c60cb78031ba6e285a9ee3",
+      "focus_edge": true,
+      "generated_inverse": false,
+      "relation_type": "part_of",
+      "source": "concepts/request-boundary",
+      "target": "concepts/harness"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_4979d3fac7c554ec4eca8fd23e2939a1",
+      "focus_edge": false,
+      "generated_inverse": true,
+      "relation_type": "has_part",
+      "source": "concepts/six-dimensional-map-of-llm-agent-architectures",
+      "target": "concepts/agent-execution-paths"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_0416655ce786946008eaa0c76ce2c72f",
+      "focus_edge": false,
+      "generated_inverse": true,
+      "relation_type": "has_part",
+      "source": "concepts/six-dimensional-map-of-llm-agent-architectures",
+      "target": "concepts/agent-planning-strategies"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_6cdc2991ce5b03f297871c7b124839f4",
+      "focus_edge": false,
+      "generated_inverse": true,
+      "relation_type": "required_by",
+      "source": "concepts/stopping-policy",
+      "target": "concepts/harness-agent-loop"
+    },
+    {
+      "confidence": 0.9,
+      "directed": false,
+      "edge_id": "edge_49383f84d13a1d5e9a5decd5e179d7d8",
+      "focus_edge": false,
+      "generated_inverse": false,
+      "relation_type": "related_to",
+      "source": "concepts/task-contract",
+      "target": "concepts/goal-drift"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_ecde9bee7fb7c3120f49cbe8e2d280c1",
+      "focus_edge": true,
+      "generated_inverse": false,
+      "relation_type": "part_of",
+      "source": "concepts/task-contract",
+      "target": "concepts/harness"
+    },
+    {
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_05cb35617ceae64502718a83649a4856",
+      "focus_edge": false,
+      "generated_inverse": false,
+      "relation_type": "part_of",
+      "source": "concepts/tool-call-proposal",
+      "target": "concepts/harness-agent-loop"
+    }
+  ],
+  "focus_neighbor_ids": [
+    "concepts/canonical-run-authority",
+    "concepts/completion-gate",
+    "concepts/harness-agent-loop",
+    "concepts/harness-verification",
+    "concepts/headless-harness-service",
+    "concepts/request-boundary",
+    "concepts/task-contract"
+  ],
+  "focus_truncated": false,
+  "nodes": [
+    {
+      "audience": "public",
+      "concept_id": "concepts/agent-execution-paths",
+      "description": "Defines Direct, Pipeline, Router, State Machine, and DAG execution structures plus their cross-cutting production controls.",
+      "focus_neighbor": false,
+      "selected": false,
+      "tags": [
+        "agents",
+        "design",
+        "routing",
+        "runtime"
+      ],
+      "title": "Agent execution paths",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/agent-planning-strategies",
+      "description": "Defines fixed logic, bounded ReAct, Plan-and-Execute, adaptive replanning, hierarchical planning, HTN, and their production control boundaries.",
+      "focus_neighbor": false,
+      "selected": false,
+      "tags": [
+        "agents",
+        "design",
+        "planning",
+        "verification"
+      ],
+      "title": "Agent decision and planning strategies",
+      "type": "Concept"
+    },
+    {
+      "audience": "internal",
+      "concept_id": "concepts/candidate-delivery-controls",
+      "description": "Defines the private acceptance gates between reviewed source and a promotable Knowledge Engine release.",
+      "focus_neighbor": false,
+      "selected": false,
+      "tags": [
+        "governance",
+        "knowledge-systems",
+        "operations",
+        "reliability",
+        "verification"
+      ],
+      "title": "Candidate delivery controls",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/canonical-run-authority",
+      "description": "Defines the system of record for authoritative execution state and transitions.",
+      "focus_neighbor": true,
+      "selected": false,
+      "tags": [
+        "governance",
+        "reliability",
+        "runtime"
+      ],
+      "title": "Canonical Run Authority",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/completion-gate",
+      "description": "Defines the authority that accepts or rejects a terminal candidate against contract and evidence.",
+      "focus_neighbor": true,
+      "selected": false,
+      "tags": [
+        "reliability",
+        "verification"
+      ],
+      "title": "Completion Gate",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/durable-thread-state",
+      "description": "Defines persistent interaction state that survives disconnects and spans turns.",
+      "focus_neighbor": false,
+      "selected": false,
+      "tags": [
+        "reliability",
+        "runtime"
+      ],
+      "title": "Durable Thread State",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/goal-drift",
+      "description": "Defines uncontrolled movement away from the accepted task contract or authorized change process.",
+      "focus_neighbor": false,
+      "selected": false,
+      "tags": [
+        "governance",
+        "reliability"
+      ],
+      "title": "Goal Drift",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/harness",
+      "description": "Defines the governed execution boundary around an LLM or agent runtime.",
+      "focus_neighbor": false,
+      "selected": true,
+      "tags": [
+        "agents",
+        "governance",
+        "runtime"
+      ],
+      "title": "Harness",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/harness-agent-loop",
+      "description": "Defines a governed harness loop for model proposals, authorization, tool execution, observations, and termination.",
+      "focus_neighbor": true,
+      "selected": false,
+      "tags": [
+        "agents",
+        "runtime"
+      ],
+      "title": "Harness Agent Loop",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/harness-verification",
+      "description": "Defines harness-owned checks that decide whether an agent result, state transition, or side effect is acceptable.",
+      "focus_neighbor": true,
+      "selected": false,
+      "tags": [
+        "reliability",
+        "verification"
+      ],
+      "title": "Harness Verification",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/harnessability",
+      "description": "Defines the measurable fitness of a task or environment for governed harness execution.",
+      "focus_neighbor": false,
+      "selected": false,
+      "tags": [
+        "agents",
+        "design",
+        "reliability"
+      ],
+      "title": "Harnessability",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/headless-harness-service",
+      "description": "Defines a UI-independent harness execution core shared by multiple clients through a stable protocol.",
+      "focus_neighbor": true,
+      "selected": false,
+      "tags": [
+        "agents",
+        "runtime"
+      ],
+      "title": "Headless Harness Service",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/item-turn-thread-protocol",
+      "description": "Defines a protocol model separating interaction items, pausable work turns, and durable threads.",
+      "focus_neighbor": false,
+      "selected": false,
+      "tags": [
+        "agents",
+        "runtime"
+      ],
+      "title": "Item Turn Thread Protocol",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/request-boundary",
+      "description": "Defines the ingress boundary that admits or rejects work before a harness run starts.",
+      "focus_neighbor": true,
+      "selected": false,
+      "tags": [
+        "design",
+        "security"
+      ],
+      "title": "Request Boundary",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/six-dimensional-map-of-llm-agent-architectures",
+      "description": "LLM agent architectures should be reviewed across separate engineering dimensions because multiple patterns can coexist at different layers of one production system.",
+      "focus_neighbor": false,
+      "selected": false,
+      "tags": [
+        "agents",
+        "design",
+        "knowledge-systems"
+      ],
+      "title": "Six-dimensional map of LLM agent architectures",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/source-governance",
+      "description": "Defines the reviewable boundary between human-authored source and generated runtime releases.",
+      "focus_neighbor": false,
+      "selected": false,
+      "tags": [
+        "governance",
+        "knowledge-systems",
+        "operations"
+      ],
+      "title": "Knowledge source governance",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/steering-control-plane",
+      "description": "Defines the human authority layer for intent, boundaries, evidence requirements, and escalation.",
+      "focus_neighbor": false,
+      "selected": false,
+      "tags": [
+        "design",
+        "governance"
+      ],
+      "title": "Steering Control Plane",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/stopping-policy",
+      "description": "Defines rules for continuing, waiting, completing, failing, cancelling, or deferring execution.",
+      "focus_neighbor": false,
+      "selected": false,
+      "tags": [
+        "governance",
+        "reliability",
+        "runtime"
+      ],
+      "title": "Stopping Policy",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/task-contract",
+      "description": "Defines the accepted outcome, constraints, evidence, authority, and completion conditions for a task.",
+      "focus_neighbor": true,
+      "selected": false,
+      "tags": [
+        "design",
+        "governance"
+      ],
+      "title": "Task Contract",
+      "type": "Concept"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/tool-call-proposal",
+      "description": "Defines a model-proposed external operation that requires harness authorization before execution.",
+      "focus_neighbor": false,
+      "selected": false,
+      "tags": [
+        "agents",
+        "runtime"
+      ],
+      "title": "Tool Call Proposal",
+      "type": "Concept"
+    }
+  ],
+  "overview_truncated": false,
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-graph-navigation/v1",
+  "selected_concept_id": "concepts/harness"
+}

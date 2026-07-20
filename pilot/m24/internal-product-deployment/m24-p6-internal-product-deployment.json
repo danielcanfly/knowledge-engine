@@ -1,0 +1,173 @@
+{
+  "artifacts": [
+    {
+      "bytes": 2009,
+      "path": "pilot/m24/internal-product-deployment/site/index.html",
+      "sha256": "b91934a37b53b930929f5689f9ac4eef813dfcdcd8aa45351ba12e3d1d42c6b3"
+    },
+    {
+      "bytes": 729,
+      "path": "pilot/m24/internal-product-deployment/site/styles.css",
+      "sha256": "b542efd78f1302c1f8fac3f01b261d08c3860a2dc20d39ee05339f7c585a3d64"
+    },
+    {
+      "bytes": 50914,
+      "path": "pilot/m24/internal-product-deployment/site/data/concept-wiki-harness.json",
+      "sha256": "2306d8f9f9a018c212277914af95cce832562466204718e4f4a9731eb7cf6830"
+    },
+    {
+      "bytes": 29048,
+      "path": "pilot/m24/internal-product-deployment/site/data/search-harness.json",
+      "sha256": "29fda5b333d64734ed6d90292be748f60c29aea18f83434e319f3764ea30321c"
+    },
+    {
+      "bytes": 18007,
+      "path": "pilot/m24/internal-product-deployment/site/data/graph-navigation.json",
+      "sha256": "e5ade54f909497e37791489d27c70851bb6edaf72cbdad36d62bccca4bfbb429"
+    },
+    {
+      "bytes": 20046,
+      "path": "pilot/m24/internal-product-deployment/site/data/source-viewers.json",
+      "sha256": "835c4bb75d1d982f167a9930cad8df6bcf6cd6742909be44cc889105f9ed4fb5"
+    },
+    {
+      "bytes": 14841,
+      "path": "pilot/m24/internal-product-deployment/site/data/query-answer-acceptance.json",
+      "sha256": "47042e96498ad102cb8e19fb848b8df78d407affe23d788161782c20bfdb93da"
+    },
+    {
+      "bytes": 1016,
+      "path": "pilot/m24/internal-product-deployment/site/data/release-viewer.json",
+      "sha256": "c97cb0085fd5dac136bee3e7680f969fe33c220cd7eb50d722d5acf1eb111cb2"
+    },
+    {
+      "bytes": 407,
+      "path": "pilot/m24/internal-product-deployment/site/data/obsidian-export-manifest.json",
+      "sha256": "434f8d14b95d6f703eadbcff3a2ad96b70bee4e9b2cab391e8108994e9b5e997"
+    }
+  ],
+  "auth": {
+    "anonymous_access": false,
+    "identity_sources": [
+      "Cloudflare Access JWT",
+      "equivalent signed internal session"
+    ],
+    "live_url_status": "pending_cloudflare_access_binding",
+    "manual_daniel_acceptance": "pending_authenticated_url",
+    "provider": "cloudflare_access_or_equivalent",
+    "required": true,
+    "unauthenticated_behavior": "403"
+  },
+  "authority": {
+    "browser_authority": "read_only",
+    "credential_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "permanent_ledger_mutation": false,
+    "product_audience": "authenticated_internal",
+    "production_answer_serving_enabled": false,
+    "production_pointer_mutation": false,
+    "production_r2_mutation": false,
+    "production_retrieval": "lexical",
+    "qdrant_mutation": false,
+    "raw_evidence_exposed": false,
+    "semantic_promotion_enabled": false,
+    "semantic_serving_enabled": false,
+    "source_mutation": false,
+    "traffic_mutation": false
+  },
+  "deployment_package": "pilot/m24/internal-product-deployment/site",
+  "issue_number": 997,
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-p6-internal-product-deployment/v1",
+  "security": {
+    "csp": "default-src 'none'; style-src 'self'; img-src 'self'; connect-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "csp_inline_script_allowed": false,
+    "csp_remote_network_allowed": false,
+    "error_states": [
+      "403_unauthenticated",
+      "release_identity_mismatch",
+      "release_unavailable",
+      "citation_unavailable",
+      "obsidian_export_unavailable"
+    ],
+    "mutation_routes": [],
+    "observability_events": [
+      "authenticated_view",
+      "release_identity_loaded",
+      "surface_opened",
+      "safe_fallback_rendered",
+      "error_state_rendered"
+    ],
+    "read_only_browser_authority": true,
+    "rollback_plan": [
+      "disable internal route or Access application",
+      "restore previous deployment package",
+      "keep production retrieval lexical",
+      "verify no Source/R2/Qdrant/pointer/traffic mutation occurred"
+    ],
+    "secret_scan_passed": true,
+    "secret_scan_patterns": 3
+  },
+  "self_sha256": "f63a48dd16d366278c60e4142f3c3e871e76c6c34501bbae05e540a32df28548",
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "status": "internal_product_deployment_package_complete",
+  "surfaces": [
+    {
+      "digest": "d6d3ded24e0ddd222a3b7c6cd0291e717c7c9aea9045937dd4e31ac5f4080fc0",
+      "fallback": "release_unavailable_error_state",
+      "path": "site/data/concept-wiki-harness.json",
+      "ready": true,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "surface": "concept_wiki"
+    },
+    {
+      "digest": "9eb4b2ba931231b958e6eff4594cd52fe02bac0d5c1dc4f71ae8c812df1a2429",
+      "fallback": "not_found_with_release_identity",
+      "path": "site/data/search-harness.json",
+      "ready": true,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "surface": "lexical_search"
+    },
+    {
+      "digest": "f7d41b8609241c2dc6686c150bd7acba45256936d556edb4fbacb32499f03415",
+      "fallback": "textual_graph_fallback",
+      "path": "site/data/graph-navigation.json",
+      "ready": true,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "surface": "sigma_graph_explorer"
+    },
+    {
+      "digest": "0264ccf1c5c1508c789a29691d59a486d012a0112c25e088fbc8c6dafcd3d715",
+      "fallback": "citation_unavailable_error_state",
+      "path": "site/data/source-viewers.json",
+      "ready": true,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "surface": "provenance_source_viewer"
+    },
+    {
+      "digest": "21a383bcc1ee5e9fe2a283f084242f790a44dd3b8f33fc2fbbb5e5ab4f65f641",
+      "fallback": "safe_answer_fallbacks_from_P5",
+      "path": "site/data/query-answer-acceptance.json",
+      "ready": true,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "surface": "citation_grounded_internal_answers"
+    },
+    {
+      "digest": "c5ab0698f99be6ca18ae491be51da6e88356822530cab9335e04262a3d86fc83",
+      "fallback": "release_identity_mismatch_block",
+      "path": "site/data/release-viewer.json",
+      "ready": true,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "surface": "release_viewer"
+    },
+    {
+      "digest": "3e0ee3af7fd8ddd86c9cd2720effa852dd0b419da0d93166475c0b928296ad68",
+      "fallback": "regenerate_export_from_canonical_release",
+      "path": "site/data/obsidian-export-manifest.json",
+      "ready": true,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "surface": "obsidian_export"
+    }
+  ]
+}
