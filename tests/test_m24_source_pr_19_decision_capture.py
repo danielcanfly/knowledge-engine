@@ -21,10 +21,10 @@ def test_source_pr_19_decision_capture_is_digest_bound() -> None:
     assert canonical_sha256(unsigned) == digest
 
 
-def test_source_pr_19_capture_keeps_review_pending_until_human_decisions() -> None:
+def test_source_pr_19_capture_records_daniel_human_decisions() -> None:
     capture = _capture()
 
-    assert capture["status"] == "decision_capture_ready"
+    assert capture["status"] == "human_decisions_recorded"
     assert capture["source_pr"] == {
         "repository": "danielcanfly/knowledge-source",
         "number": 19,
@@ -33,14 +33,31 @@ def test_source_pr_19_capture_keeps_review_pending_until_human_decisions() -> No
         "draft": True,
         "base_sha": "a6ba738d910d01d2ae99b1968f0831989934c549",
         "head_sha": "deb3ad1e631c2149183d10561fbceb0a1848a989",
-        "decision_template_state": "all_pending",
-        "human_approval_claimed": False,
+        "decision_template_state": "human_decisions_recorded",
+        "human_approval_claimed": True,
         "merge_as_is_allowed": False,
+        "decision_comment_url": (
+            "https://github.com/danielcanfly/knowledge-source/pull/19"
+            "#issuecomment-5020513924"
+        ),
     }
     assert len(capture["review_items"]) == 15
-    assert {item["decision"] for item in capture["review_items"]} == {"pending"}
-    assert all(item["human_actor"] is None for item in capture["review_items"])
-    assert all(item["reviewed_at"] is None for item in capture["review_items"])
+    assert [item["decision"] for item in capture["review_items"][:11]] == [
+        "approve_new"
+    ] * 11
+    assert [item["decision"] for item in capture["review_items"][11:]] == ["edit"] * 4
+    assert {item["human_actor"] for item in capture["review_items"]} == {"Daniel"}
+    assert {item["reviewed_at"] for item in capture["review_items"]} == {"2026-07-20"}
+    assert all(item["provenance_note"] for item in capture["review_items"])
+    assert capture["human_authorization"] == {
+        "actor": "Daniel",
+        "authorized_at": "2026-07-20",
+        "authorization_text": (
+            "我同意採用建議決策：前 11 項 approve_new；後 4 項 edit；"
+            "edit 項需在 adoption PR 中收窄為 harness-specific 定義後才可 canonicalize。"
+        ),
+        "source": "Codex user message",
+    }
 
 
 def test_source_pr_19_capture_lists_allowed_decisions_and_closure_requirements() -> None:
