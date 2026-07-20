@@ -23,10 +23,11 @@ PUBLIC_API_PATHS = {
     "/v1/ask",
     "/v1/ask/stream",
     "/v1/ask/capabilities",
+    "/v1/search",
 }
 PUBLIC_ASSET_PATHS = {"/ask", "/embed/ask.js"}
 PUBLIC_PATHS = PUBLIC_API_PATHS | PUBLIC_ASSET_PATHS
-PUBLIC_POST_PATHS = {"/v1/ask", "/v1/ask/stream"}
+PUBLIC_POST_PATHS = {"/v1/ask", "/v1/ask/stream", "/v1/search"}
 
 
 @dataclass(frozen=True)

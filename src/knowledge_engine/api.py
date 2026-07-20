@@ -28,7 +28,10 @@ from .m14_public_contracts import (
     PublicAskResponse,
     PublicErrorDetail,
     PublicErrorResponse,
+    PublicSearchRequest,
+    PublicSearchResponse,
     public_response_from_runtime,
+    public_search_response_from_runtime,
 )
 from .m14_security import (
     PublicAbuseController,
@@ -466,6 +469,37 @@ def _execute_public_ask(
         ) from exc
 
 
+def search(
+    request: PublicSearchRequest,
+    principal: Principal,
+) -> PublicSearchResponse:
+    _authorize_public_audience(request.audience, principal)
+    try:
+        runtime_result = get_runtime().query(
+            request.query,
+            {request.audience},
+            limit=request.max_results,
+        )
+        return public_search_response_from_runtime(
+            runtime_result,
+            query=request.query,
+            max_results=request.max_results,
+            audience=request.audience,
+            sort_by=request.sort_by,
+            source_kind=request.source_kind,
+        )
+    except (KnowledgeEngineError, FileNotFoundError) as exc:
+        logger.exception("public search failed integrity check")
+        detail = PublicErrorDetail(
+            code="PUBLIC-SEARCH-503",
+            message="current knowledge release is unavailable",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=detail.model_dump(),
+        ) from exc
+
+
 def ask_capabilities() -> PublicInterfaceCapabilities:
     return public_interface_capabilities()
 
@@ -537,6 +571,29 @@ def ask_endpoint(
         lambda: ask(request, identity.principal),
         identity=identity,
         path="/v1/ask",
+    )
+
+
+@app.post(
+    "/v1/search",
+    response_model=PublicSearchResponse,
+    responses={
+        401: {"model": PublicErrorResponse},
+        403: {"model": PublicErrorResponse},
+        413: {"model": PublicErrorResponse},
+        429: {"model": PublicErrorResponse},
+        503: {"model": PublicErrorResponse},
+        504: {"model": PublicErrorResponse},
+    },
+)
+def search_endpoint(
+    request: PublicSearchRequest,
+    identity: PublicRequestIdentity = Depends(get_public_request_identity),
+) -> PublicSearchResponse:
+    return _execute_with_public_controls(
+        lambda: search(request, identity.principal),
+        identity=identity,
+        path="/v1/search",
     )
 
 

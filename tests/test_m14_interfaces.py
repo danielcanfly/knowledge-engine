@@ -132,12 +132,15 @@ def test_interface_capabilities_are_stable_and_stateless() -> None:
     assert capabilities["default_audience"] == "public"
     assert capabilities["same_origin_default"] is True
     assert capabilities["ask_path"] == "/v1/ask"
+    assert capabilities["search_path"] == "/v1/search"
     assert capabilities["stream_path"] == "/v1/ask/stream"
     assert capabilities["standalone_path"] == "/ask"
     assert capabilities["widget_script_path"] == "/embed/ask.js"
     assert capabilities["supported_locales"] == ["en", "zh-TW"]
     assert capabilities["max_query_characters"] == 8000
     assert capabilities["max_results"] == 20
+    assert capabilities["search_sorts"] == ["relevance", "title"]
+    assert capabilities["search_filters"] == ["source_kind"]
     assert capabilities["stream_event_order"] == [
         "meta",
         "answer",

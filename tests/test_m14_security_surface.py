@@ -59,6 +59,7 @@ def test_public_edge_paths_do_not_include_internal_control_routes() -> None:
         1,
     )[0]
     assert "/v1/ask" in public_constants
+    assert "/v1/search" in public_constants
     assert "/v1/query" not in public_constants
     assert "/v1/releases" not in public_constants
 
