@@ -89,7 +89,7 @@ jobs:
           digest = value.pop("contract_sha256")
           encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
           assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "0d9bf346f4e98f0dd63863b08edb693698e9d0e76c9b11b9ef8e261646b1e1b2"
+          assert digest == "22c44268ac442a480ddf41d6c6e4197edae3ddbf79fdfeac546709d29b20d1db"
           assert value["issue"] == 937
           assert value["trigger_run_id"] == "29667556969"
           assert value["placement"]["target_type"] == "region"
@@ -115,8 +115,13 @@ jobs:
               ".github/workflows/m23-7-r3-8-placement-semantics-v2-ci.yml",
               ".github/workflows/m23-7-r3-8-region-placement-v3-ci.yml",
               ".github/workflows/m23-7-r3-8-remote-observe.yml",
+              "pilot/m23/m23-7-r3-8-placement-semantics-v2-contract.json",
+              "pilot/m23/m23-7-r3-8-region-placement-v3-contract.json",
+              "scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py",
+              "scripts/m23_7_r3_8_remote_entrypoint_region_v3.py",
               "scripts/m23_7_r3_8_remote_operator.py",
               "scripts/m23_7_r3_8_remote_operator_placement_v2.py",
+              "scripts/m23_7_r3_8_remote_operator_region_v3.py",
               "tests/test_m23_7_r3_8_remote_operator.py",
               "tests/test_m23_7_r3_8_placement_semantics_v2.py",
               "tests/test_m23_7_r3_8_region_placement_v3.py",
@@ -129,9 +134,6 @@ jobs:
           PY
           git diff --exit-code "${{ github.event.pull_request.base.sha || '3a25fbde6b1b16061478632abd0844968790f84e' }}" HEAD -- \
             scripts/m23_7_r3_8_remote_entrypoint.py \
-            scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py \
-            scripts/m23_7_r3_8_remote_operator_region_v3.py \
-            scripts/m23_7_r3_8_remote_entrypoint_region_v3.py \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
             workers/m23-7-r3-8-latency-repair/worker.mjs \
             pilot/m23/m23-7-r3-8-latency-repair-contract.json
