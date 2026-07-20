@@ -10,8 +10,10 @@ from knowledge_engine.auth import Principal
 from knowledge_engine.m14_public_contracts import (
     PUBLIC_QUERY_SCHEMA,
     PublicAskRequest,
+    PublicSearchRequest,
     public_request_id,
     public_response_from_runtime,
+    public_search_response_from_runtime,
 )
 
 
@@ -59,6 +61,41 @@ def _runtime_result(*, answered: bool = True) -> dict:
         "results": results,
         "not_found_reason": None if answered else "no_match",
     }
+
+
+def _search_runtime_result() -> dict:
+    result = _runtime_result()
+    first = result["results"][0]
+    result["results"] = [
+        {
+            **first,
+            "concept_id": "concepts/zeta",
+            "section_id": "concepts/zeta#overview",
+            "title": "Zeta Concept",
+            "section_title": "Overview",
+            "score": 15,
+        },
+        {
+            **first,
+            "concept_id": "concepts/alpha",
+            "section_id": "concepts/alpha#overview",
+            "title": "Alpha Concept",
+            "section_title": "Overview",
+            "score": 9,
+            "citations": [
+                {
+                    **first["citations"][0],
+                    "source_id": "source-2",
+                    "source_kind": "paper",
+                    "source_title": "Alpha Paper",
+                    "uri": "https://example.com/alpha",
+                    "concept_id": "concepts/alpha",
+                    "section_id": "concepts/alpha#overview",
+                }
+            ],
+        },
+    ]
+    return result
 
 
 def _principal(*audiences: str) -> Principal:
@@ -147,6 +184,59 @@ def test_public_response_has_only_stable_contract_fields() -> None:
     assert 0 < payload["confidence"] <= 1
 
 
+def test_public_search_response_shapes_lexical_results_for_scanning() -> None:
+    response = public_search_response_from_runtime(
+        _search_runtime_result(),
+        query="agent",
+        max_results=10,
+        audience="public",
+        sort_by="title",
+        source_kind=None,
+    )
+    payload = response.model_dump()
+    assert set(payload) == {
+        "schema_version",
+        "status",
+        "results",
+        "source_cards",
+        "concept_ids",
+        "release_id",
+        "request_id",
+        "audience",
+        "sort_by",
+        "source_kind",
+        "not_found_reason",
+    }
+    assert payload["schema_version"] == "knowledge-engine-public-search/v1"
+    assert payload["status"] == "answered"
+    assert [item["title"] for item in payload["results"]] == [
+        "Alpha Concept",
+        "Zeta Concept",
+    ]
+    assert payload["results"][0]["rank"] == 1
+    assert payload["results"][0]["source_kinds"] == ["paper"]
+    assert payload["results"][0]["source_card_ids"]
+    assert payload["source_cards"][0]["source_kind"] == "paper"
+    assert payload["request_id"].startswith("search_")
+    assert "retrieval" not in payload
+    assert "evaluation" not in payload
+
+
+def test_public_search_source_kind_filter_has_empty_state() -> None:
+    response = public_search_response_from_runtime(
+        _search_runtime_result(),
+        query="agent",
+        max_results=10,
+        audience="public",
+        source_kind="video",
+    )
+
+    assert response.status == "not_found"
+    assert response.results == []
+    assert response.source_cards == []
+    assert response.not_found_reason == "no_match"
+
+
 def test_public_not_found_is_explicit() -> None:
     response = public_response_from_runtime(
         _runtime_result(answered=False),
@@ -185,6 +275,32 @@ def test_ask_endpoint_uses_requested_audience_without_internal_leak(
     assert response.audience == "public"
     assert response.status == "answered"
     assert response.source_cards[0].display_host == "example.com"
+
+
+def test_search_endpoint_uses_requested_audience_without_internal_leak(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class StubRuntime:
+        def query(self, query: str, audiences: set[str], *, limit: int) -> dict:
+            assert query == "knowledge compiler"
+            assert audiences == {"public"}
+            assert limit == 2
+            return _search_runtime_result()
+
+    monkeypatch.setattr(api, "get_runtime", lambda: StubRuntime())
+    response = api.search(
+        PublicSearchRequest(
+            query="knowledge compiler",
+            max_results=2,
+            audience="public",
+            source_kind="paper",
+        ),
+        _principal("public", "internal"),
+    )
+
+    assert response.audience == "public"
+    assert response.status == "answered"
+    assert response.results[0].concept_id == "concepts/alpha"
 
 
 def test_ask_endpoint_rejects_audience_escalation() -> None:

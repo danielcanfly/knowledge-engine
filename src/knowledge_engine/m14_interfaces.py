@@ -21,6 +21,7 @@ class PublicInterfaceCapabilities(BaseModel):
     default_audience: Literal["public"]
     same_origin_default: bool
     ask_path: str
+    search_path: str
     stream_path: str
     standalone_path: str
     widget_script_path: str
@@ -29,6 +30,8 @@ class PublicInterfaceCapabilities(BaseModel):
     max_results: int
     citation_markers: bool
     source_cards: bool
+    search_sorts: list[Literal["relevance", "title"]]
+    search_filters: list[Literal["source_kind"]]
     stream_event_order: list[str]
 
 
@@ -48,6 +51,9 @@ def public_interface_capabilities() -> PublicInterfaceCapabilities:
         max_results=20,
         citation_markers=True,
         source_cards=True,
+        search_path="/v1/search",
+        search_sorts=["relevance", "title"],
+        search_filters=["source_kind"],
         stream_event_order=[
             "meta",
             "answer",
