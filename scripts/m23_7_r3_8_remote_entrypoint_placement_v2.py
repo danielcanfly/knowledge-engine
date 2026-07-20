@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
         "expected_head": args.expected_head,
         "actual_head": actual_head,
         "placement_contract_sha256": (
-            "0d4a42fe8505862a17026410dd86d2bc964407a9d0d82bd1ef9fd81f953a8f8e"
+            "4b32ddd0bfe236d5c501a1c2ecbcd2e409442a85117014388a6f6edc9f12f4c9"
         ),
         "credentials_persisted": False,
         "service_url_persisted": False,

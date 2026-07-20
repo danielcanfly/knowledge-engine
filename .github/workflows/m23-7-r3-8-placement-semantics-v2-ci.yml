@@ -64,8 +64,9 @@ jobs:
           digest = value.pop("contract_sha256")
           encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
           assert hashlib.sha256(encoded).hexdigest() == digest
-          assert digest == "0d4a42fe8505862a17026410dd86d2bc964407a9d0d82bd1ef9fd81f953a8f8e"
-          assert value["placement"]["accepted_sanitized_classes"] == ["local", "remote"]
+          assert digest == "4b32ddd0bfe236d5c501a1c2ecbcd2e409442a85117014388a6f6edc9f12f4c9"
+          assert value["placement"]["accepted_sanitized_classes"] == ["absent", "local", "remote"]
+          assert value["placement"]["placement_treated_as_telemetry"] is True
           assert value["preservation"]["maximum_worker_internal_shadow_ms"] == 1200
           assert value["preservation"]["blocker_clearance_authorized"] is False
           PY
@@ -73,8 +74,6 @@ jobs:
         run: |
           scope_base="${{ github.event.pull_request.base.sha || 'd0459fee41f747fb79cd32feaa673ef6fcf9e58a' }}"
           git diff --exit-code "$scope_base" HEAD -- \
-            scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py \
-            pilot/m23/m23-7-r3-8-placement-semantics-v2-contract.json \
             docs/architecture/m23-7-r3-8-placement-semantics-v2.md
           python - <<'PY'
           import subprocess
@@ -85,8 +84,13 @@ jobs:
               ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
               ".github/workflows/m23-7-r3-8-placement-semantics-v2-ci.yml",
               ".github/workflows/m23-7-r3-8-region-placement-v3-ci.yml",
+              "pilot/m23/m23-7-r3-8-placement-semantics-v2-contract.json",
+              "pilot/m23/m23-7-r3-8-region-placement-v3-contract.json",
+              "scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py",
+              "scripts/m23_7_r3_8_remote_entrypoint_region_v3.py",
               "scripts/m23_7_r3_8_remote_operator.py",
               "scripts/m23_7_r3_8_remote_operator_placement_v2.py",
+              "scripts/m23_7_r3_8_remote_operator_region_v3.py",
               "tests/test_m23_7_r3_8_remote_operator.py",
               "tests/test_m23_7_r3_8_placement_semantics_v2.py",
               "tests/test_m23_7_r3_8_region_placement_v3.py",

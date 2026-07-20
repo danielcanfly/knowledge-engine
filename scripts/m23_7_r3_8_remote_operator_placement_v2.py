@@ -13,9 +13,10 @@ import httpx
 from knowledge_engine import m23_7_r3_8_latency_repair as latency
 from scripts import m23_7_r3_8_remote_operator as base
 
-ALLOWED_PLACEMENT_CLASSES = frozenset({"local", "remote"})
+ALLOWED_PLACEMENT_CLASSES = frozenset({"absent", "local", "remote"})
+ENABLED_PLACEMENT_CLASSES = frozenset({"local", "remote"})
 PLACEMENT_CONTRACT_SHA256 = (
-    "0d4a42fe8505862a17026410dd86d2bc964407a9d0d82bd1ef9fd81f953a8f8e"
+    "4b32ddd0bfe236d5c501a1c2ecbcd2e409442a85117014388a6f6edc9f12f4c9"
 )
 _OBSERVED_PLACEMENT_CLASS: str | None = None
 
@@ -68,7 +69,7 @@ class PlacementAwareHttpWorkerInvoker(latency.HttpWorkerInvoker):
             latency._require(
                 placement in ALLOWED_PLACEMENT_CLASSES,
                 "worker_placement_unproven",
-                "Worker invocation did not prove an enabled placement class",
+                "Worker invocation did not return a bounded placement class",
             )
             try:
                 payload = response.json()
@@ -110,7 +111,10 @@ def normalise_receipt(
     if not isinstance(remote_operator, dict):
         raise base.RemoteOperatorError("remote_operator_receipt_missing")
     remote_operator["placement_header_verified"] = True
-    remote_operator["placement_local_or_remote_readiness_verified"] = True
+    remote_operator["placement_observation_verified"] = True
+    remote_operator["placement_local_or_remote_readiness_verified"] = (
+        placement_class in ENABLED_PLACEMENT_CLASSES
+    )
     remote_operator["placement_remote_readiness_verified"] = (
         placement_class == "remote"
     )

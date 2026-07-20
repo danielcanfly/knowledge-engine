@@ -29,8 +29,8 @@ def test_readiness_treats_placement_as_telemetry_only() -> None:
     )
 
 
-@pytest.mark.parametrize("placement", ["local", "remote"])
-def test_formal_invoker_accepts_enabled_placement_classes(
+@pytest.mark.parametrize("placement", ["absent", "local", "remote"])
+def test_formal_invoker_accepts_bounded_placement_classes(
     placement: str,
 ) -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
@@ -54,7 +54,7 @@ def test_formal_invoker_accepts_enabled_placement_classes(
     assert invoker.placement_response_class == placement
 
 
-@pytest.mark.parametrize("placement", [None, "absent", "unknown"])
+@pytest.mark.parametrize("placement", [None, "unknown"])
 def test_formal_invoker_rejects_unproven_placement(
     placement: str | None,
 ) -> None:
@@ -78,11 +78,12 @@ def test_formal_invoker_rejects_unproven_placement(
 
 
 @pytest.mark.parametrize(
-    ("placement", "remote"),
-    [("local", False), ("remote", True)],
+    ("placement", "local_or_remote", "remote"),
+    [("absent", False, False), ("local", True, False), ("remote", True, True)],
 )
 def test_receipt_records_actual_class_without_location(
     placement: str,
+    local_or_remote: bool,
     remote: bool,
 ) -> None:
     receipt = {
@@ -97,7 +98,8 @@ def test_receipt_records_actual_class_without_location(
     value = subject.normalise_receipt(receipt, placement)
     operator = value["remote_operator"]
     assert operator["placement_header_verified"] is True
-    assert operator["placement_local_or_remote_readiness_verified"] is True
+    assert operator["placement_observation_verified"] is True
+    assert operator["placement_local_or_remote_readiness_verified"] is local_or_remote
     assert operator["placement_remote_readiness_verified"] is remote
     assert operator["placement_response_class"] == placement
     assert operator["placement_routing_was_remote"] is remote
@@ -186,7 +188,8 @@ def test_source_preserves_mutation_and_privacy_boundaries() -> None:
         "scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py"
     ).read_text(encoding="utf-8")
     assert "ALLOWED_PLACEMENT_CLASSES" in operator_text
-    assert '{"local", "remote"}' in operator_text
+    assert '{"absent", "local", "remote"}' in operator_text
+    assert "placement_observation_verified" in operator_text
     assert "worker_placement_unproven" in operator_text
     assert "placement_location_persisted" in operator_text
     for forbidden in (
