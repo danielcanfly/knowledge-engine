@@ -1,0 +1,112 @@
+{
+  "schema_version": "knowledge-engine-m24-semantic-promotion-decision/v1",
+  "milestone": "M24",
+  "issue": 965,
+  "status": "accepted_flagged_implementation_only",
+  "decision": {
+    "semantic_promotion_decision_complete": true,
+    "production_semantic_hybrid_retrieval_may_start": true,
+    "production_semantic_hybrid_retrieval_scope": "flagged_implementation_without_serving",
+    "production_retrieval_after_decision": "lexical",
+    "semantic_promotion_enabled_after_decision": false,
+    "semantic_answer_serving_enabled_after_decision": false,
+    "hybrid_retrieval_enabled_after_decision": false,
+    "activation_gate_required_after_implementation": true
+  },
+  "source_evidence": {
+    "m23_7_r3_8_closure_pr": 963,
+    "m24_bootstrap_pr": 964,
+    "m24_kickoff_readiness_pr": 975,
+    "engine_sha": "2a24ed38f4d9c5e370417453860314cd60c14ef9",
+    "observation_run_id": "29715599032",
+    "artifact_id": "8450463481",
+    "artifact_zip_sha256": "7f025b28fad8f6574748f58f0de9042cf15c7b93a8fa8070c105a0ba0419311c",
+    "evidence_seal_sha256": "94dad021d947422933fab588b6f0396c249d73516ae27f3533329480edc7e2eb",
+    "reconciliation_sha256": "cb6b7d1b7213da018dd8466c9c43538d616f24f65ece25ef1c28ec1ac4e3094a",
+    "recall_at_5": 0.875,
+    "mrr_at_10": 0.807291666667,
+    "ndcg_at_10": 0.851933109598
+  },
+  "authority_boundary": {
+    "decision_authorized": true,
+    "issue_966_unblocked_for_flagged_implementation": true,
+    "production_retrieval_change_authorized": false,
+    "production_semantic_serving_authorized": false,
+    "production_hybrid_serving_authorized": false,
+    "semantic_answer_serving_authorized": false,
+    "semantic_promotion_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "pointer_mutation_authorized": false,
+    "credential_rotation_authorized": false,
+    "production_traffic_change_authorized": false
+  },
+  "serving_contract": {
+    "default_retrieval_mode": "lexical",
+    "implementation_must_default_disabled": true,
+    "lexical_fallback_required": true,
+    "semantic_results_may_not_be_response_authoritative": true,
+    "raw_user_query_retention_authorized": false,
+    "raw_answer_retention_authorized": false,
+    "public_endpoint_authorized": false,
+    "feature_flag_required": true,
+    "activation_requires_new_reconciliation": true
+  },
+  "rollout_plan": [
+    {
+      "phase": "implementation",
+      "issue": 966,
+      "allowed": true,
+      "scope": "code and tests for guarded semantic/hybrid retrieval with runtime default lexical",
+      "serving_authorized": false
+    },
+    {
+      "phase": "internal_shadow",
+      "allowed": false,
+      "scope": "requires a later exact authorization after implementation review",
+      "serving_authorized": false
+    },
+    {
+      "phase": "production_activation",
+      "allowed": false,
+      "scope": "requires activation reconciliation and explicit production authority",
+      "serving_authorized": false
+    }
+  ],
+  "rollback_plan": {
+    "primary_rollback": "keep lexical as default and leave semantic/hybrid flags disabled",
+    "required_controls": [
+      "single switch back to lexical",
+      "no production pointer dependency for initial implementation",
+      "no irreversible Qdrant or R2 mutation in implementation PR",
+      "tests proving disabled semantic path cannot serve answers"
+    ]
+  },
+  "metrics_and_guardrails": {
+    "minimum_recall_at_5": 0.82,
+    "minimum_mrr_at_10": 0.68,
+    "minimum_ndcg_at_10": 0.72,
+    "maximum_worker_internal_shadow_ms": 1200,
+    "maximum_acl_violation_rate": 0.0,
+    "maximum_query_error_rate": 0.0,
+    "maximum_output_influence_rate": 0.0,
+    "strict_zero_protected_mutations": true
+  },
+  "failure_triggers": [
+    "semantic path can influence production response while disabled",
+    "lexical fallback cannot be forced",
+    "protected mutation appears without exact authorization",
+    "production serving or traffic change is bundled into implementation",
+    "M23.7 accepted evidence identity drifts",
+    "Source PR #19 is merged or mutated without separate Source authority"
+  ],
+  "reconciliation": {
+    "issue_965_may_close_after_merge": true,
+    "issue_966_may_start_after_merge": true,
+    "issue_966_must_not_enable_serving": true,
+    "production_semantic_or_hybrid_serving_remains_blocked": true,
+    "next_required_gate": "m24_semantic_activation_reconciliation"
+  },
+  "decision_sha256": "aae12e30fe5c49798c20577c27a120b39babe5d848c5dd1bb8768174b2b6508d"
+}
