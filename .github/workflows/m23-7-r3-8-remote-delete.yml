@@ -96,7 +96,6 @@ jobs:
         shell: bash
         run: |
           set +e
-          rm -rf "$EVIDENCE_DIR"
           python -m scripts.m23_7_r3_8_remote_delete \
             --authorization-path "${{ inputs.authorization_path }}" \
             --expected-head "${{ inputs.expected_head }}" \
