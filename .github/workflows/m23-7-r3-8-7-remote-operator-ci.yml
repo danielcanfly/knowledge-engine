@@ -118,5 +118,5 @@ jobs:
       - name: Verify pinned Wrangler surface
         run: |
           test "$(npx --yes wrangler@4.111.0 --version | tr -d '\r')" = "4.111.0"
-          npx --yes wrangler@4.111.0 deploy --help >/dev/null
-          npx --yes wrangler@4.111.0 secret put --help >/dev/null
+          npx --yes wrangler@4.111.0 deploy --help | grep -- --secrets-file >/dev/null
+          npx --yes wrangler@4.111.0 deploy --help | grep -- --keep-vars >/dev/null

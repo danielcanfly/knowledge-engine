@@ -43,6 +43,11 @@ LIVE_OBSERVATION_RETRY_CODES = frozenset(
 )
 LIFECYCLE_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-lifecycle/v1"
 REMOTE_RECEIPT_SCHEMA = "knowledge-engine-m23-7-r3-8-remote-observation/v1"
+ATOMIC_SECRET_BINDINGS = (
+    "M23_R3_8_OPERATOR_TOKEN",
+    "QDRANT_API_KEY",
+    "QDRANT_URL",
+)
 
 _HEX_40 = re.compile(r"^[0-9a-f]{40}$")
 _WORKER = re.compile(r"^knowledge-engine-r3-8-[0-9]{1,20}$")
@@ -135,6 +140,59 @@ def generate_wrangler_config(
         "generated_config_committed": False,
         "ai_binding": "AI",
     }
+
+
+def write_wrangler_secrets_file(
+    output: Path,
+    *,
+    qdrant_url: str,
+    qdrant_api_key: str,
+    operator_token: str,
+) -> dict[str, Any]:
+    parsed = urlparse(qdrant_url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise RemoteOperatorError("invalid_qdrant_url")
+    if len(qdrant_api_key) < 16:
+        raise RemoteOperatorError("invalid_qdrant_api_key")
+    if len(operator_token) < 32:
+        raise RemoteOperatorError("invalid_operator_token")
+    secrets_payload = {
+        "M23_R3_8_OPERATOR_TOKEN": operator_token,
+        "QDRANT_API_KEY": qdrant_api_key,
+        "QDRANT_URL": qdrant_url,
+    }
+    raw = json.dumps(
+        secrets_payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        indent=2,
+    ) + "\n"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(raw, encoding="utf-8")
+    output.chmod(0o600)
+    return {
+        "atomic_secrets_file_committed": False,
+        "atomic_secrets_uploaded_with_deploy": True,
+        "secret_binding_names": list(ATOMIC_SECRET_BINDINGS),
+        "secret_count": len(ATOMIC_SECRET_BINDINGS),
+        "secret_values_persisted": False,
+    }
+
+
+def wrangler_deploy_command(
+    wrangler: list[str],
+    *,
+    config: Path,
+    secrets_file: Path,
+) -> list[str]:
+    return wrangler + [
+        "deploy",
+        "--config",
+        str(config),
+        "--secrets-file",
+        str(secrets_file),
+        "--keep-vars",
+    ]
 
 
 def parse_deploy_identity(output_file: Path, worker_name: str) -> dict[str, str]:
@@ -369,6 +427,7 @@ def execute(args: argparse.Namespace) -> int:
     receipt_exit = 23
     readiness_timeline: list[dict[str, Any]] = []
     readiness_successes = 0
+    atomic_secrets: dict[str, Any] | None = None
     try:
         if args.confirmation != "RUN_R3_8_REMOTE_ONCE":
             raise RemoteOperatorError("confirmation_mismatch")
@@ -406,11 +465,23 @@ def execute(args: argparse.Namespace) -> int:
             if version.returncode != 0 or WRANGLER_VERSION not in version.stdout + version.stderr:
                 raise RemoteOperatorError("wrangler_version_mismatch")
 
+            operator_token = secrets.token_hex(32)
+            secrets_file = temp / "wrangler-secrets.json"
+            atomic_secrets = write_wrangler_secrets_file(
+                secrets_file,
+                qdrant_url=required_env("QDRANT_URL"),
+                qdrant_api_key=required_env("QDRANT_API_KEY"),
+                operator_token=operator_token,
+            )
             deploy_output = temp / "wrangler-deploy.jsonl"
             deploy_env = {**env, "WRANGLER_OUTPUT_FILE_PATH": str(deploy_output)}
-            stage = "worker_deploy"
+            stage = "worker_deploy_with_secrets"
             deployed = _run_command(
-                wrangler + ["deploy", "--config", str(config)],
+                wrangler_deploy_command(
+                    wrangler,
+                    config=config,
+                    secrets_file=secrets_file,
+                ),
                 cwd=worker_dir,
                 env=deploy_env,
             )
@@ -422,25 +493,6 @@ def execute(args: argparse.Namespace) -> int:
             identity = parse_deploy_identity(deploy_output, worker_name)
             worker_version_id = identity["worker_version_id"]
             worker_origin = identity["worker_origin"]
-
-            operator_token = secrets.token_hex(32)
-            for secret_name, secret_value in (
-                ("QDRANT_URL", required_env("QDRANT_URL")),
-                ("QDRANT_API_KEY", required_env("QDRANT_API_KEY")),
-                ("M23_R3_8_OPERATOR_TOKEN", operator_token),
-            ):
-                stage = "worker_secret_" + secret_name.casefold()
-                result = _run_command(
-                    wrangler
-                    + ["secret", "put", secret_name, "--config", str(config)],
-                    cwd=worker_dir,
-                    env=env,
-                    input_text=secret_value,
-                )
-                if result.returncode != 0:
-                    raise RemoteOperatorError(
-                        "secret_" + classify_wrangler_error(result.stdout + result.stderr)
-                    )
 
             stage = "worker_readiness"
             import httpx
@@ -542,6 +594,7 @@ def execute(args: argparse.Namespace) -> int:
                 "placement_remote_readiness_verified": True,
                 "placement_response_class": "remote",
                 "placement_location_persisted": False,
+                "atomic_deploy": atomic_secrets,
                 "evidence_sha256": EXPECTED_EVIDENCE_SHA256,
                 "evidence_key_sha256": hashlib.sha256(key.encode()).hexdigest(),
                 "evidence_size_bytes": evidence_size,
@@ -563,6 +616,7 @@ def execute(args: argparse.Namespace) -> int:
             "worker_deployed": worker_deployed,
             "worker_retained": True,
             "deletion_authorization_required": True,
+            "atomic_deploy": atomic_secrets,
             "receipt_file_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
             "readiness": readiness_summary(
                 readiness_timeline,
@@ -594,6 +648,7 @@ def execute(args: argparse.Namespace) -> int:
             "arbitrary_exception_text_persisted": False,
             "credentials_persisted": False,
             "service_url_persisted": False,
+            "atomic_deploy": atomic_secrets,
             "readiness": readiness_summary(
                 readiness_timeline,
                 consecutive_successes=readiness_successes,
@@ -616,6 +671,7 @@ def execute(args: argparse.Namespace) -> int:
             "worker_deployed": worker_deployed,
             "worker_retained": worker_deployed,
             "deletion_authorization_required": worker_deployed,
+            "atomic_deploy": atomic_secrets,
             "failure_code": code,
             "failure_stage": stage,
             "readiness": readiness_summary(
