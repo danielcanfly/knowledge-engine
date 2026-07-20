@@ -1,0 +1,17 @@
+{
+  "schema_version": "knowledge-engine-r3-8-run-authorization/v1",
+  "affected_run_id": "29696136508",
+  "affected_engine_sha": "b57f0a05f6dca2d4030fdee354a478be6f295ff8",
+  "worker_name": "knowledge-engine-r3-8-29696136508",
+  "allowed_actions": [
+    "recovery_probe"
+  ],
+  "observation_artifact_sha256": "b36601576409de58c3c86a00f1c73d3bd8c1413b4a074d74b984ed9ce69f4670",
+  "expires_at": "2026-07-27T00:00:00Z",
+  "production_mutation_authorized": false,
+  "qdrant_mutation_authorized": false,
+  "r2_mutation_authorized": false,
+  "source_mutation_authorized": false,
+  "blocker_clearance_authorized": false,
+  "authorization_sha256": "43309d7a75533fe182339d4f5a326f6330e5d693fcb634b46690e6a465422216"
+}
