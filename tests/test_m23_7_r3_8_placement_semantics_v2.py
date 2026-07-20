@@ -15,12 +15,12 @@ from scripts import m23_7_r3_8_remote_operator_placement_v2 as subject
 from knowledge_engine import m23_7_r3_8_latency_repair as latency
 
 
-def test_readiness_accepts_only_present_sanitized_placement_classes() -> None:
+def test_readiness_treats_placement_as_telemetry_only() -> None:
     payload = {"status": "error", "code": "request-schema-drift"}
     assert subject.worker_ready_response(400, payload, "local")
     assert subject.worker_ready_response(400, payload, "remote")
-    assert not subject.worker_ready_response(400, payload, "absent")
-    assert not subject.worker_ready_response(400, payload, None)
+    assert subject.worker_ready_response(400, payload, "absent")
+    assert subject.worker_ready_response(400, payload, None)
     assert not subject.worker_ready_response(401, payload, "local")
     assert not subject.worker_ready_response(
         400,
