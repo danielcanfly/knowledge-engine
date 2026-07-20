@@ -1,0 +1,239 @@
+{
+  "authority": {
+    "browser_authority": "read_only",
+    "credential_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "permanent_ledger_mutation": false,
+    "product_audience": "authenticated_internal",
+    "production_answer_serving_enabled": false,
+    "production_pointer_mutation": false,
+    "production_r2_mutation": false,
+    "production_retrieval": "lexical",
+    "qdrant_mutation": false,
+    "raw_evidence_exposed": false,
+    "semantic_promotion_enabled": false,
+    "semantic_serving_enabled": false,
+    "source_mutation": false,
+    "traffic_mutation": false
+  },
+  "closure_decision": {
+    "closeout_statement": "M24 is ready for operator handoff as an authenticated internal lexical product candidate. Final product closure is not self-certified until Daniel acceptance and a separate independent-operator exercise pass.",
+    "independent_operator_exercise_status": "pending",
+    "large_scale_ingestion_status": "not_authorized",
+    "product_internal_url_status": "access_protected",
+    "production_retrieval": "lexical",
+    "production_semantic_or_hybrid_status": "not_authorized",
+    "status": "operator_ready_pending_external_acceptance"
+  },
+  "custom_hostname": "m24-internal.danielcanfly.com",
+  "evidence_hygiene": [
+    "no Cloudflare token values recorded",
+    "no operator email recorded",
+    "no raw headers recorded",
+    "no raw response bodies recorded",
+    "no preview full URL committed",
+    "no production semantic or hybrid authority asserted",
+    "no large-scale ingestion authority asserted"
+  ],
+  "handoff_package": {
+    "generated_at": "2026-07-20",
+    "manifest_entry_count": 32,
+    "manifest_verified_locally": true,
+    "package_name": "LLM_Wiki_Codex_End_to_End_Completion_Execution_Pack_2026-07-20",
+    "selected_entry_sha256": {
+      "00_COMPLETION_DEFINITION.md": "7393763b7d94700c8088f717463e9c97f22175a54792290130361d2af22be813",
+      "01_PROGRAMME_MAP.md": "631f5dfe93e3b15f90cb89bfb5fd2cd950d1f393e6dd7dc8c65e6e40253645d3",
+      "14_P7_PRODUCTION_PROMOTION.md": "b674409c04e6fed4b992e4c0c3764d3bf05ddabffe24f145a6a940b381c0763b",
+      "15_P8_PROGRESSIVE_LARGE_INGESTION.md": "0e5ac20cfc6131cd73ae1a129b44ad27a7df58a986ed4f4c3dcbab0848746f56",
+      "16_P9_FEEDBACK_AND_MAINTENANCE.md": "dcc96e356943f63d5212c05a5d7f6540b9ee2d42f58d476ca55539f7fefb250f",
+      "17_P10_FINAL_CLOSURE.md": "b17573820a5c8dec685cb5f3f0c4396fcc4678525da6bb58bfd961de7cedb0ec"
+    },
+    "zip_file_count": 34
+  },
+  "issue_number": 1005,
+  "maintenance_contract": {
+    "alias_duplicate_cleanup_defined": true,
+    "contradiction_discovery_defined": true,
+    "deletion_tombstones_defined": true,
+    "embedding_migration_requires_gate": true,
+    "feedback_lifecycle_defined": true,
+    "freshness_checks_defined": true,
+    "graph_schema_migration_requires_gate": true,
+    "qdrant_rebuild_requires_gate": true,
+    "review_throughput_reporting_defined": true,
+    "rollback_drills_defined": true,
+    "supersession_defined": true
+  },
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "pages_project_name": "llm-wiki-m24-internal",
+  "programme": [
+    {
+      "closure_note": "All fifteen Source PR #19 decisions are accounted for; the final four remain narrowed as harness-specific before canonical use.",
+      "handoff_goal": "Canonical Source adoption decision capture and adoption planning.",
+      "phase": "P1",
+      "remaining_trigger": null,
+      "repo_evidence": [
+        "pilot/m24/m24-source-pr-19-decision-capture.json",
+        "docs/architecture/m24/m24-source-pr-19-decision-capture.md",
+        "docs/architecture/m24/m24-canonical-source-adoption-plan.md"
+      ],
+      "status": "complete_as_internal_candidate"
+    },
+    {
+      "closure_note": "Candidate release artifacts rebuild and cross-validate by digest.",
+      "handoff_goal": "Deterministic canonical candidate release rebuild.",
+      "phase": "P2",
+      "remaining_trigger": null,
+      "repo_evidence": [
+        "pilot/m24/canonical-release/manifest.json",
+        "pilot/m24/m24-p2-canonical-release-rebuild.json",
+        "tests/test_m24_p2_canonical_release_rebuild.py"
+      ],
+      "status": "complete"
+    },
+    {
+      "closure_note": "Wiki, lexical search, source viewer, graph, answer, and export payloads share the release identity.",
+      "handoff_goal": "Product surfaces integrated against the same canonical release.",
+      "phase": "P3",
+      "remaining_trigger": null,
+      "repo_evidence": [
+        "pilot/m24/m24-p3-product-surface-integration.json",
+        "tests/test_m24_p3_product_surface_integration.py",
+        "docs/architecture/m24/m24-6-product-surface-integration.md"
+      ],
+      "status": "complete"
+    },
+    {
+      "closure_note": "Three consecutive candidate-only batches and dry-run drills pass; large-scale ingestion remains separately gated.",
+      "handoff_goal": "Controlled ingestion pilot with bounded batches and drills.",
+      "phase": "P4",
+      "remaining_trigger": null,
+      "repo_evidence": [
+        "pilot/m24/controlled-ingestion-pilot/m24-p4-controlled-ingestion-pilot.json",
+        "pilot/m24/controlled-ingestion-pilot/batches/m24-p4-pilot-batch-001.json",
+        "pilot/m24/controlled-ingestion-pilot/batches/m24-p4-pilot-batch-002.json",
+        "pilot/m24/controlled-ingestion-pilot/batches/m24-p4-pilot-batch-003.json",
+        "tests/test_m24_p4_controlled_ingestion_pilot.py"
+      ],
+      "status": "complete"
+    },
+    {
+      "closure_note": "Internal lexical evidence bundles and citation verification pass; production answer serving is not authorized.",
+      "handoff_goal": "Query and citation-grounded answer acceptance.",
+      "phase": "P5",
+      "remaining_trigger": null,
+      "repo_evidence": [
+        "pilot/m24/query-answer-acceptance/m24-p5-query-answer-acceptance.json",
+        "tests/test_m24_p5_query_answer_acceptance.py"
+      ],
+      "status": "complete_as_internal_candidate"
+    },
+    {
+      "closure_note": "The internal product package is deployed behind Cloudflare Access and unauthenticated probes do not expose release content.",
+      "handoff_goal": "Authenticated internal product deployment.",
+      "phase": "P6",
+      "remaining_trigger": null,
+      "repo_evidence": [
+        "pilot/m24/internal-product-deployment/m24-p6-internal-product-deployment.json",
+        "pilot/m24/authenticated-live-url-binding/m24-p9-authenticated-live-url-binding.json",
+        "tests/test_m24_p6_internal_product_deployment.py",
+        "tests/test_m24_p9_authenticated_live_url_binding.py"
+      ],
+      "status": "complete"
+    },
+    {
+      "closure_note": "Production remains lexical; semantic, hybrid, and answer serving promotion require explicit later approval.",
+      "handoff_goal": "Production promotion.",
+      "phase": "P7",
+      "remaining_trigger": "Approve a production promotion request after semantic promotion acceptance passes.",
+      "repo_evidence": [
+        "docs/architecture/m24/m24-2-semantic-promotion-decision.md",
+        "src/knowledge_engine/m24_semantic_hybrid_runtime.py",
+        "tests/test_m24_semantic_hybrid_runtime.py"
+      ],
+      "status": "governed_deferred"
+    },
+    {
+      "closure_note": "The controlled pilot passed, but the large-scale ingestion gate remains intentionally blocked until capacity and scale-tier acceptance are approved.",
+      "handoff_goal": "Progressive large-scale ingestion.",
+      "phase": "P8",
+      "remaining_trigger": "Approve the next scale tier after review throughput, backpressure, and production promotion prerequisites are satisfied.",
+      "repo_evidence": [
+        "pilot/m24/controlled-ingestion-pilot/m24-p4-controlled-ingestion-pilot.json",
+        "tests/test_m24_p4_controlled_ingestion_pilot.py"
+      ],
+      "status": "governed_deferred"
+    },
+    {
+      "closure_note": "Feedback and maintenance lifecycle is codified for operator handoff; production-impacting maintenance remains gated.",
+      "handoff_goal": "Operational scale, feedback, and maintenance.",
+      "phase": "P9",
+      "remaining_trigger": null,
+      "repo_evidence": [
+        "docs/architecture/m24/m24-12-authenticated-live-url-binding.md",
+        "pilot/m24/final-product-closure/m24-p10-final-product-closure.json"
+      ],
+      "status": "complete_as_internal_candidate"
+    },
+    {
+      "closure_note": "The handoff-only replay bundle is ready, but this session cannot self-certify the required independent-operator exercise.",
+      "handoff_goal": "Final product closure by independent operator exercise.",
+      "phase": "P10",
+      "remaining_trigger": "A different qualified operator completes the full unseen-source exercise from the handoff alone.",
+      "repo_evidence": [
+        "pilot/m24/final-product-closure/m24-p10-final-product-closure.json",
+        "tests/test_m24_p10_final_product_closure.py"
+      ],
+      "status": "pending_external_acceptance"
+    }
+  ],
+  "readiness": {
+    "answer": "A3_citation_verified_internal_candidate",
+    "obsidian": "O1_canonical_export_generated",
+    "query": "Q2_internal_usable_lexical",
+    "relation_aware": "candidate_design_only",
+    "sigma": "S2_internal_deployed_usable_pending_manual_acceptance"
+  },
+  "reconciliation_base_engine_sha": "3f494dfe8c1547eaa2acfc3919d48339c14d29d2",
+  "release_id": "20260720T160000Z-46137c97263e",
+  "remaining_items": [
+    {
+      "authorized_now": false,
+      "item": "daniel_authenticated_browser_acceptance",
+      "reason": "Codex observed the Access wall but cannot complete Daniel's browser login and acceptance on his behalf.",
+      "status": "pending_external_acceptance",
+      "trigger_to_complete": "Daniel signs in through Cloudflare Access and accepts the rendered canonical release."
+    },
+    {
+      "authorized_now": false,
+      "item": "independent_operator_final_exercise",
+      "reason": "The P10 handoff definition requires an operator who did not build the original path.",
+      "status": "pending_external_acceptance",
+      "trigger_to_complete": "A separate qualified operator ingests an unseen source and reproduces the evidence from the handoff alone."
+    },
+    {
+      "authorized_now": false,
+      "item": "production_semantic_hybrid_retrieval",
+      "reason": "Semantic promotion has not been accepted for production and production retrieval must remain lexical.",
+      "status": "governed_deferred",
+      "trigger_to_complete": "Merge an explicit semantic promotion decision and production promotion request with rollback evidence."
+    },
+    {
+      "authorized_now": false,
+      "item": "production_answer_serving",
+      "reason": "Internal citation verification exists, but production answer serving needs separate groundedness, ACL, latency, cost, and off-switch acceptance.",
+      "status": "governed_deferred",
+      "trigger_to_complete": "Approve production answer serving after the semantic promotion gate and answer-serving acceptance pass."
+    },
+    {
+      "authorized_now": false,
+      "item": "large_scale_ingestion",
+      "reason": "The controlled pilot passed, but scale-tier authority is intentionally blocked until capacity, backpressure, and production promotion prerequisites are satisfied.",
+      "status": "governed_deferred",
+      "trigger_to_complete": "Approve the first progressive scale tier with measured review capacity and rollback/deletion drill evidence."
+    }
+  ],
+  "schema_version": "knowledge-engine-m24-p10-final-product-closure/v1",
+  "self_sha256": "d90f5561135d7af146c57322d04d8a66f62122f7b8baece33e252b26ac34e3e2",
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9"
+}
