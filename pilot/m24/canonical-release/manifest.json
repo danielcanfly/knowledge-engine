@@ -1,0 +1,145 @@
+{
+  "artifacts": [
+    {
+      "audiences": [
+        "public",
+        "internal"
+      ],
+      "bytes": 32396,
+      "key": "releases/20260720T160000Z-46137c97263e/bundle.tar.gz",
+      "kind": "okf_bundle",
+      "media_type": "application/gzip",
+      "required": true,
+      "sha256": "2d296721030dd81331f128093beec2f1d4cddf9db17aa155bea5be8ff0e312d9"
+    },
+    {
+      "audiences": [
+        "public",
+        "internal"
+      ],
+      "bytes": 5235,
+      "key": "releases/20260720T160000Z-46137c97263e/artifacts/graph.json",
+      "kind": "graph",
+      "media_type": "application/json",
+      "required": true,
+      "sha256": "fbe9d90a7d5eff9e77db2fedcd87c4e2022bf81a1fb16c0adde0695029b299c8"
+    },
+    {
+      "audiences": [
+        "public",
+        "internal"
+      ],
+      "bytes": 33269,
+      "key": "releases/20260720T160000Z-46137c97263e/artifacts/graph-v2.json",
+      "kind": "graph_v2",
+      "media_type": "application/json",
+      "required": true,
+      "sha256": "6737dfb3fa9cd4d992c26dce562329c95e06066cd475f97f2fdffdbab8f25abe"
+    },
+    {
+      "audiences": [
+        "public",
+        "internal"
+      ],
+      "bytes": 223031,
+      "key": "releases/20260720T160000Z-46137c97263e/artifacts/lexical-index.json",
+      "kind": "lexical_index",
+      "media_type": "application/json",
+      "required": true,
+      "sha256": "1106857e4eb2438674bc74a074bf81132f54b77f4c5d2dfe52954328b8271b83"
+    },
+    {
+      "audiences": [
+        "public",
+        "internal"
+      ],
+      "bytes": 64919,
+      "key": "releases/20260720T160000Z-46137c97263e/artifacts/provenance.json",
+      "kind": "provenance",
+      "media_type": "application/json",
+      "required": true,
+      "sha256": "0593d6669661df0d639e13b3b93d744b36f6fa934ca4faf7566d05574a573a05"
+    },
+    {
+      "audiences": [
+        "public",
+        "internal"
+      ],
+      "bytes": 253,
+      "key": "releases/20260720T160000Z-46137c97263e/artifacts/build-report.json",
+      "kind": "build_report",
+      "media_type": "application/json",
+      "required": true,
+      "sha256": "4ac3da975f8eae8adee2b4379bb4b419e16dfed9bdfdb069c7e3fa400dca6e47"
+    },
+    {
+      "audiences": [
+        "public",
+        "internal"
+      ],
+      "bytes": 19448,
+      "key": "releases/20260720T160000Z-46137c97263e/artifacts/source-snapshot.json",
+      "kind": "source_snapshot",
+      "media_type": "application/json",
+      "required": true,
+      "sha256": "c2150569ee59f460f64ece3ddd2deb0c27908d079fb5ac9d91722d0cd3edfd3c"
+    }
+  ],
+  "builder": {
+    "build_id": "build_20260720T160000Z_46137c97",
+    "git_sha": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+    "name": "knowledge-engine",
+    "version": "0.3.0"
+  },
+  "compatibility": {
+    "contract_versions": {
+      "build_pipeline": "0.2.0",
+      "knowledge_graph": "2.0",
+      "layer_model": "0.1.0",
+      "okf_profile": "0.1.0",
+      "provenance": "1.0",
+      "runtime_query": "0.2.0"
+    },
+    "runtime_min_version": "0.3.0"
+  },
+  "counts": {
+    "concepts": 20,
+    "edges": 0,
+    "provenance_records": 20,
+    "sections": 92,
+    "source_snapshots": 7,
+    "tombstones": 0
+  },
+  "created_at": "2026-07-20T16:00:00Z",
+  "okf": {
+    "base_version": "0.1",
+    "bundle_id": "kb_main",
+    "bundle_prefix": "releases/20260720T160000Z-46137c97263e/bundle/",
+    "content_sha256": "46137c97263effa21aef5392b41cbd3948ac58b0147342310eed84ec41fb354a",
+    "profile": "daniel-knowledge-os/0.1",
+    "root_index": "releases/20260720T160000Z-46137c97263e/bundle/index.md"
+  },
+  "quality": {
+    "overall": "passed"
+  },
+  "release_id": "20260720T160000Z-46137c97263e",
+  "release_ready": true,
+  "schema_version": "1.0",
+  "security": {
+    "acl_propagation": "passed",
+    "audiences": [
+      "public",
+      "internal"
+    ],
+    "contains_restricted_data": false,
+    "secret_scan": "passed"
+  },
+  "source": {
+    "commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+    "dirty": false,
+    "foundation_commit_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+    "foundation_repository": "danielcanfly/knowledge-os-foundation",
+    "repository": "danielcanfly/knowledge-source",
+    "snapshot_sha256": "9f2fa3df237616e97b6e3bece5f4dfc96a72342ccba2452ee8fe375286d6a451"
+  }
+}

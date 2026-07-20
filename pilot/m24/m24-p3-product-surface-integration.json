@@ -1,0 +1,89 @@
+{
+  "authority": {
+    "credential_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "production_pointer_mutation": false,
+    "production_r2_mutation": false,
+    "production_retrieval": "lexical",
+    "qdrant_mutation": false,
+    "raw_evidence_exposed": false,
+    "semantic_promotion_enabled": false,
+    "semantic_serving_enabled": false,
+    "source_mutation": false,
+    "traffic_mutation": false
+  },
+  "graph_v2_sha256": "6737dfb3fa9cd4d992c26dce562329c95e06066cd475f97f2fdffdbab8f25abe",
+  "issue_number": 991,
+  "lexical_index_sha256": "1106857e4eb2438674bc74a074bf81132f54b77f4c5d2dfe52954328b8271b83",
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "product_surfaces": [
+    {
+      "concept_count": 5,
+      "digest": "9eb4b2ba931231b958e6eff4594cd52fe02bac0d5c1dc4f71ae8c812df1a2429",
+      "edge_count": 0,
+      "file_count": 0,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "request_id": "search_a95f9328cae03c8653e8331e1ca4e636",
+      "source_viewer_count": 3,
+      "surface": "lexical_search"
+    },
+    {
+      "concept_count": 5,
+      "digest": "fdbb7d58f87d10b682d7ee546272cd223abbb99e426b1eeb0dedd31a2f036b18",
+      "edge_count": 0,
+      "file_count": 0,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "request_id": "search_a95f9328cae03c8653e8331e1ca4e636",
+      "source_viewer_count": 3,
+      "surface": "source_viewer"
+    },
+    {
+      "concept_count": 1,
+      "digest": "b995dcb3398e7e9b0e7692675b89f9016da2811daa85652a3fb418b6eb96c95b",
+      "edge_count": 8,
+      "file_count": 0,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "request_id": "search_0cc674ac7bb4f69354fd004ce6d7ee76",
+      "source_viewer_count": 3,
+      "surface": "concept_wiki"
+    },
+    {
+      "concept_count": 20,
+      "digest": "5111837a0512f4d587ab36c2ee8bf2cb31bb19aed937acd4a0f2ff5422b48aa6",
+      "edge_count": 28,
+      "file_count": 0,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "request_id": null,
+      "source_viewer_count": 0,
+      "surface": "sigma_graph"
+    },
+    {
+      "concept_count": 20,
+      "digest": "c7492d350ac66171565da567aec7be09b93ad7ef37a8abc0ca6f133bb89c5fea",
+      "edge_count": 0,
+      "file_count": 29,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "request_id": "search_b471ac35398ab7de04a4742f15ab7157",
+      "source_viewer_count": 7,
+      "surface": "obsidian_export"
+    }
+  ],
+  "provenance_sha256": "0593d6669661df0d639e13b3b93d744b36f6fa934ca4faf7566d05574a573a05",
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-p3-product-surface-integration/v1",
+  "self_sha256": "fd28466d7d31edf2569f9b3720332e719ffda157ef97864b907ab07dc14b8ff5",
+  "shared_exit_gate": {
+    "queries": [
+      "harness",
+      "stopping policy",
+      "canonical run authority",
+      "tool call proposal"
+    ],
+    "same_canonical_candidate_release": true,
+    "semantic_promotion_required_before_production_semantic_or_hybrid": true,
+    "surface_count": 5
+  },
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "source_snapshot_sha256": "c2150569ee59f460f64ece3ddd2deb0c27908d079fb5ac9d91722d0cd3edfd3c",
+  "status": "product_surface_integration_complete"
+}
