@@ -1,7 +1,7 @@
 {
   "schema_version": "knowledge-engine-m24-bootstrap-roadmap/v1",
   "milestone": "M24",
-  "status": "bootstrap_open",
+  "status": "kickoff_ready",
   "source_closure": {
     "milestone": "M23.7 R3.8",
     "closure_pr": 963,
@@ -24,6 +24,8 @@
   "gated_lanes": [
     {
       "id": "semantic_promotion_decision",
+      "issue": 965,
+      "url": "https://github.com/danielcanfly/knowledge-engine/issues/965",
       "order": 1,
       "title": "Semantic promotion decision",
       "may_start_now": true,
@@ -49,6 +51,8 @@
   "parallel_product_lanes": [
     {
       "id": "source_pr_19_review",
+      "issue": 974,
+      "url": "https://github.com/danielcanfly/knowledge-engine/issues/974",
       "title": "Source PR #19 manual review",
       "may_start_now": true,
       "blocked_by_semantic_promotion": false,
@@ -56,6 +60,8 @@
     },
     {
       "id": "canonical_source_adoption_plan",
+      "issue": 967,
+      "url": "https://github.com/danielcanfly/knowledge-engine/issues/967",
       "title": "Canonical Source adoption planning",
       "may_start_now": true,
       "blocked_by_semantic_promotion": false,
@@ -63,6 +69,8 @@
     },
     {
       "id": "sigma_internal_deployment",
+      "issue": 973,
+      "url": "https://github.com/danielcanfly/knowledge-engine/issues/973",
       "title": "Sigma.js internal deployment",
       "may_start_now": true,
       "blocked_by_semantic_promotion": false,
@@ -70,6 +78,8 @@
     },
     {
       "id": "obsidian_exporter",
+      "issue": 971,
+      "url": "https://github.com/danielcanfly/knowledge-engine/issues/971",
       "title": "Obsidian exporter",
       "may_start_now": true,
       "blocked_by_semantic_promotion": false,
@@ -77,6 +87,8 @@
     },
     {
       "id": "concept_wiki",
+      "issue": 968,
+      "url": "https://github.com/danielcanfly/knowledge-engine/issues/968",
       "title": "Concept Wiki",
       "may_start_now": true,
       "blocked_by_semantic_promotion": false,
@@ -84,6 +96,8 @@
     },
     {
       "id": "lexical_search_ux",
+      "issue": 970,
+      "url": "https://github.com/danielcanfly/knowledge-engine/issues/970",
       "title": "Lexical search UX",
       "may_start_now": true,
       "blocked_by_semantic_promotion": false,
@@ -91,6 +105,8 @@
     },
     {
       "id": "provenance_source_viewer",
+      "issue": 972,
+      "url": "https://github.com/danielcanfly/knowledge-engine/issues/972",
       "title": "Provenance and source viewer",
       "may_start_now": true,
       "blocked_by_semantic_promotion": false,
@@ -98,6 +114,8 @@
     },
     {
       "id": "graph_navigation",
+      "issue": 969,
+      "url": "https://github.com/danielcanfly/knowledge-engine/issues/969",
       "title": "Graph navigation",
       "may_start_now": true,
       "blocked_by_semantic_promotion": false,
@@ -110,6 +128,43 @@
     "semantic_answer_serving",
     "semantic_promotion"
   ],
+  "blocked_implementation_lanes": [
+    {
+      "id": "production_semantic_hybrid_retrieval",
+      "issue": 966,
+      "url": "https://github.com/danielcanfly/knowledge-engine/issues/966",
+      "title": "Production semantic/hybrid retrieval implementation",
+      "blocked_by": [
+        965
+      ],
+      "may_start_now": false,
+      "must_wait_for": "semantic_promotion_decision",
+      "production_serving_authority": false
+    }
+  ],
+  "kickoff_topology": {
+    "milestone": {
+      "number": 1,
+      "title": "M24",
+      "url": "https://github.com/danielcanfly/knowledge-engine/milestone/1"
+    },
+    "bootstrap_pr": 964,
+    "bootstrap_merge_sha": "01c5ff461882893a2e0924bb9ea634f3cd06e378",
+    "promotion_gate_issue": 965,
+    "blocked_production_issue": 966,
+    "parallel_lane_issues": [
+      974,
+      967,
+      973,
+      971,
+      968,
+      970,
+      972,
+      969
+    ],
+    "ready_for_non_serving_lane_work": true,
+    "ready_for_production_semantic_or_hybrid_retrieval": false
+  },
   "bootstrap_authority": {
     "promotion_authorized": false,
     "serving_authorized": false,
@@ -120,11 +175,18 @@
     "pointer_mutation_authorized": false,
     "credential_rotation_authorized": false
   },
-  "next_actions": [
-    "open_semantic_promotion_decision_issue",
-    "open_parallel_product_lane_issues",
-    "keep_production_retrieval_lexical_until_explicit_promotion",
-    "start_non_serving_product_work_without_waiting_for_promotion"
+  "completed_pre_kickoff_actions": [
+    "merged_m24_bootstrap_pr",
+    "created_m24_milestone",
+    "opened_semantic_promotion_decision_issue",
+    "opened_blocked_production_semantic_hybrid_retrieval_issue",
+    "opened_parallel_product_lane_issues",
+    "recorded_issue_topology"
   ],
-  "roadmap_sha256": "c21860918b29e7aadc4377fa7e18ec6e7247e06d06592dd784a96b70449fad39"
+  "next_actions": [
+    "start_semantic_promotion_decision_gate",
+    "start_non_serving_product_lane_work_without_waiting_for_promotion",
+    "keep_production_retrieval_lexical_until_explicit_promotion"
+  ],
+  "roadmap_sha256": "af9f390daf688ca80dfe9309a31a1941974135cd5b09f3e8c40d56644b005912"
 }
