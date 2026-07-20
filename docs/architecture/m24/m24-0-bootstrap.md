@@ -53,3 +53,6 @@ production retrieval change.
 
 The machine-readable roadmap is `pilot/m24/m24-bootstrap-roadmap.json`. Its
 deterministic digest is recorded as `roadmap_sha256`.
+
+After PR #964 merged, M24 kickoff readiness is tracked in
+`docs/architecture/m24/m24-1-kickoff-readiness.md`.

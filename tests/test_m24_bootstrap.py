@@ -25,7 +25,7 @@ def test_m24_starts_from_m23_7_live_acceptance_without_promotion() -> None:
     roadmap = _load_roadmap()
 
     assert roadmap["milestone"] == "M24"
-    assert roadmap["status"] == "bootstrap_open"
+    assert roadmap["status"] == "kickoff_ready"
     assert roadmap["source_closure"] == {
         "milestone": "M23.7 R3.8",
         "closure_pr": 963,
@@ -58,6 +58,8 @@ def test_semantic_promotion_decision_is_first_gated_lane() -> None:
     gate = roadmap["gated_lanes"][0]
 
     assert gate["id"] == "semantic_promotion_decision"
+    assert gate["issue"] == 965
+    assert gate["url"] == "https://github.com/danielcanfly/knowledge-engine/issues/965"
     assert gate["order"] == 1
     assert gate["may_start_now"] is True
     assert gate["gated"] is True
@@ -93,10 +95,24 @@ def test_parallel_product_lanes_are_not_frozen_by_promotion_gate() -> None:
         "provenance_source_viewer",
         "graph_navigation",
     }
+    expected_issues = {
+        "source_pr_19_review": 974,
+        "canonical_source_adoption_plan": 967,
+        "sigma_internal_deployment": 973,
+        "obsidian_exporter": 971,
+        "concept_wiki": 968,
+        "lexical_search_ux": 970,
+        "provenance_source_viewer": 972,
+        "graph_navigation": 969,
+    }
     for lane in lanes.values():
         assert lane["may_start_now"] is True
         assert lane["blocked_by_semantic_promotion"] is False
         assert lane["production_serving_authority"] is False
+        assert lane["issue"] == expected_issues[lane["id"]]
+        assert lane["url"] == (
+            f"https://github.com/danielcanfly/knowledge-engine/issues/{lane['issue']}"
+        )
 
 
 def test_bootstrap_blocks_production_semantic_serving_until_decision() -> None:
@@ -118,9 +134,47 @@ def test_bootstrap_blocks_production_semantic_serving_until_decision() -> None:
         "pointer_mutation_authorized": False,
         "credential_rotation_authorized": False,
     }
+    assert roadmap["blocked_implementation_lanes"] == [
+        {
+            "id": "production_semantic_hybrid_retrieval",
+            "issue": 966,
+            "url": "https://github.com/danielcanfly/knowledge-engine/issues/966",
+            "title": "Production semantic/hybrid retrieval implementation",
+            "blocked_by": [965],
+            "may_start_now": False,
+            "must_wait_for": "semantic_promotion_decision",
+            "production_serving_authority": False,
+        }
+    ]
     assert roadmap["next_actions"] == [
-        "open_semantic_promotion_decision_issue",
-        "open_parallel_product_lane_issues",
+        "start_semantic_promotion_decision_gate",
+        "start_non_serving_product_lane_work_without_waiting_for_promotion",
         "keep_production_retrieval_lexical_until_explicit_promotion",
-        "start_non_serving_product_work_without_waiting_for_promotion",
+    ]
+
+
+def test_m24_kickoff_topology_is_ready_before_work_starts() -> None:
+    roadmap = _load_roadmap()
+
+    assert roadmap["kickoff_topology"] == {
+        "milestone": {
+            "number": 1,
+            "title": "M24",
+            "url": "https://github.com/danielcanfly/knowledge-engine/milestone/1",
+        },
+        "bootstrap_pr": 964,
+        "bootstrap_merge_sha": "01c5ff461882893a2e0924bb9ea634f3cd06e378",
+        "promotion_gate_issue": 965,
+        "blocked_production_issue": 966,
+        "parallel_lane_issues": [974, 967, 973, 971, 968, 970, 972, 969],
+        "ready_for_non_serving_lane_work": True,
+        "ready_for_production_semantic_or_hybrid_retrieval": False,
+    }
+    assert roadmap["completed_pre_kickoff_actions"] == [
+        "merged_m24_bootstrap_pr",
+        "created_m24_milestone",
+        "opened_semantic_promotion_decision_issue",
+        "opened_blocked_production_semantic_hybrid_retrieval_issue",
+        "opened_parallel_product_lane_issues",
+        "recorded_issue_topology",
     ]
