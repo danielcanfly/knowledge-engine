@@ -1,0 +1,127 @@
+{
+  "artifact_digests": {
+    "build_report": {
+      "bytes": 253,
+      "key": "releases/20260720T160000Z-46137c97263e/artifacts/build-report.json",
+      "required": true,
+      "sha256": "4ac3da975f8eae8adee2b4379bb4b419e16dfed9bdfdb069c7e3fa400dca6e47"
+    },
+    "graph": {
+      "bytes": 5235,
+      "key": "releases/20260720T160000Z-46137c97263e/artifacts/graph.json",
+      "required": true,
+      "sha256": "fbe9d90a7d5eff9e77db2fedcd87c4e2022bf81a1fb16c0adde0695029b299c8"
+    },
+    "graph_v2": {
+      "bytes": 33269,
+      "key": "releases/20260720T160000Z-46137c97263e/artifacts/graph-v2.json",
+      "required": true,
+      "sha256": "6737dfb3fa9cd4d992c26dce562329c95e06066cd475f97f2fdffdbab8f25abe"
+    },
+    "lexical_index": {
+      "bytes": 223031,
+      "key": "releases/20260720T160000Z-46137c97263e/artifacts/lexical-index.json",
+      "required": true,
+      "sha256": "1106857e4eb2438674bc74a074bf81132f54b77f4c5d2dfe52954328b8271b83"
+    },
+    "okf_bundle": {
+      "bytes": 32396,
+      "key": "releases/20260720T160000Z-46137c97263e/bundle.tar.gz",
+      "required": true,
+      "sha256": "2d296721030dd81331f128093beec2f1d4cddf9db17aa155bea5be8ff0e312d9"
+    },
+    "provenance": {
+      "bytes": 64919,
+      "key": "releases/20260720T160000Z-46137c97263e/artifacts/provenance.json",
+      "required": true,
+      "sha256": "0593d6669661df0d639e13b3b93d744b36f6fa934ca4faf7566d05574a573a05"
+    },
+    "source_snapshot": {
+      "bytes": 19448,
+      "key": "releases/20260720T160000Z-46137c97263e/artifacts/source-snapshot.json",
+      "required": true,
+      "sha256": "c2150569ee59f460f64ece3ddd2deb0c27908d079fb5ac9d91722d0cd3edfd3c"
+    }
+  },
+  "authority_boundary": {
+    "credential_rotation_authorized": false,
+    "hybrid_retrieval_enabled": false,
+    "production_pointer_mutation_authorized": false,
+    "production_retrieval": "lexical",
+    "production_traffic_change_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "semantic_answer_serving_enabled": false,
+    "semantic_promotion_enabled": false
+  },
+  "channel_pointer": {
+    "channel": "m24-p2-canonical-rebuild",
+    "manifest_key": "releases/20260720T160000Z-46137c97263e/manifest.json",
+    "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+    "non_production": true,
+    "pointer_sha256": "d979e66fae45ca57551f031e7c2d832916e48ce13494e149668b7996d18fad2c"
+  },
+  "counts": {
+    "concepts": 20,
+    "graph_v2_authored_edges": 15,
+    "graph_v2_edges": 28,
+    "graph_v2_generated_inverse_edges": 13,
+    "graph_v2_nodes": 20,
+    "provenance_records": 20,
+    "sections": 92,
+    "source_snapshots": 7
+  },
+  "graph_v2": {
+    "artifact_sha256": "6737dfb3fa9cd4d992c26dce562329c95e06066cd475f97f2fdffdbab8f25abe",
+    "relation_types": [
+      "complements",
+      "has_part",
+      "implemented_by",
+      "implements",
+      "part_of",
+      "related_to",
+      "required_by",
+      "requires",
+      "supported_by",
+      "supports"
+    ],
+    "renderer_neutral": true,
+    "schema_version": "knowledge-os-graph/v2"
+  },
+  "inputs": {
+    "adopted_source_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+    "engine_builder_sha": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+    "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+    "release_time": "2026-07-20T16:00:00Z",
+    "source_repository": "danielcanfly/knowledge-source"
+  },
+  "issue": 989,
+  "milestone": "M24",
+  "next_phase": "P3 release consumption / product lane integration without semantic serving",
+  "phase": "P2",
+  "rebuild_command": {
+    "channel": "m24-p2-canonical-rebuild",
+    "object_store_backend": "filesystem",
+    "production_channel_used": false,
+    "source_url": "https://github.com/danielcanfly/knowledge-source.git",
+    "tool": "knowledge-engine build-source"
+  },
+  "rebuild_sha256": "7e304655332b8ebc71294e8313b57a83677b8e4fb63d31cfb149d68b6d0620aa",
+  "release": {
+    "manifest_key": "releases/20260720T160000Z-46137c97263e/manifest.json",
+    "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+    "okf_content_sha256": "46137c97263effa21aef5392b41cbd3948ac58b0147342310eed84ec41fb354a",
+    "release_id": "20260720T160000Z-46137c97263e",
+    "release_ready": true,
+    "source_snapshot_sha256": "9f2fa3df237616e97b6e3bece5f4dfc96a72342ccba2452ee8fe375286d6a451"
+  },
+  "schema_version": "knowledge-engine-m24-p2-canonical-release-rebuild/v1",
+  "status": "canonical_release_rebuild_complete",
+  "validation": {
+    "channel_pointer_sha256_verified": true,
+    "local_rebuild_succeeded": true,
+    "manifest_sha256_verified": true,
+    "production_mutation_dispatched": false,
+    "source_checkout_clean": true
+  }
+}

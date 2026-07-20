@@ -10,19 +10,27 @@ PARSER_ID = "pypdf_text"
 PARSER_VERSION = "6.14.2"
 
 
-def _set_limits() -> None:
+def _set_limits(*, include_memory: bool = True) -> str | None:
     try:
         import resource
     except ImportError:
-        return
+        return None
 
-    memory_limit = int(os.environ["KNOWLEDGE_PDF_MAX_MEMORY_BYTES"])
     cpu_seconds = int(os.environ["KNOWLEDGE_PDF_MAX_CPU_SECONDS"])
     output_limit = int(os.environ["KNOWLEDGE_PDF_MAX_OUTPUT_BYTES"])
-    resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
     resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
     resource.setrlimit(resource.RLIMIT_FSIZE, (output_limit, output_limit))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    if include_memory:
+        memory_limit = int(os.environ["KNOWLEDGE_PDF_MAX_MEMORY_BYTES"])
+        try:
+            resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
+        except (OSError, ValueError):
+            # Some platforms, notably macOS, expose RLIMIT_AS but cannot lower it
+            # for the spawned interpreter. CPU, file-size, core, process, and
+            # parent timeout limits still bound the worker there.
+            return None
+    return None
 
 
 def _disable_network() -> None:
@@ -58,10 +66,17 @@ def main() -> int:
         print("usage: pdf_parser_worker INPUT_PDF OUTPUT_JSON", file=sys.stderr)
         return 2
 
-    _set_limits()
+    limit_failure = _set_limits(include_memory=False)
+    if limit_failure is not None:
+        _write_payload(Path(sys.argv[2]), _failure(limit_failure, "PDF parser limit setup failed"))
+        return 0
     pypdf = importlib.import_module("pypdf")
     pdf_reader = pypdf.PdfReader
     pypdf_version = pypdf.__version__
+    limit_failure = _set_limits(include_memory=True)
+    if limit_failure is not None:
+        _write_payload(Path(sys.argv[2]), _failure(limit_failure, "PDF parser limit setup failed"))
+        return 0
 
     _disable_network()
     source = Path(sys.argv[1])
