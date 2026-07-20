@@ -1,0 +1,177 @@
+{
+  "acceptance_gate": {
+    "blocker": "Cloudflare API token lacks Pages and Access authority.",
+    "live_url_status": "pending_cloudflare_access_binding",
+    "manual_daniel_acceptance": "pending_authenticated_url",
+    "required_next_authority": [
+      "Cloudflare Pages Write",
+      "Cloudflare Access Apps and Policies Write",
+      "Cloudflare Access Organization Read",
+      "Zone DNS Edit for danielcanfly.com"
+    ],
+    "status": "blocked_pending_cloudflare_pages_access_authority"
+  },
+  "authority": {
+    "browser_authority": "read_only",
+    "credential_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "permanent_ledger_mutation": false,
+    "product_audience": "authenticated_internal",
+    "production_answer_serving_enabled": false,
+    "production_pointer_mutation": false,
+    "production_r2_mutation": false,
+    "production_retrieval": "lexical",
+    "qdrant_mutation": false,
+    "raw_evidence_exposed": false,
+    "semantic_promotion_enabled": false,
+    "semantic_serving_enabled": false,
+    "source_mutation": false,
+    "traffic_mutation": false
+  },
+  "bounded_evidence_rules": [
+    "record status classes, counts, and permission names only",
+    "never record API tokens, raw headers, full raw error bodies, or secret values",
+    "do not record arbitrary exception text from live probes",
+    "do not record a live URL as accepted until Access binding and Daniel acceptance pass"
+  ],
+  "capability_observations": [
+    {
+      "bounded_status": "active",
+      "capability": "cloudflare_token_verify",
+      "evidence": {
+        "http_status_class": "2xx",
+        "token_value_recorded": false
+      },
+      "status_class": "available"
+    },
+    {
+      "bounded_status": "one_account_matches_env",
+      "capability": "cloudflare_account_read",
+      "evidence": {
+        "account_count": 1,
+        "account_id_recorded": false
+      },
+      "status_class": "available"
+    },
+    {
+      "bounded_status": "active_zones_available",
+      "capability": "cloudflare_zone_read",
+      "evidence": {
+        "candidate_zone": "danielcanfly.com",
+        "zone_count": 3
+      },
+      "status_class": "available"
+    },
+    {
+      "bounded_status": "api_403_authentication_error",
+      "capability": "cloudflare_pages_projects_read_write",
+      "evidence": {
+        "http_status_class": "4xx",
+        "raw_error_body_recorded": false
+      },
+      "status_class": "forbidden"
+    },
+    {
+      "bounded_status": "api_403_authentication_error",
+      "capability": "cloudflare_access_apps_read_write",
+      "evidence": {
+        "http_status_class": "4xx",
+        "raw_error_body_recorded": false
+      },
+      "status_class": "forbidden"
+    },
+    {
+      "bounded_status": "api_403_authentication_error",
+      "capability": "cloudflare_access_organization_read",
+      "evidence": {
+        "http_status_class": "4xx",
+        "raw_error_body_recorded": false
+      },
+      "status_class": "forbidden"
+    },
+    {
+      "bounded_status": "no_repo_secret_named_for_pages_or_access",
+      "capability": "github_cloudflare_pages_access_secret",
+      "evidence": {
+        "cloudflare_pages_or_access_secret_present": false,
+        "secret_values_read": false
+      },
+      "status_class": "missing"
+    }
+  ],
+  "deployment_plan": {
+    "access_application_type": "self_hosted",
+    "access_policy": {
+      "anonymous_access_allowed": false,
+      "decision": "allow",
+      "include": [
+        "Daniel internal operator identity or approved internal group"
+      ],
+      "session_duration": "8h",
+      "unauthenticated_behavior": "403"
+    },
+    "custom_hostname": "m24-internal.danielcanfly.com",
+    "direct_upload_command": [
+      "wrangler",
+      "pages",
+      "deploy",
+      "pilot/m24/internal-product-deployment/site",
+      "--project-name",
+      "llm-wiki-m24-internal",
+      "--branch",
+      "main"
+    ],
+    "pages_project_name": "llm-wiki-m24-internal",
+    "public_exposure_controls": [
+      "do not treat the pages.dev URL as accepted",
+      "do not deploy until Pages and Access authority are available in the same run",
+      "bind Access before declaring Daniel acceptance",
+      "if Access binding fails after upload, delete or disable the Pages project"
+    ],
+    "readiness_checks": [
+      "unauthenticated request to custom hostname returns 403 or Access challenge",
+      "authenticated request renders exact canonical release banner",
+      "site artifacts match P6 sha256 manifest",
+      "no network request leaves the static package except Access authentication",
+      "Daniel opens the authenticated URL and records manual acceptance"
+    ],
+    "rollback": [
+      "delete the Pages deployment or project",
+      "remove the custom hostname binding",
+      "disable the Access application",
+      "keep production retrieval lexical",
+      "verify no Source/R2/Qdrant/pointer/traffic mutation occurred"
+    ],
+    "source_package": "pilot/m24/internal-product-deployment/site"
+  },
+  "issue_number": 999,
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "p6_package_status": "internal_product_deployment_package_complete",
+  "p6_schema_version": "knowledge-engine-m24-p6-internal-product-deployment/v1",
+  "release_id": "20260720T160000Z-46137c97263e",
+  "required_authority": [
+    {
+      "currently_available": false,
+      "permission": "Cloudflare Pages Write",
+      "purpose": "Create or deploy the P6 static site as a Pages Direct Upload project."
+    },
+    {
+      "currently_available": false,
+      "permission": "Cloudflare Access Apps and Policies Write",
+      "purpose": "Create the self-hosted Access application and allow policy."
+    },
+    {
+      "currently_available": false,
+      "permission": "Cloudflare Access Organization Read",
+      "purpose": "Resolve the account's Access team domain and validate JWT issuer metadata."
+    },
+    {
+      "currently_available": false,
+      "permission": "Zone DNS Edit for danielcanfly.com",
+      "purpose": "Bind the internal custom hostname to the Pages project."
+    }
+  ],
+  "schema_version": "knowledge-engine-m24-p7-authenticated-live-url-readiness/v1",
+  "self_sha256": "a0414cf7b72d2c51a341668ddcdf03e7e480d0f451974f42a185fb5b2f4e2787",
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9"
+}
