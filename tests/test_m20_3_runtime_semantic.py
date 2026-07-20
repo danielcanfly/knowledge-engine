@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from knowledge_engine.errors import IntegrityError
+from knowledge_engine.errors import ConfigurationError, IntegrityError
 from knowledge_engine.m20_embedding_contract import load_json
 from knowledge_engine.m20_semantic_artifacts import build_semantic_artifacts
 from knowledge_engine.runtime import Runtime
@@ -262,6 +262,105 @@ def test_vector_diagnostic_filters_acl_before_serialization(
     assert internal_result["results"][0]["section_id"] == internal["section_id"]
     assert internal_result["results"][0]["score"] == 1.0
     assert len(suite["documents"]) == internal_result["retrieval"]["candidate_count"]
+
+
+def test_m24_shadow_preview_wires_vector_diagnostic_without_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store, _, contract = _release_store(tmp_path)
+    monkeypatch.setenv("M24_RETRIEVAL_REQUESTED_MODE", "semantic_shadow")
+    monkeypatch.setenv("M24_SEMANTIC_HYBRID_IMPLEMENTATION_ENABLED", "true")
+    monkeypatch.delenv("KNOWLEDGE_CHANNEL", raising=False)
+    runtime = Runtime(
+        store,
+        tmp_path / "cache",
+        "staging",
+        semantic_diagnostic_enabled=True,
+        expected_semantic_model_id=contract["model"]["id"],
+        expected_semantic_dimension=contract["model"]["vector_dimension"],
+    )
+    active = runtime.refresh()
+    assert active.semantic_runtime is not None
+    public_doc = next(
+        document
+        for document in active.semantic_runtime.metadata["documents"]
+        if document["audience"] == "public"
+    )
+    query_vector = [0.0] * contract["model"]["vector_dimension"]
+    query_vector[public_doc["row"]] = 1.0
+
+    result = runtime.query_m24_shadow_preview(
+        "bilingual blog",
+        {"public"},
+        query_vector=query_vector,
+        limit=5,
+    )
+
+    assert result["retrieval"]["production_retrieval"] == "lexical"
+    assert result["retrieval"]["authoritative_mode"] == "lexical"
+    assert result["retrieval"]["m24_requested_mode"] == "semantic_shadow"
+    assert result["retrieval"]["m24_channel"] == "staging"
+    assert result["retrieval"]["shadow_preview_attached"] is True
+    assert result["retrieval"]["semantic_diagnostic_invoked"] is True
+    assert result["retrieval"]["semantic_answer_serving_enabled"] is False
+    assert result["retrieval"]["semantic_promotion_enabled"] is False
+    assert result["retrieval"]["hybrid_retrieval_enabled"] is False
+    preview = result["m24_shadow_preview"]
+    assert preview["diagnostic_only"] is True
+    assert preview["response_authoritative"] is False
+    assert preview["production_authority"] is False
+    assert preview["raw_query_persisted"] is False
+    assert preview["raw_answer_persisted"] is False
+    assert preview["result_count"] > 0
+    assert "query_vector" not in preview
+    assert "shadow_evaluation" not in result
+
+
+def test_m24_shadow_preview_requires_explicit_shadow_mode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store, _, _ = _release_store(tmp_path)
+    monkeypatch.delenv("M24_RETRIEVAL_REQUESTED_MODE", raising=False)
+    monkeypatch.delenv("M24_SEMANTIC_HYBRID_IMPLEMENTATION_ENABLED", raising=False)
+    runtime = Runtime(
+        store,
+        tmp_path / "cache",
+        "staging",
+        semantic_diagnostic_enabled=True,
+    )
+
+    with pytest.raises(IntegrityError, match="M24-RUNTIME-113"):
+        runtime.query_m24_shadow_preview(
+            "bilingual blog",
+            {"public"},
+            query_vector=[1.0] + [0.0] * 63,
+        )
+
+
+def test_m24_shadow_preview_rejects_production_before_retrieval(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store, _, _ = _release_store(tmp_path)
+    monkeypatch.setenv("M24_RETRIEVAL_REQUESTED_MODE", "hybrid_shadow")
+    monkeypatch.setenv("M24_SEMANTIC_HYBRID_IMPLEMENTATION_ENABLED", "true")
+    monkeypatch.setenv("KNOWLEDGE_CHANNEL", "production")
+    runtime = Runtime(
+        store,
+        tmp_path / "cache",
+        "staging",
+        semantic_diagnostic_enabled=True,
+    )
+
+    with pytest.raises(ConfigurationError, match="M24-RUNTIME-006"):
+        runtime.query_m24_shadow_preview(
+            "bilingual blog",
+            {"public"},
+            query_vector=[1.0] + [0.0] * 63,
+        )
+    assert runtime.active is None
 
 
 def test_semantic_model_policy_mismatch_rejects_refresh(tmp_path: Path) -> None:
