@@ -1,0 +1,112 @@
+{
+  "acceptance": {
+    "live_url_status": "rolled_back_after_unprotected_pages_upload",
+    "manual_daniel_acceptance": "pending_access_enablement",
+    "required_next_action": "Enable Cloudflare Access in the dashboard, then rerun the Pages upload and Access self-hosted application binding.",
+    "status": "rolled_back_pending_cloudflare_access_enablement"
+  },
+  "authority": {
+    "browser_authority": "read_only",
+    "credential_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "permanent_ledger_mutation": false,
+    "product_audience": "authenticated_internal",
+    "production_answer_serving_enabled": false,
+    "production_pointer_mutation": false,
+    "production_r2_mutation": false,
+    "production_retrieval": "lexical",
+    "qdrant_mutation": false,
+    "raw_evidence_exposed": false,
+    "semantic_promotion_enabled": false,
+    "semantic_serving_enabled": false,
+    "source_mutation": false,
+    "traffic_mutation": false
+  },
+  "evidence_hygiene": [
+    "no Cloudflare token values recorded",
+    "no raw headers recorded",
+    "no raw API error bodies recorded",
+    "no preview URL committed",
+    "no public deployment left active after Access blocker"
+  ],
+  "issue_number": 1001,
+  "lifecycle": [
+    {
+      "bounded_evidence": {
+        "access_api_status": "not_enabled",
+        "pages_deploy_authorized": true,
+        "pages_project_create_authorized": true,
+        "token_value_recorded": false,
+        "token_verified": true
+      },
+      "status": "success",
+      "step": "token_capability_probe"
+    },
+    {
+      "bounded_evidence": {
+        "production_branch": "main",
+        "project_id_recorded": false,
+        "project_name": "llm-wiki-m24-internal"
+      },
+      "status": "success",
+      "step": "pages_project_create"
+    },
+    {
+      "bounded_evidence": {
+        "branch": "main",
+        "deployment_environment": "production",
+        "deployment_short_id": "6fbb3abe",
+        "preview_url_recorded": false,
+        "uploaded_file_count": 9
+      },
+      "status": "success",
+      "step": "pages_direct_upload"
+    },
+    {
+      "bounded_evidence": {
+        "blocker": "cloudflare_access_not_enabled",
+        "cloudflare_error_code": 9999,
+        "http_status_class": "4xx",
+        "raw_error_body_recorded": false
+      },
+      "status": "blocked",
+      "step": "access_application_binding"
+    },
+    {
+      "bounded_evidence": {
+        "reason": "access_application_binding_blocked_first",
+        "target_dns_records_created": 0
+      },
+      "status": "not_attempted",
+      "step": "custom_hostname_dns_binding"
+    }
+  ],
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "pages_project_name": "llm-wiki-m24-internal",
+  "release_id": "20260720T160000Z-46137c97263e",
+  "rollback": {
+    "absence_proof": {
+      "access_api_after_rollback": {
+        "cloudflare_error_code": 9999,
+        "http_status_class": "4xx",
+        "state": "access_not_enabled"
+      },
+      "custom_hostname_dns_records": {
+        "count": 0,
+        "name": "m24-internal.danielcanfly.com",
+        "type": "CNAME"
+      },
+      "pages_project_get_after_delete": {
+        "cloudflare_error_code": 8000007,
+        "http_status": 404,
+        "state": "absent"
+      }
+    },
+    "completed": true,
+    "reason": "Pages upload produced an unprotected preview before Access was enabled.",
+    "required": true
+  },
+  "schema_version": "knowledge-engine-m24-p8-live-url-attempt/v1",
+  "self_sha256": "09479213ce7a7ce1d20931cb381f53d1eeaec2c4704625d3b26cd5b6b1fc870e",
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9"
+}
