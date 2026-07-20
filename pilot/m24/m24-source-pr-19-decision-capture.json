@@ -1,0 +1,184 @@
+{
+  "schema_version": "knowledge-engine-m24-source-pr-19-decision-capture/v1",
+  "lane": "source_pr_19_review",
+  "issue": 974,
+  "url": "https://github.com/danielcanfly/knowledge-engine/issues/974",
+  "status": "decision_capture_ready",
+  "source_pr": {
+    "repository": "danielcanfly/knowledge-source",
+    "number": 19,
+    "url": "https://github.com/danielcanfly/knowledge-source/pull/19",
+    "state": "open",
+    "draft": true,
+    "base_sha": "a6ba738d910d01d2ae99b1968f0831989934c549",
+    "head_sha": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+    "decision_template_state": "all_pending",
+    "human_approval_claimed": false,
+    "merge_as_is_allowed": false
+  },
+  "review_items": [
+    {
+      "title": "Harness",
+      "review_id": "m23review_e2847c567565549ea21b89ee7b572d47",
+      "suggested_decision": "approve_new",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Parent execution-governance concept tying request boundary, task contract, completion gate, authority, and verification together."
+    },
+    {
+      "title": "Task Contract",
+      "review_id": "m23review_37d35397ace98d69c00b0e8fe4cb1458",
+      "suggested_decision": "approve_new",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Explicit outcome, evidence, and constraint contract narrower than general planning strategy."
+    },
+    {
+      "title": "Request Boundary",
+      "review_id": "m23review_12cf0442aff36f0400715efe1ee1025a",
+      "suggested_decision": "approve_new",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Ingress identity, tenant scope, schema validity, and admission are product/security boundaries."
+    },
+    {
+      "title": "Completion Gate",
+      "review_id": "m23review_ed53fb63ef649af90d2e2f73e85ae5e7",
+      "suggested_decision": "approve_new",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Terminal acceptance authority is a concrete harness primitive."
+    },
+    {
+      "title": "Canonical Run Authority",
+      "review_id": "m23review_8566693dd5241e3269f5038e01394f6b",
+      "suggested_decision": "approve_new",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Execution state authority differs from Source governance and candidate delivery."
+    },
+    {
+      "title": "Stopping Policy",
+      "review_id": "m23review_7c7842b8a5e71c5f7577b26c27e2f73f",
+      "suggested_decision": "approve_new",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Stop, wait, complete, fail, and cancel rules are reusable harness execution policy."
+    },
+    {
+      "title": "Goal Drift",
+      "review_id": "m23review_0df0b6cb698712b98425cc2b05265565",
+      "suggested_decision": "approve_new",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Failure mode tied to Task Contract and steering should remain first-class."
+    },
+    {
+      "title": "Steering Control Plane",
+      "review_id": "m23review_784ebc246b86b22be547d2f4c006ca64",
+      "suggested_decision": "approve_new",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Human authority over intent, boundaries, evidence, and escalation is distinct from Source governance."
+    },
+    {
+      "title": "Headless Harness Service",
+      "review_id": "m23review_ee3af10c8e0f2f6d9fb49c6c7b1f308c",
+      "suggested_decision": "approve_new",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "UI-independent execution core is an implementation/product architecture concept."
+    },
+    {
+      "title": "Durable Thread State",
+      "review_id": "m23review_ce9255a1a87d7f2cc87c88ec26e1dc9a",
+      "suggested_decision": "approve_new",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Persistent interaction state across turns supports the Headless Harness Service."
+    },
+    {
+      "title": "Item Turn Thread Protocol",
+      "review_id": "m23review_08f2083f1643842c7266a7fa3e7118b1",
+      "suggested_decision": "approve_new",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Typed item/turn/thread model is specific enough to warrant a canonical protocol concept."
+    },
+    {
+      "title": "Harnessability",
+      "review_id": "m23review_94192ccc4b53c47e32942121da3775c2",
+      "suggested_decision": "edit",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Keep the idea, but tighten the definition as a measurable quality attribute before adoption."
+    },
+    {
+      "title": "Agent Loop",
+      "review_id": "m23review_998e1adb9a6ce64f12a4fc9477eebe30",
+      "suggested_decision": "edit",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Approve only if edited to a harness-specific governed loop with distinct lifecycle semantics."
+    },
+    {
+      "title": "Tool Calling",
+      "review_id": "m23review_c3b0082d594d591018a417614574b098",
+      "suggested_decision": "edit",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Prefer an edited concept such as Tool Call Proposal if the intended meaning is proposed external operations requiring authority."
+    },
+    {
+      "title": "Verification",
+      "review_id": "m23review_a91d9910fbd95236a02e5f1bf52a1b27",
+      "suggested_decision": "edit",
+      "decision": "pending",
+      "human_actor": null,
+      "reviewed_at": null,
+      "rationale": "Approve only if edited to a harness-specific verification primitive with acceptance authority boundaries."
+    }
+  ],
+  "allowed_decisions": [
+    "approve_new",
+    "map_existing",
+    "edit",
+    "reject",
+    "defer"
+  ],
+  "closure_requirements": {
+    "all_items_non_pending": true,
+    "human_actor_required": true,
+    "reviewed_at_required": true,
+    "source_pr_comment_or_review_required": true,
+    "source_pr_must_not_merge_as_is": true,
+    "canonical_adoption_pr_required_later": true
+  },
+  "authority_boundary": {
+    "production_retrieval": "lexical",
+    "semantic_promotion_enabled": false,
+    "semantic_answer_serving_enabled": false,
+    "hybrid_retrieval_enabled": false,
+    "source_mutation_authorized": false,
+    "pointer_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "credential_rotation_authorized": false
+  },
+  "next_human_action": "Daniel must record one allowed decision, human actor, reviewed timestamp, and provenance note for each review item before #974 can close.",
+  "decision_capture_sha256": "a640d82ae7b3d123ef674f87fb640a7877849324c8d5a4fac04035f3b41f18e7"
+}
