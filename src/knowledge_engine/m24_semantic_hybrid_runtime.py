@@ -17,6 +17,7 @@ SUPPORTED_REQUESTED_MODES = frozenset({
     HYBRID_SHADOW_MODE,
 })
 MAX_SHADOW_RESULTS = 50
+MAX_CHANNEL_LENGTH = 128
 
 
 def _env(name: str, default: str | None = None) -> str | None:
@@ -44,12 +45,18 @@ class M24RetrievalRuntimeSettings:
     activation_authorized: bool = False
 
     @classmethod
-    def from_env(cls) -> M24RetrievalRuntimeSettings:
+    def from_env(
+        cls,
+        *,
+        channel_default: str = "production",
+    ) -> M24RetrievalRuntimeSettings:
         settings = cls(
             requested_mode=(
                 _env("M24_RETRIEVAL_REQUESTED_MODE", LEXICAL_MODE) or LEXICAL_MODE
             ).casefold(),
-            channel=(_env("KNOWLEDGE_CHANNEL", "production") or "production").casefold(),
+            channel=(
+                _env("KNOWLEDGE_CHANNEL", channel_default) or channel_default
+            ).casefold(),
             flagged_implementation_enabled=_bool_env(
                 "M24_SEMANTIC_HYBRID_IMPLEMENTATION_ENABLED",
                 False,
@@ -68,8 +75,8 @@ class M24RetrievalRuntimeSettings:
                 "M24-RUNTIME-002 requested mode must be lexical, "
                 "semantic_shadow, or hybrid_shadow"
             )
-        if self.channel not in {"production", "internal", "staging", "test"}:
-            raise ConfigurationError(f"M24-RUNTIME-003 unsupported channel: {self.channel}")
+        if not self.channel or len(self.channel) > MAX_CHANNEL_LENGTH:
+            raise ConfigurationError("M24-RUNTIME-003 channel must be bounded")
         if self.activation_authorized:
             raise ConfigurationError(
                 "M24-RUNTIME-004 semantic activation requires a later activation "
