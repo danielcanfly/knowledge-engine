@@ -14,6 +14,8 @@ Search responses include:
 - ranked result cards with concept ID, section ID, title, section title, excerpt,
   score, citation ordinals, source card IDs, and source kinds;
 - source cards reused from the public citation contract;
+- bounded source viewers that bind each visible source card to its safe citation
+  locator and claim metadata;
 - stable concept IDs;
 - release-bound request IDs;
 - explicit empty state with `status=not_found`;

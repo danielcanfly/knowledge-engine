@@ -10,6 +10,7 @@ from .m14_source_cards import build_public_citation_payload
 
 PUBLIC_QUERY_SCHEMA = "knowledge-engine-public-query/v1"
 PUBLIC_SEARCH_SCHEMA = "knowledge-engine-public-search/v1"
+PUBLIC_SOURCE_VIEWER_SCHEMA = "knowledge-engine-public-source-viewer/v1"
 AskStatus = Literal["answered", "not_found", "degraded"]
 Audience = Literal["public", "internal", "confidential", "restricted"]
 NotFoundReason = Literal["no_match", "no_authorized_match", "release_unavailable"]
@@ -81,6 +82,26 @@ class PublicSourceCard(BaseModel):
     claim_ids: list[str]
 
 
+class PublicSourceViewerSummary(BaseModel):
+    citation_count: int = Field(ge=0)
+    concept_count: int = Field(ge=0)
+    claim_count: int = Field(ge=0)
+    has_snapshot: bool
+    integrity_available: bool
+    retrieval_authority: Literal["lexical"] = "lexical"
+    semantic_serving_enabled: bool = False
+    raw_evidence_exposed: bool = False
+
+
+class PublicSourceViewer(BaseModel):
+    schema_version: str = PUBLIC_SOURCE_VIEWER_SCHEMA
+    viewer_id: str
+    release_id: str
+    source_card: PublicSourceCard
+    citations: list[PublicCitation]
+    summary: PublicSourceViewerSummary
+
+
 class PublicAskResponse(BaseModel):
     schema_version: str = PUBLIC_QUERY_SCHEMA
     answer: str | None
@@ -114,6 +135,7 @@ class PublicSearchResponse(BaseModel):
     status: AskStatus
     results: list[PublicSearchResult]
     source_cards: list[PublicSourceCard]
+    source_viewers: list[PublicSourceViewer]
     concept_ids: list[str]
     release_id: str
     request_id: str
@@ -183,6 +205,61 @@ def public_search_request_id(
     }
     digest = hashlib.sha256(_canonical_bytes(identity)).hexdigest()[:32]
     return f"search_{digest}"
+
+
+def public_source_viewer_id(
+    *,
+    release_id: str,
+    source_card_id: str,
+    citation_ids: list[str],
+) -> str:
+    identity = {
+        "schema_version": f"{PUBLIC_SOURCE_VIEWER_SCHEMA}/identity",
+        "release_id": release_id,
+        "source_card_id": source_card_id,
+        "citation_ids": sorted(citation_ids),
+    }
+    digest = hashlib.sha256(_canonical_bytes(identity)).hexdigest()[:32]
+    return f"viewer_{digest}"
+
+
+def public_source_viewers(
+    *,
+    release_id: str,
+    source_cards: list[PublicSourceCard],
+    citations: list[PublicCitation],
+) -> list[PublicSourceViewer]:
+    citations_by_card: dict[str, list[PublicCitation]] = {}
+    for citation in citations:
+        citations_by_card.setdefault(citation.source_card_id, []).append(citation)
+
+    viewers: list[PublicSourceViewer] = []
+    for card in source_cards:
+        card_citations = sorted(
+            citations_by_card.get(card.source_card_id, []),
+            key=lambda item: (item.ordinal, item.citation_id),
+        )
+        citation_ids = [item.citation_id for item in card_citations]
+        viewers.append(
+            PublicSourceViewer(
+                viewer_id=public_source_viewer_id(
+                    release_id=release_id,
+                    source_card_id=card.source_card_id,
+                    citation_ids=citation_ids,
+                ),
+                release_id=release_id,
+                source_card=card,
+                citations=card_citations,
+                summary=PublicSourceViewerSummary(
+                    citation_count=len(card_citations),
+                    concept_count=len(card.concept_ids),
+                    claim_count=len(card.claim_ids),
+                    has_snapshot=card.snapshot_available,
+                    integrity_available=card.integrity_sha256 is not None,
+                ),
+            )
+        )
+    return viewers
 
 
 def _compose_answer(
@@ -368,6 +445,16 @@ def public_search_response_from_runtime(
         for item in card_payload
         if item["source_card_id"] in used_card_ids
     ]
+    citations = [
+        PublicCitation(**item)
+        for item in citation_payload
+        if item["source_card_id"] in used_card_ids
+    ]
+    source_viewers = public_source_viewers(
+        release_id=release_id,
+        source_cards=source_cards,
+        citations=citations,
+    )
     status_value = runtime_result.get("status")
     not_found_reason = runtime_result.get("not_found_reason")
     status: AskStatus = (
@@ -391,6 +478,7 @@ def public_search_response_from_runtime(
         status=status,
         results=[PublicSearchResult(**item) for item in result_cards],
         source_cards=source_cards,
+        source_viewers=source_viewers,
         concept_ids=concept_ids,
         release_id=release_id,
         request_id=request_id,
