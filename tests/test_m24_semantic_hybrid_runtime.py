@@ -165,6 +165,27 @@ def test_runtime_settings_from_env_default_to_lexical(
     assert settings.activation_authorized is False
 
 
+def test_runtime_settings_from_env_uses_runtime_channel_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KNOWLEDGE_CHANNEL", raising=False)
+
+    settings = M24RetrievalRuntimeSettings.from_env(channel_default="staging")
+
+    assert settings.channel == "staging"
+
+
+def test_runtime_settings_accept_dynamic_non_production_channels() -> None:
+    settings = M24RetrievalRuntimeSettings(channel="candidate-source-abc123")
+
+    settings.validate()
+
+
+def test_runtime_settings_reject_unbounded_channel() -> None:
+    with pytest.raises(ConfigurationError, match="M24-RUNTIME-003"):
+        M24RetrievalRuntimeSettings(channel="x" * 129).validate()
+
+
 def test_wrapper_deep_copies_lexical_input() -> None:
     lexical = _lexical_result()
     result = apply_m24_flagged_retrieval(lexical)

@@ -292,7 +292,7 @@ def query(
             set(principal.audiences),
             limit=request.max_results,
         )
-    except IntegrityError as exc:
+    except KnowledgeEngineError as exc:
         logger.exception("query failed integrity check")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -454,7 +454,7 @@ def _execute_public_ask(
             max_results=request.max_results,
             audience=request.audience,
         )
-    except (IntegrityError, FileNotFoundError) as exc:
+    except (KnowledgeEngineError, FileNotFoundError) as exc:
         logger.exception("public ask failed integrity check")
         detail = PublicErrorDetail(
             code="PUBLIC-QUERY-503",

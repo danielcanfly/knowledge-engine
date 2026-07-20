@@ -13,6 +13,10 @@ from .errors import IntegrityError
 from .m14_citation_runtime import enrich_runtime_citations
 from .m14_retrieval import retrieve_wiki_first, validate_relation_graph_v2
 from .m20_runtime_semantic import SemanticRuntimeIndex
+from .m24_semantic_hybrid_runtime import (
+    M24RetrievalRuntimeSettings,
+    apply_m24_flagged_retrieval,
+)
 from .query_evaluation import evaluate_runtime_query
 from .storage import ObjectStore, sha256_bytes
 
@@ -331,7 +335,7 @@ class Runtime:
             retrieval=retrieved["retrieval"],
             non_answer_reason=retrieved["not_found_reason"],
         )
-        return {
+        lexical_result = {
             "status": retrieved["status"],
             "release": release,
             "query": query,
@@ -341,3 +345,7 @@ class Runtime:
             "not_found_reason": retrieved["not_found_reason"],
             "non_answer_reason": retrieved["not_found_reason"],
         }
+        return apply_m24_flagged_retrieval(
+            lexical_result,
+            M24RetrievalRuntimeSettings.from_env(channel_default=self.channel),
+        )

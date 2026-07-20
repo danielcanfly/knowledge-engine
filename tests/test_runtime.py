@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from knowledge_engine.errors import IntegrityError
+from knowledge_engine.errors import ConfigurationError, IntegrityError
 from knowledge_engine.runtime import Runtime
 
 
@@ -44,6 +44,12 @@ def test_internal_query_returns_citations(tmp_path: Path, built_store) -> None:
     assert result["release"]["release_id"] == compiled.release_id
     assert result["results"][0]["concept_id"] == "concepts/knowledge-compiler"
     assert result["results"][0]["citations"][0]["source_id"] == "src_google_okf_v01"
+    assert result["retrieval"]["production_retrieval"] == "lexical"
+    assert result["retrieval"]["authoritative_mode"] == "lexical"
+    assert result["retrieval"]["semantic_answer_serving_enabled"] is False
+    assert result["retrieval"]["semantic_promotion_enabled"] is False
+    assert result["retrieval"]["hybrid_retrieval_enabled"] is False
+    assert result["retrieval"]["m24_channel"] == "staging"
 
 
 def test_public_query_cannot_retrieve_internal(tmp_path: Path, built_store) -> None:
@@ -54,6 +60,19 @@ def test_public_query_cannot_retrieve_internal(tmp_path: Path, built_store) -> N
     assert result["results"] == []
     assert result["retrieval"]["acl_filtered_count"] == 1
     assert result["non_answer_reason"] == "no_authorized_match"
+
+
+def test_m24_activation_flag_fails_closed_on_runtime_query(
+    tmp_path: Path,
+    built_store,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store, _, _ = built_store
+    monkeypatch.setenv("M24_SEMANTIC_ACTIVATION_AUTHORIZED", "true")
+    runtime = Runtime(store, tmp_path / "cache", "staging")
+
+    with pytest.raises(ConfigurationError, match="M24-RUNTIME-004"):
+        runtime.query("knowledge compiler", {"public", "internal"})
 
 
 def test_tampered_artifact_preserves_last_known_good(tmp_path: Path, built_store) -> None:
