@@ -105,32 +105,30 @@ jobs:
           import subprocess
           from pathlib import Path
 
+          scope_base = "${{ github.event.pull_request.base.sha || '3a25fbde6b1b16061478632abd0844968790f84e' }}"
           workflow = Path(".github/workflows/m23-7-r3-8-remote-observe.yml").read_text(encoding="utf-8")
           assert "m23_7_r3_8_remote_entrypoint_region_v3" in workflow
           assert "Run one region-placed Worker observation" in workflow
           assert "GITHUB_RUN_ATTEMPT" in workflow
           allowed = {
-              "scripts/m23_7_r3_8_remote_operator_region_v3.py",
-              "scripts/m23_7_r3_8_remote_entrypoint_region_v3.py",
-              "tests/test_m23_7_r3_8_region_placement_v3.py",
-              "pilot/m23/m23-7-r3-8-region-placement-v3-contract.json",
-              "docs/architecture/m23-7-r3-8-region-placement-v3.md",
+              ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
               ".github/workflows/m23-7-r3-8-region-placement-v3-ci.yml",
               ".github/workflows/m23-7-r3-8-remote-observe.yml",
-              ".github/workflows/m23-7-r3-8-placement-semantics-v2-ci.yml",
-              ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
+              "scripts/m23_7_r3_8_remote_operator.py",
+              "tests/test_m23_7_r3_8_remote_operator.py",
           }
           changed = set(subprocess.check_output(
-              ["git", "diff", "--name-only", "d0459fee41f747fb79cd32feaa673ef6fcf9e58a", "HEAD"],
+              ["git", "diff", "--name-only", scope_base, "HEAD"],
               text=True,
           ).splitlines())
-          assert changed == allowed, (changed, allowed)
+          assert changed <= allowed, (changed, allowed)
           PY
-          git diff --exit-code d0459fee41f747fb79cd32feaa673ef6fcf9e58a HEAD -- \
-            scripts/m23_7_r3_8_remote_operator.py \
+          git diff --exit-code "${{ github.event.pull_request.base.sha || '3a25fbde6b1b16061478632abd0844968790f84e' }}" HEAD -- \
             scripts/m23_7_r3_8_remote_entrypoint.py \
             scripts/m23_7_r3_8_remote_operator_placement_v2.py \
             scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py \
+            scripts/m23_7_r3_8_remote_operator_region_v3.py \
+            scripts/m23_7_r3_8_remote_entrypoint_region_v3.py \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
             workers/m23-7-r3-8-latency-repair/worker.mjs \
             pilot/m23/m23-7-r3-8-latency-repair-contract.json

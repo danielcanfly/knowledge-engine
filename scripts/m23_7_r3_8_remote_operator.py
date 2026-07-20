@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import secrets
@@ -27,6 +28,7 @@ READINESS_CONSECUTIVE_SUCCESSES = 2
 PLACEMENT_READINESS_ATTEMPTS = 120
 PLACEMENT_READINESS_RETRY_SECONDS = 5
 PLACEMENT_RESPONSE_HEADER = "X-M23-R3-8-Placement"
+READINESS_BODY_CODE = re.compile(r"^[a-z0-9_-]{1,80}$")
 LIVE_OBSERVATION_ATTEMPTS = 9
 LIVE_OBSERVATION_RETRY_SECONDS = 5
 LIVE_OBSERVATION_RETRY_CODES = frozenset(
@@ -281,6 +283,74 @@ def worker_ready_response(
     )
 
 
+def http_status_class(status_code: int | None) -> str:
+    if status_code is None:
+        return "network_error"
+    if 100 <= status_code <= 599:
+        return f"{status_code // 100}xx"
+    return "invalid_status"
+
+
+def bounded_body_code(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    code = payload.get("code")
+    if isinstance(code, str) and READINESS_BODY_CODE.fullmatch(code):
+        return code
+    return None
+
+
+def bounded_placement_class(value: str | None) -> str:
+    if value in {"local", "remote", "absent"}:
+        return value
+    return "unknown"
+
+
+def readiness_timeline_entry(
+    *,
+    attempt: int,
+    elapsed_ms: int,
+    status_code: int | None,
+    payload: object,
+    placement: str | None,
+) -> dict[str, Any]:
+    body_code = bounded_body_code(payload)
+    service_available = status_code is not None
+    application_ready = (
+        status_code == 400 and body_code == "request-schema-drift"
+    )
+    return {
+        "attempt": attempt,
+        "elapsed_ms": max(0, elapsed_ms),
+        "http_status_class": http_status_class(status_code),
+        "body_code": body_code,
+        "service_available": service_available,
+        "application_ready": application_ready,
+        "placement_class": bounded_placement_class(placement),
+    }
+
+
+def readiness_summary(
+    timeline: list[dict[str, Any]],
+    *,
+    consecutive_successes: int,
+) -> dict[str, Any]:
+    return {
+        "attempt_count": len(timeline),
+        "service_available": any(item["service_available"] for item in timeline),
+        "application_ready": any(item["application_ready"] for item in timeline),
+        "placement_classes": sorted(
+            {
+                item["placement_class"]
+                for item in timeline
+                if item["placement_class"] != "unknown"
+            }
+        ),
+        "consecutive_successes": consecutive_successes,
+        "required_consecutive_successes": READINESS_CONSECUTIVE_SUCCESSES,
+    }
+
+
 def execute(args: argparse.Namespace) -> int:
     from knowledge_engine import m23_7_r3_8_latency_repair as subject
 
@@ -297,6 +367,8 @@ def execute(args: argparse.Namespace) -> int:
     stage = "entry"
     evidence_size = 0
     receipt_exit = 23
+    readiness_timeline: list[dict[str, Any]] = []
+    readiness_successes = 0
     try:
         if args.confirmation != "RUN_R3_8_REMOTE_ONCE":
             raise RemoteOperatorError("confirmation_mismatch")
@@ -375,7 +447,8 @@ def execute(args: argparse.Namespace) -> int:
 
             endpoint = worker_origin + WORKER_ROUTE
             ready_successes = 0
-            for _ in range(PLACEMENT_READINESS_ATTEMPTS):
+            for attempt in range(1, PLACEMENT_READINESS_ATTEMPTS + 1):
+                readiness_started = time.perf_counter_ns()
                 try:
                     response = httpx.post(
                         endpoint,
@@ -386,9 +459,25 @@ def execute(args: argparse.Namespace) -> int:
                         json={},
                         timeout=5.0,
                     )
+                    try:
+                        payload = response.json()
+                    except ValueError:
+                        payload = None
+                    readiness_timeline.append(
+                        readiness_timeline_entry(
+                            attempt=attempt,
+                            elapsed_ms=math.ceil(
+                                (time.perf_counter_ns() - readiness_started)
+                                / 1_000_000
+                            ),
+                            status_code=response.status_code,
+                            payload=payload,
+                            placement=response.headers.get(PLACEMENT_RESPONSE_HEADER),
+                        )
+                    )
                     if worker_ready_response(
                         response.status_code,
-                        response.json(),
+                        payload,
                         response.headers.get(PLACEMENT_RESPONSE_HEADER),
                     ):
                         ready_successes += 1
@@ -396,10 +485,23 @@ def execute(args: argparse.Namespace) -> int:
                             break
                     else:
                         ready_successes = 0
-                except (httpx.HTTPError, ValueError):
+                except httpx.HTTPError:
+                    readiness_timeline.append(
+                        readiness_timeline_entry(
+                            attempt=attempt,
+                            elapsed_ms=math.ceil(
+                                (time.perf_counter_ns() - readiness_started)
+                                / 1_000_000
+                            ),
+                            status_code=None,
+                            payload=None,
+                            placement=None,
+                        )
+                    )
                     ready_successes = 0
                 if ready_successes < READINESS_CONSECUTIVE_SUCCESSES:
                     time.sleep(PLACEMENT_READINESS_RETRY_SECONDS)
+            readiness_successes = ready_successes
             if ready_successes < READINESS_CONSECUTIVE_SUCCESSES:
                 raise RemoteOperatorError("worker_not_ready")
 
@@ -432,6 +534,11 @@ def execute(args: argparse.Namespace) -> int:
                 "worker_version_id": worker_version_id,
                 "worker_retained": True,
                 "local_terminal_operator_used": False,
+                "readiness": readiness_summary(
+                    readiness_timeline,
+                    consecutive_successes=readiness_successes,
+                ),
+                "readiness_timeline": readiness_timeline,
                 "placement_remote_readiness_verified": True,
                 "placement_response_class": "remote",
                 "placement_location_persisted": False,
@@ -457,6 +564,11 @@ def execute(args: argparse.Namespace) -> int:
             "worker_retained": True,
             "deletion_authorization_required": True,
             "receipt_file_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+            "readiness": readiness_summary(
+                readiness_timeline,
+                consecutive_successes=readiness_successes,
+            ),
+            "readiness_timeline": readiness_timeline,
             "production_retrieval": "lexical",
             "protected_mutations_dispatched": False,
             "blockers_cleared": False,
@@ -482,6 +594,11 @@ def execute(args: argparse.Namespace) -> int:
             "arbitrary_exception_text_persisted": False,
             "credentials_persisted": False,
             "service_url_persisted": False,
+            "readiness": readiness_summary(
+                readiness_timeline,
+                consecutive_successes=readiness_successes,
+            ),
+            "readiness_timeline": readiness_timeline,
             "production_retrieval": "lexical",
             "protected_mutations_dispatched": False,
             "blockers_cleared": False,
@@ -501,6 +618,11 @@ def execute(args: argparse.Namespace) -> int:
             "deletion_authorization_required": worker_deployed,
             "failure_code": code,
             "failure_stage": stage,
+            "readiness": readiness_summary(
+                readiness_timeline,
+                consecutive_successes=readiness_successes,
+            ),
+            "readiness_timeline": readiness_timeline,
             "production_retrieval": "lexical",
             "protected_mutations_dispatched": False,
             "blockers_cleared": False,

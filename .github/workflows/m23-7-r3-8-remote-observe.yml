@@ -89,7 +89,6 @@ jobs:
         shell: bash
         run: |
           set +e
-          rm -rf "$EVIDENCE_DIR"
           python -m scripts.m23_7_r3_8_remote_entrypoint_region_v3 \
             --expected-head "${{ inputs.expected_head }}" \
             --run-id "$GITHUB_RUN_ID" \

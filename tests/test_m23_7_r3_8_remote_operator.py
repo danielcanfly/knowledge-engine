@@ -157,6 +157,52 @@ def test_worker_readiness_requires_authorized_remote_schema_probe() -> None:
     )
 
 
+def test_readiness_timeline_splits_service_app_and_placement() -> None:
+    ready = subject.readiness_timeline_entry(
+        attempt=7,
+        elapsed_ms=131,
+        status_code=400,
+        payload={"status": "error", "code": "request-schema-drift"},
+        placement="local",
+    )
+    assert ready == {
+        "attempt": 7,
+        "elapsed_ms": 131,
+        "http_status_class": "4xx",
+        "body_code": "request-schema-drift",
+        "service_available": True,
+        "application_ready": True,
+        "placement_class": "local",
+    }
+    network = subject.readiness_timeline_entry(
+        attempt=8,
+        elapsed_ms=-5,
+        status_code=None,
+        payload={"code": "https://example.invalid/not-persisted"},
+        placement="remote-SJC",
+    )
+    assert network == {
+        "attempt": 8,
+        "elapsed_ms": 0,
+        "http_status_class": "network_error",
+        "body_code": None,
+        "service_available": False,
+        "application_ready": False,
+        "placement_class": "unknown",
+    }
+    assert subject.readiness_summary(
+        [ready, network],
+        consecutive_successes=1,
+    ) == {
+        "attempt_count": 2,
+        "service_available": True,
+        "application_ready": True,
+        "placement_classes": ["local"],
+        "consecutive_successes": 1,
+        "required_consecutive_successes": 2,
+    }
+
+
 def test_source_has_no_fixed_worker_absence_probe() -> None:
     text = Path("scripts/m23_7_r3_8_remote_operator.py").read_text(encoding="utf-8")
     assert "versions list" not in text
@@ -168,6 +214,9 @@ def test_source_has_no_fixed_worker_absence_probe() -> None:
     assert "PLACEMENT_READINESS_RETRY_SECONDS = 5" in text
     assert "PLACEMENT_RESPONSE_HEADER" in text
     assert "LIVE_OBSERVATION_ATTEMPTS = 9" in text
+    assert "readiness_timeline" in text
+    assert "service_available" in text
+    assert "application_ready" in text
     assert '"worker_http_404"' in text
     assert '"worker_http_500_operator_secret_missing"' in text
     assert '"worker_http_502_qdrant_batch_unavailable"' in text
