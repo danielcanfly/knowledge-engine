@@ -1,0 +1,130 @@
+{
+  "schema_version": "knowledge-engine-m24-bootstrap-roadmap/v1",
+  "milestone": "M24",
+  "status": "bootstrap_open",
+  "source_closure": {
+    "milestone": "M23.7 R3.8",
+    "closure_pr": 963,
+    "parent_issue": 474,
+    "semantic_live_acceptance_complete": true,
+    "engine_sha": "2a24ed38f4d9c5e370417453860314cd60c14ef9",
+    "observation_run_id": "29715599032",
+    "artifact_id": "8450463481",
+    "artifact_zip_sha256": "7f025b28fad8f6574748f58f0de9042cf15c7b93a8fa8070c105a0ba0419311c",
+    "evidence_seal_sha256": "94dad021d947422933fab588b6f0396c249d73516ae27f3533329480edc7e2eb",
+    "reconciliation_sha256": "cb6b7d1b7213da018dd8466c9c43538d616f24f65ece25ef1c28ec1ac4e3094a"
+  },
+  "production_state": {
+    "retrieval": "lexical",
+    "semantic_promotion_enabled": false,
+    "semantic_answer_serving_enabled": false,
+    "hybrid_retrieval_enabled": false,
+    "protected_mutations_dispatched": false
+  },
+  "gated_lanes": [
+    {
+      "id": "semantic_promotion_decision",
+      "order": 1,
+      "title": "Semantic promotion decision",
+      "may_start_now": true,
+      "gated": true,
+      "required_before": [
+        "production_retrieval_change",
+        "production_hybrid_retrieval",
+        "semantic_answer_serving",
+        "semantic_promotion"
+      ],
+      "must_define": [
+        "authority_boundary",
+        "rollout_plan",
+        "rollback_plan",
+        "serving_contract",
+        "production_metrics",
+        "failure_triggers",
+        "operator_or_pr_authorization"
+      ],
+      "authorizes_on_bootstrap": []
+    }
+  ],
+  "parallel_product_lanes": [
+    {
+      "id": "source_pr_19_review",
+      "title": "Source PR #19 manual review",
+      "may_start_now": true,
+      "blocked_by_semantic_promotion": false,
+      "production_serving_authority": false
+    },
+    {
+      "id": "canonical_source_adoption_plan",
+      "title": "Canonical Source adoption planning",
+      "may_start_now": true,
+      "blocked_by_semantic_promotion": false,
+      "production_serving_authority": false
+    },
+    {
+      "id": "sigma_internal_deployment",
+      "title": "Sigma.js internal deployment",
+      "may_start_now": true,
+      "blocked_by_semantic_promotion": false,
+      "production_serving_authority": false
+    },
+    {
+      "id": "obsidian_exporter",
+      "title": "Obsidian exporter",
+      "may_start_now": true,
+      "blocked_by_semantic_promotion": false,
+      "production_serving_authority": false
+    },
+    {
+      "id": "concept_wiki",
+      "title": "Concept Wiki",
+      "may_start_now": true,
+      "blocked_by_semantic_promotion": false,
+      "production_serving_authority": false
+    },
+    {
+      "id": "lexical_search_ux",
+      "title": "Lexical search UX",
+      "may_start_now": true,
+      "blocked_by_semantic_promotion": false,
+      "production_serving_authority": false
+    },
+    {
+      "id": "provenance_source_viewer",
+      "title": "Provenance and source viewer",
+      "may_start_now": true,
+      "blocked_by_semantic_promotion": false,
+      "production_serving_authority": false
+    },
+    {
+      "id": "graph_navigation",
+      "title": "Graph navigation",
+      "may_start_now": true,
+      "blocked_by_semantic_promotion": false,
+      "production_serving_authority": false
+    }
+  ],
+  "blocked_until_promotion_decision": [
+    "production_retrieval_change",
+    "production_hybrid_retrieval",
+    "semantic_answer_serving",
+    "semantic_promotion"
+  ],
+  "bootstrap_authority": {
+    "promotion_authorized": false,
+    "serving_authorized": false,
+    "production_mutation_authorized": false,
+    "qdrant_mutation_authorized": false,
+    "r2_mutation_authorized": false,
+    "source_mutation_authorized": false,
+    "pointer_mutation_authorized": false,
+    "credential_rotation_authorized": false
+  },
+  "next_actions": [
+    "open_semantic_promotion_decision_issue",
+    "open_parallel_product_lane_issues",
+    "keep_production_retrieval_lexical_until_explicit_promotion",
+    "start_non_serving_product_work_without_waiting_for_promotion"
+  ],
+  "roadmap_sha256": "c21860918b29e7aadc4377fa7e18ec6e7247e06d06592dd784a96b70449fad39"
+}
