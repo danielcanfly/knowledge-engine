@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scripts.m23_7_r3_8_remote_delete import validate_authorization
 from scripts.m23_7_r3_8_remote_operator import canonical_sha256
 from scripts.m23_7_r3_8_run_authorization import load_authorization
 
@@ -13,6 +14,36 @@ DECISION_PATH = Path(
 AUTHORIZATION_PATHS = (
     Path("pilot/m23/r3-8/authorizations/29712598908.json"),
     Path("pilot/m23/r3-8/authorizations/29713148161.json"),
+)
+WORKER_PRESENT_BUNDLES = (
+    (
+        Path(
+            ".github/evidence/m23-7-r3-8-governed-defer/"
+            "worker-present-recovery-seal-29713343325.json"
+        ),
+        Path(
+            ".github/evidence/m23-7-r3-8-governed-defer/"
+            "worker-present-reconciliation-29713343325.json"
+        ),
+        Path(
+            "deletion_authorizations/m23-7/r3-8/"
+            "knowledge-engine-r3-8-29712598908.json"
+        ),
+    ),
+    (
+        Path(
+            ".github/evidence/m23-7-r3-8-governed-defer/"
+            "worker-present-recovery-seal-29713348713.json"
+        ),
+        Path(
+            ".github/evidence/m23-7-r3-8-governed-defer/"
+            "worker-present-reconciliation-29713348713.json"
+        ),
+        Path(
+            "deletion_authorizations/m23-7/r3-8/"
+            "knowledge-engine-r3-8-29713148161.json"
+        ),
+    ),
 )
 
 
@@ -83,3 +114,36 @@ def test_cleanup_recovery_manifests_are_data_bound_and_read_only() -> None:
         assert value["r2_mutation_authorized"] is False
         assert value["source_mutation_authorized"] is False
         assert value["blocker_clearance_authorized"] is False
+
+
+def test_worker_present_recovery_seals_authorize_exact_deletion() -> None:
+    for seal_path, reconciliation_path, authorization_path in WORKER_PRESENT_BUNDLES:
+        seal = _load(seal_path)
+        reconciliation = _load(reconciliation_path)
+        authorization = validate_authorization(authorization_path)
+        _assert_self_digest(seal, "seal_sha256")
+        _assert_self_digest(reconciliation, "reconciliation_sha256")
+
+        receipt = seal["receipt"]
+        assert receipt["worker_state"] == "worker_present"
+        assert receipt["versions"]["identity_count"] == 4
+        assert receipt["deployments"]["identity_count"] == 4
+        assert reconciliation["seal_sha256"] == seal["seal_sha256"]
+        assert reconciliation["result"]["next_gate"] == "exact_deletion_authorization"
+        assert reconciliation["result"]["m23_7_closure_authorized"] is False
+
+        assert authorization["worker_name"] == receipt["worker_name"]
+        assert authorization["observation_run_id"] == receipt["affected_run_id"]
+        assert authorization["recovery_run_id"] == receipt["affected_run_id"].replace(
+            "29712598908", "29713343325"
+        ).replace("29713148161", "29713348713")
+        assert authorization["receipt_sha256"] == receipt["recovery_probe_sha256"]
+        assert authorization["evidence_seal_sha256"] == seal["seal_sha256"]
+        assert (
+            authorization["independent_reconciliation_sha256"]
+            == reconciliation["reconciliation_sha256"]
+        )
+        assert authorization["worker_version_ids"] == receipt["versions"]["identities"]
+        assert authorization["worker_deployment_ids"] == receipt["deployments"][
+            "identities"
+        ]
