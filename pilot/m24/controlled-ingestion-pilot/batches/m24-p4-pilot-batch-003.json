@@ -1,0 +1,68 @@
+{
+  "allowed_actions": [
+    "snapshot",
+    "normalize",
+    "extract_candidates",
+    "resolve_entities",
+    "deduplicate",
+    "contradiction_check",
+    "build_review_packet",
+    "dry_run_replay",
+    "dry_run_rollback",
+    "dry_run_deletion_tombstone"
+  ],
+  "batch_id": "m24-p4-pilot-batch-003",
+  "disallowed_actions": [
+    "write_canonical_source",
+    "open_source_pr_with_content",
+    "auto_approve_candidates",
+    "rebuild_candidate_release",
+    "mutate_production_pointer",
+    "write_qdrant",
+    "write_r2",
+    "rotate_credentials",
+    "route_traffic"
+  ],
+  "idempotency_key": "m24p4-0ef011de53d2515e8f9e090a04fd811b",
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "manifest_sha256_self": "c39ea3ea91e34520f7828e50e1b8b5b10f0289d32d78832dbe83f9303f99fe25",
+  "release_id": "20260720T160000Z-46137c97263e",
+  "review_capacity": {
+    "automatic_canonicalization_allowed": false,
+    "estimated_minutes_per_source": 20,
+    "max_bytes_per_batch": 200000,
+    "max_sources_per_batch": 25,
+    "required_reviewer_decision": "defer",
+    "review_population": "canonical-provenance-source-slice"
+  },
+  "schema_version": "knowledge-engine-m24-p4-controlled-ingestion-pilot/v1/batch-manifest",
+  "sequence": 3,
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "source_count": 2,
+  "source_snapshot_artifact_sha256": "c2150569ee59f460f64ece3ddd2deb0c27908d079fb5ac9d91722d0cd3edfd3c",
+  "sources": [
+    {
+      "claim_count": 41,
+      "concept_count": 15,
+      "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+      "provenance_record_count": 15,
+      "snapshot_bytes": 4118,
+      "snapshot_sha256": "8d878876872eed84a2f9a79ae8e3e8c0fb5a6106b20e1d920ce4dc013e6a30e6",
+      "source_id": "source_m24_source_pr_19_decision_capture",
+      "source_kind": "github",
+      "uri_sha256": "38a61994b2a2595f246778a9c95cb5ec04bdf41ea4893b846654f7b76dc29b41"
+    },
+    {
+      "claim_count": 0,
+      "concept_count": 2,
+      "origin_path": null,
+      "provenance_record_count": 2,
+      "snapshot_bytes": 585,
+      "snapshot_sha256": "acdfa5bbefa7ea50109bfbbce5d95b57a676699b671344c74d00c13a4ba69b74",
+      "source_id": "source_m3_contract",
+      "source_kind": "github",
+      "uri_sha256": "f5afd584d37bcee67352b7ef841311daf9d2a1a1097f006dcb3a6c65bf305153"
+    }
+  ],
+  "total_snapshot_bytes": 4703
+}

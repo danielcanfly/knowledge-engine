@@ -1,0 +1,79 @@
+{
+  "allowed_actions": [
+    "snapshot",
+    "normalize",
+    "extract_candidates",
+    "resolve_entities",
+    "deduplicate",
+    "contradiction_check",
+    "build_review_packet",
+    "dry_run_replay",
+    "dry_run_rollback",
+    "dry_run_deletion_tombstone"
+  ],
+  "batch_id": "m24-p4-pilot-batch-001",
+  "disallowed_actions": [
+    "write_canonical_source",
+    "open_source_pr_with_content",
+    "auto_approve_candidates",
+    "rebuild_candidate_release",
+    "mutate_production_pointer",
+    "write_qdrant",
+    "write_r2",
+    "rotate_credentials",
+    "route_traffic"
+  ],
+  "idempotency_key": "m24p4-82adac799644cf0fc85f3eef7ad5412a",
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "manifest_sha256_self": "04b57aa57a3a89d23ded14ac0a34f8d075e1c4cc8be478dad56ca8cb8d6707c1",
+  "release_id": "20260720T160000Z-46137c97263e",
+  "review_capacity": {
+    "automatic_canonicalization_allowed": false,
+    "estimated_minutes_per_source": 20,
+    "max_bytes_per_batch": 200000,
+    "max_sources_per_batch": 25,
+    "required_reviewer_decision": "defer",
+    "review_population": "canonical-provenance-source-slice"
+  },
+  "schema_version": "knowledge-engine-m24-p4-controlled-ingestion-pilot/v1/batch-manifest",
+  "sequence": 1,
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "source_count": 3,
+  "source_snapshot_artifact_sha256": "c2150569ee59f460f64ece3ddd2deb0c27908d079fb5ac9d91722d0cd3edfd3c",
+  "sources": [
+    {
+      "claim_count": 3,
+      "concept_count": 1,
+      "origin_path": null,
+      "provenance_record_count": 1,
+      "snapshot_bytes": 442,
+      "snapshot_sha256": "d63e16353608362bec897a8afbaca33f8895aaab2e027c1b5e7dba95cb53ab6c",
+      "source_id": "source_blog_agent_architecture_6d",
+      "source_kind": "web",
+      "uri_sha256": "e0917d13cc459ef90544bf4dd84a2e158de6a9f0fa2bf13552a1b25d33c24930"
+    },
+    {
+      "claim_count": 9,
+      "concept_count": 1,
+      "origin_path": "src/content/blog/the-atlas-of-agent-design-patterns-part-2/en.md",
+      "provenance_record_count": 1,
+      "snapshot_bytes": 479,
+      "snapshot_sha256": "82b5d13a26273e102dd30e4c8f79332e3d321e16e7c8cc1684216a39a08e765c",
+      "source_id": "source_blog_agent_execution_paths",
+      "source_kind": "web",
+      "uri_sha256": "eff54829e3abd23707a08c34edf6bcd735bdfe1c329043d0c6fad316722ac490"
+    },
+    {
+      "claim_count": 11,
+      "concept_count": 1,
+      "origin_path": "src/content/blog/the-atlas-of-agent-design-patterns-part-3/en.md",
+      "provenance_record_count": 1,
+      "snapshot_bytes": 492,
+      "snapshot_sha256": "0b2338ca5e9908f5853041feaa756e1011f2cbd93d2ed5c4f964ed70bfbcb966",
+      "source_id": "source_blog_agent_planning_strategies",
+      "source_kind": "web",
+      "uri_sha256": "2f5a144ced9a9558f274943bdab76deed497bf404ade43647ce8faa6f3eac829"
+    }
+  ],
+  "total_snapshot_bytes": 1413
+}
