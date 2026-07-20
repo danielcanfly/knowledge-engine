@@ -391,12 +391,12 @@ def worker_http_error_code(response: httpx.Response) -> str:
     try:
         payload = response.json()
     except ValueError:
-        return base
+        return base + "_non_json"
     if not isinstance(payload, Mapping):
-        return base
+        return base + "_invalid_json_shape"
     code = payload.get("code")
     if not isinstance(code, str) or not _WORKER_ERROR_CODE.fullmatch(code):
-        return base
+        return base + "_unbounded_error_code"
     return base + "_" + code.replace("-", "_")
 
 
