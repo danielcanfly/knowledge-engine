@@ -1,0 +1,86 @@
+{
+  "schema_version": "knowledge-engine-m24-source-pr-19-pre-review/v1",
+  "milestone": "M24",
+  "issue": 974,
+  "status": "technical_pre_review_complete_human_decisions_pending",
+  "source_pr": {
+    "repo": "danielcanfly/knowledge-source",
+    "number": 19,
+    "url": "https://github.com/danielcanfly/knowledge-source/pull/19",
+    "title": "review: M23.4 Harness concept and relationship candidates",
+    "state": "OPEN",
+    "draft": true,
+    "mergeable": "MERGEABLE",
+    "base": "main",
+    "base_sha": "a6ba738d910d01d2ae99b1968f0831989934c549",
+    "head": "review/m23-4-harness-candidates",
+    "head_sha": "deb3ad1e631c2149183d10561fbceb0a1848a989"
+  },
+  "files": [
+    {
+      "path": "proposals/m23-4/README.md",
+      "sha256": "ffeafbb5da81f4986c2a0d6c8794ee6bdd019ce7e1db92ee3e03d274d9d27ed8",
+      "size_bytes": 735
+    },
+    {
+      "path": "proposals/m23-4/decision-template.json",
+      "sha256": "394a7282d02f95a8ff014e0c174efd30f8db1474666f1839b66ce108c6569f70",
+      "size_bytes": 2995
+    },
+    {
+      "path": "proposals/m23-4/proposed-concepts.md",
+      "sha256": "1e580018c29fae0e07c66d39acdf09adc675b535a85153129130a8211189e4c4",
+      "size_bytes": 5066
+    },
+    {
+      "path": "proposals/m23-4/provenance-summary.json",
+      "sha256": "873844b75fc5cbfd2f55a20321461abce0e2de2ada4137eade56acf1cd9b8c57",
+      "size_bytes": 4434
+    },
+    {
+      "path": "proposals/m23-4/review-manifest.json",
+      "sha256": "b07dd4a36f858b8db23b1c287767d4c0e9ad9f5107663327df2125ca25a6e01e",
+      "size_bytes": 10682
+    }
+  ],
+  "observed_counts": {
+    "candidate_count": 38,
+    "concept_endpoints": 15,
+    "governed_tags": 34,
+    "typed_relationships": 12,
+    "decision_items": 15,
+    "pending_decisions": 15,
+    "provenance_records": 15,
+    "review_manifest_items": 15
+  },
+  "review_findings": {
+    "canonical_write_permitted": false,
+    "all_decisions_pending": true,
+    "human_actor_recorded": false,
+    "draft_pr_must_not_merge_as_is": true,
+    "non_canonical_review_surface_only": true,
+    "shared_tag_duplicate_warning_is_weak_signal": true,
+    "recommendation": "defer_canonical_adoption_pending_human_distinctness_decisions"
+  },
+  "authority_boundary": {
+    "source_pr_merge_authorized": false,
+    "source_mutation_authorized": false,
+    "canonical_adoption_authorized": false,
+    "production_mutation_authorized": false,
+    "semantic_serving_authorized": false,
+    "promotion_authorized": false
+  },
+  "next_review_actions": [
+    "collect explicit approve_new map_existing edit reject or defer decision for each of 15 items",
+    "convert approved decisions into a separate canonical Source adoption PR",
+    "keep Source PR #19 draft and unmerged until decisions are recorded",
+    "feed adoption constraints into M24 Canonical Source adoption planning issue #967"
+  ],
+  "reconciliation": {
+    "issue_974_started": true,
+    "issue_974_may_close_after_this_merge": false,
+    "issue_967_may_use_this_pre_review": true,
+    "source_pr_19_may_merge": false
+  },
+  "review_sha256": "7d27895e5ff0a1ed77f9cbdc9dcedb62d22ebee32dcea1f8dc291dbf15a58df0"
+}
