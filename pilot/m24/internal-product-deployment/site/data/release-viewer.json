@@ -1,0 +1,24 @@
+{
+  "artifacts": {
+    "graph": "fbe9d90a7d5eff9e77db2fedcd87c4e2022bf81a1fb16c0adde0695029b299c8",
+    "graph_v2": "6737dfb3fa9cd4d992c26dce562329c95e06066cd475f97f2fdffdbab8f25abe",
+    "lexical_index": "1106857e4eb2438674bc74a074bf81132f54b77f4c5d2dfe52954328b8271b83",
+    "provenance": "0593d6669661df0d639e13b3b93d744b36f6fa934ca4faf7566d05574a573a05",
+    "source_snapshot": "c2150569ee59f460f64ece3ddd2deb0c27908d079fb5ac9d91722d0cd3edfd3c"
+  },
+  "counts": {
+    "concepts": 20,
+    "edges": 0,
+    "provenance_records": 20,
+    "sections": 92,
+    "source_snapshots": 7,
+    "tombstones": 0
+  },
+  "hybrid_retrieval_enabled": false,
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "production_retrieval": "lexical",
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-p6-internal-product-deployment/v1/release-viewer",
+  "semantic_serving_enabled": false,
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9"
+}
