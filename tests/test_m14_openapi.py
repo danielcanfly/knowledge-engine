@@ -59,6 +59,38 @@ def test_public_ask_openapi_exposes_citation_and_source_card_contracts() -> None
     } <= set(card_schema["properties"])
 
 
+def test_public_search_openapi_exposes_source_viewer_contract() -> None:
+    schema = app.openapi()
+    operation = schema["paths"]["/v1/search"]["post"]
+    success = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    assert success["$ref"].endswith("/PublicSearchResponse")
+    for status_code in ("401", "403", "413", "429", "503", "504"):
+        error = operation["responses"][status_code]["content"]["application/json"][
+            "schema"
+        ]
+        assert error["$ref"].endswith("/PublicErrorResponse")
+
+    response_schema = schema["components"]["schemas"]["PublicSearchResponse"]
+    viewer_items = response_schema["properties"]["source_viewers"]["items"]
+    assert viewer_items["$ref"].endswith("/PublicSourceViewer")
+
+    viewer_schema = schema["components"]["schemas"]["PublicSourceViewer"]
+    assert {
+        "viewer_id",
+        "release_id",
+        "source_card",
+        "citations",
+        "summary",
+    } <= set(viewer_schema["properties"])
+
+    summary_schema = schema["components"]["schemas"]["PublicSourceViewerSummary"]
+    assert {
+        "retrieval_authority",
+        "semantic_serving_enabled",
+        "raw_evidence_exposed",
+    } <= set(summary_schema["properties"])
+
+
 def test_public_interface_capabilities_and_stream_are_documented() -> None:
     schema = app.openapi()
     paths = schema["paths"]

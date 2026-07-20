@@ -199,6 +199,7 @@ def test_public_search_response_shapes_lexical_results_for_scanning() -> None:
         "status",
         "results",
         "source_cards",
+        "source_viewers",
         "concept_ids",
         "release_id",
         "request_id",
@@ -217,9 +218,25 @@ def test_public_search_response_shapes_lexical_results_for_scanning() -> None:
     assert payload["results"][0]["source_kinds"] == ["paper"]
     assert payload["results"][0]["source_card_ids"]
     assert payload["source_cards"][0]["source_kind"] == "paper"
+    viewer = payload["source_viewers"][0]
+    assert viewer["source_card"]["source_card_id"] == payload["source_cards"][0][
+        "source_card_id"
+    ]
+    assert viewer["citations"][0]["locator"]["heading"] == "Operations"
+    assert viewer["summary"] == {
+        "citation_count": 1,
+        "concept_count": 1,
+        "claim_count": 1,
+        "has_snapshot": True,
+        "integrity_available": True,
+        "retrieval_authority": "lexical",
+        "semantic_serving_enabled": False,
+        "raw_evidence_exposed": False,
+    }
     assert payload["request_id"].startswith("search_")
     assert "retrieval" not in payload
     assert "evaluation" not in payload
+    assert "query_vector" not in response.model_dump_json()
 
 
 def test_public_search_source_kind_filter_has_empty_state() -> None:
@@ -234,6 +251,7 @@ def test_public_search_source_kind_filter_has_empty_state() -> None:
     assert response.status == "not_found"
     assert response.results == []
     assert response.source_cards == []
+    assert response.source_viewers == []
     assert response.not_found_reason == "no_match"
 
 

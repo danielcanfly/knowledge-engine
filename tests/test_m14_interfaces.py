@@ -139,6 +139,7 @@ def test_interface_capabilities_are_stable_and_stateless() -> None:
     assert capabilities["supported_locales"] == ["en", "zh-TW"]
     assert capabilities["max_query_characters"] == 8000
     assert capabilities["max_results"] == 20
+    assert capabilities["source_viewers"] is True
     assert capabilities["search_sorts"] == ["relevance", "title"]
     assert capabilities["search_filters"] == ["source_kind"]
     assert capabilities["stream_event_order"] == [

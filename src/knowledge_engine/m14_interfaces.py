@@ -30,6 +30,7 @@ class PublicInterfaceCapabilities(BaseModel):
     max_results: int
     citation_markers: bool
     source_cards: bool
+    source_viewers: bool
     search_sorts: list[Literal["relevance", "title"]]
     search_filters: list[Literal["source_kind"]]
     stream_event_order: list[str]
@@ -51,6 +52,7 @@ def public_interface_capabilities() -> PublicInterfaceCapabilities:
         max_results=20,
         citation_markers=True,
         source_cards=True,
+        source_viewers=True,
         search_path="/v1/search",
         search_sorts=["relevance", "title"],
         search_filters=["source_kind"],
