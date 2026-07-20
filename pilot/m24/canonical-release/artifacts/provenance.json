@@ -1,0 +1,1342 @@
+{
+  "records": [
+    {
+      "claims": [
+        {
+          "claim_id": "claim_outer_structure_is_separate_from_node_logic",
+          "evidence": [
+            {
+              "locator": "Execution structure is not node-level intelligence",
+              "source_lines": "34-67"
+            }
+          ],
+          "text": "Outer execution structure and node-level decision logic are separate architectural layers and may be combined."
+        },
+        {
+          "claim_id": "claim_five_primary_execution_structures",
+          "evidence": [
+            {
+              "locator": "Five core execution structures",
+              "source_lines": "69-91"
+            }
+          ],
+          "text": "Direct, Pipeline, Router, State Machine, and DAG answer different execution-control questions and are not a maturity ladder."
+        },
+        {
+          "claim_id": "claim_direct_and_pipeline_baselines",
+          "evidence": [
+            {
+              "locator": "Direct and Pipeline sections"
+            }
+          ],
+          "text": "Direct is the smallest useful bounded path, while a Pipeline uses a predetermined sequence whose stages should expose explicit contracts and observations."
+        },
+        {
+          "claim_id": "claim_router_requires_abstention_and_observability",
+          "evidence": [
+            {
+              "locator": "Router, escape-path, and logging sections"
+            }
+          ],
+          "text": "A production Router needs permission-first controls, abstention or clarification outcomes, controlled overrides, and traceable routing evidence."
+        },
+        {
+          "claim_id": "claim_state_machine_models_legal_progress",
+          "evidence": [
+            {
+              "locator": "State machine: make progress and legal transitions explicit"
+            }
+          ],
+          "text": "A State Machine makes states, legal transitions, guards, persisted progress, waiting, bounded recovery, and terminal outcomes explicit."
+        },
+        {
+          "claim_id": "claim_dag_models_dependencies_and_joins",
+          "evidence": [
+            {
+              "locator": "DAG, parallelism, and join-logic sections"
+            }
+          ],
+          "text": "A DAG models directional task dependencies rather than agent count; concurrency must be bounded and join rules must preserve partial-result policy and provenance."
+        },
+        {
+          "claim_id": "claim_event_and_human_layers_are_cross_cutting",
+          "evidence": [
+            {
+              "locator": "Event-driven execution and Human-in-the-loop sections"
+            }
+          ],
+          "text": "Event-driven execution and human review are cross-cutting control layers that can wrap Direct, Pipeline, Router, State Machine, or DAG structures."
+        },
+        {
+          "claim_id": "claim_program_generation_is_not_peer_topology",
+          "evidence": [
+            {
+              "locator": "Program generation is an execution technique, not a path topology"
+            }
+          ],
+          "text": "Program generation is an execution technique that still requires a controlling topology plus parsing, policy, sandbox, privilege, limit, and verification controls."
+        },
+        {
+          "claim_id": "claim_selection_should_use_smallest_sufficient_structure",
+          "evidence": [
+            {
+              "locator": "Selection and shared production-controls sections"
+            }
+          ],
+          "text": "Architecture selection should start with the smallest sufficient structure and add routing, durable state, dependency graphs, events, and human gates only when their control requirements exist."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-synthesis",
+      "resolution_id": "res_a2c94d14ae5f1ddb4e7c640f321d7f17",
+      "review_decision_id": "dec_5e65310b419c0c66a498b255aa6e3fca",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "capture_id": "capture_2210ddf20783cde76521adb828abab9a",
+          "origin_blob_sha": "9b8912a4dc0193c0c478bcfe83dfaccff21b7ffe",
+          "origin_commit": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
+          "origin_path": "src/content/blog/the-atlas-of-agent-design-patterns-part-2/en.md",
+          "retrieved_at": "2026-07-07T10:32:36Z",
+          "source_id": "source_blog_agent_execution_paths",
+          "uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-2/"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/agent-execution-paths",
+        "x_kos_id": "ko_7FHJFQQ11PKPEWC4W25CCBCGZM"
+      },
+      "synthesis_id": "syn_c24c29095a90a2aa56f85b3abbd38856"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_execution_structure_separate_from_decision_strategy",
+          "evidence": [
+            {
+              "locator": "Execution structure and decision strategy are different layers; A more precise map of the planning layer"
+            }
+          ],
+          "text": "Outer execution structure and node-level decision strategy are separate, composable architectural layers."
+        },
+        {
+          "claim_id": "claim_fixed_logic_is_valid_baseline",
+          "evidence": [
+            {
+              "locator": "Fixed decision logic: keep deterministic work deterministic"
+            }
+          ],
+          "text": "Fixed decision logic is the preferred baseline when the next step and contract are known, while typed fallbacks or escalation handle unmodelled conditions."
+        },
+        {
+          "claim_id": "claim_bounded_react_requires_contracts",
+          "evidence": [
+            {
+              "locator": "ReAct, progress failure, and production contract sections"
+            }
+          ],
+          "text": "Production ReAct should be bounded by a step objective, allowed tools, completion criteria, budgets, progress state, duplicate detection, and escalation."
+        },
+        {
+          "claim_id": "claim_plan_steps_must_be_executable",
+          "evidence": [
+            {
+              "locator": "Plan-and-Execute and executable-plan sections"
+            }
+          ],
+          "text": "Plan-and-Execute provides global coverage only when each step has explicit inputs, dependencies, outputs, completion criteria, failure policy, budget, and provenance requirements."
+        },
+        {
+          "claim_id": "claim_plans_require_validation",
+          "evidence": [
+            {
+              "locator": "Plan validation: a plan is a proposal, not proof"
+            }
+          ],
+          "text": "A generated plan is a proposal that may require deterministic validation, review, simulation, or a formal planner or solver."
+        },
+        {
+          "claim_id": "claim_replanning_needs_triggers_and_versions",
+          "evidence": [
+            {
+              "locator": "Adaptive planning: change the remaining plan when reality changes"
+            }
+          ],
+          "text": "Adaptive replanning should run only after material triggers, distinguish local repair from global revision, preserve valid work, and record versioned diffs."
+        },
+        {
+          "claim_id": "claim_hierarchy_needs_integration_ownership",
+          "evidence": [
+            {
+              "locator": "Hierarchical planning: decompose goals at several levels"
+            }
+          ],
+          "text": "Hierarchical planning helps manage large goals but requires parent and child completion contracts, shared facts, provenance, dependency management, integration ownership, and cross-subgoal verification."
+        },
+        {
+          "claim_id": "claim_htn_uses_domain_methods",
+          "evidence": [
+            {
+              "locator": "HTN: formal decomposition with domain methods"
+            }
+          ],
+          "text": "HTN planning refines compound tasks through governed domain methods into primitive executable tasks and can be combined with LLM interpretation."
+        },
+        {
+          "claim_id": "claim_goals_and_policies_are_cross_cutting",
+          "evidence": [
+            {
+              "locator": "Goals and policies are cross-cutting, not peer strategies"
+            }
+          ],
+          "text": "Goals define measurable outcomes and policies authorise or deny actions across every planning strategy; important policies require runtime or infrastructure enforcement."
+        },
+        {
+          "claim_id": "claim_production_hybrid_separates_responsibilities",
+          "evidence": [
+            {
+              "locator": "The production hybrid: Planner, bounded Executor, Verifier, and Replanner"
+            }
+          ],
+          "text": "A robust production system combines a Planner, versioned plan store, State Machine, bounded Executor, Verifier, Replanner, and policy layer with explicit responsibilities."
+        },
+        {
+          "claim_id": "claim_least_flexible_sufficient_strategy",
+          "evidence": [
+            {
+              "locator": "How to choose a strategy"
+            }
+          ],
+          "text": "Strategy selection should begin with the least flexible mechanism that can reliably complete the task and add planning freedom only when its control requirement exists."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-synthesis",
+      "resolution_id": "res_8edf59259fda46a1837adb13e6fc59b4",
+      "review_decision_id": "dec_92fc06d1a4e249d2877df502d61e2d4e",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "capture_id": "capture_31d832860a1b4056b4cee81e571a2105",
+          "origin_blob_sha": "185fa419771942e0737cdefe10c3180505bb3c23",
+          "origin_commit": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
+          "origin_path": "src/content/blog/the-atlas-of-agent-design-patterns-part-3/en.md",
+          "retrieved_at": "2026-07-08T03:29:20Z",
+          "source_id": "source_blog_agent_planning_strategies",
+          "uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-3/"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/agent-planning-strategies",
+        "x_kos_id": "ko_7T9Q4M2V8J6K3R5C1N0PWHDBXF"
+      },
+      "synthesis_id": "syn_f9f47a97df7343e4bd1514f62658ee08"
+    },
+    {
+      "confidence": 0.99,
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "retrieved_at": "2026-07-02T12:20:00Z",
+          "source_id": "source_m3_contract",
+          "uri": "https://github.com/danielcanfly/knowledge-os-foundation"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/candidate-delivery-controls",
+        "x_kos_id": "ko_01JXYZ123456789ABCDEFGHJKQ"
+      }
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_canonical_run_authority_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_bd10b1c1b28edb6e20d34b96c780c10a",
+              "excerpt_sha256": "2e35375f9fa40589b29ddc47ad99a5b345950a6ac498573c4e44597bd05eb768",
+              "locator": "derivative_harness-theory-part-02-en:3942-3965"
+            }
+          ],
+          "text": "Canonical run authority is the system of record that owns authoritative run identity, state, transitions, evidence pointers, approvals, and terminal status."
+        },
+        {
+          "claim_id": "claim_canonical_run_authority_decision_authority",
+          "evidence": [
+            {
+              "decision": "approve_new",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_8566693dd5241e3269f5038e01394f6b"
+            }
+          ],
+          "text": "Daniel authorized Canonical Run Authority for canonical Source adoption with decision approve_new in the M24 Source PR #19 decision capture."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_bd10b1c1b28edb6e20d34b96c780c10a",
+      "review_decision_id": "m23review_8566693dd5241e3269f5038e01394f6b",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/canonical-run-authority",
+        "x_kos_id": "ko_2KRT52YC2PT9MW75SJ7E6GCBT1"
+      },
+      "synthesis_id": "syn_m24_p1_canonical_run_authority"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_completion_gate_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_724ab01fa724799d46ddb2b9497d7752",
+              "excerpt_sha256": "7b71223b2dcaa62db1ec3b0f5cb24f3fef57d6fae30f0605c68a392c056b3a41",
+              "locator": "derivative_harness-theory-part-02-en:4397-4412"
+            }
+          ],
+          "text": "A completion gate is the authority that decides whether a terminal candidate satisfies the task contract, evidence requirements, and safety boundaries."
+        },
+        {
+          "claim_id": "claim_completion_gate_decision_authority",
+          "evidence": [
+            {
+              "decision": "approve_new",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_ed53fb63ef649af90d2e2f73e85ae5e7"
+            }
+          ],
+          "text": "Daniel authorized Completion Gate for canonical Source adoption with decision approve_new in the M24 Source PR #19 decision capture."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_724ab01fa724799d46ddb2b9497d7752",
+      "review_decision_id": "m23review_ed53fb63ef649af90d2e2f73e85ae5e7",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/completion-gate",
+        "x_kos_id": "ko_T15101XKN0QCZ0Z7VE3G8X1HXM"
+      },
+      "synthesis_id": "syn_m24_p1_completion_gate"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_durable_thread_state_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_fe165e95fd7459e5a6f1cd1a7d418c25",
+              "excerpt_sha256": "e7b041efc701cb600b0fac60b1d9c7cee93b3ae989d6e72c137f8f654bf65a46",
+              "locator": "derivative_harness-theory-part-02-en:21567-21587"
+            }
+          ],
+          "text": "Durable thread state is persistent interaction state that survives client disconnects, spans turns, and preserves enough context to resume without repeating unsafe side effects."
+        },
+        {
+          "claim_id": "claim_durable_thread_state_decision_authority",
+          "evidence": [
+            {
+              "decision": "approve_new",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_ce9255a1a87d7f2cc87c88ec26e1dc9a"
+            }
+          ],
+          "text": "Daniel authorized Durable Thread State for canonical Source adoption with decision approve_new in the M24 Source PR #19 decision capture."
+        },
+        {
+          "claim_id": "claim_durable_thread_state_supports_headless_service",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_fe165e95fd7459e5a6f1cd1a7d418c25",
+              "excerpt_sha256": "e7b041efc701cb600b0fac60b1d9c7cee93b3ae989d6e72c137f8f654bf65a46",
+              "locator": "derivative_harness-theory-part-02-en:21567-21587"
+            }
+          ],
+          "text": "Durable thread state supports a headless harness service by preserving resumable interaction and execution state."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_fe165e95fd7459e5a6f1cd1a7d418c25",
+      "review_decision_id": "m23review_ce9255a1a87d7f2cc87c88ec26e1dc9a",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/durable-thread-state",
+        "x_kos_id": "ko_RNT24ZG5RX48B78P2YRRHS7N60"
+      },
+      "synthesis_id": "syn_m24_p1_durable_thread_state"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_goal_drift_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_d3d6dd0bc39b6d17ac3f77830f59a8e4",
+              "excerpt_sha256": "576e3df3645809b5ac0050af75761ad507a562f46e42bfe86b93b3b32e3f0ff4",
+              "locator": "derivative_harness-theory-part-03-en:21654-21709"
+            }
+          ],
+          "text": "Goal drift is uncontrolled movement away from the accepted task contract, authority boundary, or authorized change process."
+        },
+        {
+          "claim_id": "claim_goal_drift_decision_authority",
+          "evidence": [
+            {
+              "decision": "approve_new",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_0df0b6cb698712b98425cc2b05265565"
+            }
+          ],
+          "text": "Daniel authorized Goal Drift for canonical Source adoption with decision approve_new in the M24 Source PR #19 decision capture."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_d3d6dd0bc39b6d17ac3f77830f59a8e4",
+      "review_decision_id": "m23review_0df0b6cb698712b98425cc2b05265565",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/goal-drift",
+        "x_kos_id": "ko_RTYH9E7DNAXKXJWWZBS85TQEYQ"
+      },
+      "synthesis_id": "syn_m24_p1_goal_drift"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_harness_agent_loop_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_a857949159ff2af3a917b9b4945d2563",
+              "excerpt_sha256": "52a65b6cf105b50ac02376bc0b84c222bed5b0cf4a758040fb5857569fc1cc3e",
+              "locator": "derivative_harness-theory-part-03-en:37-65"
+            }
+          ],
+          "text": "A harness agent loop is a governed loop in which a model may propose actions, the harness checks authority, tools execute under constraints, observations update durable state, and a stopping policy decides whether to continue or terminate."
+        },
+        {
+          "claim_id": "claim_harness_agent_loop_decision_authority",
+          "evidence": [
+            {
+              "decision": "edit",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_998e1adb9a6ce64f12a4fc9477eebe30"
+            }
+          ],
+          "text": "Daniel authorized Agent Loop for canonical Source adoption with decision edit in the M24 Source PR #19 decision capture."
+        },
+        {
+          "claim_id": "claim_harness_agent_loop_harness_specific_narrowing",
+          "evidence": [
+            {
+              "decision": "edit",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:human_authorization",
+              "review_id": "m23review_998e1adb9a6ce64f12a4fc9477eebe30"
+            }
+          ],
+          "text": "Harness Agent Loop is canonicalized only as a harness-specific edited concept, preserving Daniel's requirement that the edited item be narrowed before canonicalization."
+        },
+        {
+          "claim_id": "claim_agent_loop_requires_stopping_policy",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_a857949159ff2af3a917b9b4945d2563",
+              "excerpt_sha256": "52a65b6cf105b50ac02376bc0b84c222bed5b0cf4a758040fb5857569fc1cc3e",
+              "locator": "derivative_harness-theory-part-03-en:37-65"
+            }
+          ],
+          "text": "A harness agent loop requires a stopping policy to decide whether execution continues, waits, completes, fails, cancels, or defers."
+        }
+      ],
+      "confidence": 0.88,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_a857949159ff2af3a917b9b4945d2563",
+      "review_decision_id": "m23review_998e1adb9a6ce64f12a4fc9477eebe30",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/harness-agent-loop",
+        "x_kos_id": "ko_STXQQ3DR32B1ST8FMNWQQ71BNA"
+      },
+      "synthesis_id": "syn_m24_p1_harness_agent_loop"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_harness_verification_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_dae13dfab2f3bd99933996727ae31785",
+              "excerpt_sha256": "4183b7793fd28ba47ea9e79e7697f2915da218567e6657a158b51bd14bce91cd",
+              "locator": "derivative_harness-theory-part-01-en:1731-1743"
+            }
+          ],
+          "text": "Harness verification is the set of harness-owned checks that decide whether an agent result, state transition, or side effect is acceptable under the task contract."
+        },
+        {
+          "claim_id": "claim_harness_verification_decision_authority",
+          "evidence": [
+            {
+              "decision": "edit",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_a91d9910fbd95236a02e5f1bf52a1b27"
+            }
+          ],
+          "text": "Daniel authorized Verification for canonical Source adoption with decision edit in the M24 Source PR #19 decision capture."
+        },
+        {
+          "claim_id": "claim_harness_verification_harness_specific_narrowing",
+          "evidence": [
+            {
+              "decision": "edit",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:human_authorization",
+              "review_id": "m23review_a91d9910fbd95236a02e5f1bf52a1b27"
+            }
+          ],
+          "text": "Harness Verification is canonicalized only as a harness-specific edited concept, preserving Daniel's requirement that the edited item be narrowed before canonicalization."
+        }
+      ],
+      "confidence": 0.88,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_dae13dfab2f3bd99933996727ae31785",
+      "review_decision_id": "m23review_a91d9910fbd95236a02e5f1bf52a1b27",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/harness-verification",
+        "x_kos_id": "ko_27B0AHGGXEKMCVEBNQ86EHR9TJ"
+      },
+      "synthesis_id": "syn_m24_p1_harness_verification"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_harness_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_c574aa8a041d990b0848426332cbe695",
+              "excerpt_sha256": "d136d700e646065e934f6ebe13d828ccf747945a579ace0754dd5fcd1ba1a9dc",
+              "locator": "derivative_harness-theory-part-01-en:1805-1882"
+            }
+          ],
+          "text": "A harness is the governed execution and control system around an LLM or agent runtime. It defines the request boundary, task contract, run authority, completion gate, steering surface, verification boundary, and stopping policy that make autonomous work reviewable and recoverable."
+        },
+        {
+          "claim_id": "claim_harness_decision_authority",
+          "evidence": [
+            {
+              "decision": "approve_new",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_e2847c567565549ea21b89ee7b572d47"
+            }
+          ],
+          "text": "Daniel authorized Harness for canonical Source adoption with decision approve_new in the M24 Source PR #19 decision capture."
+        },
+        {
+          "claim_id": "claim_harness_supports_agent_loop",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_c574aa8a041d990b0848426332cbe695",
+              "excerpt_sha256": "d136d700e646065e934f6ebe13d828ccf747945a579ace0754dd5fcd1ba1a9dc",
+              "locator": "derivative_harness-theory-part-01-en:1805-1882"
+            }
+          ],
+          "text": "A harness supports a harness agent loop by supplying governance, authorization, observation, verification, and stopping boundaries."
+        },
+        {
+          "claim_id": "claim_harness_requires_verification",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_c574aa8a041d990b0848426332cbe695",
+              "excerpt_sha256": "d136d700e646065e934f6ebe13d828ccf747945a579ace0754dd5fcd1ba1a9dc",
+              "locator": "derivative_harness-theory-part-01-en:1805-1882"
+            }
+          ],
+          "text": "A harness requires harness verification so terminal outcomes and side effects are accepted against evidence rather than model assertion."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_c574aa8a041d990b0848426332cbe695",
+      "review_decision_id": "m23review_e2847c567565549ea21b89ee7b572d47",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/harness",
+        "x_kos_id": "ko_FG7KSSJYQ3CX4AVN97A7WGWQA9"
+      },
+      "synthesis_id": "syn_m24_p1_harness"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_harnessability_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_674327c38116ba67829aa0e92480f906",
+              "excerpt_sha256": "37298e371d06f25241518585aadfa4c00203b3e29cc6b38298df8ec5eee522ef",
+              "locator": "derivative_harness-theory-part-01-en:13909-13923"
+            }
+          ],
+          "text": "Harnessability is the measurable fitness of a task, environment, or tool surface for governed harness execution."
+        },
+        {
+          "claim_id": "claim_harnessability_decision_authority",
+          "evidence": [
+            {
+              "decision": "edit",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_94192ccc4b53c47e32942121da3775c2"
+            }
+          ],
+          "text": "Daniel authorized Harnessability for canonical Source adoption with decision edit in the M24 Source PR #19 decision capture."
+        },
+        {
+          "claim_id": "claim_harnessability_harness_specific_narrowing",
+          "evidence": [
+            {
+              "decision": "edit",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:human_authorization",
+              "review_id": "m23review_94192ccc4b53c47e32942121da3775c2"
+            }
+          ],
+          "text": "Harnessability is canonicalized only as a harness-specific edited concept, preserving Daniel's requirement that the edited item be narrowed before canonicalization."
+        }
+      ],
+      "confidence": 0.88,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_674327c38116ba67829aa0e92480f906",
+      "review_decision_id": "m23review_94192ccc4b53c47e32942121da3775c2",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/harnessability",
+        "x_kos_id": "ko_EE6FJXNYE7DJ7XN9QCG5EYMN92"
+      },
+      "synthesis_id": "syn_m24_p1_harnessability"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_headless_harness_service_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_225a9ee65ca6ef67c5d6015d7f4e0cb3",
+              "excerpt_sha256": "28f99faaff1fd0537e9f48e27b96de2684d030fc3448fc4b5129b1f6980e8b19",
+              "locator": "derivative_harness-theory-part-02-en:20344-20368"
+            }
+          ],
+          "text": "A headless harness service is a UI-independent execution core that exposes harness operations through a stable protocol rather than tying them to one chat client or browser surface."
+        },
+        {
+          "claim_id": "claim_headless_harness_service_decision_authority",
+          "evidence": [
+            {
+              "decision": "approve_new",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_ee3af10c8e0f2f6d9fb49c6c7b1f308c"
+            }
+          ],
+          "text": "Daniel authorized Headless Harness Service for canonical Source adoption with decision approve_new in the M24 Source PR #19 decision capture."
+        },
+        {
+          "claim_id": "claim_headless_service_implements_harness",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_225a9ee65ca6ef67c5d6015d7f4e0cb3",
+              "excerpt_sha256": "28f99faaff1fd0537e9f48e27b96de2684d030fc3448fc4b5129b1f6980e8b19",
+              "locator": "derivative_harness-theory-part-02-en:20344-20368"
+            }
+          ],
+          "text": "A headless harness service implements the harness as a UI-independent execution core shared by clients."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_225a9ee65ca6ef67c5d6015d7f4e0cb3",
+      "review_decision_id": "m23review_ee3af10c8e0f2f6d9fb49c6c7b1f308c",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/headless-harness-service",
+        "x_kos_id": "ko_F2Q6GJ0EX2QNT88T963Z15C785"
+      },
+      "synthesis_id": "syn_m24_p1_headless_harness_service"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_item_turn_thread_protocol_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_dcc0a2165404ede003499acbc175bc91",
+              "excerpt_sha256": "7abfe83662569f15f7862107ea875e2024c465fd411ecaa4c3aaa7651768c18a",
+              "locator": "derivative_harness-theory-part-03-en:16100-16158"
+            }
+          ],
+          "text": "The item turn thread protocol is a harness interaction model that separates typed interaction items, pausable work turns, and durable threads."
+        },
+        {
+          "claim_id": "claim_item_turn_thread_protocol_decision_authority",
+          "evidence": [
+            {
+              "decision": "approve_new",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_08f2083f1643842c7266a7fa3e7118b1"
+            }
+          ],
+          "text": "Daniel authorized Item Turn Thread Protocol for canonical Source adoption with decision approve_new in the M24 Source PR #19 decision capture."
+        },
+        {
+          "claim_id": "claim_item_turn_thread_protocol_supports_agent_loop",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_dcc0a2165404ede003499acbc175bc91",
+              "excerpt_sha256": "7abfe83662569f15f7862107ea875e2024c465fd411ecaa4c3aaa7651768c18a",
+              "locator": "derivative_harness-theory-part-03-en:16100-16158"
+            }
+          ],
+          "text": "The item turn thread protocol supports a harness agent loop by separating items, work turns, and durable threads."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_dcc0a2165404ede003499acbc175bc91",
+      "review_decision_id": "m23review_08f2083f1643842c7266a7fa3e7118b1",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/item-turn-thread-protocol",
+        "x_kos_id": "ko_A98W7YHJACY4DJ7XCKGJQNRQ96"
+      },
+      "synthesis_id": "syn_m24_p1_item_turn_thread_protocol"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_request_boundary_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_632f23ba5b420f1403631d38bd2f4e10",
+              "excerpt_sha256": "6dd0a2e7c8eba56b4f11045a82145003853e46a8768b1663755c449f6bfb4afa",
+              "locator": "derivative_harness-theory-part-02-en:3778-3794"
+            }
+          ],
+          "text": "A request boundary is the ingress layer that establishes identity, tenant or repository scope, schema validity, policy eligibility, and admission before a harness run is created."
+        },
+        {
+          "claim_id": "claim_request_boundary_decision_authority",
+          "evidence": [
+            {
+              "decision": "approve_new",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_12cf0442aff36f0400715efe1ee1025a"
+            }
+          ],
+          "text": "Daniel authorized Request Boundary for canonical Source adoption with decision approve_new in the M24 Source PR #19 decision capture."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_632f23ba5b420f1403631d38bd2f4e10",
+      "review_decision_id": "m23review_12cf0442aff36f0400715efe1ee1025a",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/request-boundary",
+        "x_kos_id": "ko_15XQXKWWRZRBC9J8R3HA34NQ5B"
+      },
+      "synthesis_id": "syn_m24_p1_request_boundary"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_patterns_coexist_across_layers",
+          "evidence": [
+            {
+              "end_char": 997,
+              "end_line": 17,
+              "quote": "A production agent may use ReAct inside a tool-execution node, a state machine to control the overall flow, a verifier to accept or reject results, memory to preserve progress, and a supervisor to coordinate specialised workers. These mechanisms do not compete for the same job. They operate at different architectural layers.",
+              "quote_sha256": "6bca7d9faaca4ec9993140b37700ee147b78c45835447a72cd33a5cee52cc74b",
+              "start_char": 671,
+              "start_line": 17
+            }
+          ],
+          "text": "Agent architecture patterns can coexist because they operate at different architectural layers rather than competing for one role."
+        },
+        {
+          "claim_id": "claim_six_design_lenses",
+          "evidence": [
+            {
+              "end_char": 1694,
+              "end_line": 28,
+              "quote": "This article introduces six practical design lenses:\n\n1. **Execution path**: how the task moves from start to finish\n2. **Decision and planning**: how the next action is selected\n3. **Reasoning and search**: how candidate solutions are explored\n4. **Verification and recovery**: how errors are detected and handled\n5. **Agent organisation**: how responsibility is divided\n6. **State and memory**: what information is preserved, where, and for how long",
+              "quote_sha256": "3e8f6ba9dcbdb40acea549349365fc3fa445c2e19b360da8aa40bfb5a6ce5511",
+              "start_char": 1243,
+              "start_line": 21
+            }
+          ],
+          "text": "A practical agent architecture review can be organized across six lenses: execution path, decision and planning, reasoning and search, verification and recovery, agent organization, and state and memory."
+        },
+        {
+          "claim_id": "claim_engineering_not_universal_taxonomy",
+          "evidence": [
+            {
+              "end_char": 1910,
+              "end_line": 30,
+              "quote": "These six dimensions are a **working engineering model**, not a universal academic taxonomy. They are intentionally optimised for system design, product decisions, implementation reviews, and production operations.",
+              "quote_sha256": "5d0d6d7700d0ce0d884c6692c29e12029afd6fc2d8c3903d220132fe2fa5b1da",
+              "start_char": 1696,
+              "start_line": 30
+            }
+          ],
+          "text": "The six-dimensional map is an engineering model optimized for design and production work, not a universal academic taxonomy."
+        }
+      ],
+      "confidence": 0.85,
+      "method": "human-reviewed-ai-assisted-synthesis",
+      "resolution_id": "res_e82b33c358ca700be3d64f47ab5d443f",
+      "review_decision_id": "dec_1f9025c488e9c83356e402ec4f859d11",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "capture_id": "capture_27d12c4c2560e4d5ab8852759aee41c9",
+          "normalized_key": "normalized/captures/capture_27d12c4c2560e4d5ab8852759aee41c9/document.md",
+          "normalized_sha256": "2b9b500ee1078c8d61bd5c70067954f46c787957d114bf84fb08d72773e77537",
+          "raw_blob_key": "raw/blobs/sha256/2b/2b9b500ee1078c8d61bd5c70067954f46c787957d114bf84fb08d72773e77537",
+          "raw_sha256": "2b9b500ee1078c8d61bd5c70067954f46c787957d114bf84fb08d72773e77537",
+          "retrieved_at": "2026-07-03T10:40:00Z",
+          "source_id": "source_blog_agent_architecture_6d",
+          "uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/six-dimensional-map-of-llm-agent-architectures",
+        "x_kos_id": "ko_HW0QBJBSFFJ9SWVXJTDHVV604T"
+      },
+      "synthesis_id": "syn_c6e45ef3137bdaebfcd690514a0abf8f"
+    },
+    {
+      "confidence": 0.99,
+      "method": "manual_review",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "retrieved_at": "2026-07-02T08:00:00Z",
+          "source_id": "source_m3_contract",
+          "uri": "https://github.com/danielcanfly/knowledge-os-foundation"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/source-governance",
+        "x_kos_id": "ko_01JXYZ123456789ABCDEFGHJKM"
+      }
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_steering_control_plane_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_dfae712de3eb869423e8f6a4ddc1007e",
+              "excerpt_sha256": "6c1a9bac3918c703c21849c34b05bdc5956b3d7adc98bc165a77d14aec8680a0",
+              "locator": "derivative_harness-theory-part-01-en:214-236"
+            }
+          ],
+          "text": "A steering control plane is the human-owned authority layer that sets intent, boundaries, evidence requirements, escalation rules, and acceptance policy for harnessed execution."
+        },
+        {
+          "claim_id": "claim_steering_control_plane_decision_authority",
+          "evidence": [
+            {
+              "decision": "approve_new",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_784ebc246b86b22be547d2f4c006ca64"
+            }
+          ],
+          "text": "Daniel authorized Steering Control Plane for canonical Source adoption with decision approve_new in the M24 Source PR #19 decision capture."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_dfae712de3eb869423e8f6a4ddc1007e",
+      "review_decision_id": "m23review_784ebc246b86b22be547d2f4c006ca64",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/steering-control-plane",
+        "x_kos_id": "ko_V4Q17MZAD0RCMQR4VQS33WW9QF"
+      },
+      "synthesis_id": "syn_m24_p1_steering_control_plane"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_stopping_policy_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_8a73560fa206f8d5d9323e648d15d2c0",
+              "excerpt_sha256": "45ea9a9da8fde3a61165cbe88eb4103cbdc78831101cefe0ed622fa2f10e749a",
+              "locator": "derivative_harness-theory-part-03-en:20305-20377"
+            }
+          ],
+          "text": "A stopping policy is the set of rules that decides whether execution continues, waits, completes, fails, cancels, escalates, or defers."
+        },
+        {
+          "claim_id": "claim_stopping_policy_decision_authority",
+          "evidence": [
+            {
+              "decision": "approve_new",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_7c7842b8a5e71c5f7577b26c27e2f73f"
+            }
+          ],
+          "text": "Daniel authorized Stopping Policy for canonical Source adoption with decision approve_new in the M24 Source PR #19 decision capture."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_8a73560fa206f8d5d9323e648d15d2c0",
+      "review_decision_id": "m23review_7c7842b8a5e71c5f7577b26c27e2f73f",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/stopping-policy",
+        "x_kos_id": "ko_HFZTQX87AN4MBDEK45DKE50MZZ"
+      },
+      "synthesis_id": "syn_m24_p1_stopping_policy"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_task_contract_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_e9cb685f0b06f9b488b327f1b05ba4bb",
+              "excerpt_sha256": "f17e312ac6bd8ae16092c4d66df8079986e7587f636be5aa7e01f53805bceabd",
+              "locator": "derivative_harness-theory-part-02-en:3846-3859"
+            }
+          ],
+          "text": "A task contract is the explicit agreement that describes the required outcome, constraints, evidence, authority limits, and completion conditions for a bounded unit of work."
+        },
+        {
+          "claim_id": "claim_task_contract_decision_authority",
+          "evidence": [
+            {
+              "decision": "approve_new",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_37d35397ace98d69c00b0e8fe4cb1458"
+            }
+          ],
+          "text": "Daniel authorized Task Contract for canonical Source adoption with decision approve_new in the M24 Source PR #19 decision capture."
+        },
+        {
+          "claim_id": "claim_task_contract_bounds_goal_drift",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_e9cb685f0b06f9b488b327f1b05ba4bb",
+              "excerpt_sha256": "f17e312ac6bd8ae16092c4d66df8079986e7587f636be5aa7e01f53805bceabd",
+              "locator": "derivative_harness-theory-part-02-en:3846-3859"
+            }
+          ],
+          "text": "A task contract provides the stable boundary used to detect and control goal drift."
+        }
+      ],
+      "confidence": 0.9,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_e9cb685f0b06f9b488b327f1b05ba4bb",
+      "review_decision_id": "m23review_37d35397ace98d69c00b0e8fe4cb1458",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/task-contract",
+        "x_kos_id": "ko_NFQVE5X917WGQJCG3X94Q6184H"
+      },
+      "synthesis_id": "syn_m24_p1_task_contract"
+    },
+    {
+      "claims": [
+        {
+          "claim_id": "claim_tool_call_proposal_definition",
+          "evidence": [
+            {
+              "candidate_id": "conceptcand_cce3e198ea0f2ca4a2394e8c97e63826",
+              "excerpt_sha256": "615a974ea4617c125cf4e2a292e13c1c73d8978eee92d5d8db5172df45edcafd",
+              "locator": "derivative_harness-theory-part-03-en:2155-2222"
+            }
+          ],
+          "text": "A tool call proposal is a structured request by a model or agent to perform an external operation through a harness-controlled tool interface."
+        },
+        {
+          "claim_id": "claim_tool_call_proposal_decision_authority",
+          "evidence": [
+            {
+              "decision": "edit",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:review_items",
+              "review_id": "m23review_c3b0082d594d591018a417614574b098"
+            }
+          ],
+          "text": "Daniel authorized Tool Calling for canonical Source adoption with decision edit in the M24 Source PR #19 decision capture."
+        },
+        {
+          "claim_id": "claim_tool_call_proposal_harness_specific_narrowing",
+          "evidence": [
+            {
+              "decision": "edit",
+              "locator": "pilot/m24/m24-source-pr-19-decision-capture.json:human_authorization",
+              "review_id": "m23review_c3b0082d594d591018a417614574b098"
+            }
+          ],
+          "text": "Tool Call Proposal is canonicalized only as a harness-specific edited concept, preserving Daniel's requirement that the edited item be narrowed before canonicalization."
+        }
+      ],
+      "confidence": 0.88,
+      "method": "human-reviewed-ai-assisted-source-adoption",
+      "resolution_id": "conceptcand_cce3e198ea0f2ca4a2394e8c97e63826",
+      "review_decision_id": "m23review_c3b0082d594d591018a417614574b098",
+      "schema_version": "1.0",
+      "sources": [
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/proposed-concepts.md",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_proposed_concepts",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+        },
+        {
+          "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+          "origin_path": "proposals/m23-4/provenance-summary.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m23_4_harness_provenance_summary",
+          "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+        },
+        {
+          "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+          "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+          "retrieved_at": "2026-07-20T09:11:44Z",
+          "source_id": "source_m24_source_pr_19_decision_capture",
+          "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+        }
+      ],
+      "subject": {
+        "concept_id": "concepts/tool-call-proposal",
+        "x_kos_id": "ko_EWHT6TCKX8Q4E80MWHXHBDPNV1"
+      },
+      "synthesis_id": "syn_m24_p1_tool_call_proposal"
+    }
+  ],
+  "schema_version": "1.0"
+}

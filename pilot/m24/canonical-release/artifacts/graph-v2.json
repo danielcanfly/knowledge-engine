@@ -1,0 +1,904 @@
+{
+  "edges": [
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_031cae2bae121631b03da2052295d22c",
+      "generated_inverse": true,
+      "provenance_record": "provenance/headless-harness-service.json",
+      "provenance_ref": "claim_headless_service_implements_harness",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "implemented_by",
+      "review_id": "review_relation_m24_p1_headless_harness_service_implements_harness",
+      "review_status": "approved",
+      "source": "concepts/harness",
+      "target": "concepts/headless-harness-service"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_0416655ce786946008eaa0c76ce2c72f",
+      "generated_inverse": true,
+      "provenance_record": "provenance/agent-planning-strategies.json",
+      "provenance_ref": "This concept expands the decision-and-planning lens explicitly enumerated by the reviewed six-dimensional architecture map.",
+      "qualifiers": {
+        "context": "decision-and-planning design lens"
+      },
+      "relation_type": "has_part",
+      "review_id": "review_relation_m18_5_planning_part_of_map",
+      "review_status": "approved",
+      "source": "concepts/six-dimensional-map-of-llm-agent-architectures",
+      "target": "concepts/agent-planning-strategies"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_05cb35617ceae64502718a83649a4856",
+      "generated_inverse": false,
+      "provenance_record": "provenance/tool-call-proposal.json",
+      "provenance_ref": "tool-call-proposal is an authored interaction component inside a harness agent loop.",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "part_of",
+      "review_id": "review_relation_m24_p1_tool_call_proposal_part_of_harness_agent_loop",
+      "review_status": "approved",
+      "source": "concepts/tool-call-proposal",
+      "target": "concepts/harness-agent-loop"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_066cda73130d3f1a7cc6dde6ac4897c5",
+      "generated_inverse": false,
+      "provenance_record": "provenance/harness-agent-loop.json",
+      "provenance_ref": "claim_agent_loop_requires_stopping_policy",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "requires",
+      "review_id": "review_relation_m24_p1_harness_agent_loop_requires_stopping_policy",
+      "review_status": "approved",
+      "source": "concepts/harness-agent-loop",
+      "target": "concepts/stopping-policy"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_084795f2903ed7f23e4fac24d77268d9",
+      "generated_inverse": false,
+      "provenance_record": "provenance/completion-gate.json",
+      "provenance_ref": "completion-gate is the harness terminal acceptance component.",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "part_of",
+      "review_id": "review_relation_m24_p1_completion_gate_part_of_harness",
+      "review_status": "approved",
+      "source": "concepts/completion-gate",
+      "target": "concepts/harness"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_0b6e57164714ea5ebe3c7f07d8335b17",
+      "generated_inverse": true,
+      "provenance_record": "provenance/canonical-run-authority.json",
+      "provenance_ref": "canonical-run-authority is the system-of-record component of the harness.",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "has_part",
+      "review_id": "review_relation_m24_p1_canonical_run_authority_part_of_harness",
+      "review_status": "approved",
+      "source": "concepts/harness",
+      "target": "concepts/canonical-run-authority"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_0b8cb73b1690049c9bd39f1333ac2fdc",
+      "generated_inverse": false,
+      "provenance_record": "provenance/headless-harness-service.json",
+      "provenance_ref": "claim_headless_service_implements_harness",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "implements",
+      "review_id": "review_relation_m24_p1_headless_harness_service_implements_harness",
+      "review_status": "approved",
+      "source": "concepts/headless-harness-service",
+      "target": "concepts/harness"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_0cc19496d16008c4250c1ddf5c91ad9d",
+      "generated_inverse": false,
+      "provenance_record": "provenance/harness.json",
+      "provenance_ref": "claim_harness_requires_verification",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "requires",
+      "review_id": "review_relation_m24_p1_harness_requires_harness_verification",
+      "review_status": "approved",
+      "source": "concepts/harness",
+      "target": "concepts/harness-verification"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_139461a6402df8395db031c0a59bd784",
+      "generated_inverse": false,
+      "provenance_record": "provenance/canonical-run-authority.json",
+      "provenance_ref": "canonical-run-authority is the system-of-record component of the harness.",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "part_of",
+      "review_id": "review_relation_m24_p1_canonical_run_authority_part_of_harness",
+      "review_status": "approved",
+      "source": "concepts/canonical-run-authority",
+      "target": "concepts/harness"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_1399113ce4c60cb78031ba6e285a9ee3",
+      "generated_inverse": false,
+      "provenance_record": "provenance/request-boundary.json",
+      "provenance_ref": "request-boundary is the harness admission component for identity, scope, schema, and policy checks.",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "part_of",
+      "review_id": "review_relation_m24_p1_request_boundary_part_of_harness",
+      "review_status": "approved",
+      "source": "concepts/request-boundary",
+      "target": "concepts/harness"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_1869cb30f4f88eb07662581bbccbeb89",
+      "generated_inverse": true,
+      "provenance_record": "provenance/tool-call-proposal.json",
+      "provenance_ref": "tool-call-proposal is an authored interaction component inside a harness agent loop.",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "has_part",
+      "review_id": "review_relation_m24_p1_tool_call_proposal_part_of_harness_agent_loop",
+      "review_status": "approved",
+      "source": "concepts/harness-agent-loop",
+      "target": "concepts/tool-call-proposal"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": false,
+      "edge_id": "edge_49383f84d13a1d5e9a5decd5e179d7d8",
+      "generated_inverse": false,
+      "provenance_record": "provenance/task-contract.json",
+      "provenance_ref": "claim_task_contract_bounds_goal_drift",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "related_to",
+      "review_id": "review_relation_m24_p1_task_contract_related_to_goal_drift",
+      "review_status": "approved",
+      "source": "concepts/task-contract",
+      "target": "concepts/goal-drift"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_4979d3fac7c554ec4eca8fd23e2939a1",
+      "generated_inverse": true,
+      "provenance_record": "provenance/agent-execution-paths.json",
+      "provenance_ref": "This concept expands the execution-path lens explicitly enumerated by the reviewed six-dimensional architecture map.",
+      "qualifiers": {
+        "context": "execution-path design lens"
+      },
+      "relation_type": "has_part",
+      "review_id": "review_relation_m18_5_execution_part_of_map",
+      "review_status": "approved",
+      "source": "concepts/six-dimensional-map-of-llm-agent-architectures",
+      "target": "concepts/agent-execution-paths"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_58a5c4aadc5e6b143d47b21948843ee5",
+      "generated_inverse": false,
+      "provenance_record": "provenance/durable-thread-state.json",
+      "provenance_ref": "claim_durable_thread_state_supports_headless_service",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "supports",
+      "review_id": "review_relation_m24_p1_durable_thread_state_supports_headless_harness_service",
+      "review_status": "approved",
+      "source": "concepts/durable-thread-state",
+      "target": "concepts/headless-harness-service"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_58e21088f0d8d98eec1793248238ff6d",
+      "generated_inverse": true,
+      "provenance_record": "provenance/request-boundary.json",
+      "provenance_ref": "request-boundary is the harness admission component for identity, scope, schema, and policy checks.",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "has_part",
+      "review_id": "review_relation_m24_p1_request_boundary_part_of_harness",
+      "review_status": "approved",
+      "source": "concepts/harness",
+      "target": "concepts/request-boundary"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_6cdc2991ce5b03f297871c7b124839f4",
+      "generated_inverse": true,
+      "provenance_record": "provenance/harness-agent-loop.json",
+      "provenance_ref": "claim_agent_loop_requires_stopping_policy",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "required_by",
+      "review_id": "review_relation_m24_p1_harness_agent_loop_requires_stopping_policy",
+      "review_status": "approved",
+      "source": "concepts/stopping-policy",
+      "target": "concepts/harness-agent-loop"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_6dbbd2c45c9883118e69bd7e5b7ca0b1",
+      "generated_inverse": false,
+      "provenance_record": "provenance/agent-planning-strategies.json",
+      "provenance_ref": "This concept expands the decision-and-planning lens explicitly enumerated by the reviewed six-dimensional architecture map.",
+      "qualifiers": {
+        "context": "decision-and-planning design lens"
+      },
+      "relation_type": "part_of",
+      "review_id": "review_relation_m18_5_planning_part_of_map",
+      "review_status": "approved",
+      "source": "concepts/agent-planning-strategies",
+      "target": "concepts/six-dimensional-map-of-llm-agent-architectures"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_7b29c36189b05f61353fc892f262e78f",
+      "generated_inverse": true,
+      "provenance_record": "provenance/completion-gate.json",
+      "provenance_ref": "completion-gate is the harness terminal acceptance component.",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "has_part",
+      "review_id": "review_relation_m24_p1_completion_gate_part_of_harness",
+      "review_status": "approved",
+      "source": "concepts/harness",
+      "target": "concepts/completion-gate"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_8c13f75feffc2949e09aa00a880c9afd",
+      "generated_inverse": true,
+      "provenance_record": "provenance/harness.json",
+      "provenance_ref": "claim_harness_requires_verification",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "required_by",
+      "review_id": "review_relation_m24_p1_harness_requires_harness_verification",
+      "review_status": "approved",
+      "source": "concepts/harness-verification",
+      "target": "concepts/harness"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_995c1e17667d0bc941e1427c8d66d7a0",
+      "generated_inverse": true,
+      "provenance_record": "provenance/harness.json",
+      "provenance_ref": "claim_harness_supports_agent_loop",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "supported_by",
+      "review_id": "review_relation_m24_p1_harness_supports_harness_agent_loop",
+      "review_status": "approved",
+      "source": "concepts/harness-agent-loop",
+      "target": "concepts/harness"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_b4cf706c86fb0d0d5156a2b5c8375e73",
+      "generated_inverse": true,
+      "provenance_record": "provenance/durable-thread-state.json",
+      "provenance_ref": "claim_durable_thread_state_supports_headless_service",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "supported_by",
+      "review_id": "review_relation_m24_p1_durable_thread_state_supports_headless_harness_service",
+      "review_status": "approved",
+      "source": "concepts/headless-harness-service",
+      "target": "concepts/durable-thread-state"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_c76ecf628fb58c6ecffa469a890bb3c3",
+      "generated_inverse": false,
+      "provenance_record": "provenance/agent-execution-paths.json",
+      "provenance_ref": "This concept expands the execution-path lens explicitly enumerated by the reviewed six-dimensional architecture map.",
+      "qualifiers": {
+        "context": "execution-path design lens"
+      },
+      "relation_type": "part_of",
+      "review_id": "review_relation_m18_5_execution_part_of_map",
+      "review_status": "approved",
+      "source": "concepts/agent-execution-paths",
+      "target": "concepts/six-dimensional-map-of-llm-agent-architectures"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_c93c1c93882c5387f5d0fef34664d20b",
+      "generated_inverse": true,
+      "provenance_record": "provenance/item-turn-thread-protocol.json",
+      "provenance_ref": "claim_item_turn_thread_protocol_supports_agent_loop",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "supported_by",
+      "review_id": "review_relation_m24_p1_item_turn_thread_protocol_supports_harness_agent_loop",
+      "review_status": "approved",
+      "source": "concepts/harness-agent-loop",
+      "target": "concepts/item-turn-thread-protocol"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_d6a2aeea0d896900bf0e3247a99e9d04",
+      "generated_inverse": false,
+      "provenance_record": "provenance/item-turn-thread-protocol.json",
+      "provenance_ref": "claim_item_turn_thread_protocol_supports_agent_loop",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "supports",
+      "review_id": "review_relation_m24_p1_item_turn_thread_protocol_supports_harness_agent_loop",
+      "review_status": "approved",
+      "source": "concepts/item-turn-thread-protocol",
+      "target": "concepts/harness-agent-loop"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_eafc77f881e58dff4e3efc4be45fcdba",
+      "generated_inverse": false,
+      "provenance_record": "provenance/harness.json",
+      "provenance_ref": "claim_harness_supports_agent_loop",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "supports",
+      "review_id": "review_relation_m24_p1_harness_supports_harness_agent_loop",
+      "review_status": "approved",
+      "source": "concepts/harness",
+      "target": "concepts/harness-agent-loop"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_ecde9bee7fb7c3120f49cbe8e2d280c1",
+      "generated_inverse": false,
+      "provenance_record": "provenance/task-contract.json",
+      "provenance_ref": "task-contract is a core contractual component of the harness governance boundary.",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "part_of",
+      "review_id": "review_relation_m24_p1_task_contract_part_of_harness",
+      "review_status": "approved",
+      "source": "concepts/task-contract",
+      "target": "concepts/harness"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": true,
+      "edge_id": "edge_f3ee310788e2874f2e4ab5442342ebfc",
+      "generated_inverse": true,
+      "provenance_record": "provenance/task-contract.json",
+      "provenance_ref": "task-contract is a core contractual component of the harness governance boundary.",
+      "qualifiers": {
+        "context": "M24 P1 canonical Source adoption from Source PR #19"
+      },
+      "relation_type": "has_part",
+      "review_id": "review_relation_m24_p1_task_contract_part_of_harness",
+      "review_status": "approved",
+      "source": "concepts/harness",
+      "target": "concepts/task-contract"
+    },
+    {
+      "audience": "public",
+      "confidence": 0.9,
+      "directed": false,
+      "edge_id": "edge_f55a979c704bddcf552b4e9e713428db",
+      "generated_inverse": false,
+      "provenance_record": "provenance/agent-planning-strategies.json",
+      "provenance_ref": "claim_execution_structure_separate_from_decision_strategy",
+      "qualifiers": {
+        "context": "separate composable architecture layers"
+      },
+      "relation_type": "complements",
+      "review_id": "review_relation_m18_5_planning_complements_execution",
+      "review_status": "approved",
+      "source": "concepts/agent-planning-strategies",
+      "target": "concepts/agent-execution-paths"
+    }
+  ],
+  "generic_edges_artifact": "graph.json",
+  "nodes": [
+    {
+      "aliases": [
+        "agent execution structures",
+        "execution topologies"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/agent-execution-paths",
+      "confidence": 0.9,
+      "description": "Defines Direct, Pipeline, Router, State Machine, and DAG execution structures plus their cross-cutting production controls.",
+      "path": "concepts/agent-execution-paths.md",
+      "provenance_record": "provenance/agent-execution-paths.json",
+      "status": "published",
+      "tags": [
+        "agents",
+        "design",
+        "routing",
+        "runtime"
+      ],
+      "title": "Agent execution paths",
+      "type": "Concept",
+      "x_kos_id": "ko_7FHJFQQ11PKPEWC4W25CCBCGZM"
+    },
+    {
+      "aliases": [
+        "agent decision strategies",
+        "planning strategies"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/agent-planning-strategies",
+      "confidence": 0.9,
+      "description": "Defines fixed logic, bounded ReAct, Plan-and-Execute, adaptive replanning, hierarchical planning, HTN, and their production control boundaries.",
+      "path": "concepts/agent-planning-strategies.md",
+      "provenance_record": "provenance/agent-planning-strategies.json",
+      "status": "published",
+      "tags": [
+        "agents",
+        "design",
+        "planning",
+        "verification"
+      ],
+      "title": "Agent decision and planning strategies",
+      "type": "Concept",
+      "x_kos_id": "ko_7T9Q4M2V8J6K3R5C1N0PWHDBXF"
+    },
+    {
+      "aliases": [
+        "candidate acceptance gates",
+        "candidate release controls"
+      ],
+      "audience": "internal",
+      "concept_id": "concepts/candidate-delivery-controls",
+      "confidence": 0.99,
+      "description": "Defines the private acceptance gates between reviewed source and a promotable Knowledge Engine release.",
+      "path": "concepts/candidate-delivery-controls.md",
+      "provenance_record": "provenance/candidate-delivery-controls.json",
+      "status": "published",
+      "tags": [
+        "governance",
+        "knowledge-systems",
+        "operations",
+        "reliability",
+        "verification"
+      ],
+      "title": "Candidate delivery controls",
+      "type": "Concept",
+      "x_kos_id": "ko_01JXYZ123456789ABCDEFGHJKQ"
+    },
+    {
+      "aliases": [
+        "execution state authority",
+        "run authority"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/canonical-run-authority",
+      "confidence": 0.9,
+      "description": "Defines the system of record for authoritative execution state and transitions.",
+      "path": "concepts/canonical-run-authority.md",
+      "provenance_record": "provenance/canonical-run-authority.json",
+      "status": "published",
+      "tags": [
+        "governance",
+        "reliability",
+        "runtime"
+      ],
+      "title": "Canonical Run Authority",
+      "type": "Concept",
+      "x_kos_id": "ko_2KRT52YC2PT9MW75SJ7E6GCBT1"
+    },
+    {
+      "aliases": [
+        "acceptance gate",
+        "terminal completion gate"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/completion-gate",
+      "confidence": 0.9,
+      "description": "Defines the authority that accepts or rejects a terminal candidate against contract and evidence.",
+      "path": "concepts/completion-gate.md",
+      "provenance_record": "provenance/completion-gate.json",
+      "status": "published",
+      "tags": [
+        "reliability",
+        "verification"
+      ],
+      "title": "Completion Gate",
+      "type": "Concept",
+      "x_kos_id": "ko_T15101XKN0QCZ0Z7VE3G8X1HXM"
+    },
+    {
+      "aliases": [
+        "durable conversation state",
+        "persistent thread state"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/durable-thread-state",
+      "confidence": 0.9,
+      "description": "Defines persistent interaction state that survives disconnects and spans turns.",
+      "path": "concepts/durable-thread-state.md",
+      "provenance_record": "provenance/durable-thread-state.json",
+      "status": "published",
+      "tags": [
+        "reliability",
+        "runtime"
+      ],
+      "title": "Durable Thread State",
+      "type": "Concept",
+      "x_kos_id": "ko_RNT24ZG5RX48B78P2YRRHS7N60"
+    },
+    {
+      "aliases": [
+        "goal displacement",
+        "task drift"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/goal-drift",
+      "confidence": 0.9,
+      "description": "Defines uncontrolled movement away from the accepted task contract or authorized change process.",
+      "path": "concepts/goal-drift.md",
+      "provenance_record": "provenance/goal-drift.json",
+      "status": "published",
+      "tags": [
+        "governance",
+        "reliability"
+      ],
+      "title": "Goal Drift",
+      "type": "Concept",
+      "x_kos_id": "ko_RTYH9E7DNAXKXJWWZBS85TQEYQ"
+    },
+    {
+      "aliases": [
+        "agent harness",
+        "execution harness"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/harness",
+      "confidence": 0.9,
+      "description": "Defines the governed execution boundary around an LLM or agent runtime.",
+      "path": "concepts/harness.md",
+      "provenance_record": "provenance/harness.json",
+      "status": "published",
+      "tags": [
+        "agents",
+        "governance",
+        "runtime"
+      ],
+      "title": "Harness",
+      "type": "Concept",
+      "x_kos_id": "ko_FG7KSSJYQ3CX4AVN97A7WGWQA9"
+    },
+    {
+      "aliases": [
+        "bounded agent loop",
+        "governed agent loop"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/harness-agent-loop",
+      "confidence": 0.88,
+      "description": "Defines a governed harness loop for model proposals, authorization, tool execution, observations, and termination.",
+      "path": "concepts/harness-agent-loop.md",
+      "provenance_record": "provenance/harness-agent-loop.json",
+      "status": "published",
+      "tags": [
+        "agents",
+        "runtime"
+      ],
+      "title": "Harness Agent Loop",
+      "type": "Concept",
+      "x_kos_id": "ko_STXQQ3DR32B1ST8FMNWQQ71BNA"
+    },
+    {
+      "aliases": [
+        "acceptance verification",
+        "agent verification"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/harness-verification",
+      "confidence": 0.88,
+      "description": "Defines harness-owned checks that decide whether an agent result, state transition, or side effect is acceptable.",
+      "path": "concepts/harness-verification.md",
+      "provenance_record": "provenance/harness-verification.json",
+      "status": "published",
+      "tags": [
+        "reliability",
+        "verification"
+      ],
+      "title": "Harness Verification",
+      "type": "Concept",
+      "x_kos_id": "ko_27B0AHGGXEKMCVEBNQ86EHR9TJ"
+    },
+    {
+      "aliases": [
+        "harness fitness",
+        "harness readiness"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/harnessability",
+      "confidence": 0.88,
+      "description": "Defines the measurable fitness of a task or environment for governed harness execution.",
+      "path": "concepts/harnessability.md",
+      "provenance_record": "provenance/harnessability.json",
+      "status": "published",
+      "tags": [
+        "agents",
+        "design",
+        "reliability"
+      ],
+      "title": "Harnessability",
+      "type": "Concept",
+      "x_kos_id": "ko_EE6FJXNYE7DJ7XN9QCG5EYMN92"
+    },
+    {
+      "aliases": [
+        "harness execution service",
+        "headless agent harness"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/headless-harness-service",
+      "confidence": 0.9,
+      "description": "Defines a UI-independent harness execution core shared by multiple clients through a stable protocol.",
+      "path": "concepts/headless-harness-service.md",
+      "provenance_record": "provenance/headless-harness-service.json",
+      "status": "published",
+      "tags": [
+        "agents",
+        "runtime"
+      ],
+      "title": "Headless Harness Service",
+      "type": "Concept",
+      "x_kos_id": "ko_F2Q6GJ0EX2QNT88T963Z15C785"
+    },
+    {
+      "aliases": [
+        "item-turn-thread model",
+        "turn thread protocol"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/item-turn-thread-protocol",
+      "confidence": 0.9,
+      "description": "Defines a protocol model separating interaction items, pausable work turns, and durable threads.",
+      "path": "concepts/item-turn-thread-protocol.md",
+      "provenance_record": "provenance/item-turn-thread-protocol.json",
+      "status": "published",
+      "tags": [
+        "agents",
+        "runtime"
+      ],
+      "title": "Item Turn Thread Protocol",
+      "type": "Concept",
+      "x_kos_id": "ko_A98W7YHJACY4DJ7XCKGJQNRQ96"
+    },
+    {
+      "aliases": [
+        "ingress boundary",
+        "request admission boundary"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/request-boundary",
+      "confidence": 0.9,
+      "description": "Defines the ingress boundary that admits or rejects work before a harness run starts.",
+      "path": "concepts/request-boundary.md",
+      "provenance_record": "provenance/request-boundary.json",
+      "status": "published",
+      "tags": [
+        "design",
+        "security"
+      ],
+      "title": "Request Boundary",
+      "type": "Concept",
+      "x_kos_id": "ko_15XQXKWWRZRBC9J8R3HA34NQ5B"
+    },
+    {
+      "aliases": [
+        "agent architecture dimensions",
+        "six-dimensional agent map"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/six-dimensional-map-of-llm-agent-architectures",
+      "confidence": 0.85,
+      "description": "LLM agent architectures should be reviewed across separate engineering dimensions because multiple patterns can coexist at different layers of one production system.",
+      "path": "concepts/six-dimensional-map-of-llm-agent-architectures.md",
+      "provenance_record": "provenance/six-dimensional-map-of-llm-agent-architectures.json",
+      "status": "published",
+      "tags": [
+        "agents",
+        "design",
+        "knowledge-systems"
+      ],
+      "title": "Six-dimensional map of LLM agent architectures",
+      "type": "Concept",
+      "x_kos_id": "ko_HW0QBJBSFFJ9SWVXJTDHVV604T"
+    },
+    {
+      "aliases": [
+        "governed knowledge source",
+        "source governance policy"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/source-governance",
+      "confidence": 0.99,
+      "description": "Defines the reviewable boundary between human-authored source and generated runtime releases.",
+      "path": "concepts/source-governance.md",
+      "provenance_record": "provenance/source-governance.json",
+      "status": "published",
+      "tags": [
+        "governance",
+        "knowledge-systems",
+        "operations"
+      ],
+      "title": "Knowledge source governance",
+      "type": "Concept",
+      "x_kos_id": "ko_01JXYZ123456789ABCDEFGHJKM"
+    },
+    {
+      "aliases": [
+        "control plane",
+        "human steering plane"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/steering-control-plane",
+      "confidence": 0.9,
+      "description": "Defines the human authority layer for intent, boundaries, evidence requirements, and escalation.",
+      "path": "concepts/steering-control-plane.md",
+      "provenance_record": "provenance/steering-control-plane.json",
+      "status": "published",
+      "tags": [
+        "design",
+        "governance"
+      ],
+      "title": "Steering Control Plane",
+      "type": "Concept",
+      "x_kos_id": "ko_V4Q17MZAD0RCMQR4VQS33WW9QF"
+    },
+    {
+      "aliases": [
+        "stop policy",
+        "termination policy"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/stopping-policy",
+      "confidence": 0.9,
+      "description": "Defines rules for continuing, waiting, completing, failing, cancelling, or deferring execution.",
+      "path": "concepts/stopping-policy.md",
+      "provenance_record": "provenance/stopping-policy.json",
+      "status": "published",
+      "tags": [
+        "governance",
+        "reliability",
+        "runtime"
+      ],
+      "title": "Stopping Policy",
+      "type": "Concept",
+      "x_kos_id": "ko_HFZTQX87AN4MBDEK45DKE50MZZ"
+    },
+    {
+      "aliases": [
+        "outcome contract",
+        "task acceptance contract"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/task-contract",
+      "confidence": 0.9,
+      "description": "Defines the accepted outcome, constraints, evidence, authority, and completion conditions for a task.",
+      "path": "concepts/task-contract.md",
+      "provenance_record": "provenance/task-contract.json",
+      "status": "published",
+      "tags": [
+        "design",
+        "governance"
+      ],
+      "title": "Task Contract",
+      "type": "Concept",
+      "x_kos_id": "ko_NFQVE5X917WGQJCG3X94Q6184H"
+    },
+    {
+      "aliases": [
+        "tool calling",
+        "tool-use proposal"
+      ],
+      "audience": "public",
+      "concept_id": "concepts/tool-call-proposal",
+      "confidence": 0.88,
+      "description": "Defines a model-proposed external operation that requires harness authorization before execution.",
+      "path": "concepts/tool-call-proposal.md",
+      "provenance_record": "provenance/tool-call-proposal.json",
+      "status": "published",
+      "tags": [
+        "agents",
+        "runtime"
+      ],
+      "title": "Tool Call Proposal",
+      "type": "Concept",
+      "x_kos_id": "ko_EWHT6TCKX8Q4E80MWHXHBDPNV1"
+    }
+  ],
+  "release": {
+    "content_sha256": "46137c97263effa21aef5392b41cbd3948ac58b0147342310eed84ec41fb354a",
+    "foundation_commit_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+    "release_id": "20260720T160000Z-46137c97263e",
+    "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9"
+  },
+  "renderer_neutral": true,
+  "schema_version": "knowledge-os-graph/v2"
+}

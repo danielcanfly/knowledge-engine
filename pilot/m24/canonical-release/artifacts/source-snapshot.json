@@ -1,0 +1,527 @@
+{
+  "commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "content_sha256": "9f2fa3df237616e97b6e3bece5f4dfc96a72342ccba2452ee8fe375286d6a451",
+  "file_count": 74,
+  "files": [
+    {
+      "bytes": 5612,
+      "git_blob_sha": "8cca083cee383ff94de97400888588cf32202043",
+      "mode": "100644",
+      "path": ".github/workflows/m18-5-exact-engine-build.yml",
+      "sha256": "20bec5aeafcf4aab3e1acd7adf12c35e5336c0cadb29f93d34f6e6bdb360d1db"
+    },
+    {
+      "bytes": 923,
+      "git_blob_sha": "ba30fa1557d2885de151faa95daf385439193754",
+      "mode": "100644",
+      "path": ".github/workflows/m18-5-migration-acceptance.yml",
+      "sha256": "d01d578bd6538ae255189ddacd1a08d92532e46ab1e697d129d19ac870a824c7"
+    },
+    {
+      "bytes": 11252,
+      "git_blob_sha": "8a38bfecf93ac8f1061d68a4fc5b37e7007cba4b",
+      "mode": "100644",
+      "path": ".github/workflows/m18-7-phase-a-acceptance.yml",
+      "sha256": "baadd6b5a198f957aed5f34e67dfb206c582c87920929db652ab851e221a9a69"
+    },
+    {
+      "bytes": 3657,
+      "git_blob_sha": "69fe90699eb6106ca0f1756e2e32e503a8fdaa59",
+      "mode": "100644",
+      "path": ".github/workflows/publish-candidate.yml",
+      "sha256": "bfb1936ecbe82a40e1053740aed3deb38bb6b0c446746b0d5fdc9439451df404"
+    },
+    {
+      "bytes": 977,
+      "git_blob_sha": "7e06a9d84201ba2c8a1c57e90801d78647e35655",
+      "mode": "100644",
+      "path": ".github/workflows/relation-validation.yml",
+      "sha256": "d34276187d2621360163c7451eb72cf84a02a9ce9a975c1f334cb1eb1f758348"
+    },
+    {
+      "bytes": 703,
+      "git_blob_sha": "f654b1074a5410e725125626dc6af4f0f851ec3a",
+      "mode": "100644",
+      "path": ".github/workflows/tag-alias-validation.yml",
+      "sha256": "e596112b6d086ca827c30647e9325077573ea406b3b254d6779e50e65bc0a831"
+    },
+    {
+      "bytes": 5286,
+      "git_blob_sha": "a1d139c2afbe4dea42082c328fafa32c7fe693a4",
+      "mode": "100644",
+      "path": ".github/workflows/validate.yml",
+      "sha256": "e657943d8fe09b115493e7acc1ab8853f12852c4ec3950e77d0db6acc05d6fbf"
+    },
+    {
+      "bytes": 66,
+      "git_blob_sha": "73742206ace9384306655e632652d93bf0e8ec99",
+      "mode": "100644",
+      "path": ".gitignore",
+      "sha256": "7413598decf6ba8f15e808e8301b2e1adef537c914f81273e0514bd49a2cfe12"
+    },
+    {
+      "bytes": 1871,
+      "git_blob_sha": "5a872aa0b5127496405113b41e6f3366bed3e2a3",
+      "mode": "100644",
+      "path": "README.md",
+      "sha256": "ce670c53674fd99726c4648743d091ae80e5dea8ed6060f97eb8c58fe358951c"
+    },
+    {
+      "bytes": 2599,
+      "git_blob_sha": "c690cf1d2df0b49f12a78cdcba2c54c875006729",
+      "mode": "100644",
+      "path": "bundle/_meta/graph-profile.json",
+      "sha256": "6a554f24d12b660cecc61ab66f426690385e992e2a0d1cf75c0d6bb0f6a70b12"
+    },
+    {
+      "bytes": 1082,
+      "git_blob_sha": "421dbdcd8682cc4b6fd011380e2dfd848763d858",
+      "mode": "100644",
+      "path": "bundle/_meta/tag-profile.json",
+      "sha256": "9304f1a9f34afebfdd1f5046c91ebbcb25144b0eb1eb211d4a21c67b1a73f64b"
+    },
+    {
+      "bytes": 8440,
+      "git_blob_sha": "a403a9781843e1a7063a04a8b3f057bcb96dbd56",
+      "mode": "100644",
+      "path": "bundle/concepts/agent-execution-paths.md",
+      "sha256": "62f7e5282ae334fbaa9d616bc483dc19fe3bde322f5fda68ed14b31d9e139fdb"
+    },
+    {
+      "bytes": 11723,
+      "git_blob_sha": "01b2011ec903e5c0c0654661d7a1f974e1edd62a",
+      "mode": "100644",
+      "path": "bundle/concepts/agent-planning-strategies.md",
+      "sha256": "c5863f6c6500dd43dfe61196874dbd1adce5a3c9fc400f5fc36d0e8c99606200"
+    },
+    {
+      "bytes": 1279,
+      "git_blob_sha": "0b921f01cd9630fffdc37c00422eea3c32fa7b7e",
+      "mode": "100644",
+      "path": "bundle/concepts/candidate-delivery-controls.md",
+      "sha256": "b42853f3ab881b9b99f2d594c1a0ac8fa5bfee5338949d5ea42f58f08222c89d"
+    },
+    {
+      "bytes": 1839,
+      "git_blob_sha": "4c9114121b794854f3253dd0af12c6f833d1a8b6",
+      "mode": "100644",
+      "path": "bundle/concepts/canonical-run-authority.md",
+      "sha256": "900c5d3111d4714598a7245b68ff8691d922e41b16b93fec23242f4b5611abba"
+    },
+    {
+      "bytes": 1747,
+      "git_blob_sha": "14c372916800bb08f176c604af13c355bd2105e3",
+      "mode": "100644",
+      "path": "bundle/concepts/completion-gate.md",
+      "sha256": "17f286acce6fa813a7488df7dc790e780941aeae7067ea12eaa55f2b396a628c"
+    },
+    {
+      "bytes": 1811,
+      "git_blob_sha": "12a0877725ca2361461a393be8cc303500a4be42",
+      "mode": "100644",
+      "path": "bundle/concepts/durable-thread-state.md",
+      "sha256": "c82c2ed3b4c6e1d9b80d968dd1ef02c973631af2d85d390c8f94434d230044be"
+    },
+    {
+      "bytes": 1257,
+      "git_blob_sha": "94efa44a2f7f1fdf064bb06cae9d1138e0a871b1",
+      "mode": "100644",
+      "path": "bundle/concepts/goal-drift.md",
+      "sha256": "9fef07d32865cbf961cf81b1401960e8f48373ab06448cd95c263f18a1c1fbac"
+    },
+    {
+      "bytes": 2083,
+      "git_blob_sha": "b961ed885e84a987fe4d5adbda0520506a5d93dd",
+      "mode": "100644",
+      "path": "bundle/concepts/harness-agent-loop.md",
+      "sha256": "a3611c6d5609209714abe8d56f4eaea0905fc974cea61dd985bbb1e47ce194d4"
+    },
+    {
+      "bytes": 1574,
+      "git_blob_sha": "766a2857e38635525d1bee2ec94866c6b2640d9a",
+      "mode": "100644",
+      "path": "bundle/concepts/harness-verification.md",
+      "sha256": "e5c28eaa49f902102ee503ab73a2abc7d46c79a9b40b842aa97bb8c6d75ca788"
+    },
+    {
+      "bytes": 2331,
+      "git_blob_sha": "8fa894dca8fd88d9b5ca5ade3aee6cb907a03314",
+      "mode": "100644",
+      "path": "bundle/concepts/harness.md",
+      "sha256": "aacac95c72d8c076e3d77e5f2852548741a76373ed94744287f46f2ec548d742"
+    },
+    {
+      "bytes": 1632,
+      "git_blob_sha": "e7674344ac063b426a59a5993bbea65cb61e73f1",
+      "mode": "100644",
+      "path": "bundle/concepts/harnessability.md",
+      "sha256": "306d541c075123b3cade6a39b6d09d051e92bda05b851fe86973290cf9ee8e3c"
+    },
+    {
+      "bytes": 1820,
+      "git_blob_sha": "01849950d6a95b9dc847f913f4eee1a958c39be1",
+      "mode": "100644",
+      "path": "bundle/concepts/headless-harness-service.md",
+      "sha256": "efd59e375efceeecea8789cc8c9bd12ac8b053ec789d371d52acbef14774b550"
+    },
+    {
+      "bytes": 1798,
+      "git_blob_sha": "483022914193b7fcbca6825397c1a7cb247d19e1",
+      "mode": "100644",
+      "path": "bundle/concepts/item-turn-thread-protocol.md",
+      "sha256": "0aeec935280325d0ec687e856ab7e63157f8e5b45661351ad7243836aeb4da94"
+    },
+    {
+      "bytes": 1863,
+      "git_blob_sha": "586d214e0e2dc348eaa2ead8b256c11b2a247c2d",
+      "mode": "100644",
+      "path": "bundle/concepts/request-boundary.md",
+      "sha256": "a2cf5c67ae8080bdc7ed71b47ff82ed4cf71daf130e80e4c5785f26913acf4ac"
+    },
+    {
+      "bytes": 1630,
+      "git_blob_sha": "9e8f8a98c2f145db36adfd1a5814c953d74ad29e",
+      "mode": "100644",
+      "path": "bundle/concepts/six-dimensional-map-of-llm-agent-architectures.md",
+      "sha256": "017620cbb210134f59d6778fec7e6fb9fdad81b8e17f1d81acbadff743158750"
+    },
+    {
+      "bytes": 1012,
+      "git_blob_sha": "51468c4c7dd2ebc51e20b1be9dd1292ca0aecc6e",
+      "mode": "100644",
+      "path": "bundle/concepts/source-governance.md",
+      "sha256": "aef2188d9dfe0bb98db7f2fb909a4c347e9c3dad4e3398dbb4b30b9f0e70fe7e"
+    },
+    {
+      "bytes": 1292,
+      "git_blob_sha": "73da47d2d9548ce76c55b634d6ad0612f71a59a3",
+      "mode": "100644",
+      "path": "bundle/concepts/steering-control-plane.md",
+      "sha256": "19569430e9191c1b29d1cc3241d4855ff696f2ab296e4f38e45c56cbcafcf5fa"
+    },
+    {
+      "bytes": 1352,
+      "git_blob_sha": "2931f193baa3ad1c2f00877c39beeff20d5be161",
+      "mode": "100644",
+      "path": "bundle/concepts/stopping-policy.md",
+      "sha256": "d67c5713658cb2163df73f886a7418f58be51e94cd233d8d477a55aaf9277326"
+    },
+    {
+      "bytes": 2231,
+      "git_blob_sha": "8ccb6e79ad1f6fa8294ba81884c87038592d7506",
+      "mode": "100644",
+      "path": "bundle/concepts/task-contract.md",
+      "sha256": "3d53a70a360cc09a4b5b336883948c6b7564cce5497aed2402dce4c914d40087"
+    },
+    {
+      "bytes": 2031,
+      "git_blob_sha": "82616912794f861790e9eeee322f5032bcb47a55",
+      "mode": "100644",
+      "path": "bundle/concepts/tool-call-proposal.md",
+      "sha256": "c8f70894a7753f167ec6ed7b14c85de219f88920d49e5c91837bb5b4057bf575"
+    },
+    {
+      "bytes": 1249,
+      "git_blob_sha": "37a7ed7bce690edb4be81f40f5c3196906296e81",
+      "mode": "100644",
+      "path": "bundle/index.md",
+      "sha256": "6b173cc5461adb849fa51ef6e329164276bd0bb7fec12285dbecc3b8ed6608d1"
+    },
+    {
+      "bytes": 613,
+      "git_blob_sha": "afcc677b6bc48af837abebc7b202a40bc95c3c5a",
+      "mode": "100644",
+      "path": "docs/tag-alias-authoring.md",
+      "sha256": "e07ba241fd7990686ae9487b7f79a262feaa2f11ce9d72bca6d4530bb37f7642"
+    },
+    {
+      "bytes": 2109,
+      "git_blob_sha": "65ee7749b18805037073404abdd612d8cc716ae3",
+      "mode": "100644",
+      "path": "migrations/m18-5-five-concepts.json",
+      "sha256": "870d5dfb5e093df32e43f3ceaa3695a07e64033ee3a689533e4c76d0179bd758"
+    },
+    {
+      "bytes": 1172,
+      "git_blob_sha": "add5ab3347e96c01ed5ee802f4e007a0424490d9",
+      "mode": "100644",
+      "path": "migrations/m18-7-phase-a-acceptance.json",
+      "sha256": "ac07f75bc00d5e17c700546e599ab6ba0c1c38fea237a8c8dc4327ad819031e6"
+    },
+    {
+      "bytes": 5522,
+      "git_blob_sha": "4e40ab30e5884f1ab844572aabebb95205dc795a",
+      "mode": "100644",
+      "path": "migrations/m24-p1-canonical-source-adoption.json",
+      "sha256": "b9723d99cb6d13a2d92f7bcf05f20d343f99608a1401d4c1cde747d890981762"
+    },
+    {
+      "bytes": 856,
+      "git_blob_sha": "251ad2cec1369461e7c513aac7fe49f81b95d803",
+      "mode": "100644",
+      "path": "policy/promotion-policy.json",
+      "sha256": "05954bf6a8935667500d4a3c7f2eb033b3be0535350e6d571f7e8c5f31137df1"
+    },
+    {
+      "bytes": 470,
+      "git_blob_sha": "eca7e417ba98a46d052191af4a09634960b3dcdd",
+      "mode": "100644",
+      "path": "policy/source-policy.json",
+      "sha256": "57bd9ecb660a01191487dfc36b78d738ce280e52d3f2789430878fc4eb5ebb60"
+    },
+    {
+      "bytes": 4282,
+      "git_blob_sha": "664bd04a0dc63aa4139da941ba7180dd2b658ba1",
+      "mode": "100644",
+      "path": "provenance/agent-execution-paths.json",
+      "sha256": "42b1c82e3c46b3a11c3a247b7c5899f2811f909f8c6d531c3308e27b18a740cd"
+    },
+    {
+      "bytes": 5125,
+      "git_blob_sha": "99295a202adfc9f087439ff91ff6736a997cd1e5",
+      "mode": "100644",
+      "path": "provenance/agent-planning-strategies.json",
+      "sha256": "46f0a594777c2da8b0bab19c6d0f30c9eb0542b15e7ef15870f42ad5924cf705"
+    },
+    {
+      "bytes": 368,
+      "git_blob_sha": "4a43257adfe6af78028aa908763d4e4dc656a289",
+      "mode": "100644",
+      "path": "provenance/candidate-delivery-controls.json",
+      "sha256": "a5d92c181b65c16de553cc13e68ab0afbe33ec2240c7a6d7d27ae37952e8d0e8"
+    },
+    {
+      "bytes": 2696,
+      "git_blob_sha": "183f5aa08eff92851b692b4df165e36d319576fa",
+      "mode": "100644",
+      "path": "provenance/canonical-run-authority.json",
+      "sha256": "819f8c18b3186f6cfdce234a4fc39d8326af35a2110ccce3dc50045317bf46f7"
+    },
+    {
+      "bytes": 2651,
+      "git_blob_sha": "72e3d611786164c25d2b9a2dc8bde88f328df68c",
+      "mode": "100644",
+      "path": "provenance/completion-gate.json",
+      "sha256": "6166ab3d6091345bf607736dd69a03c6ef64d51cda5fa13afbab4cf534b63f70"
+    },
+    {
+      "bytes": 3212,
+      "git_blob_sha": "1b3e810313e953e63ddaf117742fa069ff44b726",
+      "mode": "100644",
+      "path": "provenance/durable-thread-state.json",
+      "sha256": "c7b01e758e10a272e4e9522b5ee916075ca4d137fca5e1c6ff7dcae1870f8d1c"
+    },
+    {
+      "bytes": 2600,
+      "git_blob_sha": "94762318f42cd3777bc0b2718e55a4f7ba274bf0",
+      "mode": "100644",
+      "path": "provenance/goal-drift.json",
+      "sha256": "33c63f9ab15f5668681f7d16b4796bd88cb1b402032edc553c5d80b3739a6c85"
+    },
+    {
+      "bytes": 3749,
+      "git_blob_sha": "08496272fe9d20cde7c83797b9d1920018a99261",
+      "mode": "100644",
+      "path": "provenance/harness-agent-loop.json",
+      "sha256": "188b26cd569d53eae8f45aab7370577a408d630844d9d0b8468a078af08ff905"
+    },
+    {
+      "bytes": 3183,
+      "git_blob_sha": "9fc2cd9e9b13c7f0ff5df7a2e592f3f8ea52a6b0",
+      "mode": "100644",
+      "path": "provenance/harness-verification.json",
+      "sha256": "dd56ba98080ef915cd6bf021fa0f05e089d6b8fa30cc78b4fbae24fae5a12798"
+    },
+    {
+      "bytes": 3758,
+      "git_blob_sha": "c55c4e6702edf14118c3c609f0f47b278ab33857",
+      "mode": "100644",
+      "path": "provenance/harness.json",
+      "sha256": "740d57aa990f6875513035d7eb3a781140ab0cb3f3deacbbd24c0233af4c3847"
+    },
+    {
+      "bytes": 3099,
+      "git_blob_sha": "534103a92ca7bf0993a6d9e261555fb6ce54c6c5",
+      "mode": "100644",
+      "path": "provenance/harnessability.json",
+      "sha256": "65477989c43d656045570b0539736cdaca22b6963b992e3e196a8bc692a1b668"
+    },
+    {
+      "bytes": 3215,
+      "git_blob_sha": "d03c186dd10829ab8a1768d8c7fc9a05fa0dee3c",
+      "mode": "100644",
+      "path": "provenance/headless-harness-service.json",
+      "sha256": "bf1d8f46ead3757dca9720f3d195a4bb0ae11445f7f66337028162cda79597b4"
+    },
+    {
+      "bytes": 3201,
+      "git_blob_sha": "7219033814ae130bb3a545e4ae9871f3ab78e319",
+      "mode": "100644",
+      "path": "provenance/item-turn-thread-protocol.json",
+      "sha256": "c1a271b1cfcd438509d8fee600210b20aef71bd1b4c0563d1298016fb77946e3"
+    },
+    {
+      "bytes": 2683,
+      "git_blob_sha": "552c505de6ffbf3a3591f29044a4af8683542d68",
+      "mode": "100644",
+      "path": "provenance/request-boundary.json",
+      "sha256": "8bc6a4776b559715a07c9b4261850e82650da26167dd5b6f04e2a304c4d783fc"
+    },
+    {
+      "bytes": 3673,
+      "git_blob_sha": "fb56d5a3fd7c742acbbe619e6f8bc1191e2c243f",
+      "mode": "100644",
+      "path": "provenance/six-dimensional-map-of-llm-agent-architectures.json",
+      "sha256": "c743f7fe78fc14301fd8fb7764f5f583ba35037b0554628d03f11aa1af132276"
+    },
+    {
+      "bytes": 387,
+      "git_blob_sha": "fb522802a97835a2037d058b4ca9973b78ec3dce",
+      "mode": "100644",
+      "path": "provenance/source-governance.json",
+      "sha256": "9322cacfda97369319691776e85b3fcb46bc76dea4e65b80a509e527fac65625"
+    },
+    {
+      "bytes": 2710,
+      "git_blob_sha": "dbc6f0dce84ac1711dfe66a1691b52f06b79d10c",
+      "mode": "100644",
+      "path": "provenance/steering-control-plane.json",
+      "sha256": "2fa5c9a79af2e01f27d0849b7d8d2e4540742075d7761856ac31ddabd892913e"
+    },
+    {
+      "bytes": 2637,
+      "git_blob_sha": "9737ac9753e9a053bca4ba51480a592d92146ff3",
+      "mode": "100644",
+      "path": "provenance/stopping-policy.json",
+      "sha256": "9ccea1cf8877b7ae1d94bb51916f0d0abe3664146afb18253a67cf0b21df58e3"
+    },
+    {
+      "bytes": 3124,
+      "git_blob_sha": "c8666edb1d60427cff310c576add3e11dd6bf472",
+      "mode": "100644",
+      "path": "provenance/task-contract.json",
+      "sha256": "db1f8ff4f2d25a18a79482475454d57cd7591c44dbd29bb10b779cb8b16ec4d0"
+    },
+    {
+      "bytes": 3149,
+      "git_blob_sha": "dc8ee4f12294c40c1d5a5e616a64aca1a1c2d886",
+      "mode": "100644",
+      "path": "provenance/tool-call-proposal.json",
+      "sha256": "80ca6e9d1858a6ec2916d4cb444eb5f2c70d8eb1c27680f5159b63d99cc76d73"
+    },
+    {
+      "bytes": 703,
+      "git_blob_sha": "2fe731aebff4cab60725e5c7b545ca54e31eda52",
+      "mode": "100644",
+      "path": "pyproject.toml",
+      "sha256": "df568acf09276d2435fc058e3c8c439bfd6acbf2cc60b212c6f2a246b7ee3695"
+    },
+    {
+      "bytes": 18687,
+      "git_blob_sha": "02828fdbd51e1fab74a3263bbcc6eabd49781a45",
+      "mode": "100644",
+      "path": "registry/reviews.json",
+      "sha256": "c1234f45cc931e431d5454e0ba341c23f35a1d47d18a2d7155df64b4c1d612a1"
+    },
+    {
+      "bytes": 4558,
+      "git_blob_sha": "d8e35a0a46f73808e3da7ca63961ea17cbd9824e",
+      "mode": "100644",
+      "path": "registry/sources.json",
+      "sha256": "bf724cb161ca338a92d1be31b9587cf3dfd75d2ede3dbe5276f3a690941b0fce"
+    },
+    {
+      "bytes": 1973,
+      "git_blob_sha": "9a07e1ae48e8e62891e4a22b76e249996fba5606",
+      "mode": "100644",
+      "path": "schemas/source-relation-v0.1.schema.json",
+      "sha256": "213ead5f94139f8e01b6b0be0da09c3a667979739c730422e429193b2595ee56"
+    },
+    {
+      "bytes": 0,
+      "git_blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "mode": "100644",
+      "path": "scripts/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 9099,
+      "git_blob_sha": "252ceef74cd43f06384ba244751e5287db100917",
+      "mode": "100644",
+      "path": "scripts/validate_delivery_contract.py",
+      "sha256": "9458031881250a110da97679262bd96bae2a18de11ce7d0fd48ddae89f2cad71"
+    },
+    {
+      "bytes": 15744,
+      "git_blob_sha": "4bb18acf0b62fc454f838b8ae4106d24013bbe8f",
+      "mode": "100644",
+      "path": "scripts/validate_relations.py",
+      "sha256": "6ff81825173dac5d501b6045d50cc29203dcf8dec3d453540144ce54bbb9d5bf"
+    },
+    {
+      "bytes": 19242,
+      "git_blob_sha": "a67af14912afb3e2abe5ce96b7c54f34f4e400a3",
+      "mode": "100644",
+      "path": "scripts/validate_source.py",
+      "sha256": "e11bacca5b7ee0cc6a3b70f168ac49cc8109e5a70ec65f4c32387df6c6a3d239"
+    },
+    {
+      "bytes": 6819,
+      "git_blob_sha": "b2d28d74012156b2616a9dd07f4788ba1b250737",
+      "mode": "100644",
+      "path": "scripts/validate_tags_aliases.py",
+      "sha256": "eec174158f3ee6eec98d2a4027ad13fd7e9eaaf9b2a225957bd90faba15b75d7"
+    },
+    {
+      "bytes": 520,
+      "git_blob_sha": "bb8828a97f5f6111f88f2ca15bd88d44a10e7d56",
+      "mode": "100644",
+      "path": "tests/test_delivery_contract.py",
+      "sha256": "e6d132075c25d93b9bc7dbe98a40a163af7104afdecf690b7d63e00532488a2c"
+    },
+    {
+      "bytes": 2369,
+      "git_blob_sha": "36d015ae4d20ced275b884cde6c2285617d21c12",
+      "mode": "100644",
+      "path": "tests/test_m18_5_migration.py",
+      "sha256": "2f606d6f70983bdf5ec2cbd87a436f1c8da8998ad681e3b764ada9af56cf59ee"
+    },
+    {
+      "bytes": 2821,
+      "git_blob_sha": "69a6723ca86c5b9e311d7133b531baf0fd9cb2de",
+      "mode": "100644",
+      "path": "tests/test_m24_p1_canonical_adoption.py",
+      "sha256": "82577b3c87bbf7c995462c6163aa62117eb6bf62583df1647cbe8afc842fed25"
+    },
+    {
+      "bytes": 2810,
+      "git_blob_sha": "c001781858f99bce4d40c96c1f530078a7979eb8",
+      "mode": "100644",
+      "path": "tests/test_m9_agent_planning_source.py",
+      "sha256": "fa34a469d2208b6a7b291722aa00202e2b29d9cc551e78322e5ff636cb83bdeb"
+    },
+    {
+      "bytes": 2933,
+      "git_blob_sha": "5c6fd153a217b9c75735b3f843474036b012067e",
+      "mode": "100644",
+      "path": "tests/test_tags_aliases.py",
+      "sha256": "4d912ad10e13df3dbe9eb7b49a238c9acee5b60c0efc04d9ee804f47b6c9057a"
+    },
+    {
+      "bytes": 7213,
+      "git_blob_sha": "6dc7a8b6248d0a0d24ff46c4da7889db76aaa61a",
+      "mode": "100644",
+      "path": "tests/test_validate_relations.py",
+      "sha256": "550a7e2ec02fc7225bf5d15e8c35f988b2b4f037e59e61c47b926fb1e435eea5"
+    },
+    {
+      "bytes": 4278,
+      "git_blob_sha": "6a6128b0f17d562deafb81ea6eb0a377d6d5c7f1",
+      "mode": "100644",
+      "path": "tests/test_validate_source.py",
+      "sha256": "2260e43ddf15d7493429f02560789392bc227e354b17532166b72160b137818b"
+    }
+  ],
+  "repository": "danielcanfly/knowledge-source",
+  "schema_version": "1.0"
+}

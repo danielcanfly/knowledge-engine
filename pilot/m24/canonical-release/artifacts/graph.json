@@ -1,0 +1,166 @@
+{
+  "edges": [],
+  "nodes": [
+    {
+      "audience": "public",
+      "concept_id": "concepts/agent-execution-paths",
+      "path": "concepts/agent-execution-paths.md",
+      "title": "Agent execution paths",
+      "type": "Concept",
+      "x_kos_id": "ko_7FHJFQQ11PKPEWC4W25CCBCGZM"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/agent-planning-strategies",
+      "path": "concepts/agent-planning-strategies.md",
+      "title": "Agent decision and planning strategies",
+      "type": "Concept",
+      "x_kos_id": "ko_7T9Q4M2V8J6K3R5C1N0PWHDBXF"
+    },
+    {
+      "audience": "internal",
+      "concept_id": "concepts/candidate-delivery-controls",
+      "path": "concepts/candidate-delivery-controls.md",
+      "title": "Candidate delivery controls",
+      "type": "Concept",
+      "x_kos_id": "ko_01JXYZ123456789ABCDEFGHJKQ"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/canonical-run-authority",
+      "path": "concepts/canonical-run-authority.md",
+      "title": "Canonical Run Authority",
+      "type": "Concept",
+      "x_kos_id": "ko_2KRT52YC2PT9MW75SJ7E6GCBT1"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/completion-gate",
+      "path": "concepts/completion-gate.md",
+      "title": "Completion Gate",
+      "type": "Concept",
+      "x_kos_id": "ko_T15101XKN0QCZ0Z7VE3G8X1HXM"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/durable-thread-state",
+      "path": "concepts/durable-thread-state.md",
+      "title": "Durable Thread State",
+      "type": "Concept",
+      "x_kos_id": "ko_RNT24ZG5RX48B78P2YRRHS7N60"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/goal-drift",
+      "path": "concepts/goal-drift.md",
+      "title": "Goal Drift",
+      "type": "Concept",
+      "x_kos_id": "ko_RTYH9E7DNAXKXJWWZBS85TQEYQ"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/harness-agent-loop",
+      "path": "concepts/harness-agent-loop.md",
+      "title": "Harness Agent Loop",
+      "type": "Concept",
+      "x_kos_id": "ko_STXQQ3DR32B1ST8FMNWQQ71BNA"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/harness-verification",
+      "path": "concepts/harness-verification.md",
+      "title": "Harness Verification",
+      "type": "Concept",
+      "x_kos_id": "ko_27B0AHGGXEKMCVEBNQ86EHR9TJ"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/harness",
+      "path": "concepts/harness.md",
+      "title": "Harness",
+      "type": "Concept",
+      "x_kos_id": "ko_FG7KSSJYQ3CX4AVN97A7WGWQA9"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/harnessability",
+      "path": "concepts/harnessability.md",
+      "title": "Harnessability",
+      "type": "Concept",
+      "x_kos_id": "ko_EE6FJXNYE7DJ7XN9QCG5EYMN92"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/headless-harness-service",
+      "path": "concepts/headless-harness-service.md",
+      "title": "Headless Harness Service",
+      "type": "Concept",
+      "x_kos_id": "ko_F2Q6GJ0EX2QNT88T963Z15C785"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/item-turn-thread-protocol",
+      "path": "concepts/item-turn-thread-protocol.md",
+      "title": "Item Turn Thread Protocol",
+      "type": "Concept",
+      "x_kos_id": "ko_A98W7YHJACY4DJ7XCKGJQNRQ96"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/request-boundary",
+      "path": "concepts/request-boundary.md",
+      "title": "Request Boundary",
+      "type": "Concept",
+      "x_kos_id": "ko_15XQXKWWRZRBC9J8R3HA34NQ5B"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/six-dimensional-map-of-llm-agent-architectures",
+      "path": "concepts/six-dimensional-map-of-llm-agent-architectures.md",
+      "title": "Six-dimensional map of LLM agent architectures",
+      "type": "Concept",
+      "x_kos_id": "ko_HW0QBJBSFFJ9SWVXJTDHVV604T"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/source-governance",
+      "path": "concepts/source-governance.md",
+      "title": "Knowledge source governance",
+      "type": "Concept",
+      "x_kos_id": "ko_01JXYZ123456789ABCDEFGHJKM"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/steering-control-plane",
+      "path": "concepts/steering-control-plane.md",
+      "title": "Steering Control Plane",
+      "type": "Concept",
+      "x_kos_id": "ko_V4Q17MZAD0RCMQR4VQS33WW9QF"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/stopping-policy",
+      "path": "concepts/stopping-policy.md",
+      "title": "Stopping Policy",
+      "type": "Concept",
+      "x_kos_id": "ko_HFZTQX87AN4MBDEK45DKE50MZZ"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/task-contract",
+      "path": "concepts/task-contract.md",
+      "title": "Task Contract",
+      "type": "Concept",
+      "x_kos_id": "ko_NFQVE5X917WGQJCG3X94Q6184H"
+    },
+    {
+      "audience": "public",
+      "concept_id": "concepts/tool-call-proposal",
+      "path": "concepts/tool-call-proposal.md",
+      "title": "Tool Call Proposal",
+      "type": "Concept",
+      "x_kos_id": "ko_EWHT6TCKX8Q4E80MWHXHBDPNV1"
+    }
+  ],
+  "schema_version": "1.1"
+}
