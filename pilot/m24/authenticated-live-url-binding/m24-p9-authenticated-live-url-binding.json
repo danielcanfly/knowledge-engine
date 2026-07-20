@@ -1,0 +1,187 @@
+{
+  "acceptance": {
+    "live_url_status": "authenticated_access_wall_bound",
+    "manual_daniel_acceptance": "pending_authenticated_browser_acceptance",
+    "required_next_action": "Daniel opens the protected custom hostname in a browser, completes Cloudflare Access login, and accepts the rendered canonical release.",
+    "status": "access_protected_pending_daniel_acceptance"
+  },
+  "access_applications": [
+    {
+      "application_id_recorded": false,
+      "application_type": "self_hosted",
+      "audience_tag_recorded": false,
+      "domain_class": "custom_hostname",
+      "operator_email_recorded": false,
+      "policies_count": 1,
+      "single_operator_allow_policy": true
+    },
+    {
+      "application_id_recorded": false,
+      "application_type": "self_hosted",
+      "audience_tag_recorded": false,
+      "domain_class": "pages_dev_primary",
+      "operator_email_recorded": false,
+      "policies_count": 1,
+      "single_operator_allow_policy": true
+    },
+    {
+      "application_id_recorded": false,
+      "application_type": "self_hosted",
+      "audience_tag_recorded": false,
+      "domain_class": "pages_dev_wildcard",
+      "operator_email_recorded": false,
+      "policies_count": 1,
+      "single_operator_allow_policy": true
+    }
+  ],
+  "authority": {
+    "browser_authority": "read_only",
+    "credential_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "permanent_ledger_mutation": false,
+    "product_audience": "authenticated_internal",
+    "production_answer_serving_enabled": false,
+    "production_pointer_mutation": false,
+    "production_r2_mutation": false,
+    "production_retrieval": "lexical",
+    "qdrant_mutation": false,
+    "raw_evidence_exposed": false,
+    "semantic_promotion_enabled": false,
+    "semantic_serving_enabled": false,
+    "source_mutation": false,
+    "traffic_mutation": false
+  },
+  "custom_domain": {
+    "activation_note": "Pages custom-domain API still reports pending, but external unauthenticated HTTPS observation already reaches Cloudflare Access.",
+    "external_access_wall_observed": true,
+    "hostname": "m24-internal.danielcanfly.com",
+    "pages_domain_status": "pending"
+  },
+  "dns_binding": {
+    "cname_count": 1,
+    "hostname": "m24-internal.danielcanfly.com",
+    "proxied": true,
+    "record_type": "CNAME",
+    "target_class": "pages_dev",
+    "zone_id_recorded": false
+  },
+  "evidence_hygiene": [
+    "no Cloudflare token values recorded",
+    "no operator email recorded",
+    "no raw headers recorded",
+    "no raw response bodies recorded",
+    "no raw API error bodies recorded",
+    "no preview full URL committed",
+    "no Access application ids or audience tags committed"
+  ],
+  "issue_number": 1003,
+  "lifecycle": [
+    {
+      "bounded_evidence": {
+        "cloudflare_pages_access_token_used": true,
+        "token_value_recorded": false
+      },
+      "status": "success",
+      "step": "token_capability_probe"
+    },
+    {
+      "bounded_evidence": {
+        "deployment_short_id": "89eadd26",
+        "preview_full_url_recorded": false,
+        "project_name": "llm-wiki-m24-internal",
+        "worker_bundle_uploaded": true
+      },
+      "status": "success",
+      "step": "pages_project_and_production_deploy"
+    },
+    {
+      "bounded_evidence": {
+        "applications_created": 3,
+        "domains_protected": [
+          "custom_hostname",
+          "pages_dev_primary",
+          "pages_dev_wildcard"
+        ],
+        "operator_email_recorded": false
+      },
+      "status": "success",
+      "step": "access_application_binding"
+    },
+    {
+      "bounded_evidence": {
+        "cname_count": 1,
+        "proxied": true,
+        "record_type": "CNAME",
+        "target_class": "pages_dev"
+      },
+      "status": "success",
+      "step": "dns_custom_hostname_binding"
+    },
+    {
+      "bounded_evidence": {
+        "all_observed_access_wall": true,
+        "probe_count": 3,
+        "raw_headers_recorded": false,
+        "raw_response_bodies_recorded": false,
+        "release_content_observed": false
+      },
+      "status": "success",
+      "step": "unauthenticated_access_observation"
+    },
+    {
+      "bounded_evidence": {
+        "authenticated_release_render_observed_by_codex": false,
+        "manual_acceptance_recorded": false
+      },
+      "status": "pending_manual_acceptance",
+      "step": "daniel_authenticated_browser_acceptance"
+    }
+  ],
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "pages_deployment": {
+    "deployment_count_observed": 2,
+    "deployment_short_id": "89eadd26",
+    "latest_deployment_environment": "production",
+    "preview_full_url_recorded": false,
+    "production_branch": "main",
+    "project_name": "llm-wiki-m24-internal",
+    "static_asset_count": 9,
+    "worker_bundle_uploaded": true
+  },
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-p9-authenticated-live-url-binding/v1",
+  "self_sha256": "f6c38ffb142677841b8a7532b3632b00d400bb9dccca197e8e49bc8310309208",
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "token_capability": {
+    "access_apps_read_write_authorized": true,
+    "access_organization_read_authorized": true,
+    "pages_deploy_authorized": true,
+    "pages_projects_read_write_authorized": true,
+    "token_value_recorded": false,
+    "token_verified": true,
+    "zone_dns_edit_authorized": true
+  },
+  "unauthenticated_probes": [
+    {
+      "access_wall_observed": true,
+      "host_class": "custom_host",
+      "http_status_class": "2xx",
+      "release_content_observed": false,
+      "service_available": true
+    },
+    {
+      "access_wall_observed": true,
+      "host_class": "pages_dev_primary",
+      "http_status_class": "2xx",
+      "release_content_observed": false,
+      "service_available": true
+    },
+    {
+      "access_wall_observed": true,
+      "host_class": "pages_dev_preview",
+      "http_status_class": "2xx",
+      "release_content_observed": false,
+      "service_available": true
+    }
+  ]
+}
