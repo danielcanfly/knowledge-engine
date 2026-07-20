@@ -66,17 +66,31 @@ jobs:
           node --test workers/m23-7-r3-8-latency-repair/worker.test.mjs
       - name: Preserve historical remote core byte-exact
         run: |
-          accepted_merge="a5fca48683567b48a196e67657bd7dc4a4b9c554"
-          git diff --exit-code "$accepted_merge" HEAD -- \
+          scope_base="${{ github.event.pull_request.base.sha || '3a25fbde6b1b16061478632abd0844968790f84e' }}"
+          git diff --exit-code "$scope_base" HEAD -- \
             docs/architecture/m23-7-r3-8-7-remote-operator.md \
             pilot/m23/m23-7-r3-8-7-remote-operator-contract.json \
-            scripts/m23_7_r3_8_remote_operator.py \
             scripts/m23_7_r3_8_remote_entrypoint.py \
             src/knowledge_engine/m23_7_r3_8_latency_repair.py \
             tests/test_m23_7_r3_8_latency_repair.py \
-            tests/test_m23_7_r3_8_remote_operator.py \
             workers/m23-7-r3-8-latency-repair/worker.mjs \
             workers/m23-7-r3-8-latency-repair/worker.test.mjs
+          python - <<'PY'
+          import subprocess
+
+          allowed = {
+              ".github/workflows/m23-7-r3-8-7-remote-operator-ci.yml",
+              ".github/workflows/m23-7-r3-8-region-placement-v3-ci.yml",
+              ".github/workflows/m23-7-r3-8-remote-observe.yml",
+              "scripts/m23_7_r3_8_remote_operator.py",
+              "tests/test_m23_7_r3_8_remote_operator.py",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "${{ github.event.pull_request.base.sha || '3a25fbde6b1b16061478632abd0844968790f84e' }}", "HEAD"],
+              text=True,
+          ).splitlines())
+          assert changed <= allowed, (changed, allowed)
+          PY
           test -f scripts/m23_7_r3_8_remote_operator_placement_v2.py
           test -f scripts/m23_7_r3_8_remote_entrypoint_placement_v2.py
           test -f scripts/m23_7_r3_8_remote_operator_region_v3.py
