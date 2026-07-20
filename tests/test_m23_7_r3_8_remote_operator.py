@@ -7,9 +7,13 @@ import pytest
 from scripts import m23_7_r3_8_remote_operator as subject
 
 
-def test_worker_name_is_unique_and_bounded() -> None:
-    assert subject.derive_worker_name("29499115739", 1) == (
-        "knowledge-engine-r3-8-29499115739"
+def test_worker_name_uses_stable_diagnostic_service() -> None:
+    assert (
+        subject.derive_worker_name("29499115739", 1)
+        == subject.STABLE_DIAGNOSTIC_WORKER_NAME
+    )
+    assert subject.derive_worker_name("29499115740", 1) == (
+        subject.derive_worker_name("29499115739", 1)
     )
     with pytest.raises(subject.RemoteOperatorError, match="rerun_attempt_forbidden"):
         subject.derive_worker_name("29499115739", 2)
@@ -45,7 +49,7 @@ def test_wrangler_config_uses_unique_name_and_no_secret(tmp_path: Path) -> None:
         "https://qdrant.example.test", subject.derive_worker_name("12345", 1), output
     )
     payload = json.loads(output.read_text(encoding="utf-8"))
-    assert payload["name"] == "knowledge-engine-r3-8-12345"
+    assert payload["name"] == subject.STABLE_DIAGNOSTIC_WORKER_NAME
     assert payload["workers_dev"] is True
     assert payload["placement"] == {"hostname": "qdrant.example.test"}
     assert payload["ai"] == {"binding": "AI"}
@@ -105,6 +109,16 @@ def test_atomic_deploy_command_uses_single_secrets_file(tmp_path: Path) -> None:
     ]
     assert "secret" not in command
     assert "put" not in command
+
+
+def test_stable_worker_lifecycle_has_no_per_run_cleanup_gate() -> None:
+    assert subject.stable_worker_lifecycle(True) == {
+        "stable_diagnostic_service": True,
+        "per_run_worker_created": False,
+        "diagnostic_service_retained": True,
+        "per_run_deletion_authorization_required": False,
+    }
+    assert subject.stable_worker_lifecycle(False)["diagnostic_service_retained"] is False
 
 
 def _deploy_record(worker: str, **updates: object) -> dict[str, object]:
@@ -261,7 +275,13 @@ def test_source_has_no_fixed_worker_absence_probe() -> None:
     text = Path("scripts/m23_7_r3_8_remote_operator.py").read_text(encoding="utf-8")
     assert "versions list" not in text
     assert "derive_worker_name" in text
+    assert "STABLE_DIAGNOSTIC_WORKER_NAME" in text
+    assert 'f"{WORKER_PREFIX}{run_id}"' not in text
     assert "worker_retained" in text
+    assert "stable_worker_lifecycle" in text
+    assert '"transient_diagnostic_worker_deployed"] = False' in text
+    assert '"stable_diagnostic_worker_deployed"] = True' in text
+    assert '"diagnostic_worker_deletion_required_after_reconciliation"] = False' in text
     assert "R2_BUCKET" in text
     assert "READINESS_CONSECUTIVE_SUCCESSES = 2" in text
     assert "PLACEMENT_READINESS_ATTEMPTS = 120" in text
