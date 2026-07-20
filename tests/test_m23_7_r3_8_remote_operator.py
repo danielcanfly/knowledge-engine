@@ -53,6 +53,60 @@ def test_wrangler_config_uses_unique_name_and_no_secret(tmp_path: Path) -> None:
     assert identity["generated_config_committed"] is False
 
 
+def test_atomic_wrangler_secrets_file_is_ephemeral_and_bounded(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "wrangler-secrets.json"
+    metadata = subject.write_wrangler_secrets_file(
+        output,
+        qdrant_url="https://qdrant.example.test",
+        qdrant_api_key="q" * 32,
+        operator_token="t" * 64,
+    )
+    assert metadata == {
+        "atomic_secrets_file_committed": False,
+        "atomic_secrets_uploaded_with_deploy": True,
+        "secret_binding_names": [
+            "M23_R3_8_OPERATOR_TOKEN",
+            "QDRANT_API_KEY",
+            "QDRANT_URL",
+        ],
+        "secret_count": 3,
+        "secret_values_persisted": False,
+    }
+    assert output.stat().st_mode & 0o777 == 0o600
+    assert json.loads(output.read_text(encoding="utf-8")) == {
+        "M23_R3_8_OPERATOR_TOKEN": "t" * 64,
+        "QDRANT_API_KEY": "q" * 32,
+        "QDRANT_URL": "https://qdrant.example.test",
+    }
+    assert "q" * 32 not in json.dumps(metadata)
+    assert "t" * 64 not in json.dumps(metadata)
+
+
+def test_atomic_deploy_command_uses_single_secrets_file(tmp_path: Path) -> None:
+    config = tmp_path / "wrangler.jsonc"
+    secrets_file = tmp_path / "wrangler-secrets.json"
+    command = subject.wrangler_deploy_command(
+        ["npx", "--yes", "wrangler@4.111.0"],
+        config=config,
+        secrets_file=secrets_file,
+    )
+    assert command == [
+        "npx",
+        "--yes",
+        "wrangler@4.111.0",
+        "deploy",
+        "--config",
+        str(config),
+        "--secrets-file",
+        str(secrets_file),
+        "--keep-vars",
+    ]
+    assert "secret" not in command
+    assert "put" not in command
+
+
 def _deploy_record(worker: str, **updates: object) -> dict[str, object]:
     record: dict[str, object] = {
         "type": "deploy",
@@ -223,4 +277,8 @@ def test_source_has_no_fixed_worker_absence_probe() -> None:
     assert '"worker_http_502_qdrant_query_batch_unavailable"' in text
     assert '"worker_http_502_qdrant_single_query_unavailable"' in text
     assert '"worker_placement_not_remote"' in text
+    execute_text = text.split("def execute", 1)[1].split("def parse_args", 1)[0]
+    assert "--secrets-file" in text
+    assert "wrangler_deploy_command" in execute_text
+    assert '"secret", "put"' not in execute_text
     assert "delete" not in text.split("def execute", 1)[1].split("def parse_args", 1)[0]
