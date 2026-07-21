@@ -40,7 +40,7 @@ M24_14_6_FOUNDATION_SHA = "e5ef644053d34e89c70d2ceb37521e1c59234832"
 M24_14_6_ACCEPTED_VAULT_SHA256 = (
     "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
 )
-M24_14_6_CURRENT_PROTECTED_DEPLOYMENT = "5361997c-fe53-47a5-998e-81244a6470ab"
+M24_14_6_PRE_STAGE_A_PROTECTED_DEPLOYMENT = "5361997c-fe53-47a5-998e-81244a6470ab"
 M24_14_6_IMMEDIATE_ROLLBACK_DEPLOYMENT = "b570b0c7-a812-4878-8573-e7b7d41faf78"
 M24_14_6_SECONDARY_ROLLBACK_DEPLOYMENT = "586deae3-d679-45e2-8542-ec6845f9f2e7"
 M24_14_6_PAGES_PROJECT = "llm-wiki-m24-internal"
@@ -333,7 +333,10 @@ def build_m24_14_6_pending_acceptance_report(
         "source_commit_sha": CANONICAL_SOURCE_SHA,
         "foundation_sha": M24_14_6_FOUNDATION_SHA,
         "vault_sha256": M24_14_6_ACCEPTED_VAULT_SHA256,
-        "current_protected_deployment": M24_14_6_CURRENT_PROTECTED_DEPLOYMENT,
+        "deployment_identity": {
+            "pre_stage_a_protected_deployment": M24_14_6_PRE_STAGE_A_PROTECTED_DEPLOYMENT,
+            "post_merge_deployment_recorded_in_return_handoff": True,
+        },
         "rollback_deployments": [
             M24_14_6_IMMEDIATE_ROLLBACK_DEPLOYMENT,
             M24_14_6_SECONDARY_ROLLBACK_DEPLOYMENT,
