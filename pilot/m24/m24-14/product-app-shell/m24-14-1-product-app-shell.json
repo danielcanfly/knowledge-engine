@@ -11,9 +11,9 @@
       "sha256": "94ac6cb6e858885a5e8368b5d6302fce9371ca8fdeb463524d8986d9c875d55d"
     },
     {
-      "bytes": 27240,
+      "bytes": 27607,
       "path": "pilot/m24/internal-product-deployment/site/app.js",
-      "sha256": "f3a1db7a896875eaf07823e841a2343525fcdd62901bf82ab8a284e765b15e6f"
+      "sha256": "f6238b67372c31e3de17af394941185db131d57de0594512e303120cc639092c"
     },
     {
       "bytes": 12634,
@@ -56,9 +56,9 @@
       "sha256": "835c4bb75d1d982f167a9930cad8df6bcf6cd6742909be44cc889105f9ed4fb5"
     },
     {
-      "bytes": 407,
+      "bytes": 654,
       "path": "pilot/m24/internal-product-deployment/site/data/obsidian-export-manifest.json",
-      "sha256": "434f8d14b95d6f703eadbcff3a2ad96b70bee4e9b2cab391e8108994e9b5e997"
+      "sha256": "caac42be3111d6af711d0a62c475f4ca54168b921f0fae7a62aab423db101d79"
     }
   ],
   "authority": {
@@ -151,7 +151,7 @@
     "same_origin_artifact_fetch_only": true,
     "secret_scan_passed": true
   },
-  "self_sha256": "eb4fd0d7f34bf38e519a3e166d47ae1c4e85b3cb2823b82eb48fd6f74efc4abb",
+  "self_sha256": "c0348c165328fed2b61afe69cf2003358c213aa599a5cefbcca6e2a0e60022c5",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "m24_14_1_product_application_shell_implemented"
 }
