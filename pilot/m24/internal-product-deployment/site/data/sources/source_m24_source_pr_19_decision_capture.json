@@ -1,0 +1,254 @@
+{
+  "audience": "public",
+  "canonical_uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json",
+  "citations": [],
+  "coverage_status": "structured_snapshot",
+  "document": {
+    "body": "{\n  \"allowed_decisions\": [\n    \"approve_new\",\n    \"map_existing\",\n    \"edit\",\n    \"reject\",\n    \"defer\"\n  ],\n  \"authority_boundary\": {\n    \"credential_rotation_authorized\": false,\n    \"hybrid_retrieval_enabled\": false,\n    \"pointer_mutation_authorized\": false,\n    \"production_retrieval\": \"lexical\",\n    \"qdrant_mutation_authorized\": false,\n    \"r2_mutation_authorized\": false,\n    \"semantic_answer_serving_enabled\": false,\n    \"semantic_promotion_enabled\": false,\n    \"source_mutation_authorized\": false\n  },\n  \"closure_requirements\": {\n    \"all_items_non_pending\": true,\n    \"canonical_adoption_pr_required_later\": true,\n    \"human_actor_required\": true,\n    \"reviewed_at_required\": true,\n    \"source_pr_comment_or_review_required\": true,\n    \"source_pr_must_not_merge_as_is\": true\n  },\n  \"decision_capture_sha256\": \"88b1593275cc8c10e3a998d03be31939360a5d41965a06d5a020da13ba73947c\",\n  \"human_authorization\": {\n    \"actor\": \"Daniel\",\n    \"authorization_text\": \"我同意採用建議決策：前 11 項 approve_new；後 4 項 edit；edit 項需在 adoption PR 中收窄為 harness-specific 定義後才可 canonicalize。\",\n    \"authorized_at\": \"2026-07-20\",\n    \"source\": \"Codex user message\"\n  },\n  \"issue\": 974,\n  \"lane\": \"source_pr_19_review\",\n  \"next_human_action\": \"Human decisions are recorded. Next agent action is to create a canonical Source adoption PR that keeps Source PR #19 draft and does not merge it as-is.\",\n  \"review_items\": [\n    {\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Parent execution-governance concept tying request boundary, task contract, completion gate, authority, and verification together.\",\n      \"review_id\": \"m23review_e2847c567565549ea21b89ee7b572d47\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"approve_new\",\n      \"title\": \"Harness\"\n    },\n    {\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Explicit outcome, evidence, and constraint contract narrower than general planning strategy.\",\n      \"review_id\": \"m23review_37d35397ace98d69c00b0e8fe4cb1458\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"approve_new\",\n      \"title\": \"Task Contract\"\n    },\n    {\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Ingress identity, tenant scope, schema validity, and admission are product/security boundaries.\",\n      \"review_id\": \"m23review_12cf0442aff36f0400715efe1ee1025a\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"approve_new\",\n      \"title\": \"Request Boundary\"\n    },\n    {\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Terminal acceptance authority is a concrete harness primitive.\",\n      \"review_id\": \"m23review_ed53fb63ef649af90d2e2f73e85ae5e7\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"approve_new\",\n      \"title\": \"Completion Gate\"\n    },\n    {\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Execution state authority differs from Source governance and candidate delivery.\",\n      \"review_id\": \"m23review_8566693dd5241e3269f5038e01394f6b\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"approve_new\",\n      \"title\": \"Canonical Run Authority\"\n    },\n    {\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Stop, wait, complete, fail, and cancel rules are reusable harness execution policy.\",\n      \"review_id\": \"m23review_7c7842b8a5e71c5f7577b26c27e2f73f\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"approve_new\",\n      \"title\": \"Stopping Policy\"\n    },\n    {\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Failure mode tied to Task Contract and steering should remain first-class.\",\n      \"review_id\": \"m23review_0df0b6cb698712b98425cc2b05265565\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"approve_new\",\n      \"title\": \"Goal Drift\"\n    },\n    {\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Human authority over intent, boundaries, evidence, and escalation is distinct from Source governance.\",\n      \"review_id\": \"m23review_784ebc246b86b22be547d2f4c006ca64\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"approve_new\",\n      \"title\": \"Steering Control Plane\"\n    },\n    {\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"UI-independent execution core is an implementation/product architecture concept.\",\n      \"review_id\": \"m23review_ee3af10c8e0f2f6d9fb49c6c7b1f308c\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"approve_new\",\n      \"title\": \"Headless Harness Service\"\n    },\n    {\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Persistent interaction state across turns supports the Headless Harness Service.\",\n      \"review_id\": \"m23review_ce9255a1a87d7f2cc87c88ec26e1dc9a\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"approve_new\",\n      \"title\": \"Durable Thread State\"\n    },\n    {\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Typed item/turn/thread model is specific enough to warrant a canonical protocol concept.\",\n      \"review_id\": \"m23review_08f2083f1643842c7266a7fa3e7118b1\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"approve_new\",\n      \"title\": \"Item Turn Thread Protocol\"\n    },\n    {\n      \"decision\": \"edit\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized adoption only after the canonical adoption PR narrows this item to a harness-specific definition; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Keep the idea, but tighten the definition as a measurable quality attribute before adoption.\",\n      \"review_id\": \"m23review_94192ccc4b53c47e32942121da3775c2\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"edit\",\n      \"title\": \"Harnessability\"\n    },\n    {\n      \"decision\": \"edit\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized adoption only after the canonical adoption PR narrows this item to a harness-specific definition; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Approve only if edited to a harness-specific governed loop with distinct lifecycle semantics.\",\n      \"review_id\": \"m23review_998e1adb9a6ce64f12a4fc9477eebe30\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"edit\",\n      \"title\": \"Agent Loop\"\n    },\n    {\n      \"decision\": \"edit\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized adoption only after the canonical adoption PR narrows this item to a harness-specific definition; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Prefer an edited concept such as Tool Call Proposal if the intended meaning is proposed external operations requiring authority.\",\n      \"review_id\": \"m23review_c3b0082d594d591018a417614574b098\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"edit\",\n      \"title\": \"Tool Calling\"\n    },\n    {\n      \"decision\": \"edit\",\n      \"human_actor\": \"Daniel\",\n      \"provenance_note\": \"Daniel authorized adoption only after the canonical adoption PR narrows this item to a harness-specific definition; use the existing decision-capture rationale as provenance guidance.\",\n      \"rationale\": \"Approve only if edited to a harness-specific verification primitive with acceptance authority boundaries.\",\n      \"review_id\": \"m23review_a91d9910fbd95236a02e5f1bf52a1b27\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"suggested_decision\": \"edit\",\n      \"title\": \"Verification\"\n    }\n  ],\n  \"schema_version\": \"knowledge-engine-m24-source-pr-19-decision-capture/v1\",\n  \"source_pr\": {\n    \"base_sha\": \"a6ba738d910d01d2ae99b1968f0831989934c549\",\n    \"decision_comment_url\": \"https://github.com/danielcanfly/knowledge-source/pull/19#issuecomment-5020513924\",\n    \"decision_template_state\": \"human_decisions_recorded\",\n    \"draft\": true,\n    \"head_sha\": \"deb3ad1e631c2149183d10561fbceb0a1848a989\",\n    \"human_approval_claimed\": true,\n    \"merge_as_is_allowed\": false,\n    \"number\": 19,\n    \"repository\": \"danielcanfly/knowledge-source\",\n    \"state\": \"open\",\n    \"url\": \"https://github.com/danielcanfly/knowledge-source/pull/19\"\n  },\n  \"status\": \"human_decisions_recorded\",\n  \"url\": \"https://github.com/danielcanfly/knowledge-engine/issues/974\"\n}\n",
+    "format": "json",
+    "json": {
+      "allowed_decisions": [
+        "approve_new",
+        "map_existing",
+        "edit",
+        "reject",
+        "defer"
+      ],
+      "authority_boundary": {
+        "credential_rotation_authorized": false,
+        "hybrid_retrieval_enabled": false,
+        "pointer_mutation_authorized": false,
+        "production_retrieval": "lexical",
+        "qdrant_mutation_authorized": false,
+        "r2_mutation_authorized": false,
+        "semantic_answer_serving_enabled": false,
+        "semantic_promotion_enabled": false,
+        "source_mutation_authorized": false
+      },
+      "closure_requirements": {
+        "all_items_non_pending": true,
+        "canonical_adoption_pr_required_later": true,
+        "human_actor_required": true,
+        "reviewed_at_required": true,
+        "source_pr_comment_or_review_required": true,
+        "source_pr_must_not_merge_as_is": true
+      },
+      "decision_capture_sha256": "88b1593275cc8c10e3a998d03be31939360a5d41965a06d5a020da13ba73947c",
+      "human_authorization": {
+        "actor": "Daniel",
+        "authorization_text": "我同意採用建議決策：前 11 項 approve_new；後 4 項 edit；edit 項需在 adoption PR 中收窄為 harness-specific 定義後才可 canonicalize。",
+        "authorized_at": "2026-07-20",
+        "source": "Codex user message"
+      },
+      "issue": 974,
+      "lane": "source_pr_19_review",
+      "next_human_action": "Human decisions are recorded. Next agent action is to create a canonical Source adoption PR that keeps Source PR #19 draft and does not merge it as-is.",
+      "review_items": [
+        {
+          "decision": "approve_new",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Parent execution-governance concept tying request boundary, task contract, completion gate, authority, and verification together.",
+          "review_id": "m23review_e2847c567565549ea21b89ee7b572d47",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "approve_new",
+          "title": "Harness"
+        },
+        {
+          "decision": "approve_new",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Explicit outcome, evidence, and constraint contract narrower than general planning strategy.",
+          "review_id": "m23review_37d35397ace98d69c00b0e8fe4cb1458",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "approve_new",
+          "title": "Task Contract"
+        },
+        {
+          "decision": "approve_new",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Ingress identity, tenant scope, schema validity, and admission are product/security boundaries.",
+          "review_id": "m23review_12cf0442aff36f0400715efe1ee1025a",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "approve_new",
+          "title": "Request Boundary"
+        },
+        {
+          "decision": "approve_new",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Terminal acceptance authority is a concrete harness primitive.",
+          "review_id": "m23review_ed53fb63ef649af90d2e2f73e85ae5e7",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "approve_new",
+          "title": "Completion Gate"
+        },
+        {
+          "decision": "approve_new",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Execution state authority differs from Source governance and candidate delivery.",
+          "review_id": "m23review_8566693dd5241e3269f5038e01394f6b",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "approve_new",
+          "title": "Canonical Run Authority"
+        },
+        {
+          "decision": "approve_new",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Stop, wait, complete, fail, and cancel rules are reusable harness execution policy.",
+          "review_id": "m23review_7c7842b8a5e71c5f7577b26c27e2f73f",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "approve_new",
+          "title": "Stopping Policy"
+        },
+        {
+          "decision": "approve_new",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Failure mode tied to Task Contract and steering should remain first-class.",
+          "review_id": "m23review_0df0b6cb698712b98425cc2b05265565",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "approve_new",
+          "title": "Goal Drift"
+        },
+        {
+          "decision": "approve_new",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Human authority over intent, boundaries, evidence, and escalation is distinct from Source governance.",
+          "review_id": "m23review_784ebc246b86b22be547d2f4c006ca64",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "approve_new",
+          "title": "Steering Control Plane"
+        },
+        {
+          "decision": "approve_new",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "UI-independent execution core is an implementation/product architecture concept.",
+          "review_id": "m23review_ee3af10c8e0f2f6d9fb49c6c7b1f308c",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "approve_new",
+          "title": "Headless Harness Service"
+        },
+        {
+          "decision": "approve_new",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Persistent interaction state across turns supports the Headless Harness Service.",
+          "review_id": "m23review_ce9255a1a87d7f2cc87c88ec26e1dc9a",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "approve_new",
+          "title": "Durable Thread State"
+        },
+        {
+          "decision": "approve_new",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Typed item/turn/thread model is specific enough to warrant a canonical protocol concept.",
+          "review_id": "m23review_08f2083f1643842c7266a7fa3e7118b1",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "approve_new",
+          "title": "Item Turn Thread Protocol"
+        },
+        {
+          "decision": "edit",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized adoption only after the canonical adoption PR narrows this item to a harness-specific definition; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Keep the idea, but tighten the definition as a measurable quality attribute before adoption.",
+          "review_id": "m23review_94192ccc4b53c47e32942121da3775c2",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "edit",
+          "title": "Harnessability"
+        },
+        {
+          "decision": "edit",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized adoption only after the canonical adoption PR narrows this item to a harness-specific definition; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Approve only if edited to a harness-specific governed loop with distinct lifecycle semantics.",
+          "review_id": "m23review_998e1adb9a6ce64f12a4fc9477eebe30",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "edit",
+          "title": "Agent Loop"
+        },
+        {
+          "decision": "edit",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized adoption only after the canonical adoption PR narrows this item to a harness-specific definition; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Prefer an edited concept such as Tool Call Proposal if the intended meaning is proposed external operations requiring authority.",
+          "review_id": "m23review_c3b0082d594d591018a417614574b098",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "edit",
+          "title": "Tool Calling"
+        },
+        {
+          "decision": "edit",
+          "human_actor": "Daniel",
+          "provenance_note": "Daniel authorized adoption only after the canonical adoption PR narrows this item to a harness-specific definition; use the existing decision-capture rationale as provenance guidance.",
+          "rationale": "Approve only if edited to a harness-specific verification primitive with acceptance authority boundaries.",
+          "review_id": "m23review_a91d9910fbd95236a02e5f1bf52a1b27",
+          "reviewed_at": "2026-07-20",
+          "suggested_decision": "edit",
+          "title": "Verification"
+        }
+      ],
+      "schema_version": "knowledge-engine-m24-source-pr-19-decision-capture/v1",
+      "source_pr": {
+        "base_sha": "a6ba738d910d01d2ae99b1968f0831989934c549",
+        "decision_comment_url": "https://github.com/danielcanfly/knowledge-source/pull/19#issuecomment-5020513924",
+        "decision_template_state": "human_decisions_recorded",
+        "draft": true,
+        "head_sha": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+        "human_approval_claimed": true,
+        "merge_as_is_allowed": false,
+        "number": 19,
+        "repository": "danielcanfly/knowledge-source",
+        "state": "open",
+        "url": "https://github.com/danielcanfly/knowledge-source/pull/19"
+      },
+      "status": "human_decisions_recorded",
+      "url": "https://github.com/danielcanfly/knowledge-engine/issues/974"
+    },
+    "raw_json": "{\n  \"schema_version\": \"knowledge-engine-m24-source-pr-19-decision-capture/v1\",\n  \"lane\": \"source_pr_19_review\",\n  \"issue\": 974,\n  \"url\": \"https://github.com/danielcanfly/knowledge-engine/issues/974\",\n  \"status\": \"human_decisions_recorded\",\n  \"source_pr\": {\n    \"repository\": \"danielcanfly/knowledge-source\",\n    \"number\": 19,\n    \"url\": \"https://github.com/danielcanfly/knowledge-source/pull/19\",\n    \"state\": \"open\",\n    \"draft\": true,\n    \"base_sha\": \"a6ba738d910d01d2ae99b1968f0831989934c549\",\n    \"head_sha\": \"deb3ad1e631c2149183d10561fbceb0a1848a989\",\n    \"decision_template_state\": \"human_decisions_recorded\",\n    \"human_approval_claimed\": true,\n    \"merge_as_is_allowed\": false,\n    \"decision_comment_url\": \"https://github.com/danielcanfly/knowledge-source/pull/19#issuecomment-5020513924\"\n  },\n  \"review_items\": [\n    {\n      \"title\": \"Harness\",\n      \"review_id\": \"m23review_e2847c567565549ea21b89ee7b572d47\",\n      \"suggested_decision\": \"approve_new\",\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Parent execution-governance concept tying request boundary, task contract, completion gate, authority, and verification together.\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Task Contract\",\n      \"review_id\": \"m23review_37d35397ace98d69c00b0e8fe4cb1458\",\n      \"suggested_decision\": \"approve_new\",\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Explicit outcome, evidence, and constraint contract narrower than general planning strategy.\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Request Boundary\",\n      \"review_id\": \"m23review_12cf0442aff36f0400715efe1ee1025a\",\n      \"suggested_decision\": \"approve_new\",\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Ingress identity, tenant scope, schema validity, and admission are product/security boundaries.\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Completion Gate\",\n      \"review_id\": \"m23review_ed53fb63ef649af90d2e2f73e85ae5e7\",\n      \"suggested_decision\": \"approve_new\",\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Terminal acceptance authority is a concrete harness primitive.\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Canonical Run Authority\",\n      \"review_id\": \"m23review_8566693dd5241e3269f5038e01394f6b\",\n      \"suggested_decision\": \"approve_new\",\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Execution state authority differs from Source governance and candidate delivery.\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Stopping Policy\",\n      \"review_id\": \"m23review_7c7842b8a5e71c5f7577b26c27e2f73f\",\n      \"suggested_decision\": \"approve_new\",\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Stop, wait, complete, fail, and cancel rules are reusable harness execution policy.\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Goal Drift\",\n      \"review_id\": \"m23review_0df0b6cb698712b98425cc2b05265565\",\n      \"suggested_decision\": \"approve_new\",\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Failure mode tied to Task Contract and steering should remain first-class.\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Steering Control Plane\",\n      \"review_id\": \"m23review_784ebc246b86b22be547d2f4c006ca64\",\n      \"suggested_decision\": \"approve_new\",\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Human authority over intent, boundaries, evidence, and escalation is distinct from Source governance.\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Headless Harness Service\",\n      \"review_id\": \"m23review_ee3af10c8e0f2f6d9fb49c6c7b1f308c\",\n      \"suggested_decision\": \"approve_new\",\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"UI-independent execution core is an implementation/product architecture concept.\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Durable Thread State\",\n      \"review_id\": \"m23review_ce9255a1a87d7f2cc87c88ec26e1dc9a\",\n      \"suggested_decision\": \"approve_new\",\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Persistent interaction state across turns supports the Headless Harness Service.\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Item Turn Thread Protocol\",\n      \"review_id\": \"m23review_08f2083f1643842c7266a7fa3e7118b1\",\n      \"suggested_decision\": \"approve_new\",\n      \"decision\": \"approve_new\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Typed item/turn/thread model is specific enough to warrant a canonical protocol concept.\",\n      \"provenance_note\": \"Daniel authorized canonical adoption as a new harness execution-governance concept; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Harnessability\",\n      \"review_id\": \"m23review_94192ccc4b53c47e32942121da3775c2\",\n      \"suggested_decision\": \"edit\",\n      \"decision\": \"edit\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Keep the idea, but tighten the definition as a measurable quality attribute before adoption.\",\n      \"provenance_note\": \"Daniel authorized adoption only after the canonical adoption PR narrows this item to a harness-specific definition; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Agent Loop\",\n      \"review_id\": \"m23review_998e1adb9a6ce64f12a4fc9477eebe30\",\n      \"suggested_decision\": \"edit\",\n      \"decision\": \"edit\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Approve only if edited to a harness-specific governed loop with distinct lifecycle semantics.\",\n      \"provenance_note\": \"Daniel authorized adoption only after the canonical adoption PR narrows this item to a harness-specific definition; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Tool Calling\",\n      \"review_id\": \"m23review_c3b0082d594d591018a417614574b098\",\n      \"suggested_decision\": \"edit\",\n      \"decision\": \"edit\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Prefer an edited concept such as Tool Call Proposal if the intended meaning is proposed external operations requiring authority.\",\n      \"provenance_note\": \"Daniel authorized adoption only after the canonical adoption PR narrows this item to a harness-specific definition; use the existing decision-capture rationale as provenance guidance.\"\n    },\n    {\n      \"title\": \"Verification\",\n      \"review_id\": \"m23review_a91d9910fbd95236a02e5f1bf52a1b27\",\n      \"suggested_decision\": \"edit\",\n      \"decision\": \"edit\",\n      \"human_actor\": \"Daniel\",\n      \"reviewed_at\": \"2026-07-20\",\n      \"rationale\": \"Approve only if edited to a harness-specific verification primitive with acceptance authority boundaries.\",\n      \"provenance_note\": \"Daniel authorized adoption only after the canonical adoption PR narrows this item to a harness-specific definition; use the existing decision-capture rationale as provenance guidance.\"\n    }\n  ],\n  \"allowed_decisions\": [\n    \"approve_new\",\n    \"map_existing\",\n    \"edit\",\n    \"reject\",\n    \"defer\"\n  ],\n  \"closure_requirements\": {\n    \"all_items_non_pending\": true,\n    \"human_actor_required\": true,\n    \"reviewed_at_required\": true,\n    \"source_pr_comment_or_review_required\": true,\n    \"source_pr_must_not_merge_as_is\": true,\n    \"canonical_adoption_pr_required_later\": true\n  },\n  \"authority_boundary\": {\n    \"production_retrieval\": \"lexical\",\n    \"semantic_promotion_enabled\": false,\n    \"semantic_answer_serving_enabled\": false,\n    \"hybrid_retrieval_enabled\": false,\n    \"source_mutation_authorized\": false,\n    \"pointer_mutation_authorized\": false,\n    \"r2_mutation_authorized\": false,\n    \"qdrant_mutation_authorized\": false,\n    \"credential_rotation_authorized\": false\n  },\n  \"next_human_action\": \"Human decisions are recorded. Next agent action is to create a canonical Source adoption PR that keeps Source PR #19 draft and does not merge it as-is.\",\n  \"decision_capture_sha256\": \"88b1593275cc8c10e3a998d03be31939360a5d41965a06d5a020da13ba73947c\",\n  \"human_authorization\": {\n    \"actor\": \"Daniel\",\n    \"authorized_at\": \"2026-07-20\",\n    \"authorization_text\": \"我同意採用建議決策：前 11 項 approve_new；後 4 項 edit；edit 項需在 adoption PR 中收窄為 harness-specific 定義後才可 canonicalize。\",\n    \"source\": \"Codex user message\"\n  }\n}\n"
+  },
+  "integrity": {
+    "browser_payload_sha256": "5846a7a2b496051144e2440ff1613cc01d8583f7651ad9ade7103dd1ae46e308",
+    "byte_count": 10511,
+    "executable_scripts_detected": false,
+    "line_count": 206,
+    "origin_blob_sha": "d1e8f577d9dee969be2e439565c34982715785af",
+    "snapshot_sha256": "73bd8f9767991b1aa2c16c2da91305c28e24be5b92c761732714b0291d0e4cb5",
+    "truncated": false
+  },
+  "kind": "json",
+  "license": "owner-provided",
+  "metadata_only_reason": null,
+  "origin": {
+    "blob_sha": "d1e8f577d9dee969be2e439565c34982715785af",
+    "commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+    "path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+    "repo": "danielcanfly/knowledge-engine"
+  },
+  "owner": "Daniel Huang",
+  "registry": {
+    "content_hash_scope": "engine-human-decision-artifact",
+    "content_sha256": "73bd8f9767991b1aa2c16c2da91305c28e24be5b92c761732714b0291d0e4cb5",
+    "source_commit": "acf78596ace8a7366688ccef72b507204d09d9f9",
+    "source_id": "source_m24_source_pr_19_decision_capture",
+    "source_repository": "danielcanfly/knowledge-source"
+  },
+  "related_concepts": [
+    "concepts/source-governance",
+    "concepts/harness",
+    "concepts/task-contract"
+  ],
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-14-5-source-document/v1",
+  "source_id": "source_m24_source_pr_19_decision_capture",
+  "title": "M24 Source PR 19 human decision capture",
+  "toc": [],
+  "trust": "authoritative"
+}

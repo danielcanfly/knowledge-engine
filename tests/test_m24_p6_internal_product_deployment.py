@@ -64,11 +64,80 @@ def test_m24_p6_artifact_manifest_matches_committed_site_bytes() -> None:
 
     assert "pilot/m24/internal-product-deployment/site/index.html" in artifact_paths
     assert "pilot/m24/internal-product-deployment/site/styles.css" in artifact_paths
+    assert "pilot/m24/internal-product-deployment/site/data/source-index.json" in artifact_paths
+    assert "pilot/m24/internal-product-deployment/site/data/source-documents.json" in artifact_paths
     for artifact in report.artifacts:
         path = Path(artifact.path)
         data = path.read_bytes()
         assert len(data) == artifact.bytes
         assert sha256_bytes(data) == artifact.sha256
+
+
+def test_m24_p6_source_document_package_covers_canonical_registry() -> None:
+    build_p6_internal_product_deployment()
+    source_index = _json(Path("pilot/m24/internal-product-deployment/site/data/source-index.json"))
+    source_documents = _json(
+        Path("pilot/m24/internal-product-deployment/site/data/source-documents.json")
+    )
+    source_viewers = _json(
+        Path("pilot/m24/internal-product-deployment/site/data/source-viewers.json")
+    )
+
+    assert source_index["source_commit_sha"] == "acf78596ace8a7366688ccef72b507204d09d9f9"
+    assert source_index["source_count"] == 7
+    assert source_documents["source_count"] == 7
+    assert source_viewers["viewer_count"] == 7
+
+    paths = {row["document_path"] for row in source_index["coverage_matrix"]}
+    assert len(paths) == 7
+    for path in paths:
+        assert Path("pilot/m24/internal-product-deployment/site", path).exists()
+
+    blog_rows = [
+        row for row in source_index["coverage_matrix"]
+        if row["source_id"].startswith("source_blog_")
+    ]
+    assert len(blog_rows) == 3
+    assert all(row["coverage_status"] == "full_snapshot" for row in blog_rows)
+    assert all(
+        row["origin_commit"] == "27e2fe996f878f2129bf510d6a326c02f7d87be5"
+        for row in blog_rows
+    )
+    assert all(row["content_bytes"] > 20000 for row in blog_rows)
+
+    assert (
+        "Multi-agent is an organisational choice, not a maturity level"
+        in source_documents["documents"]["source_blog_agent_architecture_6d"]["document"]["body"]
+    )
+    assert (
+        "Simple requests pay the latency and error surface of planning"
+        in source_documents["documents"]["source_blog_agent_execution_paths"]["document"]["body"]
+    )
+    assert (
+        "The production objective is not maximum planning freedom"
+        in source_documents["documents"]["source_blog_agent_planning_strategies"][
+            "document"
+        ]["body"]
+    )
+
+    m3 = source_documents["documents"]["source_m3_contract"]
+    assert m3["coverage_status"] == "metadata_only_with_reason"
+    assert m3["metadata_only_reason"]
+
+    for row in source_index["coverage_matrix"]:
+        document = source_documents["documents"][row["source_id"]]
+        comparable = json.loads(json.dumps(document))
+        comparable["integrity"]["browser_payload_sha256"] = None
+        assert (
+            canonical_sha256(comparable)
+            == document["integrity"]["browser_payload_sha256"]
+        )
+        assert document["origin"]["repo"] == row["origin_repo"]
+        assert document["origin"]["commit"] == row["origin_commit"]
+        assert document["origin"]["path"] == row["origin_path"]
+        assert document["origin"]["blob_sha"] == row["origin_blob_sha"]
+        assert document["integrity"]["truncated"] is False
+        assert document["integrity"]["executable_scripts_detected"] is False
 
 
 def test_m24_p6_security_auth_and_rollback_gates_are_explicit() -> None:

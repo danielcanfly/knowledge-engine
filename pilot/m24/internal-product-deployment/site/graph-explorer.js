@@ -100,7 +100,7 @@
     return graph;
   }
 
-  function selection(graph, nodeId) {
+  function selection(graph, nodeId, sourceCountsByConcept) {
     const attrs = graph.getNodeAttributes(nodeId);
     return {
       id: nodeId,
@@ -108,6 +108,7 @@
       type: attrs.semanticType || "concept",
       description: attrs.description || attrs.summary || "",
       sourcePath: attrs.source_path || attrs.path || "",
+      sourceCount: Number(sourceCountsByConcept?.[nodeId] || 0),
       tags: stringList(attrs.tags),
     };
   }
@@ -262,9 +263,28 @@
         details.innerHTML = "<p>Select a node to inspect provenance and relationships.</p>";
         return;
       }
-      const selected = selection(graph, selectedNodeId);
+      const selected = selection(graph, selectedNodeId, options.sourceCountsByConcept || {});
       const neighbors = graph.neighbors(selectedNodeId).sort();
       details.innerHTML = `
+        <div class="detail-actions graph-selection-actions">
+          <button
+            class="inline-action"
+            type="button"
+            data-graph-open-wiki="${escapeHtml(selected.id)}"
+          >Open Wiki</button>
+          ${selected.sourceCount > 0 ? `
+            <button
+              class="inline-action"
+              type="button"
+              data-graph-view-sources="${escapeHtml(selected.id)}"
+            >View sources</button>
+          ` : ""}
+          <button
+            class="inline-action"
+            type="button"
+            data-graph-copy-concept="${escapeHtml(selected.id)}"
+          >Copy concept ID</button>
+        </div>
         <dl>
           <div><dt>Title</dt><dd>${escapeHtml(selected.title)}</dd></div>
           <div><dt>Type</dt><dd>${escapeHtml(selected.type)}</dd></div>
@@ -274,12 +294,32 @@
           </div>
           <div><dt>Tags</dt><dd>${escapeHtml(selected.tags.join(", ") || "none")}</dd></div>
           <div><dt>Neighbors</dt><dd>${escapeHtml(neighbors.length)}</dd></div>
+          <div><dt>Source handoffs</dt><dd>${escapeHtml(selected.sourceCount)}</dd></div>
           <div>
             <dt>Description</dt>
             <dd>${escapeHtml(selected.description || "No description")}</dd>
           </div>
         </dl>
       `;
+      const wikiButton = details.querySelector("[data-graph-open-wiki]");
+      if (wikiButton) {
+        wikiButton.addEventListener("click", () => options.onOpenWiki?.(selected));
+      }
+      const sourcesButton = details.querySelector("[data-graph-view-sources]");
+      if (sourcesButton) {
+        sourcesButton.addEventListener("click", () => options.onViewSources?.(selected));
+      }
+      const copyButton = details.querySelector("[data-graph-copy-concept]");
+      if (copyButton) {
+        copyButton.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard?.writeText(selected.id);
+            options.onStatus?.(`Copied ${selected.id}.`);
+          } catch (_error) {
+            options.onStatus?.(selected.id);
+          }
+        });
+      }
       options.onSelection?.(selected);
     }
 

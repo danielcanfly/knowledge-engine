@@ -6,19 +6,19 @@
       "sha256": "53b2cfac96c82e65f10a75e711577baf7fb48d4b0749ae81d6e8177da6caf72f"
     },
     {
-      "bytes": 7383,
+      "bytes": 8703,
       "path": "pilot/m24/internal-product-deployment/site/styles.css",
-      "sha256": "94ac6cb6e858885a5e8368b5d6302fce9371ca8fdeb463524d8986d9c875d55d"
+      "sha256": "358935d4eead848b58a710ba9b806a3fcd9fb4606d3f20d414d9ad2e8d5970f3"
     },
     {
-      "bytes": 34000,
+      "bytes": 40914,
       "path": "pilot/m24/internal-product-deployment/site/app.js",
-      "sha256": "55fb4375e7078198fa2185790a01263addfb6ccc01da0dace8d9c1eda27aef02"
+      "sha256": "db03c1b399951f585bcf5e4065c282def0342dc29d33ddb7d073896a02676aa2"
     },
     {
-      "bytes": 12810,
+      "bytes": 14493,
       "path": "pilot/m24/internal-product-deployment/site/graph-explorer.js",
-      "sha256": "f627aac7a187688b8355378703b1fcbd750bcfb189e86224471d5599f8a07719"
+      "sha256": "0ad87fb441a3abe73c9863a83d8f5c5d7d192f6a6384e3131320634ece9ed6f9"
     },
     {
       "bytes": 73629,
@@ -106,7 +106,7 @@
     "sigma_version": "3.0.3"
   },
   "schema_version": "knowledge-engine-m24-14-2-sigma-graph-explorer/v1",
-  "self_sha256": "29f51d1ff7a45535f6507946a2b1453362a63bb2aee7e2ef5841fdb304116350",
+  "self_sha256": "32283a402a6b6aef99ba57e31fe8e5aa21cc425ffbeff1e14672c1f47437df2a",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "m24_14_2_sigma_graph_explorer_integrated"
 }

@@ -1,0 +1,366 @@
+{
+  "audience": "public",
+  "canonical_uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-2/",
+  "citations": [],
+  "coverage_status": "full_snapshot",
+  "document": {
+    "body": "\nPart 1 introduced six practical design dimensions for agent systems. This article goes deeper into the first:\n\n> How does a task move from its starting condition to a terminal outcome?\n\nThis sounds like a flowchart question. In production, it is also a reliability question.\n\nAn execution path determines:\n\n- which nodes may run\n- which nodes must run\n- which branches may be skipped\n- where state is persisted\n- what happens after failure\n- which work may run concurrently\n- where human approval is required\n- when the system is complete, failed, cancelled, or still waiting\n\nMany systems become unnecessarily expensive because every request launches the full workflow. Others become impossible to debug because the model may jump anywhere at any time. A third group looks controlled on a diagram but has no defined recovery path once a tool times out or an approval never arrives.\n\nDirect calls, pipelines, routers, state machines, and directed acyclic graphs solve different parts of this problem. They are not a ladder from primitive to advanced, and they are not mutually exclusive.\n\n## Execution structure is not node-level intelligence\n\nAn execution structure describes the allowed movement of work through the system.\n\nNode-level decision logic describes how one node chooses an action.\n\nFor example, a state machine may control the overall process while a research node uses bounded ReAct:\n\n```text\nSTART\n -> PLAN\n -> RESEARCH\n -> bounded ReAct chooses queries and tools\n -> VERIFY\n -> COMPLETE\n```\n\nA fixed pipeline may also contain a planning node:\n\n```text\nNormalize\n -> Plan\n -> Plan-and-Execute creates subtasks\n -> Retrieve\n -> Generate\n -> Validate\n```\n\nCalling something a \"ReAct agent\" therefore says little about its outer execution structure. ReAct may operate inside a direct tool-use step, a pipeline stage, a state-machine state, or one branch of a larger graph.\n\n![Figure 2-1 — Execution Skeletons vs Node-Level Decisions](/images/the-atlas-of-agent-design-patterns-part-2/execution-skeletons-vs-node-decisions.png)\n\n> **Figure 2-1｜Execution Skeletons vs Node-Level Decisions**  \n> Outer execution structure and node-level decision logic are two separate layers that combine freely. Pipeline, Router and State Machine are outer structures; Fixed Rules and Bounded ReAct are node-level decisions.\n\n## Five core execution structures\n\nThe five structures in the title answer different questions:\n\n| Structure | Primary question |\n|---|---|\n| Direct | Can one bounded operation produce the result? |\n| Pipeline | Are the required steps known in advance? |\n| Router | Do different requests need different paths? |\n| State machine | Must execution move through explicit states and conditional transitions? |\n| DAG | Do tasks have directional dependencies that can branch and later join? |\n\nTwo related ideas sit around these structures:\n\n- **Event-driven execution** determines what triggers work and how events move between services.\n- **Human-in-the-loop** inserts a controlled pause, review, edit, or approval point.\n\nThey can wrap or appear inside any of the five core structures.\n\n![Figure 2-2 — Five Execution Path Patterns at a Glance](/images/the-atlas-of-agent-design-patterns-part-2/five-patterns-comparison.png)\n\n> **Figure 2-2｜Five Execution Path Patterns at a Glance**  \n> Direct, Pipeline, Router, State Machine and DAG answer different questions. A common mistake is to force the whole system under a single label.\n\n## Direct: use one bounded operation when one is enough\n\nA direct path is the smallest useful execution structure:\n\n```text\nInput -> Model or Function -> Output\n```\n\nThe key property is not \"no tools ever\". A direct path may include deterministic validation, preprocessing, post-processing, or one predetermined tool call. What it does not contain is an adaptive multi-step loop that decides, after each observation, what to do next.\n\n### Good uses\n\n- translation\n- rewriting\n- summarisation\n- fixed-field extraction\n- classification\n- format conversion\n- answering from information already supplied\n- a known calculation through one predetermined function\n\n### Why direct paths are valuable\n\nThey minimise moving parts. Latency, cost, and failure attribution are easier to understand. A direct path is often easier to evaluate because the contract between input and output is narrow.\n\nA direct path may still use:\n\n- input validation\n- an output schema\n- content or policy checks\n- a timeout\n- a token limit\n- a fallback model\n- deterministic post-processing\n\nDirect does not mean careless. It means the system does not invent an orchestration problem where none exists.\n\n### Common failure\n\nA simple transformation is expanded into Planner -> Writer -> Critic -> Refiner because the team wants the feature to look \"agentic\". The result may cost four times as much without producing a reliably better output.\n\nThe first architecture question should therefore be:\n\n> Can a single bounded operation solve this with the information and tools already determined?\n\nWhen the answer is yes, Direct is usually the strongest baseline.\n\n## Pipeline: predictable work in a predetermined sequence\n\nA pipeline divides work into known stages:\n\n```text\nRewrite -> Retrieve -> Rerank -> Generate -> Verify\n```\n\nThe defining property is that the main sequence is predetermined by the application. Individual stages may use models, rules, databases, or tools, but the system is not freely redesigning the overall route during each run.\n\n### Good uses\n\n- retrieval-augmented generation\n- document parsing and indexing\n- extract-transform-load processing\n- fixed review and formatting flows\n- media processing\n- classification followed by a known write operation\n- batch processing with stable contracts\n\n### Why pipelines work well in production\n\nEach stage can have an explicit contract:\n\n| Stage | Example contract |\n|---|---|\n| Rewrite | Preserve intent and return one normalised query |\n| Retrieve | Return ranked source candidates with provenance |\n| Rerank | Return a stable top set with scores |\n| Generate | Use only supplied evidence |\n| Verify | Return pass, fail, or review-required with reasons |\n\nThis makes it easier to measure latency, cost, error rate, and quality at the stage where the problem occurs.\n\n### Pipelines are not always perfectly linear\n\nA production pipeline may contain optional stages, guarded branches, or bounded retries. Once conditional movement, waiting, resumability, and several possible terminal outcomes become central, the system is better described as a stateful workflow or state machine.\n\nThe useful distinction is not whether the diagram has one branch. It is whether the overall control logic remains a predetermined processing sequence or is organised around explicit states and transitions.\n\n### Common failures\n\n- every request runs every stage\n- several stages silently rewrite the same intent\n- all stages use the largest model\n- stage contracts are implicit\n- only the final answer is logged\n- a stage failure has no fallback or typed error path\n\nA pipeline becomes trustworthy when each stage is observable and replaceable, not merely when arrows connect several boxes.\n\n## Router: choose the path before paying for it\n\nA router selects one or more downstream paths:\n\n```text\nRequest\n -> Router\n -> Direct response\n -> Document retrieval\n -> SQL or analytics\n -> Calculator\n -> Bounded agent workflow\n -> Clarification or unsupported\n```\n\nThe router's job is not necessarily to solve the request. Its job is to select the appropriate capability, data source, risk profile, or cost envelope.\n\n### Routing signals\n\nA router may consider:\n\n- task type\n- required source of truth\n- user permission\n- data sensitivity\n- expected latency\n- cost budget\n- risk level\n- required tool\n- language or tenant\n- whether several intents are present\n\n### Router implementations\n\n#### Deterministic router\n\nRules handle cases with crisp boundaries:\n\n```text\napproved arithmetic expression -> calculator\nauthorised account lookup -> SQL\nquestion about indexed documents -> RAG\n```\n\nThis is inexpensive and explainable.\n\n#### Model-based classifier\n\nA classifier or LLM assigns a route when language varies too much for simple rules. This improves coverage, but introduces uncertainty and version-sensitive behaviour.\n\n#### Semantic router\n\nEmbeddings compare a request with route descriptions or examples. This is useful when boundaries are semantic, but close scores need an abstention rule.\n\n#### Hybrid router\n\nHard safety and permission rules run first. A model handles the unresolved middle. The system then applies confidence thresholds and fallbacks.\n\nThis is often the most practical arrangement.\n\n### A production router needs an escape path\n\nA router should not be forced to choose a supported path for every input. It needs explicit outcomes such as:\n\n- `unknown`\n- `ambiguous`\n- `unsupported`\n- `need_clarification`\n- `human_review`\n\nIt also needs an operational override when automated routing is wrong. That override should be logged, permission-controlled, and visible in traces.\n\n### Multi-intent requests are not single-label classification\n\nA request such as:\n\n> Find last month's order decline, explain the likely causes, and draft an email.\n\ncontains data access, analysis, and writing. A router may first select a decomposition workflow rather than pretending that one label describes the whole task.\n\n### What to log\n\n- router input\n- selected route\n- routing policy version\n- confidence or decision basis\n- rejected alternatives\n- fallback route\n- permission and risk checks\n- operator override, if any\n\n![Figure 2-2A — Router Deep Dive: Criteria, Types, Risks, and Production Notes](/images/the-atlas-of-agent-design-patterns-part-2/router-deep-dive.png)\n\n> **Figure 2-2A｜Router Deep Dive: Criteria, Types, Risks, and Production Notes**  \n> Routing signals, implementation types (deterministic, model-based, semantic, hybrid), common risks, and the log and override discipline that production routers must keep.\n\n## State machine: make progress and legal transitions explicit\n\nA state machine represents a finite set of states and the transitions allowed between them:\n\n```text\nSTART\n -> RETRIEVE\n -> VERIFY_EVIDENCE\n -> enough evidence -> DRAFT\n -> insufficient and retries remain -> REWRITE_QUERY\n -> retry limit reached -> FAILED\n -> WAITING_FOR_APPROVAL\n -> approved -> EXECUTE\n -> rejected -> CANCELLED\n -> COMPLETED\n```\n\nThe structure answers:\n\n- where the system is now\n- what transitions are legal\n- which condition selects each transition\n- what data must be persisted\n- which states are terminal\n\nWorkflow engines such as AWS Step Functions expose explicit task and flow states, including choices, waits, maps, and parallel branches. They also distinguish retry behaviour from catch or fallback transitions. The broader lesson is architectural rather than vendor-specific: failure and waiting should be modelled, not left as comments beside a happy-path arrow.\n\n### Core elements\n\n#### State\n\nA named phase of execution, such as:\n\n- `PLANNING`\n- `RETRIEVING`\n- `VERIFYING`\n- `WAITING_FOR_APPROVAL`\n- `EXECUTING`\n- `COMPLETED`\n- `FAILED`\n- `CANCELLED`\n\n#### Transition\n\nA permitted movement between states.\n\n#### Guard or condition\n\nA test that selects a transition:\n\n- evidence is sufficient\n- retry count is below the limit\n- user approved\n- budget remains\n- policy check passed\n- tool failed with a retryable error\n\n#### Terminal state\n\nA state that ends the current run. Production systems often need more than `success` and `failure`, for example `cancelled`, `partial`, `expired`, or `needs_manual_resolution`.\n\n### Why state machines help\n\n- bounded retries are explicit\n- pause and resume are natural\n- progress can be persisted\n- approval states can be audited\n- illegal transitions can be rejected\n- recovery can resume from a checkpoint\n- completion criteria are visible\n\n### What a state machine does not guarantee\n\nDrawing states does not automatically provide durability, exactly-once effects, or recovery. Those depend on the runtime, persistence layer, task design, and idempotency strategy.\n\nA state machine may also support parallel branches, depending on the engine. This does not turn every state machine into a DAG, and it does not remove the value of modelling dependency-heavy parallel work as a DAG inside one state.\n\n### Common failures\n\n- every implementation detail becomes a state\n- two guards can fire without a defined priority\n- retryable and permanent failures are not distinguished\n- there is no terminal state\n- the state is stored only in model context\n- approval resumes by rerunning earlier side effects\n- a rejected action falls into the same path as a technical error\n\n![Figure 2-3 — State Machine: Control, Recovery, Persistence, and Human Approval](/images/the-atlas-of-agent-design-patterns-part-2/state-machine.png)\n\n> **Figure 2-3｜State Machine: Control, Recovery, Persistence, and Human Approval**  \n> Four core elements: state, transition, guard, and terminal state. Persistence, pause and resume, bounded retry, multiple terminal outcomes, and audit all need to be modelled explicitly.\n\n## DAG: express dependencies without cycles\n\nA directed acyclic graph is a set of tasks connected by directional dependencies with no cycle in the graph:\n\n```text\n -> Research A -\nProblem -> Split -> Research B --> Synthesis -> Verify\n -> Research C -\n```\n\nThe key property is dependency, not parallelism. Independent branches can run concurrently when the execution engine and resource limits allow it. Dependent nodes must wait for their prerequisites.\n\nApache Airflow describes a DAG as tasks organised by dependencies and relationships that determine how they should run. The graph itself defines execution order and dependency, while the work inside each task remains separate.\n\n### Good uses\n\n- multi-source research\n- independent market or competitor analysis\n- batch document processing\n- test suites with shared prerequisites\n- map-reduce style workloads\n- fan-out tool calls followed by synthesis\n- data and model evaluation pipelines\n\n### A DAG is not automatically multi-agent\n\nOne process can execute every DAG node. One agent can launch several tools. Conversely, several agents can work sequentially in a state machine.\n\nDAG describes task dependency. Multi-agent describes responsibility and communication.\n\n### Acyclic does not mean \"no retries\"\n\nA task may be retried by the execution engine without creating a graph cycle. The same node is attempted again under a retry policy.\n\nWhat a DAG does not naturally represent inside one run is a semantic loop such as:\n\n```text\nVerify failed -> return to Research -> generate new branches -> verify again\n```\n\nThat loop needs an outer state machine, a new DAG run, or another cyclic control structure.\n\n### Parallelism needs limits\n\nFan-out can make a workflow slower or less reliable when all branches compete for the same bottleneck:\n\n- API rate limits\n- database connection pools\n- model concurrency quotas\n- browser capacity\n- memory\n- token or cost budgets\n\nUse bounded concurrency, backpressure, per-resource limits, and cancellation rules. \"Can run in parallel\" is not the same as \"should all start now\".\n\n### Join logic is part of the design\n\nA synthesis node must define:\n\n- whether all branches are required\n- whether partial results are acceptable\n- how timeouts are handled\n- how duplicates are removed\n- how conflicting evidence is resolved\n- how provenance is preserved\n- whether one failed branch cancels the run\n\n![Figure 2-4 — DAG: Decompose, Run in Parallel, and Aggregate](/images/the-atlas-of-agent-design-patterns-part-2/dag.png)\n\n> **Figure 2-4｜DAG: Decompose, Run in Parallel, and Aggregate**  \n> Dependency-driven, cycle-free task graph. Parallel execution is bounded by resources, and join logic is part of the design itself.\n\n## Pipeline, state machine, and DAG are different abstractions\n\n| Question | Pipeline | State machine | DAG |\n|---|---|---|---|\n| Main abstraction | Processing stages | States and legal transitions | Tasks and directional dependencies |\n| Typical movement | Predetermined sequence | Conditional, possibly cyclic | Dependency-ordered, acyclic within a run |\n| Branching | Possible but usually limited | Central capability | Natural |\n| Loops and replanning | Usually external or bounded | Natural | Requires an outer controller or a new run |\n| Parallel work | Possible | Engine-dependent | Natural where dependencies allow |\n| Pause and approval | Possible but awkward without state | Natural with persisted state | Usually handled by the execution platform or an outer workflow |\n| Best fit | Stable transformation chain | Long-running, recoverable, conditional process | Fan-out, dependency-heavy, parallelisable work |\n| Common risk | Rigid or wasteful stages | State explosion | Concurrency and join complexity |\n\nThese structures compose cleanly:\n\n```text\nEvent\n -> Router\n -> State machine\n -> RESEARCH state launches a DAG\n -> VERIFY state evaluates the merge\n -> APPROVAL state waits for a person\n -> Output pipeline formats and publishes\n```\n\nThe strongest architecture description names the layers instead of forcing the whole system into one label.\n\n## Event-driven execution: define what starts the work\n\nEvent-driven architecture is primarily about triggers and message flow, not one specific workflow topology.\n\nAn event may come from:\n\n- a webhook\n- a new email\n- a file upload\n- a database change\n- a scheduled time\n- a price threshold\n- a GitHub issue\n- an external service callback\n\nThat event may trigger a direct handler, a pipeline, a state machine, or a DAG.\n\nThe CloudEvents specification exists because event producers and consumers benefit from a common event description. At minimum, production events need stable identity, source, type, and enough context to trace or reject them safely.\n\n### Delivery realities\n\nDistributed event systems often deliver at least once. A consumer may therefore see the same event more than once. Side-effecting handlers need idempotency so a retry does not send the same email, charge the same payment, or create the same record twice.\n\nAWS's guidance on idempotent APIs captures the principle well: the desired effect should happen once even when a request is repeated as part of recovery.\n\nAlso plan for:\n\n- out-of-order events\n- late events\n- poison messages\n- dead-letter handling\n- schema evolution\n- correlation and trace IDs\n- backpressure\n- replay\n\nEvent-driven does not mean fire-and-forget. It means the lifecycle is distributed across messages and consumers, which makes observability more important.\n\n## Human-in-the-loop: insert a governed control point\n\nHuman-in-the-loop is not a separate reasoning method or task topology. It is a control point that pauses execution for review, editing, clarification, or approval.\n\n```text\nPrepare action\n -> Persist state\n -> Human review\n -> approve -> resume\n -> edit -> resume with changes\n -> reject -> cancel or replan\n -> timeout -> expire or escalate\n```\n\nGood approval design shows the reviewer:\n\n- the proposed action\n- the evidence and source data\n- the expected impact\n- the risk\n- whether the action is reversible\n- the fields they may edit\n- the consequence of approving or rejecting\n\nA durable workflow must save enough state to resume without repeating earlier side effects. LangGraph's interrupt model is one example of pausing a graph, persisting state, and resuming later, but the underlying requirement is framework-independent.\n\nUse human control for:\n\n- irreversible or high-impact actions\n- permission escalation\n- public publication\n- financial transfers\n- destructive data operations\n- production changes\n- conflicting evidence\n- policy exceptions\n- cases where a person owns the final decision\n\nDo not use a decorative Approve button that hides what will actually happen.\n\n## Behavior trees: a related hierarchical control structure\n\nBehavior trees organise switching logic as a hierarchy of reusable control and action nodes. They are widely used in games and robotics and can also describe reactive agent behaviour.\n\nCommon node types include:\n\n- **Sequence:** run children in order until one fails\n- **Fallback or Selector:** try children until one succeeds\n- **Condition:** test whether a branch is applicable\n- **Action:** perform work\n- **Decorator:** modify a child's execution policy\n\nExample:\n\n```text\nFallback\n -> Return cached result if valid\n -> Sequence\n -> Retrieve\n -> Verify\n -> Generate\n -> Ask a human\n```\n\nBehavior trees are attractive when behaviours must be modular, hierarchical, and reactive. For many text-centric business workflows, a state machine remains easier for a mixed engineering and operations team to inspect. The right choice depends on the behaviour model, not on which diagram looks more sophisticated.\n\n## Program generation is an execution technique, not a path topology\n\nAn agent may generate SQL, Python, shell commands, API calls, a DSL, or a workflow definition, then validate and execute that artefact:\n\n```text\nRequest -> Generate program -> Validate -> Execute -> Inspect result\n```\n\nThis can be highly reliable when the generated artefact has a real parser, policy checker, sandbox, or test environment.\n\nIt is useful to call this a **program-generating agent** or **code-as-action pattern**. It should not be treated as a sixth peer topology beside Pipeline or DAG. The generated program still executes through one of the structures described above.\n\nRequired controls include:\n\n- sandboxing\n- least privilege\n- command or API allowlists\n- read-only database policies where appropriate\n- secret isolation\n- time and resource limits\n- output limits\n- test or verification steps\n\n## How to choose the execution structure\n\nThe following questions are deliberately stackable. They are not a claim that every system has one exclusive label.\n\n### 1. Is work triggered by an external event?\n\nUse an event-driven trigger and envelope. Then choose the workflow that processes the event.\n\n### 2. Does the process contain high-impact or irreversible actions?\n\nInsert human review or another policy gate at the relevant point. This is a control layer, not the entire workflow.\n\n### 3. Can one bounded operation solve the task?\n\nStart with Direct.\n\n### 4. Do different requests require different capabilities or sources of truth?\n\nPlace a Router before the downstream paths.\n\n### 5. Are the required stages known and stable?\n\nUse a Pipeline as the baseline.\n\n### 6. Does execution need persistent states, conditional transitions, pause and resume, bounded recovery, or several terminal outcomes?\n\nUse a State Machine or durable stateful workflow.\n\n### 7. Can the task be expressed as directional dependencies with independent branches and joins?\n\nUse a DAG inside the relevant pipeline or state.\n\nA practical selection flow for the primary skeleton is:\n\n```text\nCan one bounded operation solve it?\n yes -> Direct\n no -> Do request types need different paths?\n yes -> Router, then select the downstream structure\n no -> Do you need explicit persisted states, loops, waits, or approvals?\n yes -> State Machine\n no -> Do dependencies benefit from fan-out and join?\n yes -> DAG\n no -> Pipeline\n```\n\nThis flow selects a useful starting skeleton. Event triggers, human gates, retries, verification, and tool policies still apply across it.\n\n![Figure 2-5 — How a Router Sends Different Questions to Different Execution Paths](/images/the-atlas-of-agent-design-patterns-part-2/router-overview.png)\n\n> **Figure 2-5｜How a Router Sends Different Questions to Different Execution Paths**  \n> Match the request to an execution path: Direct, RAG, SQL, Calculator, Bounded Agent, or Clarify/Unsupported.\n\n## Common execution-path anti-patterns\n\n### Every request runs the most expensive workflow\n\nSimple requests pay the latency and error surface of planning, retrieval, critique, and multiple agents.\n\n### The LLM controls every branch\n\nThere is no allowlist, step limit, state constraint, budget, stop condition, or deterministic safety gate.\n\n### The router must always guess\n\nThere is no abstention, clarification, unsupported, or human-review route.\n\n### Retry means repeat the same side effect\n\nA timed-out payment, email, deployment, or database write is retried without an idempotency key or outcome check.\n\n### The state machine has no terminal states\n\nThe workflow circles among retry, verify, and replan because completion and exhaustion were never defined.\n\n### The DAG fans out without a resource budget\n\nDozens of workers saturate APIs, model quotas, browser slots, and databases.\n\n### Human approval contains no review context\n\nThe reviewer sees Approve and Reject but cannot inspect evidence, impact, or the exact action.\n\n### \"Programmatic agent\" bypasses the execution boundary\n\nGenerated code is executed directly without parsing, permissions, sandboxing, or tests.\n\n## Production controls that belong around every structure\n\n| Control | Purpose |\n|---|---|\n| Trace and correlation ID | Reconstruct the end-to-end run |\n| Persisted state | Resume safely after interruption |\n| Typed errors | Separate retryable, permanent, policy, and user errors |\n| Timeout and cancellation | Stop abandoned or stuck work |\n| Bounded retry with backoff | Recover from transient failures without looping forever |\n| Idempotency | Prevent repeated side effects |\n| Fallback | Change method or resource after an appropriate failure |\n| Budget guard | Limit model, tool, and concurrency cost |\n| Tool and permission policy | Restrict available actions and data |\n| Terminal outcomes | Define completed, failed, cancelled, expired, and partial |\n| Audit log | Record who or what made each decision |\n| Human control | Protect high-impact operations |\n| Observability | Measure latency, errors, cost, route quality, and retries |\n\nThe point of an execution path is not to produce a prettier diagram. It is to make the system answerable:\n\n- Where is this run now?\n- Why did it take this route?\n- What has already happened?\n- Which operation failed?\n- Is a retry safe?\n- Who owns the next decision?\n- What outcome ends the run?\n\n## Conclusion\n\nThe five core structures solve distinct problems:\n\n- **Direct** minimises orchestration when one bounded operation is sufficient.\n- **Pipeline** makes a known processing sequence explicit and measurable.\n- **Router** sends different requests to different capabilities and sources of truth.\n- **State machine** governs persisted progress, legal transitions, waiting, recovery, and terminal outcomes.\n- **DAG** expresses directional dependencies, fan-out, and joins without cycles inside one run.\n\nEvent-driven triggers and human approval operate across those structures. Behavior trees provide another hierarchical control model. Program generation is an execution technique that still needs one of the underlying workflow structures.\n\nA mature system rarely has one label. A more useful description is:\n\n```text\nCloud event\n -> permission-aware router\n -> durable state machine\n -> research DAG with bounded concurrency\n -> evidence verification\n -> human approval for publication\n -> deterministic output pipeline\n```\n\nExecution is not better because it is freer. It is better when the fixed parts, dynamic parts, recovery paths, and human boundaries are deliberate.\n\nPart 3 moves to the next dimension:\n\n> How does an agent decide what to do next?\n\nIt compares ReAct, Plan-and-Execute, adaptive planning, hierarchical planning, and the production hybrid that places flexible local execution inside a controlled outer workflow.\n\n## References\n\n- [AWS Step Functions, *Learn about state machines in Step Functions*](https://docs.aws.amazon.com/step-functions/latest/dg/concepts-statemachines.html)\n- [AWS Step Functions, *Handling errors in Step Functions workflows*](https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html)\n- [Apache Airflow, *DAGs*](https://airflow.apache.org/docs/apache-airflow/3.0.3/core-concepts/dags.html)\n- [CloudEvents, *A specification for describing event data in a common way*](https://cloudevents.io/)\n- [AWS Builders' Library, *Making retries safe with idempotent APIs*](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/)\n- [Colledanchise and Ögren, *Behavior Trees in Robotics and AI: An Introduction*](https://arxiv.org/abs/1709.00084)\n- [LangGraph Documentation, *Interrupts and human-in-the-loop workflows*](https://langchain-ai.github.io/langgraph/concepts/breakpoints/)\n\n",
+    "format": "markdown",
+    "frontmatter": {
+      "categories": "[\"AI\"]",
+      "date": "2026-06-19T01:00:00",
+      "description": "A practical guide to the execution structures behind production agent systems, including direct calls, fixed pipelines, routers, state machines, DAGs, event-driven triggers, human approval, and behavior trees.",
+      "lang": "en",
+      "series": "The Atlas of Agent Design Patterns",
+      "seriesOrder": "2",
+      "title": "The Atlas of Agent Design Patterns Part 2 | Agent Execution Paths: Direct Calls, Pipelines, Routers, State Machines, and DAGs"
+    },
+    "raw_markdown": "---\ntitle: \"The Atlas of Agent Design Patterns Part 2 | Agent Execution Paths: Direct Calls, Pipelines, Routers, State Machines, and DAGs\"\ndescription: \"A practical guide to the execution structures behind production agent systems, including direct calls, fixed pipelines, routers, state machines, DAGs, event-driven triggers, human approval, and behavior trees.\"\ndate: 2026-06-19T01:00:00\nlang: en\ncategories: [\"AI\"]\nseries: \"The Atlas of Agent Design Patterns\"\nseriesOrder: 2\n---\n\nPart 1 introduced six practical design dimensions for agent systems. This article goes deeper into the first:\n\n> How does a task move from its starting condition to a terminal outcome?\n\nThis sounds like a flowchart question. In production, it is also a reliability question.\n\nAn execution path determines:\n\n- which nodes may run\n- which nodes must run\n- which branches may be skipped\n- where state is persisted\n- what happens after failure\n- which work may run concurrently\n- where human approval is required\n- when the system is complete, failed, cancelled, or still waiting\n\nMany systems become unnecessarily expensive because every request launches the full workflow. Others become impossible to debug because the model may jump anywhere at any time. A third group looks controlled on a diagram but has no defined recovery path once a tool times out or an approval never arrives.\n\nDirect calls, pipelines, routers, state machines, and directed acyclic graphs solve different parts of this problem. They are not a ladder from primitive to advanced, and they are not mutually exclusive.\n\n## Execution structure is not node-level intelligence\n\nAn execution structure describes the allowed movement of work through the system.\n\nNode-level decision logic describes how one node chooses an action.\n\nFor example, a state machine may control the overall process while a research node uses bounded ReAct:\n\n```text\nSTART\n -> PLAN\n -> RESEARCH\n -> bounded ReAct chooses queries and tools\n -> VERIFY\n -> COMPLETE\n```\n\nA fixed pipeline may also contain a planning node:\n\n```text\nNormalize\n -> Plan\n -> Plan-and-Execute creates subtasks\n -> Retrieve\n -> Generate\n -> Validate\n```\n\nCalling something a \"ReAct agent\" therefore says little about its outer execution structure. ReAct may operate inside a direct tool-use step, a pipeline stage, a state-machine state, or one branch of a larger graph.\n\n![Figure 2-1 — Execution Skeletons vs Node-Level Decisions](/images/the-atlas-of-agent-design-patterns-part-2/execution-skeletons-vs-node-decisions.png)\n\n> **Figure 2-1｜Execution Skeletons vs Node-Level Decisions**  \n> Outer execution structure and node-level decision logic are two separate layers that combine freely. Pipeline, Router and State Machine are outer structures; Fixed Rules and Bounded ReAct are node-level decisions.\n\n## Five core execution structures\n\nThe five structures in the title answer different questions:\n\n| Structure | Primary question |\n|---|---|\n| Direct | Can one bounded operation produce the result? |\n| Pipeline | Are the required steps known in advance? |\n| Router | Do different requests need different paths? |\n| State machine | Must execution move through explicit states and conditional transitions? |\n| DAG | Do tasks have directional dependencies that can branch and later join? |\n\nTwo related ideas sit around these structures:\n\n- **Event-driven execution** determines what triggers work and how events move between services.\n- **Human-in-the-loop** inserts a controlled pause, review, edit, or approval point.\n\nThey can wrap or appear inside any of the five core structures.\n\n![Figure 2-2 — Five Execution Path Patterns at a Glance](/images/the-atlas-of-agent-design-patterns-part-2/five-patterns-comparison.png)\n\n> **Figure 2-2｜Five Execution Path Patterns at a Glance**  \n> Direct, Pipeline, Router, State Machine and DAG answer different questions. A common mistake is to force the whole system under a single label.\n\n## Direct: use one bounded operation when one is enough\n\nA direct path is the smallest useful execution structure:\n\n```text\nInput -> Model or Function -> Output\n```\n\nThe key property is not \"no tools ever\". A direct path may include deterministic validation, preprocessing, post-processing, or one predetermined tool call. What it does not contain is an adaptive multi-step loop that decides, after each observation, what to do next.\n\n### Good uses\n\n- translation\n- rewriting\n- summarisation\n- fixed-field extraction\n- classification\n- format conversion\n- answering from information already supplied\n- a known calculation through one predetermined function\n\n### Why direct paths are valuable\n\nThey minimise moving parts. Latency, cost, and failure attribution are easier to understand. A direct path is often easier to evaluate because the contract between input and output is narrow.\n\nA direct path may still use:\n\n- input validation\n- an output schema\n- content or policy checks\n- a timeout\n- a token limit\n- a fallback model\n- deterministic post-processing\n\nDirect does not mean careless. It means the system does not invent an orchestration problem where none exists.\n\n### Common failure\n\nA simple transformation is expanded into Planner -> Writer -> Critic -> Refiner because the team wants the feature to look \"agentic\". The result may cost four times as much without producing a reliably better output.\n\nThe first architecture question should therefore be:\n\n> Can a single bounded operation solve this with the information and tools already determined?\n\nWhen the answer is yes, Direct is usually the strongest baseline.\n\n## Pipeline: predictable work in a predetermined sequence\n\nA pipeline divides work into known stages:\n\n```text\nRewrite -> Retrieve -> Rerank -> Generate -> Verify\n```\n\nThe defining property is that the main sequence is predetermined by the application. Individual stages may use models, rules, databases, or tools, but the system is not freely redesigning the overall route during each run.\n\n### Good uses\n\n- retrieval-augmented generation\n- document parsing and indexing\n- extract-transform-load processing\n- fixed review and formatting flows\n- media processing\n- classification followed by a known write operation\n- batch processing with stable contracts\n\n### Why pipelines work well in production\n\nEach stage can have an explicit contract:\n\n| Stage | Example contract |\n|---|---|\n| Rewrite | Preserve intent and return one normalised query |\n| Retrieve | Return ranked source candidates with provenance |\n| Rerank | Return a stable top set with scores |\n| Generate | Use only supplied evidence |\n| Verify | Return pass, fail, or review-required with reasons |\n\nThis makes it easier to measure latency, cost, error rate, and quality at the stage where the problem occurs.\n\n### Pipelines are not always perfectly linear\n\nA production pipeline may contain optional stages, guarded branches, or bounded retries. Once conditional movement, waiting, resumability, and several possible terminal outcomes become central, the system is better described as a stateful workflow or state machine.\n\nThe useful distinction is not whether the diagram has one branch. It is whether the overall control logic remains a predetermined processing sequence or is organised around explicit states and transitions.\n\n### Common failures\n\n- every request runs every stage\n- several stages silently rewrite the same intent\n- all stages use the largest model\n- stage contracts are implicit\n- only the final answer is logged\n- a stage failure has no fallback or typed error path\n\nA pipeline becomes trustworthy when each stage is observable and replaceable, not merely when arrows connect several boxes.\n\n## Router: choose the path before paying for it\n\nA router selects one or more downstream paths:\n\n```text\nRequest\n -> Router\n -> Direct response\n -> Document retrieval\n -> SQL or analytics\n -> Calculator\n -> Bounded agent workflow\n -> Clarification or unsupported\n```\n\nThe router's job is not necessarily to solve the request. Its job is to select the appropriate capability, data source, risk profile, or cost envelope.\n\n### Routing signals\n\nA router may consider:\n\n- task type\n- required source of truth\n- user permission\n- data sensitivity\n- expected latency\n- cost budget\n- risk level\n- required tool\n- language or tenant\n- whether several intents are present\n\n### Router implementations\n\n#### Deterministic router\n\nRules handle cases with crisp boundaries:\n\n```text\napproved arithmetic expression -> calculator\nauthorised account lookup -> SQL\nquestion about indexed documents -> RAG\n```\n\nThis is inexpensive and explainable.\n\n#### Model-based classifier\n\nA classifier or LLM assigns a route when language varies too much for simple rules. This improves coverage, but introduces uncertainty and version-sensitive behaviour.\n\n#### Semantic router\n\nEmbeddings compare a request with route descriptions or examples. This is useful when boundaries are semantic, but close scores need an abstention rule.\n\n#### Hybrid router\n\nHard safety and permission rules run first. A model handles the unresolved middle. The system then applies confidence thresholds and fallbacks.\n\nThis is often the most practical arrangement.\n\n### A production router needs an escape path\n\nA router should not be forced to choose a supported path for every input. It needs explicit outcomes such as:\n\n- `unknown`\n- `ambiguous`\n- `unsupported`\n- `need_clarification`\n- `human_review`\n\nIt also needs an operational override when automated routing is wrong. That override should be logged, permission-controlled, and visible in traces.\n\n### Multi-intent requests are not single-label classification\n\nA request such as:\n\n> Find last month's order decline, explain the likely causes, and draft an email.\n\ncontains data access, analysis, and writing. A router may first select a decomposition workflow rather than pretending that one label describes the whole task.\n\n### What to log\n\n- router input\n- selected route\n- routing policy version\n- confidence or decision basis\n- rejected alternatives\n- fallback route\n- permission and risk checks\n- operator override, if any\n\n![Figure 2-2A — Router Deep Dive: Criteria, Types, Risks, and Production Notes](/images/the-atlas-of-agent-design-patterns-part-2/router-deep-dive.png)\n\n> **Figure 2-2A｜Router Deep Dive: Criteria, Types, Risks, and Production Notes**  \n> Routing signals, implementation types (deterministic, model-based, semantic, hybrid), common risks, and the log and override discipline that production routers must keep.\n\n## State machine: make progress and legal transitions explicit\n\nA state machine represents a finite set of states and the transitions allowed between them:\n\n```text\nSTART\n -> RETRIEVE\n -> VERIFY_EVIDENCE\n -> enough evidence -> DRAFT\n -> insufficient and retries remain -> REWRITE_QUERY\n -> retry limit reached -> FAILED\n -> WAITING_FOR_APPROVAL\n -> approved -> EXECUTE\n -> rejected -> CANCELLED\n -> COMPLETED\n```\n\nThe structure answers:\n\n- where the system is now\n- what transitions are legal\n- which condition selects each transition\n- what data must be persisted\n- which states are terminal\n\nWorkflow engines such as AWS Step Functions expose explicit task and flow states, including choices, waits, maps, and parallel branches. They also distinguish retry behaviour from catch or fallback transitions. The broader lesson is architectural rather than vendor-specific: failure and waiting should be modelled, not left as comments beside a happy-path arrow.\n\n### Core elements\n\n#### State\n\nA named phase of execution, such as:\n\n- `PLANNING`\n- `RETRIEVING`\n- `VERIFYING`\n- `WAITING_FOR_APPROVAL`\n- `EXECUTING`\n- `COMPLETED`\n- `FAILED`\n- `CANCELLED`\n\n#### Transition\n\nA permitted movement between states.\n\n#### Guard or condition\n\nA test that selects a transition:\n\n- evidence is sufficient\n- retry count is below the limit\n- user approved\n- budget remains\n- policy check passed\n- tool failed with a retryable error\n\n#### Terminal state\n\nA state that ends the current run. Production systems often need more than `success` and `failure`, for example `cancelled`, `partial`, `expired`, or `needs_manual_resolution`.\n\n### Why state machines help\n\n- bounded retries are explicit\n- pause and resume are natural\n- progress can be persisted\n- approval states can be audited\n- illegal transitions can be rejected\n- recovery can resume from a checkpoint\n- completion criteria are visible\n\n### What a state machine does not guarantee\n\nDrawing states does not automatically provide durability, exactly-once effects, or recovery. Those depend on the runtime, persistence layer, task design, and idempotency strategy.\n\nA state machine may also support parallel branches, depending on the engine. This does not turn every state machine into a DAG, and it does not remove the value of modelling dependency-heavy parallel work as a DAG inside one state.\n\n### Common failures\n\n- every implementation detail becomes a state\n- two guards can fire without a defined priority\n- retryable and permanent failures are not distinguished\n- there is no terminal state\n- the state is stored only in model context\n- approval resumes by rerunning earlier side effects\n- a rejected action falls into the same path as a technical error\n\n![Figure 2-3 — State Machine: Control, Recovery, Persistence, and Human Approval](/images/the-atlas-of-agent-design-patterns-part-2/state-machine.png)\n\n> **Figure 2-3｜State Machine: Control, Recovery, Persistence, and Human Approval**  \n> Four core elements: state, transition, guard, and terminal state. Persistence, pause and resume, bounded retry, multiple terminal outcomes, and audit all need to be modelled explicitly.\n\n## DAG: express dependencies without cycles\n\nA directed acyclic graph is a set of tasks connected by directional dependencies with no cycle in the graph:\n\n```text\n -> Research A -\nProblem -> Split -> Research B --> Synthesis -> Verify\n -> Research C -\n```\n\nThe key property is dependency, not parallelism. Independent branches can run concurrently when the execution engine and resource limits allow it. Dependent nodes must wait for their prerequisites.\n\nApache Airflow describes a DAG as tasks organised by dependencies and relationships that determine how they should run. The graph itself defines execution order and dependency, while the work inside each task remains separate.\n\n### Good uses\n\n- multi-source research\n- independent market or competitor analysis\n- batch document processing\n- test suites with shared prerequisites\n- map-reduce style workloads\n- fan-out tool calls followed by synthesis\n- data and model evaluation pipelines\n\n### A DAG is not automatically multi-agent\n\nOne process can execute every DAG node. One agent can launch several tools. Conversely, several agents can work sequentially in a state machine.\n\nDAG describes task dependency. Multi-agent describes responsibility and communication.\n\n### Acyclic does not mean \"no retries\"\n\nA task may be retried by the execution engine without creating a graph cycle. The same node is attempted again under a retry policy.\n\nWhat a DAG does not naturally represent inside one run is a semantic loop such as:\n\n```text\nVerify failed -> return to Research -> generate new branches -> verify again\n```\n\nThat loop needs an outer state machine, a new DAG run, or another cyclic control structure.\n\n### Parallelism needs limits\n\nFan-out can make a workflow slower or less reliable when all branches compete for the same bottleneck:\n\n- API rate limits\n- database connection pools\n- model concurrency quotas\n- browser capacity\n- memory\n- token or cost budgets\n\nUse bounded concurrency, backpressure, per-resource limits, and cancellation rules. \"Can run in parallel\" is not the same as \"should all start now\".\n\n### Join logic is part of the design\n\nA synthesis node must define:\n\n- whether all branches are required\n- whether partial results are acceptable\n- how timeouts are handled\n- how duplicates are removed\n- how conflicting evidence is resolved\n- how provenance is preserved\n- whether one failed branch cancels the run\n\n![Figure 2-4 — DAG: Decompose, Run in Parallel, and Aggregate](/images/the-atlas-of-agent-design-patterns-part-2/dag.png)\n\n> **Figure 2-4｜DAG: Decompose, Run in Parallel, and Aggregate**  \n> Dependency-driven, cycle-free task graph. Parallel execution is bounded by resources, and join logic is part of the design itself.\n\n## Pipeline, state machine, and DAG are different abstractions\n\n| Question | Pipeline | State machine | DAG |\n|---|---|---|---|\n| Main abstraction | Processing stages | States and legal transitions | Tasks and directional dependencies |\n| Typical movement | Predetermined sequence | Conditional, possibly cyclic | Dependency-ordered, acyclic within a run |\n| Branching | Possible but usually limited | Central capability | Natural |\n| Loops and replanning | Usually external or bounded | Natural | Requires an outer controller or a new run |\n| Parallel work | Possible | Engine-dependent | Natural where dependencies allow |\n| Pause and approval | Possible but awkward without state | Natural with persisted state | Usually handled by the execution platform or an outer workflow |\n| Best fit | Stable transformation chain | Long-running, recoverable, conditional process | Fan-out, dependency-heavy, parallelisable work |\n| Common risk | Rigid or wasteful stages | State explosion | Concurrency and join complexity |\n\nThese structures compose cleanly:\n\n```text\nEvent\n -> Router\n -> State machine\n -> RESEARCH state launches a DAG\n -> VERIFY state evaluates the merge\n -> APPROVAL state waits for a person\n -> Output pipeline formats and publishes\n```\n\nThe strongest architecture description names the layers instead of forcing the whole system into one label.\n\n## Event-driven execution: define what starts the work\n\nEvent-driven architecture is primarily about triggers and message flow, not one specific workflow topology.\n\nAn event may come from:\n\n- a webhook\n- a new email\n- a file upload\n- a database change\n- a scheduled time\n- a price threshold\n- a GitHub issue\n- an external service callback\n\nThat event may trigger a direct handler, a pipeline, a state machine, or a DAG.\n\nThe CloudEvents specification exists because event producers and consumers benefit from a common event description. At minimum, production events need stable identity, source, type, and enough context to trace or reject them safely.\n\n### Delivery realities\n\nDistributed event systems often deliver at least once. A consumer may therefore see the same event more than once. Side-effecting handlers need idempotency so a retry does not send the same email, charge the same payment, or create the same record twice.\n\nAWS's guidance on idempotent APIs captures the principle well: the desired effect should happen once even when a request is repeated as part of recovery.\n\nAlso plan for:\n\n- out-of-order events\n- late events\n- poison messages\n- dead-letter handling\n- schema evolution\n- correlation and trace IDs\n- backpressure\n- replay\n\nEvent-driven does not mean fire-and-forget. It means the lifecycle is distributed across messages and consumers, which makes observability more important.\n\n## Human-in-the-loop: insert a governed control point\n\nHuman-in-the-loop is not a separate reasoning method or task topology. It is a control point that pauses execution for review, editing, clarification, or approval.\n\n```text\nPrepare action\n -> Persist state\n -> Human review\n -> approve -> resume\n -> edit -> resume with changes\n -> reject -> cancel or replan\n -> timeout -> expire or escalate\n```\n\nGood approval design shows the reviewer:\n\n- the proposed action\n- the evidence and source data\n- the expected impact\n- the risk\n- whether the action is reversible\n- the fields they may edit\n- the consequence of approving or rejecting\n\nA durable workflow must save enough state to resume without repeating earlier side effects. LangGraph's interrupt model is one example of pausing a graph, persisting state, and resuming later, but the underlying requirement is framework-independent.\n\nUse human control for:\n\n- irreversible or high-impact actions\n- permission escalation\n- public publication\n- financial transfers\n- destructive data operations\n- production changes\n- conflicting evidence\n- policy exceptions\n- cases where a person owns the final decision\n\nDo not use a decorative Approve button that hides what will actually happen.\n\n## Behavior trees: a related hierarchical control structure\n\nBehavior trees organise switching logic as a hierarchy of reusable control and action nodes. They are widely used in games and robotics and can also describe reactive agent behaviour.\n\nCommon node types include:\n\n- **Sequence:** run children in order until one fails\n- **Fallback or Selector:** try children until one succeeds\n- **Condition:** test whether a branch is applicable\n- **Action:** perform work\n- **Decorator:** modify a child's execution policy\n\nExample:\n\n```text\nFallback\n -> Return cached result if valid\n -> Sequence\n -> Retrieve\n -> Verify\n -> Generate\n -> Ask a human\n```\n\nBehavior trees are attractive when behaviours must be modular, hierarchical, and reactive. For many text-centric business workflows, a state machine remains easier for a mixed engineering and operations team to inspect. The right choice depends on the behaviour model, not on which diagram looks more sophisticated.\n\n## Program generation is an execution technique, not a path topology\n\nAn agent may generate SQL, Python, shell commands, API calls, a DSL, or a workflow definition, then validate and execute that artefact:\n\n```text\nRequest -> Generate program -> Validate -> Execute -> Inspect result\n```\n\nThis can be highly reliable when the generated artefact has a real parser, policy checker, sandbox, or test environment.\n\nIt is useful to call this a **program-generating agent** or **code-as-action pattern**. It should not be treated as a sixth peer topology beside Pipeline or DAG. The generated program still executes through one of the structures described above.\n\nRequired controls include:\n\n- sandboxing\n- least privilege\n- command or API allowlists\n- read-only database policies where appropriate\n- secret isolation\n- time and resource limits\n- output limits\n- test or verification steps\n\n## How to choose the execution structure\n\nThe following questions are deliberately stackable. They are not a claim that every system has one exclusive label.\n\n### 1. Is work triggered by an external event?\n\nUse an event-driven trigger and envelope. Then choose the workflow that processes the event.\n\n### 2. Does the process contain high-impact or irreversible actions?\n\nInsert human review or another policy gate at the relevant point. This is a control layer, not the entire workflow.\n\n### 3. Can one bounded operation solve the task?\n\nStart with Direct.\n\n### 4. Do different requests require different capabilities or sources of truth?\n\nPlace a Router before the downstream paths.\n\n### 5. Are the required stages known and stable?\n\nUse a Pipeline as the baseline.\n\n### 6. Does execution need persistent states, conditional transitions, pause and resume, bounded recovery, or several terminal outcomes?\n\nUse a State Machine or durable stateful workflow.\n\n### 7. Can the task be expressed as directional dependencies with independent branches and joins?\n\nUse a DAG inside the relevant pipeline or state.\n\nA practical selection flow for the primary skeleton is:\n\n```text\nCan one bounded operation solve it?\n yes -> Direct\n no -> Do request types need different paths?\n yes -> Router, then select the downstream structure\n no -> Do you need explicit persisted states, loops, waits, or approvals?\n yes -> State Machine\n no -> Do dependencies benefit from fan-out and join?\n yes -> DAG\n no -> Pipeline\n```\n\nThis flow selects a useful starting skeleton. Event triggers, human gates, retries, verification, and tool policies still apply across it.\n\n![Figure 2-5 — How a Router Sends Different Questions to Different Execution Paths](/images/the-atlas-of-agent-design-patterns-part-2/router-overview.png)\n\n> **Figure 2-5｜How a Router Sends Different Questions to Different Execution Paths**  \n> Match the request to an execution path: Direct, RAG, SQL, Calculator, Bounded Agent, or Clarify/Unsupported.\n\n## Common execution-path anti-patterns\n\n### Every request runs the most expensive workflow\n\nSimple requests pay the latency and error surface of planning, retrieval, critique, and multiple agents.\n\n### The LLM controls every branch\n\nThere is no allowlist, step limit, state constraint, budget, stop condition, or deterministic safety gate.\n\n### The router must always guess\n\nThere is no abstention, clarification, unsupported, or human-review route.\n\n### Retry means repeat the same side effect\n\nA timed-out payment, email, deployment, or database write is retried without an idempotency key or outcome check.\n\n### The state machine has no terminal states\n\nThe workflow circles among retry, verify, and replan because completion and exhaustion were never defined.\n\n### The DAG fans out without a resource budget\n\nDozens of workers saturate APIs, model quotas, browser slots, and databases.\n\n### Human approval contains no review context\n\nThe reviewer sees Approve and Reject but cannot inspect evidence, impact, or the exact action.\n\n### \"Programmatic agent\" bypasses the execution boundary\n\nGenerated code is executed directly without parsing, permissions, sandboxing, or tests.\n\n## Production controls that belong around every structure\n\n| Control | Purpose |\n|---|---|\n| Trace and correlation ID | Reconstruct the end-to-end run |\n| Persisted state | Resume safely after interruption |\n| Typed errors | Separate retryable, permanent, policy, and user errors |\n| Timeout and cancellation | Stop abandoned or stuck work |\n| Bounded retry with backoff | Recover from transient failures without looping forever |\n| Idempotency | Prevent repeated side effects |\n| Fallback | Change method or resource after an appropriate failure |\n| Budget guard | Limit model, tool, and concurrency cost |\n| Tool and permission policy | Restrict available actions and data |\n| Terminal outcomes | Define completed, failed, cancelled, expired, and partial |\n| Audit log | Record who or what made each decision |\n| Human control | Protect high-impact operations |\n| Observability | Measure latency, errors, cost, route quality, and retries |\n\nThe point of an execution path is not to produce a prettier diagram. It is to make the system answerable:\n\n- Where is this run now?\n- Why did it take this route?\n- What has already happened?\n- Which operation failed?\n- Is a retry safe?\n- Who owns the next decision?\n- What outcome ends the run?\n\n## Conclusion\n\nThe five core structures solve distinct problems:\n\n- **Direct** minimises orchestration when one bounded operation is sufficient.\n- **Pipeline** makes a known processing sequence explicit and measurable.\n- **Router** sends different requests to different capabilities and sources of truth.\n- **State machine** governs persisted progress, legal transitions, waiting, recovery, and terminal outcomes.\n- **DAG** expresses directional dependencies, fan-out, and joins without cycles inside one run.\n\nEvent-driven triggers and human approval operate across those structures. Behavior trees provide another hierarchical control model. Program generation is an execution technique that still needs one of the underlying workflow structures.\n\nA mature system rarely has one label. A more useful description is:\n\n```text\nCloud event\n -> permission-aware router\n -> durable state machine\n -> research DAG with bounded concurrency\n -> evidence verification\n -> human approval for publication\n -> deterministic output pipeline\n```\n\nExecution is not better because it is freer. It is better when the fixed parts, dynamic parts, recovery paths, and human boundaries are deliberate.\n\nPart 3 moves to the next dimension:\n\n> How does an agent decide what to do next?\n\nIt compares ReAct, Plan-and-Execute, adaptive planning, hierarchical planning, and the production hybrid that places flexible local execution inside a controlled outer workflow.\n\n## References\n\n- [AWS Step Functions, *Learn about state machines in Step Functions*](https://docs.aws.amazon.com/step-functions/latest/dg/concepts-statemachines.html)\n- [AWS Step Functions, *Handling errors in Step Functions workflows*](https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html)\n- [Apache Airflow, *DAGs*](https://airflow.apache.org/docs/apache-airflow/3.0.3/core-concepts/dags.html)\n- [CloudEvents, *A specification for describing event data in a common way*](https://cloudevents.io/)\n- [AWS Builders' Library, *Making retries safe with idempotent APIs*](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/)\n- [Colledanchise and Ögren, *Behavior Trees in Robotics and AI: An Introduction*](https://arxiv.org/abs/1709.00084)\n- [LangGraph Documentation, *Interrupts and human-in-the-loop workflows*](https://langchain-ai.github.io/langgraph/concepts/breakpoints/)\n\n"
+  },
+  "integrity": {
+    "browser_payload_sha256": "c27650d4afc80d2e4e98654edb96def9d303a739dbcc53d552f6373adfe67005",
+    "byte_count": 29020,
+    "executable_scripts_detected": false,
+    "line_count": 759,
+    "origin_blob_sha": "9b8912a4dc0193c0c478bcfe83dfaccff21b7ffe",
+    "snapshot_sha256": "57f9b3af9f91df45f479e16efa0ad32619ee464b55fbd6a760dbb96586943a52",
+    "truncated": false
+  },
+  "kind": "markdown",
+  "license": "owner-provided",
+  "metadata_only_reason": null,
+  "origin": {
+    "blob_sha": "9b8912a4dc0193c0c478bcfe83dfaccff21b7ffe",
+    "commit": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
+    "path": "src/content/blog/the-atlas-of-agent-design-patterns-part-2/en.md",
+    "repo": "huaihsuanbusiness/daniel-blog"
+  },
+  "owner": "Daniel Huang",
+  "registry": {
+    "content_hash_scope": "canonical-concept-file",
+    "content_sha256": "8146edd6dce90fcb94a87b99f37b18b7c3ae41765ed7615ca352a3998e1409dc",
+    "source_commit": "acf78596ace8a7366688ccef72b507204d09d9f9",
+    "source_id": "source_blog_agent_execution_paths",
+    "source_repository": "danielcanfly/knowledge-source"
+  },
+  "related_concepts": [
+    "concepts/agent-execution-paths"
+  ],
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-14-5-source-document/v1",
+  "source_id": "source_blog_agent_execution_paths",
+  "title": "Agent execution paths",
+  "toc": [
+    {
+      "level": 2,
+      "slug": "execution-structure-is-not-node-level-intelligence",
+      "title": "Execution structure is not node-level intelligence"
+    },
+    {
+      "level": 2,
+      "slug": "five-core-execution-structures",
+      "title": "Five core execution structures"
+    },
+    {
+      "level": 2,
+      "slug": "direct-use-one-bounded-operation-when-one-is-enough",
+      "title": "Direct: use one bounded operation when one is enough"
+    },
+    {
+      "level": 3,
+      "slug": "good-uses",
+      "title": "Good uses"
+    },
+    {
+      "level": 3,
+      "slug": "why-direct-paths-are-valuable",
+      "title": "Why direct paths are valuable"
+    },
+    {
+      "level": 3,
+      "slug": "common-failure",
+      "title": "Common failure"
+    },
+    {
+      "level": 2,
+      "slug": "pipeline-predictable-work-in-a-predetermined-sequence",
+      "title": "Pipeline: predictable work in a predetermined sequence"
+    },
+    {
+      "level": 3,
+      "slug": "good-uses",
+      "title": "Good uses"
+    },
+    {
+      "level": 3,
+      "slug": "why-pipelines-work-well-in-production",
+      "title": "Why pipelines work well in production"
+    },
+    {
+      "level": 3,
+      "slug": "pipelines-are-not-always-perfectly-linear",
+      "title": "Pipelines are not always perfectly linear"
+    },
+    {
+      "level": 3,
+      "slug": "common-failures",
+      "title": "Common failures"
+    },
+    {
+      "level": 2,
+      "slug": "router-choose-the-path-before-paying-for-it",
+      "title": "Router: choose the path before paying for it"
+    },
+    {
+      "level": 3,
+      "slug": "routing-signals",
+      "title": "Routing signals"
+    },
+    {
+      "level": 3,
+      "slug": "router-implementations",
+      "title": "Router implementations"
+    },
+    {
+      "level": 4,
+      "slug": "deterministic-router",
+      "title": "Deterministic router"
+    },
+    {
+      "level": 4,
+      "slug": "model-based-classifier",
+      "title": "Model-based classifier"
+    },
+    {
+      "level": 4,
+      "slug": "semantic-router",
+      "title": "Semantic router"
+    },
+    {
+      "level": 4,
+      "slug": "hybrid-router",
+      "title": "Hybrid router"
+    },
+    {
+      "level": 3,
+      "slug": "a-production-router-needs-an-escape-path",
+      "title": "A production router needs an escape path"
+    },
+    {
+      "level": 3,
+      "slug": "multi-intent-requests-are-not-single-label-classification",
+      "title": "Multi-intent requests are not single-label classification"
+    },
+    {
+      "level": 3,
+      "slug": "what-to-log",
+      "title": "What to log"
+    },
+    {
+      "level": 2,
+      "slug": "state-machine-make-progress-and-legal-transitions-explicit",
+      "title": "State machine: make progress and legal transitions explicit"
+    },
+    {
+      "level": 3,
+      "slug": "core-elements",
+      "title": "Core elements"
+    },
+    {
+      "level": 4,
+      "slug": "state",
+      "title": "State"
+    },
+    {
+      "level": 4,
+      "slug": "transition",
+      "title": "Transition"
+    },
+    {
+      "level": 4,
+      "slug": "guard-or-condition",
+      "title": "Guard or condition"
+    },
+    {
+      "level": 4,
+      "slug": "terminal-state",
+      "title": "Terminal state"
+    },
+    {
+      "level": 3,
+      "slug": "why-state-machines-help",
+      "title": "Why state machines help"
+    },
+    {
+      "level": 3,
+      "slug": "what-a-state-machine-does-not-guarantee",
+      "title": "What a state machine does not guarantee"
+    },
+    {
+      "level": 3,
+      "slug": "common-failures",
+      "title": "Common failures"
+    },
+    {
+      "level": 2,
+      "slug": "dag-express-dependencies-without-cycles",
+      "title": "DAG: express dependencies without cycles"
+    },
+    {
+      "level": 3,
+      "slug": "good-uses",
+      "title": "Good uses"
+    },
+    {
+      "level": 3,
+      "slug": "a-dag-is-not-automatically-multi-agent",
+      "title": "A DAG is not automatically multi-agent"
+    },
+    {
+      "level": 3,
+      "slug": "acyclic-does-not-mean-no-retries",
+      "title": "Acyclic does not mean \"no retries\""
+    },
+    {
+      "level": 3,
+      "slug": "parallelism-needs-limits",
+      "title": "Parallelism needs limits"
+    },
+    {
+      "level": 3,
+      "slug": "join-logic-is-part-of-the-design",
+      "title": "Join logic is part of the design"
+    },
+    {
+      "level": 2,
+      "slug": "pipeline-state-machine-and-dag-are-different-abstractions",
+      "title": "Pipeline, state machine, and DAG are different abstractions"
+    },
+    {
+      "level": 2,
+      "slug": "event-driven-execution-define-what-starts-the-work",
+      "title": "Event-driven execution: define what starts the work"
+    },
+    {
+      "level": 3,
+      "slug": "delivery-realities",
+      "title": "Delivery realities"
+    },
+    {
+      "level": 2,
+      "slug": "human-in-the-loop-insert-a-governed-control-point",
+      "title": "Human-in-the-loop: insert a governed control point"
+    },
+    {
+      "level": 2,
+      "slug": "behavior-trees-a-related-hierarchical-control-structure",
+      "title": "Behavior trees: a related hierarchical control structure"
+    },
+    {
+      "level": 2,
+      "slug": "program-generation-is-an-execution-technique-not-a-path-topology",
+      "title": "Program generation is an execution technique, not a path topology"
+    },
+    {
+      "level": 2,
+      "slug": "how-to-choose-the-execution-structure",
+      "title": "How to choose the execution structure"
+    },
+    {
+      "level": 3,
+      "slug": "1-is-work-triggered-by-an-external-event",
+      "title": "1. Is work triggered by an external event?"
+    },
+    {
+      "level": 3,
+      "slug": "2-does-the-process-contain-high-impact-or-irreversible-actions",
+      "title": "2. Does the process contain high-impact or irreversible actions?"
+    },
+    {
+      "level": 3,
+      "slug": "3-can-one-bounded-operation-solve-the-task",
+      "title": "3. Can one bounded operation solve the task?"
+    },
+    {
+      "level": 3,
+      "slug": "4-do-different-requests-require-different-capabilities-or-sources-of-truth",
+      "title": "4. Do different requests require different capabilities or sources of truth?"
+    },
+    {
+      "level": 3,
+      "slug": "5-are-the-required-stages-known-and-stable",
+      "title": "5. Are the required stages known and stable?"
+    },
+    {
+      "level": 3,
+      "slug": "6-does-execution-need-persistent-states-conditional-transitions-pause-and-resume-bounded-recovery-or-several-terminal-outcomes",
+      "title": "6. Does execution need persistent states, conditional transitions, pause and resume, bounded recovery, or several terminal outcomes?"
+    },
+    {
+      "level": 3,
+      "slug": "7-can-the-task-be-expressed-as-directional-dependencies-with-independent-branches-and-joins",
+      "title": "7. Can the task be expressed as directional dependencies with independent branches and joins?"
+    },
+    {
+      "level": 2,
+      "slug": "common-execution-path-anti-patterns",
+      "title": "Common execution-path anti-patterns"
+    },
+    {
+      "level": 3,
+      "slug": "every-request-runs-the-most-expensive-workflow",
+      "title": "Every request runs the most expensive workflow"
+    },
+    {
+      "level": 3,
+      "slug": "the-llm-controls-every-branch",
+      "title": "The LLM controls every branch"
+    },
+    {
+      "level": 3,
+      "slug": "the-router-must-always-guess",
+      "title": "The router must always guess"
+    },
+    {
+      "level": 3,
+      "slug": "retry-means-repeat-the-same-side-effect",
+      "title": "Retry means repeat the same side effect"
+    },
+    {
+      "level": 3,
+      "slug": "the-state-machine-has-no-terminal-states",
+      "title": "The state machine has no terminal states"
+    },
+    {
+      "level": 3,
+      "slug": "the-dag-fans-out-without-a-resource-budget",
+      "title": "The DAG fans out without a resource budget"
+    },
+    {
+      "level": 3,
+      "slug": "human-approval-contains-no-review-context",
+      "title": "Human approval contains no review context"
+    },
+    {
+      "level": 3,
+      "slug": "programmatic-agent-bypasses-the-execution-boundary",
+      "title": "\"Programmatic agent\" bypasses the execution boundary"
+    },
+    {
+      "level": 2,
+      "slug": "production-controls-that-belong-around-every-structure",
+      "title": "Production controls that belong around every structure"
+    },
+    {
+      "level": 2,
+      "slug": "conclusion",
+      "title": "Conclusion"
+    },
+    {
+      "level": 2,
+      "slug": "references",
+      "title": "References"
+    }
+  ],
+  "trust": "reviewed"
+}

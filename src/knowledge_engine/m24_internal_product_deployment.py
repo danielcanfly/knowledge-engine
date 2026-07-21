@@ -28,6 +28,10 @@ P6_ISSUE_NUMBER = 997
 DEPLOYMENT_ROOT = Path("pilot/m24/internal-product-deployment")
 SITE_ROOT = DEPLOYMENT_ROOT / "site"
 OBSIDIAN_VAULT_ZIP_RELATIVE = "downloads/llm-wiki-m24-obsidian-vault.zip"
+SOURCE_DOCUMENT_PACKAGE_ROOT = Path("pilot/m24/source-document-package")
+SOURCE_DOCUMENT_INDEX_PATH = SOURCE_DOCUMENT_PACKAGE_ROOT / "source-index.json"
+SOURCE_DOCUMENT_AGGREGATE_PATH = SOURCE_DOCUMENT_PACKAGE_ROOT / "source-documents.json"
+SOURCE_DOCUMENT_PAYLOAD_ROOT = SOURCE_DOCUMENT_PACKAGE_ROOT / "sources"
 ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 GRAPH_VENDOR_ASSETS = (
     (
@@ -617,6 +621,76 @@ a {
   padding: 10px;
 }
 
+.source-card[aria-current="true"] {
+  border-color: #0f766e;
+  box-shadow: inset 4px 0 0 #0f766e;
+}
+
+.source-detail-panel {
+  align-self: start;
+  max-height: calc(100vh - 56px);
+  overflow: auto;
+}
+
+.source-detail-panel h3:focus {
+  outline: 2px solid #0f766e;
+  outline-offset: 3px;
+}
+
+.reader-meta {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 12px 0;
+}
+
+.reader-meta section,
+.source-toc {
+  border: 1px solid #e5e7eb;
+  padding: 10px;
+}
+
+.reader-meta h4,
+.source-toc h4 {
+  margin: 0 0 6px;
+}
+
+.compact-meta.vertical {
+  display: grid;
+}
+
+.source-toc ol {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding-left: 22px;
+}
+
+.source-toc li[data-level="2"] {
+  margin-left: 12px;
+}
+
+.source-toc li[data-level="3"],
+.source-toc li[data-level="4"],
+.source-toc li[data-level="5"],
+.source-toc li[data-level="6"] {
+  margin-left: 24px;
+}
+
+.source-document-body {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 12px 0 0;
+  max-height: 65vh;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .detail-actions {
   display: flex;
   flex-wrap: wrap;
@@ -799,6 +873,14 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .source-detail-panel {
+    max-height: none;
+  }
+
+  .reader-meta {
+    grid-template-columns: 1fr;
+  }
+
   .graph-toolbar {
     grid-template-columns: 1fr 1fr;
   }
@@ -919,7 +1001,7 @@ def _graph_explorer_js() -> str:
     return graph;
   }
 
-  function selection(graph, nodeId) {
+  function selection(graph, nodeId, sourceCountsByConcept) {
     const attrs = graph.getNodeAttributes(nodeId);
     return {
       id: nodeId,
@@ -927,6 +1009,7 @@ def _graph_explorer_js() -> str:
       type: attrs.semanticType || "concept",
       description: attrs.description || attrs.summary || "",
       sourcePath: attrs.source_path || attrs.path || "",
+      sourceCount: Number(sourceCountsByConcept?.[nodeId] || 0),
       tags: stringList(attrs.tags),
     };
   }
@@ -1081,9 +1164,28 @@ def _graph_explorer_js() -> str:
         details.innerHTML = "<p>Select a node to inspect provenance and relationships.</p>";
         return;
       }
-      const selected = selection(graph, selectedNodeId);
+      const selected = selection(graph, selectedNodeId, options.sourceCountsByConcept || {});
       const neighbors = graph.neighbors(selectedNodeId).sort();
       details.innerHTML = `
+        <div class="detail-actions graph-selection-actions">
+          <button
+            class="inline-action"
+            type="button"
+            data-graph-open-wiki="${escapeHtml(selected.id)}"
+          >Open Wiki</button>
+          ${selected.sourceCount > 0 ? `
+            <button
+              class="inline-action"
+              type="button"
+              data-graph-view-sources="${escapeHtml(selected.id)}"
+            >View sources</button>
+          ` : ""}
+          <button
+            class="inline-action"
+            type="button"
+            data-graph-copy-concept="${escapeHtml(selected.id)}"
+          >Copy concept ID</button>
+        </div>
         <dl>
           <div><dt>Title</dt><dd>${escapeHtml(selected.title)}</dd></div>
           <div><dt>Type</dt><dd>${escapeHtml(selected.type)}</dd></div>
@@ -1093,12 +1195,32 @@ def _graph_explorer_js() -> str:
           </div>
           <div><dt>Tags</dt><dd>${escapeHtml(selected.tags.join(", ") || "none")}</dd></div>
           <div><dt>Neighbors</dt><dd>${escapeHtml(neighbors.length)}</dd></div>
+          <div><dt>Source handoffs</dt><dd>${escapeHtml(selected.sourceCount)}</dd></div>
           <div>
             <dt>Description</dt>
             <dd>${escapeHtml(selected.description || "No description")}</dd>
           </div>
         </dl>
       `;
+      const wikiButton = details.querySelector("[data-graph-open-wiki]");
+      if (wikiButton) {
+        wikiButton.addEventListener("click", () => options.onOpenWiki?.(selected));
+      }
+      const sourcesButton = details.querySelector("[data-graph-view-sources]");
+      if (sourcesButton) {
+        sourcesButton.addEventListener("click", () => options.onViewSources?.(selected));
+      }
+      const copyButton = details.querySelector("[data-graph-copy-concept]");
+      if (copyButton) {
+        copyButton.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard?.writeText(selected.id);
+            options.onStatus?.(`Copied ${selected.id}.`);
+          } catch (_error) {
+            options.onStatus?.(selected.id);
+          }
+        });
+      }
       options.onSelection?.(selected);
     }
 
@@ -1195,6 +1317,8 @@ const ARTIFACTS = {{
   search: "data/search-harness.json",
   graph: "data/graph-navigation.json",
   sources: "data/source-viewers.json",
+  sourceIndex: "data/source-index.json",
+  sourceDocuments: "data/source-documents.json",
   answers: "data/query-answer-acceptance.json",
   obsidian: "data/obsidian-export-manifest.json",
 }};
@@ -1216,6 +1340,7 @@ const state = {{
   selectedConceptId: HARNESS_CONCEPT_ID,
   selectedCitationId: null,
   selectedSourceViewerId: null,
+  sourceDetailFocusRequested: false,
   searchQuery: "harness",
   sourceQuery: "",
 }};
@@ -1310,8 +1435,8 @@ function applyRouteStateFromHash(route) {{
     state.selectedConceptId = params.get("concept");
   }}
   if (route === "sources") {{
-    state.selectedSourceViewerId = params.get("viewer") || state.selectedSourceViewerId;
-    state.selectedCitationId = params.get("citation") || state.selectedCitationId;
+    state.selectedSourceViewerId = params.has("viewer") ? params.get("viewer") : null;
+    state.selectedCitationId = params.has("citation") ? params.get("citation") : null;
   }}
 }}
 
@@ -1334,6 +1459,14 @@ function sourceViewers(artifacts) {{
   return artifacts.sources.source_viewers || [];
 }}
 
+function sourceCoverageRows(artifacts) {{
+  return artifacts.sourceIndex.coverage_matrix || artifacts.sources.coverage_matrix || [];
+}}
+
+function sourceDocuments(artifacts) {{
+  return (artifacts.sourceDocuments && artifacts.sourceDocuments.documents) || {{}};
+}}
+
 function allSourceCards(artifacts) {{
   const searchCards = artifacts.search.source_cards || [];
   const viewerCards = sourceViewers(artifacts).map((viewer) => viewer.source_card || {{}});
@@ -1353,6 +1486,28 @@ function viewerBySourceCard(artifacts, sourceCardId) {{
   return sourceViewers(artifacts).find(
     (viewer) => (viewer.source_card || {{}}).source_card_id === sourceCardId
   ) || null;
+}}
+
+function viewerBySourceId(artifacts, sourceId) {{
+  return sourceViewers(artifacts).find(
+    (viewer) => (viewer.source_card || {{}}).source_id === sourceId
+  ) || null;
+}}
+
+function firstViewerForConcept(artifacts, conceptId) {{
+  return sourceViewers(artifacts).find((viewer) =>
+    (((viewer.source_card || {{}}).concept_ids || []).includes(conceptId))
+  ) || null;
+}}
+
+function sourceCountsByConcept(artifacts) {{
+  const counts = {{}};
+  for (const viewer of sourceViewers(artifacts)) {{
+    for (const conceptId of ((viewer.source_card || {{}}).concept_ids || [])) {{
+      counts[conceptId] = (counts[conceptId] || 0) + 1;
+    }}
+  }}
+  return counts;
 }}
 
 function citationById(artifacts, citationId) {{
@@ -1567,10 +1722,11 @@ function renderWiki(artifacts) {{
         <div class="source-list">
           ${{viewers.map((viewer) => {{
             const card = viewer.source_card || {{}};
+            const resolvedViewer = viewerBySourceId(state.artifacts, card.source_id) || viewer;
             return `
               <button
                 class="inline-action"
-                data-open-source-viewer="${{escapeHtml(viewer.viewer_id)}}"
+                data-open-source-viewer="${{escapeHtml(resolvedViewer.viewer_id)}}"
               >
                 ${{escapeHtml(card.title || card.source_id || viewer.viewer_id)}}
               </button>
@@ -1698,6 +1854,82 @@ function renderSearch(artifacts) {{
   `;
 }}
 
+function renderSummary(summary) {{
+  if (!summary || typeof summary !== "object") return "";
+  return `
+    <ul class="compact-meta">
+      <li>${{escapeHtml(summary.coverage_status || "metadata")}}</li>
+      <li>${{escapeHtml(summary.content_bytes || 0)}} bytes</li>
+      <li>${{escapeHtml(summary.line_count || 0)}} lines</li>
+      <li>${{escapeHtml(summary.citation_count || 0)}} citations</li>
+    </ul>
+  `;
+}}
+
+function renderSourceDocument(documentPayload) {{
+  if (!documentPayload) {{
+    return `
+      <section class="state-panel" data-state="source-document-missing">
+        <h3>Source document unavailable</h3>
+        <p>No release-pinned document payload is available for this source.</p>
+      </section>
+    `;
+  }}
+  const doc = documentPayload.document || {{}};
+  const integrity = documentPayload.integrity || {{}};
+  const origin = documentPayload.origin || {{}};
+  const registry = documentPayload.registry || {{}};
+  const metadataOnlyReason = documentPayload.metadata_only_reason || doc.metadata_only_reason;
+  const body = doc.body || "";
+  const toc = documentPayload.toc || [];
+  return `
+    <section
+      class="source-reader"
+      data-source-document="${{escapeHtml(documentPayload.source_id)}}"
+    >
+      <div class="reader-meta">
+        <section>
+          <h4>Origin</h4>
+          <ul class="compact-meta vertical">
+            <li>${{escapeHtml(origin.repo || "unresolved")}}</li>
+            <li>${{escapeHtml(origin.commit || "no exact commit")}}</li>
+            <li>${{escapeHtml(origin.path || "no exact path")}}</li>
+            <li>blob ${{escapeHtml(origin.blob_sha || "unavailable")}}</li>
+          </ul>
+        </section>
+        <section>
+          <h4>Integrity</h4>
+          <ul class="compact-meta vertical">
+            <li>snapshot ${{escapeHtml(integrity.snapshot_sha256 || "metadata-only")}}</li>
+            <li>payload ${{escapeHtml(integrity.browser_payload_sha256 || "unavailable")}}</li>
+            <li>registry ${{escapeHtml(registry.content_sha256 || "not declared")}}</li>
+            <li>scope ${{escapeHtml(registry.content_hash_scope || "not declared")}}</li>
+            <li>truncated ${{escapeHtml(String(Boolean(integrity.truncated)))}}</li>
+          </ul>
+        </section>
+      </div>
+      ${{toc.length ? `
+        <section class="source-toc" aria-label="Document table of contents">
+          <h4>Contents</h4>
+          <ol>
+            ${{toc.slice(0, 40).map((item) => `
+              <li data-level="${{escapeHtml(item.level)}}">${{escapeHtml(item.title)}}</li>
+            `).join("")}}
+          </ol>
+        </section>
+      ` : ""}}
+      ${{metadataOnlyReason ? `
+        <section class="state-panel" data-state="metadata-only-source">
+          <h3>Metadata-only source</h3>
+          <p>${{escapeHtml(metadataOnlyReason)}}</p>
+        </section>
+      ` : `
+        <pre class="source-document-body" tabindex="0"><code>${{escapeHtml(body)}}</code></pre>
+      `}}
+    </section>
+  `;
+}}
+
 function renderSources(artifacts) {{
   const viewers = sourceViewers(artifacts);
   const selected = state.selectedCitationId
@@ -1708,6 +1940,11 @@ function renderSources(artifacts) {{
   const query = state.sourceQuery.trim().toLocaleLowerCase("en-US");
   const filtered = viewers.filter((viewer) => {{
     const card = viewer.source_card || {{}};
+    const document = (
+      viewer.document ||
+      sourceDocuments(artifacts)[card.source_id] ||
+      {{}}
+    ).document || {{}};
     if (!query) return true;
     return [
       viewer.viewer_id,
@@ -1717,11 +1954,16 @@ function renderSources(artifacts) {{
       card.source_kind,
       card.source_id,
       (card.concept_ids || []).join(" "),
+      document.body,
     ].join(" ").toLocaleLowerCase("en-US").includes(query);
   }});
   const activeCitation = state.selectedCitationId
     ? citationById(artifacts, state.selectedCitationId)
     : null;
+  const activeDocument = activeViewer
+    ? (activeViewer.document || sourceDocuments(artifacts)[activeCard.source_id])
+    : null;
+  const rows = sourceCoverageRows(artifacts);
   return `
     <form class="toolbar" data-source-form>
       <label for="source-input">Source filter</label>
@@ -1736,23 +1978,34 @@ function renderSources(artifacts) {{
     <div class="surface-split">
       <section class="panel">
         <h3>Sources</h3>
+        <p class="muted">
+          Showing ${{escapeHtml(filtered.length)}} of ${{escapeHtml(rows.length)}}
+          canonical source records.
+        </p>
         <div class="result-list">
           ${{filtered.map((viewer) => {{
             const card = viewer.source_card || {{}};
+            const isSelected = activeViewer && viewer.viewer_id === activeViewer.viewer_id;
             return `
-              <article>
+              <article
+                class="source-card"
+                data-source-id="${{escapeHtml(card.source_id)}}"
+                aria-current="${{isSelected ? "true" : "false"}}"
+              >
                 <h4>${{escapeHtml(card.title || card.source_id || viewer.viewer_id)}}</h4>
                 <p>${{escapeHtml(card.display_host || card.publisher || "source")}}</p>
                 <ul class="compact-meta">
                   <li>${{escapeHtml(card.source_kind)}}</li>
                   <li>${{escapeHtml((viewer.citations || []).length)}} citations</li>
                   <li>snapshot ${{escapeHtml(String(card.snapshot_available))}}</li>
+                  <li>${{escapeHtml(card.content_bytes || 0)}} bytes</li>
+                  <li>${{escapeHtml(card.coverage_status || "metadata")}}</li>
                 </ul>
                 <div class="detail-actions">
                   <button
                     class="inline-action"
                     data-open-source-viewer="${{escapeHtml(viewer.viewer_id)}}"
-                  >Inspect</button>
+                  >${{isSelected ? "Inspect selected" : "Inspect"}}</button>
                   ${{(card.concept_ids || []).slice(0, 2).map((conceptId) => `
                     <button
                       class="inline-action"
@@ -1770,16 +2023,27 @@ function renderSources(artifacts) {{
           `}}
         </div>
       </section>
-      <aside class="panel">
-        <h3>Source detail</h3>
+      <aside class="panel source-detail-panel" data-source-detail>
+        <p class="eyebrow">Source detail</p>
+        <h3 id="source-detail-heading" tabindex="-1">
+          ${{escapeHtml(activeCard.title || "Source detail")}}
+        </h3>
         ${{activeViewer ? `
-          <p>${{escapeHtml(activeViewer.summary || activeCard.title || activeCard.source_id)}}</p>
+          ${{renderSummary(activeViewer.summary)}}
           <ul class="compact-meta">
             <li>${{escapeHtml(activeCard.source_card_id)}}</li>
             <li>${{escapeHtml(activeCard.source_kind)}}</li>
             <li>${{escapeHtml(activeCard.display_host || activeCard.publisher)}}</li>
+            <li>${{escapeHtml(activeCard.document_path || "document path unavailable")}}</li>
           </ul>
           <div class="detail-actions">
+            ${{activeCard.uri ? `
+              <a
+                class="inline-action"
+                href="${{escapeHtml(activeCard.uri)}}"
+                rel="noreferrer"
+              >Open original source</a>
+            ` : ""}}
             ${{(activeCard.concept_ids || []).map((conceptId) => `
               <button
                 class="inline-action"
@@ -1787,6 +2051,7 @@ function renderSources(artifacts) {{
               >${{escapeHtml(conceptId.replace("concepts/", ""))}}</button>
             `).join("")}}
           </div>
+          ${{renderSourceDocument(activeDocument)}}
           <h4>Citations</h4>
           <div class="citation-list">
             ${{(activeViewer.citations || []).map((citation) => `
@@ -1914,8 +2179,26 @@ function initializeGraphExplorer(artifacts) {{
       root,
       payload: artifacts.graph,
       selectedNodeId: state.selectedConceptId,
+      sourceCountsByConcept: sourceCountsByConcept(artifacts),
       onSelection: (selection) => {{
         if (selection && selection.id) state.selectedConceptId = selection.id;
+      }},
+      onOpenWiki: (selection) => {{
+        if (!selection || !selection.id) return;
+        state.selectedConceptId = selection.id;
+        navigateTo("wiki", {{ concept: state.selectedConceptId }});
+      }},
+      onViewSources: (selection) => {{
+        if (!selection || !selection.id) return;
+        const viewer = firstViewerForConcept(artifacts, selection.id);
+        state.selectedConceptId = selection.id;
+        state.selectedSourceViewerId = viewer ? viewer.viewer_id : null;
+        state.selectedCitationId = null;
+        state.sourceDetailFocusRequested = true;
+        navigateTo("sources", {{
+          concept: selection.id,
+          viewer: state.selectedSourceViewerId,
+        }});
       }},
       onStatus: (message) => setStatus(message, "ready"),
     }});
@@ -2062,6 +2345,19 @@ function navigateTo(route, params = {{}}) {{
   location.hash = nextHash;
 }}
 
+function focusSourceDetailIfRequested() {{
+  if (!state.sourceDetailFocusRequested || state.route !== "sources") return;
+  state.sourceDetailFocusRequested = false;
+  const detail = app.querySelector("[data-source-detail]");
+  const heading = app.querySelector("#source-detail-heading");
+  if (detail) {{
+    detail.scrollIntoView({{ block: "start", behavior: "instant" }});
+  }}
+  if (heading) {{
+    heading.focus({{ preventScroll: true }});
+  }}
+}}
+
 function wireInteractions() {{
   for (const button of app.querySelectorAll("[data-route]")) {{
     button.addEventListener("click", () => {{
@@ -2084,6 +2380,7 @@ function wireInteractions() {{
     button.addEventListener("click", () => {{
       state.selectedSourceViewerId = button.dataset.openSourceViewer;
       state.selectedCitationId = null;
+      state.sourceDetailFocusRequested = true;
       navigateTo("sources", {{ viewer: state.selectedSourceViewerId }});
     }});
   }}
@@ -2092,6 +2389,7 @@ function wireInteractions() {{
       const viewer = viewerBySourceCard(state.artifacts, button.dataset.openSourceCard);
       state.selectedSourceViewerId = viewer ? viewer.viewer_id : null;
       state.selectedCitationId = null;
+      state.sourceDetailFocusRequested = true;
       navigateTo("sources", {{ viewer: state.selectedSourceViewerId }});
     }});
   }}
@@ -2100,6 +2398,7 @@ function wireInteractions() {{
       state.selectedCitationId = button.dataset.openCitation;
       const resolved = citationById(state.artifacts, state.selectedCitationId);
       state.selectedSourceViewerId = resolved ? resolved.viewer.viewer_id : null;
+      state.sourceDetailFocusRequested = true;
       navigateTo("sources", {{
         citation: state.selectedCitationId,
         viewer: state.selectedSourceViewerId,
@@ -2124,6 +2423,7 @@ function wireInteractions() {{
       render();
     }});
   }}
+  focusSourceDetailIfRequested();
 }}
 
 window.addEventListener("hashchange", () => {{
@@ -2172,11 +2472,79 @@ def _release_viewer() -> dict[str, Any]:
 
 def _source_viewers_payload() -> dict[str, Any]:
     response = canonical_runtime_search(query="harness", max_results=5)
+    source_index = json.loads(SOURCE_DOCUMENT_INDEX_PATH.read_text(encoding="utf-8"))
+    source_documents = json.loads(
+        SOURCE_DOCUMENT_AGGREGATE_PATH.read_text(encoding="utf-8")
+    )
+    citation_viewers_by_source_id = {
+        item.source_card.source_id: item.model_dump(mode="json")
+        for item in response.source_viewers
+    }
+    source_viewers: list[dict[str, Any]] = []
+    for ordinal, row in enumerate(source_index["coverage_matrix"], start=1):
+        source_id = row["source_id"]
+        cited_viewer = citation_viewers_by_source_id.get(source_id, {})
+        cited_card = cited_viewer.get("source_card", {})
+        document = source_documents["documents"][source_id]
+        source_card = {
+            "schema_version": "knowledge-engine-source-card/v1",
+            "source_card_id": cited_card.get(
+                "source_card_id", f"card_{hashlib.sha256(source_id.encode()).hexdigest()[:32]}"
+            ),
+            "source_id": source_id,
+            "title": row["title"],
+            "uri": row.get("canonical_uri"),
+            "source_kind": row["kind"],
+            "publisher": row.get("origin_repo") or document.get("owner") or "source",
+            "display_host": row.get("origin_repo") or "release-authoritative source",
+            "ordinal": ordinal,
+            "retrieved_at": cited_card.get("retrieved_at"),
+            "published_at": cited_card.get("published_at"),
+            "snapshot_available": row["snapshot_available"],
+            "integrity_sha256": row.get("generated_snapshot_sha256")
+            or row.get("browser_payload_sha256"),
+            "citation_ids": cited_card.get("citation_ids", []),
+            "claim_ids": cited_card.get("claim_ids", []),
+            "concept_ids": row.get("related_concepts", []),
+            "section_ids": cited_card.get("section_ids", []),
+            "content_bytes": row.get("content_bytes", 0),
+            "line_count": row.get("line_count", 0),
+            "coverage_status": row.get("coverage_status"),
+            "document_path": row.get("document_path"),
+        }
+        citations = cited_viewer.get("citations", [])
+        source_viewers.append(
+            {
+                "schema_version": "knowledge-engine-source-viewer/v1",
+                "release_id": response.release_id,
+                "viewer_id": f"viewer_{source_id}",
+                "source_card": source_card,
+                "summary": {
+                    "citation_count": len(citations),
+                    "claim_count": len(source_card["claim_ids"]),
+                    "concept_count": len(source_card["concept_ids"]),
+                    "has_snapshot": row["snapshot_available"],
+                    "coverage_status": row.get("coverage_status"),
+                    "content_bytes": row.get("content_bytes", 0),
+                    "line_count": row.get("line_count", 0),
+                    "integrity_available": bool(source_card["integrity_sha256"]),
+                    "raw_evidence_exposed": False,
+                    "retrieval_authority": "lexical",
+                    "semantic_serving_enabled": False,
+                },
+                "document": document,
+                "document_path": row.get("document_path"),
+                "citations": citations,
+            }
+        )
     return {
         "schema_version": f"{P6_SCHEMA}/source-viewers",
         "release_id": response.release_id,
-        "viewer_count": len(response.source_viewers),
-        "source_viewers": [item.model_dump(mode="json") for item in response.source_viewers],
+        "source_index_path": "data/source-index.json",
+        "source_documents_path": "data/source-documents.json",
+        "coverage_matrix": source_index["coverage_matrix"],
+        "viewer_count": len(source_viewers),
+        "source_viewers": source_viewers,
     }
 
 
@@ -2232,16 +2600,29 @@ def build_p6_internal_product_deployment(
     answers = build_p5_query_answer_acceptance_report()
     release = _release_viewer()
     source_viewers = _source_viewers_payload()
+    source_index = json.loads(SOURCE_DOCUMENT_INDEX_PATH.read_text(encoding="utf-8"))
+    source_documents = json.loads(
+        SOURCE_DOCUMENT_AGGREGATE_PATH.read_text(encoding="utf-8")
+    )
     obsidian, obsidian_zip = _obsidian_manifest_payload(site_root=site_root)
     data_payloads: list[tuple[str, Any]] = [
         ("data/concept-wiki-harness.json", concept.model_dump(mode="json")),
         ("data/search-harness.json", search.model_dump(mode="json")),
         ("data/graph-navigation.json", graph.model_dump(mode="json")),
         ("data/source-viewers.json", source_viewers),
+        ("data/source-index.json", source_index),
+        ("data/source-documents.json", source_documents),
         ("data/query-answer-acceptance.json", answers.model_dump(mode="json")),
         ("data/release-viewer.json", release),
         ("data/obsidian-export-manifest.json", obsidian),
     ]
+    for source_payload_path in sorted(SOURCE_DOCUMENT_PAYLOAD_ROOT.glob("*.json")):
+        data_payloads.append(
+            (
+                f"data/sources/{source_payload_path.name}",
+                json.loads(source_payload_path.read_text(encoding="utf-8")),
+            )
+        )
     artifacts = [
         _write_text(site_root / "index.html", _index_html()),
         _write_text(site_root / "styles.css", _styles()),

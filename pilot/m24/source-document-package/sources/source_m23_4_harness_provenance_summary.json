@@ -1,0 +1,238 @@
+{
+  "audience": "public",
+  "canonical_uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json",
+  "citations": [],
+  "coverage_status": "structured_snapshot",
+  "document": {
+    "body": "{\n  \"bundle_sha256\": \"e65fdb2d563e2bac04cac04e4844e15ebf7db3f81429781570f177a575922d2b\",\n  \"canonical_write_permitted\": false,\n  \"extraction_packet_sha256\": \"32f29be6fa4a90d6495b0844fbe0e8a2003dec25d3adf5328a0fd0b2232ce402\",\n  \"records\": [\n    {\n      \"candidate_id\": \"conceptcand_225a9ee65ca6ef67c5d6015d7f4e0cb3\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-02-en\",\n          \"end\": 20368,\n          \"excerpt_sha256\": \"28f99faaff1fd0537e9f48e27b96de2684d030fc3448fc4b5129b1f6980e8b19\",\n          \"start\": 20344\n        }\n      ],\n      \"label\": \"Headless Harness Service\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_632f23ba5b420f1403631d38bd2f4e10\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-02-en\",\n          \"end\": 3794,\n          \"excerpt_sha256\": \"6dd0a2e7c8eba56b4f11045a82145003853e46a8768b1663755c449f6bfb4afa\",\n          \"start\": 3778\n        }\n      ],\n      \"label\": \"Request Boundary\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_674327c38116ba67829aa0e92480f906\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-01-en\",\n          \"end\": 13923,\n          \"excerpt_sha256\": \"37298e371d06f25241518585aadfa4c00203b3e29cc6b38298df8ec5eee522ef\",\n          \"start\": 13909\n        }\n      ],\n      \"label\": \"Harnessability\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_724ab01fa724799d46ddb2b9497d7752\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-02-en\",\n          \"end\": 4412,\n          \"excerpt_sha256\": \"7b71223b2dcaa62db1ec3b0f5cb24f3fef57d6fae30f0605c68a392c056b3a41\",\n          \"start\": 4397\n        }\n      ],\n      \"label\": \"Completion Gate\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_8a73560fa206f8d5d9323e648d15d2c0\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-03-en\",\n          \"end\": 20377,\n          \"excerpt_sha256\": \"45ea9a9da8fde3a61165cbe88eb4103cbdc78831101cefe0ed622fa2f10e749a\",\n          \"start\": 20305\n        }\n      ],\n      \"label\": \"Stopping Policy\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_a857949159ff2af3a917b9b4945d2563\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-03-en\",\n          \"end\": 65,\n          \"excerpt_sha256\": \"52a65b6cf105b50ac02376bc0b84c222bed5b0cf4a758040fb5857569fc1cc3e\",\n          \"start\": 37\n        }\n      ],\n      \"label\": \"Agent Loop\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_bd10b1c1b28edb6e20d34b96c780c10a\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-02-en\",\n          \"end\": 3965,\n          \"excerpt_sha256\": \"2e35375f9fa40589b29ddc47ad99a5b345950a6ac498573c4e44597bd05eb768\",\n          \"start\": 3942\n        }\n      ],\n      \"label\": \"Canonical Run Authority\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_c574aa8a041d990b0848426332cbe695\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-01-en\",\n          \"end\": 1882,\n          \"excerpt_sha256\": \"d136d700e646065e934f6ebe13d828ccf747945a579ace0754dd5fcd1ba1a9dc\",\n          \"start\": 1805\n        }\n      ],\n      \"label\": \"Harness\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_cce3e198ea0f2ca4a2394e8c97e63826\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-03-en\",\n          \"end\": 2222,\n          \"excerpt_sha256\": \"615a974ea4617c125cf4e2a292e13c1c73d8978eee92d5d8db5172df45edcafd\",\n          \"start\": 2155\n        }\n      ],\n      \"label\": \"Tool Calling\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_d3d6dd0bc39b6d17ac3f77830f59a8e4\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-03-en\",\n          \"end\": 21709,\n          \"excerpt_sha256\": \"576e3df3645809b5ac0050af75761ad507a562f46e42bfe86b93b3b32e3f0ff4\",\n          \"start\": 21654\n        }\n      ],\n      \"label\": \"Goal Drift\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_dae13dfab2f3bd99933996727ae31785\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-01-en\",\n          \"end\": 1743,\n          \"excerpt_sha256\": \"4183b7793fd28ba47ea9e79e7697f2915da218567e6657a158b51bd14bce91cd\",\n          \"start\": 1731\n        }\n      ],\n      \"label\": \"Verification\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_dcc0a2165404ede003499acbc175bc91\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-03-en\",\n          \"end\": 16158,\n          \"excerpt_sha256\": \"7abfe83662569f15f7862107ea875e2024c465fd411ecaa4c3aaa7651768c18a\",\n          \"start\": 16100\n        }\n      ],\n      \"label\": \"Item Turn Thread Protocol\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_dfae712de3eb869423e8f6a4ddc1007e\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-01-en\",\n          \"end\": 236,\n          \"excerpt_sha256\": \"6c1a9bac3918c703c21849c34b05bdc5956b3d7adc98bc165a77d14aec8680a0\",\n          \"start\": 214\n        }\n      ],\n      \"label\": \"Steering Control Plane\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_e9cb685f0b06f9b488b327f1b05ba4bb\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-02-en\",\n          \"end\": 3859,\n          \"excerpt_sha256\": \"f17e312ac6bd8ae16092c4d66df8079986e7587f636be5aa7e01f53805bceabd\",\n          \"start\": 3846\n        }\n      ],\n      \"label\": \"Task Contract\"\n    },\n    {\n      \"candidate_id\": \"conceptcand_fe165e95fd7459e5a6f1cd1a7d418c25\",\n      \"evidence\": [\n        {\n          \"derivative_id\": \"derivative_harness-theory-part-02-en\",\n          \"end\": 21587,\n          \"excerpt_sha256\": \"e7b041efc701cb600b0fac60b1d9c7cee93b3ae989d6e72c137f8f654bf65a46\",\n          \"start\": 21567\n        }\n      ],\n      \"label\": \"Durable Thread State\"\n    }\n  ],\n  \"schema_version\": \"knowledge-source-m23-proposal-provenance-summary/v1\"\n}\n",
+    "format": "json",
+    "json": {
+      "bundle_sha256": "e65fdb2d563e2bac04cac04e4844e15ebf7db3f81429781570f177a575922d2b",
+      "canonical_write_permitted": false,
+      "extraction_packet_sha256": "32f29be6fa4a90d6495b0844fbe0e8a2003dec25d3adf5328a0fd0b2232ce402",
+      "records": [
+        {
+          "candidate_id": "conceptcand_225a9ee65ca6ef67c5d6015d7f4e0cb3",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-02-en",
+              "end": 20368,
+              "excerpt_sha256": "28f99faaff1fd0537e9f48e27b96de2684d030fc3448fc4b5129b1f6980e8b19",
+              "start": 20344
+            }
+          ],
+          "label": "Headless Harness Service"
+        },
+        {
+          "candidate_id": "conceptcand_632f23ba5b420f1403631d38bd2f4e10",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-02-en",
+              "end": 3794,
+              "excerpt_sha256": "6dd0a2e7c8eba56b4f11045a82145003853e46a8768b1663755c449f6bfb4afa",
+              "start": 3778
+            }
+          ],
+          "label": "Request Boundary"
+        },
+        {
+          "candidate_id": "conceptcand_674327c38116ba67829aa0e92480f906",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-01-en",
+              "end": 13923,
+              "excerpt_sha256": "37298e371d06f25241518585aadfa4c00203b3e29cc6b38298df8ec5eee522ef",
+              "start": 13909
+            }
+          ],
+          "label": "Harnessability"
+        },
+        {
+          "candidate_id": "conceptcand_724ab01fa724799d46ddb2b9497d7752",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-02-en",
+              "end": 4412,
+              "excerpt_sha256": "7b71223b2dcaa62db1ec3b0f5cb24f3fef57d6fae30f0605c68a392c056b3a41",
+              "start": 4397
+            }
+          ],
+          "label": "Completion Gate"
+        },
+        {
+          "candidate_id": "conceptcand_8a73560fa206f8d5d9323e648d15d2c0",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-03-en",
+              "end": 20377,
+              "excerpt_sha256": "45ea9a9da8fde3a61165cbe88eb4103cbdc78831101cefe0ed622fa2f10e749a",
+              "start": 20305
+            }
+          ],
+          "label": "Stopping Policy"
+        },
+        {
+          "candidate_id": "conceptcand_a857949159ff2af3a917b9b4945d2563",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-03-en",
+              "end": 65,
+              "excerpt_sha256": "52a65b6cf105b50ac02376bc0b84c222bed5b0cf4a758040fb5857569fc1cc3e",
+              "start": 37
+            }
+          ],
+          "label": "Agent Loop"
+        },
+        {
+          "candidate_id": "conceptcand_bd10b1c1b28edb6e20d34b96c780c10a",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-02-en",
+              "end": 3965,
+              "excerpt_sha256": "2e35375f9fa40589b29ddc47ad99a5b345950a6ac498573c4e44597bd05eb768",
+              "start": 3942
+            }
+          ],
+          "label": "Canonical Run Authority"
+        },
+        {
+          "candidate_id": "conceptcand_c574aa8a041d990b0848426332cbe695",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-01-en",
+              "end": 1882,
+              "excerpt_sha256": "d136d700e646065e934f6ebe13d828ccf747945a579ace0754dd5fcd1ba1a9dc",
+              "start": 1805
+            }
+          ],
+          "label": "Harness"
+        },
+        {
+          "candidate_id": "conceptcand_cce3e198ea0f2ca4a2394e8c97e63826",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-03-en",
+              "end": 2222,
+              "excerpt_sha256": "615a974ea4617c125cf4e2a292e13c1c73d8978eee92d5d8db5172df45edcafd",
+              "start": 2155
+            }
+          ],
+          "label": "Tool Calling"
+        },
+        {
+          "candidate_id": "conceptcand_d3d6dd0bc39b6d17ac3f77830f59a8e4",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-03-en",
+              "end": 21709,
+              "excerpt_sha256": "576e3df3645809b5ac0050af75761ad507a562f46e42bfe86b93b3b32e3f0ff4",
+              "start": 21654
+            }
+          ],
+          "label": "Goal Drift"
+        },
+        {
+          "candidate_id": "conceptcand_dae13dfab2f3bd99933996727ae31785",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-01-en",
+              "end": 1743,
+              "excerpt_sha256": "4183b7793fd28ba47ea9e79e7697f2915da218567e6657a158b51bd14bce91cd",
+              "start": 1731
+            }
+          ],
+          "label": "Verification"
+        },
+        {
+          "candidate_id": "conceptcand_dcc0a2165404ede003499acbc175bc91",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-03-en",
+              "end": 16158,
+              "excerpt_sha256": "7abfe83662569f15f7862107ea875e2024c465fd411ecaa4c3aaa7651768c18a",
+              "start": 16100
+            }
+          ],
+          "label": "Item Turn Thread Protocol"
+        },
+        {
+          "candidate_id": "conceptcand_dfae712de3eb869423e8f6a4ddc1007e",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-01-en",
+              "end": 236,
+              "excerpt_sha256": "6c1a9bac3918c703c21849c34b05bdc5956b3d7adc98bc165a77d14aec8680a0",
+              "start": 214
+            }
+          ],
+          "label": "Steering Control Plane"
+        },
+        {
+          "candidate_id": "conceptcand_e9cb685f0b06f9b488b327f1b05ba4bb",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-02-en",
+              "end": 3859,
+              "excerpt_sha256": "f17e312ac6bd8ae16092c4d66df8079986e7587f636be5aa7e01f53805bceabd",
+              "start": 3846
+            }
+          ],
+          "label": "Task Contract"
+        },
+        {
+          "candidate_id": "conceptcand_fe165e95fd7459e5a6f1cd1a7d418c25",
+          "evidence": [
+            {
+              "derivative_id": "derivative_harness-theory-part-02-en",
+              "end": 21587,
+              "excerpt_sha256": "e7b041efc701cb600b0fac60b1d9c7cee93b3ae989d6e72c137f8f654bf65a46",
+              "start": 21567
+            }
+          ],
+          "label": "Durable Thread State"
+        }
+      ],
+      "schema_version": "knowledge-source-m23-proposal-provenance-summary/v1"
+    },
+    "raw_json": "{\n  \"bundle_sha256\": \"e65fdb2d563e2bac04cac04e4844e15ebf7db3f81429781570f177a575922d2b\",\n  \"canonical_write_permitted\": false,\n  \"extraction_packet_sha256\": \"32f29be6fa4a90d6495b0844fbe0e8a2003dec25d3adf5328a0fd0b2232ce402\",\n  \"records\": [\n    {\"candidate_id\":\"conceptcand_225a9ee65ca6ef67c5d6015d7f4e0cb3\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-02-en\",\"end\":20368,\"excerpt_sha256\":\"28f99faaff1fd0537e9f48e27b96de2684d030fc3448fc4b5129b1f6980e8b19\",\"start\":20344}],\"label\":\"Headless Harness Service\"},\n    {\"candidate_id\":\"conceptcand_632f23ba5b420f1403631d38bd2f4e10\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-02-en\",\"end\":3794,\"excerpt_sha256\":\"6dd0a2e7c8eba56b4f11045a82145003853e46a8768b1663755c449f6bfb4afa\",\"start\":3778}],\"label\":\"Request Boundary\"},\n    {\"candidate_id\":\"conceptcand_674327c38116ba67829aa0e92480f906\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-01-en\",\"end\":13923,\"excerpt_sha256\":\"37298e371d06f25241518585aadfa4c00203b3e29cc6b38298df8ec5eee522ef\",\"start\":13909}],\"label\":\"Harnessability\"},\n    {\"candidate_id\":\"conceptcand_724ab01fa724799d46ddb2b9497d7752\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-02-en\",\"end\":4412,\"excerpt_sha256\":\"7b71223b2dcaa62db1ec3b0f5cb24f3fef57d6fae30f0605c68a392c056b3a41\",\"start\":4397}],\"label\":\"Completion Gate\"},\n    {\"candidate_id\":\"conceptcand_8a73560fa206f8d5d9323e648d15d2c0\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-03-en\",\"end\":20377,\"excerpt_sha256\":\"45ea9a9da8fde3a61165cbe88eb4103cbdc78831101cefe0ed622fa2f10e749a\",\"start\":20305}],\"label\":\"Stopping Policy\"},\n    {\"candidate_id\":\"conceptcand_a857949159ff2af3a917b9b4945d2563\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-03-en\",\"end\":65,\"excerpt_sha256\":\"52a65b6cf105b50ac02376bc0b84c222bed5b0cf4a758040fb5857569fc1cc3e\",\"start\":37}],\"label\":\"Agent Loop\"},\n    {\"candidate_id\":\"conceptcand_bd10b1c1b28edb6e20d34b96c780c10a\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-02-en\",\"end\":3965,\"excerpt_sha256\":\"2e35375f9fa40589b29ddc47ad99a5b345950a6ac498573c4e44597bd05eb768\",\"start\":3942}],\"label\":\"Canonical Run Authority\"},\n    {\"candidate_id\":\"conceptcand_c574aa8a041d990b0848426332cbe695\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-01-en\",\"end\":1882,\"excerpt_sha256\":\"d136d700e646065e934f6ebe13d828ccf747945a579ace0754dd5fcd1ba1a9dc\",\"start\":1805}],\"label\":\"Harness\"},\n    {\"candidate_id\":\"conceptcand_cce3e198ea0f2ca4a2394e8c97e63826\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-03-en\",\"end\":2222,\"excerpt_sha256\":\"615a974ea4617c125cf4e2a292e13c1c73d8978eee92d5d8db5172df45edcafd\",\"start\":2155}],\"label\":\"Tool Calling\"},\n    {\"candidate_id\":\"conceptcand_d3d6dd0bc39b6d17ac3f77830f59a8e4\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-03-en\",\"end\":21709,\"excerpt_sha256\":\"576e3df3645809b5ac0050af75761ad507a562f46e42bfe86b93b3b32e3f0ff4\",\"start\":21654}],\"label\":\"Goal Drift\"},\n    {\"candidate_id\":\"conceptcand_dae13dfab2f3bd99933996727ae31785\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-01-en\",\"end\":1743,\"excerpt_sha256\":\"4183b7793fd28ba47ea9e79e7697f2915da218567e6657a158b51bd14bce91cd\",\"start\":1731}],\"label\":\"Verification\"},\n    {\"candidate_id\":\"conceptcand_dcc0a2165404ede003499acbc175bc91\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-03-en\",\"end\":16158,\"excerpt_sha256\":\"7abfe83662569f15f7862107ea875e2024c465fd411ecaa4c3aaa7651768c18a\",\"start\":16100}],\"label\":\"Item Turn Thread Protocol\"},\n    {\"candidate_id\":\"conceptcand_dfae712de3eb869423e8f6a4ddc1007e\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-01-en\",\"end\":236,\"excerpt_sha256\":\"6c1a9bac3918c703c21849c34b05bdc5956b3d7adc98bc165a77d14aec8680a0\",\"start\":214}],\"label\":\"Steering Control Plane\"},\n    {\"candidate_id\":\"conceptcand_e9cb685f0b06f9b488b327f1b05ba4bb\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-02-en\",\"end\":3859,\"excerpt_sha256\":\"f17e312ac6bd8ae16092c4d66df8079986e7587f636be5aa7e01f53805bceabd\",\"start\":3846}],\"label\":\"Task Contract\"},\n    {\"candidate_id\":\"conceptcand_fe165e95fd7459e5a6f1cd1a7d418c25\",\"evidence\":[{\"derivative_id\":\"derivative_harness-theory-part-02-en\",\"end\":21587,\"excerpt_sha256\":\"e7b041efc701cb600b0fac60b1d9c7cee93b3ae989d6e72c137f8f654bf65a46\",\"start\":21567}],\"label\":\"Durable Thread State\"}\n  ],\n  \"schema_version\": \"knowledge-source-m23-proposal-provenance-summary/v1\"\n}\n"
+  },
+  "integrity": {
+    "browser_payload_sha256": "c9a6da0252fee27033bed294ffd22617de2130f4fa2ecd996385ea44b72cc46f",
+    "byte_count": 4434,
+    "executable_scripts_detected": false,
+    "line_count": 23,
+    "origin_blob_sha": "15ef0ed616f93b618adcf6f7a4abf3eba9af9cea",
+    "snapshot_sha256": "873844b75fc5cbfd2f55a20321461abce0e2de2ada4137eade56acf1cd9b8c57",
+    "truncated": false
+  },
+  "kind": "json",
+  "license": "owner-provided",
+  "metadata_only_reason": null,
+  "origin": {
+    "blob_sha": "15ef0ed616f93b618adcf6f7a4abf3eba9af9cea",
+    "commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+    "path": "proposals/m23-4/provenance-summary.json",
+    "repo": "danielcanfly/knowledge-source"
+  },
+  "owner": "Daniel Huang",
+  "registry": {
+    "content_hash_scope": "source-pr-review-surface-file",
+    "content_sha256": "873844b75fc5cbfd2f55a20321461abce0e2de2ada4137eade56acf1cd9b8c57",
+    "source_commit": "acf78596ace8a7366688ccef72b507204d09d9f9",
+    "source_id": "source_m23_4_harness_provenance_summary",
+    "source_repository": "danielcanfly/knowledge-source"
+  },
+  "related_concepts": [
+    "concepts/harness",
+    "concepts/harness-agent-loop",
+    "concepts/harness-verification",
+    "concepts/headless-harness-service",
+    "concepts/request-boundary"
+  ],
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-14-5-source-document/v1",
+  "source_id": "source_m23_4_harness_provenance_summary",
+  "title": "M23.4 Harness proposal provenance summary",
+  "toc": [],
+  "trust": "reviewed"
+}

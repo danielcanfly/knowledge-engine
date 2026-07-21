@@ -18,6 +18,17 @@ from knowledge_engine.m24_internal_product_deployment import (
 
 HARNESS_CONCEPT_ID = "concepts/harness"
 NON_HARNESS_CONCEPT_ID = "concepts/agent-execution-paths"
+BLOG_DEEP_MARKERS = {
+    "Six-dimensional map of LLM agent architectures": (
+        "Multi-agent is an organisational choice, not a maturity level"
+    ),
+    "Agent execution paths": (
+        "Simple requests pay the latency and error surface of planning"
+    ),
+    "Agent decision and planning strategies": (
+        "The production objective is not maximum planning freedom"
+    ),
+}
 
 
 class _QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -143,6 +154,65 @@ def _assert_no_graph_error(page) -> None:
     assert "Graph explorer initialization failed." not in body
 
 
+def test_m24_14_5_source_documents_are_complete_and_inspectable(page, site_url: str) -> None:
+    source_index = json.loads(SITE_ROOT.joinpath("data/source-index.json").read_text())
+    source_viewers = json.loads(SITE_ROOT.joinpath("data/source-viewers.json").read_text())
+    source_documents = json.loads(SITE_ROOT.joinpath("data/source-documents.json").read_text())
+
+    assert source_index["source_count"] == 7
+    assert source_viewers["viewer_count"] == 7
+    assert source_documents["source_count"] == 7
+    assert len(list(SITE_ROOT.joinpath("data/sources").glob("*.json"))) == 7
+    assert {
+        row["coverage_status"] for row in source_index["coverage_matrix"]
+    } <= {
+        "full_snapshot",
+        "structured_snapshot",
+        "metadata_only_with_reason",
+        "blocked_with_exact_reason",
+    }
+
+    titles = [row["title"] for row in source_index["coverage_matrix"]]
+    for title, marker in BLOG_DEEP_MARKERS.items():
+        assert title in titles
+        document = next(
+            doc
+            for doc in source_documents["documents"].values()
+            if doc["title"] == title
+        )
+        assert document["integrity"]["byte_count"] > 20000
+        assert document["integrity"]["snapshot_sha256"]
+        assert document["origin"]["commit"] == "27e2fe996f878f2129bf510d6a326c02f7d87be5"
+        assert marker in document["document"]["body"]
+
+    page.goto(f"{site_url}/#/sources")
+    expect(page.locator(".source-card")).to_have_count(7)
+    for title in BLOG_DEEP_MARKERS:
+        expect(page.locator(".source-card", has_text=title)).to_be_visible()
+    assert "github.com\nweb\n5 citations\nsnapshot false" not in page.locator("#app").inner_text()
+
+    cards = page.locator(".source-card")
+    second_title = cards.nth(1).locator("h4").inner_text()
+    cards.nth(1).get_by_role("button", name="Inspect").click()
+    page.wait_for_url("**/#/sources?viewer=viewer_source_blog_agent_execution_paths")
+    expect(cards.nth(1)).to_have_attribute("aria-current", "true")
+    expect(page.locator("#source-detail-heading")).to_have_text(second_title)
+    assert BLOG_DEEP_MARKERS[second_title] in page.locator("[data-source-document]").inner_text()
+    assert page.evaluate("document.activeElement.id") == "source-detail-heading"
+
+    page.go_back()
+    page.wait_for_url("**/#/sources")
+    expect(page.locator(".source-card").first).to_have_attribute("aria-current", "true")
+
+
+def test_m24_14_5_source_inspect_scrolls_detail_on_mobile(page, site_url: str) -> None:
+    page.set_viewport_size({"width": 390, "height": 760})
+    page.goto(f"{site_url}/#/sources")
+    page.locator(".source-card").first.get_by_role("button", name="Inspect selected").click()
+    expect(page.locator("#source-detail-heading")).to_be_in_viewport()
+    assert page.evaluate("document.activeElement.id") == "source-detail-heading"
+
+
 def test_m24_14_5_graph_canvas_search_selection_and_hops(page, site_url: str) -> None:
     payload = json.loads(SITE_ROOT.joinpath("data/graph-navigation.json").read_text())
     assert {node["type"] for node in payload["nodes"]} == {"Concept"}
@@ -161,6 +231,8 @@ def test_m24_14_5_graph_canvas_search_selection_and_hops(page, site_url: str) ->
     selection = page.locator("[data-graph-details]").inner_text()
     assert "Harness" in selection
     assert "Concept" in selection
+    assert "Open Wiki" in selection
+    assert "View sources" in selection
 
     page.locator("[data-graph-neighbor='1']").click()
     expect(stage).to_have_attribute("data-state", "ready")
@@ -199,6 +271,39 @@ def test_m24_14_5_wiki_source_handoff_and_route_status_scoping(page, site_url: s
     assert "Source detail" in page.locator("#app").inner_text()
     assert "Citation" in page.locator("#app").inner_text()
     _assert_no_graph_error(page)
+
+
+def test_m24_14_5_graph_selection_actions_open_wiki_and_sources(page, site_url: str) -> None:
+    page.goto(f"{site_url}/#/graph?concept={NON_HARNESS_CONCEPT_ID}")
+    expect(page.locator("[data-sigma-stage]")).to_have_attribute("data-state", "ready")
+    page.locator("[data-graph-search]").fill("execution paths")
+    page.locator(".graph-result-button", has_text="Agent execution paths").first.click()
+    details = page.locator("[data-graph-details]")
+    expect(details.get_by_role("button", name="Open Wiki")).to_be_visible()
+    expect(details.get_by_role("button", name="View sources")).to_be_visible()
+
+    details.get_by_role("button", name="Open Wiki").click()
+    page.wait_for_url("**/#/wiki?concept=concepts%2Fagent-execution-paths")
+    page.wait_for_selector("[data-state='bounded-graph-concept-summary']")
+    assert "Bounded graph-derived summary" in page.locator("#app").inner_text()
+
+    page.goto(f"{site_url}/#/graph?concept={NON_HARNESS_CONCEPT_ID}")
+    expect(page.locator("[data-sigma-stage]")).to_have_attribute("data-state", "ready")
+    page.locator("[data-graph-search]").fill("execution paths")
+    page.locator(".graph-result-button", has_text="Agent execution paths").first.click()
+    page.locator("[data-graph-details]").get_by_role("button", name="View sources").click()
+    page.wait_for_url("**/#/sources?concept=concepts%2Fagent-execution-paths&viewer=viewer_source_blog_agent_execution_paths")
+    expect(page.locator("#source-detail-heading")).to_have_text("Agent execution paths")
+    assert BLOG_DEEP_MARKERS["Agent execution paths"] in page.locator("#app").inner_text()
+
+    page.goto(f"{site_url}/#/graph?concept={HARNESS_CONCEPT_ID}")
+    expect(page.locator("[data-sigma-stage]")).to_have_attribute("data-state", "ready")
+    page.locator("[data-graph-details]").get_by_role("button", name="Open Wiki").click()
+    page.wait_for_url("**/#/wiki?concept=concepts%2Fharness")
+    expect(page.locator("#route-title")).to_have_text("Concept Wiki")
+    expect(page.locator("#app")).to_contain_text("Sections")
+    assert "Bounded graph-derived summary" not in page.locator("#app").inner_text()
+    assert "Sections" in page.locator("#app").inner_text()
 
 
 def test_m24_14_5_non_harness_bounded_summary_and_history(page, site_url: str) -> None:

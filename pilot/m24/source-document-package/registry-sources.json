@@ -1,0 +1,102 @@
+{
+  "schema_version": "1.0",
+  "sources": [
+    {
+      "audience": "public",
+      "content_sha256": "2b9b500ee1078c8d61bd5c70067954f46c787957d114bf84fb08d72773e77537",
+      "kind": "markdown",
+      "license": "owner-provided",
+      "owner": "Daniel Huang",
+      "source_id": "source_blog_agent_architecture_6d",
+      "status": "active",
+      "title": "Six-dimensional map of LLM agent architectures",
+      "trust": "reviewed",
+      "uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-1/"
+    },
+    {
+      "audience": "public",
+      "content_hash_scope": "canonical-concept-file",
+      "content_sha256": "8146edd6dce90fcb94a87b99f37b18b7c3ae41765ed7615ca352a3998e1409dc",
+      "kind": "markdown",
+      "license": "owner-provided",
+      "origin_blob_sha": "9b8912a4dc0193c0c478bcfe83dfaccff21b7ffe",
+      "origin_commit": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
+      "origin_path": "src/content/blog/the-atlas-of-agent-design-patterns-part-2/en.md",
+      "owner": "Daniel Huang",
+      "source_id": "source_blog_agent_execution_paths",
+      "status": "active",
+      "title": "Agent execution paths",
+      "trust": "reviewed",
+      "uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-2/"
+    },
+    {
+      "audience": "public",
+      "content_hash_scope": "canonical-concept-file",
+      "content_sha256": "c5863f6c6500dd43dfe61196874dbd1adce5a3c9fc400f5fc36d0e8c99606200",
+      "kind": "markdown",
+      "license": "owner-provided",
+      "origin_blob_sha": "185fa419771942e0737cdefe10c3180505bb3c23",
+      "origin_commit": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
+      "origin_path": "src/content/blog/the-atlas-of-agent-design-patterns-part-3/en.md",
+      "owner": "Daniel Huang",
+      "source_id": "source_blog_agent_planning_strategies",
+      "status": "active",
+      "title": "Agent decision and planning strategies",
+      "trust": "reviewed",
+      "uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-3/"
+    },
+    {
+      "audience": "public",
+      "content_hash_scope": "source-pr-review-surface-file",
+      "content_sha256": "1e580018c29fae0e07c66d39acdf09adc675b535a85153129130a8211189e4c4",
+      "kind": "markdown",
+      "license": "owner-provided",
+      "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+      "origin_path": "proposals/m23-4/proposed-concepts.md",
+      "owner": "Daniel Huang",
+      "source_id": "source_m23_4_harness_proposed_concepts",
+      "status": "active",
+      "title": "M23.4 Harness proposed concepts review surface",
+      "trust": "reviewed",
+      "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md"
+    },
+    {
+      "audience": "public",
+      "content_hash_scope": "source-pr-review-surface-file",
+      "content_sha256": "873844b75fc5cbfd2f55a20321461abce0e2de2ada4137eade56acf1cd9b8c57",
+      "kind": "json",
+      "license": "owner-provided",
+      "origin_commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+      "origin_path": "proposals/m23-4/provenance-summary.json",
+      "owner": "Daniel Huang",
+      "source_id": "source_m23_4_harness_provenance_summary",
+      "status": "active",
+      "title": "M23.4 Harness proposal provenance summary",
+      "trust": "reviewed",
+      "uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/provenance-summary.json"
+    },
+    {
+      "audience": "public",
+      "content_hash_scope": "engine-human-decision-artifact",
+      "content_sha256": "73bd8f9767991b1aa2c16c2da91305c28e24be5b92c761732714b0291d0e4cb5",
+      "kind": "json",
+      "license": "owner-provided",
+      "origin_commit": "22041bfecd07c9e4b75146ab4d0b83e417e914e8",
+      "origin_path": "pilot/m24/m24-source-pr-19-decision-capture.json",
+      "owner": "Daniel Huang",
+      "source_id": "source_m24_source_pr_19_decision_capture",
+      "status": "active",
+      "title": "M24 Source PR 19 human decision capture",
+      "trust": "authoritative",
+      "uri": "https://github.com/danielcanfly/knowledge-engine/blob/22041bfecd07c9e4b75146ab4d0b83e417e914e8/pilot/m24/m24-source-pr-19-decision-capture.json"
+    },
+    {
+      "kind": "governance_contract",
+      "source_id": "source_m3_contract",
+      "status": "active",
+      "title": "M3 delivery contract",
+      "trust": "authoritative",
+      "uri": "https://github.com/danielcanfly/knowledge-os-foundation"
+    }
+  ]
+}
