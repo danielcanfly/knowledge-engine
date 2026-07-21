@@ -1,0 +1,117 @@
+{
+  "acceptance_matrix": {
+    "items": [
+      {
+        "id": "access_login",
+        "prior_status": "explicitly_accepted"
+      },
+      {
+        "id": "release_identity",
+        "prior_status": "explicitly_accepted"
+      },
+      {
+        "id": "graph_render_and_navigation",
+        "prior_status": "observed_with_screenshot"
+      },
+      {
+        "id": "concept_wiki_full_and_bounded",
+        "prior_status": "observed_with_screenshot"
+      },
+      {
+        "id": "source_viewer_full_content",
+        "prior_status": "explicitly_accepted"
+      },
+      {
+        "id": "source_metadata_responsive",
+        "prior_status": "explicitly_accepted"
+      },
+      {
+        "id": "obsidian_opens_and_full_source",
+        "prior_status": "explicitly_accepted"
+      },
+      {
+        "id": "obsidian_bidirectional_links",
+        "prior_status": "pending_m24_14_6_retest"
+      },
+      {
+        "id": "structured_json_source_complete",
+        "prior_status": "pending_m24_14_6_retest"
+      },
+      {
+        "id": "m3_metadata_only_reason",
+        "prior_status": "pending_m24_14_6_retest"
+      },
+      {
+        "id": "authenticated_live_performance",
+        "prior_status": "pending_m24_14_6_retest"
+      },
+      {
+        "id": "semantic_hybrid_production",
+        "prior_status": "governed_deferred"
+      },
+      {
+        "id": "production_answer_serving",
+        "prior_status": "governed_deferred"
+      },
+      {
+        "id": "large_scale_ingestion",
+        "prior_status": "governed_deferred_to_m25"
+      }
+    ],
+    "schema_version": "knowledge-engine-m24-14-6-acceptance-matrix/v1"
+  },
+  "accepted_from_daniel_package_statements": [
+    {
+      "basis": "Daniel explicitly reported Cloudflare Access login completed.",
+      "item": "access_login",
+      "status": "accepted"
+    },
+    {
+      "basis": "Daniel explicitly reported homepage, canonical Release ID, and manifest digest normal.",
+      "item": "release_identity",
+      "status": "accepted"
+    },
+    {
+      "basis": "Daniel explicitly reported Sources, Inspect, source content, and deep markers passed.",
+      "item": "source_viewer_full_content",
+      "status": "accepted"
+    },
+    {
+      "basis": "Daniel explicitly reported Origin and Integrity overlap repair passed before M24.14.6.",
+      "item": "source_metadata_responsive",
+      "status": "accepted"
+    },
+    {
+      "basis": "Daniel explicitly reported the current Vault downloaded and opened normally.",
+      "item": "obsidian_opens_and_full_source",
+      "status": "accepted"
+    }
+  ],
+  "boundaries": {
+    "human_final_acceptance_claimed": false,
+    "hybrid_retrieval_enabled": false,
+    "production_answer_serving_enabled": false,
+    "production_retrieval": "lexical",
+    "semantic_serving_enabled": false
+  },
+  "governed_deferred": [
+    "semantic_hybrid_production",
+    "production_answer_serving",
+    "large_scale_ingestion"
+  ],
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "observed_but_not_final_acceptance": [
+    "graph_render_and_navigation",
+    "concept_wiki_full_and_bounded"
+  ],
+  "pending_retest": [
+    "obsidian_bidirectional_links",
+    "structured_json_source_complete",
+    "m3_metadata_only_reason",
+    "authenticated_live_performance"
+  ],
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-14-6-human-acceptance-record/v1",
+  "self_sha256": "9aeb3ecdef94421cdd9de6cdcbd5aede5ae72fd03c67f366961a6004f6b9eded",
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9"
+}

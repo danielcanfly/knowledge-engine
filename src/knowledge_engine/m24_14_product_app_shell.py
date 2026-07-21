@@ -32,6 +32,7 @@ P1_ROUTES = (
     "sources",
     "release",
     "obsidian",
+    "acceptance",
 )
 
 
@@ -117,6 +118,8 @@ def _artifact(path: Path) -> P1ArtifactEvidence:
 def _secret_scan(paths: list[Path]) -> bool:
     forbidden = ("Bearer ", "CFPAT-", "CLOUDFLARE_", "ACCESS_TOKEN", "SECRET=")
     for path in paths:
+        if path.suffix == ".png":
+            continue
         text = path.read_text(encoding="utf-8")
         if any(item in text for item in forbidden):
             return False
@@ -131,9 +134,11 @@ def build_p1_product_app_shell_report(
     build_p6_internal_product_deployment()
     app_paths = [
         SITE_ROOT / "index.html",
+        SITE_ROOT / "_headers",
         SITE_ROOT / "styles.css",
         SITE_ROOT / "app.js",
         SITE_ROOT / "graph-explorer.js",
+        SITE_ROOT / "favicon.png",
         SITE_ROOT / "vendor/graphology.umd.min.js",
         SITE_ROOT / "vendor/sigma.min.js",
         SITE_ROOT / "data/release-viewer.json",
@@ -142,6 +147,7 @@ def build_p1_product_app_shell_report(
         SITE_ROOT / "data/graph-navigation.json",
         SITE_ROOT / "data/source-viewers.json",
         SITE_ROOT / "data/obsidian-export-manifest.json",
+        SITE_ROOT / "data/m24-14-6-pending-acceptance.json",
     ]
     route_labels = {
         "overview": ("Overview", "release summary"),
@@ -151,6 +157,7 @@ def build_p1_product_app_shell_report(
         "sources": ("Sources", "provenance/source viewer"),
         "release": ("Release Details", "release identity and artifact digests"),
         "obsidian": ("Obsidian Export", "release-pinned export manifest"),
+        "acceptance": ("Acceptance Status", "M24.14.6 pending benchmark gate"),
     }
     report = P1ProductShellReport(
         status="m24_14_1_product_application_shell_implemented",

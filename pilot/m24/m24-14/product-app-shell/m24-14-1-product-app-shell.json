@@ -1,9 +1,14 @@
 {
   "artifacts": [
     {
-      "bytes": 3160,
+      "bytes": 3267,
       "path": "pilot/m24/internal-product-deployment/site/index.html",
-      "sha256": "53b2cfac96c82e65f10a75e711577baf7fb48d4b0749ae81d6e8177da6caf72f"
+      "sha256": "e2055b929ffb4d0d26fb0855952b93455473f05c03229ad08804b756aa95d6e2"
+    },
+    {
+      "bytes": 200,
+      "path": "pilot/m24/internal-product-deployment/site/_headers",
+      "sha256": "92d72771c6c582b7026a50fcad02026008b7070fb8a2cc33ed4afe1a420457d0"
     },
     {
       "bytes": 9155,
@@ -11,14 +16,19 @@
       "sha256": "736cbf93b6d76a6ad72cf50b4145b4eed83cb4f3e816b0b565151d0288d994ab"
     },
     {
-      "bytes": 40927,
+      "bytes": 42374,
       "path": "pilot/m24/internal-product-deployment/site/app.js",
-      "sha256": "2091fbf69abebeeedb5b3879a4baed82b01b81f74882aa3a21cb6c5bc133d506"
+      "sha256": "e6301f5ef8fcc5ed016cf4c8f79cee0cfdac8ba034a24042d99c1e4d7930453b"
     },
     {
       "bytes": 14493,
       "path": "pilot/m24/internal-product-deployment/site/graph-explorer.js",
       "sha256": "0ad87fb441a3abe73c9863a83d8f5c5d7d192f6a6384e3131320634ece9ed6f9"
+    },
+    {
+      "bytes": 74,
+      "path": "pilot/m24/internal-product-deployment/site/favicon.png",
+      "sha256": "adf157989497becbcc25a006b0695834d8570ccb89db695fb474ed1a899bf66f"
     },
     {
       "bytes": 73629,
@@ -59,6 +69,11 @@
       "bytes": 655,
       "path": "pilot/m24/internal-product-deployment/site/data/obsidian-export-manifest.json",
       "sha256": "8b385642b0241d9de1147dcac462f1e2e600330dcc7af142cb4f02a7a74e6e3e"
+    },
+    {
+      "bytes": 2367,
+      "path": "pilot/m24/internal-product-deployment/site/data/m24-14-6-pending-acceptance.json",
+      "sha256": "0f4f49a4f41ebffc7e5723101788fa3a6319dfb6e08dafb4d951b6f3bc3a280f"
     }
   ],
   "authority": {
@@ -139,6 +154,12 @@
       "nonblank_browser_smoke": true,
       "primary_surface": "release-pinned export manifest",
       "route": "obsidian"
+    },
+    {
+      "label": "Acceptance Status",
+      "nonblank_browser_smoke": true,
+      "primary_surface": "M24.14.6 pending benchmark gate",
+      "route": "acceptance"
     }
   ],
   "schema_version": "knowledge-engine-m24-14-1-product-application-shell/v1",
@@ -151,7 +172,7 @@
     "same_origin_artifact_fetch_only": true,
     "secret_scan_passed": true
   },
-  "self_sha256": "3d9af8321c9297fdc86c3471cc4fc54616ffc33137b4ab9567f0a6e6278a7290",
+  "self_sha256": "2dd5ad255629a35886db41b730e7d6cced34668b5319fc797b719febb0cd1895",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "m24_14_1_product_application_shell_implemented"
 }

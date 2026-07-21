@@ -1,0 +1,69 @@
+{
+  "decisions": [
+    "pass",
+    "pass_with_documented_network_variance",
+    "repair_required"
+  ],
+  "hard_gates": {
+    "access_leakage_max": 0,
+    "console_errors_max": 0,
+    "failed_required_same_origin_requests_max": 0,
+    "graph_edge_count": 28,
+    "graph_node_count": 20,
+    "horizontal_overflow_max": 0,
+    "metadata_intersection_max": 0,
+    "page_errors_max": 0
+  },
+  "iterations": {
+    "cold_min": 5,
+    "warm_min": 20
+  },
+  "release_identity": {
+    "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+    "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+    "release_id": "20260720T160000Z-46137c97263e",
+    "source_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+    "vault_sha256": "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
+  },
+  "resource_guardrails": {
+    "cold_traversal_transfer_bytes_max": 10000000,
+    "required_request_count_max": 100,
+    "runtime_third_party_cdn_requests_max": 0
+  },
+  "schema_version": "knowledge-engine-m24-14-6-benchmark-policy/v1",
+  "timing_budgets_ms": {
+    "graph_interaction_warm_p95_max": 750,
+    "graph_route_warm_p95_max": 3000,
+    "individual_long_task_max": 250,
+    "lexical_interaction_warm_p95_max": 500,
+    "long_task_total_per_case_max": 500,
+    "overview_cold_p50_max": 3000,
+    "overview_cold_p95_max": 5000,
+    "overview_warm_p95_max": 2500,
+    "source_deep_marker_warm_p95_max": 1500,
+    "standard_route_warm_p95_max": 1500,
+    "vault_download_p95_max": 3000
+  },
+  "viewports": [
+    {
+      "height": 900,
+      "performance_authority": true,
+      "width": 1440
+    },
+    {
+      "height": 768,
+      "performance_authority": false,
+      "width": 1024
+    },
+    {
+      "height": 900,
+      "performance_authority": false,
+      "width": 768
+    },
+    {
+      "height": 844,
+      "performance_authority": false,
+      "width": 390
+    }
+  ]
+}

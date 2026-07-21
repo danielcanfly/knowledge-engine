@@ -12,6 +12,7 @@ const ARTIFACTS = {
   sourceDocuments: "data/source-documents.json",
   answers: "data/query-answer-acceptance.json",
   obsidian: "data/obsidian-export-manifest.json",
+  acceptance: "data/m24-14-6-pending-acceptance.json",
 };
 
 const ROUTES = {
@@ -22,6 +23,7 @@ const ROUTES = {
   sources: "Sources",
   release: "Release Details",
   obsidian: "Obsidian Export",
+  acceptance: "Acceptance Status",
 };
 
 const state = {
@@ -957,6 +959,37 @@ function renderObsidian(artifacts) {
   `;
 }
 
+function renderAcceptance(artifacts) {
+  const acceptance = artifacts.acceptance;
+  const action = (acceptance.daniel_actions || [])[0] || {};
+  return `
+    <div class="metric-grid">
+      ${metric("Stage", acceptance.status)}
+      ${metric("Daniel actions", acceptance.daniel_action_count)}
+      ${metric("Retrieval", acceptance.boundaries.production_retrieval)}
+      ${metric("Final acceptance", String(acceptance.final_acceptance_claimed))}
+    </div>
+    <section class="panel">
+      <h3>M24.14.6 gate</h3>
+      <p>
+        Authenticated performance evidence is pending Daniel's browser session.
+        Local and CI regressions only prove harness and surface behavior.
+      </p>
+      <ul class="compact-meta vertical">
+        <li>release ${escapeHtml(acceptance.release_id)}</li>
+        <li>manifest ${escapeHtml(acceptance.manifest_sha256)}</li>
+        <li>benchmark policy ${escapeHtml(acceptance.benchmark_policy_sha256)}</li>
+        <li>benchmark cases ${escapeHtml(acceptance.benchmark_cases_sha256)}</li>
+      </ul>
+    </section>
+    <section class="panel">
+      <h3>Daniel action</h3>
+      <p>${escapeHtml(action.return_artifact || "Return the sanitized benchmark JSON.")}</p>
+      <pre class="source-document-body"><code>${escapeHtml(action.command || "")}</code></pre>
+    </section>
+  `;
+}
+
 function renderAclDenied() {
   return `
     <section class="state-panel" data-state="acl-denied">
@@ -1008,6 +1041,7 @@ function render() {
     sources: renderSources,
     release: renderRelease,
     obsidian: renderObsidian,
+    acceptance: renderAcceptance,
   };
   app.innerHTML = renderers[route](state.artifacts);
   wireInteractions();
