@@ -270,7 +270,7 @@ def _index_html() -> str:
       </div>
       <nav class="primary-nav" aria-label="M24 surfaces">
         <a href="#/overview" data-route-link="overview">Overview</a>
-        <a href="#/wiki" data-route-link="wiki">Concept Wiki</a>
+        <a href="#/wiki?concept=concepts/harness" data-route-link="wiki">Concept Wiki</a>
         <a href="#/search" data-route-link="search">Lexical Search</a>
         <a href="#/graph" data-route-link="graph">Graph Explorer</a>
         <a href="#/sources" data-route-link="sources">Sources</a>
@@ -823,6 +823,7 @@ def _graph_explorer_js() -> str:
   const NODE_COLORS = {
     architecture: "#0f766e",
     component: "#1d4ed8",
+    concept: "#0f766e",
     contract: "#7c3aed",
     decision: "#b45309",
     process: "#be123c",
@@ -881,14 +882,17 @@ def _graph_explorer_js() -> str:
     nodes.forEach((node, index) => {
       const nodeId = nodeIdOf(node);
       const position = positionFor(nodeId, index, nodes.length);
-      const type = node.type || node.concept_type || "concept";
+      const semanticType = node.type || node.concept_type || "concept";
+      const semanticTypeKey = normalize(semanticType || "concept");
       graph.addNode(nodeId, {
         ...node,
-        color: NODE_COLORS[type] || "#64748b",
+        color: NODE_COLORS[semanticTypeKey] || "#64748b",
         label: nodeTitle(node),
+        semanticType,
+        semanticTypeKey,
         size: node.focus_node ? 9 : 6,
         title: nodeTitle(node),
-        type,
+        type: "circle",
         x: position.x,
         y: position.y,
       });
@@ -920,7 +924,7 @@ def _graph_explorer_js() -> str:
     return {
       id: nodeId,
       title: attrs.title || nodeId,
-      type: attrs.type || "concept",
+      type: attrs.semanticType || "concept",
       description: attrs.description || attrs.summary || "",
       sourcePath: attrs.source_path || attrs.path || "",
       tags: stringList(attrs.tags),
@@ -1183,6 +1187,7 @@ def _graph_explorer_js() -> str:
 def _app_js() -> str:
     return f"""const EXPECTED_RELEASE = "{CANONICAL_RELEASE_ID}";
 const EXPECTED_MANIFEST = "{CANONICAL_MANIFEST_SHA256}";
+const HARNESS_CONCEPT_ID = "concepts/harness";
 
 const ARTIFACTS = {{
   release: "data/release-viewer.json",
@@ -1208,7 +1213,7 @@ const state = {{
   artifacts: null,
   graphExplorer: null,
   route: "overview",
-  selectedConceptId: "concepts/harness",
+  selectedConceptId: HARNESS_CONCEPT_ID,
   selectedCitationId: null,
   selectedSourceViewerId: null,
   searchQuery: "harness",
@@ -1290,6 +1295,24 @@ async function loadArtifacts() {{
 
 function routeFromHash() {{
   return (location.hash.replace(/^#\\/?/, "") || "overview").split("?")[0];
+}}
+
+function routeSearchParams() {{
+  return new URLSearchParams(location.hash.split("?")[1] || "");
+}}
+
+function applyRouteStateFromHash(route) {{
+  const params = routeSearchParams();
+  if (route === "wiki") {{
+    state.selectedConceptId = params.get("concept") || HARNESS_CONCEPT_ID;
+  }}
+  if (route === "graph" && params.get("concept")) {{
+    state.selectedConceptId = params.get("concept");
+  }}
+  if (route === "sources") {{
+    state.selectedSourceViewerId = params.get("viewer") || state.selectedSourceViewerId;
+    state.selectedCitationId = params.get("citation") || state.selectedCitationId;
+  }}
 }}
 
 function setActiveRoute(route) {{
@@ -1377,26 +1400,146 @@ function renderOverview(artifacts) {{
   `;
 }}
 
-function renderWiki(artifacts) {{
-  const concept = artifacts.concept;
-  if (state.selectedConceptId !== concept.concept_id) {{
+function graphNodeByConceptId(artifacts, conceptId) {{
+  return (artifacts.graph.nodes || []).find((node) =>
+    (node.concept_id || node.id || node.node_id) === conceptId
+  ) || null;
+}}
+
+function graphRelationshipsForConcept(artifacts, conceptId) {{
+  const nodesById = new Map((artifacts.graph.nodes || []).map((node) => [
+    node.concept_id || node.id || node.node_id,
+    node,
+  ]));
+  return (artifacts.graph.edges || [])
+    .filter((edge) => edge.source === conceptId || edge.target === conceptId)
+    .map((edge) => {{
+      const neighborId = edge.source === conceptId ? edge.target : edge.source;
+      const neighbor = nodesById.get(neighborId) || {{}};
+      return {{
+        neighborId,
+        neighborTitle: neighbor.title || neighbor.label || neighborId,
+        relationType: edge.relation_type || "related",
+        direction: edge.source === conceptId ? "outbound" : "inbound",
+      }};
+    }})
+    .sort((left, right) =>
+      left.relationType.localeCompare(right.relationType) ||
+      left.neighborTitle.localeCompare(right.neighborTitle)
+    );
+}}
+
+function lexicalResultsForConcept(artifacts, conceptId) {{
+  return (artifacts.search.results || [])
+    .filter((item) => item.concept_id === conceptId)
+    .sort((left, right) => (left.rank || 0) - (right.rank || 0));
+}}
+
+function sourceCardsForConcept(artifacts, conceptId) {{
+  return allSourceCards(artifacts)
+    .filter((card) => (card.concept_ids || []).includes(conceptId))
+    .sort((left, right) =>
+      (left.title || left.source_id || "").localeCompare(right.title || right.source_id || "")
+    );
+}}
+
+function renderBoundedConceptSummary(artifacts, conceptId) {{
+  const node = graphNodeByConceptId(artifacts, conceptId);
+  if (!node) {{
     return `
-      <section class="state-panel" data-state="concept-artifact-mismatch">
-        <h3>Concept artifact unavailable</h3>
-        <p>The selected concept is not present in the release-pinned Concept Wiki
-        artifact loaded by this internal route.</p>
+      <section class="state-panel" data-state="concept-not-found">
+        <h3>Concept not found in this release</h3>
+        <p>This concept ID is not present in the release-pinned graph artifact.</p>
         <div class="detail-actions">
-          <button
-            class="inline-action"
-            data-focus-concept="${{escapeHtml(state.selectedConceptId)}}"
-          >Open selected concept in graph</button>
-          <button
-            class="inline-action"
-            data-open-concept="${{escapeHtml(concept.concept_id)}}"
-          >Return to loaded concept</button>
+          <button class="inline-action" data-open-concept="${{escapeHtml(HARNESS_CONCEPT_ID)}}">
+            Return to loaded concept
+          </button>
+          <button class="inline-action" data-route="graph">Open graph explorer</button>
         </div>
       </section>
     `;
+  }}
+  const relationships = graphRelationshipsForConcept(artifacts, conceptId);
+  const lexicalResults = lexicalResultsForConcept(artifacts, conceptId);
+  const sourceCards = sourceCardsForConcept(artifacts, conceptId);
+  return `
+    <section class="panel" data-state="bounded-graph-concept-summary">
+      <h3>${{escapeHtml(node.title || node.label || conceptId)}}</h3>
+      <p>
+        ${{escapeHtml(node.description || node.summary || "No graph description is available.")}}
+      </p>
+      <p class="muted">
+        Bounded graph-derived summary. A full detailed Concept Wiki artifact is not available for
+        this concept in the release-pinned internal package.
+      </p>
+      <ul class="pill-list">
+        <li>${{escapeHtml(conceptId)}}</li>
+        <li>${{escapeHtml(node.type || node.concept_type || "Concept")}}</li>
+        <li>${{escapeHtml(relationships.length)}} relationships</li>
+        <li>${{escapeHtml(sourceCards.length)}} source handoffs</li>
+      </ul>
+      <div class="detail-actions">
+        <button class="inline-action" data-focus-concept="${{escapeHtml(conceptId)}}">
+          Open in graph
+        </button>
+        <button class="inline-action" data-open-concept="${{escapeHtml(HARNESS_CONCEPT_ID)}}">
+          Return to loaded concept
+        </button>
+      </div>
+    </section>
+    <section class="panel">
+      <h3>Graph relationships</h3>
+      <ul class="relationship-list">
+        ${{relationships.slice(0, 8).map((edge) => `
+          <li>
+            <button class="inline-action" data-focus-concept="${{escapeHtml(edge.neighborId)}}">
+              ${{escapeHtml(edge.direction)}} ${{escapeHtml(edge.relationType)}}:
+              ${{escapeHtml(edge.neighborTitle)}}
+            </button>
+          </li>
+        `).join("") || "<li>No graph relationships are available for this concept.</li>"}}
+      </ul>
+    </section>
+    <section class="panel">
+      <h3>Lexical evidence in this release</h3>
+      <div class="result-list">
+        ${{lexicalResults.slice(0, 5).map((item) => `
+          <article>
+            <h4>#${{escapeHtml(item.rank)}} ${{escapeHtml(item.title || item.section_title)}}</h4>
+            <p>${{escapeHtml(item.excerpt || "No excerpt available.")}}</p>
+            <ul class="compact-meta">
+              <li>${{escapeHtml(item.section_id || "section unavailable")}}</li>
+              <li>score ${{escapeHtml(item.score)}}</li>
+            </ul>
+          </article>
+        `).join("") || `
+          <section class="state-panel" data-state="bounded-summary-no-lexical-match">
+            <h3>No lexical sections</h3>
+            <p>The release-pinned lexical artifact has no matching section for this concept.</p>
+          </section>
+        `}}
+      </div>
+    </section>
+    <section class="panel">
+      <h3>Source handoffs</h3>
+      <div class="source-list">
+        ${{sourceCards.slice(0, 6).map((card) => `
+          <button
+            class="inline-action"
+            data-open-source-card="${{escapeHtml(card.source_card_id)}}"
+          >
+            ${{escapeHtml(card.title || card.display_host || card.source_id)}}
+          </button>
+        `).join("") || "<p class='muted'>No source handoff is available for this concept.</p>"}}
+      </div>
+    </section>
+  `;
+}}
+
+function renderWiki(artifacts) {{
+  const concept = artifacts.concept;
+  if (state.selectedConceptId !== concept.concept_id) {{
+    return renderBoundedConceptSummary(artifacts, state.selectedConceptId);
   }}
   const relationships = concept.relationships || [];
   const sections = concept.sections || [];
@@ -1863,10 +2006,13 @@ function renderMissingArtifact() {{
 function render() {{
   const route = ROUTES[state.route] ? state.route : "overview";
   state.route = route;
+  applyRouteStateFromHash(route);
   destroyGraphExplorer();
   setActiveRoute(route);
   title.textContent = ROUTES[route];
+  setStatus(`${{ROUTES[route]}} ready.`, "ready");
   if (!state.artifacts) {{
+    setStatus("Loading canonical artifacts.", "loading");
     app.innerHTML = `
       <section class="state-panel">
         <h3>Loading</h3>
@@ -1876,6 +2022,7 @@ function render() {{
     return;
   }}
   if (new URLSearchParams(location.hash.split("?")[1] || "").get("acl") === "denied") {{
+    setStatus("Access denied for this route.", "blocked");
     app.innerHTML = renderAclDenied();
     return;
   }}
@@ -1895,10 +2042,20 @@ function render() {{
   }}
 }}
 
-function navigateTo(route) {{
-  const nextHash = `#/${{route}}`;
+function hashForRoute(route, params = {{}}) {{
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {{
+    if (value) query.set(key, value);
+  }}
+  const suffix = query.toString();
+  return `#/${{route}}${{suffix ? `?${{suffix}}` : ""}}`;
+}}
+
+function navigateTo(route, params = {{}}) {{
+  const nextHash = hashForRoute(route, params);
   if (location.hash === nextHash) {{
     state.route = route;
+    applyRouteStateFromHash(route);
     render();
     return;
   }}
@@ -1914,20 +2071,20 @@ function wireInteractions() {{
   for (const button of app.querySelectorAll("[data-open-concept]")) {{
     button.addEventListener("click", () => {{
       state.selectedConceptId = button.dataset.openConcept;
-      navigateTo("wiki");
+      navigateTo("wiki", {{ concept: state.selectedConceptId }});
     }});
   }}
   for (const button of app.querySelectorAll("[data-focus-concept]")) {{
     button.addEventListener("click", () => {{
       state.selectedConceptId = button.dataset.focusConcept;
-      navigateTo("graph");
+      navigateTo("graph", {{ concept: state.selectedConceptId }});
     }});
   }}
   for (const button of app.querySelectorAll("[data-open-source-viewer]")) {{
     button.addEventListener("click", () => {{
       state.selectedSourceViewerId = button.dataset.openSourceViewer;
       state.selectedCitationId = null;
-      navigateTo("sources");
+      navigateTo("sources", {{ viewer: state.selectedSourceViewerId }});
     }});
   }}
   for (const button of app.querySelectorAll("[data-open-source-card]")) {{
@@ -1935,7 +2092,7 @@ function wireInteractions() {{
       const viewer = viewerBySourceCard(state.artifacts, button.dataset.openSourceCard);
       state.selectedSourceViewerId = viewer ? viewer.viewer_id : null;
       state.selectedCitationId = null;
-      navigateTo("sources");
+      navigateTo("sources", {{ viewer: state.selectedSourceViewerId }});
     }});
   }}
   for (const button of app.querySelectorAll("[data-open-citation]")) {{
@@ -1943,7 +2100,10 @@ function wireInteractions() {{
       state.selectedCitationId = button.dataset.openCitation;
       const resolved = citationById(state.artifacts, state.selectedCitationId);
       state.selectedSourceViewerId = resolved ? resolved.viewer.viewer_id : null;
-      navigateTo("sources");
+      navigateTo("sources", {{
+        citation: state.selectedCitationId,
+        viewer: state.selectedSourceViewerId,
+      }});
     }});
   }}
   const form = app.querySelector("[data-search-form]");
@@ -1968,6 +2128,7 @@ function wireInteractions() {{
 
 window.addEventListener("hashchange", () => {{
   state.route = routeFromHash();
+  applyRouteStateFromHash(state.route);
   render();
 }});
 
@@ -1975,6 +2136,7 @@ loadArtifacts()
   .then((artifacts) => {{
     state.artifacts = artifacts;
     state.route = routeFromHash();
+    applyRouteStateFromHash(state.route);
     setStatus("Canonical artifacts loaded and release identity validated.", "ready");
     render();
   }})

@@ -65,6 +65,20 @@ def test_m24_14_2_graph_route_uses_real_sigma_canvas_runtime() -> None:
     assert "relation_filter" in _json(P2_REPORT_PATH)["interaction"]["controls"]
 
 
+def test_m24_14_2_sigma_renderer_type_is_decoupled_from_semantic_type() -> None:
+    build_p2_sigma_graph_explorer_report()
+    graph_payload = _json(SITE_ROOT.joinpath("data/graph-navigation.json"))
+    explorer_js = SITE_ROOT.joinpath("graph-explorer.js").read_text(encoding="utf-8")
+
+    assert {node["type"] for node in graph_payload["nodes"]} == {"Concept"}
+    assert "const semanticType = node.type || node.concept_type || \"concept\";" in explorer_js
+    assert "semanticType," in explorer_js
+    assert "semanticTypeKey," in explorer_js
+    assert 'type: "circle"' in explorer_js
+    assert "type: attrs.semanticType || \"concept\"" in explorer_js
+    assert "color: NODE_COLORS[semanticTypeKey]" in explorer_js
+
+
 def test_m24_14_2_graph_controls_and_error_states_are_present() -> None:
     build_p2_sigma_graph_explorer_report()
     app_js = SITE_ROOT.joinpath("app.js").read_text(encoding="utf-8")

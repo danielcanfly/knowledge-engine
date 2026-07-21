@@ -38,12 +38,31 @@ def test_m24_14_3_report_matches_generated_surface_usability_evidence() -> None:
 def test_m24_14_3_concept_wiki_has_navigation_and_mismatch_state() -> None:
     build_p3_product_surface_usability_report()
     app_js = SITE_ROOT.joinpath("app.js").read_text(encoding="utf-8")
+    index = SITE_ROOT.joinpath("index.html").read_text(encoding="utf-8")
 
-    assert "concept-artifact-mismatch" in app_js
+    assert 'href="#/wiki?concept=concepts/harness"' in index
+    assert "HARNESS_CONCEPT_ID" in app_js
+    assert "bounded-graph-concept-summary" in app_js
+    assert "concept-not-found" in app_js
+    assert "Bounded graph-derived summary." in app_js
+    assert "Return to loaded concept" in app_js
     assert "data-open-source-viewer" in app_js
     assert "data-focus-concept" in app_js
     assert "data-route=\"search\"" in app_js
     assert "concept-section-empty" in app_js
+    assert "Concept artifact unavailable" not in app_js
+
+
+def test_m24_14_3_route_hash_state_prevents_stale_graph_status() -> None:
+    build_p3_product_surface_usability_report()
+    app_js = SITE_ROOT.joinpath("app.js").read_text(encoding="utf-8")
+
+    assert "routeSearchParams" in app_js
+    assert "applyRouteStateFromHash(route)" in app_js
+    assert 'params.get("concept") || HARNESS_CONCEPT_ID' in app_js
+    assert "setStatus(`${ROUTES[route]} ready.`, \"ready\")" in app_js
+    assert "navigateTo(\"wiki\", { concept: state.selectedConceptId })" in app_js
+    assert "navigateTo(\"graph\", { concept: state.selectedConceptId })" in app_js
 
 
 def test_m24_14_3_lexical_search_has_client_side_filter_and_handoffs() -> None:

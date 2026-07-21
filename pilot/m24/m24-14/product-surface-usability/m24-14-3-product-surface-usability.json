@@ -1,9 +1,9 @@
 {
   "assets": [
     {
-      "bytes": 3135,
+      "bytes": 3160,
       "path": "pilot/m24/internal-product-deployment/site/index.html",
-      "sha256": "970a81cd0a883ee524bd1134db6e5b1454d27c49181b1ef27998f0dceb9828cb"
+      "sha256": "53b2cfac96c82e65f10a75e711577baf7fb48d4b0749ae81d6e8177da6caf72f"
     },
     {
       "bytes": 7383,
@@ -11,9 +11,9 @@
       "sha256": "94ac6cb6e858885a5e8368b5d6302fce9371ca8fdeb463524d8986d9c875d55d"
     },
     {
-      "bytes": 27607,
+      "bytes": 34000,
       "path": "pilot/m24/internal-product-deployment/site/app.js",
-      "sha256": "f6238b67372c31e3de17af394941185db131d57de0594512e303120cc639092c"
+      "sha256": "55fb4375e7078198fa2185790a01263addfb6ccc01da0dace8d9c1eda27aef02"
     },
     {
       "bytes": 50914,
@@ -67,14 +67,15 @@
   "release_id": "20260720T160000Z-46137c97263e",
   "runtime_cdn_dependencies": false,
   "schema_version": "knowledge-engine-m24-14-3-product-surface-usability/v1",
-  "self_sha256": "2a34d85c5f529e4606a0bc99a58ae041e4222fff01270832383ee1b1d78c750e",
+  "self_sha256": "8d7f13b8c7616c0b7594aa24a87212b749851d29162ce36c71a11fd7643dfcbe",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "m24_14_3_product_surfaces_usable",
   "workflows": [
     {
       "bounded_states": [
         "concept_section_empty",
-        "concept_artifact_mismatch"
+        "bounded_graph_concept_summary",
+        "concept_not_found"
       ],
       "controls": [
         "open_loaded_concept",

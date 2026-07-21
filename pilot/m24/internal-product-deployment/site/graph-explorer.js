@@ -4,6 +4,7 @@
   const NODE_COLORS = {
     architecture: "#0f766e",
     component: "#1d4ed8",
+    concept: "#0f766e",
     contract: "#7c3aed",
     decision: "#b45309",
     process: "#be123c",
@@ -62,14 +63,17 @@
     nodes.forEach((node, index) => {
       const nodeId = nodeIdOf(node);
       const position = positionFor(nodeId, index, nodes.length);
-      const type = node.type || node.concept_type || "concept";
+      const semanticType = node.type || node.concept_type || "concept";
+      const semanticTypeKey = normalize(semanticType || "concept");
       graph.addNode(nodeId, {
         ...node,
-        color: NODE_COLORS[type] || "#64748b",
+        color: NODE_COLORS[semanticTypeKey] || "#64748b",
         label: nodeTitle(node),
+        semanticType,
+        semanticTypeKey,
         size: node.focus_node ? 9 : 6,
         title: nodeTitle(node),
-        type,
+        type: "circle",
         x: position.x,
         y: position.y,
       });
@@ -101,7 +105,7 @@
     return {
       id: nodeId,
       title: attrs.title || nodeId,
-      type: attrs.type || "concept",
+      type: attrs.semanticType || "concept",
       description: attrs.description || attrs.summary || "",
       sourcePath: attrs.source_path || attrs.path || "",
       tags: stringList(attrs.tags),
