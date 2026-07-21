@@ -116,6 +116,8 @@ def test_m24_14_6_pending_report_has_exact_gate_and_one_daniel_action() -> None:
     assert len(report["daniel_actions"]) == 1
     assert report["result_authority_required"] == "authenticated_live"
     assert report["local_ci_regression_authority"] == "local_exact_site_browser_regression"
+    assert report["deployment_identity"]["pre_stage_a_protected_deployment"]
+    assert report["deployment_identity"]["post_merge_deployment_recorded_in_return_handoff"] is True
     assert report["final_acceptance_claimed"] is False
     assert report["boundaries"]["production_retrieval"] == "lexical"
     assert report["boundaries"]["semantic_serving_enabled"] is False
