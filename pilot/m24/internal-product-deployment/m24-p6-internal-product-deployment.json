@@ -1,9 +1,14 @@
 {
   "artifacts": [
     {
-      "bytes": 3160,
+      "bytes": 3267,
       "path": "pilot/m24/internal-product-deployment/site/index.html",
-      "sha256": "53b2cfac96c82e65f10a75e711577baf7fb48d4b0749ae81d6e8177da6caf72f"
+      "sha256": "e2055b929ffb4d0d26fb0855952b93455473f05c03229ad08804b756aa95d6e2"
+    },
+    {
+      "bytes": 200,
+      "path": "pilot/m24/internal-product-deployment/site/_headers",
+      "sha256": "92d72771c6c582b7026a50fcad02026008b7070fb8a2cc33ed4afe1a420457d0"
     },
     {
       "bytes": 9155,
@@ -16,9 +21,14 @@
       "sha256": "0ad87fb441a3abe73c9863a83d8f5c5d7d192f6a6384e3131320634ece9ed6f9"
     },
     {
-      "bytes": 40927,
+      "bytes": 42374,
       "path": "pilot/m24/internal-product-deployment/site/app.js",
-      "sha256": "2091fbf69abebeeedb5b3879a4baed82b01b81f74882aa3a21cb6c5bc133d506"
+      "sha256": "e6301f5ef8fcc5ed016cf4c8f79cee0cfdac8ba034a24042d99c1e4d7930453b"
+    },
+    {
+      "bytes": 74,
+      "path": "pilot/m24/internal-product-deployment/site/favicon.png",
+      "sha256": "adf157989497becbcc25a006b0695834d8570ccb89db695fb474ed1a899bf66f"
     },
     {
       "bytes": 73629,
@@ -79,6 +89,11 @@
       "bytes": 655,
       "path": "pilot/m24/internal-product-deployment/site/data/obsidian-export-manifest.json",
       "sha256": "8b385642b0241d9de1147dcac462f1e2e600330dcc7af142cb4f02a7a74e6e3e"
+    },
+    {
+      "bytes": 2367,
+      "path": "pilot/m24/internal-product-deployment/site/data/m24-14-6-pending-acceptance.json",
+      "sha256": "0f4f49a4f41ebffc7e5723101788fa3a6319dfb6e08dafb4d951b6f3bc3a280f"
     },
     {
       "bytes": 58780,
@@ -179,7 +194,7 @@
     "secret_scan_passed": true,
     "secret_scan_patterns": 3
   },
-  "self_sha256": "9ca84d855b5f65726865131d3977500a3f9fb0c4fdd5900c8d8834dc5d667f53",
+  "self_sha256": "c3b485ca0b66077c3006f39d78495206c1531dc7830fe7f15ce19248c075f2a8",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "internal_product_deployment_package_complete",
   "surfaces": [
@@ -238,6 +253,14 @@
       "ready": true,
       "release_id": "20260720T160000Z-46137c97263e",
       "surface": "obsidian_export"
+    },
+    {
+      "digest": "059e2b4833e0ac84380771424addd81471867f9a86c42f1279568683e8de7578",
+      "fallback": "pending_acceptance_report_unavailable",
+      "path": "site/data/m24-14-6-pending-acceptance.json",
+      "ready": true,
+      "release_id": "20260720T160000Z-46137c97263e",
+      "surface": "m24_14_6_acceptance"
     }
   ]
 }

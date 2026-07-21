@@ -1,0 +1,60 @@
+{
+  "cases": [
+    {
+      "authority": "authenticated_live",
+      "id": "overview",
+      "required": true
+    },
+    {
+      "authority": "authenticated_live",
+      "id": "concept_wiki_full",
+      "required": true
+    },
+    {
+      "authority": "authenticated_live",
+      "id": "concept_wiki_bounded",
+      "required": true
+    },
+    {
+      "authority": "authenticated_live",
+      "id": "lexical_search",
+      "required": true
+    },
+    {
+      "authority": "authenticated_live",
+      "id": "sigma_graph",
+      "required": true
+    },
+    {
+      "authority": "authenticated_live",
+      "id": "source_full_markdown",
+      "required": true
+    },
+    {
+      "authority": "authenticated_live",
+      "id": "source_reverse_link",
+      "required": true
+    },
+    {
+      "authority": "authenticated_live",
+      "id": "source_structured_json",
+      "required": true
+    },
+    {
+      "authority": "authenticated_live",
+      "id": "source_m3_metadata_only",
+      "required": true
+    },
+    {
+      "authority": "authenticated_live",
+      "id": "obsidian_vault",
+      "required": true
+    },
+    {
+      "authority": "authenticated_live",
+      "id": "release_identity",
+      "required": true
+    }
+  ],
+  "schema_version": "knowledge-engine-m24-14-6-benchmark-cases/v1"
+}

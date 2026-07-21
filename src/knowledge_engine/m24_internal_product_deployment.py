@@ -10,6 +10,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from .m24_14_6_authenticated_performance import (
+    build_m24_14_6_pending_acceptance_report,
+)
 from .m24_product_surface_integration import (
     CANONICAL_MANIFEST_SHA256,
     CANONICAL_RELEASE_ID,
@@ -43,6 +46,11 @@ GRAPH_VENDOR_ASSETS = (
         "vendor/sigma.min.js",
     ),
 )
+FAVICON_PNG_BYTES = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+    "1f15c4890000000a49444154789c6360000002000100ffff030000060005"
+    "57bfab0000000049454e44ae426082"
+)
 SurfaceName = Literal[
     "concept_wiki",
     "lexical_search",
@@ -51,6 +59,7 @@ SurfaceName = Literal[
     "citation_grounded_internal_answers",
     "release_viewer",
     "obsidian_export",
+    "m24_14_6_acceptance",
 ]
 CSP = (
     "default-src 'none'; "
@@ -63,6 +72,7 @@ CSP = (
     "form-action 'none'; "
     "frame-ancestors 'none'"
 )
+CSP_META = CSP.replace("; frame-ancestors 'none'", "")
 SECRET_PATTERNS = (
     re.compile(r"(?i)\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*['\"][^'\"]{8,}"),
     re.compile(r"(?i)\b(?:bearer|basic)\s+[A-Za-z0-9._~+/-]{20,}"),
@@ -251,7 +261,8 @@ def _index_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="{CSP}">
+  <meta http-equiv="Content-Security-Policy" content="{CSP_META}">
+  <link rel="icon" type="image/png" href="favicon.png">
   <title>LLM Wiki Internal Product</title>
   <link rel="stylesheet" href="styles.css">
   <script src="vendor/graphology.umd.min.js"></script>
@@ -280,6 +291,7 @@ def _index_html() -> str:
         <a href="#/sources" data-route-link="sources">Sources</a>
         <a href="#/release" data-route-link="release">Release</a>
         <a href="#/obsidian" data-route-link="obsidian">Obsidian</a>
+        <a href="#/acceptance" data-route-link="acceptance">Acceptance</a>
       </nav>
       <section class="boundary-panel" aria-label="Authority boundary">
         <h2>Boundary</h2>
@@ -1346,6 +1358,7 @@ const ARTIFACTS = {{
   sourceDocuments: "data/source-documents.json",
   answers: "data/query-answer-acceptance.json",
   obsidian: "data/obsidian-export-manifest.json",
+  acceptance: "data/m24-14-6-pending-acceptance.json",
 }};
 
 const ROUTES = {{
@@ -1356,6 +1369,7 @@ const ROUTES = {{
   sources: "Sources",
   release: "Release Details",
   obsidian: "Obsidian Export",
+  acceptance: "Acceptance Status",
 }};
 
 const state = {{
@@ -2291,6 +2305,37 @@ function renderObsidian(artifacts) {{
   `;
 }}
 
+function renderAcceptance(artifacts) {{
+  const acceptance = artifacts.acceptance;
+  const action = (acceptance.daniel_actions || [])[0] || {{}};
+  return `
+    <div class="metric-grid">
+      ${{metric("Stage", acceptance.status)}}
+      ${{metric("Daniel actions", acceptance.daniel_action_count)}}
+      ${{metric("Retrieval", acceptance.boundaries.production_retrieval)}}
+      ${{metric("Final acceptance", String(acceptance.final_acceptance_claimed))}}
+    </div>
+    <section class="panel">
+      <h3>M24.14.6 gate</h3>
+      <p>
+        Authenticated performance evidence is pending Daniel's browser session.
+        Local and CI regressions only prove harness and surface behavior.
+      </p>
+      <ul class="compact-meta vertical">
+        <li>release ${{escapeHtml(acceptance.release_id)}}</li>
+        <li>manifest ${{escapeHtml(acceptance.manifest_sha256)}}</li>
+        <li>benchmark policy ${{escapeHtml(acceptance.benchmark_policy_sha256)}}</li>
+        <li>benchmark cases ${{escapeHtml(acceptance.benchmark_cases_sha256)}}</li>
+      </ul>
+    </section>
+    <section class="panel">
+      <h3>Daniel action</h3>
+      <p>${{escapeHtml(action.return_artifact || "Return the sanitized benchmark JSON.")}}</p>
+      <pre class="source-document-body"><code>${{escapeHtml(action.command || "")}}</code></pre>
+    </section>
+  `;
+}}
+
 function renderAclDenied() {{
   return `
     <section class="state-panel" data-state="acl-denied">
@@ -2342,6 +2387,7 @@ function render() {{
     sources: renderSources,
     release: renderRelease,
     obsidian: renderObsidian,
+    acceptance: renderAcceptance,
   }};
   app.innerHTML = renderers[route](state.artifacts);
   wireInteractions();
@@ -2478,6 +2524,12 @@ loadArtifacts()
 """
 
 
+def _headers() -> str:
+    return f"""/*
+  Content-Security-Policy: {CSP}
+"""
+
+
 def _release_viewer() -> dict[str, Any]:
     bundle = load_canonical_release()
     return {
@@ -2605,7 +2657,7 @@ def _obsidian_manifest_payload(
 
 def _secret_scan(paths: list[Path]) -> bool:
     for path in paths:
-        if path.suffix == ".zip":
+        if path.suffix in {".zip", ".png"}:
             continue
         text = path.read_text(encoding="utf-8")
         if any(pattern.search(text) for pattern in SECRET_PATTERNS):
@@ -2630,6 +2682,7 @@ def build_p6_internal_product_deployment(
         SOURCE_DOCUMENT_AGGREGATE_PATH.read_text(encoding="utf-8")
     )
     obsidian, obsidian_zip = _obsidian_manifest_payload(site_root=site_root)
+    acceptance = build_m24_14_6_pending_acceptance_report()
     data_payloads: list[tuple[str, Any]] = [
         ("data/concept-wiki-harness.json", concept.model_dump(mode="json")),
         ("data/search-harness.json", search.model_dump(mode="json")),
@@ -2640,6 +2693,7 @@ def build_p6_internal_product_deployment(
         ("data/query-answer-acceptance.json", answers.model_dump(mode="json")),
         ("data/release-viewer.json", release),
         ("data/obsidian-export-manifest.json", obsidian),
+        ("data/m24-14-6-pending-acceptance.json", acceptance),
     ]
     for source_payload_path in sorted(SOURCE_DOCUMENT_PAYLOAD_ROOT.glob("*.json")):
         data_payloads.append(
@@ -2650,9 +2704,11 @@ def build_p6_internal_product_deployment(
         )
     artifacts = [
         _write_text(site_root / "index.html", _index_html()),
+        _write_text(site_root / "_headers", _headers()),
         _write_text(site_root / "styles.css", _styles()),
         _write_text(site_root / "graph-explorer.js", _graph_explorer_js()),
         _write_text(site_root / "app.js", _app_js()),
+        _write_bytes(site_root / "favicon.png", FAVICON_PNG_BYTES),
     ]
     for source, relative in GRAPH_VENDOR_ASSETS:
         destination = site_root / relative
@@ -2708,6 +2764,12 @@ def build_p6_internal_product_deployment(
             path="site/data/obsidian-export-manifest.json",
             payload=obsidian,
             fallback="regenerate_export_from_canonical_release",
+        ),
+        _surface(
+            surface="m24_14_6_acceptance",
+            path="site/data/m24-14-6-pending-acceptance.json",
+            payload=acceptance,
+            fallback="pending_acceptance_report_unavailable",
         ),
     ]
     report = P6InternalDeploymentReport(

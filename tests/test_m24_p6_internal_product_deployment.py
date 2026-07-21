@@ -51,8 +51,9 @@ def test_m24_p6_contains_all_required_internal_product_surfaces() -> None:
         "citation_grounded_internal_answers",
         "release_viewer",
         "obsidian_export",
+        "m24_14_6_acceptance",
     }
-    assert len(report.surfaces) == 7
+    assert len(report.surfaces) == 8
     assert all(surface.ready for surface in report.surfaces)
     assert all(surface.release_id == CANONICAL_RELEASE_ID for surface in report.surfaces)
     assert all(surface.fallback for surface in report.surfaces)
@@ -66,6 +67,10 @@ def test_m24_p6_artifact_manifest_matches_committed_site_bytes() -> None:
     assert "pilot/m24/internal-product-deployment/site/styles.css" in artifact_paths
     assert "pilot/m24/internal-product-deployment/site/data/source-index.json" in artifact_paths
     assert "pilot/m24/internal-product-deployment/site/data/source-documents.json" in artifact_paths
+    assert (
+        "pilot/m24/internal-product-deployment/site/data/m24-14-6-pending-acceptance.json"
+        in artifact_paths
+    )
     for artifact in report.artifacts:
         path = Path(artifact.path)
         data = path.read_bytes()

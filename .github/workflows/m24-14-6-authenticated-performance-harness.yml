@@ -1,0 +1,50 @@
+name: M24.14.6 authenticated performance harness
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m24_14_6_authenticated_performance.py"
+      - "src/knowledge_engine/m24_internal_product_deployment.py"
+      - "src/knowledge_engine/m24_14_product_app_shell.py"
+      - "scripts/m24_14_6_authenticated_benchmark.py"
+      - "tests/test_m24_14_6_authenticated_performance.py"
+      - "tests/test_m24_14_6_authenticated_performance_browser.py"
+      - "tests/test_m24_p6_internal_product_deployment.py"
+      - "tests/test_m24_14_1_product_app_shell.py"
+      - "pilot/m24/m24-14-6/**"
+      - "pilot/m24/internal-product-deployment/site/**"
+      - ".github/workflows/m24-14-6-authenticated-performance-harness.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package and browser
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+          python -m playwright install --with-deps chromium
+      - name: Lint focused files
+        run: |
+          ruff check \
+            src/knowledge_engine/m24_14_6_authenticated_performance.py \
+            src/knowledge_engine/m24_internal_product_deployment.py \
+            src/knowledge_engine/m24_14_product_app_shell.py \
+            scripts/m24_14_6_authenticated_benchmark.py \
+            tests/test_m24_14_6_authenticated_performance.py \
+            tests/test_m24_14_6_authenticated_performance_browser.py
+      - name: Run deterministic and browser harness tests
+        run: |
+          pytest -q \
+            tests/test_m24_14_6_authenticated_performance.py \
+            tests/test_m24_14_6_authenticated_performance_browser.py \
+            tests/test_m24_14_1_product_app_shell.py \
+            tests/test_m24_p6_internal_product_deployment.py

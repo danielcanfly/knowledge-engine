@@ -1,0 +1,50 @@
+{
+  "benchmark_cases_path": "pilot/m24/m24-14-6/benchmark-cases.json",
+  "benchmark_cases_sha256": "b8e698d7b53519db60515ea747d940ae777cc65d5c9c15e6e2d76ba70b2c7cd7",
+  "benchmark_policy_path": "pilot/m24/m24-14-6/benchmark-policy.json",
+  "benchmark_policy_sha256": "9f80c7bc17444e87f3fdb491f51a80f5c553713005c2863d4daff6e32491cf75",
+  "boundaries": {
+    "access_policy_population_changed": false,
+    "cloudflare_access_required": true,
+    "foundation_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "production_pointer_mutation": false,
+    "production_retrieval": "lexical",
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "semantic_serving_enabled": false,
+    "service_token_bypass_used": false,
+    "source_mutation": false,
+    "temporary_public_bypass_used": false
+  },
+  "current_protected_deployment": "5361997c-fe53-47a5-998e-81244a6470ab",
+  "daniel_action_count": 1,
+  "daniel_actions": [
+    {
+      "command": "python scripts/m24_14_6_authenticated_benchmark.py --headed --capture-auth",
+      "id": "run_authenticated_browser_benchmark_after_access_login",
+      "required_actor": "Daniel",
+      "return_artifact": "sanitized authenticated benchmark JSON only"
+    }
+  ],
+  "deployed_url_label": "protected_custom_hostname",
+  "final_acceptance_claimed": false,
+  "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+  "issue_number": 1023,
+  "local_ci_regression_authority": "local_exact_site_browser_regression",
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "manual_browser_acceptance_claimed": false,
+  "pages_project": "llm-wiki-m24-internal",
+  "release_id": "20260720T160000Z-46137c97263e",
+  "result_authority_required": "authenticated_live",
+  "result_schema_version": "knowledge-engine-m24-14-6-authenticated-benchmark-result/v1",
+  "rollback_deployments": [
+    "b570b0c7-a812-4878-8573-e7b7d41faf78",
+    "586deae3-d679-45e2-8542-ec6845f9f2e7"
+  ],
+  "schema_version": "knowledge-engine-m24-14-6-pending-final-acceptance/v1",
+  "self_sha256": "51ca3d782cc0d0f55d79f561054cb4af527f20d13d6727b036196ffcad7730f8",
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "status": "m24_14_6_harness_deployed_pending_daniel_authenticated_benchmark",
+  "vault_sha256": "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
+}
