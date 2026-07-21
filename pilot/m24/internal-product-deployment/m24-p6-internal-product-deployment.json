@@ -1,14 +1,19 @@
 {
   "artifacts": [
     {
-      "bytes": 2009,
+      "bytes": 2990,
       "path": "pilot/m24/internal-product-deployment/site/index.html",
-      "sha256": "b91934a37b53b930929f5689f9ac4eef813dfcdcd8aa45351ba12e3d1d42c6b3"
+      "sha256": "7f0c3a92719fa7627a5875944dfe47102a4d9090e59176d7ca6dd466015f1f38"
     },
     {
-      "bytes": 729,
+      "bytes": 4911,
       "path": "pilot/m24/internal-product-deployment/site/styles.css",
-      "sha256": "b542efd78f1302c1f8fac3f01b261d08c3860a2dc20d39ee05339f7c585a3d64"
+      "sha256": "d10543ff67956eb59d4b9e1ca1b689c5a2f4f964e26f00ae1fb3def664f47e76"
+    },
+    {
+      "bytes": 13108,
+      "path": "pilot/m24/internal-product-deployment/site/app.js",
+      "sha256": "2312ebea34ced733e04763152d4ea6d5c0b7de6c4d7c99763504df423a944135"
     },
     {
       "bytes": 50914,
@@ -81,7 +86,7 @@
   "release_id": "20260720T160000Z-46137c97263e",
   "schema_version": "knowledge-engine-m24-p6-internal-product-deployment/v1",
   "security": {
-    "csp": "default-src 'none'; style-src 'self'; img-src 'self'; connect-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "csp": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     "csp_inline_script_allowed": false,
     "csp_remote_network_allowed": false,
     "error_states": [
@@ -109,7 +114,7 @@
     "secret_scan_passed": true,
     "secret_scan_patterns": 3
   },
-  "self_sha256": "f63a48dd16d366278c60e4142f3c3e871e76c6c34501bbae05e540a32df28548",
+  "self_sha256": "0eb14471e4de718c411155ab80f4566ef5a4632573928c44ed9f7450e6e323b8",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "internal_product_deployment_package_complete",
   "surfaces": [
