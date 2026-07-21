@@ -605,6 +605,11 @@ a {
   display: grid;
   gap: 14px;
   grid-template-columns: minmax(0, 1fr) 340px;
+  min-width: 0;
+}
+
+.source-split {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
 }
 
 .section-list,
@@ -628,7 +633,9 @@ a {
 
 .source-detail-panel {
   align-self: start;
+  container: source-detail / inline-size;
   max-height: calc(100vh - 56px);
+  min-width: 0;
   overflow: auto;
 }
 
@@ -640,14 +647,18 @@ a {
 .reader-meta {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   margin: 12px 0;
+  min-width: 0;
 }
 
 .reader-meta section,
 .source-toc {
   border: 1px solid #e5e7eb;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 10px;
+  word-break: break-word;
 }
 
 .reader-meta h4,
@@ -657,6 +668,13 @@ a {
 
 .compact-meta.vertical {
   display: grid;
+  min-width: 0;
+}
+
+.compact-meta.vertical > li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .source-toc ol {
@@ -691,6 +709,10 @@ a {
   word-break: break-word;
 }
 
+.source-reader {
+  min-width: 0;
+}
+
 .detail-actions {
   display: flex;
   flex-wrap: wrap;
@@ -714,6 +736,9 @@ a {
 .compact-meta li {
   color: #475569;
   font-size: 13px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .graph-placeholder {
@@ -1975,7 +2000,7 @@ function renderSources(artifacts) {{
       >
       <button type="submit">Filter</button>
     </form>
-    <div class="surface-split">
+    <div class="surface-split source-split">
       <section class="panel">
         <h3>Sources</h3>
         <p class="muted">
