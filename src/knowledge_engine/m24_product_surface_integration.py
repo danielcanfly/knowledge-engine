@@ -18,7 +18,11 @@ from .m14_retrieval import retrieve_wiki_first, validate_relation_graph_v2
 from .m19_graph_api import ReadOnlyGraphService
 from .m24_concept_wiki import ConceptWikiPage, build_concept_wiki_page
 from .m24_graph_navigation import GraphNavigationState, build_graph_navigation_state
-from .m24_obsidian_exporter import ObsidianExportBundle, export_search_response_to_obsidian
+from .m24_obsidian_exporter import (
+    ObsidianExportBundle,
+    export_search_response_to_obsidian,
+    load_source_document_package,
+)
 from .runtime import ActiveRelease
 from .storage import sha256_bytes
 
@@ -421,7 +425,10 @@ def canonical_all_concepts_response(
 def canonical_obsidian_export(
     bundle: CanonicalReleaseBundle | None = None,
 ) -> ObsidianExportBundle:
-    return export_search_response_to_obsidian(canonical_all_concepts_response(bundle=bundle))
+    return export_search_response_to_obsidian(
+        canonical_all_concepts_response(bundle=bundle),
+        source_documents=load_source_document_package(),
+    )
 
 
 def build_p3_product_surface_report(

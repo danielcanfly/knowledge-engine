@@ -28,7 +28,7 @@
   "issue_number": 1013,
   "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
   "member_count": 30,
-  "member_paths_sha256": "e66c5e408d7db74ced32ca8dfe91dcfd6a47ee731bea332054caf629bb512e78",
+  "member_paths_sha256": "916dbbdd7aeabfc4271556b9b3d3c34f092ee9d7607571204885c802b2b9d287",
   "members": [
     {
       "bytes": 148,
@@ -44,8 +44,8 @@
       ]
     },
     {
-      "bytes": 506,
-      "crc": 510412219,
+      "bytes": 535,
+      "crc": 3676132854,
       "path": "README.md",
       "timestamp": [
         1980,
@@ -57,8 +57,8 @@
       ]
     },
     {
-      "bytes": 1115,
-      "crc": 3830085087,
+      "bytes": 1090,
+      "crc": 161202597,
       "path": "concepts/001-agent-decision-and-planning-strategies.md",
       "timestamp": [
         1980,
@@ -70,8 +70,8 @@
       ]
     },
     {
-      "bytes": 1049,
-      "crc": 2370916270,
+      "bytes": 990,
+      "crc": 3460121969,
       "path": "concepts/002-agent-execution-paths.md",
       "timestamp": [
         1980,
@@ -83,8 +83,8 @@
       ]
     },
     {
-      "bytes": 1086,
-      "crc": 1777056354,
+      "bytes": 1036,
+      "crc": 206154549,
       "path": "concepts/003-candidate-delivery-controls.md",
       "timestamp": [
         1980,
@@ -96,8 +96,8 @@
       ]
     },
     {
-      "bytes": 1160,
-      "crc": 972261604,
+      "bytes": 1178,
+      "crc": 3155743312,
       "path": "concepts/004-canonical-run-authority.md",
       "timestamp": [
         1980,
@@ -109,8 +109,8 @@
       ]
     },
     {
-      "bytes": 1099,
-      "crc": 3600818805,
+      "bytes": 1197,
+      "crc": 1338668055,
       "path": "concepts/005-completion-gate.md",
       "timestamp": [
         1980,
@@ -122,8 +122,8 @@
       ]
     },
     {
-      "bytes": 1143,
-      "crc": 3254754018,
+      "bytes": 1161,
+      "crc": 1674035078,
       "path": "concepts/006-durable-thread-state.md",
       "timestamp": [
         1980,
@@ -135,8 +135,8 @@
       ]
     },
     {
-      "bytes": 1045,
-      "crc": 500161585,
+      "bytes": 1063,
+      "crc": 301160825,
       "path": "concepts/007-goal-drift.md",
       "timestamp": [
         1980,
@@ -148,8 +148,8 @@
       ]
     },
     {
-      "bytes": 1155,
-      "crc": 3538776009,
+      "bytes": 1173,
+      "crc": 2383525807,
       "path": "concepts/008-harness.md",
       "timestamp": [
         1980,
@@ -161,8 +161,8 @@
       ]
     },
     {
-      "bytes": 1129,
-      "crc": 2971391736,
+      "bytes": 1147,
+      "crc": 2001875445,
       "path": "concepts/009-harness-agent-loop.md",
       "timestamp": [
         1980,
@@ -174,8 +174,8 @@
       ]
     },
     {
-      "bytes": 1127,
-      "crc": 3617542153,
+      "bytes": 1145,
+      "crc": 2685182946,
       "path": "concepts/010-harness-verification.md",
       "timestamp": [
         1980,
@@ -187,8 +187,8 @@
       ]
     },
     {
-      "bytes": 1200,
-      "crc": 176901122,
+      "bytes": 1218,
+      "crc": 1595089237,
       "path": "concepts/011-harnessability.md",
       "timestamp": [
         1980,
@@ -200,8 +200,8 @@
       ]
     },
     {
-      "bytes": 1203,
-      "crc": 1334728263,
+      "bytes": 1221,
+      "crc": 624205962,
       "path": "concepts/012-headless-harness-service.md",
       "timestamp": [
         1980,
@@ -213,8 +213,8 @@
       ]
     },
     {
-      "bytes": 1172,
-      "crc": 3108649164,
+      "bytes": 1190,
+      "crc": 563738135,
       "path": "concepts/013-item-turn-thread-protocol.md",
       "timestamp": [
         1980,
@@ -226,8 +226,8 @@
       ]
     },
     {
-      "bytes": 1048,
-      "crc": 1622449624,
+      "bytes": 1111,
+      "crc": 1190278400,
       "path": "concepts/014-knowledge-source-governance.md",
       "timestamp": [
         1980,
@@ -239,8 +239,8 @@
       ]
     },
     {
-      "bytes": 1195,
-      "crc": 2856193964,
+      "bytes": 1213,
+      "crc": 892893432,
       "path": "concepts/015-request-boundary.md",
       "timestamp": [
         1980,
@@ -252,8 +252,8 @@
       ]
     },
     {
-      "bytes": 1166,
-      "crc": 1378912749,
+      "bytes": 1149,
+      "crc": 3107733637,
       "path": "concepts/016-six-dimensional-map-of-llm-agent-architectures.md",
       "timestamp": [
         1980,
@@ -265,8 +265,8 @@
       ]
     },
     {
-      "bytes": 1092,
-      "crc": 3341841291,
+      "bytes": 1110,
+      "crc": 3017804262,
       "path": "concepts/017-steering-control-plane.md",
       "timestamp": [
         1980,
@@ -278,8 +278,8 @@
       ]
     },
     {
-      "bytes": 1142,
-      "crc": 2549033076,
+      "bytes": 1160,
+      "crc": 4179746764,
       "path": "concepts/018-stopping-policy.md",
       "timestamp": [
         1980,
@@ -291,8 +291,8 @@
       ]
     },
     {
-      "bytes": 1140,
-      "crc": 4141771889,
+      "bytes": 1241,
+      "crc": 4238998587,
       "path": "concepts/019-task-contract.md",
       "timestamp": [
         1980,
@@ -304,8 +304,8 @@
       ]
     },
     {
-      "bytes": 1147,
-      "crc": 4086582527,
+      "bytes": 1165,
+      "crc": 3942668339,
       "path": "concepts/020-tool-call-proposal.md",
       "timestamp": [
         1980,
@@ -317,8 +317,8 @@
       ]
     },
     {
-      "bytes": 4341,
-      "crc": 2464326442,
+      "bytes": 4371,
+      "crc": 3643189907,
       "path": "manifest.json",
       "timestamp": [
         1980,
@@ -330,9 +330,9 @@
       ]
     },
     {
-      "bytes": 1418,
-      "crc": 2287316603,
-      "path": "sources/001-src-content-blog-the-atlas-of-agent-design-patterns-part-3-en-md.md",
+      "bytes": 28680,
+      "crc": 637400989,
+      "path": "sources/001-six-dimensional-map-of-llm-agent-architectures.md",
       "timestamp": [
         1980,
         1,
@@ -343,9 +343,9 @@
       ]
     },
     {
-      "bytes": 1360,
-      "crc": 788304815,
-      "path": "sources/002-src-content-blog-the-atlas-of-agent-design-patterns-part-2-en-md.md",
+      "bytes": 32150,
+      "crc": 1180024098,
+      "path": "sources/002-agent-execution-paths.md",
       "timestamp": [
         1980,
         1,
@@ -356,9 +356,9 @@
       ]
     },
     {
-      "bytes": 1367,
-      "crc": 1245486655,
-      "path": "sources/003-https-github-com-danielcanfly-knowledge-os-foundation.md",
+      "bytes": 36533,
+      "crc": 399850373,
+      "path": "sources/003-agent-decision-and-planning-strategies.md",
       "timestamp": [
         1980,
         1,
@@ -369,9 +369,9 @@
       ]
     },
     {
-      "bytes": 7764,
-      "crc": 2266795615,
-      "path": "sources/004-proposals-m23-4-proposed-concepts-md.md",
+      "bytes": 15797,
+      "crc": 1731864590,
+      "path": "sources/004-m23-4-harness-proposed-concepts-review-surface.md",
       "timestamp": [
         1980,
         1,
@@ -382,9 +382,9 @@
       ]
     },
     {
-      "bytes": 7771,
-      "crc": 3935282202,
-      "path": "sources/005-proposals-m23-4-provenance-summary-json.md",
+      "bytes": 15091,
+      "crc": 741931449,
+      "path": "sources/005-m23-4-harness-proposal-provenance-summary.md",
       "timestamp": [
         1980,
         1,
@@ -395,9 +395,9 @@
       ]
     },
     {
-      "bytes": 7790,
-      "crc": 1203872880,
-      "path": "sources/006-pilot-m24-m24-source-pr-19-decision-capture-json.md",
+      "bytes": 21282,
+      "crc": 2829628371,
+      "path": "sources/006-m24-source-pr-19-human-decision-capture.md",
       "timestamp": [
         1980,
         1,
@@ -408,9 +408,9 @@
       ]
     },
     {
-      "bytes": 1335,
-      "crc": 2134024806,
-      "path": "sources/007-https-www-danielcanfly-com-en-blog-the-atlas-of-agent-design-patterns-pa.md",
+      "bytes": 3033,
+      "crc": 60289759,
+      "path": "sources/007-m3-delivery-contract.md",
       "timestamp": [
         1980,
         1,
@@ -424,11 +424,11 @@
   "release_id": "20260720T160000Z-46137c97263e",
   "repeated_build_byte_identical": true,
   "schema_version": "knowledge-engine-m24-14-4-obsidian-vault-zip/v1",
-  "self_sha256": "2b472b1db0f41f035878e2d67b9d8f7623ec1b8c1cd5672ef68d52a1485f5e4d",
+  "self_sha256": "309df3202d9697e5cf46ead645b7e93e31cdfec7149a33c4e3f3003fff4a94ec",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "m24_14_4_obsidian_vault_zip_candidate_complete",
-  "vault_zip_bytes": 61235,
+  "vault_zip_bytes": 185150,
   "vault_zip_path": "pilot/m24/internal-product-deployment/site/downloads/llm-wiki-m24-obsidian-vault.zip",
-  "vault_zip_sha256": "e8c84fb521640b0a213615837243f3fb012b85774b3b64ef86da51e8a8a016af",
+  "vault_zip_sha256": "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64",
   "write_back_authorized": false
 }

@@ -59,7 +59,7 @@
     },
     {
       "concept_count": 20,
-      "digest": "c7492d350ac66171565da567aec7be09b93ad7ef37a8abc0ca6f133bb89c5fea",
+      "digest": "e6487a55fb435a3135eb08eab6042cca03f1d9785443010d6ba23aee9a4efc51",
       "edge_count": 0,
       "file_count": 29,
       "release_id": "20260720T160000Z-46137c97263e",
@@ -71,7 +71,7 @@
   "provenance_sha256": "0593d6669661df0d639e13b3b93d744b36f6fa934ca4faf7566d05574a573a05",
   "release_id": "20260720T160000Z-46137c97263e",
   "schema_version": "knowledge-engine-m24-p3-product-surface-integration/v1",
-  "self_sha256": "fd28466d7d31edf2569f9b3720332e719ffda157ef97864b907ab07dc14b8ff5",
+  "self_sha256": "c7b1e8384fb97ab9b9906f3e88149a1f1983108816180129cf248daa95818a77",
   "shared_exit_gate": {
     "queries": [
       "harness",

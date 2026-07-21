@@ -56,9 +56,9 @@
       "sha256": "04db5677bd6f2daf46ba0a6c78bfa6129268f85726b431b5f8869809f7f58c5b"
     },
     {
-      "bytes": 654,
+      "bytes": 655,
       "path": "pilot/m24/internal-product-deployment/site/data/obsidian-export-manifest.json",
-      "sha256": "caac42be3111d6af711d0a62c475f4ca54168b921f0fae7a62aab423db101d79"
+      "sha256": "8b385642b0241d9de1147dcac462f1e2e600330dcc7af142cb4f02a7a74e6e3e"
     }
   ],
   "authority": {
@@ -151,7 +151,7 @@
     "same_origin_artifact_fetch_only": true,
     "secret_scan_passed": true
   },
-  "self_sha256": "c920bd6abe6d59778528dd429d35276625147da2514ff266189bcf1c28a13a1a",
+  "self_sha256": "3d9af8321c9297fdc86c3471cc4fc54616ffc33137b4ab9567f0a6e6278a7290",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "m24_14_1_product_application_shell_implemented"
 }
