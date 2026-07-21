@@ -3,45 +3,71 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'; connect-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
   <title>LLM Wiki Internal Product</title>
   <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
 </head>
 <body>
-  <header>
-    <p class="eyebrow">Authenticated internal preview</p>
-    <h1>LLM Wiki</h1>
-    <p class="release">Release 20260720T160000Z-46137c97263e</p>
-    <p class="digest">Manifest ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877</p>
-  </header>
-  <main>
-    <section>
-      <h2>Surfaces</h2>
-      <ul>
-        <li><a href="data/concept-wiki-harness.json">Concept Wiki</a></li>
-        <li><a href="data/search-harness.json">Lexical Search</a></li>
-        <li><a href="data/graph-navigation.json">Sigma Graph Explorer Payload</a></li>
-        <li><a href="data/source-viewers.json">Provenance Source Viewer</a></li>
-        <li><a href="data/query-answer-acceptance.json">Citation-Grounded Answers</a></li>
-        <li><a href="data/release-viewer.json">Release Viewer</a></li>
-        <li><a href="data/obsidian-export-manifest.json">Obsidian Export Manifest</a></li>
-      </ul>
-    </section>
-    <section>
-      <h2>Authority</h2>
-      <p>Read-only internal product. Production retrieval remains lexical. Semantic
-      promotion, semantic serving, hybrid retrieval, and production answer serving
-      remain disabled.</p>
-    </section>
-    <section>
-      <h2>Error States</h2>
-      <ul>
-        <li>Unauthenticated requests must return 403.</li>
-        <li>Release identity mismatch must block rendering.</li>
-        <li>Missing canonical artifact must show a release unavailable state.</li>
-        <li>Source/provenance viewer mismatch must show citation unavailable.</li>
-      </ul>
-    </section>
-  </main>
+  <a class="skip-link" href="#app-main">Skip to content</a>
+  <div
+    class="app-shell"
+    data-release-id="20260720T160000Z-46137c97263e"
+    data-manifest-sha="ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877"
+  >
+    <aside class="sidebar" aria-label="Product navigation">
+      <div class="brand-block">
+        <p class="eyebrow">Authenticated internal</p>
+        <h1>LLM Wiki</h1>
+        <p class="release">Release 20260720T160000Z-46137c97263e</p>
+      </div>
+      <nav class="primary-nav" aria-label="M24 surfaces">
+        <a href="#/overview" data-route-link="overview">Overview</a>
+        <a href="#/wiki" data-route-link="wiki">Concept Wiki</a>
+        <a href="#/search" data-route-link="search">Lexical Search</a>
+        <a href="#/graph" data-route-link="graph">Graph Explorer</a>
+        <a href="#/sources" data-route-link="sources">Sources</a>
+        <a href="#/release" data-route-link="release">Release</a>
+        <a href="#/obsidian" data-route-link="obsidian">Obsidian</a>
+      </nav>
+      <section class="boundary-panel" aria-label="Authority boundary">
+        <h2>Boundary</h2>
+        <p>Read-only internal product. Production retrieval remains lexical.</p>
+      </section>
+    </aside>
+    <main id="app-main" class="workspace" tabindex="-1">
+      <header class="workspace-header">
+        <div>
+          <p class="eyebrow">M24 internal product candidate</p>
+          <h2 id="route-title">Loading</h2>
+        </div>
+        <dl class="identity-strip" aria-label="Release identity">
+          <div>
+            <dt>Release</dt>
+            <dd id="release-id">20260720T160000Z-46137c97263e</dd>
+          </div>
+          <div>
+            <dt>Manifest</dt>
+            <dd id="manifest-sha">ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877</dd>
+          </div>
+          <div>
+            <dt>Retrieval</dt>
+            <dd>lexical</dd>
+          </div>
+        </dl>
+      </header>
+      <section id="app-status" class="status-banner" role="status" aria-live="polite">
+        Loading canonical artifacts.
+      </section>
+      <section id="app" class="surface-region" aria-label="Selected product surface"></section>
+    </main>
+  </div>
+  <noscript>
+    <main class="noscript">
+      <h1>LLM Wiki requires JavaScript</h1>
+      <p>This internal product shell uses same-origin canonical JSON artifacts and
+      does not load runtime CDN dependencies.</p>
+    </main>
+  </noscript>
 </body>
 </html>

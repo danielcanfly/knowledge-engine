@@ -1,0 +1,142 @@
+{
+  "artifacts": [
+    {
+      "bytes": 2990,
+      "path": "pilot/m24/internal-product-deployment/site/index.html",
+      "sha256": "7f0c3a92719fa7627a5875944dfe47102a4d9090e59176d7ca6dd466015f1f38"
+    },
+    {
+      "bytes": 4911,
+      "path": "pilot/m24/internal-product-deployment/site/styles.css",
+      "sha256": "d10543ff67956eb59d4b9e1ca1b689c5a2f4f964e26f00ae1fb3def664f47e76"
+    },
+    {
+      "bytes": 13108,
+      "path": "pilot/m24/internal-product-deployment/site/app.js",
+      "sha256": "2312ebea34ced733e04763152d4ea6d5c0b7de6c4d7c99763504df423a944135"
+    },
+    {
+      "bytes": 1016,
+      "path": "pilot/m24/internal-product-deployment/site/data/release-viewer.json",
+      "sha256": "c97cb0085fd5dac136bee3e7680f969fe33c220cd7eb50d722d5acf1eb111cb2"
+    },
+    {
+      "bytes": 50914,
+      "path": "pilot/m24/internal-product-deployment/site/data/concept-wiki-harness.json",
+      "sha256": "2306d8f9f9a018c212277914af95cce832562466204718e4f4a9731eb7cf6830"
+    },
+    {
+      "bytes": 29048,
+      "path": "pilot/m24/internal-product-deployment/site/data/search-harness.json",
+      "sha256": "29fda5b333d64734ed6d90292be748f60c29aea18f83434e319f3764ea30321c"
+    },
+    {
+      "bytes": 18007,
+      "path": "pilot/m24/internal-product-deployment/site/data/graph-navigation.json",
+      "sha256": "e5ade54f909497e37791489d27c70851bb6edaf72cbdad36d62bccca4bfbb429"
+    },
+    {
+      "bytes": 20046,
+      "path": "pilot/m24/internal-product-deployment/site/data/source-viewers.json",
+      "sha256": "835c4bb75d1d982f167a9930cad8df6bcf6cd6742909be44cc889105f9ed4fb5"
+    },
+    {
+      "bytes": 407,
+      "path": "pilot/m24/internal-product-deployment/site/data/obsidian-export-manifest.json",
+      "sha256": "434f8d14b95d6f703eadbcff3a2ad96b70bee4e9b2cab391e8108994e9b5e997"
+    }
+  ],
+  "authority": {
+    "browser_authority": "read_only",
+    "credential_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "permanent_ledger_mutation": false,
+    "product_audience": "authenticated_internal",
+    "production_answer_serving_enabled": false,
+    "production_pointer_mutation": false,
+    "production_r2_mutation": false,
+    "production_retrieval": "lexical",
+    "qdrant_mutation": false,
+    "raw_evidence_exposed": false,
+    "semantic_promotion_enabled": false,
+    "semantic_serving_enabled": false,
+    "source_mutation": false,
+    "traffic_mutation": false
+  },
+  "browser_evidence": {
+    "human_visual_acceptance_claimed": false,
+    "local_http_smoke": true,
+    "note": "Local Playwright screenshot smoke loaded the overview route through a same-origin HTTP server; this is implementation evidence only.",
+    "playwright_cli_smoke": true,
+    "screenshot_committed": false
+  },
+  "deployment_package": "pilot/m24/internal-product-deployment/site",
+  "error_states": [
+    "loading",
+    "missing_artifact",
+    "release_identity_mismatch",
+    "acl_denied",
+    "bounded_error",
+    "no_match"
+  ],
+  "issue_number": 1007,
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "release_id": "20260720T160000Z-46137c97263e",
+  "route_evidence": [
+    {
+      "label": "Overview",
+      "nonblank_browser_smoke": true,
+      "primary_surface": "release summary",
+      "route": "overview"
+    },
+    {
+      "label": "Concept Wiki",
+      "nonblank_browser_smoke": true,
+      "primary_surface": "canonical concept page",
+      "route": "wiki"
+    },
+    {
+      "label": "Lexical Search",
+      "nonblank_browser_smoke": true,
+      "primary_surface": "lexical query results",
+      "route": "search"
+    },
+    {
+      "label": "Graph Explorer",
+      "nonblank_browser_smoke": true,
+      "primary_surface": "canonical graph preview",
+      "route": "graph"
+    },
+    {
+      "label": "Sources",
+      "nonblank_browser_smoke": true,
+      "primary_surface": "provenance/source viewer",
+      "route": "sources"
+    },
+    {
+      "label": "Release Details",
+      "nonblank_browser_smoke": true,
+      "primary_surface": "release identity and artifact digests",
+      "route": "release"
+    },
+    {
+      "label": "Obsidian Export",
+      "nonblank_browser_smoke": true,
+      "primary_surface": "release-pinned export manifest",
+      "route": "obsidian"
+    }
+  ],
+  "schema_version": "knowledge-engine-m24-14-1-product-application-shell/v1",
+  "security": {
+    "csp": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "external_network_dependencies": false,
+    "inline_script_allowed": false,
+    "mutation_controls_present": false,
+    "runtime_cdn_dependencies": false,
+    "same_origin_artifact_fetch_only": true,
+    "secret_scan_passed": true
+  },
+  "self_sha256": "285636ffcd75b1114b47a814e7273cf835e816336b07f0b4350028a4c28381dd",
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "status": "m24_14_1_product_application_shell_implemented"
+}
