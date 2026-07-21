@@ -632,17 +632,27 @@ function renderObsidian(artifacts) {
       ${metric("Concept notes", obsidian.concept_note_count)}
       ${metric("Source notes", obsidian.source_note_count)}
       ${metric("Files", obsidian.file_count)}
+      ${metric("ZIP bytes", obsidian.vault_zip_bytes)}
       ${metric("Write-back", String(obsidian.write_back_authorized))}
     </div>
     <section class="panel">
       <h3>Vault candidate</h3>
-      <p>M24.14.4 delivers the deterministic downloadable Vault ZIP. The current
-      app shell exposes the release-pinned export manifest and route.</p>
+      <p>The downloadable ZIP is built deterministically from the release-pinned
+      Obsidian export files and committed as a same-origin internal artifact.</p>
+      <ul class="compact-meta">
+        <li>${escapeHtml(obsidian.vault_zip_path)}</li>
+        <li>${escapeHtml(obsidian.vault_zip_sha256)}</li>
+      </ul>
+      <a
+        class="download-link"
+        href="${escapeHtml(obsidian.download_href)}"
+        download
+      >Download Vault ZIP</a>
       <a
         class="download-link"
         href="data/obsidian-export-manifest.json"
         download
-      >Download manifest</a>
+      >Download export manifest</a>
     </section>
   `;
 }

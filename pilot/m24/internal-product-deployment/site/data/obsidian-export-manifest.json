@@ -1,10 +1,14 @@
 {
   "concept_note_count": 20,
+  "download_href": "downloads/llm-wiki-m24-obsidian-vault.zip",
   "file_count": 29,
   "manifest_sha256": "c7492d350ac66171565da567aec7be09b93ad7ef37a8abc0ca6f133bb89c5fea",
   "release_id": "20260720T160000Z-46137c97263e",
   "request_id": "search_b471ac35398ab7de04a4742f15ab7157",
   "schema_version": "knowledge-engine-m24-p6-internal-product-deployment/v1/obsidian-export-path",
   "source_note_count": 7,
+  "vault_zip_bytes": 61235,
+  "vault_zip_path": "downloads/llm-wiki-m24-obsidian-vault.zip",
+  "vault_zip_sha256": "e8c84fb521640b0a213615837243f3fb012b85774b3b64ef86da51e8a8a016af",
   "write_back_authorized": false
 }

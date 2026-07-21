@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import zipfile
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal
 
@@ -25,6 +27,8 @@ P6_SCHEMA = "knowledge-engine-m24-p6-internal-product-deployment/v1"
 P6_ISSUE_NUMBER = 997
 DEPLOYMENT_ROOT = Path("pilot/m24/internal-product-deployment")
 SITE_ROOT = DEPLOYMENT_ROOT / "site"
+OBSIDIAN_VAULT_ZIP_RELATIVE = "downloads/llm-wiki-m24-obsidian-vault.zip"
+ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 GRAPH_VENDOR_ASSETS = (
     (
         Path("packages/graph-explorer/node_modules/graphology/dist/graphology.umd.min.js"),
@@ -179,6 +183,45 @@ def _write_bytes(path: Path, data: bytes) -> P6DeploymentArtifact:
         bytes=len(data),
         sha256=sha256_bytes(data),
     )
+
+
+def _zip_info(path: str) -> zipfile.ZipInfo:
+    info = zipfile.ZipInfo(path, ZIP_TIMESTAMP)
+    info.compress_type = zipfile.ZIP_STORED
+    info.create_system = 3
+    info.external_attr = (0o100644 & 0xFFFF) << 16
+    return info
+
+
+def _deterministic_obsidian_vault_zip(
+    *,
+    site_root: Path,
+    export_files: list[Any],
+) -> P6DeploymentArtifact:
+    members: dict[str, bytes] = {
+        file.path: file.content.encode("utf-8")
+        for file in export_files
+    }
+    members[".obsidian/app.json"] = (
+        json.dumps(
+            {
+                "alwaysUpdateLinks": True,
+                "attachmentFolderPath": "attachments",
+                "newFileLocation": "folder",
+                "newFileFolderPath": "concepts",
+                "readableLineLength": True,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_STORED) as archive:
+        for path in sorted(members):
+            archive.writestr(_zip_info(path), members[path])
+    return _write_bytes(site_root / OBSIDIAN_VAULT_ZIP_RELATIVE, buffer.getvalue())
 
 
 def _surface(
@@ -1772,17 +1815,27 @@ function renderObsidian(artifacts) {{
       ${{metric("Concept notes", obsidian.concept_note_count)}}
       ${{metric("Source notes", obsidian.source_note_count)}}
       ${{metric("Files", obsidian.file_count)}}
+      ${{metric("ZIP bytes", obsidian.vault_zip_bytes)}}
       ${{metric("Write-back", String(obsidian.write_back_authorized))}}
     </div>
     <section class="panel">
       <h3>Vault candidate</h3>
-      <p>M24.14.4 delivers the deterministic downloadable Vault ZIP. The current
-      app shell exposes the release-pinned export manifest and route.</p>
+      <p>The downloadable ZIP is built deterministically from the release-pinned
+      Obsidian export files and committed as a same-origin internal artifact.</p>
+      <ul class="compact-meta">
+        <li>${{escapeHtml(obsidian.vault_zip_path)}}</li>
+        <li>${{escapeHtml(obsidian.vault_zip_sha256)}}</li>
+      </ul>
+      <a
+        class="download-link"
+        href="${{escapeHtml(obsidian.download_href)}}"
+        download
+      >Download Vault ZIP</a>
       <a
         class="download-link"
         href="data/obsidian-export-manifest.json"
         download
-      >Download manifest</a>
+      >Download export manifest</a>
     </section>
   `;
 }}
@@ -1965,9 +2018,16 @@ def _source_viewers_payload() -> dict[str, Any]:
     }
 
 
-def _obsidian_manifest_payload() -> dict[str, Any]:
+def _obsidian_manifest_payload(
+    *,
+    site_root: Path,
+) -> tuple[dict[str, Any], P6DeploymentArtifact]:
     export = canonical_obsidian_export()
-    return {
+    zip_artifact = _deterministic_obsidian_vault_zip(
+        site_root=site_root,
+        export_files=export.files,
+    )
+    payload = {
         "schema_version": f"{P6_SCHEMA}/obsidian-export-path",
         "release_id": export.release_id,
         "request_id": export.request_id,
@@ -1979,12 +2039,19 @@ def _obsidian_manifest_payload() -> dict[str, Any]:
         "source_note_count": len(
             [item for item in export.files if item.path.startswith("sources/")]
         ),
+        "vault_zip_path": OBSIDIAN_VAULT_ZIP_RELATIVE,
+        "vault_zip_bytes": zip_artifact.bytes,
+        "vault_zip_sha256": zip_artifact.sha256,
+        "download_href": OBSIDIAN_VAULT_ZIP_RELATIVE,
         "write_back_authorized": False,
     }
+    return payload, zip_artifact
 
 
 def _secret_scan(paths: list[Path]) -> bool:
     for path in paths:
+        if path.suffix == ".zip":
+            continue
         text = path.read_text(encoding="utf-8")
         if any(pattern.search(text) for pattern in SECRET_PATTERNS):
             return False
@@ -2003,7 +2070,7 @@ def build_p6_internal_product_deployment(
     answers = build_p5_query_answer_acceptance_report()
     release = _release_viewer()
     source_viewers = _source_viewers_payload()
-    obsidian = _obsidian_manifest_payload()
+    obsidian, obsidian_zip = _obsidian_manifest_payload(site_root=site_root)
     data_payloads: list[tuple[str, Any]] = [
         ("data/concept-wiki-harness.json", concept.model_dump(mode="json")),
         ("data/search-harness.json", search.model_dump(mode="json")),
@@ -2023,6 +2090,7 @@ def build_p6_internal_product_deployment(
         destination = site_root / relative
         vendor_bytes = source.read_bytes() if source.exists() else destination.read_bytes()
         artifacts.append(_write_bytes(destination, vendor_bytes))
+    artifacts.append(obsidian_zip)
     for relative, payload in data_payloads:
         artifacts.append(_write_text(site_root / relative, _json(payload)))
     scanned_paths = [
