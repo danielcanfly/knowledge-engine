@@ -31,9 +31,9 @@
       "sha256": "58e30383ab428f832068d9d16a5215c65ba12430d438ed091c5703f398de9e16"
     },
     {
-      "bytes": 61235,
+      "bytes": 185150,
       "path": "pilot/m24/internal-product-deployment/site/downloads/llm-wiki-m24-obsidian-vault.zip",
-      "sha256": "e8c84fb521640b0a213615837243f3fb012b85774b3b64ef86da51e8a8a016af"
+      "sha256": "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
     },
     {
       "bytes": 50914,
@@ -76,9 +76,9 @@
       "sha256": "c97cb0085fd5dac136bee3e7680f969fe33c220cd7eb50d722d5acf1eb111cb2"
     },
     {
-      "bytes": 654,
+      "bytes": 655,
       "path": "pilot/m24/internal-product-deployment/site/data/obsidian-export-manifest.json",
-      "sha256": "caac42be3111d6af711d0a62c475f4ca54168b921f0fae7a62aab423db101d79"
+      "sha256": "8b385642b0241d9de1147dcac462f1e2e600330dcc7af142cb4f02a7a74e6e3e"
     },
     {
       "bytes": 58780,
@@ -179,7 +179,7 @@
     "secret_scan_passed": true,
     "secret_scan_patterns": 3
   },
-  "self_sha256": "39e64fa5819fc9df72322719e9a44ae34735fc4755a2b6f14b2e177f81f2e33a",
+  "self_sha256": "9ca84d855b5f65726865131d3977500a3f9fb0c4fdd5900c8d8834dc5d667f53",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "internal_product_deployment_package_complete",
   "surfaces": [
@@ -232,7 +232,7 @@
       "surface": "release_viewer"
     },
     {
-      "digest": "3c5a4f8c91b3e10be8ee335eaea11956d0f362110d7fb7e9793b6a0463765627",
+      "digest": "af1c319dfeefdc82938010ab71eef863f996e05224f3af10665b1aad89931501",
       "fallback": "regenerate_export_from_canonical_release",
       "path": "site/data/obsidian-export-manifest.json",
       "ready": true,
