@@ -666,7 +666,7 @@ function renderSources(artifacts) {
       >
       <button type="submit">Filter</button>
     </form>
-    <div class="surface-split">
+    <div class="surface-split source-split">
       <section class="panel">
         <h3>Sources</h3>
         <p class="muted">

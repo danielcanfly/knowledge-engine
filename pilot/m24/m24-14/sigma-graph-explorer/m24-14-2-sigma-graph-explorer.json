@@ -6,14 +6,14 @@
       "sha256": "53b2cfac96c82e65f10a75e711577baf7fb48d4b0749ae81d6e8177da6caf72f"
     },
     {
-      "bytes": 8703,
+      "bytes": 9155,
       "path": "pilot/m24/internal-product-deployment/site/styles.css",
-      "sha256": "358935d4eead848b58a710ba9b806a3fcd9fb4606d3f20d414d9ad2e8d5970f3"
+      "sha256": "736cbf93b6d76a6ad72cf50b4145b4eed83cb4f3e816b0b565151d0288d994ab"
     },
     {
-      "bytes": 40914,
+      "bytes": 40927,
       "path": "pilot/m24/internal-product-deployment/site/app.js",
-      "sha256": "db03c1b399951f585bcf5e4065c282def0342dc29d33ddb7d073896a02676aa2"
+      "sha256": "2091fbf69abebeeedb5b3879a4baed82b01b81f74882aa3a21cb6c5bc133d506"
     },
     {
       "bytes": 14493,
@@ -106,7 +106,7 @@
     "sigma_version": "3.0.3"
   },
   "schema_version": "knowledge-engine-m24-14-2-sigma-graph-explorer/v1",
-  "self_sha256": "32283a402a6b6aef99ba57e31fe8e5aa21cc425ffbeff1e14672c1f47437df2a",
+  "self_sha256": "84bb54338ecb9b0fb2269b176a5740bf94df3b5125a234879296bb84168a6cd9",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "m24_14_2_sigma_graph_explorer_integrated"
 }

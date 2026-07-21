@@ -29,6 +29,14 @@ BLOG_DEEP_MARKERS = {
         "The production objective is not maximum planning freedom"
     ),
 }
+SOURCE_LAYOUT_VIEWPORTS = [
+    (1440, 900),
+    (1280, 800),
+    (1024, 768),
+    (900, 800),
+    (768, 900),
+    (390, 844),
+]
 
 
 class _QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -154,6 +162,100 @@ def _assert_no_graph_error(page) -> None:
     assert "Graph explorer initialization failed." not in body
 
 
+def _assert_source_metadata_layout_is_safe(page) -> None:
+    result = page.evaluate(
+        """() => {
+            const pageRoot = document.documentElement;
+            const detail = document.querySelector("[data-source-detail]");
+            const body = document.querySelector(".source-document-body");
+            const cards = [...document.querySelectorAll(".reader-meta > section")];
+            const cardResults = cards.map((card) => {
+                const cardBox = card.getBoundingClientRect();
+                const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
+                const escaped = [];
+                while (walker.nextNode()) {
+                    const text = walker.currentNode.textContent.trim();
+                    if (!text) continue;
+                    const range = document.createRange();
+                    range.selectNodeContents(walker.currentNode);
+                    for (const rect of range.getClientRects()) {
+                        if (
+                            rect.left < cardBox.left - 1 ||
+                            rect.right > cardBox.right + 1 ||
+                            rect.top < cardBox.top - 1 ||
+                            rect.bottom > cardBox.bottom + 1
+                        ) {
+                            escaped.push({
+                                text,
+                                rect: {
+                                    left: rect.left,
+                                    right: rect.right,
+                                    top: rect.top,
+                                    bottom: rect.bottom,
+                                },
+                                card: {
+                                    left: cardBox.left,
+                                    right: cardBox.right,
+                                    top: cardBox.top,
+                                    bottom: cardBox.bottom,
+                                },
+                            });
+                        }
+                    }
+                    range.detach();
+                }
+                const styles = getComputedStyle(card);
+                return {
+                    title: card.querySelector("h4")?.textContent || "",
+                    scrollWidth: card.scrollWidth,
+                    clientWidth: card.clientWidth,
+                    escaped,
+                    overflowX: styles.overflowX,
+                    textOverflow: styles.textOverflow,
+                    box: {
+                        left: cardBox.left,
+                        right: cardBox.right,
+                        top: cardBox.top,
+                        bottom: cardBox.bottom,
+                    },
+                };
+            });
+            const origin = cardResults.find((card) => card.title === "Origin");
+            const integrity = cardResults.find((card) => card.title === "Integrity");
+            const intersects = origin && integrity
+                ? !(
+                    origin.box.right <= integrity.box.left ||
+                    integrity.box.right <= origin.box.left ||
+                    origin.box.bottom <= integrity.box.top ||
+                    integrity.box.bottom <= origin.box.top
+                )
+                : true;
+            return {
+                pageScrollWidth: pageRoot.scrollWidth,
+                pageClientWidth: pageRoot.clientWidth,
+                detailScrollWidth: detail?.scrollWidth || 0,
+                detailClientWidth: detail?.clientWidth || 0,
+                bodyScrollHeight: body?.scrollHeight || 0,
+                bodyClientHeight: body?.clientHeight || 0,
+                bodyWhiteSpace: body ? getComputedStyle(body).whiteSpace : "",
+                cards: cardResults,
+                intersects,
+            };
+        }"""
+    )
+    assert result["pageScrollWidth"] <= result["pageClientWidth"]
+    assert result["detailScrollWidth"] <= result["detailClientWidth"]
+    assert result["bodyScrollHeight"] > result["bodyClientHeight"]
+    assert result["bodyWhiteSpace"] == "pre-wrap"
+    assert result["intersects"] is False
+    assert {card["title"] for card in result["cards"]} >= {"Origin", "Integrity"}
+    for card in result["cards"]:
+        assert card["scrollWidth"] <= card["clientWidth"]
+        assert card["escaped"] == []
+        assert card["textOverflow"] != "ellipsis"
+        assert card["overflowX"] != "hidden"
+
+
 def test_m24_14_5_source_documents_are_complete_and_inspectable(page, site_url: str) -> None:
     source_index = json.loads(SITE_ROOT.joinpath("data/source-index.json").read_text())
     source_viewers = json.loads(SITE_ROOT.joinpath("data/source-viewers.json").read_text())
@@ -203,6 +305,39 @@ def test_m24_14_5_source_documents_are_complete_and_inspectable(page, site_url: 
     page.go_back()
     page.wait_for_url("**/#/sources")
     expect(page.locator(".source-card").first).to_have_attribute("aria-current", "true")
+
+
+def test_m24_14_5_source_metadata_layout_across_required_viewports(
+    page,
+    site_url: str,
+) -> None:
+    for width, height in SOURCE_LAYOUT_VIEWPORTS:
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(f"{site_url}/#/sources")
+        page.locator(
+            ".source-card",
+            has_text="Agent execution paths",
+        ).get_by_role("button", name="Inspect").click()
+        page.wait_for_url("**/#/sources?viewer=viewer_source_blog_agent_execution_paths")
+        expect(page.locator("#source-detail-heading")).to_have_text("Agent execution paths")
+        expect(
+            page.locator(".source-card", has_text="Agent execution paths")
+        ).to_have_attribute("aria-current", "true")
+        assert page.evaluate("document.activeElement.id") == "source-detail-heading"
+        app_text = page.locator("#app").inner_text()
+        assert BLOG_DEEP_MARKERS["Agent execution paths"] in app_text
+        assert "759 lines" in app_text
+        assert "27e2fe996f878f2129bf510d6a326c02f7d87be5" in app_text
+        assert "9b8912a4dc0193c0c478bcfe83dfaccff21b7ffe" in app_text
+        assert "57f9b3af9f91df45f479e16efa0ad32619ee464b55fbd6a760dbb96586943a52" in app_text
+        _assert_source_metadata_layout_is_safe(page)
+
+        page.go_back()
+        page.wait_for_url("**/#/sources")
+        expect(page.locator(".source-card").first).to_have_attribute("aria-current", "true")
+        page.go_forward()
+        page.wait_for_url("**/#/sources?viewer=viewer_source_blog_agent_execution_paths")
+        expect(page.locator("#source-detail-heading")).to_have_text("Agent execution paths")
 
 
 def test_m24_14_5_source_inspect_scrolls_detail_on_mobile(page, site_url: str) -> None:
