@@ -116,7 +116,11 @@ def build_p3_product_surface_usability_report(
                     "inspect_lexical_results",
                 ],
                 handoffs=["graph", "search", "sources"],
-                bounded_states=["concept_section_empty", "concept_artifact_mismatch"],
+                bounded_states=[
+                    "concept_section_empty",
+                    "bounded_graph_concept_summary",
+                    "concept_not_found",
+                ],
                 same_origin_artifacts=[
                     "site/data/concept-wiki-harness.json",
                     "site/data/source-viewers.json",

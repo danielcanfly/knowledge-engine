@@ -48,7 +48,8 @@ def test_m24_14_1_shell_has_required_routes_and_states() -> None:
     assert all(item.nonblank_browser_smoke for item in report.route_evidence)
     for route in P1_ROUTES:
         assert f"{route}:" in app_js
-        assert f'href="#/{route}"' in index
+        expected_hash = "#/wiki?concept=concepts/harness" if route == "wiki" else f"#/{route}"
+        assert f'href="{expected_hash}"' in index
     for state in [
         "missing-artifact",
         "release identity mismatch",
