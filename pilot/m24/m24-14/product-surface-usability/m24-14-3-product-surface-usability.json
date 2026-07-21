@@ -1,0 +1,139 @@
+{
+  "assets": [
+    {
+      "bytes": 3135,
+      "path": "pilot/m24/internal-product-deployment/site/index.html",
+      "sha256": "970a81cd0a883ee524bd1134db6e5b1454d27c49181b1ef27998f0dceb9828cb"
+    },
+    {
+      "bytes": 7383,
+      "path": "pilot/m24/internal-product-deployment/site/styles.css",
+      "sha256": "94ac6cb6e858885a5e8368b5d6302fce9371ca8fdeb463524d8986d9c875d55d"
+    },
+    {
+      "bytes": 27240,
+      "path": "pilot/m24/internal-product-deployment/site/app.js",
+      "sha256": "f3a1db7a896875eaf07823e841a2343525fcdd62901bf82ab8a284e765b15e6f"
+    },
+    {
+      "bytes": 50914,
+      "path": "pilot/m24/internal-product-deployment/site/data/concept-wiki-harness.json",
+      "sha256": "2306d8f9f9a018c212277914af95cce832562466204718e4f4a9731eb7cf6830"
+    },
+    {
+      "bytes": 29048,
+      "path": "pilot/m24/internal-product-deployment/site/data/search-harness.json",
+      "sha256": "29fda5b333d64734ed6d90292be748f60c29aea18f83434e319f3764ea30321c"
+    },
+    {
+      "bytes": 20046,
+      "path": "pilot/m24/internal-product-deployment/site/data/source-viewers.json",
+      "sha256": "835c4bb75d1d982f167a9930cad8df6bcf6cd6742909be44cc889105f9ed4fb5"
+    },
+    {
+      "bytes": 18007,
+      "path": "pilot/m24/internal-product-deployment/site/data/graph-navigation.json",
+      "sha256": "e5ade54f909497e37791489d27c70851bb6edaf72cbdad36d62bccca4bfbb429"
+    },
+    {
+      "bytes": 1016,
+      "path": "pilot/m24/internal-product-deployment/site/data/release-viewer.json",
+      "sha256": "c97cb0085fd5dac136bee3e7680f969fe33c220cd7eb50d722d5acf1eb111cb2"
+    }
+  ],
+  "authority": {
+    "browser_authority": "read_only",
+    "credential_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "permanent_ledger_mutation": false,
+    "product_audience": "authenticated_internal",
+    "production_answer_serving_enabled": false,
+    "production_pointer_mutation": false,
+    "production_r2_mutation": false,
+    "production_retrieval": "lexical",
+    "qdrant_mutation": false,
+    "raw_evidence_exposed": false,
+    "semantic_promotion_enabled": false,
+    "semantic_serving_enabled": false,
+    "source_mutation": false,
+    "traffic_mutation": false
+  },
+  "client_side_only": true,
+  "deployment_package": "pilot/m24/internal-product-deployment/site",
+  "external_network_dependencies": false,
+  "issue_number": 1011,
+  "local_browser_route_smoke": true,
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "release_id": "20260720T160000Z-46137c97263e",
+  "runtime_cdn_dependencies": false,
+  "schema_version": "knowledge-engine-m24-14-3-product-surface-usability/v1",
+  "self_sha256": "8a639f3b00f9745d869d9c65a6008b14e66dfaef93ac3b48c4ea6930534e2967",
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "status": "m24_14_3_product_surfaces_usable",
+  "workflows": [
+    {
+      "bounded_states": [
+        "concept_section_empty",
+        "concept_artifact_mismatch"
+      ],
+      "controls": [
+        "open_loaded_concept",
+        "open_relationship_in_graph",
+        "open_section_source_viewer",
+        "inspect_lexical_results"
+      ],
+      "handoffs": [
+        "graph",
+        "search",
+        "sources"
+      ],
+      "same_origin_artifacts": [
+        "site/data/concept-wiki-harness.json",
+        "site/data/source-viewers.json"
+      ],
+      "surface": "concept_wiki"
+    },
+    {
+      "bounded_states": [
+        "no_match"
+      ],
+      "controls": [
+        "query_filter",
+        "open_graph",
+        "open_wiki",
+        "open_source_card"
+      ],
+      "handoffs": [
+        "wiki",
+        "graph",
+        "sources"
+      ],
+      "same_origin_artifacts": [
+        "site/data/search-harness.json",
+        "site/data/source-viewers.json"
+      ],
+      "surface": "lexical_search"
+    },
+    {
+      "bounded_states": [
+        "source_no_match",
+        "citation_unavailable",
+        "citation_pinned"
+      ],
+      "controls": [
+        "source_filter",
+        "inspect_source",
+        "pin_citation",
+        "open_citation_concept"
+      ],
+      "handoffs": [
+        "wiki",
+        "graph"
+      ],
+      "same_origin_artifacts": [
+        "site/data/source-viewers.json"
+      ],
+      "surface": "source_viewer"
+    }
+  ]
+}

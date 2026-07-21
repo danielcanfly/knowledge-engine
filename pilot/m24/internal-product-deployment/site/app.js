@@ -26,7 +26,10 @@ const state = {
   graphExplorer: null,
   route: "overview",
   selectedConceptId: "concepts/harness",
+  selectedCitationId: null,
+  selectedSourceViewerId: null,
   searchQuery: "harness",
+  sourceQuery: "",
 };
 
 const app = document.querySelector("#app");
@@ -121,6 +124,52 @@ function metric(label, value) {
   `;
 }
 
+function sourceViewers(artifacts) {
+  return artifacts.sources.source_viewers || [];
+}
+
+function allSourceCards(artifacts) {
+  const searchCards = artifacts.search.source_cards || [];
+  const viewerCards = sourceViewers(artifacts).map((viewer) => viewer.source_card || {});
+  const byId = new Map();
+  for (const card of [...searchCards, ...viewerCards]) {
+    if (card.source_card_id) byId.set(card.source_card_id, card);
+  }
+  return [...byId.values()];
+}
+
+function viewerById(artifacts, viewerId) {
+  const viewers = sourceViewers(artifacts);
+  return viewers.find((viewer) => viewer.viewer_id === viewerId) || viewers[0] || null;
+}
+
+function viewerBySourceCard(artifacts, sourceCardId) {
+  return sourceViewers(artifacts).find(
+    (viewer) => (viewer.source_card || {}).source_card_id === sourceCardId
+  ) || null;
+}
+
+function citationById(artifacts, citationId) {
+  for (const viewer of sourceViewers(artifacts)) {
+    const citation = (viewer.citations || []).find((item) => item.citation_id === citationId);
+    if (citation) return { viewer, citation };
+  }
+  return null;
+}
+
+function filteredSearchResults(artifacts) {
+  const query = state.searchQuery.trim().toLocaleLowerCase("en-US");
+  const results = artifacts.search.results || [];
+  if (!query) return results;
+  return results.filter((item) => [
+    item.title,
+    item.section_title,
+    item.concept_id,
+    item.excerpt,
+    (item.source_kinds || []).join(" "),
+  ].join(" ").toLocaleLowerCase("en-US").includes(query));
+}
+
 function renderOverview(artifacts) {
   const counts = artifacts.release.counts || {};
   const graphEdges = Array.isArray(artifacts.graph.edges) ? artifacts.graph.edges.length : 0;
@@ -147,20 +196,96 @@ function renderOverview(artifacts) {
 
 function renderWiki(artifacts) {
   const concept = artifacts.concept;
+  if (state.selectedConceptId !== concept.concept_id) {
+    return `
+      <section class="state-panel" data-state="concept-artifact-mismatch">
+        <h3>Concept artifact unavailable</h3>
+        <p>The selected concept is not present in the release-pinned Concept Wiki
+        artifact loaded by this internal route.</p>
+        <div class="detail-actions">
+          <button
+            class="inline-action"
+            data-focus-concept="${escapeHtml(state.selectedConceptId)}"
+          >Open selected concept in graph</button>
+          <button
+            class="inline-action"
+            data-open-concept="${escapeHtml(concept.concept_id)}"
+          >Return to loaded concept</button>
+        </div>
+      </section>
+    `;
+  }
   const relationships = concept.relationships || [];
+  const sections = concept.sections || [];
+  const viewers = concept.source_viewers || [];
   return `
+    <div class="surface-split">
+      <section class="panel">
+        <h3>${escapeHtml(concept.title)}</h3>
+        <p>${escapeHtml(concept.description)}</p>
+        <ul class="pill-list">
+          <li>${escapeHtml(concept.concept_id)}</li>
+          <li>release ${escapeHtml(concept.release_id)}</li>
+          <li>${escapeHtml(sections.length)} sections</li>
+          <li>${escapeHtml(relationships.length)} relationships</li>
+        </ul>
+        <div class="detail-actions">
+          <button class="inline-action" data-focus-concept="${escapeHtml(concept.concept_id)}">
+            Open in graph
+          </button>
+          <button class="inline-action" data-route="search">Inspect lexical results</button>
+        </div>
+      </section>
+      <aside class="panel">
+        <h3>Source handoff</h3>
+        <div class="source-list">
+          ${viewers.map((viewer) => {
+            const card = viewer.source_card || {};
+            return `
+              <button
+                class="inline-action"
+                data-open-source-viewer="${escapeHtml(viewer.viewer_id)}"
+              >
+                ${escapeHtml(card.title || card.source_id || viewer.viewer_id)}
+              </button>
+            `;
+          }).join("") || "<p class='muted'>No source viewers available.</p>"}
+        </div>
+      </aside>
+    </div>
     <section class="panel">
-      <h3>${escapeHtml(concept.title)}</h3>
-      <p>${escapeHtml(concept.description)}</p>
-      <ul class="pill-list">
-        <li>${escapeHtml(concept.concept_id)}</li>
-        <li>release ${escapeHtml(concept.release_id)}</li>
-      </ul>
+      <h3>Sections</h3>
+      <div class="section-list">
+        ${sections.map((section) => `
+          <article>
+            <h4>${escapeHtml(section.title || section.section_id)}</h4>
+            <p>${escapeHtml(section.excerpt)}</p>
+            <ul class="compact-meta">
+              <li>rank ${escapeHtml(section.rank)}</li>
+              <li>score ${escapeHtml(section.score)}</li>
+              <li>${escapeHtml((section.source_card_ids || []).length)} sources</li>
+            </ul>
+            <div class="detail-actions">
+              ${(section.source_viewer_ids || []).map((viewerId) => `
+                <button
+                  class="inline-action"
+                  data-open-source-viewer="${escapeHtml(viewerId)}"
+                >Source</button>
+              `).join("")}
+            </div>
+          </article>
+        `).join("") || `
+          <section class="state-panel" data-state="concept-section-empty">
+            <h3>No sections</h3>
+            <p>This concept has no release-pinned sections.</p>
+          </section>
+        `}
+      </div>
     </section>
     <section class="panel">
       <h3>Typed relationships</h3>
       <ul class="relationship-list">
-        ${relationships.slice(0, 12).map((edge) => `
+        ${relationships.map((edge) => `
           <li>
             <button
               class="inline-action"
@@ -170,14 +295,15 @@ function renderWiki(artifacts) {
               ${escapeHtml(edge.neighbor_title)}
             </button>
           </li>
-        `).join("")}
+        `).join("") || "<li>No relationships in this release artifact.</li>"}
       </ul>
     </section>
   `;
 }
 
 function renderSearch(artifacts) {
-  const results = artifacts.search.results || [];
+  const results = filteredSearchResults(artifacts);
+  const allResults = artifacts.search.results || [];
   return `
     <form class="toolbar" data-search-form>
       <label for="search-input">Lexical query</label>
@@ -189,21 +315,194 @@ function renderSearch(artifacts) {
       >
       <button type="submit">Search</button>
     </form>
-    <section class="table-like" aria-label="Lexical search results">
-      ${results.map((item) => `
-        <article class="table-row">
-          <strong>#${escapeHtml(item.rank)}</strong>
-          <div>
-            <h3>${escapeHtml(item.title)}</h3>
+    <section class="panel">
+      <h3>Release-pinned lexical results</h3>
+      <p class="muted">
+        Showing ${escapeHtml(results.length)} of ${escapeHtml(allResults.length)} results.
+      </p>
+      <div class="result-list" aria-label="Lexical search results">
+        ${results.map((item) => `
+          <article>
+            <h4>#${escapeHtml(item.rank)} ${escapeHtml(item.title)}</h4>
             <p>${escapeHtml(item.excerpt)}</p>
-          </div>
+            <ul class="compact-meta">
+              <li>${escapeHtml(item.concept_id)}</li>
+              <li>${escapeHtml(item.section_id)}</li>
+              <li>score ${escapeHtml(item.score)}</li>
+              <li>${escapeHtml((item.citation_ordinals || []).length)} citations</li>
+            </ul>
+            <div class="detail-actions">
+              <button
+                class="inline-action"
+                data-focus-concept="${escapeHtml(item.concept_id)}"
+              >Open graph</button>
+              <button
+                class="inline-action"
+                data-open-concept="${escapeHtml(item.concept_id)}"
+              >Open wiki</button>
+              ${(item.source_card_ids || []).slice(0, 3).map((sourceCardId) => `
+                <button
+                  class="inline-action"
+                  data-open-source-card="${escapeHtml(sourceCardId)}"
+                >Source</button>
+              `).join("")}
+            </div>
+          </article>
+        `).join("") || `
+          <section class="state-panel" data-state="no-match">
+            <h3>No lexical matches</h3>
+            <p>The release-pinned lexical result set has no matches for this query.</p>
+          </section>
+        `}
+      </div>
+    </section>
+    <section class="panel">
+      <h3>Source cards</h3>
+      <div class="source-list">
+        ${allSourceCards(artifacts).map((card) => `
           <button
             class="inline-action"
-            data-focus-concept="${escapeHtml(item.concept_id)}"
-          >Open</button>
-        </article>
-      `).join("")}
+            data-open-source-card="${escapeHtml(card.source_card_id)}"
+          >
+            ${escapeHtml(card.title || card.display_host || card.source_id)}
+          </button>
+        `).join("")}
+      </div>
     </section>
+  `;
+}
+
+function renderSources(artifacts) {
+  const viewers = sourceViewers(artifacts);
+  const selected = state.selectedCitationId
+    ? (citationById(artifacts, state.selectedCitationId) || {}).viewer
+    : viewerById(artifacts, state.selectedSourceViewerId);
+  const activeViewer = selected || viewers[0] || null;
+  const activeCard = activeViewer ? activeViewer.source_card || {} : {};
+  const query = state.sourceQuery.trim().toLocaleLowerCase("en-US");
+  const filtered = viewers.filter((viewer) => {
+    const card = viewer.source_card || {};
+    if (!query) return true;
+    return [
+      viewer.viewer_id,
+      card.title,
+      card.display_host,
+      card.publisher,
+      card.source_kind,
+      card.source_id,
+      (card.concept_ids || []).join(" "),
+    ].join(" ").toLocaleLowerCase("en-US").includes(query);
+  });
+  const activeCitation = state.selectedCitationId
+    ? citationById(artifacts, state.selectedCitationId)
+    : null;
+  return `
+    <form class="toolbar" data-source-form>
+      <label for="source-input">Source filter</label>
+      <input
+        id="source-input"
+        name="q"
+        value="${escapeHtml(state.sourceQuery)}"
+        autocomplete="off"
+      >
+      <button type="submit">Filter</button>
+    </form>
+    <div class="surface-split">
+      <section class="panel">
+        <h3>Sources</h3>
+        <div class="result-list">
+          ${filtered.map((viewer) => {
+            const card = viewer.source_card || {};
+            return `
+              <article>
+                <h4>${escapeHtml(card.title || card.source_id || viewer.viewer_id)}</h4>
+                <p>${escapeHtml(card.display_host || card.publisher || "source")}</p>
+                <ul class="compact-meta">
+                  <li>${escapeHtml(card.source_kind)}</li>
+                  <li>${escapeHtml((viewer.citations || []).length)} citations</li>
+                  <li>snapshot ${escapeHtml(String(card.snapshot_available))}</li>
+                </ul>
+                <div class="detail-actions">
+                  <button
+                    class="inline-action"
+                    data-open-source-viewer="${escapeHtml(viewer.viewer_id)}"
+                  >Inspect</button>
+                  ${(card.concept_ids || []).slice(0, 2).map((conceptId) => `
+                    <button
+                      class="inline-action"
+                      data-open-concept="${escapeHtml(conceptId)}"
+                    >Concept</button>
+                  `).join("")}
+                </div>
+              </article>
+            `;
+          }).join("") || `
+            <section class="state-panel" data-state="source-no-match">
+              <h3>No source matches</h3>
+              <p>No source viewer matches this filter.</p>
+            </section>
+          `}
+        </div>
+      </section>
+      <aside class="panel">
+        <h3>Source detail</h3>
+        ${activeViewer ? `
+          <p>${escapeHtml(activeViewer.summary || activeCard.title || activeCard.source_id)}</p>
+          <ul class="compact-meta">
+            <li>${escapeHtml(activeCard.source_card_id)}</li>
+            <li>${escapeHtml(activeCard.source_kind)}</li>
+            <li>${escapeHtml(activeCard.display_host || activeCard.publisher)}</li>
+          </ul>
+          <div class="detail-actions">
+            ${(activeCard.concept_ids || []).map((conceptId) => `
+              <button
+                class="inline-action"
+                data-open-concept="${escapeHtml(conceptId)}"
+              >${escapeHtml(conceptId.replace("concepts/", ""))}</button>
+            `).join("")}
+          </div>
+          <h4>Citations</h4>
+          <div class="citation-list">
+            ${(activeViewer.citations || []).map((citation) => `
+              <article data-citation-id="${escapeHtml(citation.citation_id)}">
+                <h5>#${escapeHtml(citation.ordinal)} ${escapeHtml(citation.concept_id)}</h5>
+                <ul class="compact-meta">
+                  <li>${escapeHtml(citation.support)}</li>
+                  <li>${escapeHtml(citation.source_kind)}</li>
+                  <li>${escapeHtml(citation.retrieved_at)}</li>
+                </ul>
+                <div class="detail-actions">
+                  <button
+                    class="inline-action"
+                    data-open-citation="${escapeHtml(citation.citation_id)}"
+                  >Pin citation</button>
+                  <button
+                    class="inline-action"
+                    data-open-concept="${escapeHtml(citation.concept_id)}"
+                  >Concept</button>
+                </div>
+              </article>
+            `).join("") || `
+              <section class="state-panel" data-state="citation-unavailable">
+                <h3>Citation unavailable</h3>
+                <p>This source card has no release-pinned citations.</p>
+              </section>
+            `}
+          </div>
+          ${activeCitation ? `
+            <section class="state-panel" data-state="citation-pinned">
+              <h3>Pinned citation</h3>
+              <p>${escapeHtml(activeCitation.citation.citation_id)}</p>
+            </section>
+          ` : ""}
+        ` : `
+          <section class="state-panel" data-state="citation-unavailable">
+            <h3>Citation unavailable</h3>
+            <p>No source viewer is available in this release artifact.</p>
+          </section>
+        `}
+      </aside>
+    </div>
   `;
 }
 
@@ -302,28 +601,6 @@ function initializeGraphExplorer(artifacts) {
     }
     setStatus(String(error && error.message ? error.message : error), "blocked");
   }
-}
-
-function renderSources(artifacts) {
-  const viewers = artifacts.sources.source_viewers || [];
-  return `
-    <section class="item-grid">
-      ${viewers.map((viewer) => {
-        const card = viewer.source_card || {};
-        return `
-          <article class="item-card">
-            <h3>${escapeHtml(card.title || card.source_id)}</h3>
-            <p>${escapeHtml(card.display_host || card.publisher || "source")}</p>
-            <ul class="source-list">
-              <li>${escapeHtml(card.source_kind)}</li>
-              <li>${escapeHtml((viewer.citations || []).length)} citations</li>
-              <li>raw evidence exposed: false</li>
-            </ul>
-          </article>
-        `;
-      }).join("")}
-    </section>
-  `;
 }
 
 function renderRelease(artifacts) {
@@ -425,11 +702,55 @@ function render() {
   }
 }
 
+function navigateTo(route) {
+  const nextHash = `#/${route}`;
+  if (location.hash === nextHash) {
+    state.route = route;
+    render();
+    return;
+  }
+  location.hash = nextHash;
+}
+
 function wireInteractions() {
+  for (const button of app.querySelectorAll("[data-route]")) {
+    button.addEventListener("click", () => {
+      navigateTo(button.dataset.route);
+    });
+  }
+  for (const button of app.querySelectorAll("[data-open-concept]")) {
+    button.addEventListener("click", () => {
+      state.selectedConceptId = button.dataset.openConcept;
+      navigateTo("wiki");
+    });
+  }
   for (const button of app.querySelectorAll("[data-focus-concept]")) {
     button.addEventListener("click", () => {
       state.selectedConceptId = button.dataset.focusConcept;
-      location.hash = "#/graph";
+      navigateTo("graph");
+    });
+  }
+  for (const button of app.querySelectorAll("[data-open-source-viewer]")) {
+    button.addEventListener("click", () => {
+      state.selectedSourceViewerId = button.dataset.openSourceViewer;
+      state.selectedCitationId = null;
+      navigateTo("sources");
+    });
+  }
+  for (const button of app.querySelectorAll("[data-open-source-card]")) {
+    button.addEventListener("click", () => {
+      const viewer = viewerBySourceCard(state.artifacts, button.dataset.openSourceCard);
+      state.selectedSourceViewerId = viewer ? viewer.viewer_id : null;
+      state.selectedCitationId = null;
+      navigateTo("sources");
+    });
+  }
+  for (const button of app.querySelectorAll("[data-open-citation]")) {
+    button.addEventListener("click", () => {
+      state.selectedCitationId = button.dataset.openCitation;
+      const resolved = citationById(state.artifacts, state.selectedCitationId);
+      state.selectedSourceViewerId = resolved ? resolved.viewer.viewer_id : null;
+      navigateTo("sources");
     });
   }
   const form = app.querySelector("[data-search-form]");
@@ -438,14 +759,16 @@ function wireInteractions() {
       event.preventDefault();
       const formData = new FormData(form);
       state.searchQuery = String(formData.get("q") || "").trim();
-      if (!state.searchQuery) {
-        app.innerHTML = `
-          <section class="state-panel" data-state="no-match">
-            <h3>No query supplied</h3>
-            <p>Enter a lexical query to inspect release-pinned results.</p>
-          </section>
-        `;
-      }
+      render();
+    });
+  }
+  const sourceForm = app.querySelector("[data-source-form]");
+  if (sourceForm) {
+    sourceForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const formData = new FormData(sourceForm);
+      state.sourceQuery = String(formData.get("q") || "").trim();
+      render();
     });
   }
 }
