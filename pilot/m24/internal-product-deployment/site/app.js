@@ -23,6 +23,7 @@ const ROUTES = {
 
 const state = {
   artifacts: null,
+  graphExplorer: null,
   route: "overview",
   selectedConceptId: "concepts/harness",
   searchQuery: "harness",
@@ -206,56 +207,101 @@ function renderSearch(artifacts) {
   `;
 }
 
+function destroyGraphExplorer() {
+  if (state.graphExplorer) {
+    state.graphExplorer.destroy();
+    state.graphExplorer = null;
+  }
+}
+
 function renderGraph(artifacts) {
   const graph = artifacts.graph;
   const nodes = graph.nodes || [];
   const edges = graph.edges || [];
-  const width = 720;
-  const height = 260;
-  const placed = nodes.slice(0, 12).map((node, index) => {
-    const angle = (Math.PI * 2 * index) / Math.max(1, Math.min(12, nodes.length));
-    return {
-      ...node,
-      x: width / 2 + Math.cos(angle) * 240,
-      y: height / 2 + Math.sin(angle) * 90,
-    };
-  });
-  const byId = new Map(placed.map((node) => [node.concept_id, node]));
   return `
     <div class="metric-grid">
       ${metric("Nodes", nodes.length)}
       ${metric("Edges", edges.length)}
       ${metric("Available actions", (graph.available_actions || []).join(", "))}
     </div>
-    <section class="panel">
-      <h3>Graph preview</h3>
-      <p>Interactive Sigma.js canvas is implemented in M24.14.2. This shell route
-      proves canonical graph identity and provides a textual fallback.</p>
-      <div class="graph-placeholder" role="img" aria-label="Canonical graph preview">
-        <svg viewBox="0 0 ${width} ${height}" focusable="false">
-          ${edges.slice(0, 16).map((edge) => {
-            const source = byId.get(edge.source);
-            const target = byId.get(edge.target);
-            if (!source || !target) return "";
-            return `
-              <line
-                class="edge-line"
-                x1="${source.x}"
-                y1="${source.y}"
-                x2="${target.x}"
-                y2="${target.y}"
-              ></line>
-            `;
-          }).join("")}
-          ${placed.map((node) => `
-            <circle class="node-dot" cx="${node.x}" cy="${node.y}" r="6">
-              <title>${escapeHtml(node.title)}</title>
-            </circle>
-          `).join("")}
-        </svg>
+    <section class="panel" data-graph-root>
+      <h3>Sigma graph explorer</h3>
+      <div class="graph-toolbar" aria-label="Graph controls">
+        <label for="graph-search">Search
+          <input
+            id="graph-search"
+            data-graph-search
+            autocomplete="off"
+            value="${escapeHtml(
+              state.selectedConceptId.replace("concepts/", "")
+            )}"
+          >
+        </label>
+        <label for="graph-relation">Relation
+          <select id="graph-relation" data-graph-relation>
+            <option value="">All relations</option>
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" data-graph-orphans checked>
+          Show orphans
+        </label>
+        <button type="button" data-graph-neighbor="1">1-hop</button>
+        <button type="button" data-graph-neighbor="2">2-hop</button>
+        <button type="button" data-graph-reset>Reset</button>
+        <button type="button" data-graph-clear>Clear</button>
+      </div>
+      <div class="graph-workbench">
+        <div
+          class="graph-stage"
+          data-sigma-stage
+          role="application"
+          aria-label="Interactive read-only Sigma.js graph canvas"
+        ></div>
+        <aside class="graph-side-panel" aria-label="Graph node details">
+          <section>
+            <h4>Matches</h4>
+            <div class="graph-result-list" data-graph-results></div>
+          </section>
+          <section class="graph-details">
+            <h4>Selection</h4>
+            <div data-graph-details></div>
+          </section>
+        </aside>
       </div>
     </section>
   `;
+}
+
+function initializeGraphExplorer(artifacts) {
+  const root = app.querySelector("[data-graph-root]");
+  if (!root || typeof window.createM24GraphExplorer !== "function") {
+    const stage = app.querySelector("[data-sigma-stage]");
+    if (stage) {
+      stage.dataset.state = "unavailable";
+      stage.dataset.message = "Sigma.js browser runtime is unavailable.";
+    }
+    setStatus("Sigma.js graph explorer could not be initialized.", "blocked");
+    return;
+  }
+  try {
+    state.graphExplorer = window.createM24GraphExplorer({
+      root,
+      payload: artifacts.graph,
+      selectedNodeId: state.selectedConceptId,
+      onSelection: (selection) => {
+        if (selection && selection.id) state.selectedConceptId = selection.id;
+      },
+      onStatus: (message) => setStatus(message, "ready"),
+    });
+  } catch (error) {
+    const stage = app.querySelector("[data-sigma-stage]");
+    if (stage) {
+      stage.dataset.state = "unavailable";
+      stage.dataset.message = "Graph explorer initialization failed.";
+    }
+    setStatus(String(error && error.message ? error.message : error), "blocked");
+  }
 }
 
 function renderSources(artifacts) {
@@ -347,6 +393,7 @@ function renderMissingArtifact() {
 function render() {
   const route = ROUTES[state.route] ? state.route : "overview";
   state.route = route;
+  destroyGraphExplorer();
   setActiveRoute(route);
   title.textContent = ROUTES[route];
   if (!state.artifacts) {
@@ -373,6 +420,9 @@ function render() {
   };
   app.innerHTML = renderers[route](state.artifacts);
   wireInteractions();
+  if (route === "graph") {
+    initializeGraphExplorer(state.artifacts);
+  }
 }
 
 function wireInteractions() {

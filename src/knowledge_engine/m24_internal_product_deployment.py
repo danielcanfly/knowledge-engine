@@ -25,6 +25,16 @@ P6_SCHEMA = "knowledge-engine-m24-p6-internal-product-deployment/v1"
 P6_ISSUE_NUMBER = 997
 DEPLOYMENT_ROOT = Path("pilot/m24/internal-product-deployment")
 SITE_ROOT = DEPLOYMENT_ROOT / "site"
+GRAPH_VENDOR_ASSETS = (
+    (
+        Path("packages/graph-explorer/node_modules/graphology/dist/graphology.umd.min.js"),
+        "vendor/graphology.umd.min.js",
+    ),
+    (
+        Path("packages/graph-explorer/node_modules/sigma/dist/sigma.min.js"),
+        "vendor/sigma.min.js",
+    ),
+)
 SurfaceName = Literal[
     "concept_wiki",
     "lexical_search",
@@ -161,6 +171,16 @@ def _write_text(path: Path, text: str) -> P6DeploymentArtifact:
     )
 
 
+def _write_bytes(path: Path, data: bytes) -> P6DeploymentArtifact:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return P6DeploymentArtifact(
+        path=path.as_posix(),
+        bytes=len(data),
+        sha256=sha256_bytes(data),
+    )
+
+
 def _surface(
     *,
     surface: SurfaceName,
@@ -187,6 +207,9 @@ def _index_html() -> str:
   <meta http-equiv="Content-Security-Policy" content="{CSP}">
   <title>LLM Wiki Internal Product</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="vendor/graphology.umd.min.js"></script>
+  <script src="vendor/sigma.min.js"></script>
+  <script src="graph-explorer.js"></script>
   <script type="module" src="app.js"></script>
 </head>
 <body>
@@ -555,6 +578,112 @@ a {
   stroke-width: 1.4;
 }
 
+.graph-workbench {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.graph-toolbar {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 1fr) minmax(140px, 220px) repeat(3, max-content);
+}
+
+.graph-toolbar label {
+  display: grid;
+  gap: 5px;
+}
+
+.graph-toolbar input,
+.graph-toolbar select {
+  border: 1px solid #b8c0cc;
+  font: inherit;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+.graph-toolbar button,
+.graph-result-button {
+  background: #ffffff;
+  border: 1px solid #94a3b8;
+  cursor: pointer;
+  font: inherit;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+.graph-stage {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  min-height: 430px;
+  overflow: hidden;
+  position: relative;
+}
+
+.graph-stage canvas {
+  display: block;
+}
+
+.graph-stage[data-state="empty"]::after,
+.graph-stage[data-state="unavailable"]::after {
+  align-items: center;
+  color: #475569;
+  content: attr(data-message);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 18px;
+  position: absolute;
+  text-align: center;
+}
+
+.graph-side-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.graph-result-list {
+  display: grid;
+  gap: 6px;
+  max-height: 230px;
+  overflow: auto;
+}
+
+.graph-result-button {
+  text-align: left;
+}
+
+.graph-result-button[aria-current="true"] {
+  border-color: #0f766e;
+  box-shadow: inset 3px 0 0 #0f766e;
+}
+
+.graph-details dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.graph-details div {
+  border-top: 1px solid #e5e7eb;
+  display: grid;
+  gap: 4px;
+  padding-top: 6px;
+}
+
+.graph-details dt {
+  color: #64748b;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.graph-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .noscript {
   margin: 40px auto;
   max-width: 720px;
@@ -574,6 +703,14 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .graph-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .identity-strip,
   .table-row {
     grid-template-columns: 1fr;
@@ -584,6 +721,370 @@ a {
     border-right: 0;
   }
 }
+"""
+
+
+def _graph_explorer_js() -> str:
+    return """(function () {
+  "use strict";
+
+  const NODE_COLORS = {
+    architecture: "#0f766e",
+    component: "#1d4ed8",
+    contract: "#7c3aed",
+    decision: "#b45309",
+    process: "#be123c",
+  };
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  function normalize(value) {
+    return String(value ?? "").normalize("NFKC").trim().toLocaleLowerCase("en-US");
+  }
+
+  function stableHash(value) {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+
+  function positionFor(nodeId, index, count) {
+    const phase = (stableHash(nodeId) / 0xffffffff) * Math.PI * 2;
+    const angle = phase + (index / Math.max(count, 1)) * Math.PI * 2;
+    const radius = 5 + (stableHash(`${nodeId}:radius`) % 1000) / 140;
+    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+  }
+
+  function nodeIdOf(node) {
+    return node.concept_id || node.id || node.node_id;
+  }
+
+  function nodeTitle(node) {
+    return node.title || node.label || nodeIdOf(node);
+  }
+
+  function stringList(value) {
+    return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+  }
+
+  function buildGraphologyGraph(payload) {
+    const Graphology = window.graphology;
+    if (typeof Graphology !== "function") {
+      throw new Error("graphology browser runtime unavailable");
+    }
+    const graph = new Graphology({ allowSelfLoops: false, multi: true, type: "mixed" });
+    const nodes = [...(payload.nodes || [])].sort((left, right) =>
+      nodeIdOf(left).localeCompare(nodeIdOf(right)),
+    );
+    nodes.forEach((node, index) => {
+      const nodeId = nodeIdOf(node);
+      const position = positionFor(nodeId, index, nodes.length);
+      const type = node.type || node.concept_type || "concept";
+      graph.addNode(nodeId, {
+        ...node,
+        color: NODE_COLORS[type] || "#64748b",
+        label: nodeTitle(node),
+        size: node.focus_node ? 9 : 6,
+        title: nodeTitle(node),
+        type,
+        x: position.x,
+        y: position.y,
+      });
+    });
+    for (const edge of [...(payload.edges || [])].sort((left, right) =>
+      left.edge_id.localeCompare(right.edge_id),
+    )) {
+      if (!graph.hasNode(edge.source) || !graph.hasNode(edge.target)) continue;
+      const attrs = {
+        ...edge,
+        color: edge.focus_edge ? "#0f766e" : "#94a3b8",
+        label: edge.relation_type || "related",
+        relationType: edge.relation_type || "related",
+        size: edge.focus_edge ? 2 : 1,
+      };
+      if (edge.directed === false) {
+        graph.addUndirectedEdgeWithKey(edge.edge_id, edge.source, edge.target, attrs);
+      } else {
+        graph.addDirectedEdgeWithKey(edge.edge_id, edge.source, edge.target, attrs);
+      }
+    }
+    graph.setAttribute("readOnly", true);
+    graph.setAttribute("releaseId", payload.release_id);
+    return graph;
+  }
+
+  function selection(graph, nodeId) {
+    const attrs = graph.getNodeAttributes(nodeId);
+    return {
+      id: nodeId,
+      title: attrs.title || nodeId,
+      type: attrs.type || "concept",
+      description: attrs.description || attrs.summary || "",
+      sourcePath: attrs.source_path || attrs.path || "",
+      tags: stringList(attrs.tags),
+    };
+  }
+
+  function searchMatches(graph, query) {
+    const normalizedQuery = normalize(query);
+    if (!normalizedQuery) return [];
+    return graph
+      .nodes()
+      .map((nodeId) => {
+        const attrs = graph.getNodeAttributes(nodeId);
+        const title = normalize(attrs.title || nodeId);
+        const aliases = stringList(attrs.aliases).map(normalize);
+        const tags = stringList(attrs.tags).map(normalize);
+        const description = normalize(attrs.description || attrs.summary || "");
+        let score = null;
+        if (title === normalizedQuery) score = 0;
+        else if (aliases.includes(normalizedQuery)) score = 1;
+        else if (title.startsWith(normalizedQuery)) score = 2;
+        else if (aliases.some((alias) => alias.startsWith(normalizedQuery))) score = 3;
+        else if (title.includes(normalizedQuery)) score = 4;
+        else if (aliases.some((alias) => alias.includes(normalizedQuery))) score = 5;
+        else if (tags.some((tag) => tag.includes(normalizedQuery))) score = 6;
+        else if (description.includes(normalizedQuery)) score = 7;
+        else if (normalize(nodeId).includes(normalizedQuery)) score = 8;
+        return score === null ? null : { id: nodeId, score, title: attrs.title || nodeId };
+      })
+      .filter(Boolean)
+      .sort((left, right) => left.score - right.score || left.id.localeCompare(right.id))
+      .slice(0, 20);
+  }
+
+  function relationTypes(payload) {
+    return [
+      ...new Set((payload.edges || []).map((edge) => edge.relation_type || "related")),
+    ].sort();
+  }
+
+  window.createM24GraphExplorer = function createM24GraphExplorer(options) {
+    const root = options.root;
+    const stage = root.querySelector("[data-sigma-stage]");
+    const details = root.querySelector("[data-graph-details]");
+    const results = root.querySelector("[data-graph-results]");
+    const search = root.querySelector("[data-graph-search]");
+    const relation = root.querySelector("[data-graph-relation]");
+    const reset = root.querySelector("[data-graph-reset]");
+    const clear = root.querySelector("[data-graph-clear]");
+    const oneHop = root.querySelector("[data-graph-neighbor='1']");
+    const twoHop = root.querySelector("[data-graph-neighbor='2']");
+    const showOrphans = root.querySelector("[data-graph-orphans]");
+    const Sigma = window.Sigma;
+    if (typeof Sigma !== "function") {
+      throw new Error("Sigma.js browser runtime unavailable");
+    }
+
+    const graph = buildGraphologyGraph(options.payload);
+    let selectedNodeId = graph.hasNode(options.selectedNodeId) ? options.selectedNodeId : null;
+    let focusDepth = 0;
+    let visibleNodes = new Set(graph.nodes());
+    let visibleEdges = new Set(graph.edges());
+    let searchResultIds = new Set();
+
+    for (const type of relationTypes(options.payload)) {
+      const option = document.createElement("option");
+      option.value = type;
+      option.textContent = type;
+      relation.append(option);
+    }
+
+    function adjacentWithinDepth(nodeId, depth) {
+      const seen = new Set([nodeId]);
+      let frontier = [nodeId];
+      for (let level = 0; level < depth; level += 1) {
+        const next = [];
+        for (const id of frontier) {
+          for (const neighbor of graph.neighbors(id).sort()) {
+            if (!seen.has(neighbor)) {
+              seen.add(neighbor);
+              next.push(neighbor);
+            }
+          }
+        }
+        frontier = next;
+      }
+      return seen;
+    }
+
+    function recompute() {
+      const relationFilter = relation.value;
+      let nodes = new Set(graph.nodes());
+      let edges = graph.edges().filter((edgeId) => {
+        if (!relationFilter) return true;
+        return graph.getEdgeAttribute(edgeId, "relationType") === relationFilter;
+      });
+      if (selectedNodeId && focusDepth > 0) {
+        nodes = adjacentWithinDepth(selectedNodeId, focusDepth);
+        edges = edges.filter((edgeId) =>
+          nodes.has(graph.source(edgeId)) && nodes.has(graph.target(edgeId)),
+        );
+      }
+      if (!showOrphans.checked) {
+        const connected = new Set();
+        for (const edgeId of edges) {
+          connected.add(graph.source(edgeId));
+          connected.add(graph.target(edgeId));
+        }
+        if (selectedNodeId) connected.add(selectedNodeId);
+        nodes = new Set([...nodes].filter((nodeId) => connected.has(nodeId)));
+        edges = edges.filter((edgeId) =>
+          nodes.has(graph.source(edgeId)) && nodes.has(graph.target(edgeId)),
+        );
+      }
+      visibleNodes = nodes;
+      visibleEdges = new Set(edges);
+      const matches = searchMatches(graph, search.value).filter((match) => nodes.has(match.id));
+      searchResultIds = new Set(matches.map((match) => match.id));
+      renderResults(matches);
+      renderDetails();
+      stage.dataset.state = nodes.size === 0 ? "empty" : "ready";
+      stage.dataset.message = nodes.size === 0 ? "No graph nodes match the current filters." : "";
+      renderer.refresh();
+      options.onStatus?.(
+        `Sigma.js canvas ready: ${nodes.size} visible nodes, ${edges.length} visible edges.`,
+      );
+    }
+
+    function renderResults(matches) {
+      if (!search.value.trim()) {
+        results.innerHTML = "<p>Search graph nodes by title, aliases, tags, or source path.</p>";
+        return;
+      }
+      if (matches.length === 0) {
+        results.innerHTML = '<p data-state="no-match">No matching graph nodes.</p>';
+        return;
+      }
+      results.innerHTML = matches
+        .map((match) => `
+          <button
+            class="graph-result-button"
+            data-node-id="${escapeHtml(match.id)}"
+            aria-current="${match.id === selectedNodeId ? "true" : "false"}"
+          >${escapeHtml(match.title)}</button>
+        `)
+        .join("");
+      for (const button of results.querySelectorAll("[data-node-id]")) {
+        button.addEventListener("click", () => selectNode(button.dataset.nodeId));
+      }
+    }
+
+    function renderDetails() {
+      if (!selectedNodeId) {
+        details.innerHTML = "<p>Select a node to inspect provenance and relationships.</p>";
+        return;
+      }
+      const selected = selection(graph, selectedNodeId);
+      const neighbors = graph.neighbors(selectedNodeId).sort();
+      details.innerHTML = `
+        <dl>
+          <div><dt>Title</dt><dd>${escapeHtml(selected.title)}</dd></div>
+          <div><dt>Type</dt><dd>${escapeHtml(selected.type)}</dd></div>
+          <div>
+            <dt>Source</dt>
+            <dd>${escapeHtml(selected.sourcePath || "release artifact")}</dd>
+          </div>
+          <div><dt>Tags</dt><dd>${escapeHtml(selected.tags.join(", ") || "none")}</dd></div>
+          <div><dt>Neighbors</dt><dd>${escapeHtml(neighbors.length)}</dd></div>
+          <div>
+            <dt>Description</dt>
+            <dd>${escapeHtml(selected.description || "No description")}</dd>
+          </div>
+        </dl>
+      `;
+      options.onSelection?.(selected);
+    }
+
+    function selectNode(nodeId) {
+      if (!graph.hasNode(nodeId)) return;
+      selectedNodeId = nodeId;
+      focusDepth = Math.max(focusDepth, 0);
+      recompute();
+    }
+
+    const renderer = new Sigma(graph, stage, {
+      allowInvalidContainer: false,
+      defaultEdgeColor: "#94a3b8",
+      defaultNodeColor: "#64748b",
+      edgeReducer: (edgeId, data) =>
+        visibleEdges.has(edgeId) ? data : { ...data, hidden: true },
+      enableEdgeEvents: true,
+      hideEdgesOnMove: true,
+      hideLabelsOnMove: true,
+      labelDensity: 0.08,
+      labelRenderedSizeThreshold: 8,
+      nodeReducer: (nodeId, data) => {
+        if (!visibleNodes.has(nodeId)) return { ...data, hidden: true };
+        if (nodeId === selectedNodeId) {
+          return {
+            ...data,
+            color: "#0f766e",
+            forceLabel: true,
+            highlighted: true,
+            size: 10,
+            zIndex: 2,
+          };
+        }
+        if (searchResultIds.has(nodeId)) {
+          return { ...data, forceLabel: true, highlighted: true, size: 8, zIndex: 1 };
+        }
+        return data;
+      },
+      renderLabels: true,
+      zIndex: true,
+    });
+
+    renderer.on("clickNode", ({ node }) => selectNode(node));
+    renderer.on("clickStage", () => {
+      selectedNodeId = null;
+      focusDepth = 0;
+      recompute();
+    });
+    search.addEventListener("input", recompute);
+    relation.addEventListener("change", recompute);
+    showOrphans.addEventListener("change", recompute);
+    reset.addEventListener("click", () => renderer.getCamera().animatedReset({ duration: 200 }));
+    clear.addEventListener("click", () => {
+      selectedNodeId = null;
+      focusDepth = 0;
+      search.value = "";
+      relation.value = "";
+      showOrphans.checked = true;
+      recompute();
+    });
+    oneHop.addEventListener("click", () => {
+      if (selectedNodeId) {
+        focusDepth = 1;
+        recompute();
+      }
+    });
+    twoHop.addEventListener("click", () => {
+      if (selectedNodeId) {
+        focusDepth = 2;
+        recompute();
+      }
+    });
+
+    if (selectedNodeId) focusDepth = 1;
+    recompute();
+    return {
+      destroy() {
+        renderer.kill();
+      },
+    };
+  };
+})();
 """
 
 
@@ -613,6 +1114,7 @@ const ROUTES = {{
 
 const state = {{
   artifacts: null,
+  graphExplorer: null,
   route: "overview",
   selectedConceptId: "concepts/harness",
   searchQuery: "harness",
@@ -796,56 +1298,101 @@ function renderSearch(artifacts) {{
   `;
 }}
 
+function destroyGraphExplorer() {{
+  if (state.graphExplorer) {{
+    state.graphExplorer.destroy();
+    state.graphExplorer = null;
+  }}
+}}
+
 function renderGraph(artifacts) {{
   const graph = artifacts.graph;
   const nodes = graph.nodes || [];
   const edges = graph.edges || [];
-  const width = 720;
-  const height = 260;
-  const placed = nodes.slice(0, 12).map((node, index) => {{
-    const angle = (Math.PI * 2 * index) / Math.max(1, Math.min(12, nodes.length));
-    return {{
-      ...node,
-      x: width / 2 + Math.cos(angle) * 240,
-      y: height / 2 + Math.sin(angle) * 90,
-    }};
-  }});
-  const byId = new Map(placed.map((node) => [node.concept_id, node]));
   return `
     <div class="metric-grid">
       ${{metric("Nodes", nodes.length)}}
       ${{metric("Edges", edges.length)}}
       ${{metric("Available actions", (graph.available_actions || []).join(", "))}}
     </div>
-    <section class="panel">
-      <h3>Graph preview</h3>
-      <p>Interactive Sigma.js canvas is implemented in M24.14.2. This shell route
-      proves canonical graph identity and provides a textual fallback.</p>
-      <div class="graph-placeholder" role="img" aria-label="Canonical graph preview">
-        <svg viewBox="0 0 ${{width}} ${{height}}" focusable="false">
-          ${{edges.slice(0, 16).map((edge) => {{
-            const source = byId.get(edge.source);
-            const target = byId.get(edge.target);
-            if (!source || !target) return "";
-            return `
-              <line
-                class="edge-line"
-                x1="${{source.x}}"
-                y1="${{source.y}}"
-                x2="${{target.x}}"
-                y2="${{target.y}}"
-              ></line>
-            `;
-          }}).join("")}}
-          ${{placed.map((node) => `
-            <circle class="node-dot" cx="${{node.x}}" cy="${{node.y}}" r="6">
-              <title>${{escapeHtml(node.title)}}</title>
-            </circle>
-          `).join("")}}
-        </svg>
+    <section class="panel" data-graph-root>
+      <h3>Sigma graph explorer</h3>
+      <div class="graph-toolbar" aria-label="Graph controls">
+        <label for="graph-search">Search
+          <input
+            id="graph-search"
+            data-graph-search
+            autocomplete="off"
+            value="${{escapeHtml(
+              state.selectedConceptId.replace("concepts/", "")
+            )}}"
+          >
+        </label>
+        <label for="graph-relation">Relation
+          <select id="graph-relation" data-graph-relation>
+            <option value="">All relations</option>
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" data-graph-orphans checked>
+          Show orphans
+        </label>
+        <button type="button" data-graph-neighbor="1">1-hop</button>
+        <button type="button" data-graph-neighbor="2">2-hop</button>
+        <button type="button" data-graph-reset>Reset</button>
+        <button type="button" data-graph-clear>Clear</button>
+      </div>
+      <div class="graph-workbench">
+        <div
+          class="graph-stage"
+          data-sigma-stage
+          role="application"
+          aria-label="Interactive read-only Sigma.js graph canvas"
+        ></div>
+        <aside class="graph-side-panel" aria-label="Graph node details">
+          <section>
+            <h4>Matches</h4>
+            <div class="graph-result-list" data-graph-results></div>
+          </section>
+          <section class="graph-details">
+            <h4>Selection</h4>
+            <div data-graph-details></div>
+          </section>
+        </aside>
       </div>
     </section>
   `;
+}}
+
+function initializeGraphExplorer(artifacts) {{
+  const root = app.querySelector("[data-graph-root]");
+  if (!root || typeof window.createM24GraphExplorer !== "function") {{
+    const stage = app.querySelector("[data-sigma-stage]");
+    if (stage) {{
+      stage.dataset.state = "unavailable";
+      stage.dataset.message = "Sigma.js browser runtime is unavailable.";
+    }}
+    setStatus("Sigma.js graph explorer could not be initialized.", "blocked");
+    return;
+  }}
+  try {{
+    state.graphExplorer = window.createM24GraphExplorer({{
+      root,
+      payload: artifacts.graph,
+      selectedNodeId: state.selectedConceptId,
+      onSelection: (selection) => {{
+        if (selection && selection.id) state.selectedConceptId = selection.id;
+      }},
+      onStatus: (message) => setStatus(message, "ready"),
+    }});
+  }} catch (error) {{
+    const stage = app.querySelector("[data-sigma-stage]");
+    if (stage) {{
+      stage.dataset.state = "unavailable";
+      stage.dataset.message = "Graph explorer initialization failed.";
+    }}
+    setStatus(String(error && error.message ? error.message : error), "blocked");
+  }}
 }}
 
 function renderSources(artifacts) {{
@@ -937,6 +1484,7 @@ function renderMissingArtifact() {{
 function render() {{
   const route = ROUTES[state.route] ? state.route : "overview";
   state.route = route;
+  destroyGraphExplorer();
   setActiveRoute(route);
   title.textContent = ROUTES[route];
   if (!state.artifacts) {{
@@ -963,6 +1511,9 @@ function render() {{
   }};
   app.innerHTML = renderers[route](state.artifacts);
   wireInteractions();
+  if (route === "graph") {{
+    initializeGraphExplorer(state.artifacts);
+  }}
 }}
 
 function wireInteractions() {{
@@ -1093,8 +1644,13 @@ def build_p6_internal_product_deployment(
     artifacts = [
         _write_text(site_root / "index.html", _index_html()),
         _write_text(site_root / "styles.css", _styles()),
+        _write_text(site_root / "graph-explorer.js", _graph_explorer_js()),
         _write_text(site_root / "app.js", _app_js()),
     ]
+    for source, relative in GRAPH_VENDOR_ASSETS:
+        destination = site_root / relative
+        vendor_bytes = source.read_bytes() if source.exists() else destination.read_bytes()
+        artifacts.append(_write_bytes(destination, vendor_bytes))
     for relative, payload in data_payloads:
         artifacts.append(_write_text(site_root / relative, _json(payload)))
     scanned_paths = [

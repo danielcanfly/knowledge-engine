@@ -1,0 +1,112 @@
+{
+  "assets": [
+    {
+      "bytes": 3135,
+      "path": "pilot/m24/internal-product-deployment/site/index.html",
+      "sha256": "970a81cd0a883ee524bd1134db6e5b1454d27c49181b1ef27998f0dceb9828cb"
+    },
+    {
+      "bytes": 6734,
+      "path": "pilot/m24/internal-product-deployment/site/styles.css",
+      "sha256": "1233b155c812779e12e2c2ba3b3e700a837eec084a894fa44181c388cfa4ec21"
+    },
+    {
+      "bytes": 14653,
+      "path": "pilot/m24/internal-product-deployment/site/app.js",
+      "sha256": "88bcd4e6fed21ed21f4421913d035510109681fac3eeaab13a14b291414610e9"
+    },
+    {
+      "bytes": 12634,
+      "path": "pilot/m24/internal-product-deployment/site/graph-explorer.js",
+      "sha256": "7cf219ae0d76f00c5b33e1838eecf20bedc64ed2ea05bf7fee99da1b53f3e780"
+    },
+    {
+      "bytes": 73629,
+      "path": "pilot/m24/internal-product-deployment/site/vendor/graphology.umd.min.js",
+      "sha256": "dc337efa23903f61e064c8e7e7f93a429e6855dccfc2458802b4ed30c621c087"
+    },
+    {
+      "bytes": 187876,
+      "path": "pilot/m24/internal-product-deployment/site/vendor/sigma.min.js",
+      "sha256": "58e30383ab428f832068d9d16a5215c65ba12430d438ed091c5703f398de9e16"
+    },
+    {
+      "bytes": 18007,
+      "path": "pilot/m24/internal-product-deployment/site/data/graph-navigation.json",
+      "sha256": "e5ade54f909497e37791489d27c70851bb6edaf72cbdad36d62bccca4bfbb429"
+    },
+    {
+      "bytes": 1016,
+      "path": "pilot/m24/internal-product-deployment/site/data/release-viewer.json",
+      "sha256": "c97cb0085fd5dac136bee3e7680f969fe33c220cd7eb50d722d5acf1eb111cb2"
+    }
+  ],
+  "authority": {
+    "browser_authority": "read_only",
+    "credential_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "permanent_ledger_mutation": false,
+    "product_audience": "authenticated_internal",
+    "production_answer_serving_enabled": false,
+    "production_pointer_mutation": false,
+    "production_r2_mutation": false,
+    "production_retrieval": "lexical",
+    "qdrant_mutation": false,
+    "raw_evidence_exposed": false,
+    "semantic_promotion_enabled": false,
+    "semantic_serving_enabled": false,
+    "source_mutation": false,
+    "traffic_mutation": false
+  },
+  "deployment_package": "pilot/m24/internal-product-deployment/site",
+  "interaction": {
+    "controls": [
+      "pan_zoom",
+      "camera_reset",
+      "node_search",
+      "node_selection",
+      "one_hop_neighbor_focus",
+      "two_hop_neighbor_focus",
+      "relation_filter",
+      "show_orphans_toggle",
+      "selection_details"
+    ],
+    "states": [
+      "loading",
+      "missing_artifact",
+      "release_identity_mismatch",
+      "acl_denied",
+      "empty_graph_filter",
+      "bounded_error",
+      "sigma_runtime_unavailable"
+    ],
+    "supports_camera_reset": true,
+    "supports_neighbor_focus": true,
+    "supports_node_search": true,
+    "supports_node_selection": true,
+    "supports_pan_zoom": true,
+    "supports_relation_filter": true,
+    "supports_selection_details": true,
+    "textual_fallback_available": true
+  },
+  "issue_number": 1009,
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "release_id": "20260720T160000Z-46137c97263e",
+  "runtime": {
+    "browser_canvas_selector": "[data-sigma-stage] canvas",
+    "graph_source_artifact": "site/data/graph-navigation.json",
+    "graph_source_is_canonical_release_bound": true,
+    "graphology_version": "0.26.0",
+    "human_visual_acceptance_claimed": false,
+    "local_playwright_canvas_nonblank_smoke": true,
+    "local_playwright_route_smoke": true,
+    "local_vendor_assets_only": true,
+    "renderer_runtime": "sigma_js_canvas",
+    "runtime_cdn_dependencies": false,
+    "sigma_version": "3.0.3"
+  },
+  "schema_version": "knowledge-engine-m24-14-2-sigma-graph-explorer/v1",
+  "self_sha256": "a8e98585f8f9f28d5322ee8dcb0f2ccedba14e260808ffcc1a1291b807ca4078",
+  "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "status": "m24_14_2_sigma_graph_explorer_integrated"
+}

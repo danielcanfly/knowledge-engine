@@ -297,6 +297,112 @@ a {
   stroke-width: 1.4;
 }
 
+.graph-workbench {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.graph-toolbar {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 1fr) minmax(140px, 220px) repeat(3, max-content);
+}
+
+.graph-toolbar label {
+  display: grid;
+  gap: 5px;
+}
+
+.graph-toolbar input,
+.graph-toolbar select {
+  border: 1px solid #b8c0cc;
+  font: inherit;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+.graph-toolbar button,
+.graph-result-button {
+  background: #ffffff;
+  border: 1px solid #94a3b8;
+  cursor: pointer;
+  font: inherit;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+.graph-stage {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  min-height: 430px;
+  overflow: hidden;
+  position: relative;
+}
+
+.graph-stage canvas {
+  display: block;
+}
+
+.graph-stage[data-state="empty"]::after,
+.graph-stage[data-state="unavailable"]::after {
+  align-items: center;
+  color: #475569;
+  content: attr(data-message);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 18px;
+  position: absolute;
+  text-align: center;
+}
+
+.graph-side-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.graph-result-list {
+  display: grid;
+  gap: 6px;
+  max-height: 230px;
+  overflow: auto;
+}
+
+.graph-result-button {
+  text-align: left;
+}
+
+.graph-result-button[aria-current="true"] {
+  border-color: #0f766e;
+  box-shadow: inset 3px 0 0 #0f766e;
+}
+
+.graph-details dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.graph-details div {
+  border-top: 1px solid #e5e7eb;
+  display: grid;
+  gap: 4px;
+  padding-top: 6px;
+}
+
+.graph-details dt {
+  color: #64748b;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.graph-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .noscript {
   margin: 40px auto;
   max-width: 720px;
@@ -314,6 +420,14 @@ a {
 
   .workspace-header {
     grid-template-columns: 1fr;
+  }
+
+  .graph-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-toolbar {
+    grid-template-columns: 1fr 1fr;
   }
 
   .identity-strip,
