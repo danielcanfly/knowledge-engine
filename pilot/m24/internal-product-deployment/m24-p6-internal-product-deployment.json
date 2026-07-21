@@ -6,19 +6,19 @@
       "sha256": "53b2cfac96c82e65f10a75e711577baf7fb48d4b0749ae81d6e8177da6caf72f"
     },
     {
-      "bytes": 7383,
+      "bytes": 8703,
       "path": "pilot/m24/internal-product-deployment/site/styles.css",
-      "sha256": "94ac6cb6e858885a5e8368b5d6302fce9371ca8fdeb463524d8986d9c875d55d"
+      "sha256": "358935d4eead848b58a710ba9b806a3fcd9fb4606d3f20d414d9ad2e8d5970f3"
     },
     {
-      "bytes": 12810,
+      "bytes": 14493,
       "path": "pilot/m24/internal-product-deployment/site/graph-explorer.js",
-      "sha256": "f627aac7a187688b8355378703b1fcbd750bcfb189e86224471d5599f8a07719"
+      "sha256": "0ad87fb441a3abe73c9863a83d8f5c5d7d192f6a6384e3131320634ece9ed6f9"
     },
     {
-      "bytes": 34000,
+      "bytes": 40914,
       "path": "pilot/m24/internal-product-deployment/site/app.js",
-      "sha256": "55fb4375e7078198fa2185790a01263addfb6ccc01da0dace8d9c1eda27aef02"
+      "sha256": "db03c1b399951f585bcf5e4065c282def0342dc29d33ddb7d073896a02676aa2"
     },
     {
       "bytes": 73629,
@@ -51,9 +51,19 @@
       "sha256": "e5ade54f909497e37791489d27c70851bb6edaf72cbdad36d62bccca4bfbb429"
     },
     {
-      "bytes": 20046,
+      "bytes": 330492,
       "path": "pilot/m24/internal-product-deployment/site/data/source-viewers.json",
-      "sha256": "835c4bb75d1d982f167a9930cad8df6bcf6cd6742909be44cc889105f9ed4fb5"
+      "sha256": "04db5677bd6f2daf46ba0a6c78bfa6129268f85726b431b5f8869809f7f58c5b"
+    },
+    {
+      "bytes": 9313,
+      "path": "pilot/m24/internal-product-deployment/site/data/source-index.json",
+      "sha256": "40b72663279e602b0f34ca968432e2cebd39679a660c924737b322ddab4a2c56"
+    },
+    {
+      "bytes": 289382,
+      "path": "pilot/m24/internal-product-deployment/site/data/source-documents.json",
+      "sha256": "372d5e569479c7b4830c24e420cc9b49ad51f8b714038fe52a4b3797eafbe7f1"
     },
     {
       "bytes": 14841,
@@ -69,6 +79,41 @@
       "bytes": 654,
       "path": "pilot/m24/internal-product-deployment/site/data/obsidian-export-manifest.json",
       "sha256": "caac42be3111d6af711d0a62c475f4ca54168b921f0fae7a62aab423db101d79"
+    },
+    {
+      "bytes": 58780,
+      "path": "pilot/m24/internal-product-deployment/site/data/sources/source_blog_agent_architecture_6d.json",
+      "sha256": "aea8524abf93d610e27ede641a49ad657aebeae83495f5709408542202e4e9cb"
+    },
+    {
+      "bytes": 69944,
+      "path": "pilot/m24/internal-product-deployment/site/data/sources/source_blog_agent_execution_paths.json",
+      "sha256": "03eb4be3ea7f02aa50709611e1500be87a4048e0f5c21c5c8326ef0102f0c464"
+    },
+    {
+      "bytes": 81458,
+      "path": "pilot/m24/internal-product-deployment/site/data/sources/source_blog_agent_planning_strategies.json",
+      "sha256": "93599c07a900ae7fbdbde538c1cd4672fc12627abd755f50e5de78b7c2235f72"
+    },
+    {
+      "bytes": 14009,
+      "path": "pilot/m24/internal-product-deployment/site/data/sources/source_m23_4_harness_proposed_concepts.json",
+      "sha256": "8ecbf1b49e5ccf2dfbda1d32aaf3a8f5c675c6a006540a36d55107331e8a9bda"
+    },
+    {
+      "bytes": 19901,
+      "path": "pilot/m24/internal-product-deployment/site/data/sources/source_m23_4_harness_provenance_summary.json",
+      "sha256": "bdea69f12d50c55077d8762761007396c7593e367ed436bad1b535d8db963342"
+    },
+    {
+      "bytes": 35821,
+      "path": "pilot/m24/internal-product-deployment/site/data/sources/source_m24_source_pr_19_decision_capture.json",
+      "sha256": "8e56a967b31321bcbe5a11479eb7a59e1773ad3b2eed96ad26d3601ef12559ad"
+    },
+    {
+      "bytes": 1673,
+      "path": "pilot/m24/internal-product-deployment/site/data/sources/source_m3_contract.json",
+      "sha256": "835d49f962f8176e1f357f24e74ef6cf1c3a91ec07c87ebc3beac80ab01935da"
     }
   ],
   "auth": {
@@ -134,7 +179,7 @@
     "secret_scan_passed": true,
     "secret_scan_patterns": 3
   },
-  "self_sha256": "6ecae165bb9f1d647612fb0e84a70a30a844925ad7b6f9786b78ee631456d7db",
+  "self_sha256": "a0405988ebac237262a70d64dbfb96a44c58aa523d0dde8b5a016eff62ac870a",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "internal_product_deployment_package_complete",
   "surfaces": [
@@ -163,7 +208,7 @@
       "surface": "sigma_graph_explorer"
     },
     {
-      "digest": "0264ccf1c5c1508c789a29691d59a486d012a0112c25e088fbc8c6dafcd3d715",
+      "digest": "854cd06df879835256354e15dda08b52b5ce85e249b0efc33468511f95d6f4d4",
       "fallback": "citation_unavailable_error_state",
       "path": "site/data/source-viewers.json",
       "ready": true,

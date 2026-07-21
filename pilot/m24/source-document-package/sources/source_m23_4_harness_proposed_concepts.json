@@ -1,0 +1,137 @@
+{
+  "audience": "public",
+  "canonical_uri": "https://github.com/danielcanfly/knowledge-source/blob/deb3ad1e631c2149183d10561fbceb0a1848a989/proposals/m23-4/proposed-concepts.md",
+  "citations": [],
+  "coverage_status": "full_snapshot",
+  "document": {
+    "body": "# M23.4 proposed concepts\n\n> Review-only. Not canonical.\n\n## Agent Loop\n\n**Proposed definition:** A governed state machine coordinating model proposals, authorisation, tool execution, observations and termination.\n\n- tags: `agents`, `runtime`\n- relationships: supports Harness; contains Tool Calling; requires Stopping Policy; supported by Item Turn Thread Protocol\n- attachment: bilingual term Agent Loop\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Canonical Run Authority\n\n**Proposed definition:** The system of record that owns authoritative execution state and transitions.\n\n- tags: `governance`, `runtime`, `reliability`\n- relationship: part of Harness\n- attachment: Architecture review begins with authority\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Completion Gate\n\n**Proposed definition:** The authority that accepts or rejects a terminal candidate against contract and evidence.\n\n- tags: `verification`, `reliability`\n- relationship: part of Harness\n- attachment: bilingual term Completion Gate\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Durable Thread State\n\n**Proposed definition:** Persistent interaction state that survives client disconnects and spans turns.\n\n- tags: `runtime`, `reliability`\n- relationship: supports Headless Harness Service\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Goal Drift\n\n**Proposed definition:** Uncontrolled movement away from the accepted task contract or authorised change process.\n\n- tags: `governance`, `reliability`\n- relationship: related to Task Contract\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Harness\n\n**Proposed definition:** The execution and governance system around an LLM or agent runtime.\n\n- tags: `agents`, `governance`, `runtime`\n- relationships: contains Request Boundary, Task Contract, Completion Gate and Canonical Run Authority; supports Agent Loop; requires Verification; implemented by Headless Harness Service\n- attachments: Agent Harness alias; Harness responsibility boundary claim; Harness working definition; bilingual Harness term\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Harnessability\n\n**Proposed definition:** The degree to which an environment makes agent work bounded, legible, verifiable and recoverable.\n\n- tags: `reliability`, `design`, `agents`\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Headless Harness Service\n\n**Proposed definition:** A UI-independent execution core shared by multiple clients through a stable protocol.\n\n- tags: `runtime`, `agents`\n- relationships: implements Harness; supported by Durable Thread State\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Item Turn Thread Protocol\n\n**Proposed definition:** A protocol model separating typed interaction items, pausable work turns and durable threads.\n\n- tags: `runtime`, `agents`\n- relationship: supports Agent Loop\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Request Boundary\n\n**Proposed definition:** The ingress layer that establishes identity, tenant scope, schema validity and admission.\n\n- tags: `security`, `design`\n- relationship: part of Harness\n- attachment: bilingual Request Boundary term\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Steering Control Plane\n\n**Proposed definition:** The human authority layer that sets intent, boundaries, evidence requirements and escalation rules.\n\n- tags: `design`, `governance`\n- attachment: bilingual term 控制平面\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Stopping Policy\n\n**Proposed definition:** Rules that decide whether execution continues, waits, completes, fails or is cancelled.\n\n- tags: `governance`, `reliability`, `runtime`\n- relationship: required by Agent Loop\n- attachment: bilingual term Stop Policy\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Task Contract\n\n**Proposed definition:** The explicit statement of required outcome, constraints, evidence and completion conditions.\n\n- tags: `design`, `governance`\n- relationships: part of Harness; related to Goal Drift\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Tool Calling\n\n**Proposed definition:** A structured interface through which a model proposes an external operation.\n\n- tags: `agents`, `runtime`\n- relationship: part of Agent Loop\n- attachment: Tool calls are proposals claim\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Verification\n\n**Proposed definition:** External checks that determine whether an agent result or side effect should be accepted.\n\n- tags: `reliability`, `verification`\n- relationship: required by Harness\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Human decision required\n\nEach section requires one explicit decision: `approve_new`, `map_existing`, `edit`, `reject`, or `defer`. No proposal in this file is canonical knowledge, and the draft PR must not be merged as-is.\n",
+    "format": "markdown",
+    "frontmatter": {},
+    "raw_markdown": "# M23.4 proposed concepts\n\n> Review-only. Not canonical.\n\n## Agent Loop\n\n**Proposed definition:** A governed state machine coordinating model proposals, authorisation, tool execution, observations and termination.\n\n- tags: `agents`, `runtime`\n- relationships: supports Harness; contains Tool Calling; requires Stopping Policy; supported by Item Turn Thread Protocol\n- attachment: bilingual term Agent Loop\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Canonical Run Authority\n\n**Proposed definition:** The system of record that owns authoritative execution state and transitions.\n\n- tags: `governance`, `runtime`, `reliability`\n- relationship: part of Harness\n- attachment: Architecture review begins with authority\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Completion Gate\n\n**Proposed definition:** The authority that accepts or rejects a terminal candidate against contract and evidence.\n\n- tags: `verification`, `reliability`\n- relationship: part of Harness\n- attachment: bilingual term Completion Gate\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Durable Thread State\n\n**Proposed definition:** Persistent interaction state that survives client disconnects and spans turns.\n\n- tags: `runtime`, `reliability`\n- relationship: supports Headless Harness Service\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Goal Drift\n\n**Proposed definition:** Uncontrolled movement away from the accepted task contract or authorised change process.\n\n- tags: `governance`, `reliability`\n- relationship: related to Task Contract\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Harness\n\n**Proposed definition:** The execution and governance system around an LLM or agent runtime.\n\n- tags: `agents`, `governance`, `runtime`\n- relationships: contains Request Boundary, Task Contract, Completion Gate and Canonical Run Authority; supports Agent Loop; requires Verification; implemented by Headless Harness Service\n- attachments: Agent Harness alias; Harness responsibility boundary claim; Harness working definition; bilingual Harness term\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Harnessability\n\n**Proposed definition:** The degree to which an environment makes agent work bounded, legible, verifiable and recoverable.\n\n- tags: `reliability`, `design`, `agents`\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Headless Harness Service\n\n**Proposed definition:** A UI-independent execution core shared by multiple clients through a stable protocol.\n\n- tags: `runtime`, `agents`\n- relationships: implements Harness; supported by Durable Thread State\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Item Turn Thread Protocol\n\n**Proposed definition:** A protocol model separating typed interaction items, pausable work turns and durable threads.\n\n- tags: `runtime`, `agents`\n- relationship: supports Agent Loop\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Request Boundary\n\n**Proposed definition:** The ingress layer that establishes identity, tenant scope, schema validity and admission.\n\n- tags: `security`, `design`\n- relationship: part of Harness\n- attachment: bilingual Request Boundary term\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Steering Control Plane\n\n**Proposed definition:** The human authority layer that sets intent, boundaries, evidence requirements and escalation rules.\n\n- tags: `design`, `governance`\n- attachment: bilingual term 控制平面\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Stopping Policy\n\n**Proposed definition:** Rules that decide whether execution continues, waits, completes, fails or is cancelled.\n\n- tags: `governance`, `reliability`, `runtime`\n- relationship: required by Agent Loop\n- attachment: bilingual term Stop Policy\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Task Contract\n\n**Proposed definition:** The explicit statement of required outcome, constraints, evidence and completion conditions.\n\n- tags: `design`, `governance`\n- relationships: part of Harness; related to Goal Drift\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Tool Calling\n\n**Proposed definition:** A structured interface through which a model proposes an external operation.\n\n- tags: `agents`, `runtime`\n- relationship: part of Agent Loop\n- attachment: Tool calls are proposals claim\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Verification\n\n**Proposed definition:** External checks that determine whether an agent result or side effect should be accepted.\n\n- tags: `reliability`, `verification`\n- relationship: required by Harness\n- resolution: `probable_duplicate` from shared governed tags only\n\n## Human decision required\n\nEach section requires one explicit decision: `approve_new`, `map_existing`, `edit`, `reject`, or `defer`. No proposal in this file is canonical knowledge, and the draft PR must not be merged as-is.\n"
+  },
+  "integrity": {
+    "browser_payload_sha256": "e45e59da86562ec5f654c3b746df119491fe030613a515153fc61eca50a049fe",
+    "byte_count": 5066,
+    "executable_scripts_detected": false,
+    "line_count": 133,
+    "origin_blob_sha": "bdfdc26610f38e89869241194cab7bb1b700a6d1",
+    "snapshot_sha256": "1e580018c29fae0e07c66d39acdf09adc675b535a85153129130a8211189e4c4",
+    "truncated": false
+  },
+  "kind": "markdown",
+  "license": "owner-provided",
+  "metadata_only_reason": null,
+  "origin": {
+    "blob_sha": "bdfdc26610f38e89869241194cab7bb1b700a6d1",
+    "commit": "deb3ad1e631c2149183d10561fbceb0a1848a989",
+    "path": "proposals/m23-4/proposed-concepts.md",
+    "repo": "danielcanfly/knowledge-source"
+  },
+  "owner": "Daniel Huang",
+  "registry": {
+    "content_hash_scope": "source-pr-review-surface-file",
+    "content_sha256": "1e580018c29fae0e07c66d39acdf09adc675b535a85153129130a8211189e4c4",
+    "source_commit": "acf78596ace8a7366688ccef72b507204d09d9f9",
+    "source_id": "source_m23_4_harness_proposed_concepts",
+    "source_repository": "danielcanfly/knowledge-source"
+  },
+  "related_concepts": [
+    "concepts/harness",
+    "concepts/harness-agent-loop",
+    "concepts/harness-verification",
+    "concepts/headless-harness-service",
+    "concepts/request-boundary"
+  ],
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-14-5-source-document/v1",
+  "source_id": "source_m23_4_harness_proposed_concepts",
+  "title": "M23.4 Harness proposed concepts review surface",
+  "toc": [
+    {
+      "level": 1,
+      "slug": "m23-4-proposed-concepts",
+      "title": "M23.4 proposed concepts"
+    },
+    {
+      "level": 2,
+      "slug": "agent-loop",
+      "title": "Agent Loop"
+    },
+    {
+      "level": 2,
+      "slug": "canonical-run-authority",
+      "title": "Canonical Run Authority"
+    },
+    {
+      "level": 2,
+      "slug": "completion-gate",
+      "title": "Completion Gate"
+    },
+    {
+      "level": 2,
+      "slug": "durable-thread-state",
+      "title": "Durable Thread State"
+    },
+    {
+      "level": 2,
+      "slug": "goal-drift",
+      "title": "Goal Drift"
+    },
+    {
+      "level": 2,
+      "slug": "harness",
+      "title": "Harness"
+    },
+    {
+      "level": 2,
+      "slug": "harnessability",
+      "title": "Harnessability"
+    },
+    {
+      "level": 2,
+      "slug": "headless-harness-service",
+      "title": "Headless Harness Service"
+    },
+    {
+      "level": 2,
+      "slug": "item-turn-thread-protocol",
+      "title": "Item Turn Thread Protocol"
+    },
+    {
+      "level": 2,
+      "slug": "request-boundary",
+      "title": "Request Boundary"
+    },
+    {
+      "level": 2,
+      "slug": "steering-control-plane",
+      "title": "Steering Control Plane"
+    },
+    {
+      "level": 2,
+      "slug": "stopping-policy",
+      "title": "Stopping Policy"
+    },
+    {
+      "level": 2,
+      "slug": "task-contract",
+      "title": "Task Contract"
+    },
+    {
+      "level": 2,
+      "slug": "tool-calling",
+      "title": "Tool Calling"
+    },
+    {
+      "level": 2,
+      "slug": "verification",
+      "title": "Verification"
+    },
+    {
+      "level": 2,
+      "slug": "human-decision-required",
+      "title": "Human decision required"
+    }
+  ],
+  "trust": "reviewed"
+}

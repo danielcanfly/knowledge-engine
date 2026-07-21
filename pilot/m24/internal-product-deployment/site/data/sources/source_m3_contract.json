@@ -1,0 +1,48 @@
+{
+  "audience": null,
+  "canonical_uri": "https://github.com/danielcanfly/knowledge-os-foundation",
+  "citations": [],
+  "coverage_status": "metadata_only_with_reason",
+  "document": {
+    "body": "",
+    "format": "metadata",
+    "metadata_only_reason": "No exact release-authoritative file or immutable snapshot was resolved for this governance contract in the M24.14.5 repair authority boundary."
+  },
+  "integrity": {
+    "browser_payload_sha256": "7cf94ede7d9699bf8c8d9a5596c4759a177136689773204a37c0591c3d216f1c",
+    "byte_count": 0,
+    "executable_scripts_detected": false,
+    "line_count": 0,
+    "origin_blob_sha": null,
+    "snapshot_sha256": null,
+    "truncated": false
+  },
+  "kind": "governance_contract",
+  "license": null,
+  "metadata_only_reason": "No exact release-authoritative file or immutable snapshot was resolved for this governance contract in the M24.14.5 repair authority boundary.",
+  "origin": {
+    "blob_sha": null,
+    "commit": null,
+    "path": null,
+    "repo": "danielcanfly/knowledge-os-foundation"
+  },
+  "owner": null,
+  "registry": {
+    "content_hash_scope": "registry-declared",
+    "content_sha256": null,
+    "source_commit": "acf78596ace8a7366688ccef72b507204d09d9f9",
+    "source_id": "source_m3_contract",
+    "source_repository": "danielcanfly/knowledge-source"
+  },
+  "related_concepts": [
+    "concepts/task-contract",
+    "concepts/completion-gate",
+    "concepts/source-governance"
+  ],
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-14-5-source-document/v1",
+  "source_id": "source_m3_contract",
+  "title": "M3 delivery contract",
+  "toc": [],
+  "trust": "authoritative"
+}

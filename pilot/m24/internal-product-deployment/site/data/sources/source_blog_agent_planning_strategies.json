@@ -1,0 +1,511 @@
+{
+  "audience": "public",
+  "canonical_uri": "https://www.danielcanfly.com/en/blog/the-atlas-of-agent-design-patterns-part-3/",
+  "citations": [],
+  "coverage_status": "full_snapshot",
+  "document": {
+    "body": "\nPart 2 examined the outer execution structures of an agent system:\n\n- Direct\n- Pipeline\n- Router\n- State Machine\n- DAG\n\nThose structures describe how work may move through the system. They do not fully determine what happens inside one node.\n\nSuppose a state machine enters `RESEARCH`. The node may still need to decide whether to:\n\n- search the official documentation\n- query an internal source\n- rewrite a failed query\n- inspect an API response\n- ask the user for missing information\n- stop because the evidence is sufficient\n- escalate because the task cannot be completed safely\n\nThis is the decision-and-planning layer.\n\nThe central question is:\n\n> How much of the next action should be predetermined, planned in advance, revised during execution, or selected from a formal procedure?\n\nThis article compares five useful approaches:\n\n1. fixed decision logic\n2. bounded ReAct\n3. Plan-and-Execute\n4. adaptive planning and replanning\n5. hierarchical decomposition, including formal HTN planning\n\nIt also separates two concerns that are often mixed into the same list:\n\n- **Goals** define the desired outcome.\n- **Policies** constrain which actions are permitted.\n\nGoals and policies shape every strategy. They are not peer planning algorithms.\n\n## Execution structure and decision strategy are different layers\n\nA state machine may define the outer route:\n\n```text\nSTART\n  -> PLAN\n  -> RESEARCH\n  -> VERIFY\n  -> ANSWER\n  -> END\n```\n\nInside `RESEARCH`, the system may use one of several decision strategies.\n\n### Fixed logic\n\n```text\nSearch official source\n  -> Extract required fields\n  -> Return structured result\n```\n\nThe application decides the next step.\n\n### Bounded ReAct\n\n```text\nRead goal and current state\n  -> Select an allowed action\n  -> Execute tool\n  -> Inspect normalised observation\n  -> Update progress\n  -> Select again or stop\n```\n\nThe next action depends on the latest observation, but only within explicit limits.\n\n### Plan-and-Execute\n\n```text\nCreate a structured plan\n  -> Select the current step\n  -> Execute the step\n  -> Record the result\n  -> Continue, repair, or replan\n```\n\nThe system establishes a global plan before performing the individual steps.\n\nThese strategies can live inside the same outer workflow. A state machine can call a planner, launch a bounded ReAct executor for one step, and invoke a verifier before allowing the next transition.\n\n![Figure 3-1 — One Execution Skeleton with Three Decision Strategies](/images/the-atlas-of-agent-design-patterns-part-3/skeleton-with-three-decision-strategies.png)\n\n> **Figure 3-1｜One Execution Skeleton with Three Decision Strategies**  \n> A single RESEARCH node inside an outer state machine can switch between fixed logic, bounded ReAct, and Plan-and-Execute depending on what the step requires.\n\n## A more precise map of the planning layer\n\n| Concern | Primary question | Typical mechanism |\n|---|---|---|\n| Fixed decision logic | Is the next step already known? | Rules, application code, fixed workflow |\n| Reactive action selection | Does the next action depend on the latest observation? | Bounded ReAct or another closed-loop policy |\n| Explicit planning | Should the task be decomposed before execution? | Plan-and-Execute |\n| Replanning | Has new evidence invalidated the remaining plan? | Triggered adaptive planning |\n| Hierarchical decomposition | Does the goal contain several levels of subgoals? | Hierarchical planner |\n| Formal procedural decomposition | Is there a reusable domain model of valid decompositions? | HTN planner |\n| Plan validation | Is the proposed plan feasible and acceptable? | Verifier, simulator, solver, policy checks |\n| Governance | Which actions are allowed and how much may they cost? | Policy layer, budget, approval, audit |\n\nThis map is intentionally layered. It avoids treating every named mechanism as a complete agent architecture.\n\n## Fixed decision logic: keep deterministic work deterministic\n\nFixed decision logic means that the application already knows the next step.\n\n```text\nClassify\n  -> Retrieve\n  -> Generate\n  -> Verify\n```\n\nThe model may perform work inside a step, but it does not freely redesign the sequence.\n\n### Good uses\n\n- document ingestion\n- fixed extraction and transformation\n- stable RAG stages\n- known approval procedures\n- deterministic validation\n- compliance-sensitive operations with established rules\n- tasks where every request requires the same sequence\n\n### Strengths\n\n- predictable cost and latency\n- straightforward tests\n- clear permissions\n- reproducible execution\n- simple failure attribution\n- low risk of loops\n\n### Limitation\n\nA fixed flow cannot react to an unmodelled situation unless the application already contains a branch for it.\n\nIf an official page disappears, the system must have a defined response:\n\n- switch to another approved source\n- mark the field unavailable\n- ask for credentials\n- stop with a typed failure\n- escalate for human handling\n\nFixed logic is not an immature design. It is often the correct outer boundary for a production agent. Autonomy should be introduced only where predetermined rules are genuinely insufficient.\n\n## ReAct: choose the next action from the latest observation\n\nThe original ReAct method interleaves reasoning traces with task-specific actions and observations. In engineering terms, the useful idea is a closed loop:\n\n```text\nCurrent goal and state\n  -> Choose action\n  -> Act in an environment\n  -> Receive observation\n  -> Update the next decision\n```\n\nThe method does not require one particular workflow engine or node boundary. In production, teams often place a ReAct-style loop inside a bounded executor node so that local flexibility does not control the entire application.\n\n### Good uses\n\n- web and documentation research\n- debugging\n- browser interaction\n- API exploration\n- file-system investigation\n- operating an unfamiliar interface\n- tasks where the next useful action cannot be known before seeing the result\n\n### Example\n\nThe goal is to confirm a product's current billing rules.\n\n```text\nAction:\nOpen the official pricing page\n\nObservation:\nOnly annual prices are visible\n\nAction:\nOpen the official billing documentation\n\nObservation:\nMonthly billing is available only for selected plans\n\nAction:\nCheck the official FAQ for plan-level exceptions\n```\n\nThe value comes from adapting to observations instead of following a prewritten list of URLs.\n\n### ReAct is local adaptation, not global reliability\n\nA raw action-observation loop does not automatically provide:\n\n- a measurable definition of progress\n- a reliable completion condition\n- permission enforcement\n- cost control\n- duplicate-action detection\n- durable state\n- recovery after interruption\n- evidence quality\n- acceptance of the final result\n\nThose belong to the production architecture around the loop.\n\n## Why ReAct loops without making progress\n\nA typical failure trajectory looks active but repeats the same state:\n\n```text\nSearch query A\n  -> insufficient evidence\nSearch query B\n  -> insufficient evidence\nSearch query A again\n  -> open a previously rejected page\nSearch query B again\n```\n\nCommon causes include:\n\n### No progress model\n\nThe executor knows that it should continue, but not which requirements remain unresolved.\n\n### Unstructured observations\n\nLong tool outputs are appended to context without extracting:\n\n- source identity\n- relevant facts\n- unresolved questions\n- conflicts\n- failure reason\n- suggested next action\n\n### No duplicate detection\n\nThe runtime does not detect repeated:\n\n- queries\n- URLs\n- tool calls\n- parameters\n- error conditions\n- equivalent actions expressed in different words\n\n### Vague completion criteria\n\n\"Keep researching until enough information is found\" is not testable.\n\nA stronger condition is:\n\n```text\nComplete when:\n- every required comparison field is filled or marked unavailable\n- every factual claim has an approved source\n- all material conflicts are recorded\n- no critical verifier failure remains\n```\n\n### Excessive tool freedom\n\nA large tool catalogue without permissions, costs, priorities, or call limits creates exploration noise rather than capability.\n\n## A production ReAct loop needs explicit contracts\n\nA bounded executor should receive:\n\n- the current step objective\n- allowed tools\n- available inputs\n- completion criteria\n- prohibited actions\n- remaining budget\n- maximum actions\n- current progress state\n- escalation policy\n\nEach tool should return a structured observation rather than an arbitrary text blob.\n\nExample:\n\n```json\n{\n  \"tool\": \"official_docs_search\",\n  \"status\": \"success\",\n  \"source\": \"https://example.com/docs\",\n  \"facts\": [\n    {\"field\": \"monthly_billing\", \"value\": \"selected_plans_only\"}\n  ],\n  \"unresolved\": [\"which plans support monthly billing\"],\n  \"retryable\": false\n}\n```\n\nThe loop should evaluate three outcomes after each observation:\n\n1. **complete**: the step contract is satisfied\n2. **continue**: another allowed action is justified\n3. **escalate**: the executor cannot finish within its authority or budget\n\n![Figure 3-2 — Production ReAct Loop with Explicit Step Contract](/images/the-atlas-of-agent-design-patterns-part-3/react-production-loop.png)\n\n> **Figure 3-2｜Production ReAct Loop with Explicit Step Contract**  \n> A bounded executor must receive step objective, allowed tools, completion criteria, budget, and escalation policy. After every observation it judges complete, continue, or escalate.\n\n## Plan-and-Execute: establish the global structure before acting\n\nPlan-and-Execute is best treated as an engineering pattern family, not one canonical algorithm with one universal implementation.\n\nIts defining rhythm is:\n\n```text\nGoal\n  -> Produce an explicit plan\n  -> Execute plan steps\n  -> Integrate the results\n```\n\nRelated research separates planning or reasoning from tool observations in different ways. Plan-and-Solve prompting decomposes a problem before solving its subtasks. ReWOO separates a planner-like reasoning stage from workers that obtain tool evidence and a solver that combines the results. These works are related, but they should not be presented as one identical architecture.\n\n### Good uses\n\n- long-form research\n- multi-document review\n- migration planning\n- large code changes\n- market analysis\n- project work with many requirements\n- tasks with ordering or dependency constraints\n- tasks that must expose progress\n\n### Strengths\n\n#### Global coverage\n\nThe planner can enumerate all required dimensions before execution begins.\n\n#### Trackable progress\n\nThe system can distinguish:\n\n- pending\n- ready\n- running\n- blocked\n- completed\n- failed\n- skipped\n\n#### Clear delegation\n\nIndependent steps may be assigned to different tools, workers, or DAG branches.\n\n#### Better integration planning\n\nThe expected output of each step can be designed to support the final synthesis.\n\n### Central weakness\n\nA polished plan may still be infeasible, incomplete, or based on a false premise.\n\nIf a planner guesses instead of reading the real input, the executor may efficiently complete the wrong task. Plan generation therefore does not replace source acquisition, constraint checking, or verification.\n\n## A plan must be executable, not ceremonial\n\nThis is not an executable plan:\n\n```text\n1. Research the topic\n2. Analyse the information\n3. Write the answer\n```\n\nIt merely restates the task.\n\nA production step should include a contract such as:\n\n| Field | Purpose |\n|---|---|\n| Step ID | Stable identifier |\n| Objective | Outcome this step must achieve |\n| Inputs | Required state and artefacts |\n| Dependencies | Steps that must finish first |\n| Allowed tools | Capabilities available to the executor |\n| Expected output | Structured result to produce |\n| Completion criteria | Observable acceptance condition |\n| Failure policy | Retry, fallback, block, replan, or stop |\n| Budget | Time, tokens, calls, or money |\n| Status | Current lifecycle state |\n| Provenance requirements | Evidence that must accompany the result |\n\nExample:\n\n```text\nStep ID:\nS3\n\nObjective:\nCollect official pricing information for every candidate\n\nDependencies:\nS1 evaluation criteria completed\nS2 candidate list approved\n\nAllowed tools:\nOfficial web search\nBrowser\n\nExpected output:\nStructured pricing table with source URL and access date\n\nCompletion criteria:\nEvery candidate has a documented price\nor an explicit unavailable / undisclosed status\n\nFailure policy:\nTry official pricing page\nthen official documentation\nthen official announcement\notherwise mark unavailable\n\nBudget:\n6 tool calls\n8 minutes\n```\n\nThis gives the executor a bounded assignment and the verifier an acceptance contract.\n\n![Figure 3-3 — Executable Plan Contract](/images/the-atlas-of-agent-design-patterns-part-3/executable-plan-contract.png)\n\n> **Figure 3-3｜Executable Plan Contract**  \n> A plan step cannot be just a task name. It must carry objective, dependencies, allowed tools, expected output, completion criteria, failure policy, and budget.\n\n## Plan validation: a plan is a proposal, not proof\n\nLanguage models can produce plausible-looking plans that violate preconditions, omit required effects, or invent actions unavailable in the environment.\n\nValidation strength should match the task.\n\n### Natural-language review\n\nUseful for low-risk work where the main concern is missing requirements or weak sequencing.\n\n### Deterministic checks\n\nValidate:\n\n- required fields\n- dependency references\n- cycle-free step dependencies\n- permitted tools\n- budget totals\n- known preconditions\n- output schema\n\n### Simulation or dry run\n\nTest the plan against a model of the environment before performing irreversible actions.\n\n### External planner or solver\n\nWhen the domain has formal actions, preconditions, effects, and constraints, a classical planner or solver may provide stronger guarantees than free-form generation. LLM+P, for example, converts a natural-language problem into a planning representation and delegates plan search to a classical planner.\n\nThe lesson is not that every business workflow needs PDDL. It is that fluent generation is not the same as plan validity.\n\n## Adaptive planning: change the remaining plan when reality changes\n\nA static plan assumes that its premises remain valid. An adaptive planner inspects execution feedback and revises the remaining work when a material assumption fails.\n\n```text\nCreate plan\n  -> Execute one step\n  -> Inspect result\n  -> Is the remaining plan still valid?\n       yes -> continue\n       no  -> repair locally or create a revised plan\n```\n\nAdaptive planning should not mean \"rewrite the whole plan after every step\". It needs explicit triggers and bounded authority.\n\n### Valid replan triggers\n\n- a critical premise is false\n- required data is unavailable\n- a dependency changed\n- the user's goal or constraint changed\n- a verifier rejected the result\n- a tool or capability is unavailable\n- the remaining budget cannot support the plan\n- repeated local repair failed\n- a new high-priority risk was discovered\n\n### Local repair versus global replan\n\nNot every failure requires replanning.\n\nUse **local repair** when:\n\n- the objective remains valid\n- only one step implementation failed\n- an approved fallback can satisfy the same contract\n- dependencies and later steps remain unchanged\n\nUse **replanning** when:\n\n- a premise affecting several steps changed\n- the original decomposition is no longer valid\n- the deliverable or constraint changed\n- later dependencies must be rewritten\n- a new approval or policy boundary appears\n\n### Preserve valid completed work\n\nA revised plan should not silently discard work that remains correct.\n\nExample:\n\n```text\nPlan v1\n\nCompleted:\nS1 Define evaluation criteria\nS2 Select candidate frameworks\n\nBlocked:\nS3 Collect official pricing\n```\n\nA replan may produce:\n\n```text\nPlan v2\n\nPreserved:\nS1 Define evaluation criteria\nS2 Select candidate frameworks\n\nRevised:\nS3A Search official documentation\nS3B Search official announcements\nS3C Mark undisclosed pricing explicitly\n\nUnchanged:\nS4 Compare architecture\nS5 Produce recommendation\n```\n\n### Versioning requirements\n\nRecord:\n\n- immutable original goal\n- current plan version\n- previous plan version\n- replan trigger\n- plan diff\n- preserved steps\n- invalidated steps\n- new dependencies\n- replan count\n- verifier decision\n- actor or model that approved the change\n\nAdaptive planning research such as AdaPlanner demonstrates feedback-driven refinement. Production governance adds explicit plan versions, limits, and auditability so that replanning itself does not become an uncontrolled loop.\n\n![Figure 3-4 — Adaptive Planning with Versions](/images/the-atlas-of-agent-design-patterns-part-3/adaptive-planning-with-versions.png)\n\n> **Figure 3-4｜Adaptive Planning with Versions**  \n> Replanning is triggered by explicit signals. A revised plan preserves valid completed work and records the plan diff, replan count, and preserved steps.\n\n## Hierarchical planning: decompose goals at several levels\n\nA flat plan becomes difficult to manage when a goal contains several independent areas of work.\n\nHierarchical planning separates levels:\n\n```text\nMain goal\n  -> Subgoal A\n       -> Task A1\n       -> Task A2\n  -> Subgoal B\n       -> Task B1\n       -> Task B2\n  -> Subgoal C\n       -> Task C1\n```\n\nExample:\n\n```text\nProduce market recommendation\n  -> Analyse market\n       -> estimate size\n       -> identify growth drivers\n  -> Analyse competitors\n       -> collect pricing\n       -> compare features\n       -> review positioning\n  -> Produce recommendation\n       -> synthesise findings\n       -> identify risks\n       -> recommend action\n```\n\n### Benefits\n\n- the upper level tracks outcomes rather than tool calls\n- subgoals can be delegated\n- local failures can be isolated\n- context can be scoped to the worker\n- independent branches can become DAG nodes\n\n### Risks\n\n- duplicated work across subgoals\n- inconsistent assumptions\n- loss of intent during hand-offs\n- incompatible output formats\n- completion of every subtask without completion of the parent goal\n\nHierarchical decomposition therefore needs:\n\n- parent and child completion contracts\n- shared facts and terminology\n- source provenance\n- dependency management\n- integration ownership\n- cross-subgoal verification\n\n## HTN: formal decomposition with domain methods\n\nHierarchical Task Network planning is a formal planning approach. It refines compound tasks into lower-level task networks until executable primitive tasks remain.\n\nCore concepts include:\n\n### Compound task\n\nA task that requires decomposition.\n\n```text\nProcess customer refund\n```\n\n### Method\n\nA domain-specific decomposition that may apply when its conditions hold.\n\n```text\nStandard refund method:\n  verify order\n  check eligibility\n  calculate amount\n  execute refund\n  notify customer\n```\n\n### Primitive task\n\nAn action that the execution system can perform directly.\n\n```text\nQuery order database\nCreate approval request\nIssue refund\nSend confirmation\n```\n\nThe important distinction is not simply \"humans wrote the plan\". HTN planning relies on domain knowledge encoded as tasks, methods, constraints, and operators. That domain model is often authored and governed by experts, but methods may also be generated or learned and then validated.\n\n### When HTN is useful\n\n- established operational procedures\n- logistics and fulfilment\n- customer service processes\n- IT operations\n- regulated approvals\n- reusable domain-specific decompositions\n- environments where allowed procedures matter more than open-ended creativity\n\n### Strengths\n\n- auditable decomposition\n- reusable methods\n- strong fit with domain rules\n- controllable search space\n- consistent execution structure\n\n### Limits\n\n- the domain model is expensive to build and maintain\n- unmodelled tasks remain difficult\n- stale methods reproduce stale behaviour\n- several applicable methods require selection\n- formal correctness still depends on the accuracy of the domain model\n\n### HTN and LLMs can be combined\n\nA practical arrangement is:\n\n```text\nLLM:\nInterpret the natural-language request\n  -> map it to a known task and extract parameters\n\nHTN planner:\nSelect applicable methods\n  -> decompose into primitive tasks\n\nExecution system:\nRun permitted primitive tasks\n\nLLM:\nHandle language-heavy steps and explain results\n```\n\nThe LLM handles ambiguity. The HTN model constrains procedure.\n\n## Goals and policies are cross-cutting, not peer strategies\n\nThe previous categories describe how decisions or plans are produced. Goals and policies operate across all of them.\n\n### Goal\n\nA goal defines the desired state or acceptance condition.\n\nA strong goal is measurable:\n\n```text\nAll target tests pass\nFull test suite passes\nLint passes\nBuild succeeds\nNo unrelated files changed\n```\n\nA weak goal is open-ended:\n\n```text\nImprove the repository\n```\n\nFixed logic, ReAct, Plan-and-Execute, adaptive planning, and HTN all need goals.\n\n### Policy\n\nA policy defines which proposed actions may proceed.\n\n```text\nProposed action\n  -> Policy check\n       -> allowed -> execute\n       -> approval required -> pause\n       -> denied -> reject or use fallback\n```\n\nPolicies may cover:\n\n- tools\n- permissions\n- data access\n- cost\n- risk\n- privacy\n- network access\n- reversibility\n- human approval\n\nImportant policy enforcement should live in application or infrastructure controls, not only in a prompt.\n\nExamples:\n\n- read-only database credentials\n- scoped API tokens\n- network restrictions\n- sandboxed file access\n- tool allowlists\n- spending limits\n- approval gates\n\nThe agent should not be the sole authority deciding whether its own safety rule applies.\n\n## Comparing the main decision strategies\n\n| Dimension | Fixed logic | Bounded ReAct | Plan-and-Execute | Adaptive planning | HTN |\n|---|---|---|---|---|---|\n| Main rhythm | Follow predetermined rules | Decide after observations | Plan first, then execute | Plan, execute, and revise when triggered | Refine tasks through domain methods |\n| Global view | Encoded by developers | Usually limited | Stronger | Stronger and updateable | Encoded in the task-method model |\n| Local adaptation | Low unless branches exist | High within limits | Executor-dependent | High when repair or replan is allowed | Limited to available methods and execution feedback |\n| Predictability | High | Lower | Medium | Medium to lower | High within the modelled domain |\n| Main risk | Brittleness | Looping and local myopia | Wrong plan executed efficiently | Replanning drift and cost | Stale or incomplete domain model |\n| Best fit | Stable tasks | Uncertain tool interaction | Long multi-requirement tasks | Long tasks in changing environments | Established reusable procedures |\n| Required controls | Tests and typed failures | Limits, progress, policy, stop criteria | Plan schema and plan validation | Versioning, triggers, diff, replan limit | Method governance and domain validation |\n\nThese are defaults, not universal scores. A tightly bounded ReAct executor may be more predictable than a weakly specified static plan.\n\n## The production hybrid: Planner, bounded Executor, Verifier, and Replanner\n\nA robust architecture often combines the methods:\n\n```text\nUser goal\n  -> Planner\n  -> Versioned plan store\n  -> State machine selects ready step\n  -> Bounded executor\n       -> uses fixed logic or ReAct as appropriate\n  -> Verifier\n       -> pass\n       -> local repair\n       -> replan\n       -> fail or escalate\n```\n\n### Planner responsibilities\n\n- understand the complete goal\n- create subgoals and steps\n- define dependencies\n- assign budgets\n- define outputs and completion criteria\n- identify approval and policy boundaries\n\n### Executor responsibilities\n\n- execute one step contract\n- use only allowed tools\n- adapt locally to observations\n- normalise results\n- update progress\n- report blockers rather than silently changing the goal\n\n### Verifier responsibilities\n\n- check the step contract\n- validate evidence and output schema\n- detect missing requirements\n- distinguish local repair from global replan\n- approve or reject completion\n\n### Replanner responsibilities\n\n- respond only to valid triggers\n- preserve valid completed work\n- update the remaining dependencies\n- produce a plan diff\n- respect the replan limit\n\n### State machine responsibilities\n\n- persist progress\n- control legal transitions\n- manage retries and waiting\n- enforce terminal states\n- coordinate approval\n\n### Policy layer responsibilities\n\n- authorise tools and data\n- limit cost and time\n- intercept high-impact actions\n- require human approval\n- create an audit trail\n\n![Figure 3-5 — Production Planning Architecture](/images/the-atlas-of-agent-design-patterns-part-3/production-planning-architecture.png)\n\n> **Figure 3-5｜Production Planning Architecture**  \n> The Planner produces a versioned plan, the state machine selects the ready step, a bounded executor runs it, the Verifier accepts or rejects, and the Replanner rewrites remaining work only when a real trigger fires.\n\n## How to choose a strategy\n\nStart with the least flexible mechanism that can reliably complete the task.\n\n### Use fixed logic when\n\n- the next step is known\n- the environment is stable\n- the same contract applies to every request\n- predictability matters more than adaptation\n\n### Add bounded ReAct when\n\n- the next useful action depends on the latest tool result\n- the environment is difficult to enumerate\n- local exploration is necessary\n- completion can still be verified\n\n### Add Plan-and-Execute when\n\n- the task has many requirements\n- omissions are costly\n- progress must be visible\n- dependencies or delegation matter\n\n### Add adaptive replanning when\n\n- premises may change during execution\n- a static plan can become invalid\n- local repair is sometimes insufficient\n- the system can identify material replan triggers\n\n### Use hierarchical decomposition when\n\n- a flat plan is too large\n- subgoals have distinct owners or contexts\n- parent and child completion can be defined\n\n### Use HTN when\n\n- the domain has reusable, governed procedures\n- valid decomposition methods can be modelled\n- consistency and auditability are central\n\n### Use an external planner or solver when\n\n- preconditions and effects are formal\n- feasibility matters more than fluent explanation\n- constraints are too important to leave to free-form generation\n- a valid or optimal plan is required\n\n## Common anti-patterns\n\n### Planning every task\n\nA translation or fixed extraction does not need a five-step plan.\n\n### Treating the plan as ground truth\n\nA generated plan is a hypothesis about how to complete the work.\n\n### ReAct without a step contract\n\nThe executor explores tools without knowing what output it must produce.\n\n### Replanning after every observation\n\nThe system spends more time rewriting plans than executing them.\n\n### Global replan for a local failure\n\nOne unavailable endpoint causes the entire plan to be discarded.\n\n### Replanning without versions\n\nThe previous plan disappears, making drift and repeated work invisible.\n\n### Hierarchy without integration ownership\n\nEvery subgoal is complete, but no one owns the final outcome.\n\n### Calling every goal-directed loop a separate architecture\n\nEvery useful agent pursues some goal. The differentiator is how action selection, planning, verification, and control are implemented.\n\n### Safety rules only in prompts\n\nThe model is asked not to use a capability that the runtime still exposes without restriction.\n\n### Planner and executor duplicate the same work\n\nThe planner specifies a research strategy; the executor ignores it and redesigns the task from the beginning.\n\n### Refusing to admit an unsatisfied task\n\nThe correct terminal result may be:\n\n- unavailable\n- unsupported\n- blocked\n- partial\n- requires human action\n\nAnother planning round cannot create missing evidence or permissions.\n\n## What production planning should record\n\n| Record | Why it matters |\n|---|---|\n| Original goal | Prevents drift |\n| Goal version | Records authorised goal changes |\n| Current plan version | Identifies the active plan |\n| Plan diff | Explains what changed |\n| Replan trigger | Justifies the revision |\n| Step contract | Defines execution and acceptance |\n| Step dependency | Controls readiness |\n| Step status | Tracks progress |\n| Tool calls and observations | Records actual execution |\n| Evidence and provenance | Supports verification |\n| Retry count | Bounds local repair |\n| Replan count | Bounds global revision |\n| Remaining budget | Controls cost |\n| Policy decision | Records permission and risk checks |\n| Verifier result | Accepts or rejects completion |\n| Terminal outcome | Completed, partial, blocked, failed, or cancelled |\n\nWithout these records, a long task is a long conversation rather than a manageable process.\n\n## Complete example: researching agent frameworks\n\nThe goal is:\n\n> Compare three agent frameworks and recommend one for a production RAG system.\n\n### Router\n\nSelect the research workflow instead of direct question answering.\n\n### Planner\n\nCreate:\n\n```text\nS1 Define evaluation criteria\nS2 Confirm candidate frameworks\nS3 Collect official architecture information\nS4 Compare state and persistence\nS5 Compare observability and testing\nS6 Compare tool and multi-agent support\nS7 Evaluate risks and operational fit\nS8 Produce recommendation\n```\n\nEach step receives a contract, budget, and completion criteria.\n\n### Executor\n\nFor `S3`, a bounded ReAct executor may:\n\n```text\nOpen official architecture documentation\n  -> required field missing\nOpen official persistence documentation\n  -> record capability and version\nInspect official repository\n  -> extract structured evidence\nStop when all fields are documented or explicitly unknown\n```\n\n### Verifier\n\nCheck:\n\n- every material claim uses an official source\n- every comparison field is covered\n- missing information is marked unknown\n- version dates are not mixed\n- the recommendation follows the criteria\n\n### Adaptive replan\n\nOne framework does not publish pricing or a required technical detail.\n\nThe replanner changes only the remaining work:\n\n```text\nReplace inferred field with:\n- publicly documented capabilities\n- explicitly marked unknowns\n- no unsupported estimate\n```\n\n### Synthesis\n\nIntegrate the verified results and produce the recommendation.\n\nThis is not pure ReAct and not pure Plan-and-Execute. It is a governed composition of routing, planning, bounded action selection, verification, state management, and triggered replanning.\n\n## Conclusion\n\nThe planning layer is easier to understand when its mechanisms are separated:\n\n- **Fixed decision logic** keeps known work deterministic.\n- **Bounded ReAct** adapts the next local action to the latest observation.\n- **Plan-and-Execute** creates an explicit global structure before execution.\n- **Adaptive planning** revises remaining work after a material trigger.\n- **Hierarchical planning** organises large goals into several levels.\n- **HTN** uses a formal domain model to refine compound tasks into executable tasks.\n- **Plan verification** determines whether a plausible plan is actually acceptable.\n- **Goals and policies** define outcomes and boundaries across every strategy.\n\nThe production objective is not maximum planning freedom. It is deliberate placement of flexibility:\n\n```text\nfixed outer control\n  + explicit plan where global coverage matters\n  + bounded local adaptation where observations matter\n  + verification before acceptance\n  + versioned replanning only when reality invalidates the plan\n```\n\nPart 4 moves from planning to search:\n\n> When several candidate solutions are possible, how should an agent explore, compare, prune, and select them?\n\n## References\n\n- [Yao et al., *ReAct: Synergizing Reasoning and Acting in Language Models*](https://arxiv.org/abs/2210.03629)\n- [Xu et al., *ReWOO: Decoupling Reasoning from Observations for Efficient Augmented Language Models*](https://arxiv.org/abs/2305.18323)\n- [Wang et al., *Plan-and-Solve Prompting: Improving Zero-Shot Chain-of-Thought Reasoning by Large Language Models*](https://arxiv.org/abs/2305.04091)\n- [Sun et al., *AdaPlanner: Adaptive Planning from Feedback with Language Models*](https://arxiv.org/abs/2305.16653)\n- [Liu et al., *LLM+P: Empowering Large Language Models with Optimal Planning Proficiency*](https://arxiv.org/abs/2304.11477)\n- [Huang et al., *Language Models as Zero-Shot Planners: Extracting Actionable Knowledge for Embodied Agents*](https://arxiv.org/abs/2201.07207)\n- [Valmeekam et al., *Large Language Models Still Can't Plan: A Benchmark for LLMs on Planning and Reasoning about Change*](https://arxiv.org/abs/2206.10498)\n- [Au et al., *SHOP2: An HTN Planning System*](https://arxiv.org/abs/1106.4869)\n- [Höller et al., *On Hierarchical Task Networks*](https://arxiv.org/abs/1606.06900)\n\n",
+    "format": "markdown",
+    "frontmatter": {
+      "categories": "[\"AI\"]",
+      "date": "2026-06-20T17:00:00",
+      "description": "A production-focused guide to fixed decision logic, bounded ReAct, explicit plans, adaptive replanning, hierarchical decomposition, HTN, plan verification, and the architecture that combines Planner, Executor, Verifier, State Machine, and policy controls.",
+      "lang": "en",
+      "series": "The Atlas of Agent Design Patterns",
+      "seriesOrder": "3",
+      "title": "The Atlas of Agent Design Patterns Part 3 | ReAct, Plan-and-Execute, Adaptive Planning, and HTN"
+    },
+    "raw_markdown": "---\ntitle: \"The Atlas of Agent Design Patterns Part 3 | ReAct, Plan-and-Execute, Adaptive Planning, and HTN\"\ndescription: \"A production-focused guide to fixed decision logic, bounded ReAct, explicit plans, adaptive replanning, hierarchical decomposition, HTN, plan verification, and the architecture that combines Planner, Executor, Verifier, State Machine, and policy controls.\"\ndate: 2026-06-20T17:00:00\nlang: en\ncategories: [\"AI\"]\nseries: \"The Atlas of Agent Design Patterns\"\nseriesOrder: 3\n---\n\nPart 2 examined the outer execution structures of an agent system:\n\n- Direct\n- Pipeline\n- Router\n- State Machine\n- DAG\n\nThose structures describe how work may move through the system. They do not fully determine what happens inside one node.\n\nSuppose a state machine enters `RESEARCH`. The node may still need to decide whether to:\n\n- search the official documentation\n- query an internal source\n- rewrite a failed query\n- inspect an API response\n- ask the user for missing information\n- stop because the evidence is sufficient\n- escalate because the task cannot be completed safely\n\nThis is the decision-and-planning layer.\n\nThe central question is:\n\n> How much of the next action should be predetermined, planned in advance, revised during execution, or selected from a formal procedure?\n\nThis article compares five useful approaches:\n\n1. fixed decision logic\n2. bounded ReAct\n3. Plan-and-Execute\n4. adaptive planning and replanning\n5. hierarchical decomposition, including formal HTN planning\n\nIt also separates two concerns that are often mixed into the same list:\n\n- **Goals** define the desired outcome.\n- **Policies** constrain which actions are permitted.\n\nGoals and policies shape every strategy. They are not peer planning algorithms.\n\n## Execution structure and decision strategy are different layers\n\nA state machine may define the outer route:\n\n```text\nSTART\n  -> PLAN\n  -> RESEARCH\n  -> VERIFY\n  -> ANSWER\n  -> END\n```\n\nInside `RESEARCH`, the system may use one of several decision strategies.\n\n### Fixed logic\n\n```text\nSearch official source\n  -> Extract required fields\n  -> Return structured result\n```\n\nThe application decides the next step.\n\n### Bounded ReAct\n\n```text\nRead goal and current state\n  -> Select an allowed action\n  -> Execute tool\n  -> Inspect normalised observation\n  -> Update progress\n  -> Select again or stop\n```\n\nThe next action depends on the latest observation, but only within explicit limits.\n\n### Plan-and-Execute\n\n```text\nCreate a structured plan\n  -> Select the current step\n  -> Execute the step\n  -> Record the result\n  -> Continue, repair, or replan\n```\n\nThe system establishes a global plan before performing the individual steps.\n\nThese strategies can live inside the same outer workflow. A state machine can call a planner, launch a bounded ReAct executor for one step, and invoke a verifier before allowing the next transition.\n\n![Figure 3-1 — One Execution Skeleton with Three Decision Strategies](/images/the-atlas-of-agent-design-patterns-part-3/skeleton-with-three-decision-strategies.png)\n\n> **Figure 3-1｜One Execution Skeleton with Three Decision Strategies**  \n> A single RESEARCH node inside an outer state machine can switch between fixed logic, bounded ReAct, and Plan-and-Execute depending on what the step requires.\n\n## A more precise map of the planning layer\n\n| Concern | Primary question | Typical mechanism |\n|---|---|---|\n| Fixed decision logic | Is the next step already known? | Rules, application code, fixed workflow |\n| Reactive action selection | Does the next action depend on the latest observation? | Bounded ReAct or another closed-loop policy |\n| Explicit planning | Should the task be decomposed before execution? | Plan-and-Execute |\n| Replanning | Has new evidence invalidated the remaining plan? | Triggered adaptive planning |\n| Hierarchical decomposition | Does the goal contain several levels of subgoals? | Hierarchical planner |\n| Formal procedural decomposition | Is there a reusable domain model of valid decompositions? | HTN planner |\n| Plan validation | Is the proposed plan feasible and acceptable? | Verifier, simulator, solver, policy checks |\n| Governance | Which actions are allowed and how much may they cost? | Policy layer, budget, approval, audit |\n\nThis map is intentionally layered. It avoids treating every named mechanism as a complete agent architecture.\n\n## Fixed decision logic: keep deterministic work deterministic\n\nFixed decision logic means that the application already knows the next step.\n\n```text\nClassify\n  -> Retrieve\n  -> Generate\n  -> Verify\n```\n\nThe model may perform work inside a step, but it does not freely redesign the sequence.\n\n### Good uses\n\n- document ingestion\n- fixed extraction and transformation\n- stable RAG stages\n- known approval procedures\n- deterministic validation\n- compliance-sensitive operations with established rules\n- tasks where every request requires the same sequence\n\n### Strengths\n\n- predictable cost and latency\n- straightforward tests\n- clear permissions\n- reproducible execution\n- simple failure attribution\n- low risk of loops\n\n### Limitation\n\nA fixed flow cannot react to an unmodelled situation unless the application already contains a branch for it.\n\nIf an official page disappears, the system must have a defined response:\n\n- switch to another approved source\n- mark the field unavailable\n- ask for credentials\n- stop with a typed failure\n- escalate for human handling\n\nFixed logic is not an immature design. It is often the correct outer boundary for a production agent. Autonomy should be introduced only where predetermined rules are genuinely insufficient.\n\n## ReAct: choose the next action from the latest observation\n\nThe original ReAct method interleaves reasoning traces with task-specific actions and observations. In engineering terms, the useful idea is a closed loop:\n\n```text\nCurrent goal and state\n  -> Choose action\n  -> Act in an environment\n  -> Receive observation\n  -> Update the next decision\n```\n\nThe method does not require one particular workflow engine or node boundary. In production, teams often place a ReAct-style loop inside a bounded executor node so that local flexibility does not control the entire application.\n\n### Good uses\n\n- web and documentation research\n- debugging\n- browser interaction\n- API exploration\n- file-system investigation\n- operating an unfamiliar interface\n- tasks where the next useful action cannot be known before seeing the result\n\n### Example\n\nThe goal is to confirm a product's current billing rules.\n\n```text\nAction:\nOpen the official pricing page\n\nObservation:\nOnly annual prices are visible\n\nAction:\nOpen the official billing documentation\n\nObservation:\nMonthly billing is available only for selected plans\n\nAction:\nCheck the official FAQ for plan-level exceptions\n```\n\nThe value comes from adapting to observations instead of following a prewritten list of URLs.\n\n### ReAct is local adaptation, not global reliability\n\nA raw action-observation loop does not automatically provide:\n\n- a measurable definition of progress\n- a reliable completion condition\n- permission enforcement\n- cost control\n- duplicate-action detection\n- durable state\n- recovery after interruption\n- evidence quality\n- acceptance of the final result\n\nThose belong to the production architecture around the loop.\n\n## Why ReAct loops without making progress\n\nA typical failure trajectory looks active but repeats the same state:\n\n```text\nSearch query A\n  -> insufficient evidence\nSearch query B\n  -> insufficient evidence\nSearch query A again\n  -> open a previously rejected page\nSearch query B again\n```\n\nCommon causes include:\n\n### No progress model\n\nThe executor knows that it should continue, but not which requirements remain unresolved.\n\n### Unstructured observations\n\nLong tool outputs are appended to context without extracting:\n\n- source identity\n- relevant facts\n- unresolved questions\n- conflicts\n- failure reason\n- suggested next action\n\n### No duplicate detection\n\nThe runtime does not detect repeated:\n\n- queries\n- URLs\n- tool calls\n- parameters\n- error conditions\n- equivalent actions expressed in different words\n\n### Vague completion criteria\n\n\"Keep researching until enough information is found\" is not testable.\n\nA stronger condition is:\n\n```text\nComplete when:\n- every required comparison field is filled or marked unavailable\n- every factual claim has an approved source\n- all material conflicts are recorded\n- no critical verifier failure remains\n```\n\n### Excessive tool freedom\n\nA large tool catalogue without permissions, costs, priorities, or call limits creates exploration noise rather than capability.\n\n## A production ReAct loop needs explicit contracts\n\nA bounded executor should receive:\n\n- the current step objective\n- allowed tools\n- available inputs\n- completion criteria\n- prohibited actions\n- remaining budget\n- maximum actions\n- current progress state\n- escalation policy\n\nEach tool should return a structured observation rather than an arbitrary text blob.\n\nExample:\n\n```json\n{\n  \"tool\": \"official_docs_search\",\n  \"status\": \"success\",\n  \"source\": \"https://example.com/docs\",\n  \"facts\": [\n    {\"field\": \"monthly_billing\", \"value\": \"selected_plans_only\"}\n  ],\n  \"unresolved\": [\"which plans support monthly billing\"],\n  \"retryable\": false\n}\n```\n\nThe loop should evaluate three outcomes after each observation:\n\n1. **complete**: the step contract is satisfied\n2. **continue**: another allowed action is justified\n3. **escalate**: the executor cannot finish within its authority or budget\n\n![Figure 3-2 — Production ReAct Loop with Explicit Step Contract](/images/the-atlas-of-agent-design-patterns-part-3/react-production-loop.png)\n\n> **Figure 3-2｜Production ReAct Loop with Explicit Step Contract**  \n> A bounded executor must receive step objective, allowed tools, completion criteria, budget, and escalation policy. After every observation it judges complete, continue, or escalate.\n\n## Plan-and-Execute: establish the global structure before acting\n\nPlan-and-Execute is best treated as an engineering pattern family, not one canonical algorithm with one universal implementation.\n\nIts defining rhythm is:\n\n```text\nGoal\n  -> Produce an explicit plan\n  -> Execute plan steps\n  -> Integrate the results\n```\n\nRelated research separates planning or reasoning from tool observations in different ways. Plan-and-Solve prompting decomposes a problem before solving its subtasks. ReWOO separates a planner-like reasoning stage from workers that obtain tool evidence and a solver that combines the results. These works are related, but they should not be presented as one identical architecture.\n\n### Good uses\n\n- long-form research\n- multi-document review\n- migration planning\n- large code changes\n- market analysis\n- project work with many requirements\n- tasks with ordering or dependency constraints\n- tasks that must expose progress\n\n### Strengths\n\n#### Global coverage\n\nThe planner can enumerate all required dimensions before execution begins.\n\n#### Trackable progress\n\nThe system can distinguish:\n\n- pending\n- ready\n- running\n- blocked\n- completed\n- failed\n- skipped\n\n#### Clear delegation\n\nIndependent steps may be assigned to different tools, workers, or DAG branches.\n\n#### Better integration planning\n\nThe expected output of each step can be designed to support the final synthesis.\n\n### Central weakness\n\nA polished plan may still be infeasible, incomplete, or based on a false premise.\n\nIf a planner guesses instead of reading the real input, the executor may efficiently complete the wrong task. Plan generation therefore does not replace source acquisition, constraint checking, or verification.\n\n## A plan must be executable, not ceremonial\n\nThis is not an executable plan:\n\n```text\n1. Research the topic\n2. Analyse the information\n3. Write the answer\n```\n\nIt merely restates the task.\n\nA production step should include a contract such as:\n\n| Field | Purpose |\n|---|---|\n| Step ID | Stable identifier |\n| Objective | Outcome this step must achieve |\n| Inputs | Required state and artefacts |\n| Dependencies | Steps that must finish first |\n| Allowed tools | Capabilities available to the executor |\n| Expected output | Structured result to produce |\n| Completion criteria | Observable acceptance condition |\n| Failure policy | Retry, fallback, block, replan, or stop |\n| Budget | Time, tokens, calls, or money |\n| Status | Current lifecycle state |\n| Provenance requirements | Evidence that must accompany the result |\n\nExample:\n\n```text\nStep ID:\nS3\n\nObjective:\nCollect official pricing information for every candidate\n\nDependencies:\nS1 evaluation criteria completed\nS2 candidate list approved\n\nAllowed tools:\nOfficial web search\nBrowser\n\nExpected output:\nStructured pricing table with source URL and access date\n\nCompletion criteria:\nEvery candidate has a documented price\nor an explicit unavailable / undisclosed status\n\nFailure policy:\nTry official pricing page\nthen official documentation\nthen official announcement\notherwise mark unavailable\n\nBudget:\n6 tool calls\n8 minutes\n```\n\nThis gives the executor a bounded assignment and the verifier an acceptance contract.\n\n![Figure 3-3 — Executable Plan Contract](/images/the-atlas-of-agent-design-patterns-part-3/executable-plan-contract.png)\n\n> **Figure 3-3｜Executable Plan Contract**  \n> A plan step cannot be just a task name. It must carry objective, dependencies, allowed tools, expected output, completion criteria, failure policy, and budget.\n\n## Plan validation: a plan is a proposal, not proof\n\nLanguage models can produce plausible-looking plans that violate preconditions, omit required effects, or invent actions unavailable in the environment.\n\nValidation strength should match the task.\n\n### Natural-language review\n\nUseful for low-risk work where the main concern is missing requirements or weak sequencing.\n\n### Deterministic checks\n\nValidate:\n\n- required fields\n- dependency references\n- cycle-free step dependencies\n- permitted tools\n- budget totals\n- known preconditions\n- output schema\n\n### Simulation or dry run\n\nTest the plan against a model of the environment before performing irreversible actions.\n\n### External planner or solver\n\nWhen the domain has formal actions, preconditions, effects, and constraints, a classical planner or solver may provide stronger guarantees than free-form generation. LLM+P, for example, converts a natural-language problem into a planning representation and delegates plan search to a classical planner.\n\nThe lesson is not that every business workflow needs PDDL. It is that fluent generation is not the same as plan validity.\n\n## Adaptive planning: change the remaining plan when reality changes\n\nA static plan assumes that its premises remain valid. An adaptive planner inspects execution feedback and revises the remaining work when a material assumption fails.\n\n```text\nCreate plan\n  -> Execute one step\n  -> Inspect result\n  -> Is the remaining plan still valid?\n       yes -> continue\n       no  -> repair locally or create a revised plan\n```\n\nAdaptive planning should not mean \"rewrite the whole plan after every step\". It needs explicit triggers and bounded authority.\n\n### Valid replan triggers\n\n- a critical premise is false\n- required data is unavailable\n- a dependency changed\n- the user's goal or constraint changed\n- a verifier rejected the result\n- a tool or capability is unavailable\n- the remaining budget cannot support the plan\n- repeated local repair failed\n- a new high-priority risk was discovered\n\n### Local repair versus global replan\n\nNot every failure requires replanning.\n\nUse **local repair** when:\n\n- the objective remains valid\n- only one step implementation failed\n- an approved fallback can satisfy the same contract\n- dependencies and later steps remain unchanged\n\nUse **replanning** when:\n\n- a premise affecting several steps changed\n- the original decomposition is no longer valid\n- the deliverable or constraint changed\n- later dependencies must be rewritten\n- a new approval or policy boundary appears\n\n### Preserve valid completed work\n\nA revised plan should not silently discard work that remains correct.\n\nExample:\n\n```text\nPlan v1\n\nCompleted:\nS1 Define evaluation criteria\nS2 Select candidate frameworks\n\nBlocked:\nS3 Collect official pricing\n```\n\nA replan may produce:\n\n```text\nPlan v2\n\nPreserved:\nS1 Define evaluation criteria\nS2 Select candidate frameworks\n\nRevised:\nS3A Search official documentation\nS3B Search official announcements\nS3C Mark undisclosed pricing explicitly\n\nUnchanged:\nS4 Compare architecture\nS5 Produce recommendation\n```\n\n### Versioning requirements\n\nRecord:\n\n- immutable original goal\n- current plan version\n- previous plan version\n- replan trigger\n- plan diff\n- preserved steps\n- invalidated steps\n- new dependencies\n- replan count\n- verifier decision\n- actor or model that approved the change\n\nAdaptive planning research such as AdaPlanner demonstrates feedback-driven refinement. Production governance adds explicit plan versions, limits, and auditability so that replanning itself does not become an uncontrolled loop.\n\n![Figure 3-4 — Adaptive Planning with Versions](/images/the-atlas-of-agent-design-patterns-part-3/adaptive-planning-with-versions.png)\n\n> **Figure 3-4｜Adaptive Planning with Versions**  \n> Replanning is triggered by explicit signals. A revised plan preserves valid completed work and records the plan diff, replan count, and preserved steps.\n\n## Hierarchical planning: decompose goals at several levels\n\nA flat plan becomes difficult to manage when a goal contains several independent areas of work.\n\nHierarchical planning separates levels:\n\n```text\nMain goal\n  -> Subgoal A\n       -> Task A1\n       -> Task A2\n  -> Subgoal B\n       -> Task B1\n       -> Task B2\n  -> Subgoal C\n       -> Task C1\n```\n\nExample:\n\n```text\nProduce market recommendation\n  -> Analyse market\n       -> estimate size\n       -> identify growth drivers\n  -> Analyse competitors\n       -> collect pricing\n       -> compare features\n       -> review positioning\n  -> Produce recommendation\n       -> synthesise findings\n       -> identify risks\n       -> recommend action\n```\n\n### Benefits\n\n- the upper level tracks outcomes rather than tool calls\n- subgoals can be delegated\n- local failures can be isolated\n- context can be scoped to the worker\n- independent branches can become DAG nodes\n\n### Risks\n\n- duplicated work across subgoals\n- inconsistent assumptions\n- loss of intent during hand-offs\n- incompatible output formats\n- completion of every subtask without completion of the parent goal\n\nHierarchical decomposition therefore needs:\n\n- parent and child completion contracts\n- shared facts and terminology\n- source provenance\n- dependency management\n- integration ownership\n- cross-subgoal verification\n\n## HTN: formal decomposition with domain methods\n\nHierarchical Task Network planning is a formal planning approach. It refines compound tasks into lower-level task networks until executable primitive tasks remain.\n\nCore concepts include:\n\n### Compound task\n\nA task that requires decomposition.\n\n```text\nProcess customer refund\n```\n\n### Method\n\nA domain-specific decomposition that may apply when its conditions hold.\n\n```text\nStandard refund method:\n  verify order\n  check eligibility\n  calculate amount\n  execute refund\n  notify customer\n```\n\n### Primitive task\n\nAn action that the execution system can perform directly.\n\n```text\nQuery order database\nCreate approval request\nIssue refund\nSend confirmation\n```\n\nThe important distinction is not simply \"humans wrote the plan\". HTN planning relies on domain knowledge encoded as tasks, methods, constraints, and operators. That domain model is often authored and governed by experts, but methods may also be generated or learned and then validated.\n\n### When HTN is useful\n\n- established operational procedures\n- logistics and fulfilment\n- customer service processes\n- IT operations\n- regulated approvals\n- reusable domain-specific decompositions\n- environments where allowed procedures matter more than open-ended creativity\n\n### Strengths\n\n- auditable decomposition\n- reusable methods\n- strong fit with domain rules\n- controllable search space\n- consistent execution structure\n\n### Limits\n\n- the domain model is expensive to build and maintain\n- unmodelled tasks remain difficult\n- stale methods reproduce stale behaviour\n- several applicable methods require selection\n- formal correctness still depends on the accuracy of the domain model\n\n### HTN and LLMs can be combined\n\nA practical arrangement is:\n\n```text\nLLM:\nInterpret the natural-language request\n  -> map it to a known task and extract parameters\n\nHTN planner:\nSelect applicable methods\n  -> decompose into primitive tasks\n\nExecution system:\nRun permitted primitive tasks\n\nLLM:\nHandle language-heavy steps and explain results\n```\n\nThe LLM handles ambiguity. The HTN model constrains procedure.\n\n## Goals and policies are cross-cutting, not peer strategies\n\nThe previous categories describe how decisions or plans are produced. Goals and policies operate across all of them.\n\n### Goal\n\nA goal defines the desired state or acceptance condition.\n\nA strong goal is measurable:\n\n```text\nAll target tests pass\nFull test suite passes\nLint passes\nBuild succeeds\nNo unrelated files changed\n```\n\nA weak goal is open-ended:\n\n```text\nImprove the repository\n```\n\nFixed logic, ReAct, Plan-and-Execute, adaptive planning, and HTN all need goals.\n\n### Policy\n\nA policy defines which proposed actions may proceed.\n\n```text\nProposed action\n  -> Policy check\n       -> allowed -> execute\n       -> approval required -> pause\n       -> denied -> reject or use fallback\n```\n\nPolicies may cover:\n\n- tools\n- permissions\n- data access\n- cost\n- risk\n- privacy\n- network access\n- reversibility\n- human approval\n\nImportant policy enforcement should live in application or infrastructure controls, not only in a prompt.\n\nExamples:\n\n- read-only database credentials\n- scoped API tokens\n- network restrictions\n- sandboxed file access\n- tool allowlists\n- spending limits\n- approval gates\n\nThe agent should not be the sole authority deciding whether its own safety rule applies.\n\n## Comparing the main decision strategies\n\n| Dimension | Fixed logic | Bounded ReAct | Plan-and-Execute | Adaptive planning | HTN |\n|---|---|---|---|---|---|\n| Main rhythm | Follow predetermined rules | Decide after observations | Plan first, then execute | Plan, execute, and revise when triggered | Refine tasks through domain methods |\n| Global view | Encoded by developers | Usually limited | Stronger | Stronger and updateable | Encoded in the task-method model |\n| Local adaptation | Low unless branches exist | High within limits | Executor-dependent | High when repair or replan is allowed | Limited to available methods and execution feedback |\n| Predictability | High | Lower | Medium | Medium to lower | High within the modelled domain |\n| Main risk | Brittleness | Looping and local myopia | Wrong plan executed efficiently | Replanning drift and cost | Stale or incomplete domain model |\n| Best fit | Stable tasks | Uncertain tool interaction | Long multi-requirement tasks | Long tasks in changing environments | Established reusable procedures |\n| Required controls | Tests and typed failures | Limits, progress, policy, stop criteria | Plan schema and plan validation | Versioning, triggers, diff, replan limit | Method governance and domain validation |\n\nThese are defaults, not universal scores. A tightly bounded ReAct executor may be more predictable than a weakly specified static plan.\n\n## The production hybrid: Planner, bounded Executor, Verifier, and Replanner\n\nA robust architecture often combines the methods:\n\n```text\nUser goal\n  -> Planner\n  -> Versioned plan store\n  -> State machine selects ready step\n  -> Bounded executor\n       -> uses fixed logic or ReAct as appropriate\n  -> Verifier\n       -> pass\n       -> local repair\n       -> replan\n       -> fail or escalate\n```\n\n### Planner responsibilities\n\n- understand the complete goal\n- create subgoals and steps\n- define dependencies\n- assign budgets\n- define outputs and completion criteria\n- identify approval and policy boundaries\n\n### Executor responsibilities\n\n- execute one step contract\n- use only allowed tools\n- adapt locally to observations\n- normalise results\n- update progress\n- report blockers rather than silently changing the goal\n\n### Verifier responsibilities\n\n- check the step contract\n- validate evidence and output schema\n- detect missing requirements\n- distinguish local repair from global replan\n- approve or reject completion\n\n### Replanner responsibilities\n\n- respond only to valid triggers\n- preserve valid completed work\n- update the remaining dependencies\n- produce a plan diff\n- respect the replan limit\n\n### State machine responsibilities\n\n- persist progress\n- control legal transitions\n- manage retries and waiting\n- enforce terminal states\n- coordinate approval\n\n### Policy layer responsibilities\n\n- authorise tools and data\n- limit cost and time\n- intercept high-impact actions\n- require human approval\n- create an audit trail\n\n![Figure 3-5 — Production Planning Architecture](/images/the-atlas-of-agent-design-patterns-part-3/production-planning-architecture.png)\n\n> **Figure 3-5｜Production Planning Architecture**  \n> The Planner produces a versioned plan, the state machine selects the ready step, a bounded executor runs it, the Verifier accepts or rejects, and the Replanner rewrites remaining work only when a real trigger fires.\n\n## How to choose a strategy\n\nStart with the least flexible mechanism that can reliably complete the task.\n\n### Use fixed logic when\n\n- the next step is known\n- the environment is stable\n- the same contract applies to every request\n- predictability matters more than adaptation\n\n### Add bounded ReAct when\n\n- the next useful action depends on the latest tool result\n- the environment is difficult to enumerate\n- local exploration is necessary\n- completion can still be verified\n\n### Add Plan-and-Execute when\n\n- the task has many requirements\n- omissions are costly\n- progress must be visible\n- dependencies or delegation matter\n\n### Add adaptive replanning when\n\n- premises may change during execution\n- a static plan can become invalid\n- local repair is sometimes insufficient\n- the system can identify material replan triggers\n\n### Use hierarchical decomposition when\n\n- a flat plan is too large\n- subgoals have distinct owners or contexts\n- parent and child completion can be defined\n\n### Use HTN when\n\n- the domain has reusable, governed procedures\n- valid decomposition methods can be modelled\n- consistency and auditability are central\n\n### Use an external planner or solver when\n\n- preconditions and effects are formal\n- feasibility matters more than fluent explanation\n- constraints are too important to leave to free-form generation\n- a valid or optimal plan is required\n\n## Common anti-patterns\n\n### Planning every task\n\nA translation or fixed extraction does not need a five-step plan.\n\n### Treating the plan as ground truth\n\nA generated plan is a hypothesis about how to complete the work.\n\n### ReAct without a step contract\n\nThe executor explores tools without knowing what output it must produce.\n\n### Replanning after every observation\n\nThe system spends more time rewriting plans than executing them.\n\n### Global replan for a local failure\n\nOne unavailable endpoint causes the entire plan to be discarded.\n\n### Replanning without versions\n\nThe previous plan disappears, making drift and repeated work invisible.\n\n### Hierarchy without integration ownership\n\nEvery subgoal is complete, but no one owns the final outcome.\n\n### Calling every goal-directed loop a separate architecture\n\nEvery useful agent pursues some goal. The differentiator is how action selection, planning, verification, and control are implemented.\n\n### Safety rules only in prompts\n\nThe model is asked not to use a capability that the runtime still exposes without restriction.\n\n### Planner and executor duplicate the same work\n\nThe planner specifies a research strategy; the executor ignores it and redesigns the task from the beginning.\n\n### Refusing to admit an unsatisfied task\n\nThe correct terminal result may be:\n\n- unavailable\n- unsupported\n- blocked\n- partial\n- requires human action\n\nAnother planning round cannot create missing evidence or permissions.\n\n## What production planning should record\n\n| Record | Why it matters |\n|---|---|\n| Original goal | Prevents drift |\n| Goal version | Records authorised goal changes |\n| Current plan version | Identifies the active plan |\n| Plan diff | Explains what changed |\n| Replan trigger | Justifies the revision |\n| Step contract | Defines execution and acceptance |\n| Step dependency | Controls readiness |\n| Step status | Tracks progress |\n| Tool calls and observations | Records actual execution |\n| Evidence and provenance | Supports verification |\n| Retry count | Bounds local repair |\n| Replan count | Bounds global revision |\n| Remaining budget | Controls cost |\n| Policy decision | Records permission and risk checks |\n| Verifier result | Accepts or rejects completion |\n| Terminal outcome | Completed, partial, blocked, failed, or cancelled |\n\nWithout these records, a long task is a long conversation rather than a manageable process.\n\n## Complete example: researching agent frameworks\n\nThe goal is:\n\n> Compare three agent frameworks and recommend one for a production RAG system.\n\n### Router\n\nSelect the research workflow instead of direct question answering.\n\n### Planner\n\nCreate:\n\n```text\nS1 Define evaluation criteria\nS2 Confirm candidate frameworks\nS3 Collect official architecture information\nS4 Compare state and persistence\nS5 Compare observability and testing\nS6 Compare tool and multi-agent support\nS7 Evaluate risks and operational fit\nS8 Produce recommendation\n```\n\nEach step receives a contract, budget, and completion criteria.\n\n### Executor\n\nFor `S3`, a bounded ReAct executor may:\n\n```text\nOpen official architecture documentation\n  -> required field missing\nOpen official persistence documentation\n  -> record capability and version\nInspect official repository\n  -> extract structured evidence\nStop when all fields are documented or explicitly unknown\n```\n\n### Verifier\n\nCheck:\n\n- every material claim uses an official source\n- every comparison field is covered\n- missing information is marked unknown\n- version dates are not mixed\n- the recommendation follows the criteria\n\n### Adaptive replan\n\nOne framework does not publish pricing or a required technical detail.\n\nThe replanner changes only the remaining work:\n\n```text\nReplace inferred field with:\n- publicly documented capabilities\n- explicitly marked unknowns\n- no unsupported estimate\n```\n\n### Synthesis\n\nIntegrate the verified results and produce the recommendation.\n\nThis is not pure ReAct and not pure Plan-and-Execute. It is a governed composition of routing, planning, bounded action selection, verification, state management, and triggered replanning.\n\n## Conclusion\n\nThe planning layer is easier to understand when its mechanisms are separated:\n\n- **Fixed decision logic** keeps known work deterministic.\n- **Bounded ReAct** adapts the next local action to the latest observation.\n- **Plan-and-Execute** creates an explicit global structure before execution.\n- **Adaptive planning** revises remaining work after a material trigger.\n- **Hierarchical planning** organises large goals into several levels.\n- **HTN** uses a formal domain model to refine compound tasks into executable tasks.\n- **Plan verification** determines whether a plausible plan is actually acceptable.\n- **Goals and policies** define outcomes and boundaries across every strategy.\n\nThe production objective is not maximum planning freedom. It is deliberate placement of flexibility:\n\n```text\nfixed outer control\n  + explicit plan where global coverage matters\n  + bounded local adaptation where observations matter\n  + verification before acceptance\n  + versioned replanning only when reality invalidates the plan\n```\n\nPart 4 moves from planning to search:\n\n> When several candidate solutions are possible, how should an agent explore, compare, prune, and select them?\n\n## References\n\n- [Yao et al., *ReAct: Synergizing Reasoning and Acting in Language Models*](https://arxiv.org/abs/2210.03629)\n- [Xu et al., *ReWOO: Decoupling Reasoning from Observations for Efficient Augmented Language Models*](https://arxiv.org/abs/2305.18323)\n- [Wang et al., *Plan-and-Solve Prompting: Improving Zero-Shot Chain-of-Thought Reasoning by Large Language Models*](https://arxiv.org/abs/2305.04091)\n- [Sun et al., *AdaPlanner: Adaptive Planning from Feedback with Language Models*](https://arxiv.org/abs/2305.16653)\n- [Liu et al., *LLM+P: Empowering Large Language Models with Optimal Planning Proficiency*](https://arxiv.org/abs/2304.11477)\n- [Huang et al., *Language Models as Zero-Shot Planners: Extracting Actionable Knowledge for Embodied Agents*](https://arxiv.org/abs/2201.07207)\n- [Valmeekam et al., *Large Language Models Still Can't Plan: A Benchmark for LLMs on Planning and Reasoning about Change*](https://arxiv.org/abs/2206.10498)\n- [Au et al., *SHOP2: An HTN Planning System*](https://arxiv.org/abs/1106.4869)\n- [Höller et al., *On Hierarchical Task Networks*](https://arxiv.org/abs/1606.06900)\n\n"
+  },
+  "integrity": {
+    "browser_payload_sha256": "5df370e61531560ba3c12a47d86b9bf685fe2160b03343f036f8b97838ba53a7",
+    "byte_count": 33241,
+    "executable_scripts_detected": false,
+    "line_count": 1135,
+    "origin_blob_sha": "185fa419771942e0737cdefe10c3180505bb3c23",
+    "snapshot_sha256": "ae5de6c57a5257d446c0ce7f2944cc2ea9b75d3c5f7195023f532ac8b27785ac",
+    "truncated": false
+  },
+  "kind": "markdown",
+  "license": "owner-provided",
+  "metadata_only_reason": null,
+  "origin": {
+    "blob_sha": "185fa419771942e0737cdefe10c3180505bb3c23",
+    "commit": "27e2fe996f878f2129bf510d6a326c02f7d87be5",
+    "path": "src/content/blog/the-atlas-of-agent-design-patterns-part-3/en.md",
+    "repo": "huaihsuanbusiness/daniel-blog"
+  },
+  "owner": "Daniel Huang",
+  "registry": {
+    "content_hash_scope": "canonical-concept-file",
+    "content_sha256": "c5863f6c6500dd43dfe61196874dbd1adce5a3c9fc400f5fc36d0e8c99606200",
+    "source_commit": "acf78596ace8a7366688ccef72b507204d09d9f9",
+    "source_id": "source_blog_agent_planning_strategies",
+    "source_repository": "danielcanfly/knowledge-source"
+  },
+  "related_concepts": [
+    "concepts/agent-planning-strategies"
+  ],
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-14-5-source-document/v1",
+  "source_id": "source_blog_agent_planning_strategies",
+  "title": "Agent decision and planning strategies",
+  "toc": [
+    {
+      "level": 2,
+      "slug": "execution-structure-and-decision-strategy-are-different-layers",
+      "title": "Execution structure and decision strategy are different layers"
+    },
+    {
+      "level": 3,
+      "slug": "fixed-logic",
+      "title": "Fixed logic"
+    },
+    {
+      "level": 3,
+      "slug": "bounded-react",
+      "title": "Bounded ReAct"
+    },
+    {
+      "level": 3,
+      "slug": "plan-and-execute",
+      "title": "Plan-and-Execute"
+    },
+    {
+      "level": 2,
+      "slug": "a-more-precise-map-of-the-planning-layer",
+      "title": "A more precise map of the planning layer"
+    },
+    {
+      "level": 2,
+      "slug": "fixed-decision-logic-keep-deterministic-work-deterministic",
+      "title": "Fixed decision logic: keep deterministic work deterministic"
+    },
+    {
+      "level": 3,
+      "slug": "good-uses",
+      "title": "Good uses"
+    },
+    {
+      "level": 3,
+      "slug": "strengths",
+      "title": "Strengths"
+    },
+    {
+      "level": 3,
+      "slug": "limitation",
+      "title": "Limitation"
+    },
+    {
+      "level": 2,
+      "slug": "react-choose-the-next-action-from-the-latest-observation",
+      "title": "ReAct: choose the next action from the latest observation"
+    },
+    {
+      "level": 3,
+      "slug": "good-uses",
+      "title": "Good uses"
+    },
+    {
+      "level": 3,
+      "slug": "example",
+      "title": "Example"
+    },
+    {
+      "level": 3,
+      "slug": "react-is-local-adaptation-not-global-reliability",
+      "title": "ReAct is local adaptation, not global reliability"
+    },
+    {
+      "level": 2,
+      "slug": "why-react-loops-without-making-progress",
+      "title": "Why ReAct loops without making progress"
+    },
+    {
+      "level": 3,
+      "slug": "no-progress-model",
+      "title": "No progress model"
+    },
+    {
+      "level": 3,
+      "slug": "unstructured-observations",
+      "title": "Unstructured observations"
+    },
+    {
+      "level": 3,
+      "slug": "no-duplicate-detection",
+      "title": "No duplicate detection"
+    },
+    {
+      "level": 3,
+      "slug": "vague-completion-criteria",
+      "title": "Vague completion criteria"
+    },
+    {
+      "level": 3,
+      "slug": "excessive-tool-freedom",
+      "title": "Excessive tool freedom"
+    },
+    {
+      "level": 2,
+      "slug": "a-production-react-loop-needs-explicit-contracts",
+      "title": "A production ReAct loop needs explicit contracts"
+    },
+    {
+      "level": 2,
+      "slug": "plan-and-execute-establish-the-global-structure-before-acting",
+      "title": "Plan-and-Execute: establish the global structure before acting"
+    },
+    {
+      "level": 3,
+      "slug": "good-uses",
+      "title": "Good uses"
+    },
+    {
+      "level": 3,
+      "slug": "strengths",
+      "title": "Strengths"
+    },
+    {
+      "level": 4,
+      "slug": "global-coverage",
+      "title": "Global coverage"
+    },
+    {
+      "level": 4,
+      "slug": "trackable-progress",
+      "title": "Trackable progress"
+    },
+    {
+      "level": 4,
+      "slug": "clear-delegation",
+      "title": "Clear delegation"
+    },
+    {
+      "level": 4,
+      "slug": "better-integration-planning",
+      "title": "Better integration planning"
+    },
+    {
+      "level": 3,
+      "slug": "central-weakness",
+      "title": "Central weakness"
+    },
+    {
+      "level": 2,
+      "slug": "a-plan-must-be-executable-not-ceremonial",
+      "title": "A plan must be executable, not ceremonial"
+    },
+    {
+      "level": 2,
+      "slug": "plan-validation-a-plan-is-a-proposal-not-proof",
+      "title": "Plan validation: a plan is a proposal, not proof"
+    },
+    {
+      "level": 3,
+      "slug": "natural-language-review",
+      "title": "Natural-language review"
+    },
+    {
+      "level": 3,
+      "slug": "deterministic-checks",
+      "title": "Deterministic checks"
+    },
+    {
+      "level": 3,
+      "slug": "simulation-or-dry-run",
+      "title": "Simulation or dry run"
+    },
+    {
+      "level": 3,
+      "slug": "external-planner-or-solver",
+      "title": "External planner or solver"
+    },
+    {
+      "level": 2,
+      "slug": "adaptive-planning-change-the-remaining-plan-when-reality-changes",
+      "title": "Adaptive planning: change the remaining plan when reality changes"
+    },
+    {
+      "level": 3,
+      "slug": "valid-replan-triggers",
+      "title": "Valid replan triggers"
+    },
+    {
+      "level": 3,
+      "slug": "local-repair-versus-global-replan",
+      "title": "Local repair versus global replan"
+    },
+    {
+      "level": 3,
+      "slug": "preserve-valid-completed-work",
+      "title": "Preserve valid completed work"
+    },
+    {
+      "level": 3,
+      "slug": "versioning-requirements",
+      "title": "Versioning requirements"
+    },
+    {
+      "level": 2,
+      "slug": "hierarchical-planning-decompose-goals-at-several-levels",
+      "title": "Hierarchical planning: decompose goals at several levels"
+    },
+    {
+      "level": 3,
+      "slug": "benefits",
+      "title": "Benefits"
+    },
+    {
+      "level": 3,
+      "slug": "risks",
+      "title": "Risks"
+    },
+    {
+      "level": 2,
+      "slug": "htn-formal-decomposition-with-domain-methods",
+      "title": "HTN: formal decomposition with domain methods"
+    },
+    {
+      "level": 3,
+      "slug": "compound-task",
+      "title": "Compound task"
+    },
+    {
+      "level": 3,
+      "slug": "method",
+      "title": "Method"
+    },
+    {
+      "level": 3,
+      "slug": "primitive-task",
+      "title": "Primitive task"
+    },
+    {
+      "level": 3,
+      "slug": "when-htn-is-useful",
+      "title": "When HTN is useful"
+    },
+    {
+      "level": 3,
+      "slug": "strengths",
+      "title": "Strengths"
+    },
+    {
+      "level": 3,
+      "slug": "limits",
+      "title": "Limits"
+    },
+    {
+      "level": 3,
+      "slug": "htn-and-llms-can-be-combined",
+      "title": "HTN and LLMs can be combined"
+    },
+    {
+      "level": 2,
+      "slug": "goals-and-policies-are-cross-cutting-not-peer-strategies",
+      "title": "Goals and policies are cross-cutting, not peer strategies"
+    },
+    {
+      "level": 3,
+      "slug": "goal",
+      "title": "Goal"
+    },
+    {
+      "level": 3,
+      "slug": "policy",
+      "title": "Policy"
+    },
+    {
+      "level": 2,
+      "slug": "comparing-the-main-decision-strategies",
+      "title": "Comparing the main decision strategies"
+    },
+    {
+      "level": 2,
+      "slug": "the-production-hybrid-planner-bounded-executor-verifier-and-replanner",
+      "title": "The production hybrid: Planner, bounded Executor, Verifier, and Replanner"
+    },
+    {
+      "level": 3,
+      "slug": "planner-responsibilities",
+      "title": "Planner responsibilities"
+    },
+    {
+      "level": 3,
+      "slug": "executor-responsibilities",
+      "title": "Executor responsibilities"
+    },
+    {
+      "level": 3,
+      "slug": "verifier-responsibilities",
+      "title": "Verifier responsibilities"
+    },
+    {
+      "level": 3,
+      "slug": "replanner-responsibilities",
+      "title": "Replanner responsibilities"
+    },
+    {
+      "level": 3,
+      "slug": "state-machine-responsibilities",
+      "title": "State machine responsibilities"
+    },
+    {
+      "level": 3,
+      "slug": "policy-layer-responsibilities",
+      "title": "Policy layer responsibilities"
+    },
+    {
+      "level": 2,
+      "slug": "how-to-choose-a-strategy",
+      "title": "How to choose a strategy"
+    },
+    {
+      "level": 3,
+      "slug": "use-fixed-logic-when",
+      "title": "Use fixed logic when"
+    },
+    {
+      "level": 3,
+      "slug": "add-bounded-react-when",
+      "title": "Add bounded ReAct when"
+    },
+    {
+      "level": 3,
+      "slug": "add-plan-and-execute-when",
+      "title": "Add Plan-and-Execute when"
+    },
+    {
+      "level": 3,
+      "slug": "add-adaptive-replanning-when",
+      "title": "Add adaptive replanning when"
+    },
+    {
+      "level": 3,
+      "slug": "use-hierarchical-decomposition-when",
+      "title": "Use hierarchical decomposition when"
+    },
+    {
+      "level": 3,
+      "slug": "use-htn-when",
+      "title": "Use HTN when"
+    },
+    {
+      "level": 3,
+      "slug": "use-an-external-planner-or-solver-when",
+      "title": "Use an external planner or solver when"
+    },
+    {
+      "level": 2,
+      "slug": "common-anti-patterns",
+      "title": "Common anti-patterns"
+    },
+    {
+      "level": 3,
+      "slug": "planning-every-task",
+      "title": "Planning every task"
+    },
+    {
+      "level": 3,
+      "slug": "treating-the-plan-as-ground-truth",
+      "title": "Treating the plan as ground truth"
+    },
+    {
+      "level": 3,
+      "slug": "react-without-a-step-contract",
+      "title": "ReAct without a step contract"
+    },
+    {
+      "level": 3,
+      "slug": "replanning-after-every-observation",
+      "title": "Replanning after every observation"
+    },
+    {
+      "level": 3,
+      "slug": "global-replan-for-a-local-failure",
+      "title": "Global replan for a local failure"
+    },
+    {
+      "level": 3,
+      "slug": "replanning-without-versions",
+      "title": "Replanning without versions"
+    },
+    {
+      "level": 3,
+      "slug": "hierarchy-without-integration-ownership",
+      "title": "Hierarchy without integration ownership"
+    },
+    {
+      "level": 3,
+      "slug": "calling-every-goal-directed-loop-a-separate-architecture",
+      "title": "Calling every goal-directed loop a separate architecture"
+    },
+    {
+      "level": 3,
+      "slug": "safety-rules-only-in-prompts",
+      "title": "Safety rules only in prompts"
+    },
+    {
+      "level": 3,
+      "slug": "planner-and-executor-duplicate-the-same-work",
+      "title": "Planner and executor duplicate the same work"
+    },
+    {
+      "level": 3,
+      "slug": "refusing-to-admit-an-unsatisfied-task",
+      "title": "Refusing to admit an unsatisfied task"
+    },
+    {
+      "level": 2,
+      "slug": "what-production-planning-should-record",
+      "title": "What production planning should record"
+    },
+    {
+      "level": 2,
+      "slug": "complete-example-researching-agent-frameworks",
+      "title": "Complete example: researching agent frameworks"
+    },
+    {
+      "level": 3,
+      "slug": "router",
+      "title": "Router"
+    },
+    {
+      "level": 3,
+      "slug": "planner",
+      "title": "Planner"
+    },
+    {
+      "level": 3,
+      "slug": "executor",
+      "title": "Executor"
+    },
+    {
+      "level": 3,
+      "slug": "verifier",
+      "title": "Verifier"
+    },
+    {
+      "level": 3,
+      "slug": "adaptive-replan",
+      "title": "Adaptive replan"
+    },
+    {
+      "level": 3,
+      "slug": "synthesis",
+      "title": "Synthesis"
+    },
+    {
+      "level": 2,
+      "slug": "conclusion",
+      "title": "Conclusion"
+    },
+    {
+      "level": 2,
+      "slug": "references",
+      "title": "References"
+    }
+  ],
+  "trust": "reviewed"
+}
