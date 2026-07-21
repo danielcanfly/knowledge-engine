@@ -1,19 +1,34 @@
 {
   "artifacts": [
     {
-      "bytes": 2990,
+      "bytes": 3135,
       "path": "pilot/m24/internal-product-deployment/site/index.html",
-      "sha256": "7f0c3a92719fa7627a5875944dfe47102a4d9090e59176d7ca6dd466015f1f38"
+      "sha256": "970a81cd0a883ee524bd1134db6e5b1454d27c49181b1ef27998f0dceb9828cb"
     },
     {
-      "bytes": 4911,
+      "bytes": 6734,
       "path": "pilot/m24/internal-product-deployment/site/styles.css",
-      "sha256": "d10543ff67956eb59d4b9e1ca1b689c5a2f4f964e26f00ae1fb3def664f47e76"
+      "sha256": "1233b155c812779e12e2c2ba3b3e700a837eec084a894fa44181c388cfa4ec21"
     },
     {
-      "bytes": 13108,
+      "bytes": 12634,
+      "path": "pilot/m24/internal-product-deployment/site/graph-explorer.js",
+      "sha256": "7cf219ae0d76f00c5b33e1838eecf20bedc64ed2ea05bf7fee99da1b53f3e780"
+    },
+    {
+      "bytes": 14653,
       "path": "pilot/m24/internal-product-deployment/site/app.js",
-      "sha256": "2312ebea34ced733e04763152d4ea6d5c0b7de6c4d7c99763504df423a944135"
+      "sha256": "88bcd4e6fed21ed21f4421913d035510109681fac3eeaab13a14b291414610e9"
+    },
+    {
+      "bytes": 73629,
+      "path": "pilot/m24/internal-product-deployment/site/vendor/graphology.umd.min.js",
+      "sha256": "dc337efa23903f61e064c8e7e7f93a429e6855dccfc2458802b4ed30c621c087"
+    },
+    {
+      "bytes": 187876,
+      "path": "pilot/m24/internal-product-deployment/site/vendor/sigma.min.js",
+      "sha256": "58e30383ab428f832068d9d16a5215c65ba12430d438ed091c5703f398de9e16"
     },
     {
       "bytes": 50914,
@@ -114,7 +129,7 @@
     "secret_scan_passed": true,
     "secret_scan_patterns": 3
   },
-  "self_sha256": "0eb14471e4de718c411155ab80f4566ef5a4632573928c44ed9f7450e6e323b8",
+  "self_sha256": "1c85fa7a78e5ecf751b87362a9b11e02a4b86152c2873145f6035c37912a310f",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "internal_product_deployment_package_complete",
   "surfaces": [
