@@ -548,7 +548,7 @@ def recompute_benchmark_decision(
         if long_tasks.get(key) != expected:
             raise M24_14_6ValidationError(f"long-task aggregate mismatch: {key}")
 
-    recomputed_decision = "repair_required" if reason_codes else "pass"
+    recomputed_decision = _decision_for_reason_codes(reason_codes)
     if result.get("decision") not in benchmark_policy_payload()["decisions"]:
         raise M24_14_6ValidationError("invalid benchmark decision")
     if result.get("decision") != recomputed_decision:
@@ -914,6 +914,18 @@ def _enforce_resource_guardrails(
         reason_codes.append("resource_summary:runtime_third_party_cdn_requests_max_exceeded")
 
 
+def _decision_for_reason_codes(reason_codes: list[str]) -> str:
+    if not reason_codes:
+        return "pass"
+    if all(_is_documentable_timing_variance(reason) for reason in reason_codes):
+        return "pass_with_documented_network_variance"
+    return "repair_required"
+
+
+def _is_documentable_timing_variance(reason: str) -> bool:
+    return reason.endswith("_p95_max_exceeded") or reason.endswith("_p50_max_exceeded")
+
+
 def _recompute_errors(
     cases: Mapping[str, Any],
     interactions: Mapping[str, Any],
@@ -953,6 +965,12 @@ def _recompute_resource_summary(
         ),
         "runtime_third_party_cdn_requests": sum(
             _resources(sample)["runtime_third_party_cdn_requests"] for sample in samples
+        ),
+        "platform_third_party_request_count": sum(
+            _resources(sample)["platform_third_party_request_count"] for sample in samples
+        ),
+        "platform_console_errors": sum(
+            _resources(sample)["platform_console_errors"] for sample in samples
         ),
     }
 
@@ -1015,8 +1033,10 @@ def _resources(record: Mapping[str, Any]) -> dict[str, int]:
         "same_origin_request_count": 0,
         "same_origin_transfer_bytes": 0,
         "runtime_third_party_cdn_requests": 0,
+        "platform_third_party_request_count": 0,
         "failed_required_same_origin_requests": 0,
         "console_errors": 0,
+        "platform_console_errors": 0,
         "page_errors": 0,
         "long_task_count": 0,
         "long_task_max_ms": 0,

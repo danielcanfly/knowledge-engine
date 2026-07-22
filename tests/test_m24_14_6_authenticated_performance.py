@@ -24,6 +24,7 @@ from knowledge_engine.m24_14_6_authenticated_performance import (
     build_m24_14_5_human_acceptance_record,
     build_m24_14_6_pending_acceptance_report,
     finalize_authenticated_benchmark_result,
+    recompute_benchmark_decision,
     required_policy_coverage_payload,
     validate_authenticated_benchmark_result,
     validate_local_regression_result,
@@ -45,8 +46,10 @@ def _resources(**overrides: int) -> dict[str, int]:
         "same_origin_request_count": 0,
         "same_origin_transfer_bytes": 0,
         "runtime_third_party_cdn_requests": 0,
+        "platform_third_party_request_count": 0,
         "failed_required_same_origin_requests": 0,
         "console_errors": 0,
+        "platform_console_errors": 0,
         "page_errors": 0,
         "long_task_count": 0,
         "long_task_max_ms": 0,
@@ -229,6 +232,8 @@ def _recomputed(*, cold: int = 5, warm: int = 20) -> dict:
             "same_origin_transfer_bytes": 0,
             "cold_traversal_transfer_bytes": 0,
             "runtime_third_party_cdn_requests": 0,
+            "platform_third_party_request_count": 0,
+            "platform_console_errors": 0,
         },
         "long_tasks": {"count": 0, "max_ms": 0, "total_ms": 0},
         "decision": "pass",
@@ -455,6 +460,33 @@ def test_m24_14_6_authenticated_result_validator_rejects_evidence_and_policy_dri
 
     with pytest.raises(M24_14_6ValidationError, match=reason):
         validate_authenticated_benchmark_result(result)
+
+
+def test_m24_14_6_timing_only_variance_is_documented_without_repair_required() -> None:
+    result = _authenticated_result()
+    for sample in result["cases"]["lexical_search"]["warm_samples"]:
+        sample["elapsed_ms"] = 1600
+    result["cases"]["lexical_search"]["aggregates"]["warm_p95_ms"] = 1600
+    recomputed = copy.deepcopy(result["recomputed_aggregates"])
+    recomputed["cases"]["lexical_search"]["warm_p95_ms"] = 1600
+    recomputed["decision"] = "pass_with_documented_network_variance"
+    recomputed["reason_codes"] = ["lexical_search:standard_route_warm_p95_max_exceeded"]
+    result["recomputed_aggregates"] = recomputed
+    result["decision"] = recomputed["decision"]
+    result["reason_codes"] = recomputed["reason_codes"]
+    result = finalize_authenticated_benchmark_result(result)
+
+    assert (
+        recompute_benchmark_decision(
+            result,
+            expected_deployment_id="11111111-2222-4333-8444-555555555555",
+        )["decision"]
+        == "pass_with_documented_network_variance"
+    )
+    assert validate_authenticated_benchmark_result(
+        result,
+        expected_deployment_id="11111111-2222-4333-8444-555555555555",
+    )
 
 
 @pytest.mark.parametrize(

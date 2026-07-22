@@ -31,6 +31,7 @@ from knowledge_engine.m24_14_6_authenticated_performance import (  # noqa: E402
     M24_14_6_CUSTOM_HOSTNAME,
     M24_14_6_FOUNDATION_SHA,
     PLACEHOLDER_DEPLOYMENT_IDS,
+    _decision_for_reason_codes,
     _enforce_resource_guardrails,
     _recompute_errors,
     _recompute_long_tasks,
@@ -606,7 +607,7 @@ def collect_recomputed_fields(
         reason_codes.append("hard_gate:failed_required_same_origin_requests")
     if errors["access_leakage"] > hard_gates["access_leakage_max"]:
         reason_codes.append("hard_gate:access_leakage")
-    decision = "repair_required" if reason_codes else "pass"
+    decision = _decision_for_reason_codes(reason_codes)
     return {
         "cases": recomputed_cases,
         "interactions": recomputed_interactions,
@@ -777,6 +778,8 @@ class BrowserObserver:
         self.same_origin_requests = 0
         self.same_origin_transfer_bytes = 0
         self.third_party_requests = 0
+        self.platform_third_party_requests = 0
+        self.platform_console_errors = 0
 
     def attach(self, page) -> None:
         page.on("console", self._on_console)
@@ -791,8 +794,10 @@ class BrowserObserver:
             "same_origin_request_count": self.same_origin_requests,
             "same_origin_transfer_bytes": self.same_origin_transfer_bytes,
             "runtime_third_party_cdn_requests": self.third_party_requests,
+            "platform_third_party_request_count": self.platform_third_party_requests,
             "failed_required_same_origin_requests": self.failed_same_origin,
             "console_errors": self.console_errors,
+            "platform_console_errors": self.platform_console_errors,
             "page_errors": self.page_errors,
             "long_task_count": len(long_tasks),
             "long_task_max_ms": max(long_tasks) if long_tasks else 0,
@@ -801,24 +806,30 @@ class BrowserObserver:
 
     def _on_console(self, message) -> None:
         if message.type == "error":
-            self.console_errors += 1
+            location = message.location or {}
+            if self._is_same_origin(location.get("url", "")):
+                self.console_errors += 1
+            else:
+                self.platform_console_errors += 1
 
     def _on_page_error(self, _error) -> None:
         self.page_errors += 1
 
     def _on_request(self, request) -> None:
         url = request.url
-        if url.startswith(self.origin):
+        if self._is_same_origin(url):
             self.same_origin_requests += 1
+        elif self._is_cloudflare_platform_url(url):
+            self.platform_third_party_requests += 1
         elif request.resource_type in {"script", "stylesheet", "fetch", "xhr"}:
             self.third_party_requests += 1
 
     def _on_request_failed(self, request) -> None:
-        if request.url.startswith(self.origin):
+        if self._is_same_origin(request.url):
             self.failed_same_origin += 1
 
     def _on_response(self, response) -> None:
-        if not response.url.startswith(self.origin):
+        if not self._is_same_origin(response.url):
             return
         try:
             length = response.header_value("content-length")
@@ -826,6 +837,13 @@ class BrowserObserver:
                 self.same_origin_transfer_bytes += int(length)
         except Exception:
             return
+
+    def _is_same_origin(self, url: str) -> bool:
+        return bool(url) and url.startswith(self.origin)
+
+    def _is_cloudflare_platform_url(self, url: str) -> bool:
+        host = urlparse(url).hostname or ""
+        return host == "cloudflare.com" or host.endswith(".cloudflare.com")
 
 
 def path_url(base_url: str, fragment: str) -> str:

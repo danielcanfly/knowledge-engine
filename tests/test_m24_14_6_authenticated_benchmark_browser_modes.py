@@ -103,6 +103,13 @@ class FakeProcess:
         self.killed = True
 
 
+class FakeMessage:
+    type = "error"
+
+    def __init__(self, url: str) -> None:
+        self.location = {"url": url}
+
+
 class BrokenSession:
     def close(self) -> None:
         raise RuntimeError("sensitive cleanup detail should be suppressed")
@@ -270,6 +277,32 @@ def test_dedicated_chrome_cdp_uses_loopback_temp_profile_and_closes_only_own_pro
     assert not profile.exists()
 
 
+def test_browser_observer_classifies_platform_noise_separately() -> None:
+    module = load_benchmark_script()
+    observer = module.BrowserObserver("https://m24-internal.danielcanfly.com/")
+    observer._on_console(FakeMessage("https://cloudflare.com/cdn-cgi/access/login"))
+    observer._on_console(FakeMessage("https://m24-internal.danielcanfly.com/app.js"))
+    observer._on_request(
+        argparse.Namespace(
+            url="https://static.cloudflare.com/access/script.js",
+            resource_type="script",
+        )
+    )
+    observer._on_request(
+        argparse.Namespace(
+            url="https://cdn.example.invalid/library.js",
+            resource_type="script",
+        )
+    )
+
+    resources = observer.resources(argparse.Namespace(evaluate=lambda _script: []))
+
+    assert resources["platform_console_errors"] == 1
+    assert resources["console_errors"] == 1
+    assert resources["platform_third_party_request_count"] == 1
+    assert resources["runtime_third_party_cdn_requests"] == 1
+
+
 def test_collect_recomputed_fields_emits_repair_required_for_console_hard_gate() -> None:
     module = load_benchmark_script()
     result = authenticated_result_fixture()
@@ -283,6 +316,25 @@ def test_collect_recomputed_fields_emits_repair_required_for_console_hard_gate()
     assert recomputed["decision"] == "repair_required"
     assert "hard_gate:console_errors" in recomputed["reason_codes"]
     assert recomputed["errors"]["console_errors"] == 1
+
+
+def test_platform_noise_is_bounded_telemetry_not_product_failure() -> None:
+    module = load_benchmark_script()
+    result = authenticated_result_fixture()
+    resources = result["cases"]["overview"]["cold_samples"][0]["resources"]
+    resources["platform_console_errors"] = 4
+    resources["platform_third_party_request_count"] = 1
+
+    recomputed = module.collect_recomputed_fields(
+        result,
+        require_authenticated_iterations=True,
+    )
+
+    assert recomputed["decision"] == "pass"
+    assert recomputed["errors"]["console_errors"] == 0
+    assert recomputed["resources"]["runtime_third_party_cdn_requests"] == 0
+    assert recomputed["resources"]["platform_console_errors"] == 4
+    assert recomputed["resources"]["platform_third_party_request_count"] == 1
 
 
 def test_cleanup_warning_does_not_raise_or_emit_sensitive_details(
