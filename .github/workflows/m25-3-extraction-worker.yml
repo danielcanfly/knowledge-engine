@@ -1,4 +1,4 @@
-# Final exact-head gate after corrected M25.2 production-pointer boundary.
+# Final exact-head gate after semantic M25.2 deny-list validation.
 name: M25.3 Extraction Worker
 
 on:
