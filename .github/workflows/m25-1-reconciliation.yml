@@ -1,0 +1,44 @@
+name: M25.1 Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-1-reconciliation.yml'
+      - 'docs/architecture/m25/m25-1-reconciliation.md'
+      - 'pilot/m25/m25-1-acceptance.json'
+      - 'tests/test_m25_1_reconciliation.py'
+
+permissions:
+  contents: read
+
+jobs:
+  reconciliation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Verify implementation merge ancestry
+        run: git merge-base --is-ancestor 8a3e798352f6d16e146b0dc25e1812cc9583cc7f HEAD
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint reconciliation scope
+        run: python -m ruff check tests/test_m25_1_reconciliation.py
+      - name: Test reconciliation contract
+        run: python -m pytest -q tests/test_m25_1_reconciliation.py
+      - name: Reject protected mutations
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed="$(git diff --name-only "$BASE_SHA" HEAD)"
+          ! grep -Eq '^(src/knowledge_engine/|workers/|packages/|pilot/m24/|channels/production.json)' <<<"$changed"
+      - name: Compile reconciliation test
+        run: python -m compileall -q tests/test_m25_1_reconciliation.py

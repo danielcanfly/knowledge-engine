@@ -1,0 +1,131 @@
+{
+  "acceptance_gates": {
+    "all_components_classified": true,
+    "cross_stage_regressions_green": true,
+    "dedicated_exact_head_ci_green": true,
+    "entry_baseline_exact": true,
+    "global_ci_green": true,
+    "m25_2_inputs_digest_bound": true,
+    "no_parallel_ingestion_system": true,
+    "protected_mutations_zero": true,
+    "unresolved_review_threads": 0
+  },
+  "accepted_artifacts": {
+    "adapter_boundaries": {
+      "file_sha256": "b1bc8c21af6fdd72c156cf52d0a61558de25af2a87f9fe00a1bbc83d94235b5a",
+      "path": "pilot/m25/m25-1-adapter-boundaries.json",
+      "self_sha256": "e92bca8033199e72c7bbcf20ab1f8b6f5fd73330bc158c7602b7e1c80f7cc972"
+    },
+    "architecture_freeze": {
+      "file_sha256": "5b25c8ac2d15d5c6eaa0ff61c2c9afadc4293964674cbb02bfda3ad034462942",
+      "path": "pilot/m25/m25-1-architecture-freeze.json",
+      "self_sha256": "44b9a0bfc1922cd0af7fed4cdea8d0d8f4cd623c0fb8f1ea3a579c4ec93a6b16"
+    },
+    "authority_matrix": {
+      "file_sha256": "d195099b9b9d9136a97bd3ed6897830d34be6b95377291981503131a26b5c21c",
+      "path": "pilot/m25/m25-1-authority-matrix.json",
+      "self_sha256": "4945d769a6651a598eb527739012e1d01061cca82ded0db239d086d2a50eb945"
+    },
+    "entry_baseline": {
+      "file_sha256": "a01e560b0c757e98aa8bf7e90060af3dcd477189ff59cdb4264981fe7774d9d2",
+      "path": "pilot/m25/m25-1-entry-baseline.json",
+      "self_sha256": "8bfee144b20286be95d32546932115bd8c6623d396db21715072a70054eefca1"
+    },
+    "reuse_map": {
+      "file_sha256": "23eee4510b531b95ac24f374d391c8c16f88ba29aac2a59b8ad9d885d7fdeef8",
+      "path": "pilot/m25/m25-1-reuse-map.json",
+      "self_sha256": "bafa72f4ee040e0c744aa914dbc946d80d50fd137006a14e229feff633bedf1e"
+    },
+    "schema_registry": {
+      "file_sha256": "80fc98dc3e59a914473da7c1453505b34bb734ced1ed710fb5650c4d0cb509f6",
+      "path": "pilot/m25/m25-1-schema-registry.json",
+      "self_sha256": "6f3944a864ac4ebc1cdc4567abb3473f9a8e726f92d80a421df972439e90cb03"
+    },
+    "state_machine": {
+      "file_sha256": "55d8fb995e5fd43a6a82fb7e186e021232ad846a161a7f588283c9185bf8f169",
+      "path": "pilot/m25/m25-1-state-machine.json",
+      "self_sha256": "7094834d205405f60ae8e148ce9f49a53f3b2b1fbf96f57044a7922165b166cc"
+    }
+  },
+  "accepted_at": "2026-07-22T17:59:40Z",
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_escalations": 0,
+    "codex_used": false,
+    "daniel_gate_required": false
+  },
+  "implementation": {
+    "additions": 1546,
+    "base_sha": "25a119e428bb202ebbed4b5a73a4209c41f9ce27",
+    "changed_file_count": 23,
+    "commit_count": 2,
+    "deletions": 0,
+    "expected_head_enforced": true,
+    "head_sha": "01c6e496e8c5947de02772d9035093b3fc991a4e",
+    "merge_method": "merge",
+    "merge_sha": "8a3e798352f6d16e146b0dc25e1812cc9583cc7f",
+    "pull_request_number": 1038
+  },
+  "issue": {
+    "number": 1037,
+    "repository": "danielcanfly/knowledge-engine",
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "next_stage": {
+    "authorized": true,
+    "name": "Intake and Batch Orchestrator",
+    "predecessor_status_required": "m25_1_architecture_freeze_accepted",
+    "stage_id": "M25.2"
+  },
+  "protected_mutations": {
+    "foundation_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "large_scale_ingestion_enabled": false,
+    "production_answer_serving_enabled": false,
+    "production_pointer_mutation": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "release_mutation": false,
+    "semantic_serving_enabled": false,
+    "source_mutation": false
+  },
+  "reconciliation": {
+    "accepted_on_exact_head_merge": true,
+    "implementation_merge_is_required_ancestor": true,
+    "no_new_authority_granted": true
+  },
+  "schema_version": "knowledge-engine-m25-1-acceptance/v1",
+  "self_sha256": "2bffa688f3f4fe62dd0ce7f15b395bad96d99e50f293b9c110b340a065b027e2",
+  "status": "m25_1_architecture_freeze_accepted",
+  "workflow_runs": [
+    {
+      "conclusion": "success",
+      "head_sha": "01c6e496e8c5947de02772d9035093b3fc991a4e",
+      "name": "M25.1 Admission Architecture Freeze",
+      "run_id": 29944477763,
+      "run_number": 2
+    },
+    {
+      "conclusion": "success",
+      "head_sha": "01c6e496e8c5947de02772d9035093b3fc991a4e",
+      "name": "CI",
+      "run_id": 29944477244,
+      "run_number": 1895
+    },
+    {
+      "conclusion": "success",
+      "head_sha": "01c6e496e8c5947de02772d9035093b3fc991a4e",
+      "name": "M17 Architecture Canon Acceptance",
+      "run_id": 29944477131,
+      "run_number": 642
+    },
+    {
+      "conclusion": "success",
+      "head_sha": "01c6e496e8c5947de02772d9035093b3fc991a4e",
+      "name": "M18 Graph v2 acceptance",
+      "run_id": 29944476973,
+      "run_number": 1331
+    }
+  ]
+}
