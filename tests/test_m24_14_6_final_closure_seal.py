@@ -61,6 +61,7 @@ def test_m24_14_6_post_merge_baseline_uses_literal_final_sha() -> None:
         ci_runs=["CI=29920000001", "closure-seal=29920000002"],
     )
 
+    assert baseline["schema_version"] == "knowledge-engine-m24-14-6-m25-entry-baseline/v2"
     assert baseline["engine_main_sha"] == final_sha
     assert baseline["closure_seal_merge_sha"] == final_sha
     assert baseline["closure_seal_tag_target_sha"] == final_sha
