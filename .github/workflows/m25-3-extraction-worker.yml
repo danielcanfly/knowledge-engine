@@ -1,3 +1,4 @@
+# Final exact-head gate after bounded M25.2 forward-compatibility repair.
 name: M25.3 Extraction Worker
 
 on:
