@@ -37,11 +37,29 @@ jobs:
           python-version: '3.11'
       - name: Install exact project dependencies
         run: python -m pip install --disable-pip-version-check -e '.[dev]'
-      - name: Lint M25.2 scope
-        run: >-
-          python -m ruff check
-          src/knowledge_engine/m25_intake_*.py
-          tests/test_m25_2_intake_orchestrator*.py
+      - name: Capture M25.2 lint diagnostics
+        id: lint
+        continue-on-error: true
+        run: |
+          python -m ruff check \
+            src/knowledge_engine/m25_intake_*.py \
+            tests/test_m25_2_intake_orchestrator*.py \
+            --output-format json > /tmp/m25-2-ruff.json
+      - name: Upload M25.2 lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-2-ruff-diagnostics
+          path: /tmp/m25-2-ruff.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce M25.2 lint result
+        if: always()
+        env:
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+        run: |
+          cat /tmp/m25-2-ruff.json
+          test "$LINT_OUTCOME" = success
       - name: Test inherited and M25.2 contracts
         run: >-
           python -m pytest -q
