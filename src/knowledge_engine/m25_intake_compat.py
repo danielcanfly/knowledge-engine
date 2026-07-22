@@ -19,6 +19,7 @@ from .m25_intake_common import (
 from .m25_intake_inventory import _validate_inventory
 from .storage import sha256_bytes
 
+
 def _m21_inventory(inventory: Mapping[str, Any]) -> dict[str, Any]:
     items = []
     for item in inventory["items"]:

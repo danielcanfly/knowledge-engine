@@ -9,6 +9,7 @@ from .m25_intake_common import _pretty_bytes, _put_immutable, _signed
 from .m25_intake_compat import _validate_plan_bundle
 from .storage import ObjectStore, sha256_bytes
 
+
 def persist_plan_bundle(store: ObjectStore, bundle: Mapping[str, Any]) -> dict[str, Any]:
     inventory = bundle["inventory"]
     registry = bundle["adapter_registry"]
@@ -86,10 +87,10 @@ def persist_checkpoint(store: ObjectStore, checkpoint: Mapping[str, Any]) -> str
                 only_if_absent=True,
             )
             return key
-        except ReleaseConflictError:
+        except ReleaseConflictError as exc:
             current = store.head(head_key)
             if current is None:
-                raise IntegrityError("M25-INTAKE-143 checkpoint head disappeared")
+                raise IntegrityError("M25-INTAKE-143 checkpoint head disappeared") from exc
     store.put(
         head_key,
         head_payload,
