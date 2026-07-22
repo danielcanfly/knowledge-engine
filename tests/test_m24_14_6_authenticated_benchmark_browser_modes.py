@@ -106,8 +106,9 @@ class FakeProcess:
 class FakeMessage:
     type = "error"
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, text: str = "") -> None:
         self.location = {"url": url}
+        self.text = text
 
 
 class BrokenSession:
@@ -281,10 +282,16 @@ def test_browser_observer_classifies_platform_noise_separately() -> None:
     module = load_benchmark_script()
     observer = module.BrowserObserver("https://m24-internal.danielcanfly.com/")
     observer._on_console(FakeMessage("https://cloudflare.com/cdn-cgi/access/login"))
+    observer._on_console(
+        FakeMessage(
+            "https://m24-internal.danielcanfly.com/app.js",
+            text="Failed to load https://static.cloudflareinsights.com/beacon.min.js",
+        )
+    )
     observer._on_console(FakeMessage("https://m24-internal.danielcanfly.com/app.js"))
     observer._on_request(
         argparse.Namespace(
-            url="https://static.cloudflare.com/access/script.js",
+            url="https://static.cloudflareinsights.com/beacon.min.js",
             resource_type="script",
         )
     )
@@ -297,7 +304,7 @@ def test_browser_observer_classifies_platform_noise_separately() -> None:
 
     resources = observer.resources(argparse.Namespace(evaluate=lambda _script: []))
 
-    assert resources["platform_console_errors"] == 1
+    assert resources["platform_console_errors"] == 2
     assert resources["console_errors"] == 1
     assert resources["platform_third_party_request_count"] == 1
     assert resources["runtime_third_party_cdn_requests"] == 1

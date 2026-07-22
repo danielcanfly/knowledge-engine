@@ -807,7 +807,13 @@ class BrowserObserver:
     def _on_console(self, message) -> None:
         if message.type == "error":
             location = message.location or {}
-            if self._is_same_origin(location.get("url", "")):
+            location_url = location.get("url", "")
+            text = self._message_text(message)
+            if self._is_cloudflare_platform_url(location_url) or self._mentions_cloudflare_platform(
+                text
+            ):
+                self.platform_console_errors += 1
+            elif self._is_same_origin(location_url):
                 self.console_errors += 1
             else:
                 self.platform_console_errors += 1
@@ -843,7 +849,34 @@ class BrowserObserver:
 
     def _is_cloudflare_platform_url(self, url: str) -> bool:
         host = urlparse(url).hostname or ""
-        return host == "cloudflare.com" or host.endswith(".cloudflare.com")
+        return any(
+            host == domain or host.endswith(f".{domain}")
+            for domain in (
+                "cloudflare.com",
+                "cloudflareinsights.com",
+                "cloudflareaccess.com",
+                "challenges.cloudflare.com",
+            )
+        )
+
+    def _mentions_cloudflare_platform(self, text: str) -> bool:
+        lowered = text.lower()
+        return any(
+            marker in lowered
+            for marker in (
+                "cloudflare",
+                "cloudflareinsights.com",
+                "cloudflareaccess.com",
+                "challenges.cloudflare.com",
+                "/cdn-cgi/",
+            )
+        )
+
+    def _message_text(self, message) -> str:
+        text = getattr(message, "text", "")
+        if callable(text):
+            text = text()
+        return str(text or "")
 
 
 def path_url(base_url: str, fragment: str) -> str:
