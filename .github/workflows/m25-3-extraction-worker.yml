@@ -1,0 +1,168 @@
+name: M25.3 Extraction Worker
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-3-extraction-worker.yml'
+      - 'docs/architecture/m25/m25-3-extraction-worker.md'
+      - 'docs/architecture/m25/examples/m25-3-*.json'
+      - 'pilot/m25/m25-3-*.json'
+      - 'schemas/m25-prompt-contract-v1.schema.json'
+      - 'schemas/m25-model-policy-v1.schema.json'
+      - 'schemas/m25-candidate-policy-v1.schema.json'
+      - 'schemas/m25-provider-request-v1.schema.json'
+      - 'schemas/m25-provider-response-v1.schema.json'
+      - 'schemas/m25-extraction-receipt-v1.schema.json'
+      - 'schemas/m25-recorded-response-set-v1.schema.json'
+      - 'src/knowledge_engine/m25_extraction_*.py'
+      - 'tests/test_m25_3_extraction_*.py'
+      - 'pyproject.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  extraction-worker:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M25.3 scope
+        run: >-
+          python -m ruff check
+          src/knowledge_engine/m25_extraction_*.py
+          tests/test_m25_3_extraction_*.py
+      - name: Test inherited and M25.3 contracts
+        run: >-
+          PYTHONPATH=tests python -m pytest -q
+          tests/test_intake_v1.py
+          tests/test_m21_2_resumable_batch.py
+          tests/test_m21_3_extraction_candidates.py
+          tests/test_m25_1_architecture.py
+          tests/test_m25_1_reconciliation.py
+          tests/test_m25_2_intake_orchestrator.py
+          tests/test_m25_2_intake_orchestrator_contracts.py
+          tests/test_m25_2_reconciliation.py
+          tests/test_m25_3_extraction_worker.py
+          tests/test_m25_3_extraction_contracts.py
+          tests/test_m25_3_extraction_integration.py
+      - name: Enforce provider, logging, and authority boundaries
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python - <<'PY'
+          import ast
+          import os
+          import subprocess
+          from pathlib import Path
+
+          changed = subprocess.check_output(
+              ['git', 'diff', '--name-only', os.environ['BASE_SHA'], 'HEAD'],
+              text=True,
+          ).splitlines()
+          forbidden_paths = (
+              'workers/',
+              'packages/',
+              'pilot/m24/',
+              'channels/production.json',
+          )
+          assert not [path for path in changed if path.startswith(forbidden_paths)]
+
+          modules = sorted(Path('src/knowledge_engine').glob('m25_extraction_*.py'))
+          forbidden_imports = {
+              'anthropic',
+              'boto3',
+              'httpx',
+              'openai',
+              'requests',
+              'socket',
+              'subprocess',
+          }
+          source = ''
+          for module in modules:
+              value = module.read_text(encoding='utf-8')
+              source += value
+              tree = ast.parse(value)
+              observed = {
+                  node.names[0].name.split('.')[0]
+                  for node in ast.walk(tree)
+                  if isinstance(node, ast.Import)
+              }
+              observed.update(
+                  node.module.split('.')[0]
+                  for node in ast.walk(tree)
+                  if isinstance(node, ast.ImportFrom) and node.module
+              )
+              assert not (observed & forbidden_imports), (module, observed & forbidden_imports)
+
+          assert 'knowledge-source/' not in source
+          assert 'channels/production.json' not in source
+          assert 'live_provider_calls_permitted' in source
+          assert 'recorded_replay' in source
+          assert 'candidate_only' in source
+          assert 'raw_source_text_persisted_in_request_or_receipt' in source
+          PY
+      - name: Build exact-head evidence summary
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p .artifacts/m25-3
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          paths = sorted(
+              [*Path('pilot/m25').glob('m25-3-*.json')]
+              + [*Path('schemas').glob('m25-*.schema.json')]
+              + [*Path('src/knowledge_engine').glob('m25_extraction_*.py')]
+              + [*Path('tests').glob('test_m25_3_extraction_*.py')]
+          )
+          summary = {
+              'schema_version': 'knowledge-engine-m25-3-ci-evidence/v1',
+              'head_sha': os.environ['HEAD_SHA'],
+              'exact_head_verified': True,
+              'live_provider_calls_permitted': False,
+              'credentials_used': False,
+              'source_mutation_performed': False,
+              'files': {
+                  str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+                  for path in paths
+              },
+          }
+          unsigned = json.dumps(
+              summary,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+          ).encode()
+          summary['evidence_sha256'] = hashlib.sha256(unsigned).hexdigest()
+          Path('.artifacts/m25-3/evidence.json').write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+      - name: Upload exact-head evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-3-extraction-worker-evidence
+          path: .artifacts/m25-3/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Compile M25.3 scope
+        run: >-
+          python -m compileall -q
+          src/knowledge_engine/m25_extraction_*.py
+          tests/test_m25_3_extraction_*.py
