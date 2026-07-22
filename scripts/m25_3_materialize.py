@@ -31,6 +31,82 @@ def _extract() -> None:
         path.unlink()
 
 
+def _replace(relative: str, old: str, new: str) -> None:
+    path = ROOT / relative
+    text = path.read_text(encoding="utf-8")
+    if old not in text:
+        raise SystemExit(f"expected M25.3 repair anchor missing: {relative}")
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+def _apply_lint_fixes() -> None:
+    _replace(
+        "src/knowledge_engine/m25_extraction_inputs.py",
+        "    ExtractionInput,\n    MAX_INPUTS,\n    MAX_INPUT_TEXT_CHARS,",
+        "    MAX_INPUT_TEXT_CHARS,\n    MAX_INPUTS,\n    ExtractionInput,",
+    )
+    _replace(
+        "src/knowledge_engine/m25_extraction_worker.py",
+        "    EXTRACTION_RECEIPT_SCHEMA,\n"
+        "    MAX_CANDIDATES,\n"
+        "    MAX_CANDIDATES_PER_INPUT,\n"
+        "    MAX_EVIDENCE_SPANS,\n"
+        "    MODEL_POLICY_SCHEMA,\n"
+        "    M25_2_ACCEPTED_STATUS,\n"
+        "    M25_3_ENGINE_BASE_SHA,",
+        "    EXTRACTION_RECEIPT_SCHEMA,\n"
+        "    FOUNDATION_SHA,\n"
+        "    M25_2_ACCEPTED_STATUS,\n"
+        "    M25_3_ENGINE_BASE_SHA,\n"
+        "    MAX_CANDIDATES,\n"
+        "    MAX_CANDIDATES_PER_INPUT,\n"
+        "    MAX_EVIDENCE_SPANS,",
+    )
+    _replace(
+        "src/knowledge_engine/m25_extraction_worker.py",
+        "    SOURCE_SHA,\n    FOUNDATION_SHA,\n    ExtractionProvider,",
+        "    SOURCE_SHA,\n    ExtractionProvider,",
+    )
+    test_path = "tests/test_m25_3_extraction_worker.py"
+    _replace(
+        test_path,
+        '    bad = proposal(); bad["evidence"][0]["excerpt_sha256"] = "0" * 64\n',
+        '    bad = proposal()\n    bad["evidence"][0]["excerpt_sha256"] = "0" * 64\n',
+    )
+    _replace(
+        test_path,
+        '    bad = proposal(); bad["canonical_knowledge"] = True\n',
+        '    bad = proposal()\n    bad["canonical_knowledge"] = True\n',
+    )
+    _replace(
+        test_path,
+        "        self.calls = 0; self.final_response = final_response\n",
+        "        self.calls = 0\n        self.final_response = final_response\n",
+    )
+    _replace(
+        test_path,
+        "    prepared = prepare_extraction_request(store, PLAN_ID, prompt_contract=prompt_contract(), model_policy=model_policy(), candidate_policy=candidate_policy())\n"
+        "    provider = RecordedResponseProvider(provider_id=\"recorded-primary\", model_id=\"fixture-model\", model_revision=\"fixture-v1\", response_set=response_set(response(\"f\" * 64)))\n",
+        "    prepare_extraction_request(\n"
+        "        store,\n"
+        "        PLAN_ID,\n"
+        "        prompt_contract=prompt_contract(),\n"
+        "        model_policy=model_policy(),\n"
+        "        candidate_policy=candidate_policy(),\n"
+        "    )\n"
+        "    provider = RecordedResponseProvider(provider_id=\"recorded-primary\", model_id=\"fixture-model\", model_revision=\"fixture-v1\", response_set=response_set(response(\"f\" * 64)))\n",
+    )
+    _replace(
+        test_path,
+        '    policy = model_policy(); unsigned=dict(policy); unsigned.pop("model_policy_sha256"); unsigned["live_provider_calls_permitted"] = True; policy=signed(unsigned,"model_policy_sha256")\n',
+        '    policy = model_policy()\n'
+        '    unsigned = dict(policy)\n'
+        '    unsigned.pop("model_policy_sha256")\n'
+        '    unsigned["live_provider_calls_permitted"] = True\n'
+        '    policy = signed(unsigned, "model_policy_sha256")\n',
+    )
+
+
 def _patch_pyproject() -> None:
     path = ROOT / "pyproject.toml"
     text = path.read_text(encoding="utf-8")
@@ -51,6 +127,7 @@ def _patch_pyproject() -> None:
 
 def main() -> None:
     _extract()
+    _apply_lint_fixes()
     _patch_pyproject()
     (ROOT / ".github" / "workflows" / "m25-3-bootstrap.yml").unlink()
     Path(__file__).unlink()
