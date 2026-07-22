@@ -32,10 +32,10 @@ M24_14_6_AUTHENTICATED_RESULT_SCHEMA = (
 )
 
 M24_14_6_STATUS = (
-    "m24_14_6_harness_deployed_pending_daniel_authenticated_benchmark"
+    "m24_14_6_benchmark_harness_repair_deployed_pending_daniel_authenticated_benchmark"
 )
-M24_14_6_ISSUE_NUMBER = 1023
-M24_14_6_REQUIRED_BASE_SHA = "1c7e3a32d9e6787b0c0ea9ba129185da8f504ba1"
+M24_14_6_ISSUE_NUMBER = 1026
+M24_14_6_REQUIRED_BASE_SHA = "01c763eac7b5476765482c9b2fe6d1b5b78242b5"
 M24_14_6_FOUNDATION_SHA = "e5ef644053d34e89c70d2ceb37521e1c59234832"
 M24_14_6_ACCEPTED_VAULT_SHA256 = (
     "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
@@ -46,8 +46,11 @@ M24_14_6_SECONDARY_ROLLBACK_DEPLOYMENT = "586deae3-d679-45e2-8542-ec6845f9f2e7"
 M24_14_6_PAGES_PROJECT = "llm-wiki-m24-internal"
 M24_14_6_CUSTOM_HOSTNAME = "https://m24-internal.danielcanfly.com/"
 M24_14_6_DANIEL_COMMAND = (
-    "python scripts/m24_14_6_authenticated_benchmark.py --headed --capture-auth"
+    "python scripts/m24_14_6_authenticated_benchmark.py --headed --capture-auth "
+    "--deployment-id <exact-repaired-deployment-id>"
 )
+M24_14_6_PRE_REPAIR_DEPLOYMENT = "ee80820e-727b-4a05-8b47-121fad33c1d5"
+PLACEHOLDER_DEPLOYMENT_IDS = frozenset({"", "protected-current", "current", "latest"})
 
 M24_14_6_ROOT = Path("pilot/m24/m24-14-6")
 BENCHMARK_POLICY_PATH = M24_14_6_ROOT / "benchmark-policy.json"
@@ -178,6 +181,43 @@ def benchmark_cases_payload(authority: str = "authenticated_live") -> dict[str, 
         "cases": [
             {"id": case_id, "authority": authority, "required": True}
             for case_id in BENCHMARK_CASE_IDS
+        ],
+    }
+
+
+def required_policy_coverage_payload() -> dict[str, Any]:
+    return {
+        "schema_version": "knowledge-engine-m24-14-6-policy-coverage/v1",
+        "rule": "every field has collection, enforcement, validator, and test coverage",
+        "required_policy_fields": [
+            "iterations.cold_min",
+            "iterations.warm_min",
+            "timing_budgets_ms.overview_cold_p50_max",
+            "timing_budgets_ms.overview_cold_p95_max",
+            "timing_budgets_ms.overview_warm_p95_max",
+            "timing_budgets_ms.standard_route_warm_p95_max",
+            "timing_budgets_ms.graph_route_warm_p95_max",
+            "timing_budgets_ms.lexical_interaction_warm_p95_max",
+            "timing_budgets_ms.graph_interaction_warm_p95_max",
+            "timing_budgets_ms.source_deep_marker_warm_p95_max",
+            "timing_budgets_ms.vault_download_p95_max",
+            "timing_budgets_ms.long_task_total_per_case_max",
+            "timing_budgets_ms.individual_long_task_max",
+            "hard_gates.console_errors_max",
+            "hard_gates.page_errors_max",
+            "hard_gates.failed_required_same_origin_requests_max",
+            "hard_gates.access_leakage_max",
+            "hard_gates.graph_node_count",
+            "hard_gates.graph_edge_count",
+            "hard_gates.horizontal_overflow_max",
+            "hard_gates.metadata_intersection_max",
+            "resource_guardrails.runtime_third_party_cdn_requests_max",
+            "resource_guardrails.cold_traversal_transfer_bytes_max",
+            "resource_guardrails.required_request_count_max",
+            "viewports[1440x900]",
+            "viewports[1024x768]",
+            "viewports[768x900]",
+            "viewports[390x844]",
         ],
     }
 
@@ -334,8 +374,10 @@ def build_m24_14_6_pending_acceptance_report(
         "foundation_sha": M24_14_6_FOUNDATION_SHA,
         "vault_sha256": M24_14_6_ACCEPTED_VAULT_SHA256,
         "deployment_identity": {
+            "pre_repair_deployment": M24_14_6_PRE_REPAIR_DEPLOYMENT,
             "pre_stage_a_protected_deployment": M24_14_6_PRE_STAGE_A_PROTECTED_DEPLOYMENT,
-            "post_merge_deployment_recorded_in_return_handoff": True,
+            "post_repair_deployment_recorded_in_return_handoff": True,
+            "benchmark_requires_explicit_deployment_id": True,
         },
         "rollback_deployments": [
             M24_14_6_IMMEDIATE_ROLLBACK_DEPLOYMENT,
@@ -358,6 +400,7 @@ def build_m24_14_6_pending_acceptance_report(
                 "return_artifact": "sanitized authenticated benchmark JSON only",
             }
         ],
+        "policy_coverage": required_policy_coverage_payload(),
         "local_ci_regression_authority": "local_exact_site_browser_regression",
         "final_acceptance_claimed": False,
         "manual_browser_acceptance_claimed": False,
@@ -413,21 +456,26 @@ def finalize_authenticated_benchmark_result(payload: Mapping[str, Any]) -> dict[
     return finalized
 
 
-def validate_authenticated_benchmark_result(payload: Mapping[str, Any]) -> dict[str, Any]:
+def recompute_benchmark_decision(
+    payload: Mapping[str, Any],
+    *,
+    expected_deployment_id: str | None = None,
+    require_authenticated_iterations: bool = True,
+) -> dict[str, Any]:
     result = _require_mapping(payload, "result")
     _assert_no_sensitive_material(result)
     if result.get("schema_version") != M24_14_6_AUTHENTICATED_RESULT_SCHEMA:
         raise M24_14_6ValidationError("unexpected benchmark result schema")
-    if result.get("authority") != "authenticated_live":
-        raise M24_14_6ValidationError("authenticated live authority is required")
-    if result.get("self_sha256") != finalized_result_sha256(result):
-        raise M24_14_6ValidationError("benchmark result self digest mismatch")
     if result.get("benchmark_policy_sha256") != benchmark_policy_sha256():
         raise M24_14_6ValidationError("benchmark policy digest mismatch")
     if result.get("benchmark_cases_sha256") != benchmark_cases_sha256():
         raise M24_14_6ValidationError("benchmark cases digest mismatch")
 
+    deployment_id = str(result.get("deployment_id") or "")
+    _validate_deployment_id(deployment_id, expected_deployment_id=expected_deployment_id)
     identities = _require_mapping(result.get("identities"), "identities")
+    if identities.get("deployment_id") != deployment_id:
+        raise M24_14_6ValidationError("deployment identity mismatch")
     expected_identities = benchmark_policy_payload()["release_identity"]
     expected_pairs = {
         "release_id": expected_identities["release_id"],
@@ -440,23 +488,38 @@ def validate_authenticated_benchmark_result(payload: Mapping[str, Any]) -> dict[
     for key, expected in expected_pairs.items():
         if identities.get(key) != expected:
             raise M24_14_6ValidationError(f"identity drift: {key}")
-    if not identities.get("deployment_id"):
-        raise M24_14_6ValidationError("deployment identity is required")
 
     iterations = _require_mapping(result.get("iterations"), "iterations")
     required_iterations = benchmark_policy_payload()["iterations"]
-    if int(iterations.get("cold_completed", 0)) < required_iterations["cold_min"]:
+    cold_min = required_iterations["cold_min"] if require_authenticated_iterations else 1
+    warm_min = required_iterations["warm_min"] if require_authenticated_iterations else 1
+    if int(iterations.get("cold_completed", 0)) < cold_min:
         raise M24_14_6ValidationError("insufficient cold iterations")
-    if int(iterations.get("warm_completed", 0)) < required_iterations["warm_min"]:
+    if int(iterations.get("warm_completed", 0)) < warm_min:
         raise M24_14_6ValidationError("insufficient warm iterations")
 
     cases = _require_mapping(result.get("cases"), "cases")
     missing_cases = sorted(set(BENCHMARK_CASE_IDS) - set(cases))
     if missing_cases:
         raise M24_14_6ValidationError(f"missing benchmark cases: {missing_cases}")
+    reason_codes: list[str] = []
+    recomputed_cases: dict[str, Any] = {}
     for case_id in BENCHMARK_CASE_IDS:
-        _require_mapping(cases[case_id], f"cases.{case_id}")
+        recomputed_cases[case_id] = _validate_case_record(
+            case_id,
+            _require_mapping(cases[case_id], f"cases.{case_id}"),
+            cold_min=cold_min,
+            warm_min=warm_min,
+            reason_codes=reason_codes,
+        )
+    _validate_case_evidence(cases, reason_codes)
 
+    interactions = _require_mapping(result.get("interactions"), "interactions")
+    recomputed_interactions = _validate_interactions(interactions, warm_min, reason_codes)
+    viewport_results = _require_mapping(result.get("viewport_results"), "viewport_results")
+    _validate_viewports(viewport_results, reason_codes)
+
+    recomputed_errors = _recompute_errors(cases, interactions, viewport_results)
     errors = _require_mapping(result.get("errors"), "errors")
     for key in (
         "console_errors",
@@ -466,6 +529,8 @@ def validate_authenticated_benchmark_result(payload: Mapping[str, Any]) -> dict[
     ):
         if not isinstance(errors.get(key), int) or errors[key] < 0:
             raise M24_14_6ValidationError(f"invalid error counter: {key}")
+        if errors[key] != recomputed_errors[key]:
+            raise M24_14_6ValidationError(f"error counter aggregate mismatch: {key}")
 
     hard_gates = benchmark_policy_payload()["hard_gates"]
     if errors["console_errors"] > hard_gates["console_errors_max"]:
@@ -480,9 +545,59 @@ def validate_authenticated_benchmark_result(payload: Mapping[str, Any]) -> dict[
     if errors["access_leakage"] > hard_gates["access_leakage_max"]:
         raise M24_14_6ValidationError("access leakage hard gate failed")
 
-    decision = result.get("decision")
-    if decision not in benchmark_policy_payload()["decisions"]:
+    resource_summary = _require_mapping(result.get("resource_summary"), "resource_summary")
+    recomputed_resources = _recompute_resource_summary(cases, interactions, viewport_results)
+    for key, expected in recomputed_resources.items():
+        if resource_summary.get(key) != expected:
+            raise M24_14_6ValidationError(f"resource aggregate mismatch: {key}")
+    _enforce_resource_guardrails(recomputed_resources, reason_codes)
+
+    long_tasks = _require_mapping(result.get("long_tasks"), "long_tasks")
+    recomputed_long_tasks = _recompute_long_tasks(cases, interactions, viewport_results)
+    for key, expected in recomputed_long_tasks.items():
+        if long_tasks.get(key) != expected:
+            raise M24_14_6ValidationError(f"long-task aggregate mismatch: {key}")
+
+    recomputed_decision = "repair_required" if reason_codes else "pass"
+    if result.get("decision") not in benchmark_policy_payload()["decisions"]:
         raise M24_14_6ValidationError("invalid benchmark decision")
+    if result.get("decision") != recomputed_decision:
+        raise M24_14_6ValidationError("decision does not match validator recomputation")
+
+    stored_reasons = result.get("reason_codes", [])
+    if stored_reasons != reason_codes:
+        raise M24_14_6ValidationError("reason codes do not match validator recomputation")
+    aggregates = _require_mapping(result.get("recomputed_aggregates"), "recomputed_aggregates")
+    expected_aggregates = {
+        "cases": recomputed_cases,
+        "interactions": recomputed_interactions,
+        "errors": recomputed_errors,
+        "resources": recomputed_resources,
+        "long_tasks": recomputed_long_tasks,
+        "decision": recomputed_decision,
+        "reason_codes": reason_codes,
+    }
+    if aggregates != expected_aggregates:
+        raise M24_14_6ValidationError("stored aggregate metrics do not match recomputation")
+    return expected_aggregates
+
+
+def validate_authenticated_benchmark_result(
+    payload: Mapping[str, Any],
+    *,
+    expected_deployment_id: str | None = None,
+) -> dict[str, Any]:
+    result = _require_mapping(payload, "result")
+    _assert_no_sensitive_material(result)
+    if result.get("authority") != "authenticated_live":
+        raise M24_14_6ValidationError("authenticated live authority is required")
+    if result.get("self_sha256") != finalized_result_sha256(result):
+        raise M24_14_6ValidationError("benchmark result self digest mismatch")
+    recompute_benchmark_decision(
+        result,
+        expected_deployment_id=expected_deployment_id,
+        require_authenticated_iterations=True,
+    )
     return dict(result)
 
 
@@ -495,16 +610,444 @@ def validate_local_regression_result(payload: Mapping[str, Any]) -> dict[str, An
         raise M24_14_6ValidationError("local regression authority is required")
     if result.get("self_sha256") != finalized_result_sha256(result):
         raise M24_14_6ValidationError("benchmark result self digest mismatch")
-    identities = _require_mapping(result.get("identities"), "identities")
-    if identities.get("release_id") != CANONICAL_RELEASE_ID:
-        raise M24_14_6ValidationError("local regression release drift")
-    if identities.get("production_retrieval") != "lexical":
-        raise M24_14_6ValidationError("local regression retrieval drift")
-    cases = _require_mapping(result.get("cases"), "cases")
-    missing_cases = sorted(set(BENCHMARK_CASE_IDS) - set(cases))
-    if missing_cases:
-        raise M24_14_6ValidationError(f"missing local cases: {missing_cases}")
+    recompute_benchmark_decision(
+        result,
+        expected_deployment_id=None,
+        require_authenticated_iterations=False,
+    )
     return dict(result)
+
+
+def _validate_deployment_id(
+    deployment_id: str,
+    *,
+    expected_deployment_id: str | None = None,
+) -> None:
+    if deployment_id in PLACEHOLDER_DEPLOYMENT_IDS:
+        raise M24_14_6ValidationError("deployment identity placeholder rejected")
+    if expected_deployment_id is not None:
+        _validate_deployment_id(expected_deployment_id)
+        if deployment_id != expected_deployment_id:
+            raise M24_14_6ValidationError("deployment identity does not match expected ID")
+
+
+def _validate_case_record(
+    case_id: str,
+    record: Mapping[str, Any],
+    *,
+    cold_min: int,
+    warm_min: int,
+    reason_codes: list[str],
+) -> dict[str, Any]:
+    if record.get("status") != "pass":
+        reason_codes.append(f"{case_id}:case_status_failed")
+    cold_samples = _sample_list(record.get("cold_samples"), f"{case_id}.cold_samples")
+    warm_samples = _sample_list(record.get("warm_samples"), f"{case_id}.warm_samples")
+    if len(cold_samples) < cold_min:
+        raise M24_14_6ValidationError(f"{case_id} insufficient cold samples")
+    if len(warm_samples) < warm_min:
+        raise M24_14_6ValidationError(f"{case_id} insufficient warm samples")
+    for sample in cold_samples:
+        cache = _require_mapping(sample.get("cache"), f"{case_id}.cold.cache")
+        if cache.get("cleared_before_sample") is not True:
+            raise M24_14_6ValidationError(f"{case_id} cold sample did not clear cache")
+        if cache.get("disabled_during_sample") is not True:
+            raise M24_14_6ValidationError(f"{case_id} cold sample did not disable cache")
+    for sample in warm_samples:
+        cache = _require_mapping(sample.get("cache"), f"{case_id}.warm.cache")
+        if cache.get("cleared_before_sample") is True:
+            raise M24_14_6ValidationError(f"{case_id} warm sample cleared cache")
+    recomputed = {
+        "cold_p50_ms": _rounded_nearest_rank(_elapsed(cold_samples), 50),
+        "cold_p95_ms": _rounded_nearest_rank(_elapsed(cold_samples), 95),
+        "warm_p95_ms": _rounded_nearest_rank(_elapsed(warm_samples), 95),
+    }
+    if record.get("aggregates") != recomputed:
+        raise M24_14_6ValidationError(f"{case_id} aggregate percentile mismatch")
+    _enforce_case_budget(case_id, recomputed, cold_samples, warm_samples, reason_codes)
+    _enforce_sample_resource_limits(case_id, [*cold_samples, *warm_samples], reason_codes)
+    return recomputed
+
+
+def _validate_interactions(
+    interactions: Mapping[str, Any],
+    warm_min: int,
+    reason_codes: list[str],
+) -> dict[str, Any]:
+    expected = {
+        "lexical_search": ("search",),
+        "sigma_graph": (
+            "search",
+            "result_selection",
+            "one_hop",
+            "two_hop",
+            "open_wiki",
+            "view_sources",
+        ),
+    }
+    recomputed: dict[str, Any] = {}
+    for group, names in expected.items():
+        group_payload = _require_mapping(interactions.get(group), f"interactions.{group}")
+        recomputed[group] = {}
+        for name in names:
+            record = _require_mapping(group_payload.get(name), f"interactions.{group}.{name}")
+            samples = _sample_list(record.get("warm_samples"), f"interactions.{group}.{name}")
+            if len(samples) < warm_min:
+                raise M24_14_6ValidationError(f"{group}.{name} insufficient samples")
+            if record.get("status") != "pass":
+                reason_codes.append(f"{group}.{name}:interaction_failed")
+            aggregate = {"warm_p95_ms": _rounded_nearest_rank(_elapsed(samples), 95)}
+            if record.get("aggregates") != aggregate:
+                raise M24_14_6ValidationError(f"{group}.{name} aggregate mismatch")
+            budget_key = (
+                "lexical_interaction_warm_p95_max"
+                if group == "lexical_search"
+                else "graph_interaction_warm_p95_max"
+            )
+            budget = benchmark_policy_payload()["timing_budgets_ms"][budget_key]
+            if aggregate["warm_p95_ms"] > budget:
+                reason_codes.append(f"{group}.{name}:{budget_key}_exceeded")
+            _enforce_sample_resource_limits(f"{group}.{name}", samples, reason_codes)
+            recomputed[group][name] = aggregate
+    return recomputed
+
+
+def _validate_case_evidence(cases: Mapping[str, Any], reason_codes: list[str]) -> None:
+    graph = _require_mapping(cases["sigma_graph"].get("evidence"), "sigma_graph.evidence")
+    gates = benchmark_policy_payload()["hard_gates"]
+    if graph.get("node_count") != gates["graph_node_count"]:
+        reason_codes.append("sigma_graph:node_count_mismatch")
+    if graph.get("edge_count") != gates["graph_edge_count"]:
+        reason_codes.append("sigma_graph:edge_count_mismatch")
+    if graph.get("node_count_source") in {"constant", None}:
+        raise M24_14_6ValidationError("graph counts must come from measured source")
+    for key in (
+        "sigma_ready",
+        "harness_selected",
+        "one_hop_action",
+        "two_hop_action",
+        "open_wiki_action",
+        "view_sources_action",
+    ):
+        if graph.get(key) is not True:
+            reason_codes.append(f"sigma_graph:{key}_missing")
+
+    source = _require_mapping(
+        cases["source_full_markdown"].get("evidence"),
+        "source_full_markdown.evidence",
+    )
+    if source.get("viewer_id") != "viewer_source_blog_agent_execution_paths":
+        reason_codes.append("source_full_markdown:viewer_id_mismatch")
+    if source.get("source_id") != "source_blog_agent_execution_paths":
+        reason_codes.append("source_full_markdown:source_id_mismatch")
+    if source.get("deep_marker_present") is not True:
+        reason_codes.append("source_full_markdown:deep_marker_missing")
+    if int(source.get("content_bytes", 0)) < 28_000:
+        reason_codes.append("source_full_markdown:content_bytes_too_small")
+    if int(source.get("line_count", 0)) != 759:
+        reason_codes.append("source_full_markdown:line_count_mismatch")
+    layout = _require_mapping(source.get("layout"), "source_full_markdown.layout")
+    if layout.get("scroll_overflow") is True:
+        reason_codes.append("source_full_markdown:horizontal_overflow")
+    if layout.get("metadata_intersection") is True:
+        reason_codes.append("source_full_markdown:metadata_intersection")
+    if layout.get("metadata_value_overflow") is True:
+        reason_codes.append("source_full_markdown:metadata_value_overflow")
+
+    structured = _require_mapping(
+        cases["source_structured_json"].get("evidence"),
+        "source_structured_json.evidence",
+    )
+    if structured.get("source_id") != "source_m23_4_harness_provenance_summary":
+        reason_codes.append("source_structured_json:source_id_mismatch")
+    if structured.get("parseable_json") is not True:
+        reason_codes.append("source_structured_json:not_parseable_json")
+    if structured.get("records_count", 0) <= 0:
+        reason_codes.append("source_structured_json:no_records")
+    if structured.get("truncated") is True:
+        reason_codes.append("source_structured_json:truncated")
+    expected_structured_sha = (
+        "c9a6da0252fee27033bed294ffd22617de2130f4fa2ecd996385ea44b72cc46f"
+    )
+    if structured.get("snapshot_sha256") != expected_structured_sha:
+        reason_codes.append("source_structured_json:snapshot_sha_mismatch")
+
+    m3 = _require_mapping(cases["source_m3_metadata_only"].get("evidence"), "m3.evidence")
+    exact_reason = (
+        "No exact release-authoritative file or immutable snapshot was resolved for this "
+        "governance contract in the M24.14.5 repair authority boundary."
+    )
+    if m3.get("metadata_only_reason") != exact_reason:
+        reason_codes.append("source_m3_metadata_only:reason_mismatch")
+
+    vault = _require_mapping(cases["obsidian_vault"].get("evidence"), "obsidian_vault.evidence")
+    if vault.get("vault_zip_sha256") != M24_14_6_ACCEPTED_VAULT_SHA256:
+        reason_codes.append("obsidian_vault:sha_mismatch")
+    if vault.get("crc_pass") is not True:
+        reason_codes.append("obsidian_vault:crc_failed")
+    if vault.get("member_count") != 30:
+        reason_codes.append("obsidian_vault:member_count_mismatch")
+    if vault.get("concept_notes") != 20:
+        reason_codes.append("obsidian_vault:concept_count_mismatch")
+    if vault.get("source_notes") != 7:
+        reason_codes.append("obsidian_vault:source_count_mismatch")
+    if vault.get("unresolved_wikilinks") != 0:
+        reason_codes.append("obsidian_vault:unresolved_wikilinks")
+    if vault.get("bidirectional_source_concept_pairs") is not True:
+        reason_codes.append("obsidian_vault:bidirectional_pairs_failed")
+    for marker in (
+        "Multi-agent is an organisational choice, not a maturity level",
+        "Simple requests pay the latency and error surface of planning",
+        "The production objective is not maximum planning freedom",
+    ):
+        if marker not in set(vault.get("deep_markers", [])):
+            reason_codes.append("obsidian_vault:deep_marker_missing")
+    required_members = {
+        ".obsidian/app.json",
+        "README.md",
+        "manifest.json",
+        "sources/007-m3-delivery-contract.md",
+    }
+    if not required_members.issubset(set(vault.get("required_members", []))):
+        reason_codes.append("obsidian_vault:required_member_missing")
+
+    release = _require_mapping(cases["release_identity"].get("evidence"), "release.evidence")
+    expected = benchmark_policy_payload()["release_identity"]
+    if release.get("release_id") != expected["release_id"]:
+        reason_codes.append("release_identity:release_mismatch")
+    if release.get("manifest_sha256") != expected["manifest_sha256"]:
+        reason_codes.append("release_identity:manifest_mismatch")
+    if release.get("source_sha") != expected["source_sha"]:
+        reason_codes.append("release_identity:source_mismatch")
+    if release.get("foundation_sha") != expected["foundation_sha"]:
+        reason_codes.append("release_identity:foundation_mismatch")
+    if release.get("vault_sha256") != expected["vault_sha256"]:
+        reason_codes.append("release_identity:vault_mismatch")
+    if release.get("production_retrieval") != "lexical":
+        reason_codes.append("release_identity:retrieval_mismatch")
+    if release.get("semantic_serving_enabled") is not False:
+        reason_codes.append("release_identity:semantic_enabled")
+    if release.get("hybrid_retrieval_enabled") is not False:
+        reason_codes.append("release_identity:hybrid_enabled")
+
+
+def _validate_viewports(viewport_results: Mapping[str, Any], reason_codes: list[str]) -> None:
+    required = {
+        f"{item['width']}x{item['height']}" for item in benchmark_policy_payload()["viewports"]
+    }
+    missing = required - set(viewport_results)
+    if missing:
+        raise M24_14_6ValidationError(f"missing viewport results: {sorted(missing)}")
+    for viewport in sorted(required):
+        record = _require_mapping(viewport_results[viewport], f"viewport.{viewport}")
+        if record.get("status") != "pass":
+            reason_codes.append(f"viewport:{viewport}:failed")
+        resources = _resources(record)
+        if resources["console_errors"] or resources["page_errors"]:
+            reason_codes.append(f"viewport:{viewport}:browser_errors")
+        if record.get("horizontal_overflow") is True:
+            reason_codes.append(f"viewport:{viewport}:horizontal_overflow")
+        if record.get("metadata_intersection") is True:
+            reason_codes.append(f"viewport:{viewport}:metadata_intersection")
+        if record.get("metadata_value_overflow") is True:
+            reason_codes.append(f"viewport:{viewport}:metadata_value_overflow")
+
+
+def _enforce_case_budget(
+    case_id: str,
+    aggregates: Mapping[str, float],
+    cold_samples: list[Mapping[str, Any]],
+    warm_samples: list[Mapping[str, Any]],
+    reason_codes: list[str],
+) -> None:
+    budgets = benchmark_policy_payload()["timing_budgets_ms"]
+    if case_id == "overview":
+        if aggregates["cold_p50_ms"] > budgets["overview_cold_p50_max"]:
+            reason_codes.append("overview:overview_cold_p50_max_exceeded")
+        if aggregates["cold_p95_ms"] > budgets["overview_cold_p95_max"]:
+            reason_codes.append("overview:overview_cold_p95_max_exceeded")
+        if aggregates["warm_p95_ms"] > budgets["overview_warm_p95_max"]:
+            reason_codes.append("overview:overview_warm_p95_max_exceeded")
+    elif case_id == "sigma_graph":
+        if aggregates["warm_p95_ms"] > budgets["graph_route_warm_p95_max"]:
+            reason_codes.append("sigma_graph:graph_route_warm_p95_max_exceeded")
+    elif case_id == "source_full_markdown":
+        if aggregates["warm_p95_ms"] > budgets["source_deep_marker_warm_p95_max"]:
+            reason_codes.append("source_full_markdown:source_deep_marker_warm_p95_max_exceeded")
+    elif case_id == "obsidian_vault":
+        if aggregates["warm_p95_ms"] > budgets["vault_download_p95_max"]:
+            reason_codes.append("obsidian_vault:vault_download_p95_max_exceeded")
+    else:
+        if aggregates["warm_p95_ms"] > budgets["standard_route_warm_p95_max"]:
+            reason_codes.append(f"{case_id}:standard_route_warm_p95_max_exceeded")
+    cold_transfer = sum(_resources(sample)["same_origin_transfer_bytes"] for sample in cold_samples)
+    if (
+        cold_transfer
+        > benchmark_policy_payload()["resource_guardrails"]["cold_traversal_transfer_bytes_max"]
+    ):
+        reason_codes.append(f"{case_id}:cold_traversal_transfer_bytes_max_exceeded")
+    _ = warm_samples
+
+
+def _enforce_sample_resource_limits(
+    label: str,
+    samples: list[Mapping[str, Any]],
+    reason_codes: list[str],
+) -> None:
+    policy = benchmark_policy_payload()
+    for sample in samples:
+        resources = _resources(sample)
+        if (
+            resources["same_origin_request_count"]
+            > policy["resource_guardrails"]["required_request_count_max"]
+        ):
+            reason_codes.append(f"{label}:required_request_count_max_exceeded")
+        if (
+            resources["runtime_third_party_cdn_requests"]
+            > policy["resource_guardrails"]["runtime_third_party_cdn_requests_max"]
+        ):
+            reason_codes.append(f"{label}:runtime_third_party_cdn_requests_max_exceeded")
+        max_long_task_total = policy["timing_budgets_ms"][
+            "long_task_total_per_case_max"
+        ]
+        if resources["long_task_total_ms"] > max_long_task_total:
+            reason_codes.append(f"{label}:long_task_total_per_case_max_exceeded")
+        if resources["long_task_max_ms"] > policy["timing_budgets_ms"]["individual_long_task_max"]:
+            reason_codes.append(f"{label}:individual_long_task_max_exceeded")
+
+
+def _enforce_resource_guardrails(
+    resource_summary: Mapping[str, int],
+    reason_codes: list[str],
+) -> None:
+    policy = benchmark_policy_payload()
+    if (
+        resource_summary["runtime_third_party_cdn_requests"]
+        > policy["resource_guardrails"]["runtime_third_party_cdn_requests_max"]
+    ):
+        reason_codes.append("resource_summary:runtime_third_party_cdn_requests_max_exceeded")
+    if (
+        resource_summary["cold_traversal_transfer_bytes"]
+        > policy["resource_guardrails"]["cold_traversal_transfer_bytes_max"]
+    ):
+        reason_codes.append("resource_summary:cold_traversal_transfer_bytes_max_exceeded")
+
+
+def _recompute_errors(
+    cases: Mapping[str, Any],
+    interactions: Mapping[str, Any],
+    viewport_results: Mapping[str, Any],
+) -> dict[str, int]:
+    samples = _all_samples(cases, interactions, viewport_results)
+    return {
+        "console_errors": sum(_resources(sample)["console_errors"] for sample in samples),
+        "page_errors": sum(_resources(sample)["page_errors"] for sample in samples),
+        "failed_required_same_origin_requests": sum(
+            _resources(sample)["failed_required_same_origin_requests"] for sample in samples
+        ),
+        "access_leakage": 0,
+    }
+
+
+def _recompute_resource_summary(
+    cases: Mapping[str, Any],
+    interactions: Mapping[str, Any],
+    viewport_results: Mapping[str, Any],
+) -> dict[str, int]:
+    samples = _all_samples(cases, interactions, viewport_results)
+    cold_samples = [
+        sample
+        for case in cases.values()
+        for sample in _sample_list(case.get("cold_samples"), "cold")
+    ]
+    return {
+        "same_origin_request_count": sum(
+            _resources(sample)["same_origin_request_count"] for sample in samples
+        ),
+        "same_origin_transfer_bytes": sum(
+            _resources(sample)["same_origin_transfer_bytes"] for sample in samples
+        ),
+        "cold_traversal_transfer_bytes": sum(
+            _resources(sample)["same_origin_transfer_bytes"] for sample in cold_samples
+        ),
+        "runtime_third_party_cdn_requests": sum(
+            _resources(sample)["runtime_third_party_cdn_requests"] for sample in samples
+        ),
+    }
+
+
+def _recompute_long_tasks(
+    cases: Mapping[str, Any],
+    interactions: Mapping[str, Any],
+    viewport_results: Mapping[str, Any],
+) -> dict[str, int]:
+    samples = _all_samples(cases, interactions, viewport_results)
+    return {
+        "count": sum(_resources(sample)["long_task_count"] for sample in samples),
+        "max_ms": max([_resources(sample)["long_task_max_ms"] for sample in samples] or [0]),
+        "total_ms": sum(_resources(sample)["long_task_total_ms"] for sample in samples),
+    }
+
+
+def _all_samples(
+    cases: Mapping[str, Any],
+    interactions: Mapping[str, Any],
+    viewport_results: Mapping[str, Any],
+) -> list[Mapping[str, Any]]:
+    samples: list[Mapping[str, Any]] = []
+    for case in cases.values():
+        samples.extend(_sample_list(case.get("cold_samples"), "case.cold"))
+        samples.extend(_sample_list(case.get("warm_samples"), "case.warm"))
+    for group in interactions.values():
+        if isinstance(group, Mapping):
+            for item in group.values():
+                if isinstance(item, Mapping):
+                    samples.extend(_sample_list(item.get("warm_samples"), "interaction.warm"))
+    for viewport in viewport_results.values():
+        if isinstance(viewport, Mapping):
+            samples.append(viewport)
+    return samples
+
+
+def _sample_list(value: Any, label: str) -> list[Mapping[str, Any]]:
+    if not isinstance(value, list):
+        raise M24_14_6ValidationError(f"{label} must be a sample list")
+    samples: list[Mapping[str, Any]] = []
+    for index, item in enumerate(value):
+        samples.append(_require_mapping(item, f"{label}[{index}]"))
+    return samples
+
+
+def _elapsed(samples: list[Mapping[str, Any]]) -> list[float]:
+    return [float(sample.get("elapsed_ms", -1)) for sample in samples]
+
+
+def _rounded_nearest_rank(values: list[float], percentile: float) -> float:
+    if any(value < 0 for value in values):
+        raise M24_14_6ValidationError("sample elapsed_ms must be non-negative")
+    return round(float(nearest_rank(values, percentile)), 2)
+
+
+def _resources(record: Mapping[str, Any]) -> dict[str, int]:
+    resources = _require_mapping(record.get("resources"), "resources")
+    defaults = {
+        "same_origin_request_count": 0,
+        "same_origin_transfer_bytes": 0,
+        "runtime_third_party_cdn_requests": 0,
+        "failed_required_same_origin_requests": 0,
+        "console_errors": 0,
+        "page_errors": 0,
+        "long_task_count": 0,
+        "long_task_max_ms": 0,
+        "long_task_total_ms": 0,
+    }
+    material: dict[str, int] = {}
+    for key, default in defaults.items():
+        value = resources.get(key, default)
+        if not isinstance(value, int) or value < 0:
+            raise M24_14_6ValidationError(f"invalid resource counter: {key}")
+        material[key] = value
+    return material
 
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:

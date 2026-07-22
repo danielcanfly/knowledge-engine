@@ -20,7 +20,7 @@
   "daniel_action_count": 1,
   "daniel_actions": [
     {
-      "command": "python scripts/m24_14_6_authenticated_benchmark.py --headed --capture-auth",
+      "command": "python scripts/m24_14_6_authenticated_benchmark.py --headed --capture-auth --deployment-id <exact-repaired-deployment-id>",
       "id": "run_authenticated_browser_benchmark_after_access_login",
       "required_actor": "Daniel",
       "return_artifact": "sanitized authenticated benchmark JSON only"
@@ -28,16 +28,52 @@
   ],
   "deployed_url_label": "protected_custom_hostname",
   "deployment_identity": {
-    "post_merge_deployment_recorded_in_return_handoff": true,
+    "benchmark_requires_explicit_deployment_id": true,
+    "post_repair_deployment_recorded_in_return_handoff": true,
+    "pre_repair_deployment": "ee80820e-727b-4a05-8b47-121fad33c1d5",
     "pre_stage_a_protected_deployment": "5361997c-fe53-47a5-998e-81244a6470ab"
   },
   "final_acceptance_claimed": false,
   "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
-  "issue_number": 1023,
+  "issue_number": 1026,
   "local_ci_regression_authority": "local_exact_site_browser_regression",
   "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
   "manual_browser_acceptance_claimed": false,
   "pages_project": "llm-wiki-m24-internal",
+  "policy_coverage": {
+    "required_policy_fields": [
+      "iterations.cold_min",
+      "iterations.warm_min",
+      "timing_budgets_ms.overview_cold_p50_max",
+      "timing_budgets_ms.overview_cold_p95_max",
+      "timing_budgets_ms.overview_warm_p95_max",
+      "timing_budgets_ms.standard_route_warm_p95_max",
+      "timing_budgets_ms.graph_route_warm_p95_max",
+      "timing_budgets_ms.lexical_interaction_warm_p95_max",
+      "timing_budgets_ms.graph_interaction_warm_p95_max",
+      "timing_budgets_ms.source_deep_marker_warm_p95_max",
+      "timing_budgets_ms.vault_download_p95_max",
+      "timing_budgets_ms.long_task_total_per_case_max",
+      "timing_budgets_ms.individual_long_task_max",
+      "hard_gates.console_errors_max",
+      "hard_gates.page_errors_max",
+      "hard_gates.failed_required_same_origin_requests_max",
+      "hard_gates.access_leakage_max",
+      "hard_gates.graph_node_count",
+      "hard_gates.graph_edge_count",
+      "hard_gates.horizontal_overflow_max",
+      "hard_gates.metadata_intersection_max",
+      "resource_guardrails.runtime_third_party_cdn_requests_max",
+      "resource_guardrails.cold_traversal_transfer_bytes_max",
+      "resource_guardrails.required_request_count_max",
+      "viewports[1440x900]",
+      "viewports[1024x768]",
+      "viewports[768x900]",
+      "viewports[390x844]"
+    ],
+    "rule": "every field has collection, enforcement, validator, and test coverage",
+    "schema_version": "knowledge-engine-m24-14-6-policy-coverage/v1"
+  },
   "release_id": "20260720T160000Z-46137c97263e",
   "result_authority_required": "authenticated_live",
   "result_schema_version": "knowledge-engine-m24-14-6-authenticated-benchmark-result/v1",
@@ -46,8 +82,8 @@
     "586deae3-d679-45e2-8542-ec6845f9f2e7"
   ],
   "schema_version": "knowledge-engine-m24-14-6-pending-final-acceptance/v1",
-  "self_sha256": "309fbc7684c54be648f627b2d2851393a770c78a25884831d99bc79822b134e6",
+  "self_sha256": "a23a4c4a98009d78a64da748346799543702092d18e0a3c8f0067bef9fcac162",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
-  "status": "m24_14_6_harness_deployed_pending_daniel_authenticated_benchmark",
+  "status": "m24_14_6_benchmark_harness_repair_deployed_pending_daniel_authenticated_benchmark",
   "vault_sha256": "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
 }
