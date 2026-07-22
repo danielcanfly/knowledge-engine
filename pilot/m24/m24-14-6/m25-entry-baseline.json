@@ -1,8 +1,17 @@
 {
+  "accepted_benchmark_deployment_id": "e73c3563-01eb-4c37-b2a6-500e2b86b87c",
   "authenticated_performance_decision": "pass",
+  "benchmark_file_sha256": "3af8c6debadf8bc896952c4b9e48497a7de6971ccad489b40ae8ea23c5440c45",
+  "benchmark_self_sha256": "6fe285a4b684a61ec6c0d2b05db74d2a3afebf742dfb5e8d4c4800c0d475fe4f",
+  "closure_seal_attestation": "post_merge",
+  "closure_seal_base_sha": "b9dc2f1f8a0f30bed81bea2cafe31fb11aa0bbaf",
+  "closure_seal_issue_number": 1034,
+  "closure_seal_pr_number": 1035,
+  "closure_seal_ref": "refs/tags/m24-14-6-final-closure",
   "daniel_acceptance_recorded": true,
   "deployment_id": "e73c3563-01eb-4c37-b2a6-500e2b86b87c",
-  "engine_main_sha": "recorded_in_git",
+  "engine_product_acceptance_sha": "b9dc2f1f8a0f30bed81bea2cafe31fb11aa0bbaf",
+  "final_surface_deployment_id": "90804e78-9975-4e70-8fdd-d5cd9a9ee753",
   "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
   "hybrid_retrieval_enabled": false,
   "large_scale_ingestion_enabled": false,
@@ -13,6 +22,7 @@
     "large_scale_ingestion_planning"
   ],
   "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "production_answer_serving_enabled": false,
   "production_retrieval": "lexical",
   "protected_mutations": {
     "cloudflare_access_population_broadened": false,
@@ -29,8 +39,8 @@
     "temporary_public_bypass_used": false
   },
   "release_id": "20260720T160000Z-46137c97263e",
-  "schema_version": "knowledge-engine-m24-14-6-m25-entry-baseline/v1",
-  "self_sha256": "3892a5372f682e685c12509867c03ce078128e8a585866d1db6c16d840f6983d",
+  "schema_version": "knowledge-engine-m24-14-6-m25-entry-baseline/v2",
+  "self_sha256": "5e4e93a4c513dbee3cab6b8c8d6ab782bb0ed4b7679278ed2f45fabdf0edca41",
   "semantic_serving_enabled": false,
   "source_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "vault_sha256": "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
