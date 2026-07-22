@@ -283,6 +283,9 @@ def test_browser_observer_classifies_platform_noise_separately() -> None:
     observer = module.BrowserObserver("https://m24-internal.danielcanfly.com/")
     observer._on_console(FakeMessage("https://cloudflare.com/cdn-cgi/access/login"))
     observer._on_console(
+        FakeMessage("https://m24-internal.danielcanfly.com/cdn-cgi/access/login")
+    )
+    observer._on_console(
         FakeMessage(
             "https://m24-internal.danielcanfly.com/app.js",
             text="Failed to load https://static.cloudflareinsights.com/beacon.min.js",
@@ -304,7 +307,7 @@ def test_browser_observer_classifies_platform_noise_separately() -> None:
 
     resources = observer.resources(argparse.Namespace(evaluate=lambda _script: []))
 
-    assert resources["platform_console_errors"] == 2
+    assert resources["platform_console_errors"] == 3
     assert resources["console_errors"] == 1
     assert resources["platform_third_party_request_count"] == 1
     assert resources["runtime_third_party_cdn_requests"] == 1

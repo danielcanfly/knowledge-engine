@@ -848,7 +848,10 @@ class BrowserObserver:
         return bool(url) and url.startswith(self.origin)
 
     def _is_cloudflare_platform_url(self, url: str) -> bool:
-        host = urlparse(url).hostname or ""
+        parsed = urlparse(url)
+        if parsed.path.startswith("/cdn-cgi/"):
+            return True
+        host = parsed.hostname or ""
         return any(
             host == domain or host.endswith(f".{domain}")
             for domain in (
