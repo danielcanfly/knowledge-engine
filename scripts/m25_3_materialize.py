@@ -106,6 +106,28 @@ def _apply_lint_fixes() -> None:
         '    policy = signed(unsigned, "model_policy_sha256")\n',
     )
     _replace(
+        test_path,
+        '        "plan_sha256": PLAN_SHA,\n    }\n    m21_checkpoint = {',
+        '    }\n    m21_plan["plan_sha256"] = _digest(m21_plan)\n    m21_checkpoint = {',
+    )
+    _replace(
+        test_path,
+        '        "plan_sha256": PLAN_SHA,\n        "identity": m21_plan["identity"],',
+        '        "plan_sha256": m21_plan["plan_sha256"],\n        "identity": m21_plan["identity"],',
+    )
+    _replace(
+        test_path,
+        '        "checkpoint_sha256": CHECKPOINT_SHA,\n    }\n    bundle = {',
+        '    }\n    m21_checkpoint["checkpoint_sha256"] = _digest(m21_checkpoint)\n    bundle = {',
+    )
+    _replace(
+        "docs/architecture/m25/m25-2-intake-orchestrator.md",
+        "M25.2 permits immutable intake writes and candidate-only admission references. It performs no live\n"
+        "extraction, model call, review decision, canonical adoption, Source mutation, Foundation mutation,",
+        "M25.2 permits immutable intake writes and candidate-only admission references. It performs no live extraction,\n"
+        "model call, review decision, canonical adoption, Source mutation, Foundation mutation,",
+    )
+    _replace(
         ".github/workflows/m25-3-extraction-worker.yml",
         "          python -m pytest -q\n",
         "          PYTHONPATH=tests python -m pytest -q\n",
@@ -136,7 +158,6 @@ def main() -> None:
     _patch_pyproject()
     (ROOT / ".github" / "workflows" / "m25-3-bootstrap.yml").unlink()
     Path(__file__).unlink()
-
 
 if __name__ == "__main__":
     main()
