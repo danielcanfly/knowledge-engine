@@ -19,6 +19,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
       - name: Verify exact workflow head
         env:
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
