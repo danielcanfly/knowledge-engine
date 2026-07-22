@@ -311,6 +311,14 @@ def test_browser_observer_classifies_platform_noise_separately() -> None:
     assert resources["console_errors"] == 1
     assert resources["platform_third_party_request_count"] == 1
     assert resources["runtime_third_party_cdn_requests"] == 1
+    assert resources["console_error_classes"] == {
+        "same-origin:app-js:unmarked": 1,
+    }
+    assert resources["platform_console_error_classes"] == {
+        "cloudflare-platform-origin:cdn-cgi:unmarked": 1,
+        "same-origin:app-js:cloudflare": 1,
+        "same-origin:cdn-cgi:unmarked": 1,
+    }
 
 
 def test_collect_recomputed_fields_emits_repair_required_for_console_hard_gate() -> None:

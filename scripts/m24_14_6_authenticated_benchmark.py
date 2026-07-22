@@ -14,6 +14,7 @@ import time
 import urllib.error
 import urllib.request
 import zipfile
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -780,6 +781,8 @@ class BrowserObserver:
         self.third_party_requests = 0
         self.platform_third_party_requests = 0
         self.platform_console_errors = 0
+        self.console_error_classes: Counter[str] = Counter()
+        self.platform_console_error_classes: Counter[str] = Counter()
 
     def attach(self, page) -> None:
         page.on("console", self._on_console)
@@ -788,7 +791,7 @@ class BrowserObserver:
         page.on("requestfailed", self._on_request_failed)
         page.on("response", self._on_response)
 
-    def resources(self, page) -> dict[str, int]:
+    def resources(self, page) -> dict[str, Any]:
         long_tasks = page.evaluate("window.__m24LongTasks || []")
         return {
             "same_origin_request_count": self.same_origin_requests,
@@ -802,6 +805,10 @@ class BrowserObserver:
             "long_task_count": len(long_tasks),
             "long_task_max_ms": max(long_tasks) if long_tasks else 0,
             "long_task_total_ms": sum(long_tasks) if long_tasks else 0,
+            "console_error_classes": dict(sorted(self.console_error_classes.items())),
+            "platform_console_error_classes": dict(
+                sorted(self.platform_console_error_classes.items())
+            ),
         }
 
     def _on_console(self, message) -> None:
@@ -809,14 +816,18 @@ class BrowserObserver:
             location = message.location or {}
             location_url = location.get("url", "")
             text = self._message_text(message)
+            class_key = self._console_class(location_url, text)
             if self._is_cloudflare_platform_url(location_url) or self._mentions_cloudflare_platform(
                 text
             ):
                 self.platform_console_errors += 1
+                self.platform_console_error_classes[class_key] += 1
             elif self._is_same_origin(location_url):
                 self.console_errors += 1
+                self.console_error_classes[class_key] += 1
             else:
                 self.platform_console_errors += 1
+                self.platform_console_error_classes[class_key] += 1
 
     def _on_page_error(self, _error) -> None:
         self.page_errors += 1
@@ -880,6 +891,65 @@ class BrowserObserver:
         if callable(text):
             text = text()
         return str(text or "")
+
+    def _console_class(self, url: str, text: str) -> str:
+        return ":".join(
+            (
+                self._url_origin_class(url),
+                self._url_path_class(url),
+                self._message_marker_class(text),
+            )
+        )
+
+    def _url_origin_class(self, url: str) -> str:
+        if not url:
+            return "no-location"
+        if self._is_same_origin(url):
+            return "same-origin"
+        if self._is_cloudflare_platform_url(url):
+            return "cloudflare-platform-origin"
+        return "cross-origin"
+
+    def _url_path_class(self, url: str) -> str:
+        path = urlparse(url).path
+        if not path or path == "/":
+            return "document"
+        if path.startswith("/cdn-cgi/"):
+            return "cdn-cgi"
+        if path.endswith("/app.js"):
+            return "app-js"
+        if path.endswith("/graph-explorer.js"):
+            return "graph-explorer-js"
+        if "/vendor/" in path:
+            return "vendor-js"
+        if path.endswith((".js", ".mjs")):
+            return "script"
+        if path.endswith((".css", ".png", ".jpg", ".jpeg", ".svg", ".ico", ".webmanifest")):
+            return "static-asset"
+        return "other-path"
+
+    def _message_marker_class(self, text: str) -> str:
+        lowered = text.lower()
+        marker_groups = (
+            ("cloudflare", ("cloudflare", "cloudflareinsights", "cloudflareaccess")),
+            ("cdn-cgi", ("/cdn-cgi/",)),
+            ("blocked-client", ("err_blocked_by_client", "blocked by client")),
+            ("network-error", ("net::", "failed to load resource")),
+            ("http-status", ("status of 403", "status of 404", "status code")),
+            ("source-map", ("source map", "sourcemap")),
+            ("csp", ("content security policy", "refused to")),
+            ("mime", ("mime type",)),
+            ("cors", ("cors", "cross-origin")),
+            ("webgl", ("webgl",)),
+            ("sigma", ("sigma",)),
+            ("module", ("module", "import")),
+        )
+        matches = [
+            name
+            for name, markers in marker_groups
+            if any(item in lowered for item in markers)
+        ]
+        return "+".join(matches[:3]) if matches else "unmarked"
 
 
 def path_url(base_url: str, fragment: str) -> str:
