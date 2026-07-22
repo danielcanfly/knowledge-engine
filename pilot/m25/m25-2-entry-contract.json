@@ -1,0 +1,25 @@
+{
+  "schema_version": "knowledge-engine-m25-2-entry-contract/v1",
+  "status": "implementation_candidate",
+  "predecessor_status": "m25_1_architecture_freeze_accepted",
+  "entry_engine_sha": "8830a59d34dc0df9305b53f9bbb9eff63e03d225",
+  "source_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+  "m25_1_entry_baseline_sha256": "8bfee144b20286be95d32546932115bd8c6623d396db21715072a70054eefca1",
+  "m25_1_acceptance_sha256": "2bffa688f3f4fe62dd0ce7f15b395bad96d99e50f293b9c110b340a065b027e2",
+  "direct_reuse": ["src/knowledge_engine/intake_v1.py", "src/knowledge_engine/m21_resumable_batch.py", "src/knowledge_engine/storage.py"],
+  "authority": {
+    "immutable_intake_write_permitted": true,
+    "candidate_reference_write_permitted": true,
+    "live_extraction_permitted": false,
+    "source_mutation_permitted": false,
+    "foundation_mutation_permitted": false,
+    "release_mutation_permitted": false,
+    "production_pointer_mutation_permitted": false,
+    "qdrant_mutation_permitted": false,
+    "semantic_or_hybrid_enable_permitted": false,
+    "production_answer_serving_permitted": false,
+    "continuous_unbounded_queue_permitted": false
+  },
+  "next_status": "m25_2_intake_orchestrator_accepted"
+}
