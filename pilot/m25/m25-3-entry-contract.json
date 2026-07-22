@@ -1,0 +1,12 @@
+{
+  "engine_main_sha": "cc83a1e6bae1dce45fca50d3fdb515c26a70d0f9",
+  "entry_contract_sha256": "55d076179863834ce5113e2f6210fd9d3fed8af0ef8ff7ca9f7af1858195ea96",
+  "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+  "implementation_issue": 1043,
+  "predecessor_acceptance_git_blob_sha": "0319c935d130076dab47bf214f897db7701b39d3",
+  "predecessor_acceptance_path": "pilot/m25/m25-2-acceptance.json",
+  "predecessor_status": "m25_2_intake_orchestrator_accepted",
+  "schema_version": "knowledge-engine-m25-3-entry-contract/v1",
+  "source_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "stage_id": "M25.3"
+}

@@ -1,0 +1,35 @@
+{
+  "allowed_tags": [
+    "agents",
+    "evaluation",
+    "knowledge-systems",
+    "rag",
+    "governance",
+    "observability",
+    "reliability",
+    "security",
+    "build",
+    "design",
+    "operations",
+    "runtime",
+    "planning",
+    "retrieval",
+    "routing",
+    "verification"
+  ],
+  "candidate_policy_sha256": "2ddeeefaeba76ca1d418adb1c95b6c6b74c0fe15958c33dd58348958b7a6dd71",
+  "max_candidates": 100,
+  "max_candidates_per_input": 25,
+  "max_evidence_spans_per_candidate": 8,
+  "schema_version": "knowledge-engine-m25-candidate-policy/v1",
+  "supported_kinds": [
+    "alias",
+    "claim",
+    "concept",
+    "definition",
+    "duplicate_hint",
+    "entity",
+    "relation_hint",
+    "term"
+  ]
+}

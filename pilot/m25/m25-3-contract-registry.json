@@ -1,0 +1,21 @@
+{
+  "contract_registry_sha256": "d12a0921351e7b24656fea20d70a9b4da161bf1ccfd7285cab05b7ebe215fb78",
+  "contracts": {
+    "authority": "pilot/m25/m25-3-authority-envelope.json",
+    "candidate_policy": "pilot/m25/m25-3-candidate-policy.json",
+    "entry": "pilot/m25/m25-3-entry-contract.json",
+    "model_policy": "pilot/m25/m25-3-model-policy.json",
+    "prompt": "pilot/m25/m25-3-prompt-contract.json",
+    "provider_registry": "pilot/m25/m25-3-provider-registry.json"
+  },
+  "schema_version": "knowledge-engine-m25-3-contract-registry/v1",
+  "schemas": [
+    "schemas/m25-candidate-policy-v1.schema.json",
+    "schemas/m25-extraction-receipt-v1.schema.json",
+    "schemas/m25-model-policy-v1.schema.json",
+    "schemas/m25-prompt-contract-v1.schema.json",
+    "schemas/m25-provider-request-v1.schema.json",
+    "schemas/m25-provider-response-v1.schema.json",
+    "schemas/m25-recorded-response-set-v1.schema.json"
+  ]
+}
