@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path("scripts/m24_14_6_authenticated_benchmark.py").resolve()
+PERFORMANCE_TEST = Path("tests/test_m24_14_6_authenticated_performance.py").resolve()
 
 
 def load_benchmark_script():
@@ -21,6 +22,19 @@ def load_benchmark_script():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def authenticated_result_fixture():
+    spec = importlib.util.spec_from_file_location(
+        "m24_14_6_authenticated_performance_test_helpers",
+        PERFORMANCE_TEST,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module._authenticated_result()
 
 
 class FakeBrowser:
@@ -87,6 +101,11 @@ class FakeProcess:
 
     def kill(self) -> None:
         self.killed = True
+
+
+class BrokenSession:
+    def close(self) -> None:
+        raise RuntimeError("sensitive cleanup detail should be suppressed")
 
 
 def args(**overrides):
@@ -249,3 +268,30 @@ def test_dedicated_chrome_cdp_uses_loopback_temp_profile_and_closes_only_own_pro
     assert process.terminated is True
     assert process.killed is False
     assert not profile.exists()
+
+
+def test_collect_recomputed_fields_emits_repair_required_for_console_hard_gate() -> None:
+    module = load_benchmark_script()
+    result = authenticated_result_fixture()
+    result["cases"]["overview"]["cold_samples"][0]["resources"]["console_errors"] = 1
+
+    recomputed = module.collect_recomputed_fields(
+        result,
+        require_authenticated_iterations=True,
+    )
+
+    assert recomputed["decision"] == "repair_required"
+    assert "hard_gate:console_errors" in recomputed["reason_codes"]
+    assert recomputed["errors"]["console_errors"] == 1
+
+
+def test_cleanup_warning_does_not_raise_or_emit_sensitive_details(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = load_benchmark_script()
+
+    module.close_session_without_masking(BrokenSession())
+
+    captured = capsys.readouterr()
+    assert "warning: browser cleanup failed" in captured.err
+    assert "sensitive cleanup detail" not in captured.err

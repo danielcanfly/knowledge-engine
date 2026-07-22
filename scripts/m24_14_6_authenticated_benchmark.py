@@ -138,36 +138,37 @@ def main() -> int:
     try:
         with sync_playwright() as playwright:
             try:
-                session = launch_browser_session(playwright, args)
-            except PlaywrightError as exc:
-                message = friendly_playwright_error(exc)
-                raise SystemExit(f"browser launch failed: {message}") from exc
-            context = session.context
-            context.add_init_script(LONG_TASK_OBSERVER_SCRIPT)
-            if not args.local_regression:
-                page = context.new_page()
-                wait_for_authenticated_product(page, base_url, args.login_timeout_ms)
-                page.close()
-            result = run_benchmark(
-                context=context,
-                base_url=base_url,
-                authority=authority,
-                browser_name=session.browser_name,
-                browser_version=session.browser_version,
-                browser_mode=session.browser_mode,
-                browser_channel=session.browser_channel,
-                deployment_id=args.deployment_id,
-                cold_iterations=cold_iterations,
-                warm_iterations=warm_iterations,
-                viewport={"width": args.width, "height": args.height},
-            )
-            session.close()
-            session = None
+                try:
+                    session = launch_browser_session(playwright, args)
+                except PlaywrightError as exc:
+                    message = friendly_playwright_error(exc)
+                    raise SystemExit(f"browser launch failed: {message}") from exc
+                context = session.context
+                context.add_init_script(LONG_TASK_OBSERVER_SCRIPT)
+                if not args.local_regression:
+                    page = context.new_page()
+                    wait_for_authenticated_product(page, base_url, args.login_timeout_ms)
+                    page.close()
+                result = run_benchmark(
+                    context=context,
+                    base_url=base_url,
+                    authority=authority,
+                    browser_name=session.browser_name,
+                    browser_version=session.browser_version,
+                    browser_mode=session.browser_mode,
+                    browser_channel=session.browser_channel,
+                    deployment_id=args.deployment_id,
+                    cold_iterations=cold_iterations,
+                    warm_iterations=warm_iterations,
+                    viewport={"width": args.width, "height": args.height},
+                )
+            finally:
+                close_session_without_masking(session)
+                session = None
     except PlaywrightTimeoutError as exc:
         raise SystemExit(f"benchmark timeout before sanitized result was produced: {exc}") from exc
     finally:
-        if session is not None:
-            session.close()
+        close_session_without_masking(session)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -392,6 +393,19 @@ def close_dedicated_process(process: subprocess.Popen | None) -> None:
         process.wait(timeout=5)
 
 
+def close_session_without_masking(session: BrowserSession | None) -> None:
+    if session is None:
+        return
+    try:
+        session.close()
+    except Exception:
+        print(
+            "warning: browser cleanup failed after benchmark; no profile, endpoint, "
+            "process, cookie, or storage details were emitted",
+            file=sys.stderr,
+        )
+
+
 def friendly_playwright_error(exc: Exception) -> str:
     message = str(exc)
     if "Executable doesn't exist" in message or "Looks like Playwright" in message:
@@ -542,11 +556,12 @@ def run_benchmark(
     result["recomputed_aggregates"] = recomputed
     result["decision"] = recomputed["decision"]
     result["reason_codes"] = recomputed["reason_codes"]
-    recompute_benchmark_decision(
-        result,
-        expected_deployment_id=deployment_id,
-        require_authenticated_iterations=authority == "authenticated_live",
-    )
+    if result["decision"] == "pass":
+        recompute_benchmark_decision(
+            result,
+            expected_deployment_id=deployment_id,
+            require_authenticated_iterations=authority == "authenticated_live",
+        )
     return finalize_authenticated_benchmark_result(result)
 
 
@@ -579,6 +594,18 @@ def collect_recomputed_fields(
     resources = _recompute_resource_summary(cases, interactions, viewports)
     _enforce_resource_guardrails(resources, reason_codes)
     long_tasks = _recompute_long_tasks(cases, interactions, viewports)
+    hard_gates = benchmark_policy_payload()["hard_gates"]
+    if errors["console_errors"] > hard_gates["console_errors_max"]:
+        reason_codes.append("hard_gate:console_errors")
+    if errors["page_errors"] > hard_gates["page_errors_max"]:
+        reason_codes.append("hard_gate:page_errors")
+    if (
+        errors["failed_required_same_origin_requests"]
+        > hard_gates["failed_required_same_origin_requests_max"]
+    ):
+        reason_codes.append("hard_gate:failed_required_same_origin_requests")
+    if errors["access_leakage"] > hard_gates["access_leakage_max"]:
+        reason_codes.append("hard_gate:access_leakage")
     decision = "repair_required" if reason_codes else "pass"
     return {
         "cases": recomputed_cases,
