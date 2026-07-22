@@ -485,15 +485,17 @@ def measure_viewports(context, base_url: str) -> dict[str, Any]:
         try:
             navigate(page, base_url, f"#/graph?concept={HARNESS_CONCEPT}")
             page.wait_for_selector("[data-sigma-stage][data-state='ready']", timeout=15_000)
-            page.locator("[data-graph-details] button", has_text="View sources").first.click()
-            wait_ready(page)
+            page.locator("[data-graph-neighbor='1']").click()
+            page.locator("[data-graph-neighbor='2']").click()
+            navigate(page, base_url, f"#/sources?viewer={FULL_SOURCE_VIEWER}")
+            page.wait_for_selector("[data-source-detail]", timeout=10_000)
             layout = source_layout(page)
             results[f"{width}x{height}"] = {
                 "status": "pass",
                 "horizontal_overflow": layout["scroll_overflow"],
                 "metadata_intersection": layout["metadata_intersection"],
                 "metadata_value_overflow": layout["metadata_value_overflow"],
-                "traversal": "graph_to_sources",
+                "traversal": "graph_hops_then_exact_source_detail",
                 "resources": observer.resources(page),
             }
         finally:
