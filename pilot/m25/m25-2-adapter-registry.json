@@ -1,0 +1,45 @@
+{
+  "adapters": [
+    {
+      "adapter_id": "m25_adapter_intake_v1_local_markdown",
+      "adapter_sha256": "4363504428d07ca82045382e02ba8587c6963194ff4c92e64590e8eb29252252",
+      "adapter_version": "1.0.0",
+      "classification": "adapter",
+      "hidden_io_permitted": false,
+      "may_read": ["explicit allowed_root local Markdown files"],
+      "may_write": ["intake/v1/*", "admission/v1/*"],
+      "must_not_write": ["knowledge-source/*", "channels/production.json", "production/*"],
+      "pinned_repositories": {
+        "engine_sha": "8830a59d34dc0df9305b53f9bbb9eff63e03d225",
+        "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+        "source_sha": "acf78596ace8a7366688ccef72b507204d09d9f9"
+      },
+      "schema_version": "knowledge-engine-m25-adapter-envelope/v1",
+      "source_contract": "local-file/1.0.0 -> intake/v1",
+      "target_contract": "knowledge-engine-m25-normalized-output/v1"
+    },
+    {
+      "adapter_id": "m25_adapter_intake_v1_existing_ref",
+      "adapter_sha256": "e2813fc1b11f38dc32498831d9f8d475a6da133e7b85cc853533a18b0e7f9c8b",
+      "adapter_version": "1.0.0",
+      "classification": "direct_reuse",
+      "hidden_io_permitted": false,
+      "may_read": ["explicit intake/v1 object keys"],
+      "may_write": ["admission/v1/*"],
+      "must_not_write": ["intake/v1/raw/*", "knowledge-source/*", "channels/production.json"],
+      "pinned_repositories": {
+        "engine_sha": "8830a59d34dc0df9305b53f9bbb9eff63e03d225",
+        "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+        "source_sha": "acf78596ace8a7366688ccef72b507204d09d9f9"
+      },
+      "schema_version": "knowledge-engine-m25-adapter-envelope/v1",
+      "source_contract": "accepted intake/v1 artifact references",
+      "target_contract": "knowledge-engine-m25-normalized-output/v1"
+    }
+  ],
+  "approved_adapter_count": 2,
+  "authority": "candidate_only",
+  "entry_engine_sha": "8830a59d34dc0df9305b53f9bbb9eff63e03d225",
+  "registry_sha256": "10518396917355a2b8fb65701a4244df9b76dcd119fe8a9a87894019f21a6675",
+  "schema_version": "knowledge-engine-m25-adapter-registry/v1"
+}

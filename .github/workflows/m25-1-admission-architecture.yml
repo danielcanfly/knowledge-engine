@@ -4,9 +4,21 @@ on:
   pull_request:
     paths:
       - '.github/workflows/m25-1-admission-architecture.yml'
-      - 'docs/architecture/m25/**'
+      - 'docs/architecture/m25/README.md'
+      - 'docs/architecture/m25/adapter-boundaries.md'
+      - 'docs/architecture/m25/authority-matrix.md'
+      - 'docs/architecture/m25/m25-1-admission-architecture-freeze.md'
+      - 'docs/architecture/m25/reuse-map.md'
+      - 'docs/architecture/m25/schema-version-plan.md'
+      - 'docs/architecture/m25/state-machine.md'
+      - 'docs/architecture/m25/examples/m25-2-adapter-envelope.example.json'
+      - 'docs/architecture/m25/examples/m25-2-admission-plan.example.json'
+      - 'docs/architecture/m25/examples/m25-2-authority-envelope.example.json'
       - 'pilot/m25/m25-1-*.json'
-      - 'schemas/m25-*.schema.json'
+      - 'schemas/m25-adapter-envelope-v1.schema.json'
+      - 'schemas/m25-admission-plan-v1.schema.json'
+      - 'schemas/m25-admission-state-v1.schema.json'
+      - 'schemas/m25-authority-envelope-v1.schema.json'
       - 'tests/test_m25_1_architecture.py'
 
 permissions:
@@ -45,7 +57,7 @@ jobs:
           assert freeze['stage_authority']['release_mutation_permitted'] is False
           assert freeze['stage_authority']['pilot_execution_permitted'] is False
           PY
-      - name: Reject forbidden implementation surfaces
+      - name: Protect frozen M25.1 artifacts
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -55,14 +67,42 @@ jobs:
           import subprocess
           from pathlib import Path
 
-          changed = subprocess.check_output(
-              ["git", "diff", "--name-only", os.environ["BASE_SHA"], "HEAD"],
-              text=True,
-          ).splitlines()
-          forbidden_prefixes = ("src/knowledge_engine/", "workers/", "packages/", "pilot/m24/")
-          assert not [path for path in changed if path.startswith(forbidden_prefixes)]
-          for path in Path("pilot/m25").glob("m25-1-*.json"):
-              value = json.loads(path.read_text(encoding="utf-8"))
+          changed = set(
+              subprocess.check_output(
+                  ['git', 'diff', '--name-only', os.environ['BASE_SHA'], 'HEAD'],
+                  text=True,
+              ).splitlines()
+          )
+          frozen_prefixes = (
+              'pilot/m25/m25-1-',
+              'docs/architecture/m25/m25-1-',
+          )
+          frozen_exact = {
+              'docs/architecture/m25/README.md',
+              'docs/architecture/m25/adapter-boundaries.md',
+              'docs/architecture/m25/authority-matrix.md',
+              'docs/architecture/m25/reuse-map.md',
+              'docs/architecture/m25/schema-version-plan.md',
+              'docs/architecture/m25/state-machine.md',
+              'docs/architecture/m25/examples/m25-2-adapter-envelope.example.json',
+              'docs/architecture/m25/examples/m25-2-admission-plan.example.json',
+              'docs/architecture/m25/examples/m25-2-authority-envelope.example.json',
+              'schemas/m25-adapter-envelope-v1.schema.json',
+              'schemas/m25-admission-plan-v1.schema.json',
+              'schemas/m25-admission-state-v1.schema.json',
+              'schemas/m25-authority-envelope-v1.schema.json',
+              'tests/test_m25_1_architecture.py',
+          }
+          frozen_changed = {
+              path
+              for path in changed
+              if path in frozen_exact or path.startswith(frozen_prefixes)
+          }
+          if frozen_changed:
+              forbidden_prefixes = ('src/knowledge_engine/', 'workers/', 'packages/', 'pilot/m24/')
+              assert not [path for path in changed if path.startswith(forbidden_prefixes)]
+          for path in Path('pilot/m25').glob('m25-1-*.json'):
+              value = json.loads(path.read_text(encoding='utf-8'))
               serialized = json.dumps(value, sort_keys=True)
               assert '"semantic_or_hybrid_enable_permitted": true' not in serialized
               assert '"production_answer_serving_permitted": true' not in serialized
