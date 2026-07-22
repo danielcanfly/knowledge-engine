@@ -7,6 +7,10 @@ on:
     paths:
       - '.github/workflows/m25-3-bootstrap.yml'
       - 'scripts/m25_3_materialize.py'
+  pull_request:
+    paths:
+      - '.github/workflows/m25-3-bootstrap.yml'
+      - 'scripts/m25_3_materialize.py'
 
 permissions:
   contents: write
