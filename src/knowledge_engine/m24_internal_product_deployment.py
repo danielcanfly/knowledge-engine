@@ -11,6 +11,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from .m24_14_6_authenticated_performance import (
+    FINAL_ACCEPTANCE_PATH,
     build_m24_14_6_pending_acceptance_report,
 )
 from .m24_product_surface_integration import (
@@ -1358,7 +1359,7 @@ const ARTIFACTS = {{
   sourceDocuments: "data/source-documents.json",
   answers: "data/query-answer-acceptance.json",
   obsidian: "data/obsidian-export-manifest.json",
-  acceptance: "data/m24-14-6-pending-acceptance.json",
+  acceptance: "data/m24-14-6-final-acceptance.json",
 }};
 
 const ROUTES = {{
@@ -1422,7 +1423,8 @@ async function loadJson(path) {{
 }}
 
 function releaseOf(payload) {{
-  return payload && typeof payload === "object" ? payload.release_id : null;
+  if (!payload || typeof payload !== "object") return null;
+  return payload.release_id || payload.exact_identities?.release_id || null;
 }}
 
 function validateIdentity(artifacts) {{
@@ -2308,30 +2310,50 @@ function renderObsidian(artifacts) {{
 function renderAcceptance(artifacts) {{
   const acceptance = artifacts.acceptance;
   const action = (acceptance.daniel_actions || [])[0] || {{}};
+  const identities = acceptance.exact_identities || acceptance;
+  const retrieval = acceptance.boundaries?.production_retrieval || identities.production_retrieval;
+  const finalAccepted = acceptance.m24_14_6_closed ?? acceptance.final_acceptance_claimed;
+  const policy = acceptance.benchmark_policy || {{}};
+  const result = acceptance.validated_benchmark_result || {{}};
+  const completeStatus =
+    "m24_14_6_authenticated_performance_and_final_acceptance_complete";
+  const isComplete = acceptance.status === completeStatus;
+  const completeMessage =
+    "Authenticated performance evidence passed against Daniel's Access-gated browser session.";
+  const pendingMessage =
+    "Authenticated performance evidence is pending Daniel's browser session.";
+  const completeSummary =
+    "M24.14.6 is closed for the protected internal product baseline. " +
+    "Production semantic and hybrid retrieval remain governed deferred.";
+  const pendingSummary = action.return_artifact || "Return the sanitized benchmark JSON.";
+  const policyDigest = policy.sha256 || acceptance.benchmark_policy_sha256;
+  const casesDigest = policy.cases_sha256 || acceptance.benchmark_cases_sha256;
   return `
     <div class="metric-grid">
       ${{metric("Stage", acceptance.status)}}
-      ${{metric("Daniel actions", acceptance.daniel_action_count)}}
-      ${{metric("Retrieval", acceptance.boundaries.production_retrieval)}}
-      ${{metric("Final acceptance", String(acceptance.final_acceptance_claimed))}}
+      ${{metric("Decision", result.decision || "pending")}}
+      ${{metric("Retrieval", retrieval)}}
+      ${{metric("Final acceptance", String(finalAccepted))}}
     </div>
     <section class="panel">
       <h3>M24.14.6 gate</h3>
       <p>
-        Authenticated performance evidence is pending Daniel's browser session.
-        Local and CI regressions only prove harness and surface behavior.
+        ${{isComplete ? completeMessage : pendingMessage}}
       </p>
       <ul class="compact-meta vertical">
-        <li>release ${{escapeHtml(acceptance.release_id)}}</li>
-        <li>manifest ${{escapeHtml(acceptance.manifest_sha256)}}</li>
-        <li>benchmark policy ${{escapeHtml(acceptance.benchmark_policy_sha256)}}</li>
-        <li>benchmark cases ${{escapeHtml(acceptance.benchmark_cases_sha256)}}</li>
+        <li>release ${{escapeHtml(identities.release_id)}}</li>
+        <li>manifest ${{escapeHtml(identities.manifest_sha256)}}</li>
+        <li>benchmark policy ${{escapeHtml(policyDigest)}}</li>
+        <li>benchmark cases ${{escapeHtml(casesDigest)}}</li>
+        <li>result ${{escapeHtml(result.self_sha256 || "pending")}}</li>
       </ul>
     </section>
     <section class="panel">
-      <h3>Daniel action</h3>
-      <p>${{escapeHtml(action.return_artifact || "Return the sanitized benchmark JSON.")}}</p>
-      <pre class="source-document-body"><code>${{escapeHtml(action.command || "")}}</code></pre>
+      <h3>${{isComplete ? "M25 baseline" : "Daniel action"}}</h3>
+      <p>${{escapeHtml(isComplete ? completeSummary : pendingSummary)}}</p>
+      <pre class="source-document-body"><code>${{escapeHtml(isComplete
+        ? acceptance.m25_entry_baseline_path || ""
+        : action.command || "")}}</code></pre>
     </section>
   `;
 }}
@@ -2682,7 +2704,11 @@ def build_p6_internal_product_deployment(
         SOURCE_DOCUMENT_AGGREGATE_PATH.read_text(encoding="utf-8")
     )
     obsidian, obsidian_zip = _obsidian_manifest_payload(site_root=site_root)
-    acceptance = build_m24_14_6_pending_acceptance_report()
+    acceptance = (
+        json.loads(FINAL_ACCEPTANCE_PATH.read_text(encoding="utf-8"))
+        if FINAL_ACCEPTANCE_PATH.exists()
+        else build_m24_14_6_pending_acceptance_report()
+    )
     data_payloads: list[tuple[str, Any]] = [
         ("data/concept-wiki-harness.json", concept.model_dump(mode="json")),
         ("data/search-harness.json", search.model_dump(mode="json")),
@@ -2693,7 +2719,7 @@ def build_p6_internal_product_deployment(
         ("data/query-answer-acceptance.json", answers.model_dump(mode="json")),
         ("data/release-viewer.json", release),
         ("data/obsidian-export-manifest.json", obsidian),
-        ("data/m24-14-6-pending-acceptance.json", acceptance),
+        ("data/m24-14-6-final-acceptance.json", acceptance),
     ]
     for source_payload_path in sorted(SOURCE_DOCUMENT_PAYLOAD_ROOT.glob("*.json")):
         data_payloads.append(
@@ -2767,9 +2793,9 @@ def build_p6_internal_product_deployment(
         ),
         _surface(
             surface="m24_14_6_acceptance",
-            path="site/data/m24-14-6-pending-acceptance.json",
+            path="site/data/m24-14-6-final-acceptance.json",
             payload=acceptance,
-            fallback="pending_acceptance_report_unavailable",
+            fallback="final_acceptance_report_unavailable",
         ),
     ]
     report = P6InternalDeploymentReport(

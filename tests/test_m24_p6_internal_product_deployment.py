@@ -68,7 +68,7 @@ def test_m24_p6_artifact_manifest_matches_committed_site_bytes() -> None:
     assert "pilot/m24/internal-product-deployment/site/data/source-index.json" in artifact_paths
     assert "pilot/m24/internal-product-deployment/site/data/source-documents.json" in artifact_paths
     assert (
-        "pilot/m24/internal-product-deployment/site/data/m24-14-6-pending-acceptance.json"
+        "pilot/m24/internal-product-deployment/site/data/m24-14-6-final-acceptance.json"
         in artifact_paths
     )
     for artifact in report.artifacts:

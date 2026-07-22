@@ -1,0 +1,37 @@
+{
+  "authenticated_performance_decision": "pass",
+  "daniel_acceptance_recorded": true,
+  "deployment_id": "e73c3563-01eb-4c37-b2a6-500e2b86b87c",
+  "engine_main_sha": "recorded_in_git",
+  "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+  "hybrid_retrieval_enabled": false,
+  "large_scale_ingestion_enabled": false,
+  "m24_14_6_closed": true,
+  "m25_allowed_next": [
+    "production_admission_pipeline",
+    "semantic_promotion_decision_before_production_semantic_or_hybrid_retrieval",
+    "large_scale_ingestion_planning"
+  ],
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "production_retrieval": "lexical",
+  "protected_mutations": {
+    "cloudflare_access_population_broadened": false,
+    "foundation_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "large_scale_ingestion_enabled": false,
+    "production_answer_serving_enabled": false,
+    "production_pointer_mutation": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "semantic_serving_enabled": false,
+    "service_token_bypass_used": false,
+    "source_mutation": false,
+    "temporary_public_bypass_used": false
+  },
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-14-6-m25-entry-baseline/v1",
+  "self_sha256": "3892a5372f682e685c12509867c03ce078128e8a585866d1db6c16d840f6983d",
+  "semantic_serving_enabled": false,
+  "source_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+  "vault_sha256": "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
+}

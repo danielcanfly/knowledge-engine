@@ -1,0 +1,202 @@
+{
+  "benchmark_policy": {
+    "cases_path": "pilot/m24/m24-14-6/benchmark-cases.json",
+    "cases_sha256": "b8e698d7b53519db60515ea747d940ae777cc65d5c9c15e6e2d76ba70b2c7cd7",
+    "path": "pilot/m24/m24-14-6/benchmark-policy.json",
+    "sha256": "9f80c7bc17444e87f3fdb491f51a80f5c553713005c2863d4daff6e32491cf75"
+  },
+  "deployment_and_rollback": {
+    "accepted_deployment_id": "e73c3563-01eb-4c37-b2a6-500e2b86b87c",
+    "pages_project": "llm-wiki-m24-internal",
+    "protected_custom_hostname": "https://m24-internal.danielcanfly.com/",
+    "rollback_deployments": [
+      "b570b0c7-a812-4878-8573-e7b7d41faf78",
+      "586deae3-d679-45e2-8542-ec6845f9f2e7"
+    ]
+  },
+  "engine_main_sha": "recorded_in_git",
+  "exact_identities": {
+    "deployment_id": "e73c3563-01eb-4c37-b2a6-500e2b86b87c",
+    "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+    "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+    "production_retrieval": "lexical",
+    "release_id": "20260720T160000Z-46137c97263e",
+    "source_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+    "vault_sha256": "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
+  },
+  "final_acceptance_matrix": {
+    "authenticated_live_performance": "pass",
+    "daniel_browser_acceptance": "recorded_from_prior_explicit_acceptance",
+    "independent_clean_room_replay": "not_run",
+    "independent_human_unseen_source_exercise": "governed_deferred_to_m25",
+    "internal_product_baseline": "accepted",
+    "large_scale_ingestion": "governed_deferred_to_m25",
+    "production_answer_serving": "governed_deferred",
+    "semantic_hybrid_production": "governed_deferred"
+  },
+  "hard_gate_outcome": {
+    "access_leakage": 0,
+    "console_errors": 0,
+    "failed_required_same_origin_requests": 0,
+    "page_errors": 0,
+    "passed": true,
+    "runtime_third_party_cdn_requests": 0
+  },
+  "issue_number": 1030,
+  "known_limitations_and_governed_defers": [
+    {
+      "item": "production_semantic_hybrid_retrieval",
+      "reason": "M24.14.6 closes the protected internal product baseline only.",
+      "status": "governed_deferred"
+    },
+    {
+      "item": "production_answer_serving",
+      "reason": "Production answer serving remains outside M24.14.6 authority.",
+      "status": "governed_deferred"
+    },
+    {
+      "item": "large_scale_ingestion",
+      "reason": "M25 owns production admission and larger ingestion work.",
+      "status": "governed_deferred_to_m25"
+    },
+    {
+      "item": "independent_human_unseen_source_exercise",
+      "reason": "No separate human operator exercise was performed in M24.14.6.",
+      "status": "governed_deferred_to_m25"
+    }
+  ],
+  "m24_14_6_closed": true,
+  "m25_entry_baseline_path": "pilot/m24/m24-14-6/m25-entry-baseline.json",
+  "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+  "protected_mutations": {
+    "cloudflare_access_population_broadened": false,
+    "foundation_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "large_scale_ingestion_enabled": false,
+    "production_answer_serving_enabled": false,
+    "production_pointer_mutation": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "semantic_serving_enabled": false,
+    "service_token_bypass_used": false,
+    "source_mutation": false,
+    "temporary_public_bypass_used": false
+  },
+  "recomputed_metrics": {
+    "cases": {
+      "concept_wiki_bounded": {
+        "cold_p50_ms": 1493.09,
+        "cold_p95_ms": 1894.91,
+        "warm_p95_ms": 1020.4
+      },
+      "concept_wiki_full": {
+        "cold_p50_ms": 1090.87,
+        "cold_p95_ms": 1409.98,
+        "warm_p95_ms": 1246.79
+      },
+      "lexical_search": {
+        "cold_p50_ms": 1098.99,
+        "cold_p95_ms": 2431.83,
+        "warm_p95_ms": 1094.09
+      },
+      "obsidian_vault": {
+        "cold_p50_ms": 2066.03,
+        "cold_p95_ms": 3684.93,
+        "warm_p95_ms": 1446.21
+      },
+      "overview": {
+        "cold_p50_ms": 1165.74,
+        "cold_p95_ms": 1213.48,
+        "warm_p95_ms": 1061.55
+      },
+      "release_identity": {
+        "cold_p50_ms": 984.8,
+        "cold_p95_ms": 1721.06,
+        "warm_p95_ms": 1041.92
+      },
+      "sigma_graph": {
+        "cold_p50_ms": 1789.59,
+        "cold_p95_ms": 1971.8,
+        "warm_p95_ms": 1709.53
+      },
+      "source_full_markdown": {
+        "cold_p50_ms": 1564.29,
+        "cold_p95_ms": 1944.69,
+        "warm_p95_ms": 1170.23
+      },
+      "source_m3_metadata_only": {
+        "cold_p50_ms": 1774.65,
+        "cold_p95_ms": 2481.89,
+        "warm_p95_ms": 1016.89
+      },
+      "source_reverse_link": {
+        "cold_p50_ms": 1153.16,
+        "cold_p95_ms": 1953.96,
+        "warm_p95_ms": 612.1
+      },
+      "source_structured_json": {
+        "cold_p50_ms": 2077.48,
+        "cold_p95_ms": 2868.6,
+        "warm_p95_ms": 1143.07
+      }
+    },
+    "errors": {
+      "access_leakage": 0,
+      "console_errors": 0,
+      "failed_required_same_origin_requests": 0,
+      "page_errors": 0
+    },
+    "interactions": {
+      "lexical_search": {
+        "search": {
+          "warm_p95_ms": 66.69
+        }
+      },
+      "sigma_graph": {
+        "one_hop": {
+          "warm_p95_ms": 82.76
+        },
+        "open_wiki": {
+          "warm_p95_ms": 51.25
+        },
+        "result_selection": {
+          "warm_p95_ms": 42.52
+        },
+        "search": {
+          "warm_p95_ms": 12.2
+        },
+        "two_hop": {
+          "warm_p95_ms": 84.77
+        },
+        "view_sources": {
+          "warm_p95_ms": 59.01
+        }
+      }
+    },
+    "long_tasks": {
+      "count": 53,
+      "max_ms": 59,
+      "total_ms": 2796
+    },
+    "resources": {
+      "cold_traversal_transfer_bytes": 5550,
+      "platform_console_errors": 1676,
+      "platform_third_party_request_count": 419,
+      "runtime_third_party_cdn_requests": 0,
+      "same_origin_request_count": 7342,
+      "same_origin_transfer_bytes": 41662
+    }
+  },
+  "release_id": "20260720T160000Z-46137c97263e",
+  "schema_version": "knowledge-engine-m24-14-6-final-acceptance/v1",
+  "self_sha256": "074e7d2e721c43dd598871c761b132ca5da3805a89e59d1b5bf8eaa0d6973d2d",
+  "status": "m24_14_6_authenticated_performance_and_final_acceptance_complete",
+  "validated_benchmark_result": {
+    "authority": "authenticated_live",
+    "decision": "pass",
+    "file_sha256": "3af8c6debadf8bc896952c4b9e48497a7de6971ccad489b40ae8ea23c5440c45",
+    "generated_at_utc": "2026-07-22T11:05:20Z",
+    "reason_codes": [],
+    "self_sha256": "6fe285a4b684a61ec6c0d2b05db74d2a3afebf742dfb5e8d4c4800c0d475fe4f"
+  }
+}

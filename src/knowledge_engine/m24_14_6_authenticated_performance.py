@@ -22,6 +22,8 @@ M24_14_6_ACCEPTANCE_MATRIX_SCHEMA = "knowledge-engine-m24-14-6-acceptance-matrix
 M24_14_6_HUMAN_ACCEPTANCE_SCHEMA = "knowledge-engine-m24-14-6-human-acceptance-record/v1"
 M24_14_6_PENDING_ACCEPTANCE_SCHEMA = "knowledge-engine-m24-14-6-pending-final-acceptance/v1"
 M24_14_6_AUTHENTICATED_RESULT_SCHEMA = "knowledge-engine-m24-14-6-authenticated-benchmark-result/v1"
+M24_14_6_FINAL_ACCEPTANCE_SCHEMA = "knowledge-engine-m24-14-6-final-acceptance/v1"
+M24_14_6_M25_ENTRY_BASELINE_SCHEMA = "knowledge-engine-m24-14-6-m25-entry-baseline/v1"
 
 M24_14_6_STATUS = (
     "m24_14_6_system_chrome_auth_compatibility_repaired_pending_daniel_authenticated_benchmark"
@@ -33,6 +35,7 @@ M24_14_6_ACCEPTED_VAULT_SHA256 = "054f2a349c173d62de0d2e7b575fbb97a46611ac435653
 M24_14_6_PRE_STAGE_A_PROTECTED_DEPLOYMENT = "5361997c-fe53-47a5-998e-81244a6470ab"
 M24_14_6_IMMEDIATE_ROLLBACK_DEPLOYMENT = "b570b0c7-a812-4878-8573-e7b7d41faf78"
 M24_14_6_SECONDARY_ROLLBACK_DEPLOYMENT = "586deae3-d679-45e2-8542-ec6845f9f2e7"
+M24_14_6_ACCEPTED_DEPLOYMENT = "e73c3563-01eb-4c37-b2a6-500e2b86b87c"
 M24_14_6_PAGES_PROJECT = "llm-wiki-m24-internal"
 M24_14_6_CUSTOM_HOSTNAME = "https://m24-internal.danielcanfly.com/"
 M24_14_6_DANIEL_COMMAND = (
@@ -47,6 +50,8 @@ BENCHMARK_POLICY_PATH = M24_14_6_ROOT / "benchmark-policy.json"
 BENCHMARK_CASES_PATH = M24_14_6_ROOT / "benchmark-cases.json"
 HUMAN_ACCEPTANCE_PATH = M24_14_6_ROOT / "m24-14-5-human-acceptance.json"
 PENDING_ACCEPTANCE_PATH = M24_14_6_ROOT / "m24-14-6-pending-acceptance.json"
+FINAL_ACCEPTANCE_PATH = M24_14_6_ROOT / "m24-14-6-final-acceptance.json"
+M25_ENTRY_BASELINE_PATH = M24_14_6_ROOT / "m25-entry-baseline.json"
 
 BENCHMARK_CASE_IDS = (
     "overview",
@@ -431,6 +436,201 @@ def write_m24_14_6_stage_a_artifacts() -> list[M24_14_6Artifact]:
             )
         )
     return artifacts
+
+
+def build_m24_14_6_final_acceptance_report(
+    benchmark_result: Mapping[str, Any],
+    *,
+    output_path: Path = FINAL_ACCEPTANCE_PATH,
+    benchmark_result_file_sha256: str | None = None,
+    engine_main_sha: str | None = None,
+) -> dict[str, Any]:
+    result = validate_authenticated_benchmark_result(
+        benchmark_result,
+        expected_deployment_id=M24_14_6_ACCEPTED_DEPLOYMENT,
+    )
+    recomputed = _require_mapping(result["recomputed_aggregates"], "recomputed_aggregates")
+    payload = {
+        "schema_version": M24_14_6_FINAL_ACCEPTANCE_SCHEMA,
+        "status": "m24_14_6_authenticated_performance_and_final_acceptance_complete",
+        "m24_14_6_closed": result["decision"] in {
+            "pass",
+            "pass_with_documented_network_variance",
+        },
+        "issue_number": M24_14_6_ISSUE_NUMBER,
+        "release_id": CANONICAL_RELEASE_ID,
+        "manifest_sha256": CANONICAL_MANIFEST_SHA256,
+        "engine_main_sha": engine_main_sha or "recorded_in_git",
+        "validated_benchmark_result": {
+            "authority": result["authority"],
+            "decision": result["decision"],
+            "reason_codes": result["reason_codes"],
+            "self_sha256": result["self_sha256"],
+            "file_sha256": benchmark_result_file_sha256 or "external_artifact",
+            "generated_at_utc": result["generated_at_utc"],
+        },
+        "exact_identities": {
+            "deployment_id": result["deployment_id"],
+            "release_id": CANONICAL_RELEASE_ID,
+            "manifest_sha256": CANONICAL_MANIFEST_SHA256,
+            "source_sha": CANONICAL_SOURCE_SHA,
+            "foundation_sha": M24_14_6_FOUNDATION_SHA,
+            "vault_sha256": M24_14_6_ACCEPTED_VAULT_SHA256,
+            "production_retrieval": "lexical",
+        },
+        "deployment_and_rollback": {
+            "pages_project": M24_14_6_PAGES_PROJECT,
+            "protected_custom_hostname": M24_14_6_CUSTOM_HOSTNAME,
+            "accepted_deployment_id": result["deployment_id"],
+            "rollback_deployments": [
+                M24_14_6_IMMEDIATE_ROLLBACK_DEPLOYMENT,
+                M24_14_6_SECONDARY_ROLLBACK_DEPLOYMENT,
+            ],
+        },
+        "benchmark_policy": {
+            "path": BENCHMARK_POLICY_PATH.as_posix(),
+            "sha256": benchmark_policy_sha256(),
+            "cases_path": BENCHMARK_CASES_PATH.as_posix(),
+            "cases_sha256": benchmark_cases_sha256(),
+        },
+        "recomputed_metrics": {
+            "cases": recomputed["cases"],
+            "interactions": recomputed["interactions"],
+            "errors": recomputed["errors"],
+            "resources": recomputed["resources"],
+            "long_tasks": recomputed["long_tasks"],
+        },
+        "hard_gate_outcome": {
+            "console_errors": result["errors"]["console_errors"],
+            "page_errors": result["errors"]["page_errors"],
+            "failed_required_same_origin_requests": result["errors"][
+                "failed_required_same_origin_requests"
+            ],
+            "access_leakage": result["errors"]["access_leakage"],
+            "runtime_third_party_cdn_requests": result["resource_summary"][
+                "runtime_third_party_cdn_requests"
+            ],
+            "passed": result["decision"] in {"pass", "pass_with_documented_network_variance"},
+        },
+        "final_acceptance_matrix": {
+            "daniel_browser_acceptance": "recorded_from_prior_explicit_acceptance",
+            "authenticated_live_performance": result["decision"],
+            "internal_product_baseline": "accepted",
+            "independent_clean_room_replay": "not_run",
+            "independent_human_unseen_source_exercise": "governed_deferred_to_m25",
+            "semantic_hybrid_production": "governed_deferred",
+            "production_answer_serving": "governed_deferred",
+            "large_scale_ingestion": "governed_deferred_to_m25",
+        },
+        "known_limitations_and_governed_defers": [
+            {
+                "item": "production_semantic_hybrid_retrieval",
+                "status": "governed_deferred",
+                "reason": "M24.14.6 closes the protected internal product baseline only.",
+            },
+            {
+                "item": "production_answer_serving",
+                "status": "governed_deferred",
+                "reason": "Production answer serving remains outside M24.14.6 authority.",
+            },
+            {
+                "item": "large_scale_ingestion",
+                "status": "governed_deferred_to_m25",
+                "reason": "M25 owns production admission and larger ingestion work.",
+            },
+            {
+                "item": "independent_human_unseen_source_exercise",
+                "status": "governed_deferred_to_m25",
+                "reason": "No separate human operator exercise was performed in M24.14.6.",
+            },
+        ],
+        "protected_mutations": _m24_14_6_protected_mutations_payload(),
+        "m25_entry_baseline_path": M25_ENTRY_BASELINE_PATH.as_posix(),
+    }
+    payload["self_sha256"] = canonical_sha256(payload)
+    _write_json(output_path, payload)
+    return payload
+
+
+def build_m24_14_6_m25_entry_baseline(
+    final_acceptance_report: Mapping[str, Any],
+    *,
+    output_path: Path = M25_ENTRY_BASELINE_PATH,
+) -> dict[str, Any]:
+    report = _require_mapping(final_acceptance_report, "final_acceptance_report")
+    if report.get("status") != "m24_14_6_authenticated_performance_and_final_acceptance_complete":
+        raise M24_14_6ValidationError("final acceptance report is not complete")
+    identities = _require_mapping(report.get("exact_identities"), "exact_identities")
+    payload = {
+        "schema_version": M24_14_6_M25_ENTRY_BASELINE_SCHEMA,
+        "m24_14_6_closed": True,
+        "daniel_acceptance_recorded": True,
+        "authenticated_performance_decision": report["validated_benchmark_result"]["decision"],
+        "engine_main_sha": report["engine_main_sha"],
+        "deployment_id": identities["deployment_id"],
+        "release_id": identities["release_id"],
+        "manifest_sha256": identities["manifest_sha256"],
+        "source_sha": identities["source_sha"],
+        "foundation_sha": identities["foundation_sha"],
+        "vault_sha256": identities["vault_sha256"],
+        "production_retrieval": "lexical",
+        "semantic_serving_enabled": False,
+        "hybrid_retrieval_enabled": False,
+        "large_scale_ingestion_enabled": False,
+        "protected_mutations": _m24_14_6_protected_mutations_payload(),
+        "m25_allowed_next": [
+            "production_admission_pipeline",
+            "semantic_promotion_decision_before_production_semantic_or_hybrid_retrieval",
+            "large_scale_ingestion_planning",
+        ],
+    }
+    payload["self_sha256"] = canonical_sha256(payload)
+    _write_json(output_path, payload)
+    return payload
+
+
+def write_m24_14_6_stage_b_artifacts(
+    benchmark_result: Mapping[str, Any],
+    *,
+    benchmark_result_file_sha256: str | None = None,
+    engine_main_sha: str | None = None,
+    final_acceptance_path: Path = FINAL_ACCEPTANCE_PATH,
+    m25_entry_baseline_path: Path = M25_ENTRY_BASELINE_PATH,
+) -> list[M24_14_6Artifact]:
+    final_report = build_m24_14_6_final_acceptance_report(
+        benchmark_result,
+        benchmark_result_file_sha256=benchmark_result_file_sha256,
+        engine_main_sha=engine_main_sha,
+        output_path=final_acceptance_path,
+    )
+    build_m24_14_6_m25_entry_baseline(final_report, output_path=m25_entry_baseline_path)
+    return [
+        M24_14_6Artifact(
+            path=final_acceptance_path.as_posix(),
+            sha256=hashlib.sha256(final_acceptance_path.read_bytes()).hexdigest(),
+        ),
+        M24_14_6Artifact(
+            path=m25_entry_baseline_path.as_posix(),
+            sha256=hashlib.sha256(m25_entry_baseline_path.read_bytes()).hexdigest(),
+        ),
+    ]
+
+
+def _m24_14_6_protected_mutations_payload() -> dict[str, bool]:
+    return {
+        "source_mutation": False,
+        "foundation_mutation": False,
+        "qdrant_mutation": False,
+        "r2_production_mutation": False,
+        "production_pointer_mutation": False,
+        "semantic_serving_enabled": False,
+        "hybrid_retrieval_enabled": False,
+        "production_answer_serving_enabled": False,
+        "large_scale_ingestion_enabled": False,
+        "cloudflare_access_population_broadened": False,
+        "temporary_public_bypass_used": False,
+        "service_token_bypass_used": False,
+    }
 
 
 def finalized_result_sha256(payload: Mapping[str, Any]) -> str:

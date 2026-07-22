@@ -11,6 +11,7 @@ from knowledge_engine.m24_14_6_authenticated_performance import (
     BENCHMARK_CASES_PATH,
     BENCHMARK_POLICY_PATH,
     HUMAN_ACCEPTANCE_PATH,
+    M24_14_6_ACCEPTED_DEPLOYMENT,
     M24_14_6_ACCEPTED_VAULT_SHA256,
     M24_14_6_AUTHENTICATED_RESULT_SCHEMA,
     M24_14_6_FOUNDATION_SHA,
@@ -22,6 +23,8 @@ from knowledge_engine.m24_14_6_authenticated_performance import (
     benchmark_policy_payload,
     benchmark_policy_sha256,
     build_m24_14_5_human_acceptance_record,
+    build_m24_14_6_final_acceptance_report,
+    build_m24_14_6_m25_entry_baseline,
     build_m24_14_6_pending_acceptance_report,
     finalize_authenticated_benchmark_result,
     recompute_benchmark_decision,
@@ -29,6 +32,7 @@ from knowledge_engine.m24_14_6_authenticated_performance import (
     validate_authenticated_benchmark_result,
     validate_local_regression_result,
     write_m24_14_6_stage_a_artifacts,
+    write_m24_14_6_stage_b_artifacts,
 )
 from knowledge_engine.m24_product_surface_integration import (
     CANONICAL_MANIFEST_SHA256,
@@ -337,6 +341,72 @@ def test_m24_14_5_human_acceptance_record_does_not_overclaim() -> None:
     assert "authenticated_live_performance" in record["pending_retest"]
     assert record["boundaries"]["human_final_acceptance_claimed"] is False
     assert record["boundaries"]["production_retrieval"] == "lexical"
+
+
+def test_m24_14_6_stage_b_final_acceptance_and_m25_baseline_are_bounded(
+    tmp_path: Path,
+) -> None:
+    result = _authenticated_result(deployment_id=M24_14_6_ACCEPTED_DEPLOYMENT)
+    final_acceptance_path = tmp_path / "m24-14-6-final-acceptance.json"
+    m25_entry_baseline_path = tmp_path / "m25-entry-baseline.json"
+
+    artifacts = write_m24_14_6_stage_b_artifacts(
+        result,
+        benchmark_result_file_sha256="a" * 64,
+        engine_main_sha="b" * 40,
+        final_acceptance_path=final_acceptance_path,
+        m25_entry_baseline_path=m25_entry_baseline_path,
+    )
+    final_report = _json(final_acceptance_path)
+    baseline = _json(m25_entry_baseline_path)
+
+    assert {item.path for item in artifacts} == {
+        final_acceptance_path.as_posix(),
+        m25_entry_baseline_path.as_posix(),
+    }
+    assert final_report == build_m24_14_6_final_acceptance_report(
+        result,
+        benchmark_result_file_sha256="a" * 64,
+        engine_main_sha="b" * 40,
+        output_path=tmp_path / "expected-final-acceptance.json",
+    )
+    assert baseline == build_m24_14_6_m25_entry_baseline(
+        final_report,
+        output_path=tmp_path / "expected-m25-entry-baseline.json",
+    )
+    assert final_report["status"] == (
+        "m24_14_6_authenticated_performance_and_final_acceptance_complete"
+    )
+    assert final_report["m24_14_6_closed"] is True
+    assert final_report["validated_benchmark_result"]["decision"] == "pass"
+    assert final_report["hard_gate_outcome"]["passed"] is True
+    assert final_report["exact_identities"]["deployment_id"] == M24_14_6_ACCEPTED_DEPLOYMENT
+    assert final_report["exact_identities"]["production_retrieval"] == "lexical"
+    assert final_report["protected_mutations"]["semantic_serving_enabled"] is False
+    assert (
+        final_report["final_acceptance_matrix"]["semantic_hybrid_production"]
+        == "governed_deferred"
+    )
+    assert (
+        final_report["final_acceptance_matrix"]["independent_human_unseen_source_exercise"]
+        == "governed_deferred_to_m25"
+    )
+    assert baseline["m24_14_6_closed"] is True
+    assert baseline["daniel_acceptance_recorded"] is True
+    assert baseline["production_retrieval"] == "lexical"
+    assert baseline["semantic_serving_enabled"] is False
+    assert baseline["hybrid_retrieval_enabled"] is False
+    assert baseline["large_scale_ingestion_enabled"] is False
+
+
+def test_m24_14_6_stage_b_rejects_unaccepted_deployment(tmp_path: Path) -> None:
+    result = _authenticated_result(deployment_id="11111111-2222-4333-8444-555555555555")
+
+    with pytest.raises(M24_14_6ValidationError, match="expected"):
+        build_m24_14_6_final_acceptance_report(
+            result,
+            output_path=tmp_path / "rejected-final-acceptance.json",
+        )
 
 
 def test_m24_14_6_authenticated_result_validator_accepts_sanitized_result() -> None:

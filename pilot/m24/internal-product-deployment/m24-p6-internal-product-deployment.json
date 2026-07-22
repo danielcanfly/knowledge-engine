@@ -21,9 +21,9 @@
       "sha256": "0ad87fb441a3abe73c9863a83d8f5c5d7d192f6a6384e3131320634ece9ed6f9"
     },
     {
-      "bytes": 42374,
+      "bytes": 43558,
       "path": "pilot/m24/internal-product-deployment/site/app.js",
-      "sha256": "e6301f5ef8fcc5ed016cf4c8f79cee0cfdac8ba034a24042d99c1e4d7930453b"
+      "sha256": "947d6b43918fd42aa7f8fd0b8bf1899007d5e505fb7a4b5273834bf9800cefa9"
     },
     {
       "bytes": 74,
@@ -91,9 +91,9 @@
       "sha256": "8b385642b0241d9de1147dcac462f1e2e600330dcc7af142cb4f02a7a74e6e3e"
     },
     {
-      "bytes": 4199,
-      "path": "pilot/m24/internal-product-deployment/site/data/m24-14-6-pending-acceptance.json",
-      "sha256": "02de228ee3fbc38e371b713271dc21e0197bc60d58f2f0da8ba492fd0481bd1b"
+      "bytes": 6605,
+      "path": "pilot/m24/internal-product-deployment/site/data/m24-14-6-final-acceptance.json",
+      "sha256": "f86f89c657ebe86cd9f24949977195949f2d367d9c1aa06a81fdb18204169cf9"
     },
     {
       "bytes": 58780,
@@ -194,7 +194,7 @@
     "secret_scan_passed": true,
     "secret_scan_patterns": 3
   },
-  "self_sha256": "34ae9441b5cbdba611b73d0b8c81b1c82635f0c468d3a70d824c2c22b2c3dea6",
+  "self_sha256": "2ab2a0afd97a09dbd27a2ccba8264101ac93152ff403f7de3addafbd4f9c57e7",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "internal_product_deployment_package_complete",
   "surfaces": [
@@ -255,9 +255,9 @@
       "surface": "obsidian_export"
     },
     {
-      "digest": "87619827b97976dca9efa3a7a79d01ab8d23e449d0bc4d664c519310d9b54f48",
-      "fallback": "pending_acceptance_report_unavailable",
-      "path": "site/data/m24-14-6-pending-acceptance.json",
+      "digest": "ee827c264ce40c61b3d7fdf0b3c25927f58d5e4ea2d8d2e9ef6040a3843719ce",
+      "fallback": "final_acceptance_report_unavailable",
+      "path": "site/data/m24-14-6-final-acceptance.json",
       "ready": true,
       "release_id": "20260720T160000Z-46137c97263e",
       "surface": "m24_14_6_acceptance"
