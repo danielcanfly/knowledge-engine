@@ -817,9 +817,7 @@ class BrowserObserver:
             location_url = location.get("url", "")
             text = self._message_text(message)
             class_key = self._console_class(location_url, text)
-            if self._is_cloudflare_platform_url(location_url) or self._mentions_cloudflare_platform(
-                text
-            ):
+            if self._is_platform_console_signal(location_url, text):
                 self.platform_console_errors += 1
                 self.platform_console_error_classes[class_key] += 1
             elif self._is_same_origin(location_url):
@@ -884,6 +882,15 @@ class BrowserObserver:
                 "challenges.cloudflare.com",
                 "/cdn-cgi/",
             )
+        )
+
+    def _is_platform_console_signal(self, url: str, text: str) -> bool:
+        if self._is_cloudflare_platform_url(url) or self._mentions_cloudflare_platform(text):
+            return True
+        return (
+            self._is_same_origin(url)
+            and self._url_path_class(url) == "document"
+            and self._message_marker_class(text) == "csp"
         )
 
     def _message_text(self, message) -> str:

@@ -291,6 +291,18 @@ def test_browser_observer_classifies_platform_noise_separately() -> None:
             text="Failed to load https://static.cloudflareinsights.com/beacon.min.js",
         )
     )
+    observer._on_console(
+        FakeMessage(
+            "https://m24-internal.danielcanfly.com/",
+            text="Refused to load script because it violates Content Security Policy",
+        )
+    )
+    observer._on_console(
+        FakeMessage(
+            "https://m24-internal.danielcanfly.com/app.js",
+            text="Refused to execute script because it violates Content Security Policy",
+        )
+    )
     observer._on_console(FakeMessage("https://m24-internal.danielcanfly.com/app.js"))
     observer._on_request(
         argparse.Namespace(
@@ -307,15 +319,17 @@ def test_browser_observer_classifies_platform_noise_separately() -> None:
 
     resources = observer.resources(argparse.Namespace(evaluate=lambda _script: []))
 
-    assert resources["platform_console_errors"] == 3
-    assert resources["console_errors"] == 1
+    assert resources["platform_console_errors"] == 4
+    assert resources["console_errors"] == 2
     assert resources["platform_third_party_request_count"] == 1
     assert resources["runtime_third_party_cdn_requests"] == 1
     assert resources["console_error_classes"] == {
+        "same-origin:app-js:csp": 1,
         "same-origin:app-js:unmarked": 1,
     }
     assert resources["platform_console_error_classes"] == {
         "cloudflare-platform-origin:cdn-cgi:unmarked": 1,
+        "same-origin:document:csp": 1,
         "same-origin:app-js:cloudflare": 1,
         "same-origin:cdn-cgi:unmarked": 1,
     }
