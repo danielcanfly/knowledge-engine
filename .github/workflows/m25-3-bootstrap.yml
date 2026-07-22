@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/m25-3-bootstrap.yml'
       - 'scripts/m25_3_materialize.py'
+      - 'scripts/m25_3_prepare_push.py'
 
 permissions:
   contents: write
@@ -78,6 +79,8 @@ jobs:
           python -m compileall -q
           src/knowledge_engine/m25_extraction_*.py
           tests/test_m25_3_extraction_*.py
+      - name: Restore workflow scaffold before app push
+        run: python scripts/m25_3_prepare_push.py
       - name: Capture commit and push diagnostics
         run: |
           set +e
