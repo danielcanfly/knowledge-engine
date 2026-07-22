@@ -6,7 +6,7 @@
   "closure_seal_attestation": "post_merge",
   "closure_seal_base_sha": "b9dc2f1f8a0f30bed81bea2cafe31fb11aa0bbaf",
   "closure_seal_issue_number": 1034,
-  "closure_seal_pr_number": null,
+  "closure_seal_pr_number": 1035,
   "closure_seal_ref": "refs/tags/m24-14-6-final-closure",
   "daniel_acceptance_recorded": true,
   "deployment_id": "e73c3563-01eb-4c37-b2a6-500e2b86b87c",
@@ -40,7 +40,7 @@
   },
   "release_id": "20260720T160000Z-46137c97263e",
   "schema_version": "knowledge-engine-m24-14-6-m25-entry-baseline/v2",
-  "self_sha256": "155772d0b5bc6980bde7de25067ac1d507dde9a242f6ec3a4366a8716b79f907",
+  "self_sha256": "5e4e93a4c513dbee3cab6b8c8d6ab782bb0ed4b7679278ed2f45fabdf0edca41",
   "semantic_serving_enabled": false,
   "source_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "vault_sha256": "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"

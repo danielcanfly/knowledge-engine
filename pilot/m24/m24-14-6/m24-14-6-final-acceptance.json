@@ -5,7 +5,7 @@
     "path": "pilot/m24/m24-14-6/benchmark-policy.json",
     "sha256": "9f80c7bc17444e87f3fdb491f51a80f5c553713005c2863d4daff6e32491cf75"
   },
-  "closure_pr": null,
+  "closure_pr": 1035,
   "closure_seal_attestation": "post_merge",
   "closure_seal_base_sha": "b9dc2f1f8a0f30bed81bea2cafe31fb11aa0bbaf",
   "closure_seal_ref": "refs/tags/m24-14-6-final-closure",
@@ -198,7 +198,7 @@
   },
   "release_id": "20260720T160000Z-46137c97263e",
   "schema_version": "knowledge-engine-m24-14-6-final-acceptance/v1",
-  "self_sha256": "ae3a79fa9231b708583451df5321c22e3a2cd7e8cc777890cf00ba6af5e81c36",
+  "self_sha256": "6c3bcff9aa282e1e399c8453e16a3f9d485d276eae2d6d60f67c14f336cb12d7",
   "status": "m24_14_6_authenticated_performance_and_final_acceptance_complete",
   "validated_benchmark_result": {
     "authority": "authenticated_live",
