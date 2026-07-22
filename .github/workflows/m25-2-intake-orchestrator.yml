@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/m25-2-intake-orchestrator.yml'
       - '.github/workflows/m25-1-admission-architecture.yml'
+      - '.github/workflows/m25-3-extraction-worker.yml'
       - 'docs/architecture/m25/m25-2-intake-orchestrator.md'
       - 'docs/architecture/m25/examples/m25-2-source-descriptors.example.json'
       - 'pilot/m25/m25-2-*.json'
@@ -200,7 +201,7 @@ jobs:
               assert not (observed & forbidden_imports)
 
           assert 'knowledge-source/' not in serialized
-          assert 'channels/production.json' in serialized
+          assert 'channels/production.json' not in serialized
           assert 'intake/v1/' in serialized
           assert 'admission/v1/' in serialized
           PY
