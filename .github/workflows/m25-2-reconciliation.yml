@@ -1,0 +1,127 @@
+name: M25.2 Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-2-reconciliation.yml'
+      - 'docs/architecture/m25/m25-2-reconciliation.md'
+      - 'pilot/m25/m25-2-acceptance.json'
+      - 'tests/test_m25_2_reconciliation.py'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  reconciliation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Resolve and verify implementation identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          repository = os.environ['GH_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+
+          def fetch(url: str) -> dict:
+              request = urllib.request.Request(
+                  url,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              with urllib.request.urlopen(request) as response:
+                  return json.load(response)
+
+          pr = fetch(f'https://api.github.com/repos/{repository}/pulls/1041')
+          assert pr['merged'] is True
+          head_sha = pr['head']['sha']
+          merge_sha = pr['merge_commit_sha']
+          subprocess.run(['git', 'merge-base', '--is-ancestor', merge_sha, 'HEAD'], check=True)
+
+          query = urllib.parse.urlencode(
+              {'event': 'pull_request', 'head_sha': head_sha, 'per_page': 100}
+          )
+          runs = fetch(f'https://api.github.com/repos/{repository}/actions/runs?{query}')[
+              'workflow_runs'
+          ]
+          required = {
+              'CI',
+              'M17 Architecture Canon Acceptance',
+              'M18 Graph v2 acceptance',
+              'M25.1 Admission Architecture Freeze',
+              'M25.2 Intake Orchestrator',
+          }
+          current = {run['name']: run for run in runs if run['head_sha'] == head_sha}
+          assert required <= set(current)
+          assert all(
+              current[name]['status'] == 'completed'
+              and current[name]['conclusion'] == 'success'
+              for name in required
+          )
+          evidence = {
+              'schema_version': 'knowledge-engine-m25-2-resolved-identity/v1',
+              'implementation_pr': 1041,
+              'base_sha': pr['base']['sha'],
+              'head_sha': head_sha,
+              'merge_sha': merge_sha,
+              'merged_at': pr['merged_at'],
+              'workflow_runs': [
+                  {
+                      'name': name,
+                      'run_id': current[name]['id'],
+                      'run_number': current[name]['run_number'],
+                      'conclusion': current[name]['conclusion'],
+                      'head_sha': head_sha,
+                  }
+                  for name in sorted(required)
+              ],
+          }
+          Path('/tmp/m25-2-resolved-identity.json').write_text(
+              json.dumps(evidence, sort_keys=True, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          PY
+      - name: Upload resolved implementation identity
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-2-resolved-identity
+          path: /tmp/m25-2-resolved-identity.json
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint reconciliation scope
+        run: python -m ruff check tests/test_m25_2_reconciliation.py
+      - name: Test reconciliation contract
+        run: python -m pytest -q tests/test_m25_2_reconciliation.py
+      - name: Reject protected mutations
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed="$(git diff --name-only "$BASE_SHA" HEAD)"
+          ! grep -Eq '^(src/knowledge_engine/|workers/|packages/|pilot/m24/|channels/production.json)' <<<"$changed"
+      - name: Compile reconciliation test
+        run: python -m compileall -q tests/test_m25_2_reconciliation.py
