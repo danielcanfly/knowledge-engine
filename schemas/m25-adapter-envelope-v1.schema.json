@@ -1,0 +1,114 @@
+{
+  "$id": "https://knowledge-os.local/schemas/m25-adapter-envelope-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adapter_id": {
+      "pattern": "^m25_adapter_[a-z0-9_]{3,80}$",
+      "type": "string"
+    },
+    "adapter_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "adapter_version": {
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "type": "string"
+    },
+    "classification": {
+      "enum": [
+        "direct_reuse",
+        "adapter",
+        "versioned_adapter",
+        "extend",
+        "new"
+      ]
+    },
+    "hidden_io_permitted": {
+      "const": false
+    },
+    "may_read": {
+      "items": {
+        "maxLength": 300,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 64,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "may_write": {
+      "items": {
+        "maxLength": 300,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 32,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "must_not_write": {
+      "items": {
+        "maxLength": 300,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "pinned_repositories": {
+      "additionalProperties": false,
+      "properties": {
+        "engine_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "foundation_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "source_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "engine_sha",
+        "source_sha",
+        "foundation_sha"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-adapter-envelope/v1"
+    },
+    "source_contract": {
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string"
+    },
+    "target_contract": {
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "adapter_id",
+    "adapter_version",
+    "classification",
+    "source_contract",
+    "target_contract",
+    "pinned_repositories",
+    "may_read",
+    "may_write",
+    "must_not_write",
+    "hidden_io_permitted",
+    "adapter_sha256"
+  ],
+  "title": "M25 Adapter Envelope v1",
+  "type": "object"
+}

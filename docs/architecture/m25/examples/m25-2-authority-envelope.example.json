@@ -1,0 +1,18 @@
+{
+  "authority_class": "candidate_only",
+  "authority_id": "m25auth_f71bddf4ac75f5ec8375a9fc5f51b11590628721c721b366361942c24233d969",
+  "authority_sha256": "a51ff27fac60f200466336c3889cedb92399c40adb9ff2d29086613b956870b0",
+  "candidate_release_rebuild_permitted": false,
+  "candidate_write_permitted": true,
+  "decision_ref": null,
+  "immutable_intake_write_permitted": true,
+  "large_scale_ingestion_permitted": false,
+  "production_answer_serving_permitted": false,
+  "production_pointer_write_permitted": false,
+  "review_decision_write_permitted": false,
+  "schema_version": "knowledge-engine-m25-authority-envelope/v1",
+  "semantic_or_hybrid_enable_permitted": false,
+  "source_branch_write_permitted": false,
+  "source_pr_merge_permitted": false,
+  "source_pr_open_permitted": false
+}

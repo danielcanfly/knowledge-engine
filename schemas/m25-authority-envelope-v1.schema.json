@@ -1,0 +1,91 @@
+{
+  "$id": "https://knowledge-os.local/schemas/m25-authority-envelope-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_class": {
+      "enum": [
+        "architecture_only",
+        "candidate_only",
+        "review_only",
+        "source_pr_prepare",
+        "source_pr_open",
+        "source_merge",
+        "candidate_release",
+        "production_promotion",
+        "scale_authority"
+      ]
+    },
+    "authority_id": {
+      "pattern": "^m25auth_[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "authority_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "candidate_release_rebuild_permitted": {
+      "type": "boolean"
+    },
+    "candidate_write_permitted": {
+      "type": "boolean"
+    },
+    "decision_ref": {
+      "maxLength": 1024,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "immutable_intake_write_permitted": {
+      "type": "boolean"
+    },
+    "large_scale_ingestion_permitted": {
+      "type": "boolean"
+    },
+    "production_answer_serving_permitted": {
+      "const": false
+    },
+    "production_pointer_write_permitted": {
+      "type": "boolean"
+    },
+    "review_decision_write_permitted": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-authority-envelope/v1"
+    },
+    "semantic_or_hybrid_enable_permitted": {
+      "const": false
+    },
+    "source_branch_write_permitted": {
+      "type": "boolean"
+    },
+    "source_pr_merge_permitted": {
+      "type": "boolean"
+    },
+    "source_pr_open_permitted": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "authority_id",
+    "authority_class",
+    "decision_ref",
+    "immutable_intake_write_permitted",
+    "candidate_write_permitted",
+    "review_decision_write_permitted",
+    "source_branch_write_permitted",
+    "source_pr_open_permitted",
+    "source_pr_merge_permitted",
+    "candidate_release_rebuild_permitted",
+    "production_pointer_write_permitted",
+    "semantic_or_hybrid_enable_permitted",
+    "production_answer_serving_permitted",
+    "large_scale_ingestion_permitted",
+    "authority_sha256"
+  ],
+  "title": "M25 Authority Envelope v1",
+  "type": "object"
+}

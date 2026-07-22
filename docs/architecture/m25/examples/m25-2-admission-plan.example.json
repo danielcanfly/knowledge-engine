@@ -1,0 +1,33 @@
+{
+  "adapter_envelopes": [
+    {
+      "object_key": "admission/v1/adapters/m25_adapter_intake_v1.json",
+      "schema_version": "knowledge-engine-m25-adapter-envelope/v1",
+      "sha256": "b43df8d3c800fb6014ae055d032f0e687154dc774b664aa01d189a898f220c4d"
+    }
+  ],
+  "authority_envelope": {
+    "object_key": "admission/v1/authority/candidate-only.json",
+    "schema_version": "knowledge-engine-m25-authority-envelope/v1",
+    "sha256": "a51ff27fac60f200466336c3889cedb92399c40adb9ff2d29086613b956870b0"
+  },
+  "batch_policy": {
+    "checkpoint_required": true,
+    "max_attempts": 8,
+    "max_bytes_per_batch": 200000,
+    "max_sources_per_batch": 25
+  },
+  "entry_baseline_ref": {
+    "object_key": "pilot/m25/m25-1-entry-baseline.json",
+    "schema_version": "knowledge-engine-m25-1-entry-baseline/v1",
+    "sha256": "8bfee144b20286be95d32546932115bd8c6623d396db21715072a70054eefca1"
+  },
+  "inventory_ref": {
+    "object_key": "admission/v1/inventories/example.json",
+    "schema_version": "knowledge-engine-source-inventory/v1",
+    "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "plan_id": "m25plan_f6eb0a27675817dc4d7f286338dff054911865c13bbb225887a965d6f8a92edf",
+  "plan_sha256": "1583666d76f73511a8da0f500db150ba1ea65861ce22e1b2b2d59bed338d4c40",
+  "schema_version": "knowledge-engine-m25-admission-plan/v1"
+}
