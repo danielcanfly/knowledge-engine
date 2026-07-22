@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   materialize:
-    runs-on: ubuntu-22.04
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
         with:
@@ -78,10 +78,40 @@ jobs:
           python -m compileall -q
           src/knowledge_engine/m25_extraction_*.py
           tests/test_m25_3_extraction_*.py
-      - name: Commit generated implementation
+      - name: Capture commit and push diagnostics
         run: |
+          set +e
           git config user.name 'ChatGPT M25 Subagent'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m 'Implement M25.3 evidence-bound extraction worker'
-          git push origin HEAD:chatgpt/m25-3-extraction-worker
+          git status --short > /tmp/m25-3-git-status.log
+          git commit -m 'Implement M25.3 evidence-bound extraction worker' \
+            > /tmp/m25-3-git-commit.log 2>&1
+          commit_status=$?
+          echo "$commit_status" > /tmp/m25-3-git-commit.exit
+          if [ "$commit_status" = "0" ]; then
+            git push origin HEAD:chatgpt/m25-3-extraction-worker \
+              > /tmp/m25-3-git-push.log 2>&1
+            push_status=$?
+          else
+            echo 'push skipped because commit failed' > /tmp/m25-3-git-push.log
+            push_status=99
+          fi
+          echo "$push_status" > /tmp/m25-3-git-push.exit
+          exit 0
+      - name: Upload commit and push diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-3-git-diagnostics
+          path: |
+            /tmp/m25-3-git-status.log
+            /tmp/m25-3-git-commit.log
+            /tmp/m25-3-git-commit.exit
+            /tmp/m25-3-git-push.log
+            /tmp/m25-3-git-push.exit
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce generated commit and push
+        run: |
+          test "$(cat /tmp/m25-3-git-commit.exit)" = "0"
+          test "$(cat /tmp/m25-3-git-push.exit)" = "0"
