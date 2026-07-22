@@ -169,6 +169,11 @@ jobs:
           import subprocess
           from pathlib import Path
 
+          from knowledge_engine.m25_intake_registry import (
+              build_adapter_registry,
+              build_authority_envelope,
+          )
+
           changed = subprocess.check_output(
               ['git', 'diff', '--name-only', os.environ['BASE_SHA'], 'HEAD'],
               text=True,
@@ -200,8 +205,22 @@ jobs:
               )
               assert not (observed & forbidden_imports)
 
-          assert 'knowledge-source/' not in serialized
-          assert 'channels/production.json' not in serialized
+          registry = build_adapter_registry()
+          for adapter in registry['adapters']:
+              denied = set(adapter['must_not_write'])
+              assert 'knowledge-source/*' in denied
+              assert 'channels/production.json' in denied
+              assert adapter['hidden_io_permitted'] is False
+
+          authority = build_authority_envelope()
+          assert authority['source_branch_write_permitted'] is False
+          assert authority['source_pr_open_permitted'] is False
+          assert authority['source_pr_merge_permitted'] is False
+          assert authority['candidate_release_rebuild_permitted'] is False
+          assert authority['production_pointer_write_permitted'] is False
+          assert authority['semantic_or_hybrid_enable_permitted'] is False
+          assert authority['production_answer_serving_permitted'] is False
+          assert authority['large_scale_ingestion_permitted'] is False
           assert 'intake/v1/' in serialized
           assert 'admission/v1/' in serialized
           PY
