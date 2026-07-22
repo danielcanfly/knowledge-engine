@@ -6,6 +6,7 @@ from typing import Any
 
 from .errors import IntegrityError
 from .m25_intake_adapters import _normalized_output, default_executors
+from .m25_intake_batch import build_plan_bundle
 from .m25_intake_common import (
     ACTIONABLE_STATES,
     APPROVED_ADAPTER_IDS,
@@ -21,7 +22,6 @@ from .m25_intake_common import (
     _pretty_bytes,
     _put_immutable,
 )
-from .m25_intake_batch import build_plan_bundle
 from .m25_intake_compat import (
     _m21_inventory_item_key,
     _m21_plan_from_checkpoint,

@@ -1,0 +1,14 @@
+{
+  "live_provider_calls_permitted": false,
+  "max_attempts_per_provider": 2,
+  "model_policy_sha256": "0c3dabd61149fd4782a2d4df149202f6e2e21c70bfb05ac899d91f4f8c34975d",
+  "routes": [
+    {
+      "mode": "recorded_replay",
+      "model_id": "fixture-model",
+      "model_revision": "fixture-v1",
+      "provider_id": "recorded-primary"
+    }
+  ],
+  "schema_version": "knowledge-engine-m25-model-policy/v1"
+}

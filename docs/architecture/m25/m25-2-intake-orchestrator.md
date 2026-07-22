@@ -92,8 +92,8 @@ remain in the denominator and cannot enter extraction.
 
 ## Authority boundary
 
-M25.2 permits immutable intake writes and candidate-only admission references. It performs no live
-extraction, model call, review decision, canonical adoption, Source mutation, Foundation mutation,
+M25.2 permits immutable intake writes and candidate-only admission references. It performs no live extraction,
+model call, review decision, canonical adoption, Source mutation, Foundation mutation,
 release mutation, production pointer mutation, R2 production mutation, Qdrant mutation,
 semantic/hybrid serving, production answer serving, or large-scale ingestion authorization.
 

@@ -30,6 +30,7 @@ from .m25_intake_common import (
 )
 from .storage import sha256_bytes
 
+
 def _policy_objects(
     descriptor: Mapping[str, Any],
 ) -> tuple[EvidenceValue, EvidenceValue, AccessPolicy]:

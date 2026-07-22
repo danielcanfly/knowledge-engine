@@ -43,13 +43,14 @@ knowledge-m23-embed = "knowledge_engine.m23_cloudflare_qdrant_cli:main"
 knowledge-m23-rebenchmark = "knowledge_engine.m23_benchmark_correction_cli:main"
 knowledge-m23-ingestion-plan = "knowledge_engine.m23_qdrant_pilot_ingestion_cli:main"
 knowledge-m25-admission = "knowledge_engine.m25_intake_orchestrator_cli:main"
+knowledge-m25-extraction = "knowledge_engine.m25_extraction_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "tests"]
 addopts = "-ra --strict-markers"
 
 [tool.ruff]
@@ -126,6 +127,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "tests/test_m23_5_cloudflare_qdrant.py" = ["SIM117"]
 "tests/test_m23_6_2a_real_evidence_compat.py" = ["I001"]
 "tests/test_m23_6_3_first_pilot_upsert.py" = ["E501", "I001"]
+"tests/test_m25_3_extraction_worker.py" = ["E501"]
 "tests/test_media_intake.py" = ["E501", "UP012"]
 "tests/test_meeting_intake.py" = ["E501", "UP035"]
 "tests/test_review.py" = ["E501"]

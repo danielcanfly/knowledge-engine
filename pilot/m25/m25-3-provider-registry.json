@@ -1,0 +1,16 @@
+{
+  "live_provider_calls_permitted": false,
+  "provider_registry_sha256": "a46d3f3a8ef4e73751a9f3b53cf7d6d00cbe9f50d6c154abff722aaa3f7d23fa",
+  "providers": [
+    {
+      "credentials_required": false,
+      "mode": "recorded_replay",
+      "model_id": "fixture-model",
+      "model_revision": "fixture-v1",
+      "network_access": false,
+      "provider_id": "recorded-primary",
+      "provider_neutral_interface": "knowledge-engine-m25-extraction-provider/v1"
+    }
+  ],
+  "schema_version": "knowledge-engine-m25-provider-registry/v1"
+}

@@ -12,13 +12,13 @@ from .m25_intake_common import (
     M25_2_TRANSITIONS,
     _digest,
     _parse_time,
-    _signed,
 )
 from .m25_intake_compat import (
     _m21_inventory_item_key,
     _m21_plan_from_checkpoint,
     _validate_plan_bundle,
 )
+
 
 def _new_state(
     plan_id: str,

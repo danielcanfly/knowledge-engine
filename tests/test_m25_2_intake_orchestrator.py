@@ -6,8 +6,8 @@ import pytest
 
 from knowledge_engine.errors import IntegrityError
 from knowledge_engine.m25_intake_orchestrator import (
-    AdapterOutcome,
     LOCAL_MARKDOWN_ADAPTER,
+    AdapterOutcome,
     build_orchestrator_report,
     build_plan_bundle,
     build_source_inventory,
@@ -16,6 +16,7 @@ from knowledge_engine.m25_intake_orchestrator import (
     resume_orchestrator,
 )
 from m25_2_test_support import _descriptor, _load_json, _prepare, _unresolved
+
 
 def test_same_descriptors_and_bytes_produce_identical_inventory_and_plan(
     tmp_path: Path,

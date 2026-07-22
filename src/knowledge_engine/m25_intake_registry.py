@@ -14,6 +14,7 @@ from .m25_intake_common import (
     _digest,
 )
 
+
 def build_adapter_registry() -> dict[str, Any]:
     pins = {
         "engine_sha": M25_2_ENGINE_BASE_SHA,

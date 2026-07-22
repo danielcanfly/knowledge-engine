@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 from knowledge_engine.m25_intake_orchestrator import (
-    AdapterOutcome,
     LOCAL_MARKDOWN_ADAPTER,
+    AdapterOutcome,
     build_adapter_registry,
     build_plan_bundle,
     build_source_inventory,
@@ -21,6 +21,7 @@ from m25_2_test_support import (
     _load_json,
     _prepare,
 )
+
 
 def test_adapter_registry_is_exactly_bounded_and_protected() -> None:
     registry = build_adapter_registry()
@@ -160,7 +161,7 @@ def test_existing_intake_adapter_verifies_exact_reference_bindings(tmp_path: Pat
     source = tmp_path / "existing.md"
     source.write_text("existing\n", encoding="utf-8")
     first_store, first_bundle = _prepare(tmp_path, [_descriptor("existing.md")])
-    first = resume_orchestrator(
+    resume_orchestrator(
         first_store,
         first_bundle["admission_plan"]["plan_id"],
         allowed_root=tmp_path,

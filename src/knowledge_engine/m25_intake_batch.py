@@ -6,7 +6,11 @@ from typing import Any
 from .errors import IntegrityError
 from .m21_resumable_batch import (
     build_batch_plan as build_m21_batch_plan,
+)
+from .m21_resumable_batch import (
     build_initial_checkpoint as build_m21_initial_checkpoint,
+)
+from .m21_resumable_batch import (
     transition_checkpoint as transition_m21_checkpoint,
 )
 from .m25_intake_common import (
@@ -29,6 +33,7 @@ from .m25_intake_inventory import _validate_inventory
 from .m25_intake_registry import build_adapter_registry, build_authority_envelope
 from .m25_intake_state import _checkpoint, _new_state
 from .storage import sha256_bytes
+
 
 def _pack_batches(
     eligible: list[dict[str, Any]],

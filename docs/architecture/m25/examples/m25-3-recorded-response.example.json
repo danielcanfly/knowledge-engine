@@ -1,0 +1,39 @@
+{
+  "response_set_sha256": "182e1a3e1a302bd074264c43ee3eb7b8bc491ac72e12271d34a19d0120fad37b",
+  "responses": [
+    {
+      "authority": "candidate_only",
+      "canonical_knowledge": false,
+      "model_id": "fixture-model",
+      "model_revision": "fixture-v1",
+      "production_authority": false,
+      "proposals": [
+        {
+          "aliases": [],
+          "confidence": 0.91,
+          "definition": "Retrieval constrained by explicit operational limits.",
+          "evidence": [
+            {
+              "derivative_id": "drv_1111111111111111111111111111111111111111111111111111111111111111",
+              "end": 27,
+              "excerpt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "start": 10
+            }
+          ],
+          "kind": "concept",
+          "label": "Bounded retrieval",
+          "language": "en",
+          "tags": [
+            "rag"
+          ]
+        }
+      ],
+      "provider_id": "recorded-primary",
+      "request_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "response_sha256": "6edd3362142a46a45c6f96321750f5990000615dc2a48ecb238c0982e7485cd2",
+      "review_required": true,
+      "schema_version": "knowledge-engine-m25-provider-response/v1"
+    }
+  ],
+  "schema_version": "knowledge-engine-m25-recorded-response-set/v1"
+}

@@ -1,0 +1,16 @@
+{
+  "authority": "candidate_only",
+  "authority_sha256": "e90c649be63fd338828cb4b2b21c97b8aa9aa53765681085a1a107b3fd4277c2",
+  "canonical_knowledge": false,
+  "codex_required": false,
+  "credentials_permitted": false,
+  "daniel_gate_required": false,
+  "foundation_mutation_permitted": false,
+  "live_provider_calls_permitted": false,
+  "production_authority": false,
+  "production_pointer_mutation_permitted": false,
+  "release_mutation_permitted": false,
+  "schema_version": "knowledge-engine-m25-3-authority-envelope/v1",
+  "source_mutation_permitted": false,
+  "stage_id": "M25.3"
+}
