@@ -1,0 +1,80 @@
+{
+  "adapters": [
+    {
+      "adapter_id": "m25_adapter_intake_v1",
+      "classification": "adapter",
+      "may_read": [
+        "intake/v1/*"
+      ],
+      "may_write": [
+        "admission/v1/plans/*",
+        "admission/v1/states/*"
+      ],
+      "must_not_write": [
+        "intake/v1/raw/*",
+        "channels/production.json",
+        "knowledge-source/*"
+      ],
+      "source_contract": "intake/v1",
+      "target_contract": "knowledge-engine-m25-admission-plan/v1"
+    },
+    {
+      "adapter_id": "m25_adapter_m21_batch_v1",
+      "classification": "direct_reuse",
+      "may_read": [
+        "M21 plan and checkpoint artifacts"
+      ],
+      "may_write": [
+        "admission/v1/states/*"
+      ],
+      "must_not_write": [
+        "production/*",
+        "knowledge-source/*"
+      ],
+      "source_contract": "knowledge-engine-resumable-batch/v1",
+      "target_contract": "knowledge-engine-m25-admission-state/v1"
+    },
+    {
+      "adapter_id": "m25_adapter_m21_identity_v2",
+      "classification": "versioned_adapter",
+      "legacy_pin": "a6ba738d910d01d2ae99b1968f0831989934c549",
+      "may_read": [
+        "verified Source snapshot at exact Source SHA",
+        "M21.3 and M21.4 packets"
+      ],
+      "may_write": [
+        "admission/v1/resolution/*"
+      ],
+      "must_not_write": [
+        "knowledge-source/*",
+        "channels/production.json"
+      ],
+      "required_pin": "acf78596ace8a7366688ccef72b507204d09d9f9",
+      "source_contract": "knowledge-engine-resolution-candidates/v1",
+      "target_contract": "knowledge-engine-m25-admission-state/v1"
+    },
+    {
+      "adapter_id": "m25_adapter_review_source_pr_v2",
+      "classification": "versioned_adapter",
+      "may_read": [
+        "complete Daniel decisions",
+        "exact Source head"
+      ],
+      "may_write": [
+        "admission/v1/review/*",
+        "governed Source branch after M25.7 gate"
+      ],
+      "must_not_write": [
+        "Source main",
+        "production pointer"
+      ],
+      "source_contract": "M11 and M21 review packet contracts",
+      "target_contract": "M25 decision ledger and Source PR executor"
+    }
+  ],
+  "duplicate_raw_or_normalized_payload_forbidden": true,
+  "entry_baseline_sha256": "8bfee144b20286be95d32546932115bd8c6623d396db21715072a70054eefca1",
+  "hidden_network_or_filesystem_io_forbidden": true,
+  "schema_version": "knowledge-engine-m25-1-adapter-boundaries/v1",
+  "self_sha256": "e92bca8033199e72c7bbcf20ab1f8b6f5fd73330bc158c7602b7e1c80f7cc972"
+}

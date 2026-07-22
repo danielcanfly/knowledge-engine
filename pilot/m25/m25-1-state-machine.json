@@ -1,0 +1,109 @@
+{
+  "resume_compatible_states": [
+    "planned",
+    "acquiring",
+    "retryable"
+  ],
+  "schema_version": "knowledge-engine-m25-1-state-machine/v1",
+  "self_sha256": "7094834d205405f60ae8e148ce9f49a53f3b2b1fbf96f57044a7922165b166cc",
+  "states": [
+    "planned",
+    "acquiring",
+    "retryable",
+    "snapshotted",
+    "normalized",
+    "candidate_ready",
+    "resolution_ready",
+    "review_pending",
+    "approved",
+    "rejected",
+    "deferred",
+    "duplicate",
+    "blocked",
+    "source_pr_prepared",
+    "source_pr_opened",
+    "adopted_candidate_release",
+    "rolled_back"
+  ],
+  "success_observation_states": [
+    "adopted_candidate_release"
+  ],
+  "terminal_states": [
+    "rejected",
+    "deferred",
+    "duplicate",
+    "blocked",
+    "rolled_back"
+  ],
+  "transition_rules": {
+    "adjacent_transition_only": true,
+    "decision_digest_required_after_review_pending": true,
+    "optimistic_revision_required": true,
+    "source_pr_requires_complete_approved_decisions": true,
+    "terminal_reentry_forbidden": true
+  },
+  "transitions": {
+    "acquiring": [
+      "snapshotted",
+      "retryable",
+      "blocked",
+      "rejected"
+    ],
+    "adopted_candidate_release": [
+      "rolled_back"
+    ],
+    "approved": [
+      "source_pr_prepared",
+      "blocked"
+    ],
+    "blocked": [],
+    "candidate_ready": [
+      "resolution_ready",
+      "blocked",
+      "rejected"
+    ],
+    "deferred": [],
+    "duplicate": [],
+    "normalized": [
+      "candidate_ready",
+      "blocked",
+      "rejected"
+    ],
+    "planned": [
+      "acquiring",
+      "blocked",
+      "rejected"
+    ],
+    "rejected": [],
+    "resolution_ready": [
+      "review_pending",
+      "blocked"
+    ],
+    "retryable": [
+      "acquiring",
+      "blocked",
+      "rejected"
+    ],
+    "review_pending": [
+      "approved",
+      "rejected",
+      "deferred",
+      "duplicate",
+      "blocked"
+    ],
+    "rolled_back": [],
+    "snapshotted": [
+      "normalized",
+      "blocked",
+      "rejected"
+    ],
+    "source_pr_opened": [
+      "adopted_candidate_release",
+      "blocked"
+    ],
+    "source_pr_prepared": [
+      "source_pr_opened",
+      "blocked"
+    ]
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "$id": "https://knowledge-os.local/schemas/m25-admission-state-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attempts": {
+      "maximum": 8,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "decision_ref": {
+      "maxLength": 1024,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "evidence_refs": {
+      "items": {
+        "maxLength": 1024,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 64,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "item_id": {
+      "pattern": "^m25item_[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "plan_id": {
+      "pattern": "^m25plan_[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-admission-state/v1"
+    },
+    "state": {
+      "enum": [
+        "planned",
+        "acquiring",
+        "retryable",
+        "snapshotted",
+        "normalized",
+        "candidate_ready",
+        "resolution_ready",
+        "review_pending",
+        "approved",
+        "rejected",
+        "deferred",
+        "duplicate",
+        "blocked",
+        "source_pr_prepared",
+        "source_pr_opened",
+        "adopted_candidate_release",
+        "rolled_back"
+      ]
+    },
+    "state_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "plan_id",
+    "item_id",
+    "revision",
+    "state",
+    "attempts",
+    "evidence_refs",
+    "decision_ref",
+    "updated_at",
+    "state_sha256"
+  ],
+  "title": "M25 Admission State v1",
+  "type": "object"
+}

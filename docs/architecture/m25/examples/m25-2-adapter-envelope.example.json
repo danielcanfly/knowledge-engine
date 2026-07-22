@@ -1,0 +1,28 @@
+{
+  "adapter_id": "m25_adapter_intake_v1",
+  "adapter_sha256": "b43df8d3c800fb6014ae055d032f0e687154dc774b664aa01d189a898f220c4d",
+  "adapter_version": "1.0.0",
+  "classification": "adapter",
+  "hidden_io_permitted": false,
+  "may_read": [
+    "intake/v1/snapshots/*",
+    "intake/v1/derivatives/*"
+  ],
+  "may_write": [
+    "admission/v1/plans/*",
+    "admission/v1/states/*"
+  ],
+  "must_not_write": [
+    "intake/v1/raw/*",
+    "knowledge-source/main",
+    "channels/production.json"
+  ],
+  "pinned_repositories": {
+    "engine_sha": "25a119e428bb202ebbed4b5a73a4209c41f9ce27",
+    "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+    "source_sha": "acf78596ace8a7366688ccef72b507204d09d9f9"
+  },
+  "schema_version": "knowledge-engine-m25-adapter-envelope/v1",
+  "source_contract": "intake/v1",
+  "target_contract": "knowledge-engine-m25-admission-plan/v1"
+}

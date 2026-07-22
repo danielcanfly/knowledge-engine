@@ -1,0 +1,38 @@
+{
+  "compatibility_policy": {
+    "adapter_version_required_for_legacy_pins": true,
+    "cross_release_identity_mismatch": "reject",
+    "schema_downgrade": "reject",
+    "unknown_fields": "reject",
+    "unknown_major_version": "reject"
+  },
+  "entry_baseline_sha256": "8bfee144b20286be95d32546932115bd8c6623d396db21715072a70054eefca1",
+  "schema_version": "knowledge-engine-m25-1-schema-registry/v1",
+  "schemas": [
+    {
+      "first_writer_stage": "M25.2",
+      "path": "schemas/m25-admission-plan-v1.schema.json",
+      "schema_version": "knowledge-engine-m25-admission-plan/v1",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M25.2",
+      "path": "schemas/m25-admission-state-v1.schema.json",
+      "schema_version": "knowledge-engine-m25-admission-state/v1",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M25.2",
+      "path": "schemas/m25-authority-envelope-v1.schema.json",
+      "schema_version": "knowledge-engine-m25-authority-envelope/v1",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M25.2",
+      "path": "schemas/m25-adapter-envelope-v1.schema.json",
+      "schema_version": "knowledge-engine-m25-adapter-envelope/v1",
+      "status": "frozen_for_implementation"
+    }
+  ],
+  "self_sha256": "6f3944a864ac4ebc1cdc4567abb3473f9a8e726f92d80a421df972439e90cb03"
+}

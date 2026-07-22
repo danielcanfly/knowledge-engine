@@ -1,0 +1,52 @@
+{
+  "drift_detected": false,
+  "foundation_open_pull_requests": 0,
+  "m25_open_issues_observed": 0,
+  "open_work": [
+    {
+      "classification": "non_conflicting_stale_legacy_work",
+      "kind": "pull_request",
+      "number": 32,
+      "overlaps_m25_1_paths": false,
+      "repository": "danielcanfly/knowledge-engine"
+    }
+  ],
+  "protected_mutations": {
+    "cloudflare_access_population_broadened": false,
+    "foundation_mutation": false,
+    "hybrid_retrieval_enabled": false,
+    "large_scale_ingestion_enabled": false,
+    "production_answer_serving_enabled": false,
+    "production_pointer_mutation": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "semantic_serving_enabled": false,
+    "source_mutation": false
+  },
+  "release": {
+    "m24_entry_baseline_self_sha256": "5e4e93a4c513dbee3cab6b8c8d6ab782bb0ed4b7679278ed2f45fabdf0edca41",
+    "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+    "production_retrieval": "lexical",
+    "release_id": "20260720T160000Z-46137c97263e",
+    "vault_sha256": "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
+  },
+  "repositories": {
+    "engine": {
+      "m24_product_acceptance_sha": "b9dc2f1f8a0f30bed81bea2cafe31fb11aa0bbaf",
+      "main_sha": "25a119e428bb202ebbed4b5a73a4209c41f9ce27",
+      "repository": "danielcanfly/knowledge-engine"
+    },
+    "foundation": {
+      "main_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+      "repository": "danielcanfly/knowledge-os-foundation"
+    },
+    "source": {
+      "main_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+      "repository": "danielcanfly/knowledge-source"
+    }
+  },
+  "schema_version": "knowledge-engine-m25-1-entry-baseline/v1",
+  "self_sha256": "8bfee144b20286be95d32546932115bd8c6623d396db21715072a70054eefca1",
+  "source_open_pull_requests": 0,
+  "verified_at": "2026-07-22T17:40:08Z"
+}

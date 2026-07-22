@@ -1,0 +1,76 @@
+{
+  "authority_cannot_be_inferred_from_model_confidence": true,
+  "default_deny": true,
+  "entry_baseline_sha256": "8bfee144b20286be95d32546932115bd8c6623d396db21715072a70054eefca1",
+  "protected_mutations_require_explicit_daniel_decision": true,
+  "rows": [
+    {
+      "ChatGPT": "allowed",
+      "Codex": "conditional",
+      "Daniel": "not_required",
+      "action": "write_engine_stage_branch"
+    },
+    {
+      "ChatGPT": "orchestrate",
+      "Codex": "runtime_only",
+      "Daniel": "not_required",
+      "action": "write_immutable_intake_evidence"
+    },
+    {
+      "ChatGPT": "orchestrate",
+      "Codex": "runtime_only",
+      "Daniel": "not_required",
+      "action": "write_candidate_artifact"
+    },
+    {
+      "ChatGPT": "assist_only",
+      "Codex": "forbidden",
+      "Daniel": "required",
+      "action": "record_knowledge_decision"
+    },
+    {
+      "ChatGPT": "allowed_after_decisions",
+      "Codex": "conditional",
+      "Daniel": "decision_prerequisite",
+      "action": "prepare_source_pr"
+    },
+    {
+      "ChatGPT": "allowed_after_m25_7_gate",
+      "Codex": "forbidden_by_default",
+      "Daniel": "content_authority",
+      "action": "open_source_pr"
+    },
+    {
+      "ChatGPT": "execute_after_authorisation",
+      "Codex": "forbidden",
+      "Daniel": "required",
+      "action": "merge_source_pr"
+    },
+    {
+      "ChatGPT": "orchestrate",
+      "Codex": "runtime_only",
+      "Daniel": "source_merge_prerequisite",
+      "action": "rebuild_candidate_release"
+    },
+    {
+      "ChatGPT": "execute_after_authorisation",
+      "Codex": "forbidden",
+      "Daniel": "required",
+      "action": "mutate_production_pointer"
+    },
+    {
+      "ChatGPT": "forbidden_in_m25",
+      "Codex": "forbidden_in_m25",
+      "Daniel": "outside_m25_authority",
+      "action": "enable_semantic_or_hybrid_serving"
+    },
+    {
+      "ChatGPT": "execute_after_m25_10_decision",
+      "Codex": "forbidden",
+      "Daniel": "required",
+      "action": "enable_large_scale_ingestion"
+    }
+  ],
+  "schema_version": "knowledge-engine-m25-1-authority-matrix/v1",
+  "self_sha256": "4945d769a6651a598eb527739012e1d01061cca82ded0db239d086d2a50eb945"
+}

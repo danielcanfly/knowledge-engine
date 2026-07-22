@@ -1,0 +1,198 @@
+{
+  "admission_control_namespace": "admission/v1",
+  "canonical_editable_truth": "danielcanfly/knowledge-source",
+  "canonical_evidence_namespace": "intake/v1",
+  "classification_values": [
+    "direct_reuse",
+    "adapter",
+    "versioned_adapter",
+    "extend",
+    "new"
+  ],
+  "components": [
+    {
+      "capability": "canonical JSON and immutable object identity",
+      "decision": "direct_reuse",
+      "m25_boundary": "Use canonical_json_bytes and immutable collision rules; do not fork hashing.",
+      "origin": "M10 intake_v1",
+      "paths": [
+        "src/knowledge_engine/intake_v1.py"
+      ]
+    },
+    {
+      "capability": "immutable acquisition and normalization connectors",
+      "decision": "adapter",
+      "m25_boundary": "Wrap connectors behind a common admission adapter; raw/snapshot/derivative remain intake/v1.",
+      "origin": "M10.2-M10.9",
+      "paths": [
+        "src/knowledge_engine/intake_v1.py",
+        "src/knowledge_engine/web_intake_v1.py",
+        "src/knowledge_engine/pdf_intake.py",
+        "src/knowledge_engine/git_intake.py",
+        "src/knowledge_engine/drive_intake.py",
+        "src/knowledge_engine/media_intake.py",
+        "src/knowledge_engine/meeting_intake.py",
+        "src/knowledge_engine/database_intake.py"
+      ]
+    },
+    {
+      "capability": "ACL, owner, licence and audience evidence",
+      "decision": "direct_reuse",
+      "m25_boundary": "Unresolved ACL or licence fails closed and cannot broaden audience.",
+      "origin": "M10 intake contracts",
+      "paths": [
+        "src/knowledge_engine/intake_v1.py"
+      ]
+    },
+    {
+      "capability": "structured blocks, source maps and extraction candidate contracts",
+      "decision": "extend",
+      "m25_boundary": "Keep exact evidence semantics; M25.3 adds provider adapters without changing candidate authority.",
+      "origin": "M11.1-M11.2",
+      "paths": [
+        "src/knowledge_engine/compiler_contract_v1.py",
+        "src/knowledge_engine/compiler_markdown_v1.py",
+        "src/knowledge_engine/compiler_v1.py",
+        "schemas/compiler-extraction-candidate-v1.schema.json",
+        "schemas/compiler-source-map-v1.schema.json"
+      ]
+    },
+    {
+      "capability": "Source-aware compiler resolution",
+      "decision": "adapter",
+      "m25_boundary": "Reuse taxonomy and evidence validation as benchmark compatibility, not as a second resolver.",
+      "origin": "M11.3",
+      "paths": [
+        "src/knowledge_engine/compiler_resolution_v1.py",
+        "src/knowledge_engine/compiler_source_v1.py"
+      ]
+    },
+    {
+      "capability": "synthesis, reviewer packet and decision contracts",
+      "decision": "extend",
+      "m25_boundary": "Retain review-only and no-direct-apply invariants; adapt to M25 item ledger.",
+      "origin": "M11.4-M11.7",
+      "paths": [
+        "src/knowledge_engine/compiler_synthesis_v1.py",
+        "src/knowledge_engine/compiler_review_packet_v1.py",
+        "src/knowledge_engine/compiler_review_decision_v1.py",
+        "src/knowledge_engine/compiler_source_pr_package_v1.py"
+      ]
+    },
+    {
+      "capability": "bounded inventory",
+      "decision": "extend",
+      "m25_boundary": "Generalise source descriptors beyond blogs while preserving evidence-only authority.",
+      "origin": "M21.1",
+      "paths": [
+        "src/knowledge_engine/m21_blog_inventory.py"
+      ]
+    },
+    {
+      "capability": "deterministic batch planning and checkpoint resume",
+      "decision": "direct_reuse",
+      "m25_boundary": "Reuse plan/checkpoint identities and transition semantics through an admission wrapper.",
+      "origin": "M21.2",
+      "paths": [
+        "src/knowledge_engine/m21_resumable_batch.py"
+      ]
+    },
+    {
+      "capability": "evidence-bound candidate packet",
+      "decision": "direct_reuse",
+      "m25_boundary": "Preserve candidate-only authority, exact spans, secret scan and bounded fields.",
+      "origin": "M21.3",
+      "paths": [
+        "src/knowledge_engine/m21_extraction_candidates.py"
+      ]
+    },
+    {
+      "capability": "relation and tag governance",
+      "decision": "direct_reuse",
+      "m25_boundary": "Pin exact Foundation ontology and taxonomy; no free-form relation types.",
+      "origin": "M21.4",
+      "paths": [
+        "src/knowledge_engine/m21_governed_relations.py"
+      ]
+    },
+    {
+      "capability": "entity resolution evidence",
+      "decision": "versioned_adapter",
+      "m25_boundary": "Module pins legacy Source SHA a6ba738d910d01d2ae99b1968f0831989934c549; M25 must pass a verified Source snapshot through a new adapter and benchmark old outcomes before calibration.",
+      "origin": "M21.5",
+      "paths": [
+        "src/knowledge_engine/m21_entity_resolution.py"
+      ]
+    },
+    {
+      "capability": "review packets and Source PR preparation",
+      "decision": "versioned_adapter",
+      "m25_boundary": "Module pins legacy Source SHA and stops before GitHub PR creation. Keep packet logic; M25.7 adds stale-decision and exact-head execution gates.",
+      "origin": "M21.6",
+      "paths": [
+        "src/knowledge_engine/m21_review_source_pr.py"
+      ]
+    },
+    {
+      "capability": "phase acceptance evidence",
+      "decision": "extend",
+      "m25_boundary": "Extend full-population accounting and protected-boundary checks for M25 stages.",
+      "origin": "M21.7",
+      "paths": [
+        "src/knowledge_engine/m21_phase_d_acceptance.py"
+      ]
+    },
+    {
+      "capability": "controlled ingestion pilot accounting",
+      "decision": "extend",
+      "m25_boundary": "Replace fixed three-batch fixture with M25.9 approved 50-100-source population.",
+      "origin": "M24 P4",
+      "paths": [
+        "src/knowledge_engine/m24_controlled_ingestion_pilot.py"
+      ]
+    },
+    {
+      "capability": "human decision capture and canonical adoption evidence",
+      "decision": "direct_reuse",
+      "m25_boundary": "Reuse explicit item-level decisions and digest binding; never infer approval.",
+      "origin": "M24 Source PR 19 lane",
+      "paths": [
+        "pilot/m24/m24-source-pr-19-decision-capture.json"
+      ]
+    },
+    {
+      "capability": "candidate release rebuild and product regression",
+      "decision": "extend",
+      "m25_boundary": "Use only after authorised Source adoption in M25.8; production pointer remains separate.",
+      "origin": "M24 P2-P6",
+      "paths": [
+        "src/knowledge_engine/m24_product_surface_integration.py",
+        "src/knowledge_engine/m24_internal_product_deployment.py"
+      ]
+    },
+    {
+      "capability": "entry baseline, closure seal and protected mutation model",
+      "decision": "direct_reuse",
+      "m25_boundary": "M25 entry and every stage must preserve exact accepted release identities.",
+      "origin": "M24.14.6",
+      "paths": [
+        "src/knowledge_engine/m24_14_6_final_closure_seal.py",
+        "pilot/m24/m24-14-6/m25-entry-baseline.json"
+      ]
+    },
+    {
+      "capability": "admission control-plane envelope",
+      "decision": "new",
+      "m25_boundary": "References existing intake/compiler/M21 artifacts; does not duplicate source bytes.",
+      "origin": "M25",
+      "paths": [
+        "schemas/m25-admission-plan-v1.schema.json",
+        "schemas/m25-admission-state-v1.schema.json"
+      ]
+    }
+  ],
+  "entry_baseline_sha256": "8bfee144b20286be95d32546932115bd8c6623d396db21715072a70054eefca1",
+  "no_parallel_ingestion_system": true,
+  "schema_version": "knowledge-engine-m25-1-reuse-map/v1",
+  "self_sha256": "bafa72f4ee040e0c744aa914dbc946d80d50fd137006a14e229feff633bedf1e"
+}

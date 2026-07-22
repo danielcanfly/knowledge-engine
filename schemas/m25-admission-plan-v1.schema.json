@@ -1,0 +1,111 @@
+{
+  "$defs": {
+    "artifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "object_key": {
+          "$ref": "#/$defs/safeObjectKey"
+        },
+        "schema_version": {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "schema_version",
+        "object_key",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "safeObjectKey": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "https://knowledge-os.local/schemas/m25-admission-plan-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adapter_envelopes": {
+      "items": {
+        "$ref": "#/$defs/artifactRef"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "authority_envelope": {
+      "$ref": "#/$defs/artifactRef"
+    },
+    "batch_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint_required": {
+          "const": true
+        },
+        "max_attempts": {
+          "maximum": 8,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_bytes_per_batch": {
+          "maximum": 100000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_sources_per_batch": {
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_sources_per_batch",
+        "max_bytes_per_batch",
+        "max_attempts",
+        "checkpoint_required"
+      ],
+      "type": "object"
+    },
+    "entry_baseline_ref": {
+      "$ref": "#/$defs/artifactRef"
+    },
+    "inventory_ref": {
+      "$ref": "#/$defs/artifactRef"
+    },
+    "plan_id": {
+      "pattern": "^m25plan_[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-admission-plan/v1"
+    }
+  },
+  "required": [
+    "schema_version",
+    "plan_id",
+    "entry_baseline_ref",
+    "inventory_ref",
+    "adapter_envelopes",
+    "batch_policy",
+    "authority_envelope",
+    "plan_sha256"
+  ],
+  "title": "M25 Admission Plan v1",
+  "type": "object"
+}

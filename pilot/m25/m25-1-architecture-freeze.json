@@ -1,0 +1,50 @@
+{
+  "adapter_boundaries_ref": {
+    "path": "pilot/m25/m25-1-adapter-boundaries.json",
+    "sha256": "b1bc8c21af6fdd72c156cf52d0a61558de25af2a87f9fe00a1bbc83d94235b5a"
+  },
+  "authority_matrix_ref": {
+    "path": "pilot/m25/m25-1-authority-matrix.json",
+    "sha256": "d195099b9b9d9136a97bd3ed6897830d34be6b95377291981503131a26b5c21c"
+  },
+  "entry_baseline_ref": {
+    "path": "pilot/m25/m25-1-entry-baseline.json",
+    "self_sha256": "8bfee144b20286be95d32546932115bd8c6623d396db21715072a70054eefca1",
+    "sha256": "a01e560b0c757e98aa8bf7e90060af3dcd477189ff59cdb4264981fe7774d9d2"
+  },
+  "exit_gate": {
+    "all_components_classified": true,
+    "m25_2_inputs_digest_bound": true,
+    "no_parallel_ingestion_system": true,
+    "protected_mutations_explicit": true
+  },
+  "m25_2_input_refs": {
+    "adapter_envelope_example": "344816092197304d0fb86c102739d6e4504c161251bba22abda92fb87ae84283",
+    "admission_plan_example": "cea2819f00a04a3950bd1fe9147ac01d5952592eeaa4348d37802244651c19a2",
+    "authority_envelope_example": "10bcccac3d0024d647e99df4abffe15c097bd6f9bb4f193c4417b2060da42b39"
+  },
+  "reuse_map_ref": {
+    "path": "pilot/m25/m25-1-reuse-map.json",
+    "sha256": "23eee4510b531b95ac24f374d391c8c16f88ba29aac2a59b8ad9d885d7fdeef8"
+  },
+  "schema_registry_ref": {
+    "path": "pilot/m25/m25-1-schema-registry.json",
+    "sha256": "80fc98dc3e59a914473da7c1453505b34bb734ced1ed710fb5650c4d0cb509f6"
+  },
+  "schema_version": "knowledge-engine-m25-1-architecture-freeze/v1",
+  "self_sha256": "44b9a0bfc1922cd0af7fed4cdea8d0d8f4cd623c0fb8f1ea3a579c4ec93a6b16",
+  "stage_authority": {
+    "architecture_only": true,
+    "live_extraction_permitted": false,
+    "m26_answer_serving_permitted": false,
+    "pilot_execution_permitted": false,
+    "release_mutation_permitted": false,
+    "review_ui_permitted": false,
+    "source_mutation_permitted": false
+  },
+  "state_machine_ref": {
+    "path": "pilot/m25/m25-1-state-machine.json",
+    "sha256": "55d8fb995e5fd43a6a82fb7e186e021232ad846a161a7f588283c9185bf8f169"
+  },
+  "status": "architecture_frozen_pending_exact_head_acceptance"
+}
