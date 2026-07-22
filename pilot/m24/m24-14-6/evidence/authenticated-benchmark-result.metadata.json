@@ -1,0 +1,26 @@
+{
+  "accepted_identities": {
+    "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+    "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+    "production_retrieval": "lexical",
+    "release_id": "20260720T160000Z-46137c97263e",
+    "source_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
+    "vault_sha256": "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
+  },
+  "benchmark_self_sha256": "6fe285a4b684a61ec6c0d2b05db74d2a3afebf742dfb5e8d4c4800c0d475fe4f",
+  "cases_sha256": "b8e698d7b53519db60515ea747d940ae777cc65d5c9c15e6e2d76ba70b2c7cd7",
+  "metadata_self_sha256": "c3a6588406bbde5b7b5b18ab543d75c3a90beb042cb0ccfd63dc0290035f0793",
+  "no_local_source_path": true,
+  "no_raw_credentials": true,
+  "policy_sha256": "9f80c7bc17444e87f3fdb491f51a80f5c553713005c2863d4daff6e32491cf75",
+  "repository_path": "pilot/m24/m24-14-6/evidence/authenticated-benchmark-result.sanitized.json",
+  "schema_version": "m24-14-6-portable-benchmark-evidence-metadata/v1",
+  "sensitive_scan": {
+    "local_source_path_present": false,
+    "passed": true,
+    "raw_credentials_present": false
+  },
+  "sha256": "3af8c6debadf8bc896952c4b9e48497a7de6971ccad489b40ae8ea23c5440c45",
+  "source_acquisition_statement": "Byte-for-byte copy of Daniel's accepted sanitized authenticated benchmark JSON after exact digest and sensitivity validation.",
+  "validation_command": "python scripts/m24_14_6_final_closure_seal.py validate-evidence --benchmark-path pilot/m24/m24-14-6/evidence/authenticated-benchmark-result.sanitized.json"
+}

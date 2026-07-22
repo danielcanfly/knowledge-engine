@@ -353,7 +353,8 @@ def test_m24_14_6_stage_b_final_acceptance_and_m25_baseline_are_bounded(
     artifacts = write_m24_14_6_stage_b_artifacts(
         result,
         benchmark_result_file_sha256="a" * 64,
-        engine_main_sha="b" * 40,
+        closure_seal_issue_number=1034,
+        closure_seal_pr_number=1035,
         final_acceptance_path=final_acceptance_path,
         m25_entry_baseline_path=m25_entry_baseline_path,
     )
@@ -367,7 +368,8 @@ def test_m24_14_6_stage_b_final_acceptance_and_m25_baseline_are_bounded(
     assert final_report == build_m24_14_6_final_acceptance_report(
         result,
         benchmark_result_file_sha256="a" * 64,
-        engine_main_sha="b" * 40,
+        closure_seal_issue_number=1034,
+        closure_seal_pr_number=1035,
         output_path=tmp_path / "expected-final-acceptance.json",
     )
     assert baseline == build_m24_14_6_m25_entry_baseline(
@@ -379,6 +381,19 @@ def test_m24_14_6_stage_b_final_acceptance_and_m25_baseline_are_bounded(
     )
     assert final_report["m24_14_6_closed"] is True
     assert final_report["validated_benchmark_result"]["decision"] == "pass"
+    assert "engine_main_sha" not in final_report
+    assert (
+        final_report["engine_product_acceptance_sha"]
+        == "b9dc2f1f8a0f30bed81bea2cafe31fb11aa0bbaf"
+    )
+    assert (
+        final_report["closure_seal_base_sha"]
+        == "b9dc2f1f8a0f30bed81bea2cafe31fb11aa0bbaf"
+    )
+    assert final_report["closure_seal_ref"] == "refs/tags/m24-14-6-final-closure"
+    assert final_report["issues"]["chrome_compatibility"] == 1030
+    assert final_report["issues"]["final_closure_seal"] == 1034
+    assert final_report["closure_pr"] == 1035
     assert final_report["hard_gate_outcome"]["passed"] is True
     assert final_report["exact_identities"]["deployment_id"] == M24_14_6_ACCEPTED_DEPLOYMENT
     assert final_report["exact_identities"]["production_retrieval"] == "lexical"
@@ -393,9 +408,16 @@ def test_m24_14_6_stage_b_final_acceptance_and_m25_baseline_are_bounded(
     )
     assert baseline["m24_14_6_closed"] is True
     assert baseline["daniel_acceptance_recorded"] is True
+    assert "engine_main_sha" not in baseline
+    assert (
+        baseline["engine_product_acceptance_sha"]
+        == "b9dc2f1f8a0f30bed81bea2cafe31fb11aa0bbaf"
+    )
+    assert baseline["closure_seal_pr_number"] == 1035
     assert baseline["production_retrieval"] == "lexical"
     assert baseline["semantic_serving_enabled"] is False
     assert baseline["hybrid_retrieval_enabled"] is False
+    assert baseline["production_answer_serving_enabled"] is False
     assert baseline["large_scale_ingestion_enabled"] is False
 
 

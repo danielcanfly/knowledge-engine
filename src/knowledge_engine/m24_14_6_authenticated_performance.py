@@ -23,12 +23,22 @@ M24_14_6_HUMAN_ACCEPTANCE_SCHEMA = "knowledge-engine-m24-14-6-human-acceptance-r
 M24_14_6_PENDING_ACCEPTANCE_SCHEMA = "knowledge-engine-m24-14-6-pending-final-acceptance/v1"
 M24_14_6_AUTHENTICATED_RESULT_SCHEMA = "knowledge-engine-m24-14-6-authenticated-benchmark-result/v1"
 M24_14_6_FINAL_ACCEPTANCE_SCHEMA = "knowledge-engine-m24-14-6-final-acceptance/v1"
-M24_14_6_M25_ENTRY_BASELINE_SCHEMA = "knowledge-engine-m24-14-6-m25-entry-baseline/v1"
+M24_14_6_M25_ENTRY_BASELINE_SCHEMA = "knowledge-engine-m24-14-6-m25-entry-baseline/v2"
 
 M24_14_6_STATUS = (
     "m24_14_6_system_chrome_auth_compatibility_repaired_pending_daniel_authenticated_benchmark"
 )
 M24_14_6_ISSUE_NUMBER = 1030
+M24_14_6_CLOSURE_SEAL_ISSUE_NUMBER = 1034
+M24_14_6_PRODUCT_ACCEPTANCE_SHA = "b9dc2f1f8a0f30bed81bea2cafe31fb11aa0bbaf"
+M24_14_6_CLOSURE_SEAL_BASE_SHA = M24_14_6_PRODUCT_ACCEPTANCE_SHA
+M24_14_6_CLOSURE_SEAL_REF = "refs/tags/m24-14-6-final-closure"
+M24_14_6_BENCHMARK_FILE_SHA256 = (
+    "3af8c6debadf8bc896952c4b9e48497a7de6971ccad489b40ae8ea23c5440c45"
+)
+M24_14_6_BENCHMARK_SELF_SHA256 = (
+    "6fe285a4b684a61ec6c0d2b05db74d2a3afebf742dfb5e8d4c4800c0d475fe4f"
+)
 M24_14_6_REQUIRED_BASE_SHA = "28131aa4cb262a306bc792f95e55d69a20f5d818"
 M24_14_6_FOUNDATION_SHA = "e5ef644053d34e89c70d2ceb37521e1c59234832"
 M24_14_6_ACCEPTED_VAULT_SHA256 = "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
@@ -43,6 +53,7 @@ M24_14_6_DANIEL_COMMAND = (
     "--browser-channel chrome --deployment-id e73c3563-01eb-4c37-b2a6-500e2b86b87c"
 )
 M24_14_6_PRE_REPAIR_DEPLOYMENT = "ee80820e-727b-4a05-8b47-121fad33c1d5"
+M24_14_6_FINAL_SURFACE_DEPLOYMENT = "90804e78-9975-4e70-8fdd-d5cd9a9ee753"
 PLACEHOLDER_DEPLOYMENT_IDS = frozenset({"", "protected-current", "current", "latest"})
 
 M24_14_6_ROOT = Path("pilot/m24/m24-14-6")
@@ -52,6 +63,12 @@ HUMAN_ACCEPTANCE_PATH = M24_14_6_ROOT / "m24-14-5-human-acceptance.json"
 PENDING_ACCEPTANCE_PATH = M24_14_6_ROOT / "m24-14-6-pending-acceptance.json"
 FINAL_ACCEPTANCE_PATH = M24_14_6_ROOT / "m24-14-6-final-acceptance.json"
 M25_ENTRY_BASELINE_PATH = M24_14_6_ROOT / "m25-entry-baseline.json"
+BENCHMARK_EVIDENCE_PATH = (
+    M24_14_6_ROOT / "evidence/authenticated-benchmark-result.sanitized.json"
+)
+BENCHMARK_EVIDENCE_METADATA_PATH = (
+    M24_14_6_ROOT / "evidence/authenticated-benchmark-result.metadata.json"
+)
 
 BENCHMARK_CASE_IDS = (
     "overview",
@@ -443,7 +460,8 @@ def build_m24_14_6_final_acceptance_report(
     *,
     output_path: Path = FINAL_ACCEPTANCE_PATH,
     benchmark_result_file_sha256: str | None = None,
-    engine_main_sha: str | None = None,
+    closure_seal_issue_number: int = M24_14_6_CLOSURE_SEAL_ISSUE_NUMBER,
+    closure_seal_pr_number: int | None = None,
 ) -> dict[str, Any]:
     result = validate_authenticated_benchmark_result(
         benchmark_result,
@@ -458,9 +476,17 @@ def build_m24_14_6_final_acceptance_report(
             "pass_with_documented_network_variance",
         },
         "issue_number": M24_14_6_ISSUE_NUMBER,
+        "issues": {
+            "chrome_compatibility": M24_14_6_ISSUE_NUMBER,
+            "final_closure_seal": closure_seal_issue_number,
+        },
+        "closure_pr": closure_seal_pr_number,
         "release_id": CANONICAL_RELEASE_ID,
         "manifest_sha256": CANONICAL_MANIFEST_SHA256,
-        "engine_main_sha": engine_main_sha or "recorded_in_git",
+        "engine_product_acceptance_sha": M24_14_6_PRODUCT_ACCEPTANCE_SHA,
+        "closure_seal_base_sha": M24_14_6_CLOSURE_SEAL_BASE_SHA,
+        "closure_seal_ref": M24_14_6_CLOSURE_SEAL_REF,
+        "closure_seal_attestation": "post_merge",
         "validated_benchmark_result": {
             "authority": result["authority"],
             "decision": result["decision"],
@@ -482,6 +508,7 @@ def build_m24_14_6_final_acceptance_report(
             "pages_project": M24_14_6_PAGES_PROJECT,
             "protected_custom_hostname": M24_14_6_CUSTOM_HOSTNAME,
             "accepted_deployment_id": result["deployment_id"],
+            "final_surface_deployment_id": M24_14_6_FINAL_SURFACE_DEPLOYMENT,
             "rollback_deployments": [
                 M24_14_6_IMMEDIATE_ROLLBACK_DEPLOYMENT,
                 M24_14_6_SECONDARY_ROLLBACK_DEPLOYMENT,
@@ -566,16 +593,28 @@ def build_m24_14_6_m25_entry_baseline(
         "m24_14_6_closed": True,
         "daniel_acceptance_recorded": True,
         "authenticated_performance_decision": report["validated_benchmark_result"]["decision"],
-        "engine_main_sha": report["engine_main_sha"],
+        "engine_product_acceptance_sha": report["engine_product_acceptance_sha"],
+        "closure_seal_base_sha": report["closure_seal_base_sha"],
+        "closure_seal_ref": report["closure_seal_ref"],
+        "closure_seal_attestation": "post_merge",
+        "closure_seal_issue_number": report["issues"]["final_closure_seal"],
+        "closure_seal_pr_number": report["closure_pr"],
         "deployment_id": identities["deployment_id"],
         "release_id": identities["release_id"],
         "manifest_sha256": identities["manifest_sha256"],
         "source_sha": identities["source_sha"],
         "foundation_sha": identities["foundation_sha"],
         "vault_sha256": identities["vault_sha256"],
+        "accepted_benchmark_deployment_id": identities["deployment_id"],
+        "final_surface_deployment_id": report["deployment_and_rollback"][
+            "final_surface_deployment_id"
+        ],
+        "benchmark_file_sha256": report["validated_benchmark_result"]["file_sha256"],
+        "benchmark_self_sha256": report["validated_benchmark_result"]["self_sha256"],
         "production_retrieval": "lexical",
         "semantic_serving_enabled": False,
         "hybrid_retrieval_enabled": False,
+        "production_answer_serving_enabled": False,
         "large_scale_ingestion_enabled": False,
         "protected_mutations": _m24_14_6_protected_mutations_payload(),
         "m25_allowed_next": [
@@ -593,14 +632,16 @@ def write_m24_14_6_stage_b_artifacts(
     benchmark_result: Mapping[str, Any],
     *,
     benchmark_result_file_sha256: str | None = None,
-    engine_main_sha: str | None = None,
+    closure_seal_issue_number: int = M24_14_6_CLOSURE_SEAL_ISSUE_NUMBER,
+    closure_seal_pr_number: int | None = None,
     final_acceptance_path: Path = FINAL_ACCEPTANCE_PATH,
     m25_entry_baseline_path: Path = M25_ENTRY_BASELINE_PATH,
 ) -> list[M24_14_6Artifact]:
     final_report = build_m24_14_6_final_acceptance_report(
         benchmark_result,
         benchmark_result_file_sha256=benchmark_result_file_sha256,
-        engine_main_sha=engine_main_sha,
+        closure_seal_issue_number=closure_seal_issue_number,
+        closure_seal_pr_number=closure_seal_pr_number,
         output_path=final_acceptance_path,
     )
     build_m24_14_6_m25_entry_baseline(final_report, output_path=m25_entry_baseline_path)

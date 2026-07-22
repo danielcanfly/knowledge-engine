@@ -1,0 +1,52 @@
+name: M24.14.6 final closure seal
+
+on:
+  pull_request:
+    paths:
+      - "src/knowledge_engine/m24_14_6_authenticated_performance.py"
+      - "src/knowledge_engine/m24_14_6_final_closure_seal.py"
+      - "scripts/m24_14_6_final_closure_seal.py"
+      - "tests/test_m24_14_6_authenticated_performance.py"
+      - "tests/test_m24_14_6_final_closure_seal.py"
+      - "pilot/m24/m24-14-6/**"
+      - ".github/workflows/m24-14-6-final-closure-seal.yml"
+      - ".github/workflows/m24-14-6-final-closure-attestation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  closure-seal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Validate committed portable benchmark evidence
+        run: |
+          python scripts/m24_14_6_final_closure_seal.py validate-committed
+      - name: Lint closure files
+        run: |
+          ruff check \
+            src/knowledge_engine/m24_14_6_authenticated_performance.py \
+            src/knowledge_engine/m24_14_6_final_closure_seal.py \
+            scripts/m24_14_6_final_closure_seal.py \
+            tests/test_m24_14_6_authenticated_performance.py \
+            tests/test_m24_14_6_final_closure_seal.py
+      - name: Run closure tests
+        run: |
+          pytest -q \
+            tests/test_m24_14_6_authenticated_performance.py \
+            tests/test_m24_14_6_final_closure_seal.py
+      - name: Reject ambiguous git placeholders
+        run: |
+          ! grep -R "recorded_in_git" \
+            pilot/m24/m24-14-6/m24-14-6-final-acceptance.json \
+            pilot/m24/m24-14-6/m25-entry-baseline.json \
+            pilot/m24/internal-product-deployment/site/data/m24-14-6-final-acceptance.json

@@ -1,0 +1,71 @@
+name: M24.14.6 final closure attestation
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Closure issue number"
+        required: true
+        default: "1034"
+      pr_number:
+        description: "Closure PR number"
+        required: true
+      pr_head_sha:
+        description: "Reviewed closure PR head SHA"
+        required: true
+      final_surface_deployment_id:
+        description: "Final protected Cloudflare Pages surface deployment"
+        required: true
+      ci_runs:
+        description: "Comma-separated name=run_id entries"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Verify closure tag target
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          test "$(git rev-parse refs/tags/m24-14-6-final-closure^{})" = "$GITHUB_SHA"
+      - name: Generate post-merge attestation
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          IFS=',' read -ra runs <<< "${{ inputs.ci_runs }}"
+          for run in "${runs[@]}"; do
+            if [ -n "$run" ]; then
+              args+=(--ci-run "$run")
+            fi
+          done
+          python scripts/m24_14_6_final_closure_seal.py post-merge-attest \
+            --output-dir /tmp/m24-14-6-final-closure-attestation \
+            --issue-number "${{ inputs.issue_number }}" \
+            --pr-number "${{ inputs.pr_number }}" \
+            --pr-head-sha "${{ inputs.pr_head_sha }}" \
+            --merge-sha "$GITHUB_SHA" \
+            --final-surface-deployment-id "${{ inputs.final_surface_deployment_id }}" \
+            "${args[@]}"
+      - name: Upload final closure attestation
+        uses: actions/upload-artifact@v4
+        with:
+          name: m24-14-6-final-closure-attestation
+          path: /tmp/m24-14-6-final-closure-attestation
+          if-no-files-found: error
+          retention-days: 90
