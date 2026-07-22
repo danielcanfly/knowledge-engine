@@ -105,6 +105,11 @@ def _apply_lint_fixes() -> None:
         '    unsigned["live_provider_calls_permitted"] = True\n'
         '    policy = signed(unsigned, "model_policy_sha256")\n',
     )
+    _replace(
+        ".github/workflows/m25-3-extraction-worker.yml",
+        "          python -m pytest -q\n",
+        "          PYTHONPATH=tests python -m pytest -q\n",
+    )
 
 
 def _patch_pyproject() -> None:
