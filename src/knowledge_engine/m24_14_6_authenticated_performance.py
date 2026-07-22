@@ -18,28 +18,18 @@ from .m24_product_surface_integration import (
 
 M24_14_6_POLICY_SCHEMA = "knowledge-engine-m24-14-6-benchmark-policy/v1"
 M24_14_6_CASES_SCHEMA = "knowledge-engine-m24-14-6-benchmark-cases/v1"
-M24_14_6_ACCEPTANCE_MATRIX_SCHEMA = (
-    "knowledge-engine-m24-14-6-acceptance-matrix/v1"
-)
-M24_14_6_HUMAN_ACCEPTANCE_SCHEMA = (
-    "knowledge-engine-m24-14-6-human-acceptance-record/v1"
-)
-M24_14_6_PENDING_ACCEPTANCE_SCHEMA = (
-    "knowledge-engine-m24-14-6-pending-final-acceptance/v1"
-)
-M24_14_6_AUTHENTICATED_RESULT_SCHEMA = (
-    "knowledge-engine-m24-14-6-authenticated-benchmark-result/v1"
-)
+M24_14_6_ACCEPTANCE_MATRIX_SCHEMA = "knowledge-engine-m24-14-6-acceptance-matrix/v1"
+M24_14_6_HUMAN_ACCEPTANCE_SCHEMA = "knowledge-engine-m24-14-6-human-acceptance-record/v1"
+M24_14_6_PENDING_ACCEPTANCE_SCHEMA = "knowledge-engine-m24-14-6-pending-final-acceptance/v1"
+M24_14_6_AUTHENTICATED_RESULT_SCHEMA = "knowledge-engine-m24-14-6-authenticated-benchmark-result/v1"
 
 M24_14_6_STATUS = (
-    "m24_14_6_benchmark_harness_repair_deployed_pending_daniel_authenticated_benchmark"
+    "m24_14_6_system_chrome_auth_compatibility_repaired_pending_daniel_authenticated_benchmark"
 )
-M24_14_6_ISSUE_NUMBER = 1026
-M24_14_6_REQUIRED_BASE_SHA = "01c763eac7b5476765482c9b2fe6d1b5b78242b5"
+M24_14_6_ISSUE_NUMBER = 1030
+M24_14_6_REQUIRED_BASE_SHA = "28131aa4cb262a306bc792f95e55d69a20f5d818"
 M24_14_6_FOUNDATION_SHA = "e5ef644053d34e89c70d2ceb37521e1c59234832"
-M24_14_6_ACCEPTED_VAULT_SHA256 = (
-    "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
-)
+M24_14_6_ACCEPTED_VAULT_SHA256 = "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
 M24_14_6_PRE_STAGE_A_PROTECTED_DEPLOYMENT = "5361997c-fe53-47a5-998e-81244a6470ab"
 M24_14_6_IMMEDIATE_ROLLBACK_DEPLOYMENT = "b570b0c7-a812-4878-8573-e7b7d41faf78"
 M24_14_6_SECONDARY_ROLLBACK_DEPLOYMENT = "586deae3-d679-45e2-8542-ec6845f9f2e7"
@@ -47,7 +37,7 @@ M24_14_6_PAGES_PROJECT = "llm-wiki-m24-internal"
 M24_14_6_CUSTOM_HOSTNAME = "https://m24-internal.danielcanfly.com/"
 M24_14_6_DANIEL_COMMAND = (
     "python scripts/m24_14_6_authenticated_benchmark.py --headed --capture-auth "
-    "--deployment-id <exact-repaired-deployment-id>"
+    "--browser-channel chrome --deployment-id e73c3563-01eb-4c37-b2a6-500e2b86b87c"
 )
 M24_14_6_PRE_REPAIR_DEPLOYMENT = "ee80820e-727b-4a05-8b47-121fad33c1d5"
 PLACEHOLDER_DEPLOYMENT_IDS = frozenset({"", "protected-current", "current", "latest"})
@@ -74,7 +64,8 @@ BENCHMARK_CASE_IDS = (
 
 SENSITIVE_KEY_RE = re.compile(
     r"(cookie|authorization|token|email|account|jwt|header|local[_-]?storage|"
-    r"session[_-]?storage|profile[_-]?path|ip[_-]?address)",
+    r"session[_-]?storage|profile[_-]?path|user[_-]?data|cdp|devtools|"
+    r"debug(?:ging)?[_-]?port|endpoint|executable|process[_-]?id|pid|ip[_-]?address)",
     re.I,
 )
 SENSITIVE_VALUE_RE = re.compile(
@@ -325,8 +316,7 @@ def build_m24_14_5_human_acceptance_record(
                 "item": "obsidian_opens_and_full_source",
                 "status": "accepted",
                 "basis": (
-                    "Daniel explicitly reported the current Vault downloaded "
-                    "and opened normally."
+                    "Daniel explicitly reported the current Vault downloaded and opened normally."
                 ),
             },
         ],
@@ -766,9 +756,7 @@ def _validate_case_evidence(cases: Mapping[str, Any], reason_codes: list[str]) -
         reason_codes.append("source_structured_json:no_records")
     if structured.get("truncated") is True:
         reason_codes.append("source_structured_json:truncated")
-    expected_structured_sha = (
-        "c9a6da0252fee27033bed294ffd22617de2130f4fa2ecd996385ea44b72cc46f"
-    )
+    expected_structured_sha = "c9a6da0252fee27033bed294ffd22617de2130f4fa2ecd996385ea44b72cc46f"
     if structured.get("snapshot_sha256") != expected_structured_sha:
         reason_codes.append("source_structured_json:snapshot_sha_mismatch")
 
@@ -907,9 +895,7 @@ def _enforce_sample_resource_limits(
             > policy["resource_guardrails"]["runtime_third_party_cdn_requests_max"]
         ):
             reason_codes.append(f"{label}:runtime_third_party_cdn_requests_max_exceeded")
-        max_long_task_total = policy["timing_budgets_ms"][
-            "long_task_total_per_case_max"
-        ]
+        max_long_task_total = policy["timing_budgets_ms"]["long_task_total_per_case_max"]
         if resources["long_task_total_ms"] > max_long_task_total:
             reason_codes.append(f"{label}:long_task_total_per_case_max_exceeded")
         if resources["long_task_max_ms"] > policy["timing_budgets_ms"]["individual_long_task_max"]:

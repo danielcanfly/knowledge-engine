@@ -20,7 +20,7 @@
   "daniel_action_count": 1,
   "daniel_actions": [
     {
-      "command": "python scripts/m24_14_6_authenticated_benchmark.py --headed --capture-auth --deployment-id <exact-repaired-deployment-id>",
+      "command": "python scripts/m24_14_6_authenticated_benchmark.py --headed --capture-auth --browser-channel chrome --deployment-id e73c3563-01eb-4c37-b2a6-500e2b86b87c",
       "id": "run_authenticated_browser_benchmark_after_access_login",
       "required_actor": "Daniel",
       "return_artifact": "sanitized authenticated benchmark JSON only"
@@ -35,7 +35,7 @@
   },
   "final_acceptance_claimed": false,
   "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
-  "issue_number": 1026,
+  "issue_number": 1030,
   "local_ci_regression_authority": "local_exact_site_browser_regression",
   "manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
   "manual_browser_acceptance_claimed": false,
@@ -82,8 +82,8 @@
     "586deae3-d679-45e2-8542-ec6845f9f2e7"
   ],
   "schema_version": "knowledge-engine-m24-14-6-pending-final-acceptance/v1",
-  "self_sha256": "a23a4c4a98009d78a64da748346799543702092d18e0a3c8f0067bef9fcac162",
+  "self_sha256": "3dd805b316066e36a615598b90d70634fa446507016220646b7f0c7c815f2661",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
-  "status": "m24_14_6_benchmark_harness_repair_deployed_pending_daniel_authenticated_benchmark",
+  "status": "m24_14_6_system_chrome_auth_compatibility_repaired_pending_daniel_authenticated_benchmark",
   "vault_sha256": "054f2a349c173d62de0d2e7b575fbb97a46611ac435653eb6c9eca5255272f64"
 }
