@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,24 +43,6 @@ def main() -> None:
         "tests/test_m25_2_intake_orchestrator_contracts.py",
         [("    first = resume_orchestrator(\n", "    resume_orchestrator(\n")],
     )
-    paths = [
-        "src/knowledge_engine/m25_intake_adapters.py",
-        "src/knowledge_engine/m25_intake_batch.py",
-        "src/knowledge_engine/m25_intake_compat.py",
-        "src/knowledge_engine/m25_intake_inventory.py",
-        "src/knowledge_engine/m25_intake_orchestrator.py",
-        "src/knowledge_engine/m25_intake_persistence.py",
-        "src/knowledge_engine/m25_intake_registry.py",
-        "src/knowledge_engine/m25_intake_state.py",
-        "tests/test_m25_2_intake_orchestrator.py",
-        "tests/test_m25_2_intake_orchestrator_contracts.py",
-    ]
-    subprocess.run(
-        ["python", "-m", "ruff", "check", "--fix", "--unsafe-fixes", *paths],
-        cwd=ROOT,
-        check=True,
-    )
-    Path(__file__).unlink()
 
 
 if __name__ == "__main__":
