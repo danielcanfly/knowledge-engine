@@ -1,12 +1,6 @@
 name: M25.3 Materialize Implementation
 
 on:
-  push:
-    branches:
-      - chatgpt/m25-3-extraction-worker
-    paths:
-      - '.github/workflows/m25-3-bootstrap.yml'
-      - 'scripts/m25_3_materialize.py'
   pull_request:
     paths:
       - '.github/workflows/m25-3-bootstrap.yml'
@@ -30,11 +24,27 @@ jobs:
         run: python scripts/m25_3_materialize.py
       - name: Install exact project dependencies
         run: python -m pip install --disable-pip-version-check -e '.[dev]'
-      - name: Lint generated implementation
-        run: >-
-          python -m ruff check
-          src/knowledge_engine/m25_extraction_*.py
-          tests/test_m25_3_extraction_*.py
+      - name: Capture M25.3 lint diagnostics
+        run: |
+          set +e
+          python -m ruff check --output-format json \
+            src/knowledge_engine/m25_extraction_*.py \
+            tests/test_m25_3_extraction_*.py \
+            > /tmp/m25-3-ruff.json
+          status=$?
+          echo "$status" > /tmp/m25-3-ruff.exit
+          exit 0
+      - name: Upload M25.3 lint diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-3-ruff-diagnostics
+          path: |
+            /tmp/m25-3-ruff.json
+            /tmp/m25-3-ruff.exit
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce M25.3 lint result
+        run: test "$(cat /tmp/m25-3-ruff.exit)" = "0"
       - name: Test generated implementation
         run: >-
           python -m pytest -q
