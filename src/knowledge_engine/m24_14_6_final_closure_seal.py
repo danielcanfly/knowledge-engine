@@ -232,11 +232,11 @@ def build_m25_final_entry_baseline(
         tag_target_sha=tag_target_sha,
     )
     payload: dict[str, Any] = {
+        **identities,
         "schema_version": M25_FINAL_BASELINE_SCHEMA,
         "m24_14_6_closed": True,
         "daniel_acceptance_recorded": True,
         "authenticated_performance_decision": "pass",
-        **identities,
         "source_sha": CANONICAL_SOURCE_SHA,
         "foundation_sha": M24_14_6_FOUNDATION_SHA,
         "release_id": CANONICAL_RELEASE_ID,
