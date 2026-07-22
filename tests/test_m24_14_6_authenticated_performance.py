@@ -268,8 +268,7 @@ def _authenticated_result(
         },
         "iterations": {"cold_completed": cold, "warm_completed": warm},
         "cases": {
-            case_id: _case_result(case_id, cold=cold, warm=warm)
-            for case_id in BENCHMARK_CASE_IDS
+            case_id: _case_result(case_id, cold=cold, warm=warm) for case_id in BENCHMARK_CASE_IDS
         },
         "interactions": _interactions(warm=warm),
         "viewport_results": _viewport_results(),
@@ -310,11 +309,10 @@ def test_m24_14_6_pending_report_has_exact_gate_and_one_daniel_action() -> None:
     assert report["local_ci_regression_authority"] == "local_exact_site_browser_regression"
     assert report["deployment_identity"]["pre_repair_deployment"]
     assert (
-        report["deployment_identity"]["post_repair_deployment_recorded_in_return_handoff"]
-        is True
+        report["deployment_identity"]["post_repair_deployment_recorded_in_return_handoff"] is True
     )
     assert (
-        "--deployment-id <exact-repaired-deployment-id>"
+        "--browser-channel chrome --deployment-id e73c3563-01eb-4c37-b2a6-500e2b86b87c"
         in report["daniel_actions"][0]["command"]
     )
     assert report["policy_coverage"] == required_policy_coverage_payload()
@@ -339,10 +337,13 @@ def test_m24_14_5_human_acceptance_record_does_not_overclaim() -> None:
 def test_m24_14_6_authenticated_result_validator_accepts_sanitized_result() -> None:
     result = _authenticated_result()
 
-    assert validate_authenticated_benchmark_result(
-        result,
-        expected_deployment_id="11111111-2222-4333-8444-555555555555",
-    ) == result
+    assert (
+        validate_authenticated_benchmark_result(
+            result,
+            expected_deployment_id="11111111-2222-4333-8444-555555555555",
+        )
+        == result
+    )
 
 
 @pytest.mark.parametrize(
@@ -361,9 +362,7 @@ def test_m24_14_6_authenticated_result_validator_accepts_sanitized_result() -> N
         (lambda data: data["errors"].update({"console_errors": 1}), "console"),
         (lambda data: data.update({"decision": "done"}), "decision"),
         (
-            lambda data: data["cases"]["overview"]["aggregates"].update(
-                {"warm_p95_ms": 1}
-            ),
+            lambda data: data["cases"]["overview"]["aggregates"].update({"warm_p95_ms": 1}),
             "aggregate",
         ),
         (lambda data: data.update({"reason_codes": ["manual-pass"]}), "reason"),
@@ -467,6 +466,11 @@ def test_m24_14_6_authenticated_result_validator_rejects_evidence_and_policy_dri
         ("email", "redacted"),
         ("raw_header", "redacted"),
         ("profile_path", "redacted"),
+        ("cdp_endpoint", "http://127.0.0.1:45678"),
+        ("debugging_port", "45678"),
+        ("chrome_executable_path", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        ("process_id", "12345"),
+        ("user_data_dir", "/tmp/m24-14-6-chrome-profile"),
         ("note", "operator@example.invalid"),
         ("note", "Bearer abcdefghijklmnopqrstuvwxyz"),
     ],

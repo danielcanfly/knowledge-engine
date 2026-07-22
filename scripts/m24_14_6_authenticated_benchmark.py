@@ -6,10 +6,15 @@ import json
 import platform
 import re
 import shutil
+import socket
+import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 import zipfile
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -62,6 +67,45 @@ DEEP_MARKERS = (
     "Simple requests pay the latency and error surface of planning",
     "The production objective is not maximum planning freedom",
 )
+SUPPORTED_BROWSER_CHANNELS = ("chromium", "chrome", "msedge")
+SUPPORTED_BROWSER_MODES = ("playwright", "chrome-cdp")
+
+
+@dataclass
+class BrowserSession:
+    context: Any
+    browser_name: str
+    browser_version: str
+    browser_mode: str
+    browser_channel: str
+    profile_dir: Path | None = None
+    connected_browser: Any | None = None
+    dedicated_process: subprocess.Popen | None = None
+
+    def close(self) -> None:
+        try:
+            if self.connected_browser is not None:
+                self.connected_browser.close()
+            else:
+                self.context.close()
+        finally:
+            close_dedicated_process(self.dedicated_process)
+            if self.profile_dir is not None:
+                shutil.rmtree(self.profile_dir, ignore_errors=True)
+
+
+class ViewportContext:
+    def __init__(self, context: Any, viewport: dict[str, int]) -> None:
+        self._context = context
+        self._viewport = viewport
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._context, name)
+
+    def new_page(self) -> Any:
+        page = self._context.new_page()
+        page.set_viewport_size(self._viewport)
+        return page
 
 
 def main() -> int:
@@ -71,9 +115,7 @@ def main() -> int:
     if not base_url.endswith("/"):
         base_url += "/"
     authority = (
-        "local_exact_site_browser_regression"
-        if args.local_regression
-        else "authenticated_live"
+        "local_exact_site_browser_regression" if args.local_regression else "authenticated_live"
     )
     cold_iterations = args.cold_iterations
     warm_iterations = args.warm_iterations
@@ -82,29 +124,25 @@ def main() -> int:
         cold_iterations = max(cold_iterations, policy_iterations["cold_min"])
         warm_iterations = max(warm_iterations, policy_iterations["warm_min"])
 
-    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-    from playwright.sync_api import sync_playwright
+    try:
+        from playwright.sync_api import Error as PlaywrightError
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+        from playwright.sync_api import sync_playwright
+    except ModuleNotFoundError as exc:
+        raise SystemExit(
+            "Playwright is not installed. Install the repository test dependencies, "
+            "then rerun this benchmark."
+        ) from exc
 
-    profile_dir: Path | None = None
+    session: BrowserSession | None = None
     try:
         with sync_playwright() as playwright:
-            if args.capture_auth:
-                profile_dir = Path(tempfile.mkdtemp(prefix="m24-14-6-browser-"))
-                context = playwright.chromium.launch_persistent_context(
-                    str(profile_dir),
-                    headless=not args.headed,
-                    viewport={"width": args.width, "height": args.height},
-                )
-                browser_name = "chromium"
-                browser_version = context.browser.version if context.browser else "unknown"
-            else:
-                browser = playwright.chromium.launch(headless=not args.headed)
-                context = browser.new_context(
-                    viewport={"width": args.width, "height": args.height},
-                    storage_state=args.storage_state,
-                )
-                browser_name = browser.browser_type.name
-                browser_version = browser.version
+            try:
+                session = launch_browser_session(playwright, args)
+            except PlaywrightError as exc:
+                message = friendly_playwright_error(exc)
+                raise SystemExit(f"browser launch failed: {message}") from exc
+            context = session.context
             context.add_init_script(LONG_TASK_OBSERVER_SCRIPT)
             if not args.local_regression:
                 page = context.new_page()
@@ -114,19 +152,22 @@ def main() -> int:
                 context=context,
                 base_url=base_url,
                 authority=authority,
-                browser_name=browser_name,
-                browser_version=browser_version,
+                browser_name=session.browser_name,
+                browser_version=session.browser_version,
+                browser_mode=session.browser_mode,
+                browser_channel=session.browser_channel,
                 deployment_id=args.deployment_id,
                 cold_iterations=cold_iterations,
                 warm_iterations=warm_iterations,
                 viewport={"width": args.width, "height": args.height},
             )
-            context.close()
+            session.close()
+            session = None
     except PlaywrightTimeoutError as exc:
         raise SystemExit(f"benchmark timeout before sanitized result was produced: {exc}") from exc
     finally:
-        if profile_dir is not None:
-            shutil.rmtree(profile_dir, ignore_errors=True)
+        if session is not None:
+            session.close()
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -153,6 +194,24 @@ def parse_args() -> argparse.Namespace:
         help="Run local exact-site browser regression without authenticated-live authority.",
     )
     parser.add_argument("--storage-state", type=Path)
+    parser.add_argument(
+        "--browser-channel",
+        choices=SUPPORTED_BROWSER_CHANNELS,
+        default="chromium",
+        help=(
+            "Browser channel for Playwright launch. Use 'chrome' for official "
+            "Google Chrome in headed capture-auth mode; default remains bundled Chromium."
+        ),
+    )
+    parser.add_argument(
+        "--browser-mode",
+        choices=SUPPORTED_BROWSER_MODES,
+        default="playwright",
+        help=(
+            "Browser launch mode. 'chrome-cdp' starts a dedicated official Chrome "
+            "with a temporary profile and loopback-only CDP, then attaches to it."
+        ),
+    )
     parser.add_argument("--cold-iterations", type=int, default=5)
     parser.add_argument("--warm-iterations", type=int, default=20)
     parser.add_argument("--width", type=int, default=1440)
@@ -167,9 +226,183 @@ def parse_args() -> argparse.Namespace:
         raise SystemExit("--local-regression does not capture Cloudflare Access auth")
     if args.storage_state and ROOT in args.storage_state.resolve().parents:
         raise SystemExit("--storage-state must not point inside the repository")
+    if args.browser_mode == "chrome-cdp":
+        if not args.capture_auth:
+            raise SystemExit("--browser-mode chrome-cdp requires --capture-auth")
+        if args.browser_channel != "chrome":
+            raise SystemExit("--browser-mode chrome-cdp requires --browser-channel chrome")
+        if args.local_regression:
+            raise SystemExit("--browser-mode chrome-cdp is for authenticated capture only")
     if args.cold_iterations < 1 or args.warm_iterations < 1:
         raise SystemExit("--cold-iterations and --warm-iterations must be positive")
     return args
+
+
+def launch_browser_session(playwright, args: argparse.Namespace) -> BrowserSession:
+    viewport = {"width": args.width, "height": args.height}
+    if args.browser_mode == "chrome-cdp":
+        return launch_dedicated_chrome_cdp_session(playwright, viewport, headed=args.headed)
+    if args.capture_auth:
+        profile_dir = isolated_temp_profile_dir()
+        launch_options: dict[str, Any] = {
+            "headless": not args.headed,
+            "viewport": viewport,
+        }
+        if args.browser_channel != "chromium":
+            launch_options["channel"] = args.browser_channel
+        context = playwright.chromium.launch_persistent_context(
+            str(profile_dir),
+            **launch_options,
+        )
+        version = context.browser.version if context.browser else "unknown"
+        return BrowserSession(
+            context=context,
+            browser_name="chromium",
+            browser_version=version,
+            browser_mode="playwright_persistent_context",
+            browser_channel=args.browser_channel,
+            profile_dir=profile_dir,
+        )
+    launch_options = {"headless": not args.headed}
+    if args.browser_channel != "chromium":
+        launch_options["channel"] = args.browser_channel
+    browser = playwright.chromium.launch(**launch_options)
+    context = browser.new_context(
+        viewport=viewport,
+        storage_state=args.storage_state,
+    )
+    return BrowserSession(
+        context=context,
+        browser_name=browser.browser_type.name,
+        browser_version=browser.version,
+        browser_mode="playwright_ephemeral_context",
+        browser_channel=args.browser_channel,
+        connected_browser=browser,
+    )
+
+
+def launch_dedicated_chrome_cdp_session(
+    playwright,
+    viewport: dict[str, int],
+    *,
+    headed: bool,
+) -> BrowserSession:
+    if not headed:
+        raise SystemExit("--browser-mode chrome-cdp requires --headed")
+    executable = official_google_chrome_executable()
+    if executable is None:
+        raise SystemExit(
+            "Official Google Chrome was not found. Install Google Chrome, then rerun with "
+            "--browser-channel chrome."
+        )
+    profile_dir = isolated_temp_profile_dir()
+    port = unused_loopback_port()
+    process = subprocess.Popen(
+        [
+            executable.as_posix(),
+            f"--user-data-dir={profile_dir.as_posix()}",
+            "--remote-debugging-address=127.0.0.1",
+            f"--remote-debugging-port={port}",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "about:blank",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        wait_for_cdp_endpoint(port)
+        browser = playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
+        context = browser.contexts[0] if browser.contexts else browser.new_context()
+        wrapped = ViewportContext(context, viewport)
+        return BrowserSession(
+            context=wrapped,
+            browser_name="chromium",
+            browser_version=browser.version,
+            browser_mode="dedicated_chrome_cdp",
+            browser_channel="chrome",
+            profile_dir=profile_dir,
+            connected_browser=browser,
+            dedicated_process=process,
+        )
+    except Exception:
+        close_dedicated_process(process)
+        shutil.rmtree(profile_dir, ignore_errors=True)
+        raise
+
+
+def isolated_temp_profile_dir() -> Path:
+    path = Path(tempfile.mkdtemp(prefix="m24-14-6-chrome-profile-"))
+    try:
+        path.relative_to(ROOT)
+    except ValueError:
+        return path
+    raise SystemExit("temporary browser profile must be outside the repository")
+
+
+def official_google_chrome_executable() -> Path | None:
+    candidates: list[Path]
+    system = platform.system()
+    if system == "Darwin":
+        candidates = [
+            Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+            Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        ]
+    elif system == "Windows":
+        candidates = [
+            Path("C:/Program Files/Google/Chrome/Application/chrome.exe"),
+            Path("C:/Program Files (x86)/Google/Chrome/Application/chrome.exe"),
+        ]
+    else:
+        candidates = [
+            Path("/usr/bin/google-chrome"),
+            Path("/usr/bin/google-chrome-stable"),
+            Path("/opt/google/chrome/google-chrome"),
+        ]
+    return next((candidate for candidate in candidates if candidate.exists()), None)
+
+
+def unused_loopback_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as handle:
+        handle.bind(("127.0.0.1", 0))
+        return int(handle.getsockname()[1])
+
+
+def wait_for_cdp_endpoint(port: int, timeout_ms: int = 15_000) -> None:
+    deadline = time.monotonic() + timeout_ms / 1000
+    url = f"http://127.0.0.1:{port}/json/version"
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=0.5) as response:
+                if response.status == 200:
+                    return
+        except (OSError, urllib.error.URLError):
+            time.sleep(0.1)
+    raise SystemExit("Dedicated Google Chrome did not expose a loopback DevTools endpoint")
+
+
+def close_dedicated_process(process: subprocess.Popen | None) -> None:
+    if process is None or process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
+def friendly_playwright_error(exc: Exception) -> str:
+    message = str(exc)
+    if "Executable doesn't exist" in message or "Looks like Playwright" in message:
+        return (
+            "the requested browser is unavailable. For local/CI Chromium, run the "
+            "repository Playwright browser install. For Daniel's auth flow, install "
+            "official Google Chrome and use --browser-channel chrome."
+        )
+    if "channel" in message.lower() and "chrome" in message.lower():
+        return "official Google Chrome is unavailable for Playwright channel 'chrome'."
+    return message
 
 
 def default_output_path(local_regression: bool) -> Path:
@@ -210,6 +443,8 @@ def run_benchmark(
     authority: str,
     browser_name: str,
     browser_version: str,
+    browser_mode: str,
+    browser_channel: str,
     deployment_id: str,
     cold_iterations: int,
     warm_iterations: int,
@@ -276,6 +511,8 @@ def run_benchmark(
         "environment": {
             "browser_name": browser_name,
             "browser_version": browser_version,
+            "browser_mode": browser_mode,
+            "browser_channel": browser_channel,
             "os_family": platform.system(),
             "viewport": viewport,
         },
@@ -722,9 +959,7 @@ def case_obsidian_vault(page, context, base_url: str) -> dict[str, Any]:
             }
     unresolved = unresolved_wikilinks(texts, names)
     deep_markers = [
-        marker
-        for marker in DEEP_MARKERS
-        if any(marker in text for text in texts.values())
+        marker for marker in DEEP_MARKERS if any(marker in text for text in texts.values())
     ]
     return {
         "vault_zip_sha256": actual,
