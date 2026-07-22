@@ -71,9 +71,9 @@
       "sha256": "8b385642b0241d9de1147dcac462f1e2e600330dcc7af142cb4f02a7a74e6e3e"
     },
     {
-      "bytes": 2367,
+      "bytes": 4160,
       "path": "pilot/m24/internal-product-deployment/site/data/m24-14-6-pending-acceptance.json",
-      "sha256": "0f4f49a4f41ebffc7e5723101788fa3a6319dfb6e08dafb4d951b6f3bc3a280f"
+      "sha256": "ab0c9b23a8b5c3c8b1b7334b35e5ea598f1d9bc13017849f8c74200a811660fc"
     }
   ],
   "authority": {
@@ -172,7 +172,7 @@
     "same_origin_artifact_fetch_only": true,
     "secret_scan_passed": true
   },
-  "self_sha256": "2dd5ad255629a35886db41b730e7d6cced34668b5319fc797b719febb0cd1895",
+  "self_sha256": "374397b34de0481ad9d1b045ac84cb7783baa6ea0dfad580b883e12d2ac60239",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "m24_14_1_product_application_shell_implemented"
 }
