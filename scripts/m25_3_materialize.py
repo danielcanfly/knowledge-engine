@@ -132,6 +132,16 @@ def _apply_lint_fixes() -> None:
         "          python -m pytest -q\n",
         "          PYTHONPATH=tests python -m pytest -q\n",
     )
+    _replace(
+        "docs/architecture/m25/m25-3-extraction-worker.md",
+        "**Accepted predecessor:** `m25_2_intake_orchestrator_accepted`  \n",
+        "**Accepted predecessor:** `m25_2_intake_orchestrator_accepted`\n",
+    )
+    _replace(
+        "docs/architecture/m25/m25-3-extraction-worker.md",
+        "**Entry Engine main:** `cc83a1e6bae1dce45fca50d3fdb515c26a70d0f9`  \n",
+        "**Entry Engine main:** `cc83a1e6bae1dce45fca50d3fdb515c26a70d0f9`\n",
+    )
 
 
 def _patch_pyproject() -> None:
@@ -158,6 +168,7 @@ def main() -> None:
     _patch_pyproject()
     (ROOT / ".github" / "workflows" / "m25-3-bootstrap.yml").unlink()
     Path(__file__).unlink()
+
 
 if __name__ == "__main__":
     main()
