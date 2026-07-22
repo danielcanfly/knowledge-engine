@@ -926,11 +926,6 @@ def _enforce_resource_guardrails(
         > policy["resource_guardrails"]["runtime_third_party_cdn_requests_max"]
     ):
         reason_codes.append("resource_summary:runtime_third_party_cdn_requests_max_exceeded")
-    if (
-        resource_summary["cold_traversal_transfer_bytes"]
-        > policy["resource_guardrails"]["cold_traversal_transfer_bytes_max"]
-    ):
-        reason_codes.append("resource_summary:cold_traversal_transfer_bytes_max_exceeded")
 
 
 def _recompute_errors(
