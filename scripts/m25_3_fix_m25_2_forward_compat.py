@@ -39,10 +39,6 @@ def main() -> None:
         "src/knowledge_engine/m25_intake_state.py",
         [("    _signed,\n", "")],
     )
-    patch(
-        "tests/test_m25_2_intake_orchestrator_contracts.py",
-        [("    first = resume_orchestrator(\n", "    resume_orchestrator(\n")],
-    )
 
 
 if __name__ == "__main__":
