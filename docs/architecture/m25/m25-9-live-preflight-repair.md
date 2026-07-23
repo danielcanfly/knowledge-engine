@@ -22,7 +22,7 @@ The M25.9 pilot uses three explicit credentials and never falls back silently:
 |---|---|---|
 | `CLOUDFLARE_PAGES_TOKEN` | Read, deploy and roll back the existing Pages project | Account `Pages Write`, scoped to the exact account |
 | `CLOUDFLARE_WORKERS_TOKEN` | Read/deploy/delete the candidate Worker and manage its route | Account `Workers Scripts Write`; zone `Workers Routes Write` and `Zone Read`, scoped to `danielcanfly.com` |
-| `CLOUDFLARE_ACCESS_READ_TOKEN` | Read the exact Access application and Zero Trust organization | Account `Access: Apps Read` and `Zero Trust Read`, scoped to the exact account |
+| `CLOUDFLARE_ACCESS_READ_TOKEN` | Read the exact Access application and Zero Trust organization | Account `Access: Apps and Policies Read` plus `Access: Organizations, Identity Providers, and Groups Read`, scoped to the exact account |
 
 The existing `CLOUDFLARE_ACCOUNT_ID` remains the account identity. Secret values must be entered only in GitHub Settings and must never be pasted into issues, pull requests, logs or chat.
 
