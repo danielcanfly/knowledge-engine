@@ -41,13 +41,31 @@ jobs:
           python-version: '3.11'
       - name: Install exact project dependencies
         run: python -m pip install --disable-pip-version-check -e '.[dev]'
-      - name: Lint materialized scope
+      - name: Capture materialized lint diagnostics
+        id: lint
+        continue-on-error: true
         run: >-
           python -m ruff check
           src/knowledge_engine/m25_identity_benchmark.py
           src/knowledge_engine/m25_identity_benchmark_cli.py
           tests/test_m25_4_identity_benchmark.py
           tests/test_m25_4_identity_benchmark_contracts.py
+          --output-format json > /tmp/m25-4-ruff.json
+      - name: Upload materialized lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-4-materializer-ruff
+          path: /tmp/m25-4-ruff.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce materialized lint result
+        if: always()
+        env:
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+        run: |
+          cat /tmp/m25-4-ruff.json
+          test "$LINT_OUTCOME" = success
       - name: Test inherited resolver and M25.4 contracts
         run: >-
           python -m pytest -q
