@@ -33,7 +33,7 @@ def load(path: Path) -> dict[str, Any]:
 
 def m26_inputs() -> dict[str, dict[str, Any]]:
     return {
-        "presentation_cases": load(PILOT / "m26-7-benchmark-cases.json"),
+        "presentation_cases_artifact": load(PILOT / "m26-7-benchmark-cases.json"),
         "evaluation_cases": load(PILOT / "m26-6-benchmark-cases.json"),
         "draft_cases": load(PILOT / "m26-5-benchmark-cases.json"),
         "provider_cases": load(PILOT / "m26-4-benchmark-cases.json"),
