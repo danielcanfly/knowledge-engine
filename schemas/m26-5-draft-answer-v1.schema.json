@@ -1,0 +1,158 @@
+{
+  "$defs": {
+    "citationBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "binding_id": {
+          "type": "string"
+        },
+        "citation_id": {
+          "type": "string"
+        },
+        "claim_id": {
+          "type": "string"
+        },
+        "context_manifest_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "context_package_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "passage_id": {
+          "type": "string"
+        },
+        "provider_replay_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "binding_id",
+        "claim_id",
+        "citation_id",
+        "passage_id",
+        "context_manifest_sha256",
+        "context_package_sha256",
+        "provider_replay_sha256"
+      ],
+      "type": "object"
+    },
+    "claim": {
+      "additionalProperties": false,
+      "properties": {
+        "binding_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "claim_id": {
+          "type": "string"
+        },
+        "non_final": {
+          "const": true
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "text",
+        "binding_ids",
+        "non_final"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "knowledge-engine-m26-5-draft-answer-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "answer_text": {
+      "type": "string"
+    },
+    "citation_bindings": {
+      "items": {
+        "$ref": "#/$defs/citationBinding"
+      },
+      "type": "array"
+    },
+    "claims": {
+      "items": {
+        "$ref": "#/$defs/claim"
+      },
+      "type": "array"
+    },
+    "context_package_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "diagnostics": {
+      "type": "object"
+    },
+    "final_answer": {
+      "const": false
+    },
+    "privacy_review_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "production_answer_serving": {
+      "const": false
+    },
+    "provider_replay_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "safe_for_m26_6": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-draft-answer/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "non_final_draft_answer",
+        "non_final_draft_answer_with_warnings",
+        "abstain_propagated",
+        "privacy_block_propagated"
+      ]
+    },
+    "synthetic_only": {
+      "const": true
+    },
+    "verified_final_answer": {
+      "const": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "provider_replay_sha256",
+    "status",
+    "safe_for_m26_6",
+    "synthetic_only",
+    "final_answer",
+    "verified_final_answer",
+    "production_answer_serving",
+    "answer_text",
+    "claims",
+    "citation_bindings",
+    "privacy_review_sha256",
+    "diagnostics",
+    "self_sha256"
+  ],
+  "title": "M26.5 Draft Answer Package",
+  "type": "object"
+}
