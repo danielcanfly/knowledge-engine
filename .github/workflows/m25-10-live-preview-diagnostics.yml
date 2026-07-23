@@ -1,0 +1,64 @@
+name: M25.10 Live Preview Diagnostics
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-10-live-preview-diagnostics.yml'
+      - 'src/knowledge_engine/m25_blog_live_candidate.py'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: python -m pip install -q --disable-pip-version-check -e '.[dev]'
+      - name: Run and capture complete preview
+        env:
+          APP_ENV: test
+          AUTH_MODE: disabled
+          OBJECT_STORE_BACKEND: filesystem
+          FILESYSTEM_STORE_ROOT: /tmp/m25-preview-store
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/m25-preview-diagnostics
+          set +e
+          python -m knowledge_engine.m25_blog_live_candidate prepare \
+            --work-dir /tmp/m25-live-preview \
+            --engine-sha "$(git rev-parse HEAD)" \
+            --channel candidate-blog-preview \
+            >/tmp/m25-preview-diagnostics/stdout.json \
+            2>/tmp/m25-preview-diagnostics/stderr.txt
+          rc=$?
+          set -e
+          printf '%s\n' "$rc" > /tmp/m25-preview-diagnostics/exit-code.txt
+          find /tmp/m25-live-preview -maxdepth 4 -type f -printf '%p %s bytes\n' \
+            | sort > /tmp/m25-preview-diagnostics/files.txt || true
+          if test -f /tmp/m25-live-preview/m25-10-live-candidate-receipt.json; then
+            cp /tmp/m25-live-preview/m25-10-live-candidate-receipt.json \
+              /tmp/m25-preview-diagnostics/receipt.json
+          fi
+          if test -d /tmp/m25-live-preview/internal-site/data/sources; then
+            find /tmp/m25-live-preview/internal-site/data/sources -type f -name '*.json' \
+              | wc -l > /tmp/m25-preview-diagnostics/source-file-count.txt
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-10-live-preview-findings
+          path: /tmp/m25-preview-diagnostics/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Report
+        run: |
+          cat /tmp/m25-preview-diagnostics/stderr.txt
+          cat /tmp/m25-preview-diagnostics/stdout.json
+          test "$(cat /tmp/m25-preview-diagnostics/exit-code.txt)" = '0'
