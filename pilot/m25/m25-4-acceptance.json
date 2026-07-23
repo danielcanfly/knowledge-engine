@@ -1,0 +1,119 @@
+{
+  "schema_version": "knowledge-engine-m25-4-acceptance/v1",
+  "status": "m25_4_gold_benchmark_accepted",
+  "issue": {
+    "repository": "danielcanfly/knowledge-engine",
+    "number": 1046,
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "implementation": {
+    "pull_request_number": 1047,
+    "base_sha": "744cfdc830da4a7bcfd4ed6ec3cf55972b042358",
+    "approved_candidate_head_sha": "cf56bad3b9128020214c3a30100ec741d6842e56",
+    "final_head_sha": "a58df21e1ace0bf5793fab3de3aca161818df528",
+    "merge_sha": "9b75e467678889980aa91d31f1c41bfb72e41ee6",
+    "merged_required": true,
+    "exact_head_workflows_required": true
+  },
+  "daniel_authority": {
+    "actor": "huaihsuanbusiness",
+    "issue_comment_id": 5053875354,
+    "approved_annotation_and_adjudication_policy": true,
+    "approved_all_30_labels": true,
+    "confirmed_disputed_item_count": 0,
+    "approved_candidate_head_sha": "cf56bad3b9128020214c3a30100ec741d6842e56",
+    "m25_5_authorized_by_approval": false
+  },
+  "frozen_identities": {
+    "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+    "provisional_gold_suite_sha256": "103db6e982e71ed8e4c442eb4f36f48b06eb846fdc3f339fb3cd078215b5ddfc",
+    "provisional_baseline_sha256": "993ab879129db14400603c8a213a82c2437c6b545f998127d7ad19a9153c17d2",
+    "daniel_gate_sha256": "0adafb1f42089c98ef76b0b8c3c953e3c83e1bfde8b2fa53a5e8cc91aab7aecb",
+    "approval_record_sha256": "3702168d2ad99e388f1355bd2c2d49089dcf1aaa36731b873d4e95e8b84d2f9f",
+    "accepted_gold_suite_sha256": "e52216c4fffd03b5cf4cbd68c049ca2fc688e539743761768d08a3348572a3e6",
+    "accepted_split_manifest_sha256": "409d51ccc425823f77c192d507440956da7adfde0544c3c8a8f647600d30696d",
+    "approved_ledger_sha256": "1fcc42129a0c4f6ec5b7b5b0987e63127026a0b3ab74a159d3c1d83d8fd320fb",
+    "accepted_baseline_sha256": "1cf1c8a245d800d7eb091cf15ca4fe203958a1f98969da0fdd570a4bebde83b8"
+  },
+  "population": {
+    "item_count": 30,
+    "class_count": 10,
+    "train_count": 10,
+    "calibration_count": 10,
+    "final_count": 10,
+    "semantic_family_leakage_count": 0,
+    "disputed_item_count": 0
+  },
+  "baseline": {
+    "semantic_decision_correct": 30,
+    "semantic_decision_total": 30,
+    "semantic_decision_accuracy": 1.0,
+    "false_merge_count": 0,
+    "explanation_signal_covered": 18,
+    "explanation_signal_total": 30,
+    "explanation_signal_coverage": 0.6,
+    "explanation_signal_gap_count": 12,
+    "resolver_or_threshold_changed": false,
+    "final_split_used_for_calibration": false
+  },
+  "required_workflows": {
+    "CI": 29978054382,
+    "M17 Architecture Canon Acceptance": 29978054490,
+    "M17 Independent Operator GA Acceptance": 29978054417,
+    "M18 Graph v2 acceptance": 29978054422,
+    "M25.2 Intake Orchestrator": 29978054379,
+    "M25.3 Extraction Worker": 29978054430,
+    "M25.4 Identity Gold Benchmark": 29978054451,
+    "M25.4 Daniel Approval Finalization": 29978054409,
+    "R2 Release Integration": 29978054390
+  },
+  "evidence_artifacts": {
+    "benchmark": {
+      "workflow_run_id": 29978054451,
+      "artifact_id": 8552162015,
+      "name": "m25-4-identity-gold-benchmark-evidence",
+      "digest": "sha256:091aa7a584c2ba7ba056647dbaeeab73ba95bca3b0c66ac52ea1a8e247f43e81"
+    },
+    "daniel_approval": {
+      "workflow_run_id": 29978054409,
+      "artifact_id": 8552155311,
+      "name": "m25-4-daniel-approval-evidence",
+      "digest": "sha256:1eef2312f88d38d7316c05911ba175c8a38ee058f9cfea6b5fbf710aab1960f1"
+    }
+  },
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_used": false,
+    "codex_escalations": 0,
+    "daniel_gate_required": true,
+    "daniel_gate_satisfied": true
+  },
+  "protected_mutations": {
+    "source_mutation": false,
+    "foundation_mutation": false,
+    "release_mutation": false,
+    "production_pointer_mutation": false,
+    "r2_production_mutation": false,
+    "qdrant_mutation": false,
+    "semantic_serving_enabled": false,
+    "hybrid_retrieval_enabled": false,
+    "production_answer_serving_enabled": false,
+    "large_scale_ingestion_enabled": false,
+    "resolver_calibration_performed": false
+  },
+  "reconciliation": {
+    "implementation_merge_is_required_ancestor": true,
+    "approved_candidate_is_required_ancestor": true,
+    "authority_comment_required": true,
+    "both_evidence_digests_required": true,
+    "no_new_authority_granted": true
+  },
+  "next_stage": {
+    "authorized_by_m25_4_closure": true,
+    "stage_id": "M25.5",
+    "name": "Calibrated Concept Identity and Knowledge Governance",
+    "predecessor_status_required": "m25_4_gold_benchmark_accepted",
+    "not_authorized_by_daniel_m25_4_approval_alone": true
+  }
+}
