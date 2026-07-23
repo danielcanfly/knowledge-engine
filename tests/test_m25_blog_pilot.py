@@ -7,25 +7,38 @@ import pytest
 
 from knowledge_engine.errors import IntegrityError
 from knowledge_engine.m25_blog_pilot import (
+    SERIES_META_PATH,
     GitHubClient,
     TreeBlob,
+    build_article_record,
     build_batch,
     git_blob_sha,
     heading_sections,
+    parse_series_catalog,
     partition_by_groups,
 )
 
+CATALOG = b"""export type BlogLang = 'en' | 'zh';
+const SERIES = [
+  { slug: /^alpha-\\d+$/, key: 'alpha', order: 1, labelZh: '1. Alpha ZH', labelEn: '1. Alpha' },
+  { slug: /^beta-\\d+$/, key: 'beta', order: 2, labelZh: '2. Beta ZH', labelEn: '2. Beta' },
+  { slug: /^fallback-\\d+$/, key: 'fallback', order: 3,
+    labelZh: '3. Fallback ZH', labelEn: '3. Fallback' },
+];
+"""
+
 
 class FakeClient(GitHubClient):
-    def __init__(self, articles: dict[str, bytes]) -> None:
-        self.articles = articles
-        self.by_sha = {git_blob_sha(value): value for value in articles.values()}
+    def __init__(self, articles: dict[str, bytes], catalog: bytes = CATALOG) -> None:
+        self.files = dict(articles)
+        self.files[SERIES_META_PATH] = catalog
+        self.by_sha = {git_blob_sha(value): value for value in self.files.values()}
 
     def tree(self, repository: str, commit: str) -> list[TreeBlob]:
         del repository, commit
         return [
             TreeBlob(path=path, sha=git_blob_sha(raw), size=len(raw))
-            for path, raw in self.articles.items()
+            for path, raw in self.files.items()
         ]
 
     def blob(self, repository: str, blob_sha: str) -> bytes:
@@ -90,6 +103,9 @@ def test_build_batch_has_complete_population_and_traceable_nodes(
     assert receipt["snapshot_count"] == 3
     assert receipt["article_node_count"] == 3
     assert receipt["section_node_count"] == 6
+    assert receipt["formal_series_count"] == 3
+    assert receipt["parent_collection_count"] == 4
+    assert receipt["standalone_article_count"] == 1
     assert receipt["semantic_claim_promotion_permitted"] is False
     nodes = [
         json.loads(line)
@@ -103,13 +119,70 @@ def test_build_batch_has_complete_population_and_traceable_nodes(
     )
 
 
+def test_series_catalog_parser_preserves_key_order_and_clean_label() -> None:
+    catalog = parse_series_catalog(CATALOG)
+    assert [entry["key"] for entry in catalog] == ["alpha", "beta", "fallback"]
+    assert catalog[0]["display_order"] == 1
+    assert catalog[0]["label_en"] == "1. Alpha"
+    assert catalog[0]["label_en_clean"] == "Alpha"
+
+
+def test_catalog_fallback_resolves_missing_frontmatter_series() -> None:
+    path, raw = article("fallback-1", "Fallback 1", series=None, order=None)
+    record = build_article_record(
+        repository="example/blog",
+        commit="a" * 40,
+        tree_blob=TreeBlob(path=path, sha=git_blob_sha(raw), size=len(raw)),
+        raw=raw,
+        series_catalog=parse_series_catalog(CATALOG),
+    )
+    assert record["series_id"] == "series_fallback"
+    assert record["series_title"] == "Fallback"
+    assert record["series_order"] == 1
+    assert record["series_resolution_source"] == "series_catalog_fallback"
+
+
+def test_explicit_frontmatter_series_takes_label_precedence() -> None:
+    path, raw = article("alpha-1", "Alpha 1", series="Custom Alpha", order=9)
+    record = build_article_record(
+        repository="example/blog",
+        commit="a" * 40,
+        tree_blob=TreeBlob(path=path, sha=git_blob_sha(raw), size=len(raw)),
+        raw=raw,
+        series_catalog=parse_series_catalog(CATALOG),
+    )
+    assert record["series_id"] == "series_alpha"
+    assert record["series_title"] == "Custom Alpha"
+    assert record["series_order"] == 9
+    assert record["series_resolution_source"] == "frontmatter"
+
+
 def test_partition_never_splits_real_series() -> None:
     records = [
-        {"partition_group_id": "series_a", "series_title": "A", "series_order": 1, "slug": "a1"},
-        {"partition_group_id": "series_a", "series_title": "A", "series_order": 2, "slug": "a2"},
-        {"partition_group_id": "series_b", "series_title": "B", "series_order": 1, "slug": "b1"},
+        {
+            "partition_group_id": "series_a",
+            "series_display_order": 1,
+            "series_title": "A",
+            "series_order": 1,
+            "slug": "a1",
+        },
+        {
+            "partition_group_id": "series_a",
+            "series_display_order": 1,
+            "series_title": "A",
+            "series_order": 2,
+            "slug": "a2",
+        },
+        {
+            "partition_group_id": "series_b",
+            "series_display_order": 2,
+            "series_title": "B",
+            "series_order": 1,
+            "slug": "b1",
+        },
         {
             "partition_group_id": "standalone_x",
+            "series_display_order": 999,
             "series_title": "Standalone Articles",
             "series_order": None,
             "slug": "x",
@@ -124,10 +197,22 @@ def test_partition_never_splits_real_series() -> None:
 
 def test_partition_fails_when_whole_series_cannot_hit_target() -> None:
     records = [
-        {"partition_group_id": "series_a", "series_title": "A", "series_order": i, "slug": f"a{i}"}
+        {
+            "partition_group_id": "series_a",
+            "series_display_order": 1,
+            "series_title": "A",
+            "series_order": i,
+            "slug": f"a{i}",
+        }
         for i in range(1, 4)
     ] + [
-        {"partition_group_id": "series_b", "series_title": "B", "series_order": i, "slug": f"b{i}"}
+        {
+            "partition_group_id": "series_b",
+            "series_display_order": 2,
+            "series_title": "B",
+            "series_order": i,
+            "slug": f"b{i}",
+        }
         for i in range(1, 4)
     ]
     with pytest.raises(IntegrityError, match="no exact whole-series partition"):

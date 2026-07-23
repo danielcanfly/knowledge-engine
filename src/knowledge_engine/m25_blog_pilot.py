@@ -22,6 +22,14 @@ from .errors import IntegrityError
 
 SCHEMA_VERSION = "knowledge-engine-m25-9-blog-pilot/v1"
 ARTICLE_PATH_RE = re.compile(r"^src/content/blog/([^/]+)/en\.md$")
+SERIES_META_PATH = "src/utils/seriesMeta.ts"
+SERIES_ENTRY_RE = re.compile(
+    r"\{\s*slug:\s*/(?P<pattern>.+?)/,\s*key:\s*'(?P<key>[^']+)',\s*"
+    r"order:\s*(?P<order>\d+),\s*labelZh:\s*'(?P<label_zh>[^']*)',\s*"
+    r"labelEn:\s*'(?P<label_en>[^']*)'\s*\}"
+)
+DISPLAY_ORDER_PREFIX_RE = re.compile(r"^\d+\.\s*")
+ENDING_NUMBER_RE = re.compile(r"(?:part-?|series-)?(\d+)$")
 HEADING_RE = re.compile(r"^(#{2,3})\s+(.+?)\s*$")
 SLUG_RE = re.compile(r"[^a-z0-9]+")
 
@@ -169,6 +177,48 @@ def parse_frontmatter(raw: bytes, *, path: str) -> tuple[dict[str, Any], str, in
     return json_safe(metadata), text, closing + 2
 
 
+def parse_series_catalog(raw: bytes, *, path: str = SERIES_META_PATH) -> list[dict[str, Any]]:
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise IntegrityError(f"M25-BLOG-014 non-UTF-8 series catalog: {path}") from exc
+    entries: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    seen_patterns: set[str] = set()
+    for match in SERIES_ENTRY_RE.finditer(text):
+        pattern = match.group("pattern")
+        key = match.group("key")
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            raise IntegrityError(f"M25-BLOG-015 invalid series regex: {key}") from exc
+        if key in seen_keys or pattern in seen_patterns:
+            raise IntegrityError("M25-BLOG-016 duplicate series catalog identity")
+        label_en = match.group("label_en")
+        entry = {
+            "pattern": pattern,
+            "key": key,
+            "display_order": int(match.group("order")),
+            "label_en": label_en,
+            "label_en_clean": DISPLAY_ORDER_PREFIX_RE.sub("", label_en),
+            "label_zh": match.group("label_zh"),
+        }
+        entry["record_sha256"] = sha256(entry)
+        entries.append(entry)
+        seen_keys.add(key)
+        seen_patterns.add(pattern)
+    if not entries:
+        raise IntegrityError("M25-BLOG-017 series catalog contains no entries")
+    return entries
+
+
+def _catalog_match(slug: str, catalog: list[dict[str, Any]]) -> dict[str, Any] | None:
+    matches = [entry for entry in catalog if re.fullmatch(entry["pattern"], slug)]
+    if len(matches) > 1:
+        raise IntegrityError(f"M25-BLOG-018 multiple series catalog matches: {slug}")
+    return matches[0] if matches else None
+
+
 def _series_order(metadata: dict[str, Any]) -> int | None:
     value = metadata.get("seriesOrder", metadata.get("series_order"))
     if value in (None, ""):
@@ -176,7 +226,18 @@ def _series_order(metadata: dict[str, Any]) -> int | None:
     try:
         return int(value)
     except (TypeError, ValueError) as exc:
-        raise IntegrityError("M25-BLOG-014 invalid series order") from exc
+        raise IntegrityError("M25-BLOG-019 invalid series order") from exc
+
+
+def _infer_series_order(slug: str) -> int | None:
+    match = ENDING_NUMBER_RE.search(slug)
+    if match:
+        return int(match.group(1))
+    if slug.endswith("appendix-a"):
+        return 1001
+    if slug.endswith("appendix-b"):
+        return 1002
+    return None
 
 
 def build_article_record(
@@ -185,24 +246,44 @@ def build_article_record(
     commit: str,
     tree_blob: TreeBlob,
     raw: bytes,
+    series_catalog: list[dict[str, Any]],
 ) -> dict[str, Any]:
     match = ARTICLE_PATH_RE.fullmatch(tree_blob.path)
     if match is None:
-        raise IntegrityError("M25-BLOG-015 unexpected article path")
+        raise IntegrityError("M25-BLOG-020 unexpected article path")
     slug = match.group(1)
-    metadata, text, body_start_line = parse_frontmatter(raw, path=tree_blob.path)
+    metadata, _text, body_start_line = parse_frontmatter(raw, path=tree_blob.path)
     title = metadata.get("title")
     if not isinstance(title, str) or not title.strip():
-        raise IntegrityError(f"M25-BLOG-016 article title missing: {tree_blob.path}")
+        raise IntegrityError(f"M25-BLOG-021 article title missing: {tree_blob.path}")
     draft = metadata.get("draft", False)
     if draft is not False:
-        raise IntegrityError(f"M25-BLOG-017 draft article entered population: {tree_blob.path}")
-    series_title = metadata.get("series")
-    if series_title is not None and not isinstance(series_title, str):
-        raise IntegrityError(f"M25-BLOG-018 invalid series title: {tree_blob.path}")
-    series_title = series_title.strip() if isinstance(series_title, str) else ""
-    series_id = f"series_{slugify(series_title)}" if series_title else "series_standalone"
-    partition_group_id = series_id if series_title else f"standalone_{slug}"
+        raise IntegrityError(f"M25-BLOG-022 draft article entered population: {tree_blob.path}")
+    explicit_series = metadata.get("series")
+    if explicit_series is not None and not isinstance(explicit_series, str):
+        raise IntegrityError(f"M25-BLOG-023 invalid series title: {tree_blob.path}")
+    explicit_series = explicit_series.strip() if isinstance(explicit_series, str) else ""
+    catalog_entry = _catalog_match(slug, series_catalog)
+    if explicit_series:
+        series_title = explicit_series
+        series_key = catalog_entry["key"] if catalog_entry else slugify(explicit_series)
+        series_display_order = catalog_entry["display_order"] if catalog_entry else 999
+        series_resolution_source = "frontmatter"
+    elif catalog_entry:
+        series_title = catalog_entry["label_en_clean"]
+        series_key = catalog_entry["key"]
+        series_display_order = catalog_entry["display_order"]
+        series_resolution_source = "series_catalog_fallback"
+    else:
+        series_title = "Standalone Articles"
+        series_key = "standalone"
+        series_display_order = 999
+        series_resolution_source = "standalone_unmatched"
+    series_id = f"series_{series_key}"
+    partition_group_id = series_id if series_key != "standalone" else f"standalone_{slug}"
+    item_order = _series_order(metadata)
+    if item_order is None and series_key != "standalone":
+        item_order = _infer_series_order(slug)
     published = metadata.get("pubDate", metadata.get("published_at", metadata.get("date")))
     categories = metadata.get("categories", metadata.get("category", []))
     if isinstance(categories, str):
@@ -221,8 +302,11 @@ def build_article_record(
         "title": title.strip(),
         "description": metadata.get("description"),
         "series_id": series_id,
-        "series_title": series_title or "Standalone Articles",
-        "series_order": _series_order(metadata),
+        "series_key": series_key,
+        "series_title": series_title,
+        "series_order": item_order,
+        "series_display_order": series_display_order,
+        "series_resolution_source": series_resolution_source,
         "partition_group_id": partition_group_id,
         "published_at": json_safe(published),
         "categories": sorted(str(item) for item in categories),
@@ -266,7 +350,7 @@ def partition_by_groups(
     if batch_size not in choices:
         counts = {group: len(members) for group, members in ordered}
         raise IntegrityError(
-            "M25-BLOG-019 no exact whole-series partition for requested batch size: "
+            "M25-BLOG-024 no exact whole-series partition for requested batch size: "
             + json.dumps(counts, sort_keys=True)
         )
     selected_indices = set(choices[batch_size])
@@ -277,8 +361,9 @@ def partition_by_groups(
         target = batch_a if index in selected_indices else batch_b
         target.extend(members)
 
-    def sort_key(item: dict[str, Any]) -> tuple[str, int, str]:
+    def sort_key(item: dict[str, Any]) -> tuple[int, str, int, str]:
         return (
+            item["series_display_order"],
             item["series_title"].casefold(),
             item["series_order"] if item["series_order"] is not None else 10**9,
             item["slug"],
@@ -340,6 +425,7 @@ def build_nodes_and_edges(
             {
                 "node_id": node_id,
                 "node_type": "Series",
+                "series_id": series_id,
                 "title": series_title,
                 "status": "candidate_structural",
                 "source_article_ids": [item["article_id"] for item in members],
@@ -349,7 +435,9 @@ def build_nodes_and_edges(
             }
         )
     series_node_ids = {
-        node["title"]: node["node_id"] for node in nodes if node["node_type"] == "Series"
+        node["series_id"]: node["node_id"]
+        for node in nodes
+        if node["node_type"] == "Series"
     }
     article_node_ids: dict[str, str] = {}
     for record in records:
@@ -375,7 +463,7 @@ def build_nodes_and_edges(
                 "content_sha256": record["content_sha256"],
             }
         )
-        series_node_id = series_node_ids[record["series_title"]]
+        series_node_id = series_node_ids[record["series_id"]]
         edges.extend(
             [
                 {
@@ -497,24 +585,33 @@ def build_batch(
     client: GitHubClient,
 ) -> dict[str, Any]:
     if expected_count != batch_size * 2:
-        raise IntegrityError("M25-BLOG-020 expected count must equal two equal batches")
-    article_blobs = [
-        blob for blob in client.tree(repository, commit) if ARTICLE_PATH_RE.fullmatch(blob.path)
-    ]
+        raise IntegrityError("M25-BLOG-025 expected count must equal two equal batches")
+    tree = client.tree(repository, commit)
+    article_blobs = [blob for blob in tree if ARTICLE_PATH_RE.fullmatch(blob.path)]
     article_blobs.sort(key=lambda item: item.path)
     if len(article_blobs) != expected_count:
         raise IntegrityError(
-            f"M25-BLOG-021 expected {expected_count} English articles, found {len(article_blobs)}"
+            f"M25-BLOG-026 expected {expected_count} English articles, found {len(article_blobs)}"
         )
+    catalog_candidates = [blob for blob in tree if blob.path == SERIES_META_PATH]
+    if len(catalog_candidates) != 1:
+        raise IntegrityError("M25-BLOG-027 exact series catalog blob missing")
+    catalog_blob = catalog_candidates[0]
+    catalog_raw = client.blob(repository, catalog_blob.sha)
+    series_catalog = parse_series_catalog(catalog_raw)
     records: list[dict[str, Any]] = []
     raw_by_slug: dict[str, bytes] = {}
     for tree_blob in article_blobs:
         raw = client.blob(repository, tree_blob.sha)
         record = build_article_record(
-            repository=repository, commit=commit, tree_blob=tree_blob, raw=raw
+            repository=repository,
+            commit=commit,
+            tree_blob=tree_blob,
+            raw=raw,
+            series_catalog=series_catalog,
         )
         if record["slug"] in raw_by_slug:
-            raise IntegrityError("M25-BLOG-022 duplicate article slug")
+            raise IntegrityError("M25-BLOG-028 duplicate article slug")
         raw_by_slug[record["slug"]] = raw
         records.append(record)
     batch_a, batch_b, selected_groups = partition_by_groups(records, batch_size=batch_size)
@@ -522,9 +619,9 @@ def build_batch(
     ids_a = {item["article_id"] for item in batch_a}
     ids_b = {item["article_id"] for item in batch_b}
     if ids_a & ids_b or ids_a | ids_b != ids:
-        raise IntegrityError("M25-BLOG-023 A/B reconciliation failed")
+        raise IntegrityError("M25-BLOG-029 A/B reconciliation failed")
     if len(batch_a) != batch_size or len(batch_b) != batch_size:
-        raise IntegrityError("M25-BLOG-024 batch sizes drifted")
+        raise IntegrityError("M25-BLOG-030 batch sizes drifted")
     output_dir.mkdir(parents=True, exist_ok=True)
     source_dir = output_dir / "sources"
     for record in batch_a:
@@ -535,6 +632,12 @@ def build_batch(
     group_counts: dict[str, int] = defaultdict(int)
     for record in records:
         group_counts[record["partition_group_id"]] += 1
+    series_ids = {item["series_id"] for item in records}
+    formal_series_ids = series_ids - {"series_standalone"}
+    standalone_count = sum(item["series_id"] == "series_standalone" for item in records)
+    catalog_fallback_count = sum(
+        item["series_resolution_source"] == "series_catalog_fallback" for item in records
+    )
     master = sign(
         {
             "schema_version": SCHEMA_VERSION,
@@ -544,8 +647,16 @@ def build_batch(
             "language": "en",
             "expected_article_count": expected_count,
             "article_count": len(records),
-            "series_count": len({item["series_id"] for item in records}),
+            "formal_series_count": len(formal_series_ids),
+            "parent_collection_count": len(series_ids),
             "partition_group_count": len(group_counts),
+            "standalone_article_count": standalone_count,
+            "catalog_fallback_article_count": catalog_fallback_count,
+            "series_catalog_path": SERIES_META_PATH,
+            "series_catalog_blob_sha": catalog_blob.sha,
+            "series_catalog_sha256": sha256(catalog_raw),
+            "series_catalog_entry_count": len(series_catalog),
+            "series_catalog": series_catalog,
             "articles": records,
         },
         "inventory_sha256",
@@ -589,7 +700,13 @@ def build_batch(
             "master_inventory_sha256": master["inventory_sha256"],
             "batch_a_inventory_sha256": manifest_a["batch_inventory_sha256"],
             "batch_b_inventory_sha256": manifest_b["batch_inventory_sha256"],
+            "series_catalog_blob_sha": catalog_blob.sha,
+            "series_catalog_sha256": sha256(catalog_raw),
             "master_source_count": len(records),
+            "formal_series_count": len(formal_series_ids),
+            "parent_collection_count": len(series_ids),
+            "standalone_article_count": standalone_count,
+            "catalog_fallback_article_count": catalog_fallback_count,
             "batch_a_source_count": len(batch_a),
             "batch_b_source_count": len(batch_b),
             "intersection_count": len(ids_a & ids_b),

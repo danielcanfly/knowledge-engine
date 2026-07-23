@@ -1,19 +1,38 @@
 # M25.9 Blog Pilot Batch A
 
-Status: `implementation_in_progress_exact_inventory_not_yet_bound`
+Status: `candidate_acquisition_ready_source_write_not_authorized`
 
 ## Goal
 
-Ingest the complete English article population from Daniel's blog without omission. The corpus is split into two equal governed batches of 78 sources. Batch A starts with immutable acquisition and deterministic structural-node generation.
+Ingest the complete English article population from Daniel's blog without omission. The corpus is split into two equal governed batches of 78 sources. Batch A performs immutable acquisition and deterministic structural-node generation before any Source write.
 
-## Canonical source
+## Canonical upstream
 
 - repository: `huaihsuanbusiness/daniel-blog`
 - commit: `97821b6547ce3c0b8b8acf11cbbf4795684df458`
-- selector: `src/content/blog/*/en.md`
-- expected population: 156
+- article selector: `src/content/blog/*/en.md`
+- series catalog: `src/utils/seriesMeta.ts`
+- pinned series-catalog blob: `a08a3e025a60da9a35ed3573e1c64a57d26b9201`
+- expected population: 156 English articles
 
-The source Git commit and Git blob SHA identify the immutable bytes. The public site is a presentation surface and may lag the repository counter.
+The Git commit and each Git blob SHA identify immutable bytes. The public site is a presentation surface and may lag the repository counter.
+
+## Series identity
+
+Series resolution follows the site's production logic:
+
+1. Explicit article frontmatter `series` is authoritative for the displayed series title.
+2. The pinned `seriesMeta.ts` slug catalog supplies a series key and fallback title when frontmatter omits `series`.
+3. An article becomes standalone only when neither source provides a series.
+
+At the pinned commit this resolves to:
+
+- 25 formal series;
+- 2 true standalone articles;
+- 26 parent collections including the standalone collection;
+- 41 articles whose series is recovered through the catalog fallback.
+
+This parity repair prevents AI Agentic Workflow, Build Your Own MCP Server, MCP Engineering Deep Dive, ComfyUI, OpenClaw and RAG Engineering articles from collapsing into a false standalone bucket.
 
 ## Population contract
 
@@ -26,16 +45,17 @@ The builder must prove:
 - A ∪ B = master population;
 - missing = 0;
 - every real series stays inside one batch;
-- standalone articles may be assigned individually;
+- only true standalone articles may be assigned individually;
 - every article reaches `acquired_verified` or the run fails.
 
-If an exact 78/78 whole-series partition cannot be found, the run fails closed and prints the series population. It must not silently split a real series.
+If an exact 78/78 whole-series partition cannot be found, the run fails closed and prints the complete group population.
 
 ## Source construction
 
-Each source record contains:
+Each article source record contains:
 
-- stable article and series identities;
+- stable article and canonical series identities;
+- series resolution source and series order;
 - canonical URL;
 - upstream repository, commit, path and Git blob SHA;
 - SHA-256 of the complete Markdown bytes;
@@ -43,18 +63,18 @@ Each source record contains:
 - ownership, licence, trust and public audience;
 - terminal acquisition state.
 
-Batch A also materialises all 78 Markdown files as immutable evidence snapshots.
+The master inventory separately pins the exact series catalog, its Git blob SHA, SHA-256 and parsed catalog records. Batch A materialises all 78 Markdown files as immutable evidence snapshots.
 
 ## Candidate nodes
 
-This phase creates only deterministic structural candidates:
+This phase creates deterministic structural candidates only:
 
 - `Series` nodes;
 - `Article` nodes;
 - H2/H3 `Section` nodes;
 - `part_of`, `contains` and `precedes` edges.
 
-Every article and section node points to the exact upstream commit, path and source line range. These are structural nodes, not automatically promoted semantic claims.
+Every article and section node points to the exact upstream commit, path and source line range. These structural nodes are not automatically promoted semantic claims.
 
 ## Authority boundary
 
@@ -68,4 +88,4 @@ This phase does not permit:
 - production release, pointer, traffic or credential mutation;
 - M25.9B or M25.9C closure.
 
-After exact-head acquisition succeeds, the generated Batch A inventory digest and candidate graph must be bound to a review authority before any Source write.
+After exact-head acquisition succeeds, the corrected Batch A inventory digest and candidate graph must be bound to Daniel's review authority before any Source write.
