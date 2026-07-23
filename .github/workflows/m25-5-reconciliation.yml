@@ -5,7 +5,7 @@ on:
       - '.github/workflows/m25-5-reconciliation.yml'
       - 'docs/architecture/m25/m25-5-reconciliation.md'
       - 'pilot/m25/m25-5-acceptance.json'
-      - 'tests/test_m25_5-reconciliation.py'
+      - 'tests/test_m25_5_reconciliation.py'
 permissions:
   contents: read
   actions: read
