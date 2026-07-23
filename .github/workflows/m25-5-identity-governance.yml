@@ -22,41 +22,46 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Validate exact M25.5 head
+      - name: Verify exact head and predecessor
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          set -euo pipefail
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
           python -m pip install --disable-pip-version-check -e '.[dev]'
           python - <<'PY'
           import hashlib,json
           from pathlib import Path
           a=json.loads(Path('pilot/m25/m25-4-acceptance.json').read_text())
-          s=Path('pilot/m25/m25-4-gold-suite.json')
-          b=Path('pilot/m25/m25-4-baseline-report.json')
+          s=Path('pilot/m25/m25-4-gold-suite.json'); b=Path('pilot/m25/m25-4-baseline-report.json')
           assert a['status']=='m25_4_gold_benchmark_accepted'
           assert json.loads(s.read_text())['approval_status']=='approved_by_daniel'
           assert json.loads(b.read_text())['baseline_status']=='accepted_baseline'
           assert a['frozen_identities']['accepted_gold_suite_sha256']==hashlib.sha256(s.read_bytes()).hexdigest()
           assert a['frozen_identities']['accepted_baseline_sha256']==hashlib.sha256(b.read_bytes()).hexdigest()
           PY
+      - name: Lint and test M25.5
+        run: |
           python -m ruff check src/knowledge_engine/m25_identity_governance.py src/knowledge_engine/m25_identity_governance_cli.py tests/test_m25_5_identity_governance.py tests/test_m25_5_identity_governance_contracts.py
           python -m pytest -q tests/test_m25_5_identity_governance.py tests/test_m25_5_identity_governance_contracts.py tests/test_m25_4_identity_benchmark.py tests/test_m25_4_identity_benchmark_contracts.py tests/test_m25_4_daniel_approval.py
+      - name: Rebuild deterministic artifacts
+        run: |
           mkdir -p /tmp/m25-5 /tmp/m25-5-evidence
           knowledge-m25-identity-governance policy --suite pilot/m25/m25-4-gold-suite.json --baseline pilot/m25/m25-4-baseline-report.json --output /tmp/m25-5/policy.json
           knowledge-m25-identity-governance run --suite pilot/m25/m25-4-gold-suite.json --baseline pilot/m25/m25-4-baseline-report.json --policy pilot/m25/m25-5-calibration-policy.json --output /tmp/m25-5/report.json --gate-output /tmp/m25-5/gate.json
           cmp /tmp/m25-5/policy.json pilot/m25/m25-5-calibration-policy.json
           cmp /tmp/m25-5/report.json pilot/m25/m25-5-calibrated-report.json
           cmp /tmp/m25-5/gate.json pilot/m25/m25-5-governance-gate.json
+      - name: Enforce governance metrics
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
           python - <<'PY'
           import hashlib,json,os
           from pathlib import Path
           p=json.loads(Path('pilot/m25/m25-5-calibration-policy.json').read_text())
           r=json.loads(Path('pilot/m25/m25-5-calibrated-report.json').read_text())
           g=json.loads(Path('pilot/m25/m25-5-governance-gate.json').read_text())
-          assert not p['calibration']['final_split_used']
-          assert not r['final_split_used_for_calibration']
+          assert not p['calibration']['final_split_used'] and not r['final_split_used_for_calibration']
           m=r['metrics']
           assert (m['semantic_decision_accuracy'],m['explanation_signal_coverage'],m['final_split_governance_pass_rate'])==(1.0,1.0,1.0)
           assert (m['false_merge_count'],m['critical_false_merge_risk_count'],m['destructive_decision_count'])==(0,0,0)
@@ -66,6 +71,8 @@ jobs:
           e={'schema_version':'knowledge-engine-m25-5-exact-head-evidence/v1','head_sha':os.environ['HEAD_SHA'],'workflow_run_id':int(os.environ['GITHUB_RUN_ID']),'artifacts':{x:hashlib.sha256(Path(x).read_bytes()).hexdigest() for x in files},'candidate_only':True,'canonical_knowledge':False,'production_authority':False,'m25_6_authorized':False}
           Path('/tmp/m25-5-evidence/evidence.json').write_text(json.dumps(e,indent=2,sort_keys=True)+'\n')
           PY
+      - name: Reject protected mutations
+        run: |
           changed="$(git diff --name-only origin/main...HEAD)"
           ! printf '%s\n' "$changed" | grep -Eq '^(workers/|channels/|foundation/|release/|r2/|qdrant/|production/|src/knowledge_engine/m21_entity_resolution.py$|pilot/m25/m25-4-)'
           python -m compileall -q src/knowledge_engine/m25_identity_governance.py src/knowledge_engine/m25_identity_governance_cli.py tests/test_m25_5_identity_governance.py tests/test_m25_5_identity_governance_contracts.py
