@@ -1,0 +1,119 @@
+name: M25.9 Cloudflare Capability Retest
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-cloudflare-capability-retest.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m25-9-cloudflare-capability-retest.yml'
+
+permissions:
+  contents: read
+  issues: write
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 50
+          show-progress: false
+      - name: Verify one-file retest boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test -f .github/workflows/m25-9-cloudflare-capability-retest.yml
+          if test "${{ github.event_name }}" = 'pull_request'; then
+            git fetch --quiet --no-tags origin main
+            test "$(git diff --name-only origin/main...HEAD)" = \
+              '.github/workflows/m25-9-cloudflare-capability-retest.yml'
+          fi
+
+  capability-retest:
+    if: github.event_name == 'push'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: m23-r3-diagnostic
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
+      CLOUDFLARE_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
+      CLOUDFLARE_ACCESS_READ_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_READ_TOKEN }}
+      PAGES_PROJECT: llm-wiki-m24-internal
+      INTERNAL_HOSTNAME: m24-internal.danielcanfly.com
+      CLOUDFLARE_ZONE_NAME: danielcanfly.com
+      PREFLIGHT_DIR: /tmp/m25-9-capability-retest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 200
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify fresh exact-SHA authority
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 421f70c5696910d51ce8d93e4940109ecf06c5e7 HEAD
+          for name in \
+            CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_PAGES_TOKEN \
+            CLOUDFLARE_WORKERS_TOKEN CLOUDFLARE_ACCESS_READ_TOKEN; do
+            test -n "${!name}"
+          done
+          mkdir -p "$PREFLIGHT_DIR"
+      - name: Run zero-mutation capability preflight
+        run: |
+          set +e
+          python scripts/m25_9_cloudflare_live_preflight.py preflight \
+            --evidence-output "$PREFLIGHT_DIR/cloudflare-capability-retest.json"
+          rc=$?
+          set -e
+          echo "PREFLIGHT_RC=$rc" >> "$GITHUB_ENV"
+          reason='preflight_evidence_unavailable'
+          if test -s "$PREFLIGHT_DIR/cloudflare-capability-retest.json"; then
+            reason="$(jq -r '.root_cause_classification // "unknown"' \
+              "$PREFLIGHT_DIR/cloudflare-capability-retest.json")"
+          fi
+          echo "PREFLIGHT_REASON=$reason" >> "$GITHUB_ENV"
+      - name: Upload sanitized capability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-cloudflare-capability-retest-${{ github.sha }}
+          path: /tmp/m25-9-capability-retest/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish retest result
+        if: always()
+        run: |
+          set -euo pipefail
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if test "${PREFLIGHT_RC:-1}" = '0'; then
+            state='success'
+            result='passed'
+          else
+            state='failure'
+            result='blocked'
+          fi
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state="$state" \
+            -f context='m25-9-capability-retest' \
+            -f description="run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT $result" \
+            -f target_url="$run_url" >/dev/null
+          gh issue comment 1092 \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "M25.9 dedicated-token capability retest at exact SHA \`$GITHUB_SHA\` (run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`): \`$result\`; classification \`${PREFLIGHT_REASON:-preflight_evidence_unavailable}\`. External mutations: \`0\`."
+      - name: Enforce successful preflight
+        if: always()
+        run: test "${PREFLIGHT_RC:-1}" = '0'
