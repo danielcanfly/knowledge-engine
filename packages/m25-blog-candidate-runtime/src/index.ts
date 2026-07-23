@@ -299,8 +299,20 @@ async function answer(query: string, retrieval: RetrievalResult, env: Env): Prom
     max_tokens: 900,
     temperature: 0.1,
   } as never);
-  const object = response as Record<string, unknown>;
-  const text = object.response || (object.result as Record<string, unknown>)?.response;
+  if (
+    !response ||
+    typeof response !== "object" ||
+    response instanceof ReadableStream
+  ) {
+    throw new Error("answer model returned a non-object response");
+  }
+  const object = response as unknown as Record<string, unknown>;
+  const nested = object.result;
+  const nestedResponse =
+    nested && typeof nested === "object"
+      ? (nested as Record<string, unknown>).response
+      : undefined;
+  const text = object.response || nestedResponse;
   if (typeof text !== "string" || !text.trim()) {
     throw new Error("answer model returned no text");
   }
