@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-source-plan-approval-v1.schema.json",
+  "title": "M25.7 exact Source plan approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "actor", "actor_role", "authority_comment_id", "plan_sha256", "source_repository", "source_base_sha", "approved_branch_name", "approved_for_source_branch_and_pr", "approved_for_merge", "approval_sha256"],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-7-plan-approval/v1"},
+    "actor": {"type": "string", "minLength": 3},
+    "actor_role": {"const": "knowledge_owner"},
+    "authority_comment_id": {"type": "integer", "minimum": 1},
+    "plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_repository": {"type": "string"},
+    "source_base_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "approved_branch_name": {"type": "string"},
+    "approved_for_source_branch_and_pr": {"const": true},
+    "approved_for_merge": {"const": false},
+    "approval_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

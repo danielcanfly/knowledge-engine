@@ -1,0 +1,70 @@
+{
+  "audit_sha256": "28737d095be67ac148f9891bfa2a65dbaf16fde9d05cb125eb87bf41ca00b9e5",
+  "authority_sha256": "6a7a9300f5f9872815669bed35439f1a9327c5a5d7a1b85333de9c4a7f78160d",
+  "batch_sha256": "776a03b95128709c6c45f8646769792ee3cd572044cdf42d2b6ef1653bedb848",
+  "branch": {
+    "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "commit_title": "M25.7 apply approved knowledge decisions",
+    "name": "m25-7/approved-6a7a9300f5f9"
+  },
+  "canonical_knowledge": false,
+  "exact_plan_approval_required_before_source_write": true,
+  "github_pr_creation_permitted": false,
+  "item_count": 2,
+  "m25_8_authorized": false,
+  "mode": "test_only",
+  "no_write_operation_count": 1,
+  "operation_count": 2,
+  "operations": [
+    {
+      "action": "reject",
+      "decision_sha256": "afa35e8c97446074df1aa0e56ec264918b9c59449211f20f9720ff98caabd728",
+      "disposition": "no_write",
+      "expected_old_sha256": null,
+      "new_content_sha256": null,
+      "new_content_utf8": null,
+      "operation_id": "op-reject-no-write",
+      "path": null,
+      "rationale": "Rejected item remains explicitly accounted with no Source write.",
+      "review_item_id": "m25review_303bc37fc2105e9e3d93e5fe4476158e",
+      "review_state_sha256": "303bc37fc2105e9e3d93e5fe4476158e03d2b5b478e8ea9e3817402de5ec1621"
+    },
+    {
+      "action": "approve",
+      "decision_sha256": "2c10f3056f258158003c90020d1765f4a80644c39b87b2218eb5a6cdfc32c2fd",
+      "disposition": "create",
+      "expected_old_sha256": null,
+      "new_content_sha256": "d71458f5b324ea7790c43bac99d7471181abc3475612b948e07291707788b067",
+      "new_content_utf8": "---\ntype: Concept\nx-kos-id: kos-approved-test\ntitle: Approved Test Concept\n---\n\n# Approved Test Concept\n\nExact owner-approved bytes.\n",
+      "operation_id": "op-create-approved-test",
+      "path": "bundle/concepts/approved-test-concept.md",
+      "rationale": "Exact synthetic owner-approved bytes for deterministic testing.",
+      "review_item_id": "m25review_a225d5a5f0175a9ac4ad89ed651f460e",
+      "review_state_sha256": "a225d5a5f0175a9ac4ad89ed651f460e41259898b50f44314296ffd7c2bfbb4f"
+    }
+  ],
+  "plan_sha256": "c7844406740447d8c9ffec321f5176837e52e59451cfa6af6f7234fdce80c9cf",
+  "predecessor_main_seal_sha": "134edbcfa3841321d3ea1106d35243b866cb6913",
+  "predecessor_status": "m25_6_review_surface_accepted",
+  "production_authority": false,
+  "production_mutation_permitted": false,
+  "pull_request": {
+    "body_lines": [
+      "Applies only exact Daniel-approved item decisions and Source bytes.",
+      "Decision authority: `6a7a9300f5f9872815669bed35439f1a9327c5a5d7a1b85333de9c4a7f78160d`.",
+      "Source base: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`.",
+      "No automatic merge, release, production pointer or serving authority."
+    ],
+    "draft": true,
+    "title": "M25.7 approved knowledge admission"
+  },
+  "release_mutation_permitted": false,
+  "schema_version": "knowledge-engine-m25-7-source-pr-plan/v1",
+  "source_base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "source_branch_write_permitted": false,
+  "source_manifest_sha256": "89b530d8c788c60c372446448f1960da68eca7167c028953ad564b540903050e",
+  "source_pr_merge_permitted": false,
+  "source_repository": "example/knowledge-source-test",
+  "status": "m25_7_source_pr_plan_candidate",
+  "write_operation_count": 1
+}

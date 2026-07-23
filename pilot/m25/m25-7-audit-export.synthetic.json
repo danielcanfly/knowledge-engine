@@ -1,0 +1,90 @@
+{
+  "admission_ready": true,
+  "audit_sha256": "28737d095be67ac148f9891bfa2a65dbaf16fde9d05cb125eb87bf41ca00b9e5",
+  "authority": "audit_only",
+  "batch_sha256": "776a03b95128709c6c45f8646769792ee3cd572044cdf42d2b6ef1653bedb848",
+  "canonical_knowledge": false,
+  "decision_count": 2,
+  "deferred_item_count": 0,
+  "github_pr_creation_permitted": false,
+  "latest_item_decision_count": 2,
+  "m25_7_authorized": false,
+  "pending_item_count": 0,
+  "production_authority": false,
+  "records": [
+    {
+      "acknowledgements": {
+        "comparison_reviewed": true,
+        "diff_reviewed": true,
+        "evidence_reviewed": true
+      },
+      "action": "approve",
+      "authority": "admission_decision_only",
+      "batch_sha256": "776a03b95128709c6c45f8646769792ee3cd572044cdf42d2b6ef1653bedb848",
+      "calibrated_report_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "candidate_ids": [
+        "candidate-synthetic-create"
+      ],
+      "canonical_knowledge": false,
+      "decided_at": "2026-07-23T09:30:01+00:00",
+      "decision_sha256": "2c10f3056f258158003c90020d1765f4a80644c39b87b2218eb5a6cdfc32c2fd",
+      "edited_payload": null,
+      "evidence_identities": [],
+      "github_pr_creation_permitted": false,
+      "item_id": "synthetic-create",
+      "m25_7_authorized": false,
+      "mapping_target": null,
+      "policy_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "previous_decision_sha256": null,
+      "production_authority": false,
+      "rationale": "Synthetic terminal decision for executor validation.",
+      "review_item_id": "m25review_a225d5a5f0175a9ac4ad89ed651f460e",
+      "review_state_sha256": "a225d5a5f0175a9ac4ad89ed651f460e41259898b50f44314296ffd7c2bfbb4f",
+      "reviewer": "synthetic-knowledge-owner",
+      "reviewer_role": "internal_reviewer",
+      "schema_version": "knowledge-engine-m25-6-decision-record/v1",
+      "sequence": 1,
+      "source_write_permitted": false,
+      "split_payload": null
+    },
+    {
+      "acknowledgements": {
+        "comparison_reviewed": true,
+        "diff_reviewed": true,
+        "evidence_reviewed": true
+      },
+      "action": "reject",
+      "authority": "admission_decision_only",
+      "batch_sha256": "776a03b95128709c6c45f8646769792ee3cd572044cdf42d2b6ef1653bedb848",
+      "calibrated_report_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "candidate_ids": [
+        "candidate-synthetic-reject"
+      ],
+      "canonical_knowledge": false,
+      "decided_at": "2026-07-23T09:30:02+00:00",
+      "decision_sha256": "afa35e8c97446074df1aa0e56ec264918b9c59449211f20f9720ff98caabd728",
+      "edited_payload": null,
+      "evidence_identities": [],
+      "github_pr_creation_permitted": false,
+      "item_id": "synthetic-reject",
+      "m25_7_authorized": false,
+      "mapping_target": null,
+      "policy_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "previous_decision_sha256": "2c10f3056f258158003c90020d1765f4a80644c39b87b2218eb5a6cdfc32c2fd",
+      "production_authority": false,
+      "rationale": "Synthetic terminal decision for executor validation.",
+      "review_item_id": "m25review_303bc37fc2105e9e3d93e5fe4476158e",
+      "review_state_sha256": "303bc37fc2105e9e3d93e5fe4476158e03d2b5b478e8ea9e3817402de5ec1621",
+      "reviewer": "synthetic-knowledge-owner",
+      "reviewer_role": "internal_reviewer",
+      "schema_version": "knowledge-engine-m25-6-decision-record/v1",
+      "sequence": 2,
+      "source_write_permitted": false,
+      "split_payload": null
+    }
+  ],
+  "review_complete": true,
+  "schema_version": "knowledge-engine-m25-6-audit-export/v1",
+  "source_write_permitted": false,
+  "terminal_item_count": 2
+}
