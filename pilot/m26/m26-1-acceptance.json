@@ -1,0 +1,101 @@
+{
+  "acceptance_gates": {
+    "answer_authority_frozen": true,
+    "closed_schemas_and_examples_valid": true,
+    "cross_stage_architecture_green": true,
+    "cross_stage_graph_green": true,
+    "dedicated_exact_head_ci_green": true,
+    "global_ci_green": true,
+    "protected_mutations_zero": true,
+    "provider_contract_frozen_without_calls": true,
+    "state_machine_closed_and_bounded": true,
+    "threats_and_default_off_flags_frozen": true,
+    "unresolved_review_threads": 0
+  },
+  "accepted_artifacts": {
+    "architecture_freeze": {
+      "path": "pilot/m26/m26-1-architecture-freeze.json",
+      "sha256": "4cd442cd944b2ddd3de06074c0c9724cdc96556e81a27805ff8687753f4c0722"
+    },
+    "downstream_inputs": {
+      "path": "pilot/m26/m26-1-downstream-inputs.json",
+      "sha256": "69137ab26db6956464cfe92f86b96c7127dd29073014c7293908527e4d2e7e20"
+    },
+    "entry_baseline": {
+      "path": "pilot/m26/m26-1-entry-baseline.json",
+      "sha256": "677b94a59a9c2a0099b8d2c47377c0ec09916167a2190aa510db8ad8a7904b7d"
+    },
+    "schema_registry": {
+      "path": "pilot/m26/m26-1-schema-registry.json",
+      "sha256": "d57eb4349b9cf97094beae2f6e82f9ab0e1f2415df841ae35565e8809ad89abd"
+    }
+  },
+  "accepted_at": "2026-07-23T07:20:00Z",
+  "authority_boundary": {
+    "architecture_only": true,
+    "credentials_used": false,
+    "production_answer_serving": false,
+    "provider_calls": false,
+    "r2_or_qdrant_mutation": false,
+    "real_corpus_bound": false,
+    "release_or_pointer_mutation": false,
+    "semantic_or_hybrid_enabled": false,
+    "source_or_foundation_mutation": false
+  },
+  "evidence_artifact": {
+    "artifact_id": 8555671225,
+    "digest": "sha256:c10816ec357b12e49048b8f96b55679abe68aa4e501e05dbcf7413ccbe3fb08b",
+    "name": "m26-1-architecture-authority-evidence",
+    "workflow_run_id": 29987616046
+  },
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_escalations": 0,
+    "codex_used": false,
+    "daniel_gate_required": false
+  },
+  "implementation": {
+    "additions": 3058,
+    "base_sha": "d68be491f8d07a727bcf1f521a2e5e75256eede3",
+    "changed_file_count": 24,
+    "deletions": 0,
+    "expected_head_merge": true,
+    "head_sha": "7e23e50412a77dd2fabd80cd120a824919d68bb8",
+    "merge_sha": "882d66fdb2bd17a1a1c6b7eb98c7a9242340a532",
+    "pull_request_number": 1054,
+    "unresolved_review_thread_count": 0
+  },
+  "issue": {
+    "number": 1052,
+    "repository": "danielcanfly/knowledge-engine",
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "next_stage": {
+    "authorized": true,
+    "name": "Retrieval Envelope and Evidence Assembly",
+    "predecessor_status_required": "m26_1_architecture_authority_accepted",
+    "provider_calls_permitted": false,
+    "real_corpus_binding_permitted": false,
+    "stage_id": "M26.2"
+  },
+  "predecessor": {
+    "main_seal_sha": "d68be491f8d07a727bcf1f521a2e5e75256eede3",
+    "status": "m25_5_identity_governance_accepted"
+  },
+  "reconciliation": {
+    "evidence_digest_required": true,
+    "exact_remote_identity_verified": true,
+    "implementation_merge_is_required_ancestor": true,
+    "no_new_authority_beyond_m26_2_entry": true
+  },
+  "required_workflows": {
+    "CI": 29987616013,
+    "M17 Architecture Canon Acceptance": 29987616052,
+    "M18 Graph v2 acceptance": 29987615986,
+    "M26.1 Architecture Authority": 29987616046
+  },
+  "schema_version": "knowledge-engine-m26-1-acceptance/v1",
+  "self_sha256": "c941e9b587ef3feddcefdbfae7db0eac37886eb1ccd078e3ceeab8d1b507570d",
+  "status": "m26_1_architecture_authority_accepted"
+}
