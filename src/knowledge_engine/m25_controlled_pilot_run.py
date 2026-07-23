@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import Counter
 from collections.abc import Mapping
@@ -180,7 +181,10 @@ def _validate_boundaries(value: Any) -> dict[str, Any]:
     return dict(value)
 
 
-def build_run_receipt(evidence: Mapping[str, Any]) -> dict[str, Any]:
+def build_run_receipt(
+    evidence: Mapping[str, Any],
+    inventory_value: Mapping[str, Any],
+) -> dict[str, Any]:
     if evidence.get("schema_version") != RUN_SCHEMA:
         raise IntegrityError("M25-PILOT-067 unsupported run evidence schema")
     evidence_sha = verify_signed(
@@ -192,11 +196,21 @@ def build_run_receipt(evidence: Mapping[str, Any]) -> dict[str, Any]:
     if mode not in {"live", "test_only"}:
         raise IntegrityError("M25-PILOT-069 invalid run mode")
     predecessor = _validate_predecessor(evidence.get("predecessor"), mode)
-    inventory_raw = evidence.get("inventory")
     authority_raw = evidence.get("authority")
-    if not isinstance(inventory_raw, dict) or not isinstance(authority_raw, dict):
-        raise IntegrityError("M25-PILOT-070 inventory and authority objects required")
-    inventory = validate_inventory(inventory_raw)
+    inventory_ref = evidence.get("inventory_ref")
+    if not isinstance(authority_raw, dict) or not isinstance(inventory_ref, dict):
+        raise IntegrityError("M25-PILOT-070 inventory reference and authority objects required")
+    inventory = validate_inventory(inventory_value)
+    expected_source_ids = [item["source_id"] for item in inventory["sources"]]
+    expected_ids_sha = hashlib.sha256(
+        json.dumps(expected_source_ids, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    if inventory_ref != {
+        "inventory_sha256": inventory["inventory_sha256"],
+        "source_count": inventory["source_count"],
+        "source_ids_sha256": expected_ids_sha,
+    }:
+        raise IntegrityError("M25-PILOT-076 inventory reference mismatch")
     if inventory["mode"] != mode:
         raise IntegrityError("M25-PILOT-071 run and inventory mode mismatch")
     authority = validate_authority(authority_raw, inventory)
