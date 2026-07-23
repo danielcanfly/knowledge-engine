@@ -84,7 +84,12 @@ def test_m26_4_acceptance_authority_and_benchmark_are_closed() -> None:
     authority = acceptance["authority_boundary"]
     assert authority["synthetic_only"] is True
     assert authority["provider_mock_replay"] is True
-    forbidden = {key: value for key, value in authority.items() if key not in {"synthetic_only", "provider_mock_replay"}}
+    allowed_true = {"synthetic_only", "provider_mock_replay"}
+    forbidden = {
+        key: value
+        for key, value in authority.items()
+        if key not in allowed_true
+    }
     assert set(forbidden.values()) == {False}
 
 
