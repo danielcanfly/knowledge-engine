@@ -1,0 +1,101 @@
+{
+  "$id": "knowledge-engine/m26/draft-answer-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority": {
+      "const": "draft_only"
+    },
+    "missing_evidence": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "proposed_claims": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "claim_id": {
+            "type": "string"
+          },
+          "material": {
+            "type": "boolean"
+          },
+          "proposed_passage_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "claim_id",
+          "text",
+          "material",
+          "proposed_passage_ids"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-draft-answer/v1"
+    },
+    "sections": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "proposed_citation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "section_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "section_id",
+          "text",
+          "proposed_citation_ids"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "status": {
+      "enum": [
+        "answered",
+        "answered_with_qualifications",
+        "conflicting_evidence",
+        "insufficient_evidence",
+        "not_found"
+      ]
+    },
+    "uncertainty": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "sections",
+    "proposed_claims",
+    "uncertainty",
+    "missing_evidence",
+    "authority"
+  ],
+  "title": "M26 Draft Answer",
+  "type": "object"
+}
