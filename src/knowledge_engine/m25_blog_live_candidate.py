@@ -9,10 +9,10 @@ import shutil
 import struct
 import tempfile
 import urllib.parse
-from collections import Counter
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import httpx
 
@@ -37,7 +37,7 @@ from .m25_blog_candidate_release import (
     build_pack_artifacts,
     validate_pack,
 )
-from .m25_blog_pilot import GitHubClient, sha256, write_json, write_jsonl
+from .m25_blog_pilot import GitHubClient, write_json, write_jsonl
 from .m25_blog_pilot_batch_b import build_batch_b
 from .m25_blog_series_convergence import build_converged_batch
 from .publisher import publish_release
@@ -845,7 +845,8 @@ def build_internal_site(
         f'const EXPECTED_RELEASE = "{compiled.release_id}";',
     )
     app = app.replace(
-        'const EXPECTED_MANIFEST = "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877";',
+        'const EXPECTED_MANIFEST = '
+        '"ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877";',
         f'const EXPECTED_MANIFEST = "{manifest_sha}";',
     )
     app = app.replace(
