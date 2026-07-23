@@ -1,0 +1,38 @@
+name: M25.10 Worker Type Diagnostics
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-10-live-ts-diagnostics.yml'
+      - 'packages/m25-blog-candidate-runtime/**'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          show-progress: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Capture TypeScript findings
+        working-directory: packages/m25-blog-candidate-runtime
+        run: |
+          mkdir -p /tmp/m25-ts
+          npm install --ignore-scripts >/tmp/m25-ts/npm-install.txt 2>&1
+          npm run check >/tmp/m25-ts/tsc.txt 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-10-worker-ts-findings
+          path: /tmp/m25-ts/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Report findings
+        run: |
+          cat /tmp/m25-ts/tsc.txt
+          test ! -s /tmp/m25-ts/tsc.txt
