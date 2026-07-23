@@ -70,12 +70,15 @@ jobs:
           python -m pytest -q \
             tests/test_m26_3_context_compiler.py::test_conflicting_evidence_is_mandatory_and_cited \
             tests/test_m26_3_context_compiler.py::test_acl_no_match_does_not_leak_restricted_text
-      - name: Test M26.3 injection, budget and docs
+      - name: Test M26.3 prompt injection
         run: |
-          python -m pytest -q \
-            tests/test_m26_3_context_compiler.py::test_prompt_injection_is_quarantined_as_evidence_not_instruction \
-            tests/test_m26_3_context_compiler.py::test_budget_too_small_for_mandatory_conflict_forces_abstention \
-            tests/test_m26_3_context_compiler.py::test_docs_pin_stop_lines_and_downstream_boundary
+          python -m pytest -q tests/test_m26_3_context_compiler.py::test_prompt_injection_is_quarantined_as_evidence_not_instruction
+      - name: Test M26.3 mandatory budget
+        run: |
+          python -m pytest -q tests/test_m26_3_context_compiler.py::test_budget_too_small_for_mandatory_conflict_forces_abstention
+      - name: Test M26.3 docs
+        run: |
+          python -m pytest -q tests/test_m26_3_context_compiler.py::test_docs_pin_stop_lines_and_downstream_boundary
       - name: Test M26 predecessor contracts
         run: |
           python -m pytest -q \
