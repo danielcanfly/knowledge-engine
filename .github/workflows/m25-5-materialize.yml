@@ -49,7 +49,9 @@ jobs:
       - name: Lint M25.5 scope
         id: lint
         continue-on-error: true
-        run: python -m ruff check src/knowledge_engine/m25_identity_governance.py src/knowledge_engine/m25_identity_governance_cli.py tests/test_m25_5_identity_governance.py tests/test_m25_5_identity_governance_contracts.py > /tmp/m25-5-ruff.txt 2>&1
+        run: |
+          python -m ruff check --fix src/knowledge_engine/m25_identity_governance.py src/knowledge_engine/m25_identity_governance_cli.py tests/test_m25_5_identity_governance.py tests/test_m25_5_identity_governance_contracts.py > /tmp/m25-5-ruff.txt 2>&1
+          python -m ruff check src/knowledge_engine/m25_identity_governance.py src/knowledge_engine/m25_identity_governance_cli.py tests/test_m25_5_identity_governance.py tests/test_m25_5_identity_governance_contracts.py >> /tmp/m25-5-ruff.txt 2>&1
       - name: Upload M25.5 lint diagnostics
         if: always()
         uses: actions/upload-artifact@v4
