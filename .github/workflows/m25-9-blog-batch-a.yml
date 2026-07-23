@@ -1,0 +1,216 @@
+name: M25.9 Blog Pilot Batch A
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/m25-9-blog-batch-a.yml'
+      - 'docs/architecture/m25/m25-9-blog-batch-a.md'
+      - 'pilot/m25/m25-9-blog-batch-a-plan.json'
+      - 'schemas/m25-blog-batch-plan-v1.schema.json'
+      - 'src/knowledge_engine/m25_blog_pilot.py'
+      - 'tests/test_m25_blog_pilot.py'
+
+permissions:
+  contents: read
+
+jobs:
+  blog-batch-a:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 200
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify exact head and M25.9A predecessor
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git merge-base --is-ancestor 40cce9231b678339de832ab20caf73a72e0bac74 HEAD
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          gate = json.loads(Path('pilot/m25/m25-9-readiness-gate.json').read_text())
+          assert gate['status'] == 'blocked_awaiting_m25_8_live_acceptance_and_exact_inventory_authority'
+          assert gate['pilot_execution_permitted'] is False
+          assert gate['source_write_permitted'] is False
+          assert gate['m25_9b_authorized'] is False
+          assert gate['m25_9c_authorized'] is False
+          PY
+
+      - name: Install dependencies
+        run: python -m pip install -q --disable-pip-version-check -e '.[dev]'
+
+      - name: Lint Batch A builder
+        run: |
+          python -m ruff check \
+            src/knowledge_engine/m25_blog_pilot.py \
+            tests/test_m25_blog_pilot.py
+
+      - name: Validate committed plan
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import jsonschema
+
+          plan_path = Path('pilot/m25/m25-9-blog-batch-a-plan.json')
+          schema_path = Path('schemas/m25-blog-batch-plan-v1.schema.json')
+          plan = json.loads(plan_path.read_text())
+          schema = json.loads(schema_path.read_text())
+          jsonschema.Draft202012Validator.check_schema(schema)
+          jsonschema.validate(plan, schema)
+
+          claimed = plan.pop('plan_sha256')
+          actual = hashlib.sha256(
+              json.dumps(plan, sort_keys=True, separators=(',', ':')).encode()
+          ).hexdigest()
+          assert claimed == actual
+          assert plan['master_population']['expected_article_count'] == 156
+          assert plan['partition']['batch_a_count'] == 78
+          assert plan['partition']['batch_b_count'] == 78
+          assert all(value is False for value in plan['boundary'].values())
+          PY
+
+      - name: Test deterministic partitioning and node construction
+        run: |
+          python -m pytest -q \
+            tests/test_m25_blog_pilot.py \
+            tests/test_m25_9_controlled_pilot.py
+
+      - name: Acquire exact upstream corpus and build Batch A
+        env:
+          BLOG_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/m25-9-blog-a
+          python -m knowledge_engine.m25_blog_pilot \
+            --repository huaihsuanbusiness/daniel-blog \
+            --commit 97821b6547ce3c0b8b8acf11cbbf4795684df458 \
+            --expected-count 156 \
+            --batch-size 78 \
+            --output-dir /tmp/m25-9-blog-a \
+            >/tmp/m25-9-blog-a/cli-output.json
+
+      - name: Validate full population and protected boundaries
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('/tmp/m25-9-blog-a')
+          master = json.loads((root / 'master-inventory.json').read_text())
+          batch_a = json.loads((root / 'batch-a-inventory.json').read_text())
+          batch_b = json.loads((root / 'batch-b-inventory.json').read_text())
+          receipt = json.loads((root / 'batch-a-receipt.json').read_text())
+
+          master_ids = {item['article_id'] for item in master['articles']}
+          a_ids = {item['article_id'] for item in batch_a['articles']}
+          b_ids = {item['article_id'] for item in batch_b['articles']}
+          assert len(master_ids) == 156
+          assert len(a_ids) == 78
+          assert len(b_ids) == 78
+          assert not a_ids & b_ids
+          assert a_ids | b_ids == master_ids
+          assert len(list((root / 'sources').glob('*.md'))) == 78
+          assert all(
+              item['terminal_acquisition_state'] == 'acquired_verified'
+              for item in batch_a['articles']
+          )
+          assert receipt['master_source_count'] == 156
+          assert receipt['batch_a_source_count'] == 78
+          assert receipt['batch_b_source_count'] == 78
+          assert receipt['intersection_count'] == 0
+          assert receipt['missing_count'] == 0
+          assert receipt['article_node_count'] == 78
+          assert receipt['section_node_count'] > 0
+          assert receipt['semantic_claim_promotion_permitted'] is False
+          assert receipt['source_write_permitted'] is False
+          assert receipt['production_mutation_permitted'] is False
+          assert receipt['m25_9b_authorized'] is False
+          assert receipt['m25_9c_authorized'] is False
+          PY
+
+      - name: Enforce exact changed-file boundary
+        run: |
+          git fetch --quiet --no-tags origin main
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/m25-9-blog-batch-a.yml' \
+            'docs/architecture/m25/m25-9-blog-batch-a.md' \
+            'pilot/m25/m25-9-blog-batch-a-plan.json' \
+            'schemas/m25-blog-batch-plan-v1.schema.json' \
+            'src/knowledge_engine/m25_blog_pilot.py' \
+            'tests/test_m25_blog_pilot.py' | sort)"
+          test "$changed" = "$expected"
+          ! printf '%s\n' "$changed" | grep -Eq \
+            '^(bundle/|provenance/|registry/|reviews/|foundation/|release/|r2/|qdrant/|production/|workers/|channels/)'
+
+      - name: Assemble exact-head evidence
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path('/tmp/m25-9-blog-a')
+          receipt = json.loads((root / 'batch-a-receipt.json').read_text())
+          paths = [
+              root / 'master-inventory.json',
+              root / 'batch-a-inventory.json',
+              root / 'batch-b-inventory.json',
+              root / 'candidate-nodes.jsonl',
+              root / 'candidate-edges.jsonl',
+              root / 'batch-a-receipt.json',
+          ]
+          evidence = {
+              'schema_version': 'knowledge-engine-m25-9-blog-batch-a-exact-head/v1',
+              'head_sha': os.environ['HEAD_SHA'],
+              'workflow_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'upstream_repository': 'huaihsuanbusiness/daniel-blog',
+              'upstream_commit': '97821b6547ce3c0b8b8acf11cbbf4795684df458',
+              'artifact_sha256': {
+                  str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+                  for path in paths
+              },
+              'master_source_count': receipt['master_source_count'],
+              'batch_a_source_count': receipt['batch_a_source_count'],
+              'batch_b_source_count': receipt['batch_b_source_count'],
+              'intersection_count': receipt['intersection_count'],
+              'missing_count': receipt['missing_count'],
+              'snapshot_count': receipt['snapshot_count'],
+              'node_count': receipt['node_count'],
+              'edge_count': receipt['edge_count'],
+              'source_write_permitted': False,
+              'production_mutation_permitted': False,
+              'm25_9b_authorized': False,
+              'm25_9c_authorized': False,
+          }
+          (root / 'exact-head-evidence.json').write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-blog-batch-a-evidence
+          path: /tmp/m25-9-blog-a
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Compile Batch A builder
+        run: |
+          python -m compileall -q \
+            src/knowledge_engine/m25_blog_pilot.py \
+            tests/test_m25_blog_pilot.py
