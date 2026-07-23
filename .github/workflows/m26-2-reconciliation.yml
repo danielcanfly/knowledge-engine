@@ -140,6 +140,7 @@ jobs:
           changed="$(git diff --name-only origin/main...HEAD | sort)"
           expected="$(printf '%s\n' \
             '.github/workflows/m26-2-reconciliation.yml' \
+            '.github/workflows/m26-2-retrieval-envelope.yml' \
             'docs/architecture/m26/m26-2-reconciliation.md' \
             'pilot/m26/m26-2-acceptance.json' \
             'tests/test_m26_2_reconciliation.py' | sort)"
