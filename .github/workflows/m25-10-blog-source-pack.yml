@@ -32,11 +32,25 @@ jobs:
           git merge-base --is-ancestor 93f0a7761dee795488a3435f2bfecc6a4d6702e6 HEAD
       - name: Install
         run: python -m pip install -q --disable-pip-version-check -e '.[dev]'
-      - name: Lint
+      - name: Capture Ruff findings
         run: |
+          mkdir -p /tmp/m25-10
           python -m ruff check --output-format=concise \
             src/knowledge_engine/m25_blog_candidate_release.py \
-            tests/test_m25_10_blog_candidate_release.py
+            tests/test_m25_10_blog_candidate_release.py \
+            >/tmp/m25-10/ruff-findings.txt 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-10-blog-source-pack-ruff-findings
+          path: /tmp/m25-10/ruff-findings.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce clean Ruff
+        run: |
+          if test -s /tmp/m25-10/ruff-findings.txt; then
+            cat /tmp/m25-10/ruff-findings.txt
+            exit 1
+          fi
       - name: Focused tests
         run: python -m pytest -q tests/test_m25_10_blog_candidate_release.py
       - name: Compile
