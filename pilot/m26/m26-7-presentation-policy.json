@@ -1,0 +1,61 @@
+{
+  "accepted_predecessor_status": "m26_6_answer_evaluation_refusal_gate_accepted",
+  "authority": {
+    "answer_evaluation_required": true,
+    "credentials": false,
+    "foundation_mutation": false,
+    "live_provider_calls": false,
+    "network_execution": false,
+    "non_serving_preview": true,
+    "presentation_contract": true,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "provider_sdk": false,
+    "qdrant_or_r2_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "forbidden_text_fragments": [
+    "follow these instructions",
+    "ignore previous",
+    "BEGIN PRIVATE KEY",
+    "password=",
+    "api_key"
+  ],
+  "schema_version": "knowledge-engine-m26-answer-presentation-policy/v1",
+  "self_sha256": "1e712fb20de3eaf292bc1db28bc949df95f5c3c1e159c39eaf67e9c5f8ab092a",
+  "status_policy": {
+    "authority_rejected_status": "presentation_rejected_authority_escalation",
+    "passed_preview_status": "non_serving_preview_available",
+    "refusal_preview_status": "non_serving_refusal_preview",
+    "warning_preview_status": "non_serving_preview_with_warnings"
+  },
+  "surface_policy": {
+    "allow_final_answer_text": false,
+    "allowed_pass_statuses": [
+      "evaluation_passed_non_final",
+      "evaluation_passed_non_final_with_warnings"
+    ],
+    "allowed_refusal_statuses": [
+      "refusal_abstain_propagated",
+      "refusal_privacy_block_propagated",
+      "refusal_authority_escalation",
+      "refusal_citation_integrity",
+      "refusal_prompt_injection_leakage",
+      "refusal_fail_closed"
+    ],
+    "max_preview_claims": 6,
+    "preview_only": true,
+    "refusals_have_no_claims": true,
+    "require_binding_identity": true,
+    "require_claim_identity": true,
+    "warning_banners": [
+      "conflict_warning",
+      "prompt_injection_quarantined"
+    ]
+  }
+}
