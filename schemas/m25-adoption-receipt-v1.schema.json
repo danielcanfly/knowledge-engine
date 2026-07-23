@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.knowledge-engine.local/m25-adoption-receipt-v1.schema.json",
+  "title": "M25.8 Adoption Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "mode",
+    "evidence_sha256",
+    "authority_sha256",
+    "source_repository",
+    "source_pr_number",
+    "source_pr_exact_head_sha",
+    "merged_source_sha",
+    "candidate_release_id",
+    "candidate_manifest_sha256",
+    "surface_count",
+    "surfaces",
+    "rollback_target_release_id",
+    "rollback_passed",
+    "production_pointer_unchanged",
+    "production_mutation_permitted",
+    "m25_9_authorized",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-8-adoption-receipt/v1"},
+    "status": {"enum": ["m25_8_adoption_release_rollback_complete", "m25_8_test_only_adoption_simulation_passed"]},
+    "mode": {"enum": ["live", "test_only"]},
+    "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authority_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_repository": {"const": "danielcanfly/knowledge-source"},
+    "source_pr_number": {"type": "integer", "minimum": 1},
+    "source_pr_exact_head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "merged_source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "candidate_release_id": {"type": "string", "minLength": 1},
+    "candidate_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "surface_count": {"const": 5},
+    "surfaces": {
+      "type": "array",
+      "const": ["graph", "search", "sources", "vault", "wiki"]
+    },
+    "rollback_target_release_id": {"type": "string", "minLength": 1},
+    "rollback_passed": {"const": true},
+    "production_pointer_unchanged": {"const": true},
+    "production_mutation_permitted": {"const": false},
+    "m25_9_authorized": {"const": false},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
