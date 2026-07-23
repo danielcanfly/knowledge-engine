@@ -187,13 +187,13 @@ jobs:
           assert master['series_catalog_path'] == 'src/utils/seriesMeta.ts'
           assert master['series_catalog_blob_sha'] == 'a08a3e025a60da9a35ed3573e1c64a57d26b9201'
           assert master['series_catalog_entry_count'] == 22
-          assert master['formal_series_count'] == 24
-          assert master['parent_collection_count'] == 25
+          assert master['formal_series_count'] == 25
+          assert master['parent_collection_count'] == 26
           assert master['standalone_article_count'] == 2
           assert master['catalog_fallback_article_count'] == 41
           assert receipt['master_source_count'] == 156
-          assert receipt['formal_series_count'] == 24
-          assert receipt['parent_collection_count'] == 25
+          assert receipt['formal_series_count'] == 25
+          assert receipt['parent_collection_count'] == 26
           assert receipt['standalone_article_count'] == 2
           assert receipt['catalog_fallback_article_count'] == 41
           assert receipt['batch_a_source_count'] == 78
