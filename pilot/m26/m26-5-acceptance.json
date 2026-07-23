@@ -1,0 +1,123 @@
+{
+  "authority_boundary": {
+    "canonical_identity_or_relation_mutation": false,
+    "credentials": false,
+    "draft_answer_contract": true,
+    "foundation_mutation": false,
+    "live_provider_calls": false,
+    "network_execution": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "provider_mock_replay_required": true,
+    "provider_sdk": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "benchmark": {
+    "abstain_propagated_count": 3,
+    "case_count": 10,
+    "credentials_used_count": 0,
+    "failed_count": 0,
+    "live_network_call_count": 0,
+    "non_final_draft_count": 6,
+    "passed_count": 10,
+    "privacy_block_propagated_count": 1,
+    "production_answer_serving_count": 0,
+    "provider_call_count": 0,
+    "real_corpus_binding_count": 0,
+    "semantic_or_hybrid_use_count": 0,
+    "verified_final_answer_count": 0
+  },
+  "evidence_artifact": {
+    "artifact_id": 8562827517,
+    "digest": "sha256:aa00165e68767ceb598a44c026e3a91586f8e9f196d475caf80528d99112049a",
+    "name": "m26-5-draft-answer-evidence",
+    "retention_days": 30,
+    "workflow_run_id": 30005573864
+  },
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_escalations": 0,
+    "codex_used": false,
+    "daniel_gate_required": false
+  },
+  "frozen_identities": {
+    "benchmark_cases_sha256": "e9bd25431cd57ae7e0a4a4094164182379f3e71cda5af61ac3d953480d43b5b9",
+    "citation_binding_schema_sha256": "5078c97cf13fabeb8ce924a83999eced2bff65a8e555f6afdb45cb01e5949ea5",
+    "contract_registry_self_sha256": "2a4d525749eeffae83642bcc79ff37b2226e000311c73d6c2c0e7aa128873478",
+    "draft_answer_schema_sha256": "dabb255b26a7074ccf6cd687ab0992656c014eb0b9f365f04171fe22f427c7a4",
+    "draft_policy_sha256": "896fc36d0c73650b80bf18dfe22affcbf1df4e177d4316dd90896f2e0dc9d5c5",
+    "entry_contract_sha256": "07eb081cb2ee9326d97296c88e6bde355fd0b87faa2b0a5ec58518d8947a24ff"
+  },
+  "implementation": {
+    "accepted_predecessor_main_seal_sha": "93d4dea5cf78463e89b4e6f0f68157bf08c6ee16",
+    "base_sha": "4862761c2b90fbe5074f964bc234c42cce5bb5d5",
+    "changed_file_count": 11,
+    "expected_head_merge": true,
+    "final_head_sha": "488ccee804a31130311a5ec3ddb1aff908f5b332",
+    "merge_sha": "f94f1ff4ccb8162b4e60112ccbd20c69744949c6",
+    "pull_request_number": 1074,
+    "unresolved_review_thread_count": 0
+  },
+  "issue": {
+    "number": 1072,
+    "repository": "danielcanfly/knowledge-engine",
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "next_stage": {
+    "answer_evaluation_permitted": true,
+    "authorized": true,
+    "live_provider_calls_permitted": false,
+    "name": "Synthetic Answer Evaluation and Refusal Gate",
+    "predecessor_status_required": "m26_5_draft_answer_contract_accepted",
+    "production_answer_serving_permitted": false,
+    "real_corpus_binding_permitted": false,
+    "refusal_gate_permitted": true,
+    "stage_id": "M26.6",
+    "synthetic_only": true,
+    "verified_final_answer_permitted": false
+  },
+  "predecessor": {
+    "main_seal_sha": "93d4dea5cf78463e89b4e6f0f68157bf08c6ee16",
+    "status": "m26_4_provider_mock_replay_privacy_accepted"
+  },
+  "quality_and_security": {
+    "abstain_records_emit_no_claims": true,
+    "claim_citation_bindings_required": true,
+    "conflict_warning_preserved": true,
+    "final_answer_forbidden": true,
+    "orphan_citations_rejected": true,
+    "privacy_blocks_emit_no_claims": true,
+    "production_answer_serving_forbidden": true,
+    "prompt_injection_evidence_only": true,
+    "selected_passage_identity_required": true,
+    "unsupported_claims_rejected": true,
+    "verified_final_answer_forbidden": true
+  },
+  "reconciliation": {
+    "all_frozen_artifact_digests_required": true,
+    "evidence_digest_required": true,
+    "exact_remote_identity_verified": true,
+    "implementation_merge_is_required_ancestor": true,
+    "no_new_authority_beyond_m26_6_entry": true
+  },
+  "required_workflows": {
+    "CI": 30005573754,
+    "M17 Architecture Canon Acceptance": 30005573789,
+    "M18 Graph v2 acceptance": 30005573813,
+    "M26.1 Architecture Authority": 30005574033,
+    "M26.4 Provider Mock Replay": 30005573826,
+    "M26.5 Draft Answer Contract": 30005573864,
+    "R2 Release Integration": 30005573803
+  },
+  "schema_version": "knowledge-engine-m26-5-acceptance/v1",
+  "self_sha256": "ec33cd9645c1530f68aff0f71fb93913037a6a63e08c5a98d5363eb7bb87f352",
+  "status": "m26_5_draft_answer_contract_accepted"
+}
