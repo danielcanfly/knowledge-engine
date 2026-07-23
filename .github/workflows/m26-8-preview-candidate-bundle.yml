@@ -1,0 +1,179 @@
+name: M26.8 Preview Evidence Candidate Bundle
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m26-8-preview-candidate-bundle.yml'
+      - 'docs/architecture/m26/m26-8-*.md'
+      - 'pilot/m26/m26-8-*.json'
+      - 'schemas/m26-8-preview-evidence-integration-v1.schema.json'
+      - 'schemas/m26-candidate-bundle-v1.schema.json'
+      - 'src/knowledge_engine/m26_preview_candidate_bundle.py'
+      - 'tests/test_m26_8_preview_candidate_bundle.py'
+      - 'pyproject.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  preview-candidate-bundle:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact head and accepted predecessor
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          acceptance = json.loads(Path('pilot/m26/m26-7-acceptance.json').read_text())
+          entry = json.loads(Path('pilot/m26/m26-8-entry-contract.json').read_text())
+          assert acceptance['status'] == 'm26_7_answer_presentation_non_serving_preview_accepted'
+          assert acceptance['next_stage']['stage_id'] == 'M26.8'
+          assert acceptance['next_stage']['authorized'] is True
+          assert acceptance['next_stage']['synthetic_only'] is True
+          assert acceptance['next_stage']['preview_evidence_integration_permitted'] is True
+          assert acceptance['next_stage']['live_provider_calls_permitted'] is False
+          assert acceptance['next_stage']['real_corpus_binding_permitted'] is False
+          assert acceptance['next_stage']['production_answer_serving_permitted'] is False
+          assert acceptance['next_stage']['production_pointer_mutation_permitted'] is False
+          assert entry['accepted_predecessor']['final_main_seal'] == (
+              'e532403b3b1f0029b224f77374f5fae83b0f9e09'
+          )
+          assert entry['authority_boundary']['synthetic_only'] is True
+          assert entry['authority_boundary']['preview_evidence_integration_permitted'] is True
+          assert entry['authority_boundary']['candidate_bundle_permitted'] is True
+          assert not any(
+              value
+              for key, value in entry['authority_boundary'].items()
+              if key not in {
+                  'synthetic_only',
+                  'preview_evidence_integration_permitted',
+                  'candidate_bundle_permitted',
+                  'presentation_contract_required',
+              }
+          )
+          PY
+      - name: Install dev dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M26.8
+        run: python -m ruff check src/knowledge_engine/m26_preview_candidate_bundle.py tests/test_m26_8_preview_candidate_bundle.py
+      - name: Test M26.8 contracts and policy
+        run: |
+          python -m pytest -q tests/test_m26_8_preview_candidate_bundle.py \
+            -k 'entry_contract or registry or policy'
+      - name: Test M26.8 benchmark
+        run: |
+          python -m pytest -q tests/test_m26_8_preview_candidate_bundle.py \
+            -k 'candidate_benchmark'
+      - name: Test M26.8 candidate and safety
+        run: |
+          python -m pytest -q tests/test_m26_8_preview_candidate_bundle.py \
+            -k 'candidate_preview or refusal_candidate or conflict_and_prompt or candidate_bundle or authority_escalation or answer_text'
+      - name: Test M26 predecessors
+        run: |
+          python -m pytest -q \
+            tests/test_m26_7_answer_presentation.py \
+            tests/test_m26_6_answer_evaluation.py \
+            tests/test_m26_5_draft_answer.py \
+            tests/test_m26_4_provider_mock.py \
+            tests/test_m26_3_context_compiler.py \
+            tests/test_m26_2_retrieval_envelope.py \
+            tests/test_m26_1_architecture_authority.py
+      - name: Rebuild deterministic candidate bundle evidence
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p /tmp/m26-8
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from knowledge_engine.m26_preview_candidate_bundle import run_candidate_benchmark
+
+          def load(path):
+              return json.loads(Path(path).read_text())
+
+          def digest(path):
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+          report = run_candidate_benchmark(
+              load('pilot/m26/m26-8-benchmark-cases.json'),
+              presentation_cases=load('pilot/m26/m26-7-benchmark-cases.json'),
+              evaluation_cases=load('pilot/m26/m26-6-benchmark-cases.json'),
+              draft_cases=load('pilot/m26/m26-5-benchmark-cases.json'),
+              provider_cases=load('pilot/m26/m26-4-benchmark-cases.json'),
+              context_cases=load('pilot/m26/m26-3-benchmark-cases.json'),
+              retrieval_cases=load('pilot/m26/m26-2-benchmark-cases.json'),
+              corpus=load('pilot/m26/m26-2-synthetic-corpus.json'),
+              retrieval_policy=load('pilot/m26/m26-2-retrieval-policy.json'),
+              context_policy=load('pilot/m26/m26-3-context-policy.json'),
+              provider_policy=load('pilot/m26/m26-4-provider-policy.json'),
+              draft_policy=load('pilot/m26/m26-5-draft-answer-policy.json'),
+              evaluation_policy=load('pilot/m26/m26-6-answer-evaluation-policy.json'),
+              presentation_policy=load('pilot/m26/m26-7-presentation-policy.json'),
+              candidate_policy=load('pilot/m26/m26-8-candidate-bundle-policy.json'),
+          )
+          assert report['status'] == 'm26_8_candidate_bundle_ready'
+          report_path = Path('/tmp/m26-8/candidate-benchmark-report.json')
+          report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
+          files = [
+              'pilot/m26/m26-8-entry-contract.json',
+              'pilot/m26/m26-8-candidate-bundle-policy.json',
+              'pilot/m26/m26-8-benchmark-cases.json',
+              'pilot/m26/m26-8-contract-registry.json',
+              'schemas/m26-8-preview-evidence-integration-v1.schema.json',
+              'schemas/m26-candidate-bundle-v1.schema.json',
+          ]
+          evidence = {
+              'schema_version': 'knowledge-engine-m26-8-exact-head-evidence/v1',
+              'head_sha': os.environ['HEAD_SHA'],
+              'workflow_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'artifacts': {path: digest(path) for path in files},
+              'benchmark_report_sha256': hashlib.sha256(report_path.read_bytes()).hexdigest(),
+              'case_count': report['case_count'],
+              'passed_count': report['passed_count'],
+              'failed_count': report['failed_count'],
+              'candidate_preview_count': report['metrics']['candidate_preview_count'],
+              'candidate_refusal_count': report['metrics']['candidate_refusal_count'],
+              'synthetic_only': True,
+              'candidate_bundle': True,
+              'preview_evidence_integration': True,
+              'live_provider_calls': False,
+              'credentials_used': False,
+              'network_execution': False,
+              'real_corpus_binding': False,
+              'semantic_or_hybrid_serving': False,
+              'production_answer_serving': False,
+              'production_pointer_mutation': False,
+              'verified_final_answers': False,
+          }
+          Path('/tmp/m26-8/evidence.json').write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+      - name: Reject protected mutations
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          printf '%s\n' "$changed"
+          ! printf '%s\n' "$changed" | grep -Eq '^(workers/|channels/|foundation/|release/|r2/|qdrant/|production/)'
+          ! printf '%s\n' "$changed" | grep -Eq '^(src/knowledge_engine/(m14_|m21_|m24_|m25_|m26_context_compiler\.py|m26_retrieval_envelope\.py|m26_provider_mock\.py|m26_draft_answer\.py|m26_answer_evaluation\.py|m26_answer_presentation\.py))'
+          ! printf '%s\n' "$changed" | grep -Eq '^(pilot/m25/|docs/architecture/m25/)'
+          python -m compileall -q src/knowledge_engine/m26_preview_candidate_bundle.py tests/test_m26_8_preview_candidate_bundle.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m26-8-preview-candidate-bundle-evidence
+          path: /tmp/m26-8
+          if-no-files-found: error
+          retention-days: 30
