@@ -1,0 +1,145 @@
+{
+  "authority": {
+    "answer_evaluation": true,
+    "live_provider_calls": false,
+    "production_answer_serving": false,
+    "refusal_gate": true,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "cases": [
+    {
+      "case_id": "eval_direct_public",
+      "expected": {
+        "min_accepted_bindings": 1,
+        "min_accepted_claims": 1,
+        "safe_for_m26_7": true,
+        "status": "evaluation_passed_non_final"
+      },
+      "m26_5_case_id": "draft_direct_public"
+    },
+    {
+      "case_id": "eval_m26_1_fixture_compat",
+      "expected": {
+        "min_accepted_bindings": 1,
+        "min_accepted_claims": 1,
+        "safe_for_m26_7": true,
+        "status": "evaluation_passed_non_final"
+      },
+      "m26_5_case_id": "draft_m26_1_fixture_compat"
+    },
+    {
+      "case_id": "eval_multi_facet_internal",
+      "expected": {
+        "min_accepted_bindings": 4,
+        "min_accepted_claims": 1,
+        "safe_for_m26_7": true,
+        "status": "evaluation_passed_non_final"
+      },
+      "m26_5_case_id": "draft_multi_facet_internal"
+    },
+    {
+      "case_id": "eval_graph_public",
+      "expected": {
+        "min_accepted_bindings": 2,
+        "min_accepted_claims": 1,
+        "safe_for_m26_7": true,
+        "status": "evaluation_passed_non_final"
+      },
+      "m26_5_case_id": "draft_graph_public"
+    },
+    {
+      "case_id": "eval_acl_negative_public",
+      "expected": {
+        "min_accepted_claims": 0,
+        "requires_refusal": true,
+        "safe_for_m26_7": false,
+        "status": "refusal_abstain_propagated"
+      },
+      "m26_5_case_id": "draft_acl_negative_public"
+    },
+    {
+      "case_id": "eval_stale_public",
+      "expected": {
+        "min_accepted_claims": 0,
+        "requires_refusal": true,
+        "safe_for_m26_7": false,
+        "status": "refusal_abstain_propagated"
+      },
+      "m26_5_case_id": "draft_stale_public"
+    },
+    {
+      "case_id": "eval_conflict_public",
+      "expected": {
+        "min_accepted_bindings": 2,
+        "min_accepted_claims": 1,
+        "requires_conflict_warning": true,
+        "safe_for_m26_7": true,
+        "status": "evaluation_passed_non_final_with_warnings"
+      },
+      "m26_5_case_id": "draft_conflict_public"
+    },
+    {
+      "case_id": "eval_prompt_injection_public",
+      "expected": {
+        "forbidden_text_fragments": [
+          "follow these instructions",
+          "ignore previous"
+        ],
+        "min_accepted_claims": 1,
+        "requires_prompt_injection_quarantine": true,
+        "safe_for_m26_7": true,
+        "status": "evaluation_passed_non_final_with_warnings"
+      },
+      "m26_5_case_id": "draft_prompt_injection_public"
+    },
+    {
+      "case_id": "eval_no_match_public",
+      "expected": {
+        "min_accepted_claims": 0,
+        "requires_refusal": true,
+        "safe_for_m26_7": false,
+        "status": "refusal_abstain_propagated"
+      },
+      "m26_5_case_id": "draft_no_match_public"
+    },
+    {
+      "case_id": "eval_privacy_secret_block",
+      "expected": {
+        "min_accepted_claims": 0,
+        "requires_privacy_refusal": true,
+        "safe_for_m26_7": false,
+        "status": "refusal_privacy_block_propagated"
+      },
+      "m26_5_case_id": "draft_privacy_secret_block"
+    },
+    {
+      "case_id": "eval_final_answer_tamper",
+      "expected": {
+        "min_accepted_claims": 0,
+        "requires_refusal": true,
+        "safe_for_m26_7": false,
+        "status": "refusal_authority_escalation"
+      },
+      "m26_5_case_id": "draft_direct_public",
+      "tamper": {
+        "set_final_answer": true
+      }
+    },
+    {
+      "case_id": "eval_missing_binding_tamper",
+      "expected": {
+        "min_accepted_claims": 0,
+        "requires_refusal": true,
+        "safe_for_m26_7": false,
+        "status": "refusal_citation_integrity"
+      },
+      "m26_5_case_id": "draft_graph_public",
+      "tamper": {
+        "drop_first_claim_binding_ids": true
+      }
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-answer-evaluation-benchmark-cases/v1",
+  "self_sha256": "75f461ef6343aa8dd1248d9c42ae44cff4f36e8a16a37b191fc62779afd53790"
+}
