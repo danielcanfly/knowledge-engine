@@ -1,0 +1,52 @@
+{
+  "accepted_predecessor_status": "m26_7_answer_presentation_non_serving_preview_accepted",
+  "authority": {
+    "candidate_bundle": true,
+    "credentials": false,
+    "foundation_mutation": false,
+    "live_provider_calls": false,
+    "network_execution": false,
+    "presentation_contract_required": true,
+    "preview_evidence_integration": true,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "provider_sdk": false,
+    "qdrant_or_r2_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "candidate_bundle_policy": {
+    "bundle_kind": "synthetic_preview_candidate_bundle",
+    "require_all_records_bound": true,
+    "require_no_production_fields": true,
+    "require_preview_sha256": true
+  },
+  "forbidden_text_fragments": [
+    "follow these instructions",
+    "ignore previous",
+    "system prompt",
+    "password:",
+    "api_key"
+  ],
+  "schema_version": "knowledge-engine-m26-preview-candidate-policy/v1",
+  "self_sha256": "45040fff534e1a615c99a55ccd3f5073e100b27c90a6171803fd7b63f056c7be",
+  "status_policy": {
+    "authority_rejected_status": "candidate_rejected_authority_escalation",
+    "bundle_ready_status": "m26_8_candidate_bundle_ready",
+    "preview_record_status": "candidate_preview_record",
+    "refusal_record_status": "candidate_refusal_record",
+    "warning_record_status": "candidate_preview_record_with_warnings"
+  },
+  "surface_policy": {
+    "allow_answer_text": false,
+    "candidate_only": true,
+    "max_candidate_claims": 6,
+    "non_serving_preview": true,
+    "preview_only": true,
+    "refusals_have_no_claims": true
+  }
+}
