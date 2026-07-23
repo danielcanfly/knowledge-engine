@@ -45,7 +45,15 @@ jobs:
           )
           comment = json.load(urllib.request.urlopen(request))
           assert comment['user']['login'] == 'huaihsuanbusiness'
-          for phrase in ['全部 30 個 gold benchmark items', 'benchmark_only_reject', 'no_write', '不得寫入 live Source', '不建立 Source PR', '不授權 M25.8', 'real pilot candidate batch']:
+          for phrase in [
+              'all 30 items in the exact M25.6 gold benchmark review batch',
+              'benchmark_only_reject',
+              'no_write',
+              'must not be written to live Source',
+              'must not produce a Source branch or Source pull request',
+              'must not authorize M25.8 or any production mutation',
+              'future real pilot candidate batch',
+          ]:
               assert phrase in comment['body']
           PY
       - name: Validate closure contracts
