@@ -24,57 +24,66 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git merge-base --is-ancestor cf56bad3b9128020214c3a30100ec741d6842e56 HEAD
-      - name: Capture approval payload chunk diagnostics
-        id: chunks
-        continue-on-error: true
+      - name: Verify approval payload chunks and archive
         run: |
-          set +e
-          {
-            wc -c .m25-4-finalization-payload/chunk-*.b64
-            sha256sum .m25-4-finalization-payload/chunk-*.b64
-            test "$(wc -c < .m25-4-finalization-payload/chunk-01.b64)" = '12000'
-            echo "chunk_01_size=$?"
-            test "$(wc -c < .m25-4-finalization-payload/chunk-02.b64)" = '12000'
-            echo "chunk_02_size=$?"
-            test "$(wc -c < .m25-4-finalization-payload/chunk-03.b64)" = '6992'
-            echo "chunk_03_size=$?"
-            echo 'b97ec560d2448e808d1b7bf558abe4a00a7c0f6de1bf172be6ec9a27771f589b  .m25-4-finalization-payload/chunk-01.b64' | sha256sum --check -
-            echo "chunk_01_sha=$?"
-            echo '9dbd5126744d8dc5f10cad46af04e2d38c8dca2d1ed137719c00d22ba9e0dacf  .m25-4-finalization-payload/chunk-02.b64' | sha256sum --check -
-            echo "chunk_02_sha=$?"
-            echo '2fd9fd41bcfd1d20b5c3b2136bc384c55f85d9b427d710c9eba58adf0bc7796c  .m25-4-finalization-payload/chunk-03.b64' | sha256sum --check -
-            echo "chunk_03_sha=$?"
-          } > /tmp/m25-4-finalization-chunks.txt 2>&1
-          grep -q 'chunk_01_size=0' /tmp/m25-4-finalization-chunks.txt
-          grep -q 'chunk_02_size=0' /tmp/m25-4-finalization-chunks.txt
-          grep -q 'chunk_03_size=0' /tmp/m25-4-finalization-chunks.txt
-          grep -q 'chunk_01_sha=0' /tmp/m25-4-finalization-chunks.txt
-          grep -q 'chunk_02_sha=0' /tmp/m25-4-finalization-chunks.txt
-          grep -q 'chunk_03_sha=0' /tmp/m25-4-finalization-chunks.txt
-      - name: Upload approval payload diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: m25-4-finalization-chunk-diagnostics
-          path: /tmp/m25-4-finalization-chunks.txt
-          if-no-files-found: error
-          retention-days: 7
-      - name: Enforce approval payload chunks
-        if: always()
-        env:
-          CHUNK_OUTCOME: ${{ steps.chunks.outcome }}
-        run: |
-          cat /tmp/m25-4-finalization-chunks.txt
-          test "$CHUNK_OUTCOME" = success
-      - name: Reassemble and verify approval payload
-        run: |
-          set -euo pipefail
-          cat .m25-4-finalization-payload/chunk-*.b64 > /tmp/m25-4-finalization.b64
-          base64 --decode /tmp/m25-4-finalization.b64 > /tmp/m25-4-finalization.tar.gz
-          echo 'dac32efba7eddff8fdeb58f28742a893ad06cc442880d8496b0c6c60580e3e9f  /tmp/m25-4-finalization.tar.gz' | sha256sum --check -
-          tar -tzf /tmp/m25-4-finalization.tar.gz | tee /tmp/m25-4-finalization-files.txt
-          test "$(wc -l < /tmp/m25-4-finalization-files.txt)" = '8'
-          ! grep -Eq '(^/|\.\.|^src/|^workers/|^packages/|^channels/|^\.github/workflows/)' /tmp/m25-4-finalization-files.txt
+          python - <<'PY'
+          import base64
+          import hashlib
+          import io
+          import tarfile
+          from pathlib import Path, PurePosixPath
+
+          chunks = [
+              (
+                  Path('.m25-4-finalization-payload/chunk-01.b64'),
+                  12000,
+                  'b97ec560d2448e808d1b7bf558abe4a00a7c0f6de1bf172be6ec9a27771f589b',
+              ),
+              (
+                  Path('.m25-4-finalization-payload/chunk-02.b64'),
+                  12000,
+                  '9dbd5126744d8dc5f10cad46af04e2d38c8dca2d1ed137719c00d22ba9e0dacf',
+              ),
+              (
+                  Path('.m25-4-finalization-payload/chunk-03.b64'),
+                  6992,
+                  '2fd9fd41bcfd1d20b5c3b2136bc384c55f85d9b427d710c9eba58adf0bc7796c',
+              ),
+          ]
+          encoded_parts = []
+          for path, expected_size, expected_sha in chunks:
+              raw = path.read_bytes()
+              assert len(raw) == expected_size, (path, len(raw), expected_size)
+              assert hashlib.sha256(raw).hexdigest() == expected_sha, path
+              encoded_parts.append(raw)
+
+          archive = base64.b64decode(b''.join(encoded_parts), validate=True)
+          expected_archive_sha = (
+              'dac32efba7eddff8fdeb58f28742a893ad06cc442880d8496b0c6c60580e3e9f'
+          )
+          assert hashlib.sha256(archive).hexdigest() == expected_archive_sha
+
+          expected_names = {
+              'docs/architecture/m25/m25-4-daniel-approval.md',
+              'pilot/m25/m25-4-adjudication-ledger.approved.json',
+              'pilot/m25/m25-4-baseline-report.json',
+              'pilot/m25/m25-4-daniel-approval.json',
+              'pilot/m25/m25-4-gold-suite.json',
+              'pilot/m25/m25-4-split-manifest.accepted.json',
+              'schemas/m25-4-daniel-approval-v1.schema.json',
+              'tests/test_m25_4_daniel_approval.py',
+          }
+          with tarfile.open(fileobj=io.BytesIO(archive), mode='r:gz') as handle:
+              members = handle.getmembers()
+              names = {member.name for member in members}
+              assert names == expected_names, (names - expected_names, expected_names - names)
+              for member in members:
+                  path = PurePosixPath(member.name)
+                  assert not path.is_absolute()
+                  assert '..' not in path.parts
+                  assert member.isfile()
+          Path('/tmp/m25-4-finalization.tar.gz').write_bytes(archive)
+          PY
       - name: Extract approval finalization
         run: |
           tar -xzf /tmp/m25-4-finalization.tar.gz -C .
