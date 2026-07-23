@@ -141,7 +141,7 @@ jobs:
           set -euo pipefail
           changed="$(git diff --name-only origin/main...HEAD)"
           ! printf '%s\n' "$changed" | grep -Eq '^(workers/|channels/|foundation/|release/|r2/|qdrant/|production/|pilot/m25/|src/knowledge_engine/runtime.py$|src/knowledge_engine/m14_|src/knowledge_engine/m24_|pyproject.toml$)'
-          unexpected="$(printf '%s\n' "$changed" | grep -Ev '^(\.github/workflows/m26-2-retrieval-envelope\.yml|docs/architecture/m26/m26-2-[^/]+\.md|pilot/m26/m26-2-[^/]+\.json|schemas/m26-(retrieval-[^/]+|synthetic-corpus-v1)\.schema\.json|src/knowledge_engine/m26_retrieval_envelope(_cli)?\.py|tests/test_m26_2_retrieval_envelope(_contracts)?\.py)$' || true)"
+          unexpected="$(printf '%s\n' "$changed" | grep -Ev '^(\.github/workflows/m26-2-(retrieval-envelope|reconciliation)\.yml|docs/architecture/m26/m26-2-[^/]+\.md|pilot/m26/m26-2-[^/]+\.json|schemas/m26-(retrieval-[^/]+|synthetic-corpus-v1)\.schema\.json|src/knowledge_engine/m26_retrieval_envelope(_cli)?\.py|tests/test_m26_2_(retrieval_envelope(_contracts)?|reconciliation)\.py)$' || true)"
           test -z "$unexpected"
           ! grep -RniE 'BEGIN [A-Z ]*PRIVATE KEY|api[_-]?key[[:space:]]*[:=][[:space:]]*[A-Za-z0-9]|bearer[[:space:]]+[A-Za-z0-9._~+/=-]{12,}' \
             docs/architecture/m26/m26-2-retrieval-envelope.md \
