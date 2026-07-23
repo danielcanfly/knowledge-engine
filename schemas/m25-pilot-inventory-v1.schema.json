@@ -1,0 +1,124 @@
+{
+  "$id": "knowledge-engine-m25-9-pilot-inventory/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "inventory_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "live",
+        "test_only"
+      ]
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-9-pilot-inventory/v1"
+    },
+    "source_count": {
+      "maximum": 100,
+      "minimum": 50,
+      "type": "integer"
+    },
+    "sources": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "audience": {
+            "enum": [
+              "public",
+              "restricted"
+            ]
+          },
+          "expected_yield": {
+            "enum": [
+              "low",
+              "medium",
+              "dense"
+            ]
+          },
+          "language": {
+            "enum": [
+              "en",
+              "zh-Hant",
+              "mixed"
+            ]
+          },
+          "licence_class": {
+            "enum": [
+              "owned",
+              "permitted",
+              "test_fixture"
+            ]
+          },
+          "origin_locator": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "origin_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "source_id": {
+            "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$",
+            "type": "string"
+          },
+          "source_type": {
+            "enum": [
+              "long_form_markdown",
+              "technical_note",
+              "structured_json",
+              "bounded_web_snapshot"
+            ]
+          },
+          "traits": {
+            "items": {
+              "enum": [
+                "duplicate",
+                "near_duplicate",
+                "alias_rich",
+                "ambiguous",
+                "conflicting_claim",
+                "superseded",
+                "noisy_formatting",
+                "prompt_injection_like",
+                "restricted_audience",
+                "unsupported_irrelevant",
+                "updated_version",
+                "ordinary"
+              ]
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "source_id",
+          "source_type",
+          "origin_locator",
+          "origin_sha256",
+          "language",
+          "audience",
+          "licence_class",
+          "expected_yield",
+          "traits"
+        ],
+        "type": "object"
+      },
+      "maxItems": 100,
+      "minItems": 50,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "mode",
+    "source_count",
+    "sources",
+    "inventory_sha256"
+  ],
+  "type": "object"
+}

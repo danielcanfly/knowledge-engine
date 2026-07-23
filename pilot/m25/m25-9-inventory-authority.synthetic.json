@@ -1,0 +1,24 @@
+{
+  "actor": "synthetic-knowledge-owner",
+  "actor_role": "knowledge_owner",
+  "authority_comment_id": 9009,
+  "authority_sha256": "f73b4d1e9bbf3285c70e0646bcde25724b7ea5779460258e641d41138be90697",
+  "inventory_approved": true,
+  "inventory_sha256": "876e5f216adf7cdd3cc57cbdfd0a4335d13278953bab0238e1b9d769f7c8dc90",
+  "large_scale_ingestion_authorized": false,
+  "m25_9b_authorized": false,
+  "m25_9c_authorized": false,
+  "max_cost_usd": 25.0,
+  "mode": "test_only",
+  "pilot_start_authorized": true,
+  "production_pointer_authorized": false,
+  "production_release_authorized": false,
+  "provider_calls_authorized": false,
+  "schema_version": "knowledge-engine-m25-9-inventory-authority/v1",
+  "source_count": 50,
+  "stop_thresholds": {
+    "max_failed_sources": 2,
+    "max_security_failures": 0,
+    "max_unaccounted_sources": 0
+  }
+}

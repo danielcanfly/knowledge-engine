@@ -1,0 +1,134 @@
+{
+  "$id": "knowledge-engine-m25-9a-run-receipt/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "accounted_source_count": {
+      "maximum": 100,
+      "minimum": 50,
+      "type": "integer"
+    },
+    "authority_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "candidate_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "cost_usd": {
+      "minimum": 0,
+      "type": "number"
+    },
+    "evidence_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "failure_drill_count": {
+      "const": 11
+    },
+    "full_population_accounted": {
+      "const": true
+    },
+    "hard_safety_gates_passed": {
+      "const": true
+    },
+    "hidden_exclusions": {
+      "const": false
+    },
+    "inventory_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "m25_10_authorized": {
+      "const": false
+    },
+    "m25_9b_authorized": {
+      "const": false
+    },
+    "m25_9c_authorized": {
+      "const": false
+    },
+    "mode": {
+      "enum": [
+        "live",
+        "test_only"
+      ]
+    },
+    "next_legal_action": {
+      "const": "present_full_population_candidate_packets_for_daniel_decision_gate"
+    },
+    "predecessor_status": {
+      "type": "string"
+    },
+    "production_mutation": {
+      "const": false
+    },
+    "receipt_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-9a-run-receipt/v1"
+    },
+    "source_count": {
+      "maximum": 100,
+      "minimum": 50,
+      "type": "integer"
+    },
+    "source_mutation": {
+      "const": false
+    },
+    "stage_count": {
+      "const": 7
+    },
+    "status": {
+      "enum": [
+        "m25_9a_full_population_candidate_run_complete",
+        "m25_9a_test_only_full_population_simulation_passed"
+      ]
+    },
+    "terminal_state_counts": {
+      "additionalProperties": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "object"
+    },
+    "unaccounted_source_count": {
+      "const": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "mode",
+    "run_id",
+    "predecessor_status",
+    "inventory_sha256",
+    "authority_sha256",
+    "evidence_sha256",
+    "source_count",
+    "accounted_source_count",
+    "unaccounted_source_count",
+    "terminal_state_counts",
+    "candidate_count",
+    "stage_count",
+    "failure_drill_count",
+    "full_population_accounted",
+    "hidden_exclusions",
+    "hard_safety_gates_passed",
+    "cost_usd",
+    "production_mutation",
+    "source_mutation",
+    "m25_9b_authorized",
+    "m25_9c_authorized",
+    "m25_10_authorized",
+    "next_legal_action",
+    "receipt_sha256"
+  ],
+  "type": "object"
+}

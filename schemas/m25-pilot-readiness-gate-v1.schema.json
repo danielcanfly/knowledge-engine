@@ -1,0 +1,90 @@
+{
+  "$id": "knowledge-engine-m25-9-readiness-gate/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "benchmark_fixtures_reusable_as_pilot_sources": {
+      "const": false
+    },
+    "blockers": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 4,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "candidate_release_build_permitted": {
+      "const": false
+    },
+    "gate_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "m25_10_authorized": {
+      "const": false
+    },
+    "m25_8_engine_merge_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "m25_9b_authorized": {
+      "const": false
+    },
+    "m25_9c_authorized": {
+      "const": false
+    },
+    "next_legal_action": {
+      "const": "curate_exact_inventory_and_present_daniel_inventory_start_gate"
+    },
+    "pilot_execution_permitted": {
+      "const": false
+    },
+    "predecessor_gate_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "predecessor_status": {
+      "const": "blocked_awaiting_real_approved_source_pr"
+    },
+    "production_pointer_mutation_permitted": {
+      "const": false
+    },
+    "production_release_mutation_permitted": {
+      "const": false
+    },
+    "provider_calls_permitted": {
+      "const": false
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-9-readiness-gate/v1"
+    },
+    "source_write_permitted": {
+      "const": false
+    },
+    "status": {
+      "const": "blocked_awaiting_m25_8_live_acceptance_and_exact_inventory_authority"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "predecessor_status",
+    "predecessor_gate_sha256",
+    "m25_8_engine_merge_sha",
+    "blockers",
+    "benchmark_fixtures_reusable_as_pilot_sources",
+    "pilot_execution_permitted",
+    "provider_calls_permitted",
+    "source_write_permitted",
+    "candidate_release_build_permitted",
+    "production_pointer_mutation_permitted",
+    "production_release_mutation_permitted",
+    "m25_9b_authorized",
+    "m25_9c_authorized",
+    "m25_10_authorized",
+    "next_legal_action",
+    "gate_sha256"
+  ],
+  "type": "object"
+}

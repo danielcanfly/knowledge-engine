@@ -1,0 +1,110 @@
+{
+  "$id": "knowledge-engine-m25-9-inventory-authority/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actor": {
+      "pattern": "^[A-Za-z0-9._@-]{3,128}$",
+      "type": "string"
+    },
+    "actor_role": {
+      "const": "knowledge_owner"
+    },
+    "authority_comment_id": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "authority_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "inventory_approved": {
+      "const": true
+    },
+    "inventory_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "large_scale_ingestion_authorized": {
+      "const": false
+    },
+    "m25_9b_authorized": {
+      "const": false
+    },
+    "m25_9c_authorized": {
+      "const": false
+    },
+    "max_cost_usd": {
+      "minimum": 0,
+      "type": "number"
+    },
+    "mode": {
+      "enum": [
+        "live",
+        "test_only"
+      ]
+    },
+    "pilot_start_authorized": {
+      "const": true
+    },
+    "production_pointer_authorized": {
+      "const": false
+    },
+    "production_release_authorized": {
+      "const": false
+    },
+    "provider_calls_authorized": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-9-inventory-authority/v1"
+    },
+    "source_count": {
+      "maximum": 100,
+      "minimum": 50,
+      "type": "integer"
+    },
+    "stop_thresholds": {
+      "additionalProperties": false,
+      "properties": {
+        "max_failed_sources": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_security_failures": {
+          "const": 0
+        },
+        "max_unaccounted_sources": {
+          "const": 0
+        }
+      },
+      "required": [
+        "max_failed_sources",
+        "max_unaccounted_sources",
+        "max_security_failures"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "mode",
+    "actor",
+    "actor_role",
+    "authority_comment_id",
+    "inventory_sha256",
+    "source_count",
+    "inventory_approved",
+    "pilot_start_authorized",
+    "provider_calls_authorized",
+    "max_cost_usd",
+    "stop_thresholds",
+    "production_pointer_authorized",
+    "production_release_authorized",
+    "large_scale_ingestion_authorized",
+    "m25_9b_authorized",
+    "m25_9c_authorized",
+    "authority_sha256"
+  ],
+  "type": "object"
+}
