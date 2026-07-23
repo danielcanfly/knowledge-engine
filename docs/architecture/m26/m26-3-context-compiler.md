@@ -19,6 +19,8 @@ documentation and candidate evidence. It may not mutate Source, Foundation, rele
 pointer, R2 production, Qdrant, canonical identity, canonical relations, semantic serving, hybrid
 serving or production answer serving.
 
+Fixed stop line: source, foundation, release, production pointer, R2 production and Qdrant mutation are forbidden.
+
 ## Compiler contract
 
 The compiler consumes:
