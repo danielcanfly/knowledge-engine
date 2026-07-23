@@ -1,0 +1,51 @@
+{
+  "$id": "knowledge-engine-m26-citation-binding-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "binding_id": {
+      "type": "string"
+    },
+    "citation_id": {
+      "type": "string"
+    },
+    "claim_id": {
+      "type": "string"
+    },
+    "context_manifest_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "context_package_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "passage_id": {
+      "type": "string"
+    },
+    "provider_replay_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-citation-binding/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "binding_id",
+    "claim_id",
+    "citation_id",
+    "passage_id",
+    "context_manifest_sha256",
+    "context_package_sha256",
+    "provider_replay_sha256",
+    "self_sha256"
+  ],
+  "title": "M26.5 Claim Citation Binding",
+  "type": "object"
+}
