@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.knowledge-engine.local/m25-adoption-evidence-v1.schema.json",
+  "title": "M25.8 Adoption Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mode",
+    "predecessor",
+    "source_pr",
+    "authority",
+    "merge",
+    "candidate_release",
+    "surfaces",
+    "rollback",
+    "boundary",
+    "evidence_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-8-adoption-evidence/v1"},
+    "mode": {"enum": ["live", "test_only"]},
+    "predecessor": {
+      "type": "object",
+      "required": ["status", "executor_merge_sha", "plan_sha256", "opening_receipt_sha256", "m25_8_authorized"]
+    },
+    "source_pr": {
+      "type": "object",
+      "required": ["repository", "number", "base_sha", "head_sha", "state", "draft", "mergeable", "ci_conclusion", "plan_sha256", "changed_file_count", "changed_files"]
+    },
+    "authority": {
+      "type": "object",
+      "required": ["actor", "actor_role", "authority_comment_id", "source_repository", "source_pr_number", "exact_source_pr_base_sha", "exact_source_pr_head_sha", "plan_sha256", "source_pr_merge_authorized", "candidate_release_build_authorized", "production_pointer_authorized", "production_release_authorized", "authority_sha256"]
+    },
+    "merge": {
+      "type": "object",
+      "required": ["repository", "source_pr_number", "expected_head_sha", "merged", "merge_method", "merged_source_sha"]
+    },
+    "candidate_release": {
+      "type": "object",
+      "required": ["environment", "release_id", "manifest_sha256", "source_commit_sha", "builder_sha", "lexical_index_sha256", "graph_v2_sha256", "provenance_sha256", "source_snapshot_sha256", "production", "production_pointer_mutated"]
+    },
+    "surfaces": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["surface", "status", "release_id", "manifest_sha256", "regression_count", "evidence_sha256"]
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "required": ["scope", "drill_passed", "from_release_id", "to_release_id", "candidate_pointer_restored", "production_pointer_before_sha256", "production_pointer_after_sha256", "production_pointer_mutated", "production_release_mutated", "r2_production_mutated", "qdrant_mutated", "traffic_mutated"]
+    },
+    "boundary": {
+      "type": "object",
+      "required": ["benchmark_fixture_adopted", "automatic_source_merge", "production_pointer_mutation", "production_release_mutation", "production_r2_mutation", "qdrant_mutation", "credential_mutation", "traffic_mutation"]
+    },
+    "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

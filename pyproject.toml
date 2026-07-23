@@ -49,6 +49,7 @@ knowledge-m25-identity-benchmark = "knowledge_engine.m25_identity_benchmark_cli:
 knowledge-m25-identity-governance = "knowledge_engine.m25_identity_governance_cli:main"
 knowledge-m25-review-surface = "knowledge_engine.m25_review_surface_cli:main"
 knowledge-m25-source-pr = "knowledge_engine.m25_source_pr_executor_cli:main"
+knowledge-m25-adoption = "knowledge_engine.m25_adoption_release_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]

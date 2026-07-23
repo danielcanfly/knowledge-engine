@@ -130,7 +130,21 @@ jobs:
             'pilot/m25/m25-7-benchmark-closure.json' \
             'pilot/m25/m25-7-benchmark-decision-ledger.json' \
             'tests/test_m25_7_benchmark_closure.py' | sort)"
-          test "$changed" = "$implementation" || test "$changed" = "$closure"
+          m25_8_compat="$(printf '%s\n' \
+            '.github/workflows/m25-7-benchmark-closure.yml' \
+            '.github/workflows/m25-7-source-pr-executor.yml' \
+            '.github/workflows/m25-8-adoption-release.yml' \
+            'docs/architecture/m25/m25-8-adoption-release-rollback.md' \
+            'pilot/m25/m25-8-adoption-evidence.synthetic.json' \
+            'pilot/m25/m25-8-adoption-receipt.synthetic.json' \
+            'pilot/m25/m25-8-readiness-gate.json' \
+            'pyproject.toml' \
+            'schemas/m25-adoption-evidence-v1.schema.json' \
+            'schemas/m25-adoption-receipt-v1.schema.json' \
+            'src/knowledge_engine/m25_adoption_release.py' \
+            'src/knowledge_engine/m25_adoption_release_cli.py' \
+            'tests/test_m25_8_adoption_release.py' | sort)"
+          test "$changed" = "$implementation" || test "$changed" = "$closure" || test "$changed" = "$m25_8_compat"
           ! printf '%s\n' "$changed" | grep -Eq '^(bundle/|provenance/|registry/|reviews/|foundation/|release/|r2/|qdrant/|production/|workers/|channels/)'
       - name: Assemble exact-head evidence
         env:

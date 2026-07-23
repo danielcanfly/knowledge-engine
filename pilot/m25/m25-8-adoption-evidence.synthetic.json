@@ -1,0 +1,138 @@
+{
+  "authority": {
+    "actor": "synthetic-knowledge-owner",
+    "actor_role": "knowledge_owner",
+    "authority_comment_id": 8008,
+    "authority_sha256": "56cf6593f6193208b5294ad8cd06e2df0bd93524e3eaae0d4310956510efd8bf",
+    "candidate_release_build_authorized": true,
+    "exact_source_pr_base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "exact_source_pr_head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "plan_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "production_pointer_authorized": false,
+    "production_release_authorized": false,
+    "source_pr_merge_authorized": true,
+    "source_pr_number": 88,
+    "source_repository": "danielcanfly/knowledge-source"
+  },
+  "boundary": {
+    "automatic_source_merge": false,
+    "benchmark_fixture_adopted": false,
+    "credential_mutation": false,
+    "production_pointer_mutation": false,
+    "production_r2_mutation": false,
+    "production_release_mutation": false,
+    "qdrant_mutation": false,
+    "traffic_mutation": false
+  },
+  "candidate_release": {
+    "builder_sha": "dddddddddddddddddddddddddddddddddddddddd",
+    "environment": "candidate",
+    "graph_v2_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+    "lexical_index_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+    "manifest_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "production": false,
+    "production_pointer_mutated": false,
+    "provenance_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+    "release_id": "candidate-m25-8-synthetic-001",
+    "source_commit_sha": "cccccccccccccccccccccccccccccccccccccccc",
+    "source_snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "evidence_sha256": "41dad3193922ae72af9001778865897dbfe953fb9e71437782997095829117ce",
+  "merge": {
+    "expected_head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "merge_method": "squash",
+    "merged": true,
+    "merged_source_sha": "cccccccccccccccccccccccccccccccccccccccc",
+    "repository": "danielcanfly/knowledge-source",
+    "source_pr_number": 88
+  },
+  "mode": "test_only",
+  "predecessor": {
+    "executor_merge_sha": "209608c3821f2958b5238659e98a8f9fb7bd7840",
+    "m25_8_authorized": true,
+    "opening_receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "plan_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "status": "m25_7_source_pr_opened_awaiting_merge"
+  },
+  "rollback": {
+    "candidate_pointer_restored": true,
+    "drill_passed": true,
+    "from_release_id": "candidate-m25-8-synthetic-001",
+    "production_pointer_after_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "production_pointer_before_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "production_pointer_mutated": false,
+    "production_release_mutated": false,
+    "qdrant_mutated": false,
+    "r2_production_mutated": false,
+    "scope": "candidate_only",
+    "to_release_id": "candidate-m25-7-previous",
+    "traffic_mutated": false
+  },
+  "schema_version": "knowledge-engine-m25-8-adoption-evidence/v1",
+  "source_pr": {
+    "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "changed_file_count": 2,
+    "changed_files": [
+      {
+        "operation": "create",
+        "path": "bundle/concepts/synthetic-m25-8.md",
+        "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      {
+        "operation": "create",
+        "path": "provenance/synthetic-m25-8.json",
+        "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+      }
+    ],
+    "ci_conclusion": "success",
+    "draft": false,
+    "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "mergeable": true,
+    "number": 88,
+    "plan_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "repository": "danielcanfly/knowledge-source",
+    "state": "open"
+  },
+  "surfaces": [
+    {
+      "evidence_sha256": "000000000000000000000000000000000000000000000000000000000000000b",
+      "manifest_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "regression_count": 1,
+      "release_id": "candidate-m25-8-synthetic-001",
+      "status": "pass",
+      "surface": "search"
+    },
+    {
+      "evidence_sha256": "000000000000000000000000000000000000000000000000000000000000000c",
+      "manifest_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "regression_count": 2,
+      "release_id": "candidate-m25-8-synthetic-001",
+      "status": "pass",
+      "surface": "wiki"
+    },
+    {
+      "evidence_sha256": "000000000000000000000000000000000000000000000000000000000000000d",
+      "manifest_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "regression_count": 3,
+      "release_id": "candidate-m25-8-synthetic-001",
+      "status": "pass",
+      "surface": "graph"
+    },
+    {
+      "evidence_sha256": "000000000000000000000000000000000000000000000000000000000000000e",
+      "manifest_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "regression_count": 4,
+      "release_id": "candidate-m25-8-synthetic-001",
+      "status": "pass",
+      "surface": "sources"
+    },
+    {
+      "evidence_sha256": "000000000000000000000000000000000000000000000000000000000000000f",
+      "manifest_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "regression_count": 5,
+      "release_id": "candidate-m25-8-synthetic-001",
+      "status": "pass",
+      "surface": "vault"
+    }
+  ]
+}
