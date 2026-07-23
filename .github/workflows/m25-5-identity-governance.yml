@@ -29,15 +29,16 @@ jobs:
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
           python -m pip install --disable-pip-version-check -e '.[dev]'
           python - <<'PY'
-          import hashlib,json
+          import json
           from pathlib import Path
           a=json.loads(Path('pilot/m25/m25-4-acceptance.json').read_text())
-          s=Path('pilot/m25/m25-4-gold-suite.json'); b=Path('pilot/m25/m25-4-baseline-report.json')
+          s=json.loads(Path('pilot/m25/m25-4-gold-suite.json').read_text())
+          b=json.loads(Path('pilot/m25/m25-4-baseline-report.json').read_text())
           assert a['status']=='m25_4_gold_benchmark_accepted'
-          assert json.loads(s.read_text())['approval_status']=='approved_by_daniel'
-          assert json.loads(b.read_text())['baseline_status']=='accepted_baseline'
-          assert a['frozen_identities']['accepted_gold_suite_sha256']==hashlib.sha256(s.read_bytes()).hexdigest()
-          assert a['frozen_identities']['accepted_baseline_sha256']==hashlib.sha256(b.read_bytes()).hexdigest()
+          assert s['approval_status']=='approved_by_daniel'
+          assert b['baseline_status']=='accepted_baseline'
+          assert a['frozen_identities']['accepted_gold_suite_sha256']==s['suite_sha256']
+          assert a['frozen_identities']['accepted_baseline_sha256']==b['report_sha256']
           PY
       - name: Lint and test M25.5
         run: |
