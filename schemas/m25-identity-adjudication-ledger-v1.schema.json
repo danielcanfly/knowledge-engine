@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-identity-adjudication-ledger-v1.schema.json",
+  "title": "M25 identity adjudication ledger v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "suite_id", "suite_sha256", "policy_status", "label_decision_status",
+    "disputed_item_count", "disputed_items", "silent_label_changes_permitted",
+    "decision_required", "decision", "ledger_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-identity-adjudication-ledger/v1"},
+    "suite_id": {"type": "string"},
+    "suite_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "policy_status": {"enum": ["pending_daniel", "approved_by_daniel"]},
+    "label_decision_status": {"enum": ["pending_daniel", "approved_by_daniel"]},
+    "disputed_item_count": {"type": "integer", "minimum": 0},
+    "disputed_items": {"type": "array"},
+    "silent_label_changes_permitted": {"const": false},
+    "decision_required": {"type": "object"},
+    "decision": {"type": ["object", "null"]},
+    "ledger_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

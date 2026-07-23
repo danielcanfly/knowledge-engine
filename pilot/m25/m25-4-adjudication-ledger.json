@@ -1,0 +1,17 @@
+{
+  "decision": null,
+  "decision_required": {
+    "approve_all_provisional_labels": true,
+    "approve_annotation_policy": true,
+    "decide_disputed_labels": false
+  },
+  "disputed_item_count": 0,
+  "disputed_items": [],
+  "label_decision_status": "pending_daniel",
+  "ledger_sha256": "c7c0960c41a04ea23d44e56a2fcd98cd8b93018847a5051c462e6f9f60fb5fa1",
+  "policy_status": "pending_daniel",
+  "schema_version": "knowledge-engine-m25-identity-adjudication-ledger/v1",
+  "silent_label_changes_permitted": false,
+  "suite_id": "m25-concept-identity-gold-v1",
+  "suite_sha256": "103db6e982e71ed8e4c442eb4f36f48b06eb846fdc3f339fb3cd078215b5ddfc"
+}

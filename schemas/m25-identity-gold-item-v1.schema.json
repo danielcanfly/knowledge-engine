@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-identity-gold-item-v1.schema.json",
+  "title": "M25 identity gold item v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "item_id", "semantic_family_id", "class_label", "split",
+    "annotation_status", "annotation_policy_sha256", "evidence", "rationale", "case",
+    "expected", "candidate_only", "canonical_knowledge", "production_authority", "item_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-identity-gold-item/v1"},
+    "item_id": {"type": "string", "pattern": "^gold_(train|calibration|final)_[a-z_]+$"},
+    "semantic_family_id": {"type": "string", "pattern": "^family_[0-9a-f]{20}$"},
+    "class_label": {
+      "enum": [
+        "exact_match", "approved_alias", "duplicate", "near_match_distinct",
+        "parent_child_distinct", "polysemy_ambiguous", "contradiction_without_identity",
+        "supersession_without_identity_collapse", "ambiguous_insufficient_evidence",
+        "blocked_policy"
+      ]
+    },
+    "split": {"enum": ["train", "calibration", "final"]},
+    "annotation_status": {"enum": ["provisional_pending_daniel", "approved"]},
+    "annotation_policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uri", "sha256", "evidence_bound"],
+      "properties": {
+        "uri": {"type": "string", "pattern": "^benchmark://m25-4/"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "evidence_bound": {"const": true}
+      }
+    },
+    "rationale": {"type": "string", "minLength": 20, "maxLength": 1000},
+    "case": {"type": "object"},
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resolution_outcomes", "contradiction_count", "packaging_blocked",
+        "required_explanation_signals"
+      ],
+      "properties": {
+        "resolution_outcomes": {"type": "array", "items": {"type": "string"}},
+        "contradiction_count": {"type": "integer", "minimum": 0},
+        "packaging_blocked": {"type": "boolean"},
+        "required_explanation_signals": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
+    "candidate_only": {"const": true},
+    "canonical_knowledge": {"const": false},
+    "production_authority": {"const": false},
+    "item_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

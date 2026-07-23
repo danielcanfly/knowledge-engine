@@ -1,0 +1,220 @@
+{
+  "assignments": [
+    {
+      "class_label": "ambiguous_insufficient_evidence",
+      "item_id": "gold_calibration_ambiguous_insufficient_evidence",
+      "item_sha256": "cf489a016c86570b01ffa01986a673f0c9b16d49c1cf57d7e03f6598144c2c92",
+      "semantic_family_id": "family_93bbe3105b4b2d9d400e",
+      "split": "calibration"
+    },
+    {
+      "class_label": "approved_alias",
+      "item_id": "gold_calibration_approved_alias",
+      "item_sha256": "84e945e39d472d1473b77f5c3e8925b7fe9e49e30a323b9aa06c713f011cd02a",
+      "semantic_family_id": "family_e05f2c24ae60ce41f26c",
+      "split": "calibration"
+    },
+    {
+      "class_label": "blocked_policy",
+      "item_id": "gold_calibration_blocked_policy",
+      "item_sha256": "8d17cd5510c07be522ecfaf21965d3ae8ffb222db3887ea8167fce5174f84142",
+      "semantic_family_id": "family_082f6409c14d9789f5e6",
+      "split": "calibration"
+    },
+    {
+      "class_label": "contradiction_without_identity",
+      "item_id": "gold_calibration_contradiction_without_identity",
+      "item_sha256": "2bce42a3ccf574c9474f10d9faa29752fa4ba9008b747465ddeea52af742f874",
+      "semantic_family_id": "family_3a980cdc6e014811db66",
+      "split": "calibration"
+    },
+    {
+      "class_label": "duplicate",
+      "item_id": "gold_calibration_duplicate",
+      "item_sha256": "201e05247394d6781f93175f1ebb4fd463612ce6e2a8b7b4fe628d8e79c24cae",
+      "semantic_family_id": "family_9dd6c8c330e11a79fd43",
+      "split": "calibration"
+    },
+    {
+      "class_label": "exact_match",
+      "item_id": "gold_calibration_exact_match",
+      "item_sha256": "03eb5fadf12ff1b85aa2f22d01ae4d0121e8aa04a93671d16e9f46c07fd2fcc0",
+      "semantic_family_id": "family_5d62aa3fea9c209a7bdd",
+      "split": "calibration"
+    },
+    {
+      "class_label": "near_match_distinct",
+      "item_id": "gold_calibration_near_match_distinct",
+      "item_sha256": "189e1f5106f7ed9a97893ecfe9b3cd8e9e7c1d7515c9d495988798333ccf0a05",
+      "semantic_family_id": "family_c78336d0ab25ddceb5e4",
+      "split": "calibration"
+    },
+    {
+      "class_label": "parent_child_distinct",
+      "item_id": "gold_calibration_parent_child_distinct",
+      "item_sha256": "4792465f39ab92abe9eddd52aaf8943f8ca58897200a8e8fb0184e37709d71e3",
+      "semantic_family_id": "family_7b6926bfc0e17ae2abaf",
+      "split": "calibration"
+    },
+    {
+      "class_label": "polysemy_ambiguous",
+      "item_id": "gold_calibration_polysemy_ambiguous",
+      "item_sha256": "1cd5a70c5d9f7480a511d23ac247b80a5b209c7e108b1ff81766cd69ac87890f",
+      "semantic_family_id": "family_078c6fe9642cbe3ab9e2",
+      "split": "calibration"
+    },
+    {
+      "class_label": "supersession_without_identity_collapse",
+      "item_id": "gold_calibration_supersession_without_identity_collapse",
+      "item_sha256": "1a4266a648ec6456f22303bc2a4fc77a0cf331083e190391e3b15b29434aed28",
+      "semantic_family_id": "family_8804f318d5932d676e6c",
+      "split": "calibration"
+    },
+    {
+      "class_label": "ambiguous_insufficient_evidence",
+      "item_id": "gold_final_ambiguous_insufficient_evidence",
+      "item_sha256": "5bf85f62e70f018683d15a9c4ab1203b590a7d5a5d253ef178fe7ca2bb48a404",
+      "semantic_family_id": "family_24fbc6f5a97797d03f7b",
+      "split": "final"
+    },
+    {
+      "class_label": "approved_alias",
+      "item_id": "gold_final_approved_alias",
+      "item_sha256": "8a73a297009d5299604e11e35639f250b791926a86656af2b620528a22b9eef4",
+      "semantic_family_id": "family_7a3a74dcfc02cc4fd143",
+      "split": "final"
+    },
+    {
+      "class_label": "blocked_policy",
+      "item_id": "gold_final_blocked_policy",
+      "item_sha256": "65b23a6bf129e757fe9784730b609d49336ee2fb10f16ee777e37de0a7a3a200",
+      "semantic_family_id": "family_79eb77f96458e06a21bf",
+      "split": "final"
+    },
+    {
+      "class_label": "contradiction_without_identity",
+      "item_id": "gold_final_contradiction_without_identity",
+      "item_sha256": "5f484a5be0c4135eef862a2eea93007ad542d059b1cdf407363220cc07120a71",
+      "semantic_family_id": "family_85d5b4be5ede62358b46",
+      "split": "final"
+    },
+    {
+      "class_label": "duplicate",
+      "item_id": "gold_final_duplicate",
+      "item_sha256": "dd4a41c7611d3a00a16590aee9011c19dbeba92e02c5ed59ed2bd11fc678dd64",
+      "semantic_family_id": "family_f85c396fd2ef26d69db0",
+      "split": "final"
+    },
+    {
+      "class_label": "exact_match",
+      "item_id": "gold_final_exact_match",
+      "item_sha256": "46a080e446d3ffa777cd56fa24e25841b82b5dde7475b181b161453cb5422749",
+      "semantic_family_id": "family_9adf3e26f2b55c90e33c",
+      "split": "final"
+    },
+    {
+      "class_label": "near_match_distinct",
+      "item_id": "gold_final_near_match_distinct",
+      "item_sha256": "c759cb833fcdd60c768a51c6bbbc17ae25316da1bd70e43a3e60cbc3c48c886a",
+      "semantic_family_id": "family_8f7cf6e710115c11d62f",
+      "split": "final"
+    },
+    {
+      "class_label": "parent_child_distinct",
+      "item_id": "gold_final_parent_child_distinct",
+      "item_sha256": "1b900cb4a0694efa9b0d15bd67a4aeed0a868ac9c7bce9e364ed6b9528f830c5",
+      "semantic_family_id": "family_41d7979f3680e9b82917",
+      "split": "final"
+    },
+    {
+      "class_label": "polysemy_ambiguous",
+      "item_id": "gold_final_polysemy_ambiguous",
+      "item_sha256": "19b97c43b045b2f742d6bdf23d260f9c2734fef6783979a1b3fb4b8f81ef7ec2",
+      "semantic_family_id": "family_d3a2d28c67244373558c",
+      "split": "final"
+    },
+    {
+      "class_label": "supersession_without_identity_collapse",
+      "item_id": "gold_final_supersession_without_identity_collapse",
+      "item_sha256": "3c4d493e57c8bb1adc89a250eb088415c05f09e0e5c0c2a4f4ba9bf3e49101f5",
+      "semantic_family_id": "family_05ee3afdd0e3002a9390",
+      "split": "final"
+    },
+    {
+      "class_label": "ambiguous_insufficient_evidence",
+      "item_id": "gold_train_ambiguous_insufficient_evidence",
+      "item_sha256": "c76a7c4f073a0f8996c65cea26bdbde89568dcb02b1e55fd321ee4b41a50ade9",
+      "semantic_family_id": "family_9d0f3f013320b12e0db1",
+      "split": "train"
+    },
+    {
+      "class_label": "approved_alias",
+      "item_id": "gold_train_approved_alias",
+      "item_sha256": "86d0f1bf95ac4220cd2d302016e64d5e9313167ebc81b77c12506881db3a5810",
+      "semantic_family_id": "family_ed3ed56184f004ced057",
+      "split": "train"
+    },
+    {
+      "class_label": "blocked_policy",
+      "item_id": "gold_train_blocked_policy",
+      "item_sha256": "196184750e8124004365da9bb7b8c0bc36ded032e64c9f7a1d74b0d4d1343127",
+      "semantic_family_id": "family_7577c932b8a4c2daf5aa",
+      "split": "train"
+    },
+    {
+      "class_label": "contradiction_without_identity",
+      "item_id": "gold_train_contradiction_without_identity",
+      "item_sha256": "421ffc8db67ea0431f4a587437345c9760322037222fc2475975242d773f1214",
+      "semantic_family_id": "family_1ec200b062bbc30e5d08",
+      "split": "train"
+    },
+    {
+      "class_label": "duplicate",
+      "item_id": "gold_train_duplicate",
+      "item_sha256": "42ed15ec4b0af5909d3415cf0404b73cb144e590fc607220081f17af8f088cbd",
+      "semantic_family_id": "family_abc7421200c290898cc1",
+      "split": "train"
+    },
+    {
+      "class_label": "exact_match",
+      "item_id": "gold_train_exact_match",
+      "item_sha256": "4c604451dea509daf3e44324b3b9d85b57822e9432674f4d92197e2bd1ca4926",
+      "semantic_family_id": "family_ea0f6dae721e447b4960",
+      "split": "train"
+    },
+    {
+      "class_label": "near_match_distinct",
+      "item_id": "gold_train_near_match_distinct",
+      "item_sha256": "039cc21223a3c040e4eaec074f2f9a22317b4ed1e143e1ca9358659c91ccab29",
+      "semantic_family_id": "family_53ff1537c10f0580c8d4",
+      "split": "train"
+    },
+    {
+      "class_label": "parent_child_distinct",
+      "item_id": "gold_train_parent_child_distinct",
+      "item_sha256": "94484cfe9b20fda1451c8abbe8005faab8e198f4834a2171751dce3f3c293ef8",
+      "semantic_family_id": "family_99ea90553cfd97df99c4",
+      "split": "train"
+    },
+    {
+      "class_label": "polysemy_ambiguous",
+      "item_id": "gold_train_polysemy_ambiguous",
+      "item_sha256": "06640c21cc8b61071354f1e59a6609faf8c9aaee32ee67ad40c0d8e411b73bd7",
+      "semantic_family_id": "family_e491c3ac51699ba89c6b",
+      "split": "train"
+    },
+    {
+      "class_label": "supersession_without_identity_collapse",
+      "item_id": "gold_train_supersession_without_identity_collapse",
+      "item_sha256": "c918cd8bb4fd549423909c64495b2faaf9aab2e68832a475625b4317cebee928",
+      "semantic_family_id": "family_87c4e0beddbba4cc0be3",
+      "split": "train"
+    }
+  ],
+  "final_split_calibration_permitted": false,
+  "manifest_sha256": "3e7be2156497f5c58d6cd2e61bbfd89825c482a3384fa254aa5c0bd671306803",
+  "schema_version": "knowledge-engine-m25-identity-split-manifest/v1",
+  "split_policy": "one unique semantic family in exactly one immutable split",
+  "suite_id": "m25-concept-identity-gold-v1",
+  "suite_sha256": "103db6e982e71ed8e4c442eb4f36f48b06eb846fdc3f339fb3cd078215b5ddfc"
+}

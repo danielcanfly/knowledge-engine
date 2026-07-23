@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-identity-baseline-report-v1.schema.json",
+  "title": "M25 identity baseline report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "suite_id", "suite_sha256", "suite_approval_status", "baseline_status",
+    "resolver_module", "resolver_source_sha", "resolver_threshold_or_code_changed",
+    "final_split_used_for_calibration", "denominators", "metrics", "confusion_matrix",
+    "error_taxonomy", "results", "candidate_only", "canonical_knowledge",
+    "production_authority", "m25_5_authorized", "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-identity-baseline-report/v1"},
+    "suite_id": {"type": "string"},
+    "suite_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "suite_approval_status": {"enum": ["pending_daniel", "approved_by_daniel"]},
+    "baseline_status": {"enum": ["provisional_pending_daniel", "accepted_baseline"]},
+    "resolver_module": {"type": "string"},
+    "resolver_source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "resolver_threshold_or_code_changed": {"const": false},
+    "final_split_used_for_calibration": {"const": false},
+    "denominators": {"type": "object"},
+    "metrics": {"type": "object"},
+    "confusion_matrix": {"type": "object"},
+    "error_taxonomy": {"type": "object"},
+    "results": {"type": "array", "minItems": 30, "maxItems": 30},
+    "candidate_only": {"const": true},
+    "canonical_knowledge": {"const": false},
+    "production_authority": {"const": false},
+    "m25_5_authorized": {"const": false},
+    "report_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

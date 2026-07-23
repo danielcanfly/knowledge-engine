@@ -1,0 +1,106 @@
+{
+  "schema_version": "knowledge-engine-m25-identity-annotation-policy/v1",
+  "policy_id": "m25-identity-annotation-policy-v1",
+  "policy_revision": "provisional-1",
+  "status": "provisional_pending_daniel",
+  "annotation_authority": "daniel",
+  "proposer": "chatgpt",
+  "class_precedence": [
+    "blocked_policy",
+    "polysemy_ambiguous",
+    "ambiguous_insufficient_evidence",
+    "contradiction_without_identity",
+    "approved_alias",
+    "duplicate",
+    "supersession_without_identity_collapse",
+    "parent_child_distinct",
+    "near_match_distinct",
+    "exact_match"
+  ],
+  "classes": {
+    "exact_match": {
+      "definition": "One candidate is bound to exactly one existing concept by an exact approved identity signal.",
+      "allowed_signals": [
+        "exact_x_kos_id",
+        "exact_concept_path",
+        "exact_normalized_title",
+        "exact_approved_alias",
+        "exact_bilingual_term"
+      ],
+      "forbidden_shortcuts": ["shared_tags_only", "relation_similarity_only", "lexical_similarity_only"]
+    },
+    "approved_alias": {
+      "definition": "A proposed alias has exactly one resolved target and no ownership, title or audience collision.",
+      "requires": ["unique_target", "unique_ownership", "same_audience", "pending_review"],
+      "alias_chains_permitted": false
+    },
+    "duplicate": {
+      "definition": "Two or more candidates probably denote the same identity but remain blocked for human review.",
+      "strong_evidence": ["same_normalized_candidate_label", "explicit_duplicate_hint"],
+      "weak_evidence": ["shared_governed_tags"],
+      "automatic_canonical_merge_permitted": false
+    },
+    "near_match_distinct": {
+      "definition": "Lexically or topically related concepts remain distinct without exact identity evidence.",
+      "automatic_merge_permitted": false
+    },
+    "parent_child_distinct": {
+      "definition": "A broader and narrower concept remain separate identities and may later receive a typed relation.",
+      "automatic_merge_permitted": false
+    },
+    "polysemy_ambiguous": {
+      "definition": "One surface form has multiple plausible identity owners in different senses.",
+      "required_outcome": "ambiguous",
+      "blocks_packaging": true
+    },
+    "contradiction_without_identity": {
+      "definition": "Incompatible claims about one resolved subject are contradiction candidates, not evidence to merge or split subject identities.",
+      "blocks_packaging": true
+    },
+    "supersession_without_identity_collapse": {
+      "definition": "A later version may supersede an earlier version while preserving distinct temporal identities.",
+      "automatic_merge_permitted": false
+    },
+    "ambiguous_insufficient_evidence": {
+      "definition": "Evidence cannot select exactly one identity owner or alias target.",
+      "required_outcome": "ambiguous",
+      "blocks_packaging": true
+    },
+    "blocked_policy": {
+      "definition": "ACL, audience, secret, authority or other policy constraints forbid identity resolution.",
+      "required_outcome": "reject",
+      "blocks_packaging": true
+    }
+  },
+  "adjudication": {
+    "chatgpt_may_propose": true,
+    "chatgpt_may_approve": false,
+    "codex_may_approve": false,
+    "daniel_final_authority": true,
+    "silent_label_changes_permitted": false,
+    "label_change_requires_new_revision_and_digest": true,
+    "disputed_item_requires_evidence_bundle": true,
+    "abstention_label": "ambiguous_insufficient_evidence"
+  },
+  "evidence_requirements": {
+    "every_item_evidence_bound": true,
+    "case_digest_required": true,
+    "rationale_required": true,
+    "candidate_only": true,
+    "canonical_knowledge": false,
+    "production_authority": false
+  },
+  "split_policy": {
+    "splits": ["train", "calibration", "final"],
+    "semantic_family_may_cross_splits": false,
+    "final_split_calibration_permitted": false,
+    "label_distribution_is_uniform_by_class": true,
+    "split_mutation_requires_new_suite_revision": true
+  },
+  "baseline_policy": {
+    "resolver_code_or_threshold_change_before_baseline": false,
+    "decision_accuracy_reported_separately_from_explanation_coverage": true,
+    "false_merge_count_is_primary_safety_metric": true,
+    "confidence_interval": "wilson_95"
+  }
+}
