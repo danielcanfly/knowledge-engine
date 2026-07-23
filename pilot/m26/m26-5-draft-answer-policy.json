@@ -1,0 +1,55 @@
+{
+  "accepted_predecessor_status": "m26_4_provider_mock_replay_privacy_accepted",
+  "authority": {
+    "credentials": false,
+    "draft_answer_contract": true,
+    "foundation_mutation": false,
+    "live_provider_calls": false,
+    "network_execution": false,
+    "production_answer_serving": false,
+    "provider_mock_replay_required": true,
+    "provider_sdk": false,
+    "qdrant_or_r2_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "citation_binding_schema": "knowledge-engine-m26-citation-binding/v1",
+  "claim_policy": {
+    "allow_claims_for_abstain": false,
+    "allow_claims_for_privacy_block": false,
+    "allow_orphan_citations": false,
+    "allow_unsupported_claims": false,
+    "max_claims": 6,
+    "min_bindings_per_claim": 1,
+    "require_context_manifest_sha256": true,
+    "require_replay_sha256": true,
+    "require_selected_passage_id": true
+  },
+  "diagnostic_policy": {
+    "preserve_conflict_warning": true,
+    "preserve_prompt_injection_quarantine": true,
+    "privacy_review_required": true,
+    "prompt_injection_evidence_only": true
+  },
+  "draft_answer_schema": "knowledge-engine-m26-draft-answer/v1",
+  "provider_replay_schema": "knowledge-engine-m26-provider-replay/v1",
+  "schema_version": "knowledge-engine-m26-draft-answer-policy/v1",
+  "self_sha256": "5ada29dab076b78f5c6f9a8893a66c05666bca905b71ca891cec10e5627f6ac0",
+  "status_policy": {
+    "allowed_draft_statuses": [
+      "non_final_draft_answer",
+      "non_final_draft_answer_with_warnings",
+      "abstain_propagated",
+      "privacy_block_propagated"
+    ],
+    "forbidden_statuses": [
+      "final_answer",
+      "verified_final_answer",
+      "production_answer"
+    ]
+  }
+}
