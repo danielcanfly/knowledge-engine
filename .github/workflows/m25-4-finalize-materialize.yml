@@ -24,51 +24,37 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git merge-base --is-ancestor cf56bad3b9128020214c3a30100ec741d6842e56 HEAD
-      - name: Verify approval payload chunks and archive
-        id: verify
-        continue-on-error: true
+      - name: Verify bounded approval payload and archive
         run: |
-          python - <<'PY' > /tmp/m25-4-finalization-verify.txt 2>&1
+          python - <<'PY'
           import base64
           import hashlib
           import io
           import tarfile
           from pathlib import Path, PurePosixPath
 
-          chunks = [
-              (
-                  Path('.m25-4-finalization-payload/chunk-01.b64'),
-                  12000,
-                  'b97ec560d2448e808d1b7bf558abe4a00a7c0f6de1bf172be6ec9a27771f589b',
-              ),
-              (
-                  Path('.m25-4-finalization-payload/chunk-02.b64'),
-                  12000,
-                  '9dbd5126744d8dc5f10cad46af04e2d38c8dca2d1ed137719c00d22ba9e0dacf',
-              ),
-              (
-                  Path('.m25-4-finalization-payload/chunk-03.b64'),
-                  6992,
-                  '2fd9fd41bcfd1d20b5c3b2136bc384c55f85d9b427d710c9eba58adf0bc7796c',
-              ),
+          expected_parts = [
+              (4000, '883c8505dc2d814a06badcfb1969207db0b01156b41c4a0b1d13e95303c5582a'),
+              (4000, '617c879c443864e0b449fe33c0bb57ea2fb1aeb7ee6021e7ddf22f0448c5d224'),
+              (4000, '6d47b8bec77e8c14c7ac02daa18d933d52b52c4f8d83c23512e8cab9af2187a6'),
+              (4000, 'e19035b074941165bdbef6b833907c39ebaaaeb8f43cd831b36f0db6c8af73bf'),
+              (4000, '09933d17c190985bddcc41d3f76081b98345a611af2e003b509c7370bf10c025'),
+              (4000, '0f960cea7d5a8883960c4e910509899ca203489946c74acc8e5b97333d015b3b'),
+              (4000, '3bb8075f02f5c9e78fd4529358dceeb0947778ee75023f6b8431c72a6522f468'),
+              (2992, '23d082c7142a24c4ca85412ff18196930b1b8771a37483da1b878acb8bdb458a'),
           ]
           encoded_parts = []
-          for path, expected_size, expected_sha in chunks:
+          for index, (expected_size, expected_sha) in enumerate(expected_parts, start=1):
+              path = Path(f'.m25-4-finalization-payload/part-{index:02d}.b64')
               raw = path.read_bytes()
-              actual_sha = hashlib.sha256(raw).hexdigest()
-              print(path, len(raw), actual_sha)
               assert len(raw) == expected_size, (path, len(raw), expected_size)
-              assert actual_sha == expected_sha, path
+              assert hashlib.sha256(raw).hexdigest() == expected_sha, path
               encoded_parts.append(raw)
 
           archive = base64.b64decode(b''.join(encoded_parts), validate=True)
-          actual_archive_sha = hashlib.sha256(archive).hexdigest()
-          print('archive', len(archive), actual_archive_sha)
-          expected_archive_sha = (
+          assert hashlib.sha256(archive).hexdigest() == (
               'dac32efba7eddff8fdeb58f28742a893ad06cc442880d8496b0c6c60580e3e9f'
           )
-          assert actual_archive_sha == expected_archive_sha
-
           expected_names = {
               'docs/architecture/m25/m25-4-daniel-approval.md',
               'pilot/m25/m25-4-adjudication-ledger.approved.json',
@@ -81,32 +67,14 @@ jobs:
           }
           with tarfile.open(fileobj=io.BytesIO(archive), mode='r:gz') as handle:
               members = handle.getmembers()
-              names = {member.name for member in members}
-              print('members', sorted(names))
-              assert names == expected_names, (names - expected_names, expected_names - names)
+              assert {member.name for member in members} == expected_names
               for member in members:
                   path = PurePosixPath(member.name)
                   assert not path.is_absolute()
                   assert '..' not in path.parts
                   assert member.isfile()
           Path('/tmp/m25-4-finalization.tar.gz').write_bytes(archive)
-          print('verification=success')
           PY
-      - name: Upload finalization verification diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: m25-4-finalization-verification
-          path: /tmp/m25-4-finalization-verify.txt
-          if-no-files-found: error
-          retention-days: 7
-      - name: Enforce finalization verification
-        if: always()
-        env:
-          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
-        run: |
-          cat /tmp/m25-4-finalization-verify.txt
-          test "$VERIFY_OUTCOME" = success
       - name: Extract approval finalization
         run: |
           tar -xzf /tmp/m25-4-finalization.tar.gz -C .
