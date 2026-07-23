@@ -44,6 +44,7 @@ knowledge-m23-rebenchmark = "knowledge_engine.m23_benchmark_correction_cli:main"
 knowledge-m23-ingestion-plan = "knowledge_engine.m23_qdrant_pilot_ingestion_cli:main"
 knowledge-m25-admission = "knowledge_engine.m25_intake_orchestrator_cli:main"
 knowledge-m25-extraction = "knowledge_engine.m25_extraction_cli:main"
+knowledge-m25-identity-benchmark = "knowledge_engine.m25_identity_benchmark_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]
@@ -97,6 +98,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "src/knowledge_engine/m23_cloudflare_qdrant.py" = ["UP038"]
 "src/knowledge_engine/m23_qdrant_first_upsert.py" = ["E501"]
 "src/knowledge_engine/m23_real_ai_extraction.py" = ["E501"]
+"src/knowledge_engine/m25_identity_benchmark.py" = ["E501"]
 "src/knowledge_engine/media_bundle.py" = ["E501", "F401", "SIM109"]
 "src/knowledge_engine/media_intake.py" = ["E501"]
 "src/knowledge_engine/meeting_bundle.py" = ["E501"]

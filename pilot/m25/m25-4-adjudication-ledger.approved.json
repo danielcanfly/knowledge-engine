@@ -1,0 +1,30 @@
+{
+  "decision": {
+    "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+    "approval_record_sha256": "3702168d2ad99e388f1355bd2c2d49089dcf1aaa36731b873d4e95e8b84d2f9f",
+    "approve_all_provisional_labels": true,
+    "approve_annotation_policy": true,
+    "approved_candidate_head": "cf56bad3b9128020214c3a30100ec741d6842e56",
+    "approved_provisional_suite_sha256": "103db6e982e71ed8e4c442eb4f36f48b06eb846fdc3f339fb3cd078215b5ddfc",
+    "approved_suite_sha256": "e52216c4fffd03b5cf4cbd68c049ca2fc688e539743761768d08a3348572a3e6",
+    "authority": "daniel",
+    "authority_actor": "huaihsuanbusiness",
+    "authority_comment_id": 5053875354,
+    "confirm_zero_disputed_items": true,
+    "m25_5_authorized": false
+  },
+  "decision_required": {
+    "approve_all_provisional_labels": false,
+    "approve_annotation_policy": false,
+    "decide_disputed_labels": false
+  },
+  "disputed_item_count": 0,
+  "disputed_items": [],
+  "label_decision_status": "approved_by_daniel",
+  "ledger_sha256": "1fcc42129a0c4f6ec5b7b5b0987e63127026a0b3ab74a159d3c1d83d8fd320fb",
+  "policy_status": "approved_by_daniel",
+  "schema_version": "knowledge-engine-m25-identity-adjudication-ledger/v1",
+  "silent_label_changes_permitted": false,
+  "suite_id": "m25-concept-identity-gold-v1",
+  "suite_sha256": "e52216c4fffd03b5cf4cbd68c049ca2fc688e539743761768d08a3348572a3e6"
+}

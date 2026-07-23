@@ -1,0 +1,34 @@
+{
+  "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+  "approval_record_sha256": "3702168d2ad99e388f1355bd2c2d49089dcf1aaa36731b873d4e95e8b84d2f9f",
+  "approval_scope": {
+    "foundation_mutation_authorized": false,
+    "large_scale_ingestion_authorized": false,
+    "m25_5_authorized": false,
+    "release_or_production_mutation_authorized": false,
+    "resolver_calibration_authorized": false,
+    "serving_change_authorized": false,
+    "silent_label_change_permitted": false,
+    "source_mutation_authorized": false
+  },
+  "approved_candidate_head": "cf56bad3b9128020214c3a30100ec741d6842e56",
+  "approved_provisional_suite_sha256": "103db6e982e71ed8e4c442eb4f36f48b06eb846fdc3f339fb3cd078215b5ddfc",
+  "authority_actor": "huaihsuanbusiness",
+  "authority_comment_id": 5053875354,
+  "authority_comment_url": "https://github.com/danielcanfly/knowledge-engine/issues/1046#issuecomment-5053875354",
+  "decision_text_en": "I approve M25.4 PR #1047 exact head cf56bad3b9128020214c3a30100ec741d6842e56 annotation/adjudication policy, all 30 provisional labels, and confirm disputed-item count is 0. This approval does not authorize M25.5.",
+  "decision_text_zh": "我批准 M25.4 PR #1047 exact head cf56bad3b9128020214c3a30100ec741d6842e56 的 annotation／adjudication policy、全部 30 個 provisional labels，並確認 disputed-item count 為 0。此批准不授權 M25.5。",
+  "decisions": {
+    "approve_all_30_provisional_labels": true,
+    "approve_annotation_and_adjudication_policy": true,
+    "confirm_zero_disputed_items": true
+  },
+  "disputed_item_count": 0,
+  "gate_sha256": "0adafb1f42089c98ef76b0b8c3c953e3c83e1bfde8b2fa53a5e8cc91aab7aecb",
+  "issue_number": 1046,
+  "provisional_baseline_sha256": "993ab879129db14400603c8a213a82c2437c6b545f998127d7ad19a9153c17d2",
+  "pull_request_number": 1047,
+  "repository": "danielcanfly/knowledge-engine",
+  "schema_version": "knowledge-engine-m25-4-daniel-approval/v1",
+  "status": "approved"
+}

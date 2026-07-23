@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-identity-split-manifest-v1.schema.json",
+  "title": "M25 identity split manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "suite_id", "suite_sha256", "split_policy",
+    "final_split_calibration_permitted", "assignments", "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-identity-split-manifest/v1"},
+    "suite_id": {"type": "string"},
+    "suite_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "split_policy": {"type": "string"},
+    "final_split_calibration_permitted": {"const": false},
+    "assignments": {
+      "type": "array",
+      "minItems": 30,
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item_id", "semantic_family_id", "class_label", "split", "item_sha256"],
+        "properties": {
+          "item_id": {"type": "string"},
+          "semantic_family_id": {"type": "string"},
+          "class_label": {"type": "string"},
+          "split": {"enum": ["train", "calibration", "final"]},
+          "item_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

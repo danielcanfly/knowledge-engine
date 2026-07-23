@@ -1,0 +1,498 @@
+{
+  "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+  "approval_scope": {
+    "applies_only_to_exact_policy_and_suite_digests": true,
+    "applies_only_to_exact_pr_head": true,
+    "m25_5_authorized_by_this_decision": false,
+    "silent_label_change_permitted": false
+  },
+  "baseline_summary": {
+    "explanation_signal_coverage": 0.6,
+    "explanation_signal_coverage_ci95": {
+      "lower": 0.423204,
+      "upper": 0.754094
+    },
+    "explanation_signal_gap_count": 12,
+    "false_merge_count": 0,
+    "gap_classes": [
+      "near_match_distinct",
+      "parent_child_distinct",
+      "polysemy_ambiguous",
+      "supersession_without_identity_collapse"
+    ],
+    "semantic_decision_accuracy": 1.0,
+    "semantic_decision_accuracy_ci95": {
+      "lower": 0.886487,
+      "upper": 1.0
+    }
+  },
+  "class_count": 10,
+  "class_items": {
+    "ambiguous_insufficient_evidence": [
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [
+          "ambiguous"
+        ],
+        "item_id": "gold_calibration_ambiguous_insufficient_evidence",
+        "item_sha256": "cf489a016c86570b01ffa01986a673f0c9b16d49c1cf57d7e03f6598144c2c92",
+        "rationale": "A bilingual term owned by multiple concepts is insufficient for identity selection.",
+        "required_explanation_signals": [
+          "exact_bilingual_term"
+        ],
+        "split": "calibration"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [
+          "ambiguous"
+        ],
+        "item_id": "gold_final_ambiguous_insufficient_evidence",
+        "item_sha256": "5bf85f62e70f018683d15a9c4ab1203b590a7d5a5d253ef178fe7ca2bb48a404",
+        "rationale": "Held-out duplicate canonical titles must fail closed as ambiguous.",
+        "required_explanation_signals": [
+          "exact_normalized_title"
+        ],
+        "split": "final"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [
+          "ambiguous"
+        ],
+        "item_id": "gold_train_ambiguous_insufficient_evidence",
+        "item_sha256": "c76a7c4f073a0f8996c65cea26bdbde89568dcb02b1e55fd321ee4b41a50ade9",
+        "rationale": "An alias with no uniquely resolved target must remain ambiguous.",
+        "required_explanation_signals": [
+          "alias_target_or_ownership_ambiguous"
+        ],
+        "split": "train"
+      }
+    ],
+    "approved_alias": [
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "attach_alias_candidate"
+        ],
+        "item_id": "gold_calibration_approved_alias",
+        "item_sha256": "84e945e39d472d1473b77f5c3e8925b7fe9e49e30a323b9aa06c713f011cd02a",
+        "rationale": "Abbreviation ownership is unique and remains pending review.",
+        "required_explanation_signals": [
+          "unique_alias_target"
+        ],
+        "split": "calibration"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "attach_alias_candidate"
+        ],
+        "item_id": "gold_final_approved_alias",
+        "item_sha256": "8a73a297009d5299604e11e35639f250b791926a86656af2b620528a22b9eef4",
+        "rationale": "Held-out alias attachment verifies no silent canonical write.",
+        "required_explanation_signals": [
+          "unique_alias_target"
+        ],
+        "split": "final"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "attach_alias_candidate"
+        ],
+        "item_id": "gold_train_approved_alias",
+        "item_sha256": "86d0f1bf95ac4220cd2d302016e64d5e9313167ebc81b77c12506881db3a5810",
+        "rationale": "A new alias may attach only to one uniquely owned canonical target.",
+        "required_explanation_signals": [
+          "unique_alias_target"
+        ],
+        "split": "train"
+      }
+    ],
+    "blocked_policy": [
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [
+          "reject"
+        ],
+        "item_id": "gold_calibration_blocked_policy",
+        "item_sha256": "8d17cd5510c07be522ecfaf21965d3ae8ffb222db3887ea8167fce5174f84142",
+        "rationale": "Cross-audience candidate collisions are rejected before identity handling.",
+        "required_explanation_signals": [
+          "cross_audience_candidate_collision"
+        ],
+        "split": "calibration"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [
+          "reject"
+        ],
+        "item_id": "gold_final_blocked_policy",
+        "item_sha256": "65b23a6bf129e757fe9784730b609d49336ee2fb10f16ee777e37de0a7a3a200",
+        "rationale": "Held-out ACL mismatch verifies fail-closed behavior.",
+        "required_explanation_signals": [
+          "audience_acl_mismatch"
+        ],
+        "split": "final"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [
+          "reject"
+        ],
+        "item_id": "gold_train_blocked_policy",
+        "item_sha256": "196184750e8124004365da9bb7b8c0bc36ded032e64c9f7a1d74b0d4d1343127",
+        "rationale": "A public candidate cannot resolve into a restricted canonical concept.",
+        "required_explanation_signals": [
+          "audience_acl_mismatch"
+        ],
+        "split": "train"
+      }
+    ],
+    "contradiction_without_identity": [
+      {
+        "expected_contradiction_count": 1,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [],
+        "item_id": "gold_calibration_contradiction_without_identity",
+        "item_sha256": "2bce42a3ccf574c9474f10d9faa29752fa4ba9008b747465ddeea52af742f874",
+        "rationale": "Contradiction detection must preserve the subject identity and block packaging.",
+        "required_explanation_signals": [
+          "contradiction_candidate"
+        ],
+        "split": "calibration"
+      },
+      {
+        "expected_contradiction_count": 1,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [],
+        "item_id": "gold_final_contradiction_without_identity",
+        "item_sha256": "5f484a5be0c4135eef862a2eea93007ad542d059b1cdf407363220cc07120a71",
+        "rationale": "Held-out incompatible values are contradictions without collapsing identities.",
+        "required_explanation_signals": [
+          "contradiction_candidate"
+        ],
+        "split": "final"
+      },
+      {
+        "expected_contradiction_count": 1,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [],
+        "item_id": "gold_train_contradiction_without_identity",
+        "item_sha256": "421ffc8db67ea0431f4a587437345c9760322037222fc2475975242d773f1214",
+        "rationale": "Opposite claims about one resolved subject are contradictions, not identity merges.",
+        "required_explanation_signals": [
+          "contradiction_candidate"
+        ],
+        "split": "train"
+      }
+    ],
+    "duplicate": [
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [
+          "probable_duplicate"
+        ],
+        "item_id": "gold_calibration_duplicate",
+        "item_sha256": "201e05247394d6781f93175f1ebb4fd463612ce6e2a8b7b4fe628d8e79c24cae",
+        "rationale": "An explicit duplicate hint may cluster otherwise different labels.",
+        "required_explanation_signals": [
+          "within_batch_exact_label_or_explicit_hint"
+        ],
+        "split": "calibration"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [
+          "probable_duplicate"
+        ],
+        "item_id": "gold_final_duplicate",
+        "item_sha256": "dd4a41c7611d3a00a16590aee9011c19dbeba92e02c5ed59ed2bd11fc678dd64",
+        "rationale": "Held-out duplicate clustering must be deterministic.",
+        "required_explanation_signals": [
+          "within_batch_exact_label_or_explicit_hint"
+        ],
+        "split": "final"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [
+          "probable_duplicate"
+        ],
+        "item_id": "gold_train_duplicate",
+        "item_sha256": "42ed15ec4b0af5909d3415cf0404b73cb144e590fc607220081f17af8f088cbd",
+        "rationale": "Two same-audience candidates with the same normalized label form a duplicate cluster.",
+        "required_explanation_signals": [
+          "within_batch_exact_label_or_explicit_hint"
+        ],
+        "split": "train"
+      }
+    ],
+    "exact_match": [
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "exact_existing_match"
+        ],
+        "item_id": "gold_calibration_exact_match",
+        "item_sha256": "03eb5fadf12ff1b85aa2f22d01ae4d0121e8aa04a93671d16e9f46c07fd2fcc0",
+        "rationale": "Exact title equality must remain review-only but unambiguous.",
+        "required_explanation_signals": [
+          "exact_normalized_title"
+        ],
+        "split": "calibration"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "exact_existing_match"
+        ],
+        "item_id": "gold_final_exact_match",
+        "item_sha256": "46a080e446d3ffa777cd56fa24e25841b82b5dde7475b181b161453cb5422749",
+        "rationale": "A final held-out exact title case verifies deterministic replay.",
+        "required_explanation_signals": [
+          "exact_normalized_title"
+        ],
+        "split": "final"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "exact_existing_match"
+        ],
+        "item_id": "gold_train_exact_match",
+        "item_sha256": "4c604451dea509daf3e44324b3b9d85b57822e9432674f4d92197e2bd1ca4926",
+        "rationale": "Exact canonical title equality identifies one existing concept.",
+        "required_explanation_signals": [
+          "exact_normalized_title"
+        ],
+        "split": "train"
+      }
+    ],
+    "near_match_distinct": [
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "distinct_new_candidate"
+        ],
+        "item_id": "gold_calibration_near_match_distinct",
+        "item_sha256": "189e1f5106f7ed9a97893ecfe9b3cd8e9e7c1d7515c9d495988798333ccf0a05",
+        "rationale": "Related operating concepts remain separate identities.",
+        "required_explanation_signals": [
+          "near_match_distinction"
+        ],
+        "split": "calibration"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "distinct_new_candidate"
+        ],
+        "item_id": "gold_final_near_match_distinct",
+        "item_sha256": "c759cb833fcdd60c768a51c6bbbc17ae25316da1bd70e43a3e60cbc3c48c886a",
+        "rationale": "Final near-match case measures explicit distinction evidence coverage.",
+        "required_explanation_signals": [
+          "near_match_distinction"
+        ],
+        "split": "final"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "distinct_new_candidate"
+        ],
+        "item_id": "gold_train_near_match_distinct",
+        "item_sha256": "039cc21223a3c040e4eaec074f2f9a22317b4ed1e143e1ca9358659c91ccab29",
+        "rationale": "Lexical resemblance without identity evidence must not merge.",
+        "required_explanation_signals": [
+          "near_match_distinction"
+        ],
+        "split": "train"
+      }
+    ],
+    "parent_child_distinct": [
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "distinct_new_candidate"
+        ],
+        "item_id": "gold_calibration_parent_child_distinct",
+        "item_sha256": "4792465f39ab92abe9eddd52aaf8943f8ca58897200a8e8fb0184e37709d71e3",
+        "rationale": "A detection capability is a child of monitoring and must remain distinct.",
+        "required_explanation_signals": [
+          "parent_child_distinction"
+        ],
+        "split": "calibration"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "distinct_new_candidate"
+        ],
+        "item_id": "gold_final_parent_child_distinct",
+        "item_sha256": "1b900cb4a0694efa9b0d15bd67a4aeed0a868ac9c7bce9e364ed6b9528f830c5",
+        "rationale": "Held-out parent-child pair tests non-collapse and explanation coverage.",
+        "required_explanation_signals": [
+          "parent_child_distinction"
+        ],
+        "split": "final"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "distinct_new_candidate"
+        ],
+        "item_id": "gold_train_parent_child_distinct",
+        "item_sha256": "94484cfe9b20fda1451c8abbe8005faab8e198f4834a2171751dce3f3c293ef8",
+        "rationale": "A weekly review is a narrower child, not the same identity as the generic review.",
+        "required_explanation_signals": [
+          "parent_child_distinction"
+        ],
+        "split": "train"
+      }
+    ],
+    "polysemy_ambiguous": [
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [
+          "ambiguous"
+        ],
+        "item_id": "gold_calibration_polysemy_ambiguous",
+        "item_sha256": "1cd5a70c5d9f7480a511d23ac247b80a5b209c7e108b1ff81766cd69ac87890f",
+        "rationale": "Model is polysemous across machine learning and finance.",
+        "required_explanation_signals": [
+          "polysemy_collision"
+        ],
+        "split": "calibration"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [
+          "ambiguous"
+        ],
+        "item_id": "gold_final_polysemy_ambiguous",
+        "item_sha256": "19b97c43b045b2f742d6bdf23d260f9c2734fef6783979a1b3fb4b8f81ef7ec2",
+        "rationale": "Held-out polysemy must fail closed instead of selecting one owner.",
+        "required_explanation_signals": [
+          "polysemy_collision"
+        ],
+        "split": "final"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": true,
+        "expected_resolution_outcomes": [
+          "ambiguous"
+        ],
+        "item_id": "gold_train_polysemy_ambiguous",
+        "item_sha256": "06640c21cc8b61071354f1e59a6609faf8c9aaee32ee67ad40c0d8e411b73bd7",
+        "rationale": "The same surface form may denote an AI agent or a travel agent.",
+        "required_explanation_signals": [
+          "polysemy_collision"
+        ],
+        "split": "train"
+      }
+    ],
+    "supersession_without_identity_collapse": [
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "distinct_new_candidate"
+        ],
+        "item_id": "gold_calibration_supersession_without_identity_collapse",
+        "item_sha256": "1a4266a648ec6456f22303bc2a4fc77a0cf331083e190391e3b15b29434aed28",
+        "rationale": "Versioned taxonomies require temporal linkage rather than identity collapse.",
+        "required_explanation_signals": [
+          "supersession_distinction"
+        ],
+        "split": "calibration"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "distinct_new_candidate"
+        ],
+        "item_id": "gold_final_supersession_without_identity_collapse",
+        "item_sha256": "3c4d493e57c8bb1adc89a250eb088415c05f09e0e5c0c2a4f4ba9bf3e49101f5",
+        "rationale": "Held-out supersession case measures explicit temporal explanation coverage.",
+        "required_explanation_signals": [
+          "supersession_distinction"
+        ],
+        "split": "final"
+      },
+      {
+        "expected_contradiction_count": 0,
+        "expected_packaging_blocked": false,
+        "expected_resolution_outcomes": [
+          "distinct_new_candidate"
+        ],
+        "item_id": "gold_train_supersession_without_identity_collapse",
+        "item_sha256": "c918cd8bb4fd549423909c64495b2faaf9aab2e68832a475625b4317cebee928",
+        "rationale": "A new policy version supersedes but does not share identity with the prior version.",
+        "required_explanation_signals": [
+          "supersession_distinction"
+        ],
+        "split": "train"
+      }
+    ]
+  },
+  "disputed_item_count": 0,
+  "engine_base_sha": "744cfdc830da4a7bcfd4ed6ec3cf55972b042358",
+  "gate_sha256": "0adafb1f42089c98ef76b0b8c3c953e3c83e1bfde8b2fa53a5e8cc91aab7aecb",
+  "gold_suite_sha256": "103db6e982e71ed8e4c442eb4f36f48b06eb846fdc3f339fb3cd078215b5ddfc",
+  "issue_number": 1046,
+  "item_count": 30,
+  "predecessor_status": "m25_3_extraction_worker_accepted",
+  "protected_mutations": {
+    "foundation": false,
+    "large_scale_ingestion": false,
+    "production_answer_serving": false,
+    "production_pointer": false,
+    "qdrant": false,
+    "r2_production": false,
+    "release": false,
+    "semantic_or_hybrid_serving": false,
+    "source": false
+  },
+  "provisional_baseline_report_sha256": "993ab879129db14400603c8a213a82c2437c6b545f998127d7ad19a9153c17d2",
+  "pull_request_number": 1047,
+  "requested_decisions": {
+    "approve_all_30_provisional_labels": null,
+    "approve_annotation_and_adjudication_policy": null,
+    "confirm_zero_disputed_items": null
+  },
+  "schema_version": "knowledge-engine-m25-4-daniel-annotation-gate/v1",
+  "split_counts": {
+    "calibration": 10,
+    "final": 10,
+    "train": 10
+  },
+  "status": "awaiting_daniel_decision"
+}

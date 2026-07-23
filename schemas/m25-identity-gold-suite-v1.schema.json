@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-identity-gold-suite-v1.schema.json",
+  "title": "M25 identity gold suite v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "suite_id", "suite_revision", "engine_base_sha", "predecessor_status",
+    "resolver_module", "resolver_source_sha", "foundation_sha", "annotation_policy_sha256",
+    "annotation_authority", "approval_status", "class_labels", "splits", "item_count", "items",
+    "candidate_only", "canonical_knowledge", "production_authority", "suite_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-identity-gold-suite/v1"},
+    "suite_id": {"const": "m25-concept-identity-gold-v1"},
+    "suite_revision": {"type": "string"},
+    "engine_base_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "predecessor_status": {"const": "m25_3_extraction_worker_accepted"},
+    "resolver_module": {"const": "knowledge_engine.m21_entity_resolution"},
+    "resolver_source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "foundation_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "annotation_policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "annotation_authority": {"const": "daniel"},
+    "approval_status": {"enum": ["pending_daniel", "approved_by_daniel"]},
+    "class_labels": {"type": "array", "minItems": 10, "maxItems": 10, "uniqueItems": true},
+    "splits": {"const": ["train", "calibration", "final"]},
+    "item_count": {"const": 30},
+    "items": {
+      "type": "array",
+      "minItems": 30,
+      "maxItems": 30,
+      "items": {"$ref": "m25-identity-gold-item-v1.schema.json"}
+    },
+    "candidate_only": {"const": true},
+    "canonical_knowledge": {"const": false},
+    "production_authority": {"const": false},
+    "suite_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

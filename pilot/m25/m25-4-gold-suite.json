@@ -1,0 +1,2580 @@
+{
+  "annotation_authority": "daniel",
+  "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+  "approval_status": "approved_by_daniel",
+  "candidate_only": true,
+  "canonical_knowledge": false,
+  "class_labels": [
+    "exact_match",
+    "approved_alias",
+    "duplicate",
+    "near_match_distinct",
+    "parent_child_distinct",
+    "polysemy_ambiguous",
+    "contradiction_without_identity",
+    "supersession_without_identity_collapse",
+    "ambiguous_insufficient_evidence",
+    "blocked_policy"
+  ],
+  "engine_base_sha": "744cfdc830da4a7bcfd4ed6ec3cf55972b042358",
+  "foundation_sha": "e5ef644053d34e89c70d2ceb37521e1c59234832",
+  "item_count": 30,
+  "items": [
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_amb_term": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_amb_term",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_1147feb75bfe4d72",
+                "end": 19,
+                "excerpt_sha256": "6394cbac8a64995193d7179b685b602cffb065ca096efbf3d9223930451034ec",
+                "plan_sha256": "0644c55dd7f668d5c57d773c3dbe1f0fdb1bfa899201c0ddb9186b7ace367807",
+                "snapshot_id": "snapshot_1147feb75bfe4d72",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "代理",
+            "language": "zh",
+            "normalized_label": "代理",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [
+              "代理"
+            ],
+            "concept_path": "concepts/kos_proxy.md",
+            "normalized_title": "proxy",
+            "source_sha256": "de14bcccae3cba4d816d1106d3d08e31e224f9839a052c093d3a21284d643426",
+            "tags": [],
+            "title": "Proxy",
+            "x_kos_id": "kos_proxy"
+          },
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [
+              "代理"
+            ],
+            "concept_path": "concepts/kos_agent.md",
+            "normalized_title": "agent",
+            "source_sha256": "fe499c6226afa58677fb0c6514bbbabda189be57bdfaf7d60ac39dca1df93e74",
+            "tags": [],
+            "title": "Agent",
+            "x_kos_id": "kos_agent"
+          }
+        ]
+      },
+      "class_label": "ambiguous_insufficient_evidence",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "494c61f36b488fec0256142e767af0c0e6ccfee836b96c8f4fb65febe5f8780d",
+        "uri": "benchmark://m25-4/gold_calibration_ambiguous_insufficient_evidence"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "exact_bilingual_term"
+        ],
+        "resolution_outcomes": [
+          "ambiguous"
+        ]
+      },
+      "item_id": "gold_calibration_ambiguous_insufficient_evidence",
+      "item_sha256": "9a0eb2f42789246b471607c519dc16abbee99cdf69e664d027b2d94a462ef36d",
+      "production_authority": false,
+      "rationale": "A bilingual term owned by multiple concepts is insufficient for identity selection.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_93bbe3105b4b2d9d400e",
+      "split": "calibration"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_alias_aop": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_alias_aop",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_328b4b89effdbf1f",
+                "end": 20,
+                "excerpt_sha256": "f93451114d35ff3ec9107604ecfcb910a8562d6cf8aa19e5cb9332829dcd6f7d",
+                "plan_sha256": "319153e85fa01fa452a32a9742cd25356798e4d541a76e473785d1d1e846a210",
+                "snapshot_id": "snapshot_328b4b89effdbf1f",
+                "start": 0
+              }
+            ],
+            "kind": "alias",
+            "label": "AOP",
+            "language": "en",
+            "normalized_label": "aop",
+            "production_authority": false,
+            "status": "pending_review",
+            "target_label": "Annual Operating Plan"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_aop.md",
+            "normalized_title": "annual operating plan",
+            "source_sha256": "f65abfd04618a0561bda058a037d77b9695421547b8018220f0dda95a8130b2f",
+            "tags": [],
+            "title": "Annual Operating Plan",
+            "x_kos_id": "kos_aop"
+          }
+        ]
+      },
+      "class_label": "approved_alias",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "74ad9818614efcc51150ae7acda772b0643deace53a7d3d25f8356bac6ad8874",
+        "uri": "benchmark://m25-4/gold_calibration_approved_alias"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "unique_alias_target"
+        ],
+        "resolution_outcomes": [
+          "attach_alias_candidate"
+        ]
+      },
+      "item_id": "gold_calibration_approved_alias",
+      "item_sha256": "2a253a2a9ebe7496c78f1413f0815c92ce0e7f05fe4ea4565f42c2de6d5fe0a6",
+      "production_authority": false,
+      "rationale": "Abbreviation ownership is unique and remains pending review.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_e05f2c24ae60ce41f26c",
+      "split": "calibration"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_block_same_a": "public",
+          "c_block_same_b": "restricted"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_block_same_a",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_d830e3b5b4b1a8e6",
+                "end": 23,
+                "excerpt_sha256": "2a79e2c0b656a8b5bbc62ad8535784c3caa50f7d415197b31c9052abe6993605",
+                "plan_sha256": "ab3ebb98cd2ddc51560a30c6fc49803c6001ef500b3673ebf3f4e3818f43d852",
+                "snapshot_id": "snapshot_d830e3b5b4b1a8e6",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Shared Scope",
+            "language": "en",
+            "normalized_label": "shared scope",
+            "production_authority": false,
+            "status": "pending_review"
+          },
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_block_same_b",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_80ff13022e9b8d74",
+                "end": 23,
+                "excerpt_sha256": "ec24016083361abda0c8425512bc60db9c883c21f8bf13cc9dddefa1e07941fe",
+                "plan_sha256": "8bb3f143e43f27d4cf586c32d0488135450684fffe15e6f639f03142fba5166b",
+                "snapshot_id": "snapshot_80ff13022e9b8d74",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Shared Scope",
+            "language": "en",
+            "normalized_label": "shared scope",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": []
+      },
+      "class_label": "blocked_policy",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "9c41b438c104b295bd37c9e85c2e8f569de7dc2a534cf4cf2603325519359359",
+        "uri": "benchmark://m25-4/gold_calibration_blocked_policy"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "cross_audience_candidate_collision"
+        ],
+        "resolution_outcomes": [
+          "reject"
+        ]
+      },
+      "item_id": "gold_calibration_blocked_policy",
+      "item_sha256": "8d69a07ad0533ab044b5a46092ae3664d3c03e0b717b551024140096ff0d32c9",
+      "production_authority": false,
+      "rationale": "Cross-audience candidate collisions are rejected before identity handling.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_082f6409c14d9789f5e6",
+      "split": "calibration"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "claim_cache_no": "public",
+          "claim_cache_yes": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "body": "yes",
+            "candidate_id": "claim_cache_yes",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_43902dbf01581073",
+                "end": 24,
+                "excerpt_sha256": "bbfaea32bfc6bc0fca14aaa1737ee2f39dc677a8c718cfd4389aa80f6d2c0a74",
+                "plan_sha256": "3fe4263db8ad8aa9801f2edc1f950b8fa12423465c5c2e9b274370e3fc314397",
+                "snapshot_id": "snapshot_43902dbf01581073",
+                "start": 0
+              }
+            ],
+            "kind": "claim",
+            "label": "Cache is required",
+            "language": "en",
+            "normalized_label": "cache is required",
+            "production_authority": false,
+            "status": "pending_review",
+            "subject_label": "Semantic Cache"
+          },
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "body": "no",
+            "candidate_id": "claim_cache_no",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_f136b1af6b02cbb1",
+                "end": 23,
+                "excerpt_sha256": "3081f01f50f41dc7302c89a4525949705de9ecf0b33b19c26f604fd2d4e6caed",
+                "plan_sha256": "1bd0c9a727781803948b671576b9464251a2100d7004bccf6271741a83ae35b6",
+                "snapshot_id": "snapshot_f136b1af6b02cbb1",
+                "start": 0
+              }
+            ],
+            "kind": "claim",
+            "label": "Cache is optional",
+            "language": "en",
+            "normalized_label": "cache is optional",
+            "production_authority": false,
+            "status": "pending_review",
+            "subject_label": "Semantic Cache"
+          }
+        ],
+        "claim_assertions": [
+          {
+            "candidate_id": "claim_cache_yes",
+            "polarity": "positive",
+            "predicate": "required",
+            "scope": {
+              "environment": "production"
+            },
+            "value": "true"
+          },
+          {
+            "candidate_id": "claim_cache_no",
+            "polarity": "negative",
+            "predicate": "required",
+            "scope": {
+              "environment": "production"
+            },
+            "value": "true"
+          }
+        ],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_cache.md",
+            "normalized_title": "semantic cache",
+            "source_sha256": "97b7506f335fd3e7d8a1dcb7705a27899cc46278e0dfb7c3e63724644c7906e2",
+            "tags": [],
+            "title": "Semantic Cache",
+            "x_kos_id": "kos_cache"
+          }
+        ]
+      },
+      "class_label": "contradiction_without_identity",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "b66e015a28abead4a8a444a01bf7c8f675c168a7e2683adab29caecda783936d",
+        "uri": "benchmark://m25-4/gold_calibration_contradiction_without_identity"
+      },
+      "expected": {
+        "contradiction_count": 1,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "contradiction_candidate"
+        ],
+        "resolution_outcomes": []
+      },
+      "item_id": "gold_calibration_contradiction_without_identity",
+      "item_sha256": "0c09ef5673b215cb3d027869973ade6b080bda839b1afa63271a839e8b4cb0ea",
+      "production_authority": false,
+      "rationale": "Contradiction detection must preserve the subject identity and block packaging.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_3a980cdc6e014811db66",
+      "split": "calibration"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_dup_forecast_a": "public",
+          "c_dup_forecast_b": "public",
+          "c_dup_hint": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_dup_forecast_a",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_86d32edc60370f8c",
+                "end": 25,
+                "excerpt_sha256": "4174ccb01b14edb1976c55446e859004370ac4911e5eab4b992954520b372951",
+                "plan_sha256": "29409adaa7afdeb2617d2339d5438443deb276450717286abd704363f2168dca",
+                "snapshot_id": "snapshot_86d32edc60370f8c",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Forecast",
+            "language": "en",
+            "normalized_label": "forecast",
+            "production_authority": false,
+            "status": "pending_review"
+          },
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_dup_forecast_b",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_9d1cfb198c3b5698",
+                "end": 25,
+                "excerpt_sha256": "bfe43211ec184201f6afa15112a9feb6ac791ba594cb2daf68829b26aa473a2c",
+                "plan_sha256": "77f2b8f1fa6d16d4628d32f7874190c839c75aa575099815cb09be9d6f388c98",
+                "snapshot_id": "snapshot_9d1cfb198c3b5698",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Operating Forecast",
+            "language": "en",
+            "normalized_label": "operating forecast",
+            "production_authority": false,
+            "status": "pending_review"
+          },
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_dup_hint",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_336630a6fe49f4dc",
+                "end": 19,
+                "excerpt_sha256": "31e3a0c431d710fe683d2397a447469ca0b57c4f689de1b701bbdc942f333f93",
+                "plan_sha256": "427c4de562db045a86b8d4891a42dde79dade2e2c7f2989bce65fd3070e15c08",
+                "snapshot_id": "snapshot_336630a6fe49f4dc",
+                "start": 0
+              }
+            ],
+            "kind": "duplicate_hint",
+            "label": "Forecast",
+            "language": "en",
+            "normalized_label": "forecast",
+            "production_authority": false,
+            "status": "pending_review",
+            "target_label": "Operating Forecast"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": []
+      },
+      "class_label": "duplicate",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "f296793c46b66e1de06e4eb4e0f8a2b46cb274d6f220b9f617dc7fa6b137bdcb",
+        "uri": "benchmark://m25-4/gold_calibration_duplicate"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "within_batch_exact_label_or_explicit_hint"
+        ],
+        "resolution_outcomes": [
+          "probable_duplicate"
+        ]
+      },
+      "item_id": "gold_calibration_duplicate",
+      "item_sha256": "63ea0bf1b2f01b34592385da4ce79b174e42d900586cb1d0a9b304cd432bd3f4",
+      "production_authority": false,
+      "rationale": "An explicit duplicate hint may cluster otherwise different labels.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_9dd6c8c330e11a79fd43",
+      "split": "calibration"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_exact_harness": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_exact_harness",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_420b2b0c215cb73e",
+                "end": 24,
+                "excerpt_sha256": "ce8e454d2d40f8988b423fb8cdeab764dc1bd97cc167a460668ef9b4a1c8a211",
+                "plan_sha256": "ae9a86dca971ed23cc97de603082036fd680c0b9b23e2f277c6c03fab3584c2a",
+                "snapshot_id": "snapshot_420b2b0c215cb73e",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Agent Harness",
+            "language": "en",
+            "normalized_label": "agent harness",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_harness.md",
+            "normalized_title": "agent harness",
+            "source_sha256": "3c98290bfdfa70ad41d746bf6e80dff38a97eb88257104fa6849d04e42e21d0e",
+            "tags": [],
+            "title": "Agent Harness",
+            "x_kos_id": "kos_harness"
+          }
+        ]
+      },
+      "class_label": "exact_match",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "81796969939aeb83ae463221b844e59aa1d11a73fc9156ba870c9c785c7addd6",
+        "uri": "benchmark://m25-4/gold_calibration_exact_match"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "exact_normalized_title"
+        ],
+        "resolution_outcomes": [
+          "exact_existing_match"
+        ]
+      },
+      "item_id": "gold_calibration_exact_match",
+      "item_sha256": "0978ef620fc121a465652790ae464866a061c22ea8d3145d623551069e4bd729",
+      "production_authority": false,
+      "rationale": "Exact title equality must remain review-only but unambiguous.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_5d62aa3fea9c209a7bdd",
+      "split": "calibration"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_near_model": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_near_model",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_227f574181350b2f",
+                "end": 21,
+                "excerpt_sha256": "b108563cc8a95389c51c7aa3aa4a5f4983e4bb3ee3f768a091cc641283245fc6",
+                "plan_sha256": "91297d53cf9f1d8cd9f5e3bbeea7b333fb18c34fed7a394120384217f0642c76",
+                "snapshot_id": "snapshot_227f574181350b2f",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Model Monitoring",
+            "language": "en",
+            "normalized_label": "model monitoring",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_model_governance.md",
+            "normalized_title": "model governance",
+            "source_sha256": "86512c20d946ee5bea24dabdeeebbe727f3794b06ba96f216571d76b0b6c3136",
+            "tags": [],
+            "title": "Model Governance",
+            "x_kos_id": "kos_model_governance"
+          }
+        ]
+      },
+      "class_label": "near_match_distinct",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "9f4edbb92eaaae03aad51bacce10706028e3d43c3fd1c86dc42bb52e5bda856b",
+        "uri": "benchmark://m25-4/gold_calibration_near_match_distinct"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "near_match_distinction"
+        ],
+        "resolution_outcomes": [
+          "distinct_new_candidate"
+        ]
+      },
+      "item_id": "gold_calibration_near_match_distinct",
+      "item_sha256": "8b63d88af8f545bdd0babb0f3a306763902e9f03e6ae84588e913fd36aa34c3d",
+      "production_authority": false,
+      "rationale": "Related operating concepts remain separate identities.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_c78336d0ab25ddceb5e4",
+      "split": "calibration"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_parent_drift": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_parent_drift",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_f2266722449745ca",
+                "end": 23,
+                "excerpt_sha256": "88ff9e2c07ee61fec7f17bde562786f6d69bd28ace240570152446a19890c7a9",
+                "plan_sha256": "5e80af21e03a35398abe87490ecc92d626c96bdbdd5776960c08d407760541c7",
+                "snapshot_id": "snapshot_f2266722449745ca",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Model Drift Detection",
+            "language": "en",
+            "normalized_label": "model drift detection",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_model_monitoring.md",
+            "normalized_title": "model monitoring",
+            "source_sha256": "e873190f581d7149ffd27598a4c528c26c85e356027b282c5e41e1fdc5355f91",
+            "tags": [],
+            "title": "Model Monitoring",
+            "x_kos_id": "kos_model_monitoring"
+          }
+        ]
+      },
+      "class_label": "parent_child_distinct",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "644be8dfe68ff5a4dae2ccb25add5d129f99bcae8bebaed4541abb4f9a8ac066",
+        "uri": "benchmark://m25-4/gold_calibration_parent_child_distinct"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "parent_child_distinction"
+        ],
+        "resolution_outcomes": [
+          "distinct_new_candidate"
+        ]
+      },
+      "item_id": "gold_calibration_parent_child_distinct",
+      "item_sha256": "43d1bd729c8888145990842ea872a35f8d83a3e75bb58af253bd46bb18af40ca",
+      "production_authority": false,
+      "rationale": "A detection capability is a child of monitoring and must remain distinct.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_7b6926bfc0e17ae2abaf",
+      "split": "calibration"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_poly_model": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_poly_model",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_a04cfde520a67b29",
+                "end": 21,
+                "excerpt_sha256": "fcb59efb8a7d40ac5a13383bea872524283086d1e7266c562d5fecf74ece4887",
+                "plan_sha256": "3e0f970027d4f561e02e3db3ec890adde0c16f627af8e4a0e45eb276fb590311",
+                "snapshot_id": "snapshot_a04cfde520a67b29",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Model",
+            "language": "en",
+            "normalized_label": "model",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_ml_model.md",
+            "normalized_title": "model",
+            "source_sha256": "a0b4eef772175a32ea772aad443ea620de004cbdfc4530878bfffebcfcc96680",
+            "tags": [],
+            "title": "Model",
+            "x_kos_id": "kos_ml_model"
+          },
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_financial_model.md",
+            "normalized_title": "model",
+            "source_sha256": "01689060814d99e6d3a231ef021d5f0471840ae444e017c4ea6185a417e57937",
+            "tags": [],
+            "title": "Model",
+            "x_kos_id": "kos_financial_model"
+          }
+        ]
+      },
+      "class_label": "polysemy_ambiguous",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "ed1e667c155984a1b73fe5c94460fb4d41588480969b76a641f11cd408305dd1",
+        "uri": "benchmark://m25-4/gold_calibration_polysemy_ambiguous"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "polysemy_collision"
+        ],
+        "resolution_outcomes": [
+          "ambiguous"
+        ]
+      },
+      "item_id": "gold_calibration_polysemy_ambiguous",
+      "item_sha256": "6169b556a3651059a024f2b82dc5f33954f368af27d0a20b3ea6a3652c22eb76",
+      "production_authority": false,
+      "rationale": "Model is polysemous across machine learning and finance.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_078c6fe9642cbe3ab9e2",
+      "split": "calibration"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_super_taxonomy_v2": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_super_taxonomy_v2",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_e9fcb82f393ad04a",
+                "end": 28,
+                "excerpt_sha256": "de11966832f62267993b67fd4f1e3e770963a5d5dc1705fea3a738754592ccd9",
+                "plan_sha256": "e848b5108d0768a76234712556f07233179dea5ddf424562213c2f6603e0d6e5",
+                "snapshot_id": "snapshot_e9fcb82f393ad04a",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Metric Taxonomy v2",
+            "language": "en",
+            "normalized_label": "metric taxonomy v2",
+            "production_authority": false,
+            "status": "pending_review",
+            "supersedes_label": "Metric Taxonomy v1"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_taxonomy_v1.md",
+            "normalized_title": "metric taxonomy v1",
+            "source_sha256": "4e82f6a9fa8078478fbe3d4d56313eb230960c5d2de436884aebfa64343cb7c6",
+            "tags": [],
+            "title": "Metric Taxonomy v1",
+            "x_kos_id": "kos_taxonomy_v1"
+          }
+        ]
+      },
+      "class_label": "supersession_without_identity_collapse",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "ad87710c5ed93b522fc58c36464b6eb7dec5d07712ff1164243c36f7ea6b25bf",
+        "uri": "benchmark://m25-4/gold_calibration_supersession_without_identity_collapse"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "supersession_distinction"
+        ],
+        "resolution_outcomes": [
+          "distinct_new_candidate"
+        ]
+      },
+      "item_id": "gold_calibration_supersession_without_identity_collapse",
+      "item_sha256": "72ab3dd20dca10cb32d6472615dcfc51509ad4ad8ee5b0292f00b0f757628276",
+      "production_authority": false,
+      "rationale": "Versioned taxonomies require temporal linkage rather than identity collapse.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_8804f318d5932d676e6c",
+      "split": "calibration"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_amb_title": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_amb_title",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_00031007a7813a79",
+                "end": 20,
+                "excerpt_sha256": "ae7732dd2ba4a1775efc1c92391aa09966f1acbfccf2b7208a49ce98fc0988d4",
+                "plan_sha256": "b483412214ff5750ef892a3d986fd8e639c059c13603e1800b754f4aebdf12b5",
+                "snapshot_id": "snapshot_00031007a7813a79",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Control",
+            "language": "en",
+            "normalized_label": "control",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_control_a.md",
+            "normalized_title": "control",
+            "source_sha256": "f3cab1ce4303cbc7a04405977db39123fd7ba3f805dd6c936722fa9ff3b63205",
+            "tags": [],
+            "title": "Control",
+            "x_kos_id": "kos_control_a"
+          },
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_control_b.md",
+            "normalized_title": "control",
+            "source_sha256": "201fc899416ee23e07806987fca84c3acad6e26b759f0ec44ba3876522fb0c5e",
+            "tags": [],
+            "title": "Control",
+            "x_kos_id": "kos_control_b"
+          }
+        ]
+      },
+      "class_label": "ambiguous_insufficient_evidence",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "e2b8b97bf15868690a194878f4676633c7912ef3da7055c23fd7e530f9052c6f",
+        "uri": "benchmark://m25-4/gold_final_ambiguous_insufficient_evidence"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "exact_normalized_title"
+        ],
+        "resolution_outcomes": [
+          "ambiguous"
+        ]
+      },
+      "item_id": "gold_final_ambiguous_insufficient_evidence",
+      "item_sha256": "fd0854745d3c6ea45db94f22c65161af4764a5da006ff87051218892a2540e4f",
+      "production_authority": false,
+      "rationale": "Held-out duplicate canonical titles must fail closed as ambiguous.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_24fbc6f5a97797d03f7b",
+      "split": "final"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_alias_kri": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_alias_kri",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_cfcc2cf75a699bb0",
+                "end": 20,
+                "excerpt_sha256": "15afcf604a2905a266b0d8e0802a71faa8fc47e48292b8d341a8525efe7334a5",
+                "plan_sha256": "6b6a82abfea9f859e553db5e69bbb805bd583cd5c4f53b921f87322373fbabf5",
+                "snapshot_id": "snapshot_cfcc2cf75a699bb0",
+                "start": 0
+              }
+            ],
+            "kind": "alias",
+            "label": "KRI",
+            "language": "en",
+            "normalized_label": "kri",
+            "production_authority": false,
+            "status": "pending_review",
+            "target_label": "Key Risk Indicator"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_kri.md",
+            "normalized_title": "key risk indicator",
+            "source_sha256": "2331e4dae8494c5452c5679881de48522a38adde534c7fb3cad0ee01b7d0c781",
+            "tags": [],
+            "title": "Key Risk Indicator",
+            "x_kos_id": "kos_kri"
+          }
+        ]
+      },
+      "class_label": "approved_alias",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "6a7126449ed7fd19d5c9f52adbc4fa234642f5e5e231de6263294b511fd3d709",
+        "uri": "benchmark://m25-4/gold_final_approved_alias"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "unique_alias_target"
+        ],
+        "resolution_outcomes": [
+          "attach_alias_candidate"
+        ]
+      },
+      "item_id": "gold_final_approved_alias",
+      "item_sha256": "0e17abbe4c8d7604edad2e62f3d5fe94ef7548c1ec1de2594a4936d8e763a36d",
+      "production_authority": false,
+      "rationale": "Held-out alias attachment verifies no silent canonical write.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_7a3a74dcfc02cc4fd143",
+      "split": "final"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_block_internal": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_block_internal",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_f7882f4514ba4284",
+                "end": 25,
+                "excerpt_sha256": "0f17c0e68c2ee158ae3f32e954d961afbeb76829c7c70f28d1342b4b0d6db135",
+                "plan_sha256": "33945a45137002a8745411c832789a4d74c558d8be8161d88f7971ffdd09555e",
+                "snapshot_id": "snapshot_f7882f4514ba4284",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Internal Control",
+            "language": "en",
+            "normalized_label": "internal control",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "internal",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_internal.md",
+            "normalized_title": "internal control",
+            "source_sha256": "a95c0e0d76babd0976c87c7a0de44d072ae4ab2c8a977b10854c6eb873f997e7",
+            "tags": [],
+            "title": "Internal Control",
+            "x_kos_id": "kos_internal"
+          }
+        ]
+      },
+      "class_label": "blocked_policy",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "8b161e85acd103d928a33d3583518e25b78b761c6cda1f0adbacab978ebda83a",
+        "uri": "benchmark://m25-4/gold_final_blocked_policy"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "audience_acl_mismatch"
+        ],
+        "resolution_outcomes": [
+          "reject"
+        ]
+      },
+      "item_id": "gold_final_blocked_policy",
+      "item_sha256": "8a64afc351f85dc4dc8a7a15d09598c1d313d42a649b5d377d114c9bb7f4850e",
+      "production_authority": false,
+      "rationale": "Held-out ACL mismatch verifies fail-closed behavior.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_79eb77f96458e06a21bf",
+      "split": "final"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "claim_acl_private": "public",
+          "claim_acl_public": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "body": "public",
+            "candidate_id": "claim_acl_public",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_29396bc945ab55c7",
+                "end": 25,
+                "excerpt_sha256": "fc905b08eaa772d86734db349268b1fb6619c4cea570cd749e0ef7464e71f596",
+                "plan_sha256": "e9403a11f4387c47eaf8cb8b2ea9fd9cc77490c15647847cd11b596a60073a94",
+                "snapshot_id": "snapshot_29396bc945ab55c7",
+                "start": 0
+              }
+            ],
+            "kind": "claim",
+            "label": "Public access",
+            "language": "en",
+            "normalized_label": "public access",
+            "production_authority": false,
+            "status": "pending_review",
+            "subject_label": "Access Policy"
+          },
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "body": "private",
+            "candidate_id": "claim_acl_private",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_674d62489ed0d70e",
+                "end": 26,
+                "excerpt_sha256": "972b750c727c00943545cc88752a7151f823414e3ab278f5717d1336e8bb4f1d",
+                "plan_sha256": "e6d44d2922772974c4675631a2f3f9d049657e951dd1dbf82d06bd86112607a9",
+                "snapshot_id": "snapshot_674d62489ed0d70e",
+                "start": 0
+              }
+            ],
+            "kind": "claim",
+            "label": "Private access",
+            "language": "en",
+            "normalized_label": "private access",
+            "production_authority": false,
+            "status": "pending_review",
+            "subject_label": "Access Policy"
+          }
+        ],
+        "claim_assertions": [
+          {
+            "candidate_id": "claim_acl_public",
+            "polarity": "positive",
+            "predicate": "audience",
+            "scope": {
+              "surface": "vault"
+            },
+            "value": "public"
+          },
+          {
+            "candidate_id": "claim_acl_private",
+            "polarity": "positive",
+            "predicate": "audience",
+            "scope": {
+              "surface": "vault"
+            },
+            "value": "restricted"
+          }
+        ],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_access.md",
+            "normalized_title": "access policy",
+            "source_sha256": "dec3a28a7c05a53f7a4139bc768204eaab43464cbf0a13fbf15bb687a28b4b25",
+            "tags": [],
+            "title": "Access Policy",
+            "x_kos_id": "kos_access"
+          }
+        ]
+      },
+      "class_label": "contradiction_without_identity",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "fc3d5ee9c5eb1483c13bc73dbf8a64aafa263a329451515ec86c812831e7324d",
+        "uri": "benchmark://m25-4/gold_final_contradiction_without_identity"
+      },
+      "expected": {
+        "contradiction_count": 1,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "contradiction_candidate"
+        ],
+        "resolution_outcomes": []
+      },
+      "item_id": "gold_final_contradiction_without_identity",
+      "item_sha256": "327400619f4882b5119ab5dd67fd01e20164a698131fb9473a32e9d21b440653",
+      "production_authority": false,
+      "rationale": "Held-out incompatible values are contradictions without collapsing identities.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_85d5b4be5ede62358b46",
+      "split": "final"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_dup_cache_a": "public",
+          "c_dup_cache_b": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_dup_cache_a",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_fdab16987aef2faa",
+                "end": 22,
+                "excerpt_sha256": "3e9a1a0b00ebea87d69c7e6c60096f9731fe4e51b9482bfd6096b26b7f741a4f",
+                "plan_sha256": "b253a93d9d0c89ad724a91711fc877c776961812072c7e5e0ba39cb8d90a9d6a",
+                "snapshot_id": "snapshot_fdab16987aef2faa",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Semantic Cache",
+            "language": "en",
+            "normalized_label": "semantic cache",
+            "production_authority": false,
+            "status": "pending_review"
+          },
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_dup_cache_b",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_44df009971e1ce6e",
+                "end": 22,
+                "excerpt_sha256": "9f0eb1dc4e77f55bc4378e896e401c96b95b7d6f5bf71bd098535f6a43a13358",
+                "plan_sha256": "458d8076571f663ba84e733fed0b3fae606856dc22b947c8399920bb6c9fcd2d",
+                "snapshot_id": "snapshot_44df009971e1ce6e",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Semantic Cache",
+            "language": "en",
+            "normalized_label": "semantic cache",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": []
+      },
+      "class_label": "duplicate",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "28f7512c0761cef5840546be691de44f41e29bfb33d5f94f4fb6559e2be25c47",
+        "uri": "benchmark://m25-4/gold_final_duplicate"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "within_batch_exact_label_or_explicit_hint"
+        ],
+        "resolution_outcomes": [
+          "probable_duplicate"
+        ]
+      },
+      "item_id": "gold_final_duplicate",
+      "item_sha256": "a30e3c8f171b3d2ba5e0cfdfb011a419566bfc01a003740fc71ee0b284a59532",
+      "production_authority": false,
+      "rationale": "Held-out duplicate clustering must be deterministic.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_f85c396fd2ef26d69db0",
+      "split": "final"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_exact_lineage": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_exact_lineage",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_899e9a1b1a44ab30",
+                "end": 24,
+                "excerpt_sha256": "39d357656a295f794426c3309d1182297acf8eb0f564a8bd9228a1db655d0b6d",
+                "plan_sha256": "b9f21bee9d48aababc96de8bdfc8ca5728cdf5ea64d2776aa41e2c1f36bf5e7c",
+                "snapshot_id": "snapshot_899e9a1b1a44ab30",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Data Lineage",
+            "language": "en",
+            "normalized_label": "data lineage",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_lineage.md",
+            "normalized_title": "data lineage",
+            "source_sha256": "80cde64638661256541edb694ae77899a2f1f95fe6e2d4d04897e6b2ae165bf9",
+            "tags": [],
+            "title": "Data Lineage",
+            "x_kos_id": "kos_lineage"
+          }
+        ]
+      },
+      "class_label": "exact_match",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "4d612e74b8a651d91d8381a49ba4b30f0d8b83bf1293a90860da0ba1142c1864",
+        "uri": "benchmark://m25-4/gold_final_exact_match"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "exact_normalized_title"
+        ],
+        "resolution_outcomes": [
+          "exact_existing_match"
+        ]
+      },
+      "item_id": "gold_final_exact_match",
+      "item_sha256": "34989757bebb24d6d0b3cc553b9c6f74648891d420203002255510e138ffcd8a",
+      "production_authority": false,
+      "rationale": "A final held-out exact title case verifies deterministic replay.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_9adf3e26f2b55c90e33c",
+      "split": "final"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_near_guest": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_near_guest",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_4181f22212fd6dc8",
+                "end": 21,
+                "excerpt_sha256": "729bc461d6f58e62b9953cbcb30613d40ee2ba1f42ad6d9edbaf2598b9732cb8",
+                "plan_sha256": "21c45deca03b361312c1493287956fbdda90b9ba662ac256b26f05d2ccdcd233",
+                "snapshot_id": "snapshot_4181f22212fd6dc8",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Guest Journey Analytics",
+            "language": "en",
+            "normalized_label": "guest journey analytics",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_guest_mapping.md",
+            "normalized_title": "guest journey mapping",
+            "source_sha256": "7d1bd9429c756702d516775374f3e6391bca32369c38ccf93288554ed16ff907",
+            "tags": [],
+            "title": "Guest Journey Mapping",
+            "x_kos_id": "kos_guest_mapping"
+          }
+        ]
+      },
+      "class_label": "near_match_distinct",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "66d46cdccae267cc615334562afe59237ee506880171c6d08adbb0388733318e",
+        "uri": "benchmark://m25-4/gold_final_near_match_distinct"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "near_match_distinction"
+        ],
+        "resolution_outcomes": [
+          "distinct_new_candidate"
+        ]
+      },
+      "item_id": "gold_final_near_match_distinct",
+      "item_sha256": "2ef0d0e54a7dae294db0cf974d02f71e96d5d83b5dfb9e65dbfdec6578afe1c8",
+      "production_authority": false,
+      "rationale": "Final near-match case measures explicit distinction evidence coverage.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_8f7cf6e710115c11d62f",
+      "split": "final"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_parent_index": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_parent_index",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_6c79510def201215",
+                "end": 23,
+                "excerpt_sha256": "c0dead4c1286749df13385d39ecd87c79e7f282bb0025d49b582ceaaa46e4343",
+                "plan_sha256": "249d0ee02f45f0bc41640731d6619bff731f46c9fecc6f75638d859e224a415b",
+                "snapshot_id": "snapshot_6c79510def201215",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Vector Index Maintenance",
+            "language": "en",
+            "normalized_label": "vector index maintenance",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_vector_retrieval.md",
+            "normalized_title": "vector retrieval",
+            "source_sha256": "7ff669381dde628e9b4f4f4ec66c60fe909fdff4c18f9d9b1a4cfeb71a9c7cd2",
+            "tags": [],
+            "title": "Vector Retrieval",
+            "x_kos_id": "kos_vector_retrieval"
+          }
+        ]
+      },
+      "class_label": "parent_child_distinct",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "9b1e79b12d8e7ef6f7b2b5ba0adab0a7bbe652ca50545f230c57292d12fb58e5",
+        "uri": "benchmark://m25-4/gold_final_parent_child_distinct"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "parent_child_distinction"
+        ],
+        "resolution_outcomes": [
+          "distinct_new_candidate"
+        ]
+      },
+      "item_id": "gold_final_parent_child_distinct",
+      "item_sha256": "018ad4475e22f11b469ed701967b2d33628d7e7d66d26c0bed12b08f54ea031c",
+      "production_authority": false,
+      "rationale": "Held-out parent-child pair tests non-collapse and explanation coverage.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_41d7979f3680e9b82917",
+      "split": "final"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_poly_pipeline": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_poly_pipeline",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_683891dcce9142ab",
+                "end": 24,
+                "excerpt_sha256": "86d7ccb56533c0e045b4277254b6943f76cae21ef5771a1b6d7c2c0e048ff2d4",
+                "plan_sha256": "a84457854924e0b96b351d2f74c45e3e5882144978c6401fac0cb8d4d0402363",
+                "snapshot_id": "snapshot_683891dcce9142ab",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Pipeline",
+            "language": "en",
+            "normalized_label": "pipeline",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_data_pipeline.md",
+            "normalized_title": "pipeline",
+            "source_sha256": "63c226cf635907437515337040f9426079ef84a46b0314917ec14739b3514197",
+            "tags": [],
+            "title": "Pipeline",
+            "x_kos_id": "kos_data_pipeline"
+          },
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_sales_pipeline.md",
+            "normalized_title": "pipeline",
+            "source_sha256": "3b2eb6a3d5425b069678bb27e09eba545adce7348e481caf834c1e06e2ad4e53",
+            "tags": [],
+            "title": "Pipeline",
+            "x_kos_id": "kos_sales_pipeline"
+          }
+        ]
+      },
+      "class_label": "polysemy_ambiguous",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "cc6db2af1f35f9a7b8bff893cdc6f92382e025476734659fa4ca6e6db277261b",
+        "uri": "benchmark://m25-4/gold_final_polysemy_ambiguous"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "polysemy_collision"
+        ],
+        "resolution_outcomes": [
+          "ambiguous"
+        ]
+      },
+      "item_id": "gold_final_polysemy_ambiguous",
+      "item_sha256": "0e7126f92b70bb82f0bc0a595faffb92ab15adf94001b38e3ff263aa46a4ea34",
+      "production_authority": false,
+      "rationale": "Held-out polysemy must fail closed instead of selecting one owner.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_d3a2d28c67244373558c",
+      "split": "final"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_super_runbook_2026": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_super_runbook_2026",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_5ddaa89dcb95429b",
+                "end": 29,
+                "excerpt_sha256": "1ed7a875cc5bf890a03015f409a6b9a169848eab9824a86aa6dde222334daca4",
+                "plan_sha256": "507beaa76a58787c771ec123c9359a471b065524e0c9b8ef87eb9c5567ddecb5",
+                "snapshot_id": "snapshot_5ddaa89dcb95429b",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Incident Runbook 2026",
+            "language": "en",
+            "normalized_label": "incident runbook 2026",
+            "production_authority": false,
+            "status": "pending_review",
+            "supersedes_label": "Incident Runbook 2025"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_runbook_2025.md",
+            "normalized_title": "incident runbook 2025",
+            "source_sha256": "3d2aefaa885fa3479e2ca5b51a2c3053342d1bca08f125864277b936f6fbafd3",
+            "tags": [],
+            "title": "Incident Runbook 2025",
+            "x_kos_id": "kos_runbook_2025"
+          }
+        ]
+      },
+      "class_label": "supersession_without_identity_collapse",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "6633aae040e9c3da8d1aff75229c6f5763230eb09ac75088f45fc55c7aac5087",
+        "uri": "benchmark://m25-4/gold_final_supersession_without_identity_collapse"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "supersession_distinction"
+        ],
+        "resolution_outcomes": [
+          "distinct_new_candidate"
+        ]
+      },
+      "item_id": "gold_final_supersession_without_identity_collapse",
+      "item_sha256": "521c7400d8a6d0400e0b7ba7b564f8834204d3e25fc784b91e69dcc8a3d3c35d",
+      "production_authority": false,
+      "rationale": "Held-out supersession case measures explicit temporal explanation coverage.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_05ee3afdd0e3002a9390",
+      "split": "final"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_amb_alias_shared": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_amb_alias_shared",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_bdc0128dec214351",
+                "end": 27,
+                "excerpt_sha256": "b335b8e5ba7ff9a0f838250d3861fc924ed8b35dba7f712b88e80ca2cd3865d6",
+                "plan_sha256": "74fddca3d8615d18da1e441773939cc1cacbf46fa26e8a79ad69a982d434f617",
+                "snapshot_id": "snapshot_bdc0128dec214351",
+                "start": 0
+              }
+            ],
+            "kind": "alias",
+            "label": "Shared",
+            "language": "en",
+            "normalized_label": "shared",
+            "production_authority": false,
+            "status": "pending_review",
+            "target_label": "Unknown Target"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_alpha.md",
+            "normalized_title": "alpha",
+            "source_sha256": "72568624d2b1dfd0be95f2c9850cc3e31e6227bdabf7cdead00d4e2eff6bfddf",
+            "tags": [],
+            "title": "Alpha",
+            "x_kos_id": "kos_alpha"
+          },
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_beta.md",
+            "normalized_title": "beta",
+            "source_sha256": "3552177e8c4c0b0f5ea39975671dfbc9e43a3f350a8b094f733e72aa1787e5c5",
+            "tags": [],
+            "title": "Beta",
+            "x_kos_id": "kos_beta"
+          }
+        ]
+      },
+      "class_label": "ambiguous_insufficient_evidence",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "371bc458cb9d1929e6668c76b6e946971a6f7616e4654a222bb9ed1c68a8e10d",
+        "uri": "benchmark://m25-4/gold_train_ambiguous_insufficient_evidence"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "alias_target_or_ownership_ambiguous"
+        ],
+        "resolution_outcomes": [
+          "ambiguous"
+        ]
+      },
+      "item_id": "gold_train_ambiguous_insufficient_evidence",
+      "item_sha256": "ce59b24237a9023972348c7ae1eecae672127a583e7ce302094256e7935c741b",
+      "production_authority": false,
+      "rationale": "An alias with no uniquely resolved target must remain ambiguous.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_9d0f3f013320b12e0db1",
+      "split": "train"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_alias_rag": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_alias_rag",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_587002ece12bab42",
+                "end": 20,
+                "excerpt_sha256": "460b8c178f5b62bcb3da57cb2f9bde09ad383a172149e37bcd957e8b08d83425",
+                "plan_sha256": "bbc8d92a1a23993b4507af67e5586215a8e9e6f3cf4c9abc2e2777603130c12d",
+                "snapshot_id": "snapshot_587002ece12bab42",
+                "start": 0
+              }
+            ],
+            "kind": "alias",
+            "label": "RAG",
+            "language": "en",
+            "normalized_label": "rag",
+            "production_authority": false,
+            "status": "pending_review",
+            "target_label": "Retrieval Augmented Generation"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_rag.md",
+            "normalized_title": "retrieval augmented generation",
+            "source_sha256": "85131804c79fa71c764067e201d78916442edd0e9187b4d2c37aad1bafd52089",
+            "tags": [],
+            "title": "Retrieval Augmented Generation",
+            "x_kos_id": "kos_rag"
+          }
+        ]
+      },
+      "class_label": "approved_alias",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "c02a49a8b40822af37fbdc63b6c4fab85d030af9766dfb02e09909ed8164005e",
+        "uri": "benchmark://m25-4/gold_train_approved_alias"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "unique_alias_target"
+        ],
+        "resolution_outcomes": [
+          "attach_alias_candidate"
+        ]
+      },
+      "item_id": "gold_train_approved_alias",
+      "item_sha256": "2fc65544f8dfefb7a3df72a90214f3dd35db6c0c7c9d9ff592349ddddda805ef",
+      "production_authority": false,
+      "rationale": "A new alias may attach only to one uniquely owned canonical target.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_ed3ed56184f004ced057",
+      "split": "train"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_block_private": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_block_private",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_6e409cc9836e49b1",
+                "end": 24,
+                "excerpt_sha256": "e44cbcca226cbed20cb74ecace3ba29cbf7357482b14c1f00b90b2c81e985ca7",
+                "plan_sha256": "69b86a55ea92318e194d294b5ba30a14fba3d7afdbca1f8995a1659b88e951d7",
+                "snapshot_id": "snapshot_6e409cc9836e49b1",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Private Knowledge",
+            "language": "en",
+            "normalized_label": "private knowledge",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "restricted",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_private.md",
+            "normalized_title": "private knowledge",
+            "source_sha256": "f999f39ddf5c375cbb4e9526e930e34a7b276cff0c1b97cfcd7b71b3b97d3a99",
+            "tags": [],
+            "title": "Private Knowledge",
+            "x_kos_id": "kos_private"
+          }
+        ]
+      },
+      "class_label": "blocked_policy",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "1474ff5336003b8f32726ddd297f8d5e1dbbec1630b7edef631cc1c575ef5d7f",
+        "uri": "benchmark://m25-4/gold_train_blocked_policy"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "audience_acl_mismatch"
+        ],
+        "resolution_outcomes": [
+          "reject"
+        ]
+      },
+      "item_id": "gold_train_blocked_policy",
+      "item_sha256": "2a77eae02d311085dacda8c5ad520e89eda590f8d4fe4f02202713d2cb130cfb",
+      "production_authority": false,
+      "rationale": "A public candidate cannot resolve into a restricted canonical concept.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_7577c932b8a4c2daf5aa",
+      "split": "train"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "claim_rag_no": "public",
+          "claim_rag_yes": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "body": "yes",
+            "candidate_id": "claim_rag_yes",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_8685906e2f0a62b7",
+                "end": 22,
+                "excerpt_sha256": "0804933571a66a2549d6ace053cd208549b1fac0ca46af89aa4bd568a1c3b456",
+                "plan_sha256": "fc535190105d2a709289735da716dfa4da129650202a118d99266777605a0239",
+                "snapshot_id": "snapshot_8685906e2f0a62b7",
+                "start": 0
+              }
+            ],
+            "kind": "claim",
+            "label": "RAG needs an index",
+            "language": "en",
+            "normalized_label": "rag needs an index",
+            "production_authority": false,
+            "status": "pending_review",
+            "subject_label": "RAG"
+          },
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "body": "no",
+            "candidate_id": "claim_rag_no",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_773daba2c83229ec",
+                "end": 21,
+                "excerpt_sha256": "b076fa95231b709fc8a4a1720c116cafd6287ba7f66e2b1527f58a8249146916",
+                "plan_sha256": "c2745a61edc42c8e4505a72f44862203c494f057b014a25e3003ed8443940cb0",
+                "snapshot_id": "snapshot_773daba2c83229ec",
+                "start": 0
+              }
+            ],
+            "kind": "claim",
+            "label": "RAG does not need an index",
+            "language": "en",
+            "normalized_label": "rag does not need an index",
+            "production_authority": false,
+            "status": "pending_review",
+            "subject_label": "RAG"
+          }
+        ],
+        "claim_assertions": [
+          {
+            "candidate_id": "claim_rag_yes",
+            "polarity": "positive",
+            "predicate": "requires",
+            "scope": {
+              "context": "runtime"
+            },
+            "value": "index"
+          },
+          {
+            "candidate_id": "claim_rag_no",
+            "polarity": "negative",
+            "predicate": "requires",
+            "scope": {
+              "context": "runtime"
+            },
+            "value": "index"
+          }
+        ],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_rag.md",
+            "normalized_title": "rag",
+            "source_sha256": "85131804c79fa71c764067e201d78916442edd0e9187b4d2c37aad1bafd52089",
+            "tags": [],
+            "title": "RAG",
+            "x_kos_id": "kos_rag"
+          }
+        ]
+      },
+      "class_label": "contradiction_without_identity",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "82677ced4cbe93aad0a0afcf16a7dae3e472ea6b4dc217e97d84d48f2588c47d",
+        "uri": "benchmark://m25-4/gold_train_contradiction_without_identity"
+      },
+      "expected": {
+        "contradiction_count": 1,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "contradiction_candidate"
+        ],
+        "resolution_outcomes": []
+      },
+      "item_id": "gold_train_contradiction_without_identity",
+      "item_sha256": "c1dbe98b51c85f13972c50af58607b69e3d1b7040055dc0fe84bb3d651ff89cc",
+      "production_authority": false,
+      "rationale": "Opposite claims about one resolved subject are contradictions, not identity merges.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_1ec200b062bbc30e5d08",
+      "split": "train"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_dup_agent_a": "public",
+          "c_dup_agent_b": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_dup_agent_a",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_d4e482c58600cbf1",
+                "end": 22,
+                "excerpt_sha256": "2ce2835ec2ea79ecf036fd1158582fb0f23c166b437a40d01941410f34976c46",
+                "plan_sha256": "823aa881cb06256d9d8af8e84703ab8b414ef6d69edd10d13e1017cc23abd96a",
+                "snapshot_id": "snapshot_d4e482c58600cbf1",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Agent",
+            "language": "en",
+            "normalized_label": "agent",
+            "production_authority": false,
+            "status": "pending_review"
+          },
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_dup_agent_b",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_194772062295976e",
+                "end": 22,
+                "excerpt_sha256": "cc2cca4e2b87387e21a2b23bfa019df5408f31effa622f7860d2787d39e7eb91",
+                "plan_sha256": "ed8e165e1506b99a8c3fb7a8e3dd32a4d6d74636d438c2365a0d8785e5a89131",
+                "snapshot_id": "snapshot_194772062295976e",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Agent",
+            "language": "en",
+            "normalized_label": "agent",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": []
+      },
+      "class_label": "duplicate",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "36075e860310b9f1366e2aa89c61755f3043db06bf203c4664f3b2dfe2189ccb",
+        "uri": "benchmark://m25-4/gold_train_duplicate"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "within_batch_exact_label_or_explicit_hint"
+        ],
+        "resolution_outcomes": [
+          "probable_duplicate"
+        ]
+      },
+      "item_id": "gold_train_duplicate",
+      "item_sha256": "8c95eb000aa9e5f9bb173ea2e8e0fa9ae74b92369af6b304bbdfeb15aa027710",
+      "production_authority": false,
+      "rationale": "Two same-audience candidates with the same normalized label form a duplicate cluster.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_abc7421200c290898cc1",
+      "split": "train"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_exact_rag": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_exact_rag",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_5ddf8674d944ab1a",
+                "end": 20,
+                "excerpt_sha256": "d654e263ba6798f208176bce7244c8a9fe28101f155f6064122381545b1728c5",
+                "plan_sha256": "90900084068acc2d8a866d518b93ede0272c6cfc031167dddc4464f41691f904",
+                "snapshot_id": "snapshot_5ddf8674d944ab1a",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Retrieval Augmented Generation",
+            "language": "en",
+            "normalized_label": "retrieval augmented generation",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_rag.md",
+            "normalized_title": "retrieval augmented generation",
+            "source_sha256": "85131804c79fa71c764067e201d78916442edd0e9187b4d2c37aad1bafd52089",
+            "tags": [],
+            "title": "Retrieval Augmented Generation",
+            "x_kos_id": "kos_rag"
+          }
+        ]
+      },
+      "class_label": "exact_match",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "8cd641502c5c592b1a0307a3e20b64a5f0f8575a5421fdfc142394e73de14be5",
+        "uri": "benchmark://m25-4/gold_train_exact_match"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "exact_normalized_title"
+        ],
+        "resolution_outcomes": [
+          "exact_existing_match"
+        ]
+      },
+      "item_id": "gold_train_exact_match",
+      "item_sha256": "45cb717fe2a1c2ea1c6a21d647c5010e329a4ac2afb17f114d215596deb0d8a1",
+      "production_authority": false,
+      "rationale": "Exact canonical title equality identifies one existing concept.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_ea0f6dae721e447b4960",
+      "split": "train"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_near_revenue": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_near_revenue",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_ee7d1c396a4fc37d",
+                "end": 23,
+                "excerpt_sha256": "04af0f0fdc397ba6e28d88945f3fe5ff29a76ebd627bc922a168acc958e03afb",
+                "plan_sha256": "a64966f3438b508afa5c0579b7d1a7e4565d63380f4c216b62fb97ca9c7e14c6",
+                "snapshot_id": "snapshot_ee7d1c396a4fc37d",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Revenue Forecast",
+            "language": "en",
+            "normalized_label": "revenue forecast",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_revenue_recognition.md",
+            "normalized_title": "revenue recognition",
+            "source_sha256": "99cff23665bb36d60ecd4f571f8be8813ac3f229301c04f7f2d2fb07cb79ebf0",
+            "tags": [],
+            "title": "Revenue Recognition",
+            "x_kos_id": "kos_revenue_recognition"
+          }
+        ]
+      },
+      "class_label": "near_match_distinct",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "6d0acc89d60f95e4a82eb0069282d7ee7bf28fb4daa209985afedc1a7cb62b86",
+        "uri": "benchmark://m25-4/gold_train_near_match_distinct"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "near_match_distinction"
+        ],
+        "resolution_outcomes": [
+          "distinct_new_candidate"
+        ]
+      },
+      "item_id": "gold_train_near_match_distinct",
+      "item_sha256": "f40e213402b689542ca76e44f638adaf57b751159ce91f1c10d79881538a4ab2",
+      "production_authority": false,
+      "rationale": "Lexical resemblance without identity evidence must not merge.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_53ff1537c10f0580c8d4",
+      "split": "train"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_parent_wbr": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_parent_wbr",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_8b0d5a79c3d2ca08",
+                "end": 21,
+                "excerpt_sha256": "b125c490547867f3dd4787823f22715056f524b3c3c15e4b798c29afbd5efc9c",
+                "plan_sha256": "8c0e332273c097f5e70bfe69cdcc0635477bd23542aa3d037f746f7127e92c68",
+                "snapshot_id": "snapshot_8b0d5a79c3d2ca08",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Weekly Business Review",
+            "language": "en",
+            "normalized_label": "weekly business review",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_business_review.md",
+            "normalized_title": "business review",
+            "source_sha256": "0da22cb7388a2346bf6a352491510fbc98257350cfba33bf8cc1f0593d4da99d",
+            "tags": [],
+            "title": "Business Review",
+            "x_kos_id": "kos_business_review"
+          }
+        ]
+      },
+      "class_label": "parent_child_distinct",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "a93d45a2982b9048b6a6cee67dac5217a9c66c670a3566fb3196fd2f7158ff06",
+        "uri": "benchmark://m25-4/gold_train_parent_child_distinct"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "parent_child_distinction"
+        ],
+        "resolution_outcomes": [
+          "distinct_new_candidate"
+        ]
+      },
+      "item_id": "gold_train_parent_child_distinct",
+      "item_sha256": "240f4d7481155854a49074fa5d3ad905ea75c0430c7d2c2736c0829bfc3b89ab",
+      "production_authority": false,
+      "rationale": "A weekly review is a narrower child, not the same identity as the generic review.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_99ea90553cfd97df99c4",
+      "split": "train"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_poly_agent": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_poly_agent",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_483193da41a79ef6",
+                "end": 21,
+                "excerpt_sha256": "fc0dfc7356a1a3edb107d7a0f29d61cbb977b37e719f815e350a5d35e28ba978",
+                "plan_sha256": "cf6a58c9a7a4c66b8719a63ddd4856bc535ce517fca0bc8b2df53d7d2e59cecb",
+                "snapshot_id": "snapshot_483193da41a79ef6",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "Agent",
+            "language": "en",
+            "normalized_label": "agent",
+            "production_authority": false,
+            "status": "pending_review"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_ai_agent.md",
+            "normalized_title": "agent",
+            "source_sha256": "c7cc0aa6ac70de0bdc8c8a3de311b37b244e4867e5e85b18e286db95edfa140d",
+            "tags": [],
+            "title": "Agent",
+            "x_kos_id": "kos_ai_agent"
+          },
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_travel_agent.md",
+            "normalized_title": "agent",
+            "source_sha256": "dafa67a020c280dd7d0be5605933a245cdb0083d0369448d3f1b3dcd853ecc19",
+            "tags": [],
+            "title": "Agent",
+            "x_kos_id": "kos_travel_agent"
+          }
+        ]
+      },
+      "class_label": "polysemy_ambiguous",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "774473fc762c4f4c84215ffeecbbe2d213b3cfe0a525e007dbcd4abe90930bc4",
+        "uri": "benchmark://m25-4/gold_train_polysemy_ambiguous"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": true,
+        "required_explanation_signals": [
+          "polysemy_collision"
+        ],
+        "resolution_outcomes": [
+          "ambiguous"
+        ]
+      },
+      "item_id": "gold_train_polysemy_ambiguous",
+      "item_sha256": "026683b9cb7223e20b774761c39b60cb12df337f953bd9aa7c822f8f46ec4c3e",
+      "production_authority": false,
+      "rationale": "The same surface form may denote an AI agent or a travel agent.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_e491c3ac51699ba89c6b",
+      "split": "train"
+    },
+    {
+      "annotation_policy_sha256": "0e404be34a4dac4816dced3c9db1a0ec9543a83adcae83f01fe85f5a3d822246",
+      "annotation_status": "approved",
+      "candidate_only": true,
+      "canonical_knowledge": false,
+      "case": {
+        "candidate_audiences": {
+          "c_super_retention_2026": "public"
+        },
+        "candidates": [
+          {
+            "aliases": [],
+            "authority": "candidate_only",
+            "candidate_id": "c_super_retention_2026",
+            "canonical_knowledge": false,
+            "confidence": 0.8,
+            "controlled_tags": [],
+            "evidence_spans": [
+              {
+                "derivative_id": "derivative_a55b42c5c4351fb2",
+                "end": 31,
+                "excerpt_sha256": "38b6b231be61f1f3fe8fdd58f30c6cc1c33c3ff8cc578ec2613b458742f4acef",
+                "plan_sha256": "01335888d2d632fd6633840c719c3242746aede78ed6431e4c806bb4ba96028d",
+                "snapshot_id": "snapshot_a55b42c5c4351fb2",
+                "start": 0
+              }
+            ],
+            "kind": "concept",
+            "label": "2026 Data Retention Policy",
+            "language": "en",
+            "normalized_label": "2026 data retention policy",
+            "production_authority": false,
+            "status": "pending_review",
+            "supersedes_label": "2025 Data Retention Policy"
+          }
+        ],
+        "claim_assertions": [],
+        "governed_tags": [],
+        "source_concepts": [
+          {
+            "aliases": [],
+            "audience": "public",
+            "bilingual_terms": [],
+            "concept_path": "concepts/kos_retention_2025.md",
+            "normalized_title": "2025 data retention policy",
+            "source_sha256": "625e528beed26975d77f50d15ba046de043140c0084f1e9f751f82c1a0baaacd",
+            "tags": [],
+            "title": "2025 Data Retention Policy",
+            "x_kos_id": "kos_retention_2025"
+          }
+        ]
+      },
+      "class_label": "supersession_without_identity_collapse",
+      "evidence": {
+        "evidence_bound": true,
+        "sha256": "1ca2544ca0768afbdb802d27334d30edca2c1b0a5f42acdd15514ac991710f8b",
+        "uri": "benchmark://m25-4/gold_train_supersession_without_identity_collapse"
+      },
+      "expected": {
+        "contradiction_count": 0,
+        "packaging_blocked": false,
+        "required_explanation_signals": [
+          "supersession_distinction"
+        ],
+        "resolution_outcomes": [
+          "distinct_new_candidate"
+        ]
+      },
+      "item_id": "gold_train_supersession_without_identity_collapse",
+      "item_sha256": "0ad47f6785b377a891a420df93a2cf69543bec07fb4fe9fa4d66e3b576ba981a",
+      "production_authority": false,
+      "rationale": "A new policy version supersedes but does not share identity with the prior version.",
+      "schema_version": "knowledge-engine-m25-identity-gold-item/v1",
+      "semantic_family_id": "family_87c4e0beddbba4cc0be3",
+      "split": "train"
+    }
+  ],
+  "predecessor_status": "m25_3_extraction_worker_accepted",
+  "production_authority": false,
+  "resolver_module": "knowledge_engine.m21_entity_resolution",
+  "resolver_source_sha": "a6ba738d910d01d2ae99b1968f0831989934c549",
+  "schema_version": "knowledge-engine-m25-identity-gold-suite/v1",
+  "splits": [
+    "train",
+    "calibration",
+    "final"
+  ],
+  "suite_id": "m25-concept-identity-gold-v1",
+  "suite_revision": "approved-1",
+  "suite_sha256": "e52216c4fffd03b5cf4cbd68c049ca2fc688e539743761768d08a3348572a3e6"
+}
