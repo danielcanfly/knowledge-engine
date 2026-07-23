@@ -114,7 +114,13 @@ jobs:
             --inventory pilot/m25/m25-9-pilot-inventory.synthetic.json \
             --output /tmp/m25-9/inventory.json \
             >/tmp/m25-9/inventory-output.json
-          cmp /tmp/m25-9/inventory.json pilot/m25/m25-9-pilot-inventory.synthetic.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          assert json.loads(Path('/tmp/m25-9/inventory.json').read_text()) == json.loads(
+              Path('pilot/m25/m25-9-pilot-inventory.synthetic.json').read_text()
+          )
+          PY
           python -m knowledge_engine.m25_controlled_pilot_cli validate-run \
             --evidence pilot/m25/m25-9a-run-evidence.synthetic.json \
             --inventory pilot/m25/m25-9-pilot-inventory.synthetic.json \
