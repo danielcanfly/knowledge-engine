@@ -1,0 +1,27 @@
+{
+  "authority_sha256": "56cf6593f6193208b5294ad8cd06e2df0bd93524e3eaae0d4310956510efd8bf",
+  "candidate_manifest_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+  "candidate_release_id": "candidate-m25-8-synthetic-001",
+  "evidence_sha256": "41dad3193922ae72af9001778865897dbfe953fb9e71437782997095829117ce",
+  "m25_9_authorized": false,
+  "merged_source_sha": "cccccccccccccccccccccccccccccccccccccccc",
+  "mode": "test_only",
+  "production_mutation_permitted": false,
+  "production_pointer_unchanged": true,
+  "receipt_sha256": "d4c8928f4b56322ecc7ac29d9ea04136691a580f78b29dbd5b51c8b34c2218a0",
+  "rollback_passed": true,
+  "rollback_target_release_id": "candidate-m25-7-previous",
+  "schema_version": "knowledge-engine-m25-8-adoption-receipt/v1",
+  "source_pr_exact_head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "source_pr_number": 88,
+  "source_repository": "danielcanfly/knowledge-source",
+  "status": "m25_8_test_only_adoption_simulation_passed",
+  "surface_count": 5,
+  "surfaces": [
+    "graph",
+    "search",
+    "sources",
+    "vault",
+    "wiki"
+  ]
+}
