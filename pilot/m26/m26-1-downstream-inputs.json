@@ -1,0 +1,25 @@
+{
+  "entry_baseline_sha256": "3c11b7f137dd6eb0c0354dabf7537ada1a03a0fc901a5b9facd6f469131a85db",
+  "examples": [
+    {
+      "path": "docs/architecture/m26/examples/question-request.example.json",
+      "schema_path": "schemas/m26-question-request-v1.schema.json",
+      "sha256": "feabac2e30fba5b2676f4f906291dffcd7f78bdc386ae1254758b4e6ddff9956"
+    },
+    {
+      "path": "docs/architecture/m26/examples/retrieval-plan.example.json",
+      "schema_path": "schemas/m26-retrieval-plan-v1.schema.json",
+      "sha256": "8c66ede3902a2cc4c271ca465a026150944a197d1a3db1e55dbe05593131339c"
+    },
+    {
+      "path": "docs/architecture/m26/examples/evidence-envelope.example.json",
+      "schema_path": "schemas/m26-evidence-envelope-v1.schema.json",
+      "sha256": "0ea4e5430b7978ee839285344a8024677e20b579aef775f8f0d2db36e52018d6"
+    }
+  ],
+  "provider_call": false,
+  "real_corpus": false,
+  "schema_version": "knowledge-engine-m26-1-downstream-inputs/v1",
+  "self_sha256": "33f8f619229a8dc07d03d538f15a4857abefc1df9a56d2c970cdc3483b0189c2",
+  "status": "digest_bound_synthetic_only"
+}
