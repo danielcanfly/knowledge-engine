@@ -1,0 +1,106 @@
+{
+  "$id": "https://knowledge-engine.local/schemas/m25-4-daniel-approval-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "annotation_policy_sha256": {
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "approval_record_sha256": {
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "approval_scope": {
+      "type": "object"
+    },
+    "approved_candidate_head": {
+      "const": "cf56bad3b9128020214c3a30100ec741d6842e56"
+    },
+    "approved_provisional_suite_sha256": {
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "authority_actor": {
+      "const": "huaihsuanbusiness"
+    },
+    "authority_comment_id": {
+      "const": 5053875354
+    },
+    "authority_comment_url": {
+      "type": "string"
+    },
+    "decision_text_en": {
+      "minLength": 20,
+      "type": "string"
+    },
+    "decision_text_zh": {
+      "minLength": 20,
+      "type": "string"
+    },
+    "decisions": {
+      "additionalProperties": false,
+      "properties": {
+        "approve_all_30_provisional_labels": {
+          "const": true
+        },
+        "approve_annotation_and_adjudication_policy": {
+          "const": true
+        },
+        "confirm_zero_disputed_items": {
+          "const": true
+        }
+      },
+      "required": [
+        "approve_annotation_and_adjudication_policy",
+        "approve_all_30_provisional_labels",
+        "confirm_zero_disputed_items"
+      ],
+      "type": "object"
+    },
+    "disputed_item_count": {
+      "const": 0
+    },
+    "gate_sha256": {
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "issue_number": {
+      "const": 1046
+    },
+    "provisional_baseline_sha256": {
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "pull_request_number": {
+      "const": 1047
+    },
+    "repository": {
+      "const": "danielcanfly/knowledge-engine"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-4-daniel-approval/v1"
+    },
+    "status": {
+      "const": "approved"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "repository",
+    "issue_number",
+    "pull_request_number",
+    "approved_candidate_head",
+    "authority_actor",
+    "authority_comment_id",
+    "authority_comment_url",
+    "decision_text_zh",
+    "decision_text_en",
+    "annotation_policy_sha256",
+    "approved_provisional_suite_sha256",
+    "provisional_baseline_sha256",
+    "gate_sha256",
+    "decisions",
+    "disputed_item_count",
+    "approval_scope",
+    "approval_record_sha256"
+  ],
+  "title": "M25.4 Daniel approval v1",
+  "type": "object"
+}

@@ -1,0 +1,938 @@
+{
+  "baseline_status": "accepted_baseline",
+  "candidate_only": true,
+  "canonical_knowledge": false,
+  "confusion_matrix": {
+    "ambiguous_insufficient_evidence": {
+      "ambiguous": 3
+    },
+    "approved_alias": {
+      "attach_alias_candidate": 3
+    },
+    "blocked_policy": {
+      "reject": 3
+    },
+    "contradiction_without_identity": {
+      "contradiction_candidate": 3
+    },
+    "duplicate": {
+      "probable_duplicate": 3
+    },
+    "exact_match": {
+      "exact_existing_match": 3
+    },
+    "near_match_distinct": {
+      "distinct_new_candidate": 3
+    },
+    "parent_child_distinct": {
+      "distinct_new_candidate": 3
+    },
+    "polysemy_ambiguous": {
+      "ambiguous": 3
+    },
+    "supersession_without_identity_collapse": {
+      "distinct_new_candidate": 3
+    }
+  },
+  "denominators": {
+    "by_class": {
+      "ambiguous_insufficient_evidence": 3,
+      "approved_alias": 3,
+      "blocked_policy": 3,
+      "contradiction_without_identity": 3,
+      "duplicate": 3,
+      "exact_match": 3,
+      "near_match_distinct": 3,
+      "parent_child_distinct": 3,
+      "polysemy_ambiguous": 3,
+      "supersession_without_identity_collapse": 3
+    },
+    "by_split": {
+      "calibration": 10,
+      "final": 10,
+      "train": 10
+    },
+    "total": 30
+  },
+  "error_taxonomy": {
+    "blocking_mismatch": 0,
+    "contradiction_mismatch": 0,
+    "decision_mismatch": 0,
+    "explanation_signal_gap": 12,
+    "false_identity_merge": 0
+  },
+  "final_split_used_for_calibration": false,
+  "m25_5_authorized": false,
+  "metrics": {
+    "explanation_signal_coverage": 0.6,
+    "explanation_signal_coverage_ci95": {
+      "lower": 0.423204,
+      "upper": 0.754094
+    },
+    "false_merge_count": 0,
+    "false_merge_rate": 0.0,
+    "per_class_semantic_accuracy": {
+      "ambiguous_insufficient_evidence": 1.0,
+      "approved_alias": 1.0,
+      "blocked_policy": 1.0,
+      "contradiction_without_identity": 1.0,
+      "duplicate": 1.0,
+      "exact_match": 1.0,
+      "near_match_distinct": 1.0,
+      "parent_child_distinct": 1.0,
+      "polysemy_ambiguous": 1.0,
+      "supersession_without_identity_collapse": 1.0
+    },
+    "per_split_semantic_accuracy": {
+      "calibration": 1.0,
+      "final": 1.0,
+      "train": 1.0
+    },
+    "semantic_decision_accuracy": 1.0,
+    "semantic_decision_accuracy_ci95": {
+      "lower": 0.886487,
+      "upper": 1.0
+    }
+  },
+  "production_authority": false,
+  "report_sha256": "1cf1c8a245d800d7eb091cf15ca4fe203958a1f98969da0fdd570a4bebde83b8",
+  "resolver_module": "knowledge_engine.m21_entity_resolution",
+  "resolver_source_sha": "a6ba738d910d01d2ae99b1968f0831989934c549",
+  "resolver_threshold_or_code_changed": false,
+  "results": [
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "exact_bilingual_term"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "class_label": "ambiguous_insufficient_evidence",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_calibration_ambiguous_insufficient_evidence",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "exact_bilingual_term"
+      ],
+      "resolution_packet_sha256": "9c9ee19f2c0ee6ba606a2f875fec4627294338b9ed14f883b69bf629f5a8651a",
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "unique_alias_target"
+      ],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "attach_alias_candidate"
+      ],
+      "class_label": "approved_alias",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "attach_alias_candidate"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_calibration_approved_alias",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "unique_alias_target"
+      ],
+      "resolution_packet_sha256": "a799dd1b1aa0a22087606cb6efadce75cf50c6348ab5ec2c88b9f7bb13f043e3",
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "cross_audience_candidate_collision"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [
+        "reject"
+      ],
+      "class_label": "blocked_policy",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [
+        "reject"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_calibration_blocked_policy",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "cross_audience_candidate_collision"
+      ],
+      "resolution_packet_sha256": "5efcb0b7f2d3dfdd5ba1f71936211e25c4d5984fec953695950dd2e6f9f5ebc2",
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_contradiction_count": 1,
+      "actual_explanation_signals": [
+        "contradiction_candidate"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [],
+      "class_label": "contradiction_without_identity",
+      "error_codes": [],
+      "expected_contradiction_count": 1,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [],
+      "explanation_pass": true,
+      "item_id": "gold_calibration_contradiction_without_identity",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "contradiction_candidate"
+      ],
+      "resolution_packet_sha256": "1d51b04dc1010b22e4591b9452d10483493677407ba6bf4bd87f8da32524cdd4",
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "within_batch_exact_label_or_explicit_hint"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [
+        "probable_duplicate"
+      ],
+      "class_label": "duplicate",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [
+        "probable_duplicate"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_calibration_duplicate",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "within_batch_exact_label_or_explicit_hint"
+      ],
+      "resolution_packet_sha256": "6e7a908f8edef88fe63760c641be52189c379afe4bf88dbd2547b9f95769b815",
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "exact_existing_match"
+      ],
+      "class_label": "exact_match",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "exact_existing_match"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_calibration_exact_match",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "resolution_packet_sha256": "9b722dad638ad5dd8add5ac1ed08d0904f4030bd1cbffbd448f0cf05f52536cc",
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "near_match_distinct",
+      "error_codes": [
+        "explanation_signal_gap"
+      ],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "explanation_pass": false,
+      "item_id": "gold_calibration_near_match_distinct",
+      "missing_explanation_signals": [
+        "near_match_distinction"
+      ],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "near_match_distinction"
+      ],
+      "resolution_packet_sha256": "121f371868401b9ebc4d8f1587d26893b8a5d161fa5ee5c07ebca74004ba5a54",
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "parent_child_distinct",
+      "error_codes": [
+        "explanation_signal_gap"
+      ],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "explanation_pass": false,
+      "item_id": "gold_calibration_parent_child_distinct",
+      "missing_explanation_signals": [
+        "parent_child_distinction"
+      ],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "parent_child_distinction"
+      ],
+      "resolution_packet_sha256": "221aa864d64d6c2926c7b356cb429ba995644af48b498a2315dee13383c372b5",
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "class_label": "polysemy_ambiguous",
+      "error_codes": [
+        "explanation_signal_gap"
+      ],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "explanation_pass": false,
+      "item_id": "gold_calibration_polysemy_ambiguous",
+      "missing_explanation_signals": [
+        "polysemy_collision"
+      ],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "polysemy_collision"
+      ],
+      "resolution_packet_sha256": "cc67998f93992c5035bd5e11a087978bd37e163affff9abcecc83c8d37b3d18d",
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "supersession_without_identity_collapse",
+      "error_codes": [
+        "explanation_signal_gap"
+      ],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "explanation_pass": false,
+      "item_id": "gold_calibration_supersession_without_identity_collapse",
+      "missing_explanation_signals": [
+        "supersession_distinction"
+      ],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "supersession_distinction"
+      ],
+      "resolution_packet_sha256": "e6f5286227338c713524d5ad4b5c57b6fb9e2bce5e474f78fd711b81f4f7b5e5",
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "class_label": "ambiguous_insufficient_evidence",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_final_ambiguous_insufficient_evidence",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "resolution_packet_sha256": "0f803eecc86709e6c999a8d3c57c10696c71a6c9f004590f1dd23962a5243cc6",
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "unique_alias_target"
+      ],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "attach_alias_candidate"
+      ],
+      "class_label": "approved_alias",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "attach_alias_candidate"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_final_approved_alias",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "unique_alias_target"
+      ],
+      "resolution_packet_sha256": "d2b3947de4f71d7c8b53471ad5251752a34b91791d4f5728408bdd56f1b6f638",
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "audience_acl_mismatch",
+        "exact_normalized_title"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [
+        "reject"
+      ],
+      "class_label": "blocked_policy",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [
+        "reject"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_final_blocked_policy",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "audience_acl_mismatch"
+      ],
+      "resolution_packet_sha256": "ff2b49f099e50a4809bca06ae8c649327ec643096402ff93ca7d61afee74f6e0",
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_contradiction_count": 1,
+      "actual_explanation_signals": [
+        "contradiction_candidate"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [],
+      "class_label": "contradiction_without_identity",
+      "error_codes": [],
+      "expected_contradiction_count": 1,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [],
+      "explanation_pass": true,
+      "item_id": "gold_final_contradiction_without_identity",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "contradiction_candidate"
+      ],
+      "resolution_packet_sha256": "c37d90bd745cb983daa52168367cdb08b2ecf1da931936bdc832ec68531a80a3",
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "within_batch_exact_label_or_explicit_hint"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [
+        "probable_duplicate"
+      ],
+      "class_label": "duplicate",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [
+        "probable_duplicate"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_final_duplicate",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "within_batch_exact_label_or_explicit_hint"
+      ],
+      "resolution_packet_sha256": "5e1c9f53c07cce1e6ef61d796ba893760186cfd55c8605b698875826c29a782a",
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "exact_existing_match"
+      ],
+      "class_label": "exact_match",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "exact_existing_match"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_final_exact_match",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "resolution_packet_sha256": "80328e720716d1f15ca121009e21201340f5d9b8ac99ba557eaf539cc998c13f",
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "near_match_distinct",
+      "error_codes": [
+        "explanation_signal_gap"
+      ],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "explanation_pass": false,
+      "item_id": "gold_final_near_match_distinct",
+      "missing_explanation_signals": [
+        "near_match_distinction"
+      ],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "near_match_distinction"
+      ],
+      "resolution_packet_sha256": "1426af9c790b7ba17c6b302e136e0597689a5ec69f99b1939108bf011c760788",
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "parent_child_distinct",
+      "error_codes": [
+        "explanation_signal_gap"
+      ],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "explanation_pass": false,
+      "item_id": "gold_final_parent_child_distinct",
+      "missing_explanation_signals": [
+        "parent_child_distinction"
+      ],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "parent_child_distinction"
+      ],
+      "resolution_packet_sha256": "45b78c6525fc00b529729455672c3612946dcc7581982f0faf4b30bfaba9374a",
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "class_label": "polysemy_ambiguous",
+      "error_codes": [
+        "explanation_signal_gap"
+      ],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "explanation_pass": false,
+      "item_id": "gold_final_polysemy_ambiguous",
+      "missing_explanation_signals": [
+        "polysemy_collision"
+      ],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "polysemy_collision"
+      ],
+      "resolution_packet_sha256": "dbc7ee049f74f24014b890d9a28e4af81c9a45ea311cde55ddf91b951a28c1b2",
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "supersession_without_identity_collapse",
+      "error_codes": [
+        "explanation_signal_gap"
+      ],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "explanation_pass": false,
+      "item_id": "gold_final_supersession_without_identity_collapse",
+      "missing_explanation_signals": [
+        "supersession_distinction"
+      ],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "supersession_distinction"
+      ],
+      "resolution_packet_sha256": "38cc81830060e7931e743eea07b26ea92d9ec471b32fc37c98e550eb664eb8b0",
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "alias_target_or_ownership_ambiguous"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "class_label": "ambiguous_insufficient_evidence",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_train_ambiguous_insufficient_evidence",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "alias_target_or_ownership_ambiguous"
+      ],
+      "resolution_packet_sha256": "5c6084701a214b788dbb087ad92f76bf00a2f21d2502ca05f7f2a6c4e3efdcd7",
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "unique_alias_target"
+      ],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "attach_alias_candidate"
+      ],
+      "class_label": "approved_alias",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "attach_alias_candidate"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_train_approved_alias",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "unique_alias_target"
+      ],
+      "resolution_packet_sha256": "e794f9a7f8750bcfa1373314fe4cc38ea2844efd61a3a48672cd9fd4987605eb",
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "audience_acl_mismatch",
+        "exact_normalized_title"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [
+        "reject"
+      ],
+      "class_label": "blocked_policy",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [
+        "reject"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_train_blocked_policy",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "audience_acl_mismatch"
+      ],
+      "resolution_packet_sha256": "2275a57bb4499d8e0303eba3f8d9888d327f7961fff8ac0178188ddd3970b081",
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_contradiction_count": 1,
+      "actual_explanation_signals": [
+        "contradiction_candidate"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [],
+      "class_label": "contradiction_without_identity",
+      "error_codes": [],
+      "expected_contradiction_count": 1,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [],
+      "explanation_pass": true,
+      "item_id": "gold_train_contradiction_without_identity",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "contradiction_candidate"
+      ],
+      "resolution_packet_sha256": "e2b737738af52bf8af15bfe68da6dc9374ba7a27b6a82f27ab72bfb3b989c05b",
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "within_batch_exact_label_or_explicit_hint"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [
+        "probable_duplicate"
+      ],
+      "class_label": "duplicate",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [
+        "probable_duplicate"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_train_duplicate",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "within_batch_exact_label_or_explicit_hint"
+      ],
+      "resolution_packet_sha256": "33526b25ac96ff4a19bc043cd48aa6ceb40809b2f34505673102521b507e8a9a",
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "exact_existing_match"
+      ],
+      "class_label": "exact_match",
+      "error_codes": [],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "exact_existing_match"
+      ],
+      "explanation_pass": true,
+      "item_id": "gold_train_exact_match",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "resolution_packet_sha256": "203a550032cdd4edeafe90902443a14de88ea1d9375fdbe590808f6b45cb804f",
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "near_match_distinct",
+      "error_codes": [
+        "explanation_signal_gap"
+      ],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "explanation_pass": false,
+      "item_id": "gold_train_near_match_distinct",
+      "missing_explanation_signals": [
+        "near_match_distinction"
+      ],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "near_match_distinction"
+      ],
+      "resolution_packet_sha256": "0b35cf55ffe28fa2fa932c0893a0a3fdaee87e39572c3ab5e2c990c54cfe83a9",
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "parent_child_distinct",
+      "error_codes": [
+        "explanation_signal_gap"
+      ],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "explanation_pass": false,
+      "item_id": "gold_train_parent_child_distinct",
+      "missing_explanation_signals": [
+        "parent_child_distinction"
+      ],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "parent_child_distinction"
+      ],
+      "resolution_packet_sha256": "f5d64d00e404a3db78e25a189b82a6e240336e1d8072b16fe75fe1e84b7ee629",
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "actual_packaging_blocked": true,
+      "actual_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "class_label": "polysemy_ambiguous",
+      "error_codes": [
+        "explanation_signal_gap"
+      ],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": true,
+      "expected_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "explanation_pass": false,
+      "item_id": "gold_train_polysemy_ambiguous",
+      "missing_explanation_signals": [
+        "polysemy_collision"
+      ],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "polysemy_collision"
+      ],
+      "resolution_packet_sha256": "a9e976e8471b5b719c754e0fe6c9456f4accadea50fc20153f5de0765322adec",
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_contradiction_count": 0,
+      "actual_explanation_signals": [],
+      "actual_packaging_blocked": false,
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "supersession_without_identity_collapse",
+      "error_codes": [
+        "explanation_signal_gap"
+      ],
+      "expected_contradiction_count": 0,
+      "expected_packaging_blocked": false,
+      "expected_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "explanation_pass": false,
+      "item_id": "gold_train_supersession_without_identity_collapse",
+      "missing_explanation_signals": [
+        "supersession_distinction"
+      ],
+      "no_false_merge": true,
+      "required_explanation_signals": [
+        "supersession_distinction"
+      ],
+      "resolution_packet_sha256": "b9bdc35e0ac6399ea43a93955cc8f2f1d7d0c2b0d7109966ca097cfc35e14521",
+      "semantic_pass": true,
+      "split": "train"
+    }
+  ],
+  "schema_version": "knowledge-engine-m25-identity-baseline-report/v1",
+  "suite_approval_status": "approved_by_daniel",
+  "suite_id": "m25-concept-identity-gold-v1",
+  "suite_sha256": "e52216c4fffd03b5cf4cbd68c049ca2fc688e539743761768d08a3348572a3e6"
+}
