@@ -1,0 +1,22 @@
+{
+  "benchmark_fixtures_reusable_as_live_source": false,
+  "blockers": [
+    "real_terminal_item_decision_population_missing",
+    "exact_live_source_baseline_missing",
+    "exact_live_source_plan_approval_missing",
+    "open_source_pr_missing",
+    "exact_source_pr_head_merge_authority_missing"
+  ],
+  "candidate_release_build_permitted": false,
+  "gate_sha256": "d9992e224b8ad026bf1c9fa1b36b9086b5bc6a8e94dc1344dab66c1aac6914d0",
+  "m25_7_benchmark_closure_merge_sha": "4862761c2b90fbe5074f964bc234c42cce5bb5d5",
+  "m25_7_executor_merge_sha": "209608c3821f2958b5238659e98a8f9fb7bd7840",
+  "next_legal_action": "create_future_real_pilot_candidate_batch_under_separate_authority",
+  "predecessor_self_sha256": "4e0fa49f65f9a558a53038741048d1e5c5d8a21c78a660289c790de4d829b68b",
+  "predecessor_status": "m25_7_benchmark_batch_closed_no_write",
+  "production_pointer_mutation_permitted": false,
+  "production_release_mutation_permitted": false,
+  "schema_version": "knowledge-engine-m25-8-readiness-gate/v1",
+  "source_pr_merge_permitted": false,
+  "status": "blocked_awaiting_real_approved_source_pr"
+}
