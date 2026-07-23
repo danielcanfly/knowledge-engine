@@ -1,0 +1,723 @@
+{
+  "authority": "candidate_only",
+  "baseline_report_sha256": "1cf1c8a245d800d7eb091cf15ca4fe203958a1f98969da0fdd570a4bebde83b8",
+  "canonical_knowledge": false,
+  "denominators": {
+    "by_class": {
+      "ambiguous_insufficient_evidence": 3,
+      "approved_alias": 3,
+      "blocked_policy": 3,
+      "contradiction_without_identity": 3,
+      "duplicate": 3,
+      "exact_match": 3,
+      "near_match_distinct": 3,
+      "parent_child_distinct": 3,
+      "polysemy_ambiguous": 3,
+      "supersession_without_identity_collapse": 3
+    },
+    "by_split": {
+      "calibration": 10,
+      "final": 10,
+      "train": 10
+    },
+    "total": 30
+  },
+  "final_split_used_for_calibration": false,
+  "gate": {
+    "explanation_coverage_one": true,
+    "final_split_pass_one": true,
+    "final_split_remained_held_out": true,
+    "semantic_accuracy_one": true,
+    "zero_critical_false_merges": true,
+    "zero_destructive_decisions": true
+  },
+  "m25_6_authorized": false,
+  "metrics": {
+    "combined_governance_pass_ci95": {
+      "lower": 0.886487,
+      "upper": 1.0
+    },
+    "combined_governance_pass_rate": 1.0,
+    "critical_false_merge_risk_count": 0,
+    "destructive_decision_count": 0,
+    "explanation_signal_coverage": 1.0,
+    "false_merge_count": 0,
+    "final_split_governance_pass_rate": 1.0,
+    "per_class_governance_pass_rate": {
+      "ambiguous_insufficient_evidence": 1.0,
+      "approved_alias": 1.0,
+      "blocked_policy": 1.0,
+      "contradiction_without_identity": 1.0,
+      "duplicate": 1.0,
+      "exact_match": 1.0,
+      "near_match_distinct": 1.0,
+      "parent_child_distinct": 1.0,
+      "polysemy_ambiguous": 1.0,
+      "supersession_without_identity_collapse": 1.0
+    },
+    "per_split_governance_pass_rate": {
+      "calibration": 1.0,
+      "final": 1.0,
+      "train": 1.0
+    },
+    "relation_candidate_count_by_type": {
+      "narrower_than": 3,
+      "supersedes": 3
+    },
+    "semantic_decision_accuracy": 1.0
+  },
+  "policy_sha256": "97215c67c1a1d7663fe9ffdbb5ad680c41ec3502dfbd30b7c53973fbdf38811e",
+  "predecessor_status": "m25_4_gold_benchmark_accepted",
+  "production_authority": false,
+  "report_sha256": "701d3da816c29bc3d468515bf9996d53123d6ec79944cfaf1fea96ef2c3b5bd0",
+  "results": [
+    {
+      "actual_explanation_signals": [
+        "exact_bilingual_term",
+        "polysemy_collision"
+      ],
+      "actual_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "class_label": "ambiguous_insufficient_evidence",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_calibration_ambiguous_insufficient_evidence",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "exact_bilingual_term"
+      ],
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_explanation_signals": [
+        "unique_alias_target"
+      ],
+      "actual_resolution_outcomes": [
+        "attach_alias_candidate"
+      ],
+      "class_label": "approved_alias",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_calibration_approved_alias",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "unique_alias_target"
+      ],
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_explanation_signals": [
+        "cross_audience_candidate_collision"
+      ],
+      "actual_resolution_outcomes": [
+        "reject"
+      ],
+      "class_label": "blocked_policy",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_calibration_blocked_policy",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "cross_audience_candidate_collision"
+      ],
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_explanation_signals": [
+        "contradiction_candidate"
+      ],
+      "actual_resolution_outcomes": [],
+      "class_label": "contradiction_without_identity",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_calibration_contradiction_without_identity",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "contradiction_candidate"
+      ],
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_explanation_signals": [
+        "within_batch_exact_label_or_explicit_hint"
+      ],
+      "actual_resolution_outcomes": [
+        "probable_duplicate"
+      ],
+      "class_label": "duplicate",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_calibration_duplicate",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "within_batch_exact_label_or_explicit_hint"
+      ],
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "actual_resolution_outcomes": [
+        "exact_existing_match"
+      ],
+      "class_label": "exact_match",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_calibration_exact_match",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_explanation_signals": [
+        "near_match_distinction"
+      ],
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "near_match_distinct",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_calibration_near_match_distinct",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "near_match_distinction"
+      ],
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_explanation_signals": [
+        "parent_child_distinction"
+      ],
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "parent_child_distinct",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_calibration_parent_child_distinct",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [
+        "narrower_than"
+      ],
+      "required_explanation_signals": [
+        "parent_child_distinction"
+      ],
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_explanation_signals": [
+        "exact_normalized_title",
+        "polysemy_collision"
+      ],
+      "actual_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "class_label": "polysemy_ambiguous",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_calibration_polysemy_ambiguous",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "polysemy_collision"
+      ],
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_explanation_signals": [
+        "supersession_distinction"
+      ],
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "supersession_without_identity_collapse",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_calibration_supersession_without_identity_collapse",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [
+        "supersedes"
+      ],
+      "required_explanation_signals": [
+        "supersession_distinction"
+      ],
+      "semantic_pass": true,
+      "split": "calibration"
+    },
+    {
+      "actual_explanation_signals": [
+        "exact_normalized_title",
+        "polysemy_collision"
+      ],
+      "actual_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "class_label": "ambiguous_insufficient_evidence",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_final_ambiguous_insufficient_evidence",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_explanation_signals": [
+        "unique_alias_target"
+      ],
+      "actual_resolution_outcomes": [
+        "attach_alias_candidate"
+      ],
+      "class_label": "approved_alias",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_final_approved_alias",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "unique_alias_target"
+      ],
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_explanation_signals": [
+        "audience_acl_mismatch",
+        "exact_normalized_title"
+      ],
+      "actual_resolution_outcomes": [
+        "reject"
+      ],
+      "class_label": "blocked_policy",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_final_blocked_policy",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "audience_acl_mismatch"
+      ],
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_explanation_signals": [
+        "contradiction_candidate"
+      ],
+      "actual_resolution_outcomes": [],
+      "class_label": "contradiction_without_identity",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_final_contradiction_without_identity",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "contradiction_candidate"
+      ],
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_explanation_signals": [
+        "within_batch_exact_label_or_explicit_hint"
+      ],
+      "actual_resolution_outcomes": [
+        "probable_duplicate"
+      ],
+      "class_label": "duplicate",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_final_duplicate",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "within_batch_exact_label_or_explicit_hint"
+      ],
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "actual_resolution_outcomes": [
+        "exact_existing_match"
+      ],
+      "class_label": "exact_match",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_final_exact_match",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_explanation_signals": [
+        "near_match_distinction"
+      ],
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "near_match_distinct",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_final_near_match_distinct",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "near_match_distinction"
+      ],
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_explanation_signals": [
+        "parent_child_distinction"
+      ],
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "parent_child_distinct",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_final_parent_child_distinct",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [
+        "narrower_than"
+      ],
+      "required_explanation_signals": [
+        "parent_child_distinction"
+      ],
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_explanation_signals": [
+        "exact_normalized_title",
+        "polysemy_collision"
+      ],
+      "actual_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "class_label": "polysemy_ambiguous",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_final_polysemy_ambiguous",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "polysemy_collision"
+      ],
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_explanation_signals": [
+        "supersession_distinction"
+      ],
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "supersession_without_identity_collapse",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_final_supersession_without_identity_collapse",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [
+        "supersedes"
+      ],
+      "required_explanation_signals": [
+        "supersession_distinction"
+      ],
+      "semantic_pass": true,
+      "split": "final"
+    },
+    {
+      "actual_explanation_signals": [
+        "alias_target_or_ownership_ambiguous"
+      ],
+      "actual_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "class_label": "ambiguous_insufficient_evidence",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_train_ambiguous_insufficient_evidence",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "alias_target_or_ownership_ambiguous"
+      ],
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_explanation_signals": [
+        "unique_alias_target"
+      ],
+      "actual_resolution_outcomes": [
+        "attach_alias_candidate"
+      ],
+      "class_label": "approved_alias",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_train_approved_alias",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "unique_alias_target"
+      ],
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_explanation_signals": [
+        "audience_acl_mismatch",
+        "exact_normalized_title"
+      ],
+      "actual_resolution_outcomes": [
+        "reject"
+      ],
+      "class_label": "blocked_policy",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_train_blocked_policy",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "audience_acl_mismatch"
+      ],
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_explanation_signals": [
+        "contradiction_candidate"
+      ],
+      "actual_resolution_outcomes": [],
+      "class_label": "contradiction_without_identity",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_train_contradiction_without_identity",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "contradiction_candidate"
+      ],
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_explanation_signals": [
+        "within_batch_exact_label_or_explicit_hint"
+      ],
+      "actual_resolution_outcomes": [
+        "probable_duplicate"
+      ],
+      "class_label": "duplicate",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_train_duplicate",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "within_batch_exact_label_or_explicit_hint"
+      ],
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "actual_resolution_outcomes": [
+        "exact_existing_match"
+      ],
+      "class_label": "exact_match",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_train_exact_match",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "exact_normalized_title"
+      ],
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_explanation_signals": [
+        "near_match_distinction"
+      ],
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "near_match_distinct",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_train_near_match_distinct",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "near_match_distinction"
+      ],
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_explanation_signals": [
+        "parent_child_distinction"
+      ],
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "parent_child_distinct",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_train_parent_child_distinct",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [
+        "narrower_than"
+      ],
+      "required_explanation_signals": [
+        "parent_child_distinction"
+      ],
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_explanation_signals": [
+        "exact_normalized_title",
+        "polysemy_collision"
+      ],
+      "actual_resolution_outcomes": [
+        "ambiguous"
+      ],
+      "class_label": "polysemy_ambiguous",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_train_polysemy_ambiguous",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [],
+      "required_explanation_signals": [
+        "polysemy_collision"
+      ],
+      "semantic_pass": true,
+      "split": "train"
+    },
+    {
+      "actual_explanation_signals": [
+        "supersession_distinction"
+      ],
+      "actual_resolution_outcomes": [
+        "distinct_new_candidate"
+      ],
+      "class_label": "supersession_without_identity_collapse",
+      "critical_false_merge_risk_count": 0,
+      "destructive_decision_count": 0,
+      "explanation_pass": true,
+      "item_id": "gold_train_supersession_without_identity_collapse",
+      "missing_explanation_signals": [],
+      "no_false_merge": true,
+      "relation_candidate_types": [
+        "supersedes"
+      ],
+      "required_explanation_signals": [
+        "supersession_distinction"
+      ],
+      "semantic_pass": true,
+      "split": "train"
+    }
+  ],
+  "review_required": true,
+  "schema_version": "knowledge-engine-m25-calibrated-identity-report/v1",
+  "status": "m25_5_identity_governance_candidate",
+  "suite_id": "m25-concept-identity-gold-v1",
+  "suite_sha256": "e52216c4fffd03b5cf4cbd68c049ca2fc688e539743761768d08a3348572a3e6"
+}

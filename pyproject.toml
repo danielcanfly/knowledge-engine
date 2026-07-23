@@ -45,6 +45,7 @@ knowledge-m23-ingestion-plan = "knowledge_engine.m23_qdrant_pilot_ingestion_cli:
 knowledge-m25-admission = "knowledge_engine.m25_intake_orchestrator_cli:main"
 knowledge-m25-extraction = "knowledge_engine.m25_extraction_cli:main"
 knowledge-m25-identity-benchmark = "knowledge_engine.m25_identity_benchmark_cli:main"
+knowledge-m25-identity-governance = "knowledge_engine.m25_identity_governance_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]

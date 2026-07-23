@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-calibrated-identity-governance-v1.schema.json",
+  "title": "M25.5 calibrated identity governance packet",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "policy_sha256",
+    "resolver_packet_sha256",
+    "case_sha256",
+    "resolution_count",
+    "contradiction_count",
+    "critical_false_merge_risk_count",
+    "destructive_decision_count",
+    "packaging_blocked",
+    "explanation_signals",
+    "governed_resolutions",
+    "governed_tag_count",
+    "governed_tag_candidates",
+    "governed_tags_sha256",
+    "relation_candidate_count",
+    "relation_candidates",
+    "tag_governance_preserved",
+    "relation_governance_preserved",
+    "authority",
+    "review_required",
+    "canonical_knowledge",
+    "production_authority",
+    "governance_packet_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-engine-m25-calibrated-identity-governance/v1"
+    },
+    "policy_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "resolver_packet_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "case_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "resolution_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000
+    },
+    "contradiction_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000
+    },
+    "critical_false_merge_risk_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "destructive_decision_count": {
+      "const": 0
+    },
+    "packaging_blocked": {
+      "type": "boolean"
+    },
+    "explanation_signals": {
+      "type": "array",
+      "uniqueItems": true
+    },
+    "governed_resolutions": {
+      "type": "array",
+      "maxItems": 1000
+    },
+    "relation_candidate_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000
+    },
+    "relation_candidates": {
+      "type": "array",
+      "maxItems": 1000
+    },
+    "tag_governance_preserved": {
+      "const": true
+    },
+    "relation_governance_preserved": {
+      "const": true
+    },
+    "authority": {
+      "const": "candidate_only"
+    },
+    "review_required": {
+      "const": true
+    },
+    "canonical_knowledge": {
+      "const": false
+    },
+    "production_authority": {
+      "const": false
+    },
+    "governance_packet_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "governed_tag_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000
+    },
+    "governed_tag_candidates": {
+      "type": "array",
+      "maxItems": 1000
+    },
+    "governed_tags_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "additionalProperties": false
+}

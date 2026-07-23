@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-identity-calibration-policy-v1.schema.json",
+  "title": "M25.5 conservative identity calibration policy",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "policy_id",
+    "predecessor_status",
+    "suite_id",
+    "suite_sha256",
+    "baseline_report_sha256",
+    "calibration",
+    "held_out_evaluation",
+    "merge_gate",
+    "ranking_weights",
+    "explanation_rules",
+    "relation_governance",
+    "authority",
+    "review_required",
+    "canonical_knowledge",
+    "production_authority",
+    "m25_6_authorized",
+    "policy_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-identity-calibration-policy/v1"},
+    "policy_id": {"const": "m25-5-conservative-identity-governance-v1"},
+    "predecessor_status": {"const": "m25_4_gold_benchmark_accepted"},
+    "suite_id": {"type": "string", "minLength": 1},
+    "suite_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "baseline_report_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "calibration": {
+      "type": "object",
+      "required": ["splits", "item_ids", "item_count", "final_split_used"],
+      "properties": {
+        "splits": {"const": ["calibration", "train"]},
+        "item_ids": {"type": "array", "minItems": 20, "maxItems": 20, "uniqueItems": true},
+        "item_count": {"const": 20},
+        "final_split_used": {"const": false}
+      }
+    },
+    "held_out_evaluation": {
+      "type": "object",
+      "required": ["split", "item_ids", "item_count", "may_change_policy"],
+      "properties": {
+        "split": {"const": "final"},
+        "item_ids": {"type": "array", "minItems": 10, "maxItems": 10, "uniqueItems": true},
+        "item_count": {"const": 10},
+        "may_change_policy": {"const": false}
+      }
+    },
+    "merge_gate": {
+      "type": "object",
+      "required": [
+        "critical_false_merge_limit",
+        "lexical_or_tag_only_merge_permitted",
+        "ambiguous_destructive_action_permitted",
+        "automatic_canonical_write_permitted"
+      ],
+      "properties": {
+        "critical_false_merge_limit": {"const": 0},
+        "lexical_or_tag_only_merge_permitted": {"const": false},
+        "ambiguous_destructive_action_permitted": {"const": false},
+        "automatic_canonical_write_permitted": {"const": false}
+      }
+    },
+    "ranking_weights": {"type": "object"},
+    "explanation_rules": {"type": "object"},
+    "relation_governance": {"type": "object"},
+    "authority": {"const": "candidate_only"},
+    "review_required": {"const": true},
+    "canonical_knowledge": {"const": false},
+    "production_authority": {"const": false},
+    "m25_6_authorized": {"const": false},
+    "policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}
