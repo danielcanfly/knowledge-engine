@@ -39,10 +39,20 @@ jobs:
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    environment: m23-r3-diagnostic
     env:
       GH_TOKEN: ${{ github.token }}
       TARGET_SHA: 52d5c2a1284c05f326a1c6cfa6f31c093756a7f2
       TARGET_WORKFLOW: M25.9 Blog Full-Population Candidate Pilot
+      SECRET_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
+      SECRET_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
+      SECRET_ACCESS_READ_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_READ_TOKEN }}
+      SECRET_PAGES_ACCESS_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_ACCESS_TOKEN }}
+      SECRET_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN }}
+      SECRET_ACCESS_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_TOKEN }}
+      SECRET_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+      SECRET_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SECRET_CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
     steps:
       - name: Locate exact existing push run
         run: |
@@ -91,3 +101,33 @@ jobs:
             -f description="$description" \
             -f target_url="$url" >/dev/null
           printf '%s\n' "$job_summary"
+      - name: Publish effective secret-name presence only
+        run: |
+          set -euo pipefail
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          publish_presence() {
+            label="$1"
+            value="$2"
+            if test -n "$value"; then
+              state='success'
+              description='present in effective secret context'
+            else
+              state='failure'
+              description='absent from effective secret context'
+            fi
+            gh api --method POST \
+              "repos/$GITHUB_REPOSITORY/statuses/$TARGET_SHA" \
+              -f state="$state" \
+              -f context="m25-9-secret/$label" \
+              -f description="$description" \
+              -f target_url="$run_url" >/dev/null
+          }
+          publish_presence CLOUDFLARE_PAGES_TOKEN "$SECRET_PAGES_TOKEN"
+          publish_presence CLOUDFLARE_WORKERS_TOKEN "$SECRET_WORKERS_TOKEN"
+          publish_presence CLOUDFLARE_ACCESS_READ_TOKEN "$SECRET_ACCESS_READ_TOKEN"
+          publish_presence CLOUDFLARE_PAGES_ACCESS_TOKEN "$SECRET_PAGES_ACCESS_TOKEN"
+          publish_presence CLOUDFLARE_DEPLOY_TOKEN "$SECRET_DEPLOY_TOKEN"
+          publish_presence CLOUDFLARE_ACCESS_TOKEN "$SECRET_ACCESS_TOKEN"
+          publish_presence CLOUDFLARE_WORKERS_API_TOKEN "$SECRET_WORKERS_API_TOKEN"
+          publish_presence CLOUDFLARE_API_TOKEN "$SECRET_CLOUDFLARE_API_TOKEN"
+          publish_presence CF_API_TOKEN "$SECRET_CF_API_TOKEN"
