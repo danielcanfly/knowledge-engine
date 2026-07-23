@@ -276,11 +276,14 @@ def partition_by_groups(
     for index, (_, members) in enumerate(ordered):
         target = batch_a if index in selected_indices else batch_b
         target.extend(members)
-    sort_key = lambda item: (
-        item["series_title"].casefold(),
-        item["series_order"] if item["series_order"] is not None else 10**9,
-        item["slug"],
-    )
+
+    def sort_key(item: dict[str, Any]) -> tuple[str, int, str]:
+        return (
+            item["series_title"].casefold(),
+            item["series_order"] if item["series_order"] is not None else 10**9,
+            item["slug"],
+        )
+
     return sorted(batch_a, key=sort_key), sorted(batch_b, key=sort_key), selected_groups
 
 
