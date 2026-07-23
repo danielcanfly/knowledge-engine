@@ -20,7 +20,7 @@ jobs:
           python-version: '3.11'
       - name: Repair exact artifact identities
         env:
-          EXPECTED_HEAD: 3cf7c6cc3ab927d0c7e95b4971f48fb0f6651dde
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
           HEAD_BRANCH: ${{ github.head_ref }}
         run: |
           set -euo pipefail
