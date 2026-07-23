@@ -24,6 +24,7 @@ dev = [
   "pytest>=8.3,<9",
   "pytest-cov>=6,<7",
   "ruff>=0.9,<1",
+  "jsonschema>=4.23,<5",
 ]
 
 [project.scripts]
@@ -46,6 +47,7 @@ knowledge-m25-admission = "knowledge_engine.m25_intake_orchestrator_cli:main"
 knowledge-m25-extraction = "knowledge_engine.m25_extraction_cli:main"
 knowledge-m25-identity-benchmark = "knowledge_engine.m25_identity_benchmark_cli:main"
 knowledge-m25-identity-governance = "knowledge_engine.m25_identity_governance_cli:main"
+knowledge-m25-review-surface = "knowledge_engine.m25_review_surface_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]
@@ -64,6 +66,7 @@ src = ["src", "tests", "scripts"]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
+"src/knowledge_engine/m25_review_surface.py" = ["B008", "E501"]
 "scripts/m10_verify_production_baseline.py" = ["B008", "E501"]
 "src/knowledge_engine/api.py" = ["B008"]
 "src/knowledge_engine/compiler_source_pr_package_v1.py" = ["E501", "UP012"]

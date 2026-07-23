@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-review-decision-request-v1.schema.json",
+  "title": "M25.6 decision request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "batch_sha256", "review_item_id", "expected_review_state_sha256", "expected_ledger_head_sha256", "reviewer", "action", "rationale", "evidence_reviewed", "comparison_reviewed", "diff_reviewed", "mapping_target", "edited_payload", "split_payload", "decided_at"],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-6-decision-request/v1"},
+    "batch_sha256": {"pattern": "^[0-9a-f]{64}$"},
+    "review_item_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "expected_review_state_sha256": {"pattern": "^[0-9a-f]{64}$"},
+    "expected_ledger_head_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "reviewer": {"type": "string", "minLength": 3, "maxLength": 128},
+    "action": {"enum": ["approve", "map", "edit", "split", "reject", "defer"]},
+    "rationale": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "evidence_reviewed": {"type": "boolean"},
+    "comparison_reviewed": {"type": "boolean"},
+    "diff_reviewed": {"type": "boolean"},
+    "mapping_target": {"type": ["string", "null"], "maxLength": 240},
+    "edited_payload": {"type": ["object", "null"]},
+    "split_payload": {"type": ["array", "null"], "items": {"type": "object"}},
+    "decided_at": {"type": ["string", "null"]}
+  }
+}
