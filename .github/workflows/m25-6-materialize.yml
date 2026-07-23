@@ -50,18 +50,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Validate implementation
+      - name: Install exact dependencies
         run: |
-          set -euo pipefail
           python -m pip install --disable-pip-version-check -e '.[dev]'
           python -m pip install --disable-pip-version-check 'jsonschema>=4.23,<5'
+      - name: Lint M25.6
+        run: |
           files=(src/knowledge_engine/m25_review_surface.py src/knowledge_engine/m25_review_surface_cli.py src/knowledge_engine/m25_review_demo.py tests/test_m25_6_review_surface.py tests/test_m25_6_review_surface_contracts.py scripts/m25_6_browser_acceptance.py)
           python -m ruff check --fix "${files[@]}"
           python -m ruff check "${files[@]}"
+      - name: Test M25.6 and inherited M25.5
+        run: |
           python -m pytest -q tests/test_m25_6_review_surface.py tests/test_m25_6_review_surface_contracts.py tests/test_m25_5_identity_governance.py tests/test_m25_5_identity_governance_contracts.py tests/test_m25_5_reconciliation.py
+      - name: Rebuild deterministic review batch
+        run: |
           mkdir -p /tmp/m25-6
           knowledge-m25-review-surface build --suite pilot/m25/m25-4-gold-suite.json --baseline pilot/m25/m25-4-baseline-report.json --policy pilot/m25/m25-5-calibration-policy.json --report pilot/m25/m25-5-calibrated-report.json --acceptance pilot/m25/m25-5-acceptance.json --output /tmp/m25-6/review-batch.json
           cmp /tmp/m25-6/review-batch.json pilot/m25/m25-6-review-batch.json
+      - name: Enforce candidate-only readiness
+        run: |
           python - <<'PY'
           import json
           from pathlib import Path
@@ -76,7 +83,9 @@ jobs:
           assert not g['source_write_permitted'] and not g['github_pr_creation_permitted']
           assert not g['m25_7_authorized'] and not any(g['protected_mutations'].values())
           PY
-          python -m compileall -q "${files[@]}"
+      - name: Compile M25.6
+        run: |
+          python -m compileall -q src/knowledge_engine/m25_review_surface.py src/knowledge_engine/m25_review_surface_cli.py src/knowledge_engine/m25_review_demo.py tests/test_m25_6_review_surface.py tests/test_m25_6_review_surface_contracts.py scripts/m25_6_browser_acceptance.py
       - name: Commit verified implementation
         env:
           BRANCH: ${{ github.event.pull_request.head.ref }}
