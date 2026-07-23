@@ -7,9 +7,10 @@ import os
 import re
 import shutil
 from collections import Counter
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import httpx
 
