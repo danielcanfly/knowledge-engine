@@ -37,7 +37,7 @@ from .m25_blog_candidate_release import (
     build_pack_artifacts,
     validate_pack,
 )
-from .m25_blog_pilot import GitHubClient, write_json, write_jsonl
+from .m25_blog_pilot import GitHubClient, write_json
 from .m25_blog_pilot_batch_b import build_batch_b
 from .m25_blog_series_convergence import build_converged_batch
 from .publisher import publish_release
@@ -78,6 +78,23 @@ def _write(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "".join(
+            json.dumps(
+                row,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+            for row in rows
+        ),
         encoding="utf-8",
     )
 
@@ -218,8 +235,8 @@ def materialize_pack(output: Path, token: str | None = None) -> dict[str, Any]:
         write_json(output / "batch-b-inventory.json", batch_b)
         write_json(output / "batch-a-receipt.json", receipt_a)
         write_json(output / "batch-b-receipt.json", receipt_b)
-        write_jsonl(output / "candidate-nodes.jsonl", nodes)
-        write_jsonl(output / "candidate-edges.jsonl", edges)
+        _write_jsonl(output / "candidate-nodes.jsonl", nodes)
+        _write_jsonl(output / "candidate-edges.jsonl", edges)
         if sha256_bytes((output / "candidate-nodes.jsonl").read_bytes()) != EXPECTED[
             "combined_nodes_sha256"
         ]:
