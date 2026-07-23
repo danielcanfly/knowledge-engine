@@ -29,6 +29,7 @@ def _parser() -> argparse.ArgumentParser:
 
     run = subparsers.add_parser("validate-run")
     run.add_argument("--evidence", type=Path, required=True)
+    run.add_argument("--inventory", type=Path, required=True)
     run.add_argument("--output", type=Path, required=True)
     return parser
 
@@ -41,7 +42,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "validate-inventory":
             result = validate_inventory(load_json(args.inventory))
         else:
-            result = build_run_receipt(load_json(args.evidence))
+            result = build_run_receipt(load_json(args.evidence), load_json(args.inventory))
         write_json_atomic(args.output, result)
     except KnowledgeEngineError as exc:
         print(json.dumps({"status": "blocked", "error": str(exc)}, sort_keys=True))
