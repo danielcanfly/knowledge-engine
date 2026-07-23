@@ -1,0 +1,125 @@
+{
+  "$id": "knowledge-engine/m26/retrieval-trace-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authoritative_lane": {
+      "const": "lexical"
+    },
+    "first_divergent_stage": {
+      "enum": [
+        "none",
+        "query_plan",
+        "corpus",
+        "index",
+        "candidate_recall",
+        "acl",
+        "graph",
+        "citation_locator",
+        "evidence_assembly",
+        "sufficiency"
+      ]
+    },
+    "hybrid_used": {
+      "const": false
+    },
+    "provider_called": {
+      "const": false
+    },
+    "reason_codes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "request_id": {
+      "pattern": "^m26req_[a-f0-9]{32}$",
+      "type": "string"
+    },
+    "retrieval_plan_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-retrieval-trace/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "semantic_used": {
+      "const": false
+    },
+    "stages": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "duration_ms": {
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "stage": {
+            "enum": [
+              "query_plan",
+              "candidate_recall",
+              "acl",
+              "graph",
+              "citation_locator",
+              "evidence_assembly",
+              "sufficiency"
+            ]
+          },
+          "status": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "status",
+          "count",
+          "duration_ms",
+          "reason_codes"
+        ],
+        "type": "object"
+      },
+      "maxItems": 7,
+      "minItems": 7,
+      "type": "array"
+    },
+    "synthetic": {
+      "const": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "retrieval_plan_sha256",
+    "synthetic",
+    "stages",
+    "first_divergent_stage",
+    "reason_codes",
+    "authoritative_lane",
+    "semantic_used",
+    "hybrid_used",
+    "provider_called",
+    "self_sha256"
+  ],
+  "title": "M26 Retrieval Trace",
+  "type": "object"
+}

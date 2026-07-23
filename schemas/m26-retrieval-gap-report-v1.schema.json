@@ -1,0 +1,122 @@
+{
+  "$id": "knowledge-engine/m26/retrieval-gap-report-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority": {
+      "const": "diagnostic_only"
+    },
+    "covered_facets": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "first_divergent_stage": {
+      "enum": [
+        "none",
+        "query_plan",
+        "corpus",
+        "index",
+        "candidate_recall",
+        "acl",
+        "graph",
+        "citation_locator",
+        "evidence_assembly",
+        "sufficiency"
+      ]
+    },
+    "missing_facets": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "next_action": {
+      "enum": [
+        "context_compile",
+        "clarify",
+        "repair_fixture",
+        "repair_locator",
+        "abstain"
+      ]
+    },
+    "reason_codes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "request_id": {
+      "pattern": "^m26req_[a-f0-9]{32}$",
+      "type": "string"
+    },
+    "required_facets": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_concept_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "facet_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "matched_terms": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "facet_id",
+          "expected_concept_ids",
+          "matched_terms"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "retrieval_plan_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "safe_for_context_compiler": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-retrieval-gap-report/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "retrieval_plan_sha256",
+    "required_facets",
+    "covered_facets",
+    "missing_facets",
+    "first_divergent_stage",
+    "reason_codes",
+    "next_action",
+    "authority",
+    "safe_for_context_compiler",
+    "self_sha256"
+  ],
+  "title": "M26 Retrieval Gap Report",
+  "type": "object"
+}

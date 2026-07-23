@@ -1,0 +1,39 @@
+{
+  "accepted_predecessor_status": "m26_1_architecture_authority_accepted",
+  "authority": {
+    "production_answer_serving": false,
+    "provider_calls": false,
+    "real_corpus": false,
+    "semantic_or_hybrid": false,
+    "synthetic_only": true
+  },
+  "contracts": [
+    {
+      "path": "schemas/m26-retrieval-trace-v1.schema.json",
+      "sha256": "5d65d390a00cd305f6b9c21b07cba8131d59a3bf2d886e9063048ae66613c2aa"
+    },
+    {
+      "path": "schemas/m26-retrieval-gap-report-v1.schema.json",
+      "sha256": "babcc4a0b911e560b2df0b80902742c7e23d57e29107224d7c16668ab1c193ae"
+    },
+    {
+      "path": "schemas/m26-synthetic-corpus-v1.schema.json",
+      "sha256": "32ee646c163f10dc48a57ea21a89c94444ff6ffb785795bcb22e12bf47d0d81b"
+    },
+    {
+      "path": "pilot/m26/m26-2-retrieval-policy.json",
+      "sha256": "86320fa44a34db7c429052da573349fa9cb267db37cd6b15128e3f035c0069bb"
+    },
+    {
+      "path": "pilot/m26/m26-2-synthetic-corpus.json",
+      "sha256": "7842f26d6fe66b681c482ea3860647cc45083066a0dbf97f8e0a77fd02577c2d"
+    },
+    {
+      "path": "pilot/m26/m26-2-benchmark-cases.json",
+      "sha256": "886ff20345a0702f9a0e3f80d41a071f07f3256af378e481612574fa9bf1ac06"
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-2-contract-registry/v1",
+  "self_sha256": "0b45bdf380f91f04a222d8e19dd46c2a7c7d944d7ed284e9406706c69d5e28a1",
+  "stage_id": "M26.2"
+}

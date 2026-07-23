@@ -1,0 +1,63 @@
+{
+  "$id": "knowledge-engine/m26/synthetic-corpus-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "facet_catalog": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "graph": {
+      "type": "object"
+    },
+    "graph_v2": {
+      "type": "object"
+    },
+    "lexical_index": {
+      "type": "object"
+    },
+    "provenance": {
+      "type": "object"
+    },
+    "real_corpus": {
+      "const": false
+    },
+    "release": {
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-synthetic-corpus/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "source_documents": {
+      "items": {
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "synthetic": {
+      "const": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "synthetic",
+    "real_corpus",
+    "release",
+    "lexical_index",
+    "graph",
+    "graph_v2",
+    "provenance",
+    "source_documents",
+    "facet_catalog",
+    "self_sha256"
+  ],
+  "title": "M26 Synthetic Retrieval Corpus",
+  "type": "object"
+}
