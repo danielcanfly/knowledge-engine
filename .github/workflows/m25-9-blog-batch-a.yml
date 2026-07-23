@@ -115,6 +115,50 @@ jobs:
             --output-dir /tmp/m25-9-blog-a \
             >/tmp/m25-9-blog-a/cli-output.json
 
+      - name: Capture full-population parity metrics
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('/tmp/m25-9-blog-a')
+          master = json.loads((root / 'master-inventory.json').read_text())
+          receipt = json.loads((root / 'batch-a-receipt.json').read_text())
+          metrics = {
+              'master': {
+                  'article_count': master['article_count'],
+                  'formal_series_count': master['formal_series_count'],
+                  'parent_collection_count': master['parent_collection_count'],
+                  'standalone_article_count': master['standalone_article_count'],
+                  'catalog_fallback_article_count': master['catalog_fallback_article_count'],
+                  'series_catalog_entry_count': master['series_catalog_entry_count'],
+                  'series_catalog_blob_sha': master['series_catalog_blob_sha'],
+                  'series_catalog_sha256': master['series_catalog_sha256'],
+              },
+              'receipt': {
+                  'batch_a_source_count': receipt['batch_a_source_count'],
+                  'batch_b_source_count': receipt['batch_b_source_count'],
+                  'series_node_count': receipt['series_node_count'],
+                  'article_node_count': receipt['article_node_count'],
+                  'section_node_count': receipt['section_node_count'],
+                  'node_count': receipt['node_count'],
+                  'edge_count': receipt['edge_count'],
+                  'intersection_count': receipt['intersection_count'],
+                  'missing_count': receipt['missing_count'],
+              },
+          }
+          (root / 'parity-metrics.json').write_text(
+              json.dumps(metrics, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-blog-batch-a-parity-metrics
+          path: /tmp/m25-9-blog-a/parity-metrics.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Validate full population, series parity and protected boundaries
         run: |
           python - <<'PY'
