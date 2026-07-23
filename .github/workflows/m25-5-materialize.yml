@@ -1,8 +1,9 @@
 name: M25.5 Materialize Implementation
 on:
-  push:
-    branches: [chatgpt/m25-5-identity-governance]
-    paths: ['.m25-5-payload/READY']
+  pull_request:
+    paths:
+      - '.github/workflows/m25-5-materialize.yml'
+      - '.m25-5-payload/**'
 permissions:
   contents: write
 jobs:
@@ -11,13 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: true
       - name: Verify base and materialize bounded payload
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           git merge-base --is-ancestor 3b35ed570e1a495e687259ae87a6c70139e5a9ac HEAD
           python - <<'PY'
           import base64, hashlib, io, tarfile
@@ -57,7 +58,7 @@ jobs:
           python -m compileall -q src/knowledge_engine/m25_identity_governance.py src/knowledge_engine/m25_identity_governance_cli.py tests/test_m25_5_identity_governance.py tests/test_m25_5_identity_governance_contracts.py
       - name: Commit verified implementation
         env:
-          BRANCH: ${{ github.ref_name }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
