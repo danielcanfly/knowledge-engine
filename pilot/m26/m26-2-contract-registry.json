@@ -10,30 +10,30 @@
   "contracts": [
     {
       "path": "schemas/m26-retrieval-trace-v1.schema.json",
-      "sha256": "651f31a33bf9305f1a441d7423852401f2bb5ed587fd41f5fd57ccd62c9da7cd"
+      "sha256": "5d65d390a00cd305f6b9c21b07cba8131d59a3bf2d886e9063048ae66613c2aa"
     },
     {
       "path": "schemas/m26-retrieval-gap-report-v1.schema.json",
-      "sha256": "3d6f90a84651765818ba8726cd701f5d605be6badb7c4a3cb00c0d768b707ec8"
+      "sha256": "babcc4a0b911e560b2df0b80902742c7e23d57e29107224d7c16668ab1c193ae"
     },
     {
       "path": "schemas/m26-synthetic-corpus-v1.schema.json",
-      "sha256": "2f775cf44d31b761d50ec5e2764cf7eb409794d07af3dc7dcc1e1f7464050a35"
+      "sha256": "32ee646c163f10dc48a57ea21a89c94444ff6ffb785795bcb22e12bf47d0d81b"
     },
     {
       "path": "pilot/m26/m26-2-retrieval-policy.json",
-      "sha256": "9fb682c6067a76243de10b31ce107eb44bd6e53020e6473166e4fc9b264b0350"
+      "sha256": "86320fa44a34db7c429052da573349fa9cb267db37cd6b15128e3f035c0069bb"
     },
     {
       "path": "pilot/m26/m26-2-synthetic-corpus.json",
-      "sha256": "a5a5b58e8e69444b68c8e94e91cdbca60c7cf1e52255c71500a48ebc8d1cb378"
+      "sha256": "7842f26d6fe66b681c482ea3860647cc45083066a0dbf97f8e0a77fd02577c2d"
     },
     {
       "path": "pilot/m26/m26-2-benchmark-cases.json",
-      "sha256": "4587e5240555e83e290efb97bb1f93df0452e410b679591be7e8ac736f5e89e5"
+      "sha256": "886ff20345a0702f9a0e3f80d41a071f07f3256af378e481612574fa9bf1ac06"
     }
   ],
   "schema_version": "knowledge-engine-m26-2-contract-registry/v1",
-  "self_sha256": "f0189e83ecdd06072ffcaf2098a8a414e3e4c792ce9a64a82b8e2b8a874efc1c",
+  "self_sha256": "0b45bdf380f91f04a222d8e19dd46c2a7c7d944d7ed284e9406706c69d5e28a1",
   "stage_id": "M26.2"
 }

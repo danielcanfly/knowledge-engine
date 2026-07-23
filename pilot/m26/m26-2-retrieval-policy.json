@@ -35,7 +35,7 @@
     "secret_like_passage_excluded": true,
     "source_text_is_untrusted": true
   },
-  "self_sha256": "7e66cbc30e7c3f18aee303bc085a62bdfd0e7220af32fdfd8a2bb5671e546ed9",
+  "self_sha256": "54ec20055fd95df48463bb4b40832365cc7aa60e9e8fd8f660aa154a29196b14",
   "sufficiency_policy": {
     "citation_presence_equals_support": false,
     "claim_locator_required_for_material_support": true,

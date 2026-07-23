@@ -23,7 +23,7 @@
   },
   "predecessor_status": "m26_1_architecture_authority_accepted",
   "schema_version": "knowledge-engine-m26-2-entry-contract/v1",
-  "self_sha256": "04f08843c2064becc54007af56e37962dca29fc7f2716e2a964b32968ba7b9d6",
+  "self_sha256": "b8085932eee614547333d9f6bbd6b26ca97dc232849bee6631ccaa0047571fe4",
   "stage_id": "M26.2",
   "target_status": "m26_2_retrieval_envelope_accepted"
 }

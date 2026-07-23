@@ -93,7 +93,7 @@ Graph proximity is discovery metadata. Every relation path records `factual_supp
 
 M26.2 maps question terms to required synthetic facets and reports:
 
-- required facets;
+- required facet coverage;
 - covered facets;
 - missing facets;
 - evidence sufficiency;
