@@ -1,0 +1,117 @@
+{
+  "authority_boundary": {
+    "canonical_identity_or_relation_mutation": false,
+    "foundation_mutation": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "provider_calls": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "real_corpus_bound": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true
+  },
+  "benchmark": {
+    "acl_leakage_count": 0,
+    "case_count": 9,
+    "case_pass_rate": 1.0,
+    "failed_count": 0,
+    "passed_count": 9,
+    "provider_call_count": 0,
+    "real_corpus_binding_count": 0,
+    "semantic_or_hybrid_use_count": 0
+  },
+  "evidence_artifact": {
+    "artifact_id": 8558250962,
+    "digest": "sha256:f6683b286f5db33af3fe0f8f7c05ce40649bd1ca7c9c4c247225980d338e0e8a",
+    "name": "m26-2-retrieval-envelope-evidence",
+    "retention_days": 30,
+    "workflow_run_id": 29994182146
+  },
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_escalations": 0,
+    "codex_used": false,
+    "daniel_gate_required": false
+  },
+  "frozen_identities": {
+    "benchmark_cases_sha256": "886ff20345a0702f9a0e3f80d41a071f07f3256af378e481612574fa9bf1ac06",
+    "benchmark_report_sha256": "b61befb23c8488b955393710424ad77e2366c772aad2a0339dfe6258343c23b6",
+    "contract_registry_sha256": "5ab9c71494c9b9b5183f71b0fe425ccd4f158f946b516115e7a1aac355493cea",
+    "entry_contract_sha256": "d9cd209b359a25c4769b6439d223e462f5ead2f9b62a5de67cdd8c333b296495",
+    "latency_evidence_sha256": "269d0ba81ae0f190ec94235766e9f2fb2dbecb1bcfb0505b78abc5a258327668",
+    "retrieval_policy_sha256": "86320fa44a34db7c429052da573349fa9cb267db37cd6b15128e3f035c0069bb",
+    "synthetic_corpus_sha256": "7842f26d6fe66b681c482ea3860647cc45083066a0dbf97f8e0a77fd02577c2d"
+  },
+  "implementation": {
+    "base_sha": "d3cf8cc72d951174f10c0a8328f848143c24e004",
+    "changed_file_count": 14,
+    "expected_head_merge": true,
+    "final_head_sha": "68604fc1d80015ea5706709a1c2eda205bd1feaa",
+    "merge_sha": "7507c61f245f1027b1935c8cbcd1826f82d03e52",
+    "pull_request_number": 1059,
+    "unresolved_review_thread_count": 0
+  },
+  "issue": {
+    "number": 1058,
+    "repository": "danielcanfly/knowledge-engine",
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "latency": {
+    "all_gates_passed": true,
+    "iterations": 100,
+    "max_gate_ms": 1000.0,
+    "max_ms": 14.172905999998875,
+    "p50_ms": 8.610696999994616,
+    "p95_gate_ms": 250.0,
+    "p95_ms": 9.034986000003187
+  },
+  "next_stage": {
+    "authorized": true,
+    "name": "Context Compiler and Evidence Budgeting",
+    "predecessor_status_required": "m26_2_retrieval_envelope_accepted",
+    "production_answer_serving_permitted": false,
+    "provider_calls_permitted": false,
+    "real_corpus_binding_permitted": false,
+    "stage_id": "M26.3",
+    "synthetic_only": true
+  },
+  "predecessor": {
+    "main_seal_sha": "d3cf8cc72d951174f10c0a8328f848143c24e004",
+    "status": "m26_1_architecture_authority_accepted"
+  },
+  "quality_and_security": {
+    "conflicting_evidence_preserved": true,
+    "exact_passage_digests_and_locators": true,
+    "facet_coverage_recorded": true,
+    "first_divergent_stage_recorded": true,
+    "genuine_no_match_distinguished_from_acl_no_match": true,
+    "graph_paths_are_non_factual_discovery_metadata": true,
+    "lexical_authority_only": true,
+    "no_silent_exclusion": true,
+    "prompt_injection_contained": true,
+    "query_specific_acl_diagnostics": true,
+    "secret_like_passages_excluded": true
+  },
+  "reconciliation": {
+    "all_frozen_artifact_digests_required": true,
+    "evidence_digest_required": true,
+    "exact_remote_identity_verified": true,
+    "implementation_merge_is_required_ancestor": true,
+    "no_new_authority_beyond_m26_3_entry": true
+  },
+  "required_workflows": {
+    "CI": 29994182155,
+    "M17 Architecture Canon Acceptance": 29994182135,
+    "M18 Graph v2 acceptance": 29994182171,
+    "M26.1 Architecture Authority": 29994182161,
+    "M26.2 Retrieval Envelope": 29994182146,
+    "R2 Release Integration": 29994182131
+  },
+  "schema_version": "knowledge-engine-m26-2-acceptance/v1",
+  "self_sha256": "14c367c994d7fb24d207c30f6404c624081342c294cf655ffbc01312e2a6e5ce",
+  "status": "m26_2_retrieval_envelope_accepted"
+}
