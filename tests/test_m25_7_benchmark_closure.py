@@ -9,7 +9,12 @@ PILOT = ROOT / "pilot" / "m25"
 
 
 def canonical(value: object) -> bytes:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode()
 
 
 def load(name: str) -> dict:
@@ -28,7 +33,10 @@ def test_all_30_exact_items_are_terminal_no_write() -> None:
     verify_self_sha(ledger)
     assert batch["batch_sha256"] == ledger["batch_sha256"]
     assert batch["item_count"] == ledger["counts"]["items"] == 30
-    expected = {item["item_id"]: item["review_state_sha256"] for item in batch["items"]}
+    expected = {
+        item["item_id"]: item["review_state_sha256"]
+        for item in batch["items"]
+    }
     previous = None
     for n, record in enumerate(ledger["records"], 1):
         assert record["n"] == n
@@ -40,9 +48,18 @@ def test_all_30_exact_items_are_terminal_no_write() -> None:
         claimed = unsigned.pop("sha256")
         assert claimed == hashlib.sha256(canonical(unsigned)).hexdigest()
         previous = claimed
-    assert set(expected) == {record["id"] for record in ledger["records"]}
+    assert set(expected) == {
+        record["id"] for record in ledger["records"]
+    }
     assert ledger["final_sha256"] == previous
-    assert ledger["counts"] == {"deferred": 0, "items": 30, "pending": 0, "retained_fixtures": 30, "source_operations": 0, "terminal": 30}
+    assert ledger["counts"] == {
+        "deferred": 0,
+        "items": 30,
+        "pending": 0,
+        "retained_fixtures": 30,
+        "source_operations": 0,
+        "terminal": 30,
+    }
     assert ledger["source_pr_created"] is False
     assert ledger["m25_8_authorized"] is False
     assert ledger["production_mutation_permitted"] is False
@@ -55,6 +72,16 @@ def test_closure_preserves_all_authority_boundaries() -> None:
     assert closure["status"] == "m25_7_benchmark_batch_closed_no_write"
     assert closure["ledger"]["self_sha256"] == ledger["self_sha256"]
     assert closure["daniel_authority"]["authority_comment_id"] == 5057486325
-    assert closure["result"] == {"deferred": 0, "pending": 0, "retained_fixtures": 30, "source_files_changed": 0, "source_operations": 0, "source_pr_created": False, "terminal": 30}
+    assert closure["result"] == {
+        "deferred": 0,
+        "pending": 0,
+        "retained_fixtures": 30,
+        "source_files_changed": 0,
+        "source_operations": 0,
+        "source_pr_created": False,
+        "terminal": 30,
+    }
     assert all(value is False for value in closure["boundary"].values())
-    assert all(value is True for value in closure["future_real_pilot"].values())
+    assert all(
+        value is True for value in closure["future_real_pilot"].values()
+    )
