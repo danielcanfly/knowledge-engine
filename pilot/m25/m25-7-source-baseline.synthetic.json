@@ -1,0 +1,15 @@
+{
+  "file_count": 1,
+  "files": [
+    {
+      "content_utf8": "---\ntype: Concept\nx-kos-id: kos-existing\ntitle: Existing Test Concept\n---\n\n# Existing Test Concept\n",
+      "path": "bundle/concepts/existing-test-concept.md",
+      "sha256": "f0d04ad5363d6a8b02d806bb2435f3b93f5e6193e61b22fdc106634b219aed0d"
+    }
+  ],
+  "manifest_sha256": "89b530d8c788c60c372446448f1960da68eca7167c028953ad564b540903050e",
+  "mode": "test_only",
+  "schema_version": "knowledge-engine-m25-7-source-baseline/v1",
+  "source_base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "source_repository": "example/knowledge-source-test"
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-source-opening-receipt-v1.schema.json",
+  "title": "M25.7 Source branch and PR opening authority receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "actor", "authority_comment_id", "plan_sha256", "approval_sha256", "source_repository", "source_base_sha", "branch_name", "source_branch_write_permitted", "github_pr_creation_permitted", "source_pr_merge_permitted", "release_mutation_permitted", "production_mutation_permitted", "m25_8_authorized", "receipt_sha256"],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-7-opening-receipt/v1"},
+    "status": {"const": "m25_7_source_pr_opening_authorized"},
+    "actor": {"type": "string"},
+    "authority_comment_id": {"type": "integer", "minimum": 1},
+    "plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "approval_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_repository": {"type": "string"},
+    "source_base_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "branch_name": {"type": "string"},
+    "source_branch_write_permitted": {"const": true},
+    "github_pr_creation_permitted": {"const": true},
+    "source_pr_merge_permitted": {"const": false},
+    "release_mutation_permitted": {"const": false},
+    "production_mutation_permitted": {"const": false},
+    "m25_8_authorized": {"const": false},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
