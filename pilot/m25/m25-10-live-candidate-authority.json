@@ -1,0 +1,39 @@
+{
+  "admission_sha256": "f5f01d82c7a1a38cf15fc54c890b904c4c015f608e2d25e294f9469f9b1927f2",
+  "candidate_authority": {
+    "authenticated_internal_serving": true,
+    "candidate_worker_deploy": true,
+    "embedding": true,
+    "internal_pages_deploy": true,
+    "qdrant_create_write_readback": true,
+    "r2_candidate_publish": true
+  },
+  "combined_edges_sha256": "21c5a739a1bf2bcd78bdb032e71afc8b89d68b9c4180f626742567f39233aed8",
+  "combined_nodes_sha256": "68f8040a790d55276ced5d19f67c022dc645d801dd2749c46739f91d9f031440",
+  "counts": {
+    "article_nodes": 156,
+    "edges": 8525,
+    "nodes": 4222,
+    "section_nodes": 4041,
+    "semantic_documents": 4197,
+    "series_nodes": 25,
+    "sources": 156
+  },
+  "denied_authority": {
+    "access_policy_mutation": false,
+    "credential_creation": false,
+    "production_pointer_mutation": false,
+    "production_qdrant_mutation": false,
+    "public_production_traffic_mutation": false
+  },
+  "engine_predecessor_sha": "ac444b62d4a93348735c06543569b6acef1231ea",
+  "issue_number": 1092,
+  "master_inventory_sha256": "ee8589e4e2ce19005507fc5b9f3aa47d3c0320ab34848e81948c5cdaad7f729e",
+  "one_time_push_execution": true,
+  "schema_version": "knowledge-engine-m25-10-live-candidate-authority/v1",
+  "self_sha256": "a263f37de3728b7ef6112a4b32e2ff246fe7e2c304f84d8316be1c35796c1ef3",
+  "source_commit_sha": "5250f8422f4fa08c1f3dc84840dc756850817635",
+  "source_repository": "danielcanfly/knowledge-source",
+  "upstream_commit_sha": "97821b6547ce3c0b8b8acf11cbbf4795684df458",
+  "upstream_repository": "huaihsuanbusiness/daniel-blog"
+}
