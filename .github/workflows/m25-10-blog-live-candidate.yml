@@ -1,0 +1,460 @@
+name: M25.10 Blog Live Candidate Deployment
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-10-blog-live-candidate.yml'
+      - 'docs/architecture/m25/m25-10-live-candidate-deployment.md'
+      - 'packages/m25-blog-candidate-runtime/**'
+      - 'pilot/m25/m25-10-live-candidate-authority.json'
+      - 'src/knowledge_engine/m25_blog_live_candidate.py'
+      - 'tests/test_m25_10_blog_live_candidate.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m25-10-blog-live-candidate.yml'
+      - 'docs/architecture/m25/m25-10-live-candidate-deployment.md'
+      - 'packages/m25-blog-candidate-runtime/**'
+      - 'pilot/m25/m25-10-live-candidate-authority.json'
+      - 'src/knowledge_engine/m25_blog_live_candidate.py'
+      - 'tests/test_m25_10_blog_live_candidate.py'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: m25-10-blog-live-candidate
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 200
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact head and merged prerequisites
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor ac444b62d4a93348735c06543569b6acef1231ea HEAD
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          path = Path('pilot/m25/m25-10-live-candidate-authority.json')
+          value = json.loads(path.read_text())
+          claimed = value.pop('self_sha256')
+          actual = hashlib.sha256(
+              json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
+          ).hexdigest()
+          assert claimed == actual
+          assert claimed == 'a263f37de3728b7ef6112a4b32e2ff246fe7e2c304f84d8316be1c35796c1ef3'
+          assert value['source_commit_sha'] == '5250f8422f4fa08c1f3dc84840dc756850817635'
+          assert all(value['candidate_authority'].values())
+          assert not any(value['denied_authority'].values())
+          PY
+      - name: Install Python dependencies
+        run: python -m pip install -q --disable-pip-version-check -e '.[dev]'
+      - name: Enforce Ruff and focused tests
+        run: |
+          python -m ruff check --output-format=concise \
+            src/knowledge_engine/m25_blog_live_candidate.py \
+            tests/test_m25_10_blog_live_candidate.py
+          python -m pytest -q \
+            tests/test_m25_10_blog_live_candidate.py \
+            tests/test_m25_10_blog_candidate_release.py \
+            tests/test_m25_blog_series_convergence.py \
+            tests/test_m25_blog_pilot_batch_b.py
+          python -m compileall -q \
+            src/knowledge_engine/m25_blog_live_candidate.py \
+            tests/test_m25_10_blog_live_candidate.py
+      - name: Type-check candidate Worker
+        working-directory: packages/m25-blog-candidate-runtime
+        run: |
+          npm install --ignore-scripts
+          npm run check
+      - name: Build complete filesystem preview
+        env:
+          APP_ENV: test
+          AUTH_MODE: disabled
+          OBJECT_STORE_BACKEND: filesystem
+          FILESYSTEM_STORE_ROOT: /tmp/m25-preview-store
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -m knowledge_engine.m25_blog_live_candidate prepare \
+            --work-dir /tmp/m25-live-preview \
+            --engine-sha "$(git rev-parse HEAD)" \
+            --channel candidate-blog-preview \
+            | tee /tmp/m25-live-preview.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          receipt = json.loads(Path('/tmp/m25-live-preview.json').read_text())
+          assert receipt['status'] == 'candidate_preview_ready'
+          assert receipt['source_sha'] == '5250f8422f4fa08c1f3dc84840dc756850817635'
+          assert receipt['counts']['sources'] == 156
+          assert receipt['counts']['nodes'] == 4222
+          assert receipt['counts']['edges'] == 8525
+          assert receipt['counts']['semantic_documents'] == 4197
+          assert receipt['qdrant'] is None
+          assert receipt['r2']['published'] is False
+          assert receipt['production_pointer_mutated'] is False
+          site = Path(receipt['site']['site_dir'])
+          assert len(list((site / 'data/sources').glob('*.json'))) == 156
+          graph = json.loads((site / 'data/graph-navigation.json').read_text())
+          assert len(graph['nodes']) == 4222
+          assert len(graph['edges']) == 8525
+          PY
+      - name: Enforce exact changed-file boundary
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --quiet --no-tags origin main
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/m25-10-blog-live-candidate.yml' \
+            'docs/architecture/m25/m25-10-live-candidate-deployment.md' \
+            'packages/m25-blog-candidate-runtime/package.json' \
+            'packages/m25-blog-candidate-runtime/src/index.ts' \
+            'packages/m25-blog-candidate-runtime/tsconfig.json' \
+            'packages/m25-blog-candidate-runtime/wrangler.jsonc' \
+            'pilot/m25/m25-10-live-candidate-authority.json' \
+            'src/knowledge_engine/m25_blog_live_candidate.py' \
+            'tests/test_m25_10_blog_live_candidate.py' | sort)"
+          test "$changed" = "$expected"
+          ! printf '%s\n' "$changed" | grep -Eq \
+            '^(production/|release/production|r2/production|credentials/|secrets/)'
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: m23-r3-diagnostic
+    env:
+      APP_ENV: staging
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_REGION: auto
+      QDRANT_URL: ${{ secrets.QDRANT_URL }}
+      QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_ACCESS_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCESS_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+      PAGES_PROJECT: llm-wiki-m24-internal
+      INTERNAL_HOSTNAME: m24-internal.danielcanfly.com
+      RUNTIME_NAME: llm-wiki-m25-blog-candidate-runtime
+      WORK_DIR: /tmp/m25-10-live
+      CHANNEL: candidate-blog-m25-10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 200
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify one-time exact live authority and credentials
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor ac444b62d4a93348735c06543569b6acef1231ea HEAD
+          for name in \
+            R2_ENDPOINT_URL R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
+            QDRANT_URL QDRANT_API_KEY CLOUDFLARE_ACCOUNT_ID \
+            CLOUDFLARE_API_TOKEN CLOUDFLARE_DEPLOY_TOKEN CLOUDFLARE_ACCESS_TOKEN; do
+            test -n "${!name}"
+          done
+          mkdir -p "$WORK_DIR/evidence"
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install -q --disable-pip-version-check -e '.[dev]'
+          cd packages/m25-blog-candidate-runtime
+          npm install --ignore-scripts
+          npm run check
+      - name: Capture production invariants and Access binding
+        run: |
+          set -euo pipefail
+          python - <<'PY' > "$WORK_DIR/evidence/production-pointer-before.sha256"
+          import hashlib
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store
+          store = create_object_store(Settings.from_env())
+          print(hashlib.sha256(store.get('channels/production.json')).hexdigest())
+          PY
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_DEPLOY_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PAGES_PROJECT/deployments?env=production&per_page=20" \
+            > "$WORK_DIR/evidence/pages-before.json"
+          PREVIOUS_PAGES_DEPLOYMENT_ID="$(jq -r '.result[0].id // empty' "$WORK_DIR/evidence/pages-before.json")"
+          test -n "$PREVIOUS_PAGES_DEPLOYMENT_ID"
+          echo "PREVIOUS_PAGES_DEPLOYMENT_ID=$PREVIOUS_PAGES_DEPLOYMENT_ID" >> "$GITHUB_ENV"
+
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_ACCESS_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps" \
+            > "$WORK_DIR/evidence/access-apps.json"
+          ACCESS_AUD="$(jq -r --arg domain "$INTERNAL_HOSTNAME" '.result[] | select(.domain == $domain) | .aud' "$WORK_DIR/evidence/access-apps.json" | head -n1)"
+          test -n "$ACCESS_AUD"
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_ACCESS_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/access/organizations" \
+            > "$WORK_DIR/evidence/access-organization.json"
+          ACCESS_AUTH_DOMAIN="$(jq -r '.result.auth_domain // empty' "$WORK_DIR/evidence/access-organization.json")"
+          test -n "$ACCESS_AUTH_DOMAIN"
+          echo "::add-mask::$ACCESS_AUD"
+          echo "::add-mask::$ACCESS_AUTH_DOMAIN"
+          echo "ACCESS_AUD=$ACCESS_AUD" >> "$GITHUB_ENV"
+          echo "ACCESS_TEAM_DOMAIN=https://$ACCESS_AUTH_DOMAIN" >> "$GITHUB_ENV"
+      - name: Build, embed, fully verify Qdrant, and publish R2 candidate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m knowledge_engine.m25_blog_live_candidate prepare \
+            --work-dir "$WORK_DIR" \
+            --engine-sha "$GITHUB_SHA" \
+            --channel "$CHANNEL" \
+            --live \
+            | tee "$WORK_DIR/evidence/live-prepare-output.json"
+          cp "$WORK_DIR/m25-10-live-candidate-receipt.json" \
+            "$WORK_DIR/evidence/live-candidate-receipt.json"
+          RELEASE_ID="$(jq -r '.release_id' "$WORK_DIR/m25-10-live-candidate-receipt.json")"
+          COLLECTION="$(jq -r '.qdrant.collection' "$WORK_DIR/m25-10-live-candidate-receipt.json")"
+          SITE_DIR="$(jq -r '.site.site_dir' "$WORK_DIR/m25-10-live-candidate-receipt.json")"
+          test -n "$RELEASE_ID"
+          test -n "$COLLECTION"
+          test -d "$SITE_DIR"
+          echo "RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
+          echo "COLLECTION=$COLLECTION" >> "$GITHUB_ENV"
+          echo "SITE_DIR=$SITE_DIR" >> "$GITHUB_ENV"
+      - name: Deploy disabled Worker, bind secrets, then enable candidate runtime
+        working-directory: packages/m25-blog-candidate-runtime
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx wrangler deploy \
+            --name "$RUNTIME_NAME" \
+            --var CANDIDATE_RUNTIME_ENABLED:false \
+            --var QDRANT_COLLECTION:"$COLLECTION" \
+            --var QDRANT_VECTOR_NAME:default \
+            --var EMBEDDING_MODEL:@cf/baai/bge-m3 \
+            --var ANSWER_MODEL:@cf/meta/llama-3.1-8b-instruct-fast \
+            --var CANDIDATE_RELEASE_ID:"$RELEASE_ID" \
+            --var SOURCE_COMMIT_SHA:5250f8422f4fa08c1f3dc84840dc756850817635 \
+            --var ADMISSION_SHA256:f5f01d82c7a1a38cf15fc54c890b904c4c015f608e2d25e294f9469f9b1927f2 \
+            --var ACCESS_TEAM_DOMAIN:"$ACCESS_TEAM_DOMAIN" \
+            --var ACCESS_POLICY_AUD:"$ACCESS_AUD"
+          jq -n \
+            --arg url "$QDRANT_URL" \
+            --arg key "$QDRANT_API_KEY" \
+            '{QDRANT_URL:$url,QDRANT_API_KEY:$key}' \
+            > "$WORK_DIR/qdrant-worker-secrets.json"
+          npx wrangler secret bulk "$WORK_DIR/qdrant-worker-secrets.json" \
+            --name "$RUNTIME_NAME"
+          rm -f "$WORK_DIR/qdrant-worker-secrets.json"
+          npx wrangler deploy \
+            --name "$RUNTIME_NAME" \
+            --var CANDIDATE_RUNTIME_ENABLED:true \
+            --var QDRANT_COLLECTION:"$COLLECTION" \
+            --var QDRANT_VECTOR_NAME:default \
+            --var EMBEDDING_MODEL:@cf/baai/bge-m3 \
+            --var ANSWER_MODEL:@cf/meta/llama-3.1-8b-instruct-fast \
+            --var CANDIDATE_RELEASE_ID:"$RELEASE_ID" \
+            --var SOURCE_COMMIT_SHA:5250f8422f4fa08c1f3dc84840dc756850817635 \
+            --var ADMISSION_SHA256:f5f01d82c7a1a38cf15fc54c890b904c4c015f608e2d25e294f9469f9b1927f2 \
+            --var ACCESS_TEAM_DOMAIN:"$ACCESS_TEAM_DOMAIN" \
+            --var ACCESS_POLICY_AUD:"$ACCESS_AUD" \
+            | tee "$WORK_DIR/evidence/worker-deploy.log"
+          echo 'WORKER_DEPLOYED=true' >> "$GITHUB_ENV"
+      - name: Deploy candidate data to authenticated internal Pages project
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd packages/m25-blog-candidate-runtime
+          npx wrangler pages deploy "$SITE_DIR" \
+            --project-name "$PAGES_PROJECT" \
+            --branch main \
+            --commit-dirty=true \
+            | tee "$WORK_DIR/evidence/pages-deploy.log"
+          cd ../..
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_DEPLOY_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PAGES_PROJECT/deployments?env=production&per_page=20" \
+            > "$WORK_DIR/evidence/pages-after.json"
+          NEW_PAGES_DEPLOYMENT_ID="$(jq -r '.result[0].id // empty' "$WORK_DIR/evidence/pages-after.json")"
+          test -n "$NEW_PAGES_DEPLOYMENT_ID"
+          test "$NEW_PAGES_DEPLOYMENT_ID" != "$PREVIOUS_PAGES_DEPLOYMENT_ID"
+          echo "NEW_PAGES_DEPLOYMENT_ID=$NEW_PAGES_DEPLOYMENT_ID" >> "$GITHUB_ENV"
+          echo 'PAGES_DEPLOYED=true' >> "$GITHUB_ENV"
+      - name: Verify Access denial and production invariants
+        run: |
+          set -euo pipefail
+          for path in / /api/m25/health /api/m25/query?q=harness; do
+            safe="$(printf '%s' "$path" | tr '/?=&' '____')"
+            status="$(curl -sS -L --max-redirs 0 \
+              -D "$WORK_DIR/evidence/${safe}.headers" \
+              -o "$WORK_DIR/evidence/${safe}.body" \
+              -w '%{http_code}' \
+              "https://$INTERNAL_HOSTNAME$path" || true)"
+            printf '%s\n' "$status" > "$WORK_DIR/evidence/${safe}.status"
+            if test "$status" = '200'; then
+              ! grep -q 'data-m24-shell' "$WORK_DIR/evidence/${safe}.body"
+            fi
+            grep -Eqi 'cloudflare|access|login|location:' \
+              "$WORK_DIR/evidence/${safe}.headers" \
+              "$WORK_DIR/evidence/${safe}.body"
+          done
+          python - <<'PY' > "$WORK_DIR/evidence/production-pointer-after.sha256"
+          import hashlib
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store
+          store = create_object_store(Settings.from_env())
+          print(hashlib.sha256(store.get('channels/production.json')).hexdigest())
+          PY
+          diff -u \
+            "$WORK_DIR/evidence/production-pointer-before.sha256" \
+            "$WORK_DIR/evidence/production-pointer-after.sha256"
+          jq -e '
+            .production_pointer_mutated == false and
+            .public_production_traffic_mutated == false and
+            .counts.sources == 156 and
+            .counts.semantic_documents == 4197 and
+            .qdrant.point_count == 4197 and
+            .qdrant.readback == "all_ids_payloads_vectors_match" and
+            .r2.published == true
+          ' "$WORK_DIR/m25-10-live-candidate-receipt.json"
+      - name: Write deployment seal
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          receipt = json.loads(Path(os.environ['WORK_DIR'] + '/m25-10-live-candidate-receipt.json').read_text())
+          seal = {
+              'schema_version': 'knowledge-engine-m25-10-live-deployment-seal/v1',
+              'status': 'deployed_awaiting_authenticated_owner_acceptance',
+              'workflow_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'workflow_run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'engine_sha': os.environ['GITHUB_SHA'],
+              'source_sha': '5250f8422f4fa08c1f3dc84840dc756850817635',
+              'release_id': receipt['release_id'],
+              'manifest_sha256': receipt['manifest_sha256'],
+              'channel': receipt['channel'],
+              'qdrant_collection': receipt['qdrant']['collection'],
+              'qdrant_point_count': receipt['qdrant']['point_count'],
+              'qdrant_aggregate_fingerprint_sha256': receipt['qdrant']['aggregate_point_fingerprint_sha256'],
+              'pages_project': os.environ['PAGES_PROJECT'],
+              'pages_previous_deployment_id': os.environ['PREVIOUS_PAGES_DEPLOYMENT_ID'],
+              'pages_candidate_deployment_id': os.environ['NEW_PAGES_DEPLOYMENT_ID'],
+              'worker_name': os.environ['RUNTIME_NAME'],
+              'worker_route': 'm24-internal.danielcanfly.com/api/m25/*',
+              'unauthenticated_access_denied': True,
+              'authenticated_owner_acceptance_pending': True,
+              'production_pointer_mutated': False,
+              'public_production_traffic_mutated': False,
+          }
+          seal['seal_sha256'] = hashlib.sha256(
+              json.dumps(seal, sort_keys=True, separators=(',', ':')).encode()
+          ).hexdigest()
+          path = Path(os.environ['WORK_DIR'] + '/evidence/live-deployment-seal.json')
+          path.write_text(json.dumps(seal, indent=2, sort_keys=True) + '\n')
+          PY
+      - name: Roll back bounded external candidate state on failure
+        if: failure()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_DEPLOY_TOKEN }}
+        run: |
+          set +e
+          if test "${PAGES_DEPLOYED:-false}" = 'true' && test -n "${PREVIOUS_PAGES_DEPLOYMENT_ID:-}"; then
+            curl -sS -X POST \
+              -H "Authorization: Bearer $CLOUDFLARE_DEPLOY_TOKEN" \
+              -H 'Content-Type: application/json' \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PAGES_PROJECT/deployments/$PREVIOUS_PAGES_DEPLOYMENT_ID/rollback" \
+              -d '{}' \
+              > "$WORK_DIR/evidence/pages-rollback.json"
+          fi
+          if test "${WORKER_DEPLOYED:-false}" = 'true'; then
+            cd packages/m25-blog-candidate-runtime
+            npx wrangler delete --name "$RUNTIME_NAME" --force \
+              > "$WORK_DIR/evidence/worker-delete.log" 2>&1
+            cd ../..
+          fi
+          if test -f "$WORK_DIR/m25-10-live-candidate-receipt.json"; then
+            python -m knowledge_engine.m25_blog_live_candidate rollback \
+              --receipt "$WORK_DIR/m25-10-live-candidate-receipt.json" \
+              > "$WORK_DIR/evidence/external-state-rollback.json" 2>&1
+          fi
+          set -e
+      - name: Upload exact deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-10-blog-live-candidate-${{ github.sha }}
+          path: /tmp/m25-10-live/evidence/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Record live result on issue 1092
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if test "${{ job.status }}" = 'success'; then
+            status='deployed_awaiting_authenticated_owner_acceptance'
+          else
+            status='live_candidate_failed_and_bounded_rollback_attempted'
+          fi
+          receipt_summary='receipt unavailable'
+          if test -f "$WORK_DIR/m25-10-live-candidate-receipt.json"; then
+            receipt_summary="$(jq -c '{release_id,manifest_sha256,channel,qdrant,r2,counts,receipt_sha256,production_pointer_mutated,public_production_traffic_mutated}' "$WORK_DIR/m25-10-live-candidate-receipt.json")"
+          fi
+          cat > "$WORK_DIR/issue-comment.md" <<EOF
+          ## M25.10 live candidate workflow result
+
+          - status: \`$status\`
+          - workflow run: \`${GITHUB_RUN_ID}\`
+          - attempt: \`${GITHUB_RUN_ATTEMPT}\`
+          - engine SHA: \`${GITHUB_SHA}\`
+          - Source SHA: \`5250f8422f4fa08c1f3dc84840dc756850817635\`
+          - Pages previous deployment: \`${PREVIOUS_PAGES_DEPLOYMENT_ID:-unavailable}\`
+          - Pages candidate deployment: \`${NEW_PAGES_DEPLOYMENT_ID:-unavailable}\`
+          - Worker: \`$RUNTIME_NAME\`
+          - internal URL: \`https://$INTERNAL_HOSTNAME/\`
+          - query URL: \`https://$INTERNAL_HOSTNAME/api/m25/query?q=harness\`
+          - production pointer mutation: \`false\`
+          - public production traffic mutation: \`false\`
+
+          Receipt summary:
+
+          \`$receipt_summary\`
+
+          Successful deployment remains pending one owner-authenticated browser acceptance. No Access service token or bypass credential was created.
+          EOF
+          gh issue comment 1092 \
+            --repo danielcanfly/knowledge-engine \
+            --body-file "$WORK_DIR/issue-comment.md"

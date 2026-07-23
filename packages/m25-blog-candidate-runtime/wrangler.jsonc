@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "llm-wiki-m25-blog-candidate-runtime",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "routes": [
+    {
+      "pattern": "m24-internal.danielcanfly.com/api/m25/*",
+      "zone_name": "danielcanfly.com"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "vars": {
+    "CANDIDATE_RUNTIME_ENABLED": "false",
+    "QDRANT_COLLECTION": "replace-at-deploy",
+    "QDRANT_VECTOR_NAME": "default",
+    "EMBEDDING_MODEL": "@cf/baai/bge-m3",
+    "ANSWER_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
+    "CANDIDATE_RELEASE_ID": "replace-at-deploy",
+    "SOURCE_COMMIT_SHA": "5250f8422f4fa08c1f3dc84840dc756850817635",
+    "ADMISSION_SHA256": "f5f01d82c7a1a38cf15fc54c890b904c4c015f608e2d25e294f9469f9b1927f2",
+    "ACCESS_TEAM_DOMAIN": "https://replace-me.cloudflareaccess.com",
+    "ACCESS_POLICY_AUD": "replace-at-deploy",
+    "MAX_QUERY_CHARS": "2000",
+    "MAX_TOP_K": "20",
+    "QDRANT_TIMEOUT_MS": "10000"
+  }
+}
