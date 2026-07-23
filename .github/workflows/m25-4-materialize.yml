@@ -1,0 +1,87 @@
+name: M25.4 Materialize Gold Benchmark
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-4-materialize.yml'
+      - '.m25-4-payload/**'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Reassemble and verify payload
+        run: |
+          set -euo pipefail
+          cat .m25-4-payload/chunk-*.b64 > /tmp/m25-4-payload.b64
+          base64 --decode /tmp/m25-4-payload.b64 > /tmp/m25-4-payload.tar.gz
+          echo '8710e1d2345a73db1d8d0c9c161d7f471a531c9a804439c28c681dcfc238f35b  /tmp/m25-4-payload.tar.gz' | sha256sum --check -
+          tar -tzf /tmp/m25-4-payload.tar.gz | tee /tmp/m25-4-payload-files.txt
+          test "$(wc -l < /tmp/m25-4-payload-files.txt)" = '18'
+          ! grep -Eq '(^/|\.\.|^\.github/workflows/|^workers/|^packages/|^channels/)' /tmp/m25-4-payload-files.txt
+      - name: Extract implementation
+        run: |
+          set -euo pipefail
+          tar -xzf /tmp/m25-4-payload.tar.gz -C .
+          rm -rf .m25-4-payload
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint materialized scope
+        run: >-
+          python -m ruff check
+          src/knowledge_engine/m25_identity_benchmark.py
+          src/knowledge_engine/m25_identity_benchmark_cli.py
+          tests/test_m25_4_identity_benchmark.py
+          tests/test_m25_4_identity_benchmark_contracts.py
+      - name: Test inherited resolver and M25.4 contracts
+        run: >-
+          python -m pytest -q
+          tests/test_m21_5_entity_resolution.py
+          tests/test_m25_3_reconciliation.py
+          tests/test_m25_4_identity_benchmark.py
+          tests/test_m25_4_identity_benchmark_contracts.py
+      - name: Prove deterministic committed artifacts
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          knowledge-m25-identity-benchmark build --output-dir "$tmp"
+          cmp pilot/m25/m25-4-annotation-policy.json "$tmp/m25-4-annotation-policy.json"
+          cmp pilot/m25/m25-4-gold-suite.provisional.json "$tmp/m25-4-gold-suite.provisional.json"
+          cmp pilot/m25/m25-4-split-manifest.json "$tmp/m25-4-split-manifest.json"
+          cmp pilot/m25/m25-4-adjudication-ledger.json "$tmp/m25-4-adjudication-ledger.json"
+          cmp pilot/m25/m25-4-baseline-report.provisional.json "$tmp/m25-4-baseline-report.provisional.json"
+          cmp pilot/m25/m25-4-daniel-annotation-gate.json "$tmp/m25-4-daniel-annotation-gate.json"
+      - name: Compile materialized scope
+        run: >-
+          python -m compileall -q
+          src/knowledge_engine/m25_identity_benchmark.py
+          src/knowledge_engine/m25_identity_benchmark_cli.py
+          tests/test_m25_4_identity_benchmark.py
+          tests/test_m25_4_identity_benchmark_contracts.py
+      - name: Commit verified implementation
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pyproject.toml src tests docs pilot schemas
+          git add -u .m25-4-payload
+          git diff --cached --stat
+          git commit -m 'Implement M25.4 provisional gold set and benchmark'
+          git push origin "HEAD:$BRANCH"
