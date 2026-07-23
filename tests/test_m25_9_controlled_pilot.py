@@ -28,6 +28,10 @@ def resign(value: dict, field: str) -> dict:
     return sign(value, field)
 
 
+def inventory() -> dict:
+    return load("m25-9-pilot-inventory.synthetic.json")
+
+
 def test_readiness_gate_is_fail_closed_and_deterministic() -> None:
     predecessor = load("m25-8-readiness-gate.json")
     result = evaluate_readiness(predecessor)
@@ -40,9 +44,9 @@ def test_readiness_gate_is_fail_closed_and_deterministic() -> None:
 
 
 def test_inventory_validates_full_heterogeneous_population() -> None:
-    inventory = load("m25-9-pilot-inventory.synthetic.json")
-    result = validate_inventory(inventory)
-    assert result == inventory
+    value = inventory()
+    result = validate_inventory(value)
+    assert result == value
     assert result["source_count"] == 50
     assert {item["source_type"] for item in result["sources"]} == {
         "long_form_markdown",
@@ -54,35 +58,35 @@ def test_inventory_validates_full_heterogeneous_population() -> None:
 
 
 def test_inventory_rejects_population_below_50() -> None:
-    inventory = load("m25-9-pilot-inventory.synthetic.json")
-    inventory["sources"] = inventory["sources"][:-1]
-    inventory["source_count"] = 49
-    inventory = resign(inventory, "inventory_sha256")
+    value = inventory()
+    value["sources"] = value["sources"][:-1]
+    value["source_count"] = 49
+    value = resign(value, "inventory_sha256")
     with pytest.raises(IntegrityError, match="50-100"):
-        validate_inventory(inventory)
+        validate_inventory(value)
 
 
 def test_inventory_rejects_missing_adversarial_trait() -> None:
-    inventory = load("m25-9-pilot-inventory.synthetic.json")
-    for item in inventory["sources"]:
+    value = inventory()
+    for item in value["sources"]:
         if "conflicting_claim" in item["traits"]:
             item["traits"] = ["ordinary"]
-    inventory = resign(inventory, "inventory_sha256")
+    value = resign(value, "inventory_sha256")
     with pytest.raises(IntegrityError, match="missing required adversarial traits"):
-        validate_inventory(inventory)
+        validate_inventory(value)
 
 
 def test_live_inventory_rejects_synthetic_sources() -> None:
-    inventory = load("m25-9-pilot-inventory.synthetic.json")
-    inventory["mode"] = "live"
-    inventory = resign(inventory, "inventory_sha256")
+    value = inventory()
+    value["mode"] = "live"
+    value = resign(value, "inventory_sha256")
     with pytest.raises(AuthorizationError):
-        validate_inventory(inventory)
+        validate_inventory(value)
 
 
 def test_synthetic_full_population_run_rebuilds_exact_receipt() -> None:
     evidence = load("m25-9a-run-evidence.synthetic.json")
-    result = build_run_receipt(evidence)
+    result = build_run_receipt(evidence, inventory())
     assert result == load("m25-9a-run-receipt.synthetic.json")
     assert result["status"] == TEST_COMPLETE_STATUS
     assert result["source_count"] == 50
@@ -99,7 +103,7 @@ def test_run_rejects_hidden_population_exclusion() -> None:
     evidence["population"] = evidence["population"][:-1]
     evidence = resign(evidence, "evidence_sha256")
     with pytest.raises(IntegrityError, match="full population record count"):
-        build_run_receipt(evidence)
+        build_run_receipt(evidence, inventory())
 
 
 def test_run_rejects_failed_source_threshold_breach() -> None:
@@ -108,7 +112,7 @@ def test_run_rejects_failed_source_threshold_breach() -> None:
     evidence["authority"] = resign(evidence["authority"], "authority_sha256")
     evidence = resign(evidence, "evidence_sha256")
     with pytest.raises(IntegrityError, match="failed source threshold"):
-        build_run_receipt(evidence)
+        build_run_receipt(evidence, inventory())
 
 
 def test_run_rejects_protected_mutation() -> None:
@@ -116,7 +120,7 @@ def test_run_rejects_protected_mutation() -> None:
     evidence["boundary"]["source_write"] = True
     evidence = resign(evidence, "evidence_sha256")
     with pytest.raises(AuthorizationError, match="protected mutation"):
-        build_run_receipt(evidence)
+        build_run_receipt(evidence, inventory())
 
 
 def test_run_rejects_overbroad_inventory_authority() -> None:
@@ -125,7 +129,7 @@ def test_run_rejects_overbroad_inventory_authority() -> None:
     evidence["authority"] = resign(evidence["authority"], "authority_sha256")
     evidence = resign(evidence, "evidence_sha256")
     with pytest.raises(AuthorizationError, match="over-broad"):
-        build_run_receipt(evidence)
+        build_run_receipt(evidence, inventory())
 
 
 def test_run_rejects_tampered_authority_digest() -> None:
@@ -133,7 +137,7 @@ def test_run_rejects_tampered_authority_digest() -> None:
     evidence["authority"]["max_cost_usd"] = 1.0
     evidence = resign(evidence, "evidence_sha256")
     with pytest.raises(IntegrityError, match="authority digest mismatch"):
-        build_run_receipt(evidence)
+        build_run_receipt(evidence, inventory())
 
 
 def test_run_rejects_candidate_count_mismatch() -> None:
@@ -141,4 +145,4 @@ def test_run_rejects_candidate_count_mismatch() -> None:
     evidence["candidate_population"]["candidate_count"] += 1
     evidence = resign(evidence, "evidence_sha256")
     with pytest.raises(IntegrityError, match="candidate count mismatch"):
-        build_run_receipt(evidence)
+        build_run_receipt(evidence, inventory())
