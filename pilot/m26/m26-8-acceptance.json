@@ -1,0 +1,130 @@
+{
+  "authority_boundary": {
+    "candidate_bundle": true,
+    "canonical_identity_or_relation_mutation": false,
+    "credentials": false,
+    "foundation_mutation": false,
+    "live_provider_calls": false,
+    "network_execution": false,
+    "preview_evidence_integration": true,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "provider_sdk": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "benchmark": {
+    "candidate_preview_count": 6,
+    "candidate_refusal_count": 6,
+    "candidate_rejected_count": 0,
+    "case_count": 12,
+    "credentials_used_count": 0,
+    "failed_count": 0,
+    "live_network_call_count": 0,
+    "passed_count": 12,
+    "production_answer_serving_count": 0,
+    "production_pointer_mutation_count": 0,
+    "provider_call_count": 0,
+    "real_corpus_binding_count": 0,
+    "semantic_or_hybrid_use_count": 0,
+    "verified_final_answer_count": 0,
+    "warning_record_count": 2
+  },
+  "evidence_artifact": {
+    "artifact_id": 8575716543,
+    "digest": "sha256:0143fa54784fc1d810d1f86c6236a0dd198bddc9ae19a146e501dce4c1f14093",
+    "name": "m26-8-preview-candidate-bundle-evidence",
+    "retention_days": 30,
+    "workflow_run_id": 30037077918
+  },
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_escalations": 0,
+    "codex_used": false,
+    "daniel_gate_required": false
+  },
+  "frozen_identities": {
+    "benchmark_cases_sha256": "00f2b9d326f4f7f16322c46afa7e3482ac8b7d5215d164ce85f9b76c47cbae4b",
+    "candidate_bundle_schema_sha256": "0ec544a283d2f81360267fb0a1657f66728568cff0da035f9015d1287045e5e6",
+    "candidate_policy_sha256": "2a7204a0e115844d783db1e03f7af943d0e2e0866c759b9019fa4d415c725f75",
+    "contract_registry_sha256": "02fdfba610a0bed0f17989e3f0177f3e933090a30744adca5355a030816d8352",
+    "entry_contract_sha256": "e66af0e75ed453b6e0ef0d10622a9fdbd7bae992e36d53f44c20bf5779920408",
+    "preview_evidence_schema_sha256": "b7206223676dff5d34be0ca74e20d7ac89091645e9c4547ea9370ec92141f82b"
+  },
+  "implementation": {
+    "accepted_predecessor_main_seal_sha": "e532403b3b1f0029b224f77374f5fae83b0f9e09",
+    "base_sha": "e532403b3b1f0029b224f77374f5fae83b0f9e09",
+    "changed_file_count": 11,
+    "expected_head_merge": true,
+    "final_head_sha": "365b0089e89ae692f7e79ddbc47d5976fb5951ee",
+    "merge_sha": "c65f427a85d58e15d6f6378f962ad5adfe42addf",
+    "pull_request_number": 1099,
+    "unresolved_review_thread_count": 0
+  },
+  "issue": {
+    "number": 1098,
+    "repository": "danielcanfly/knowledge-engine",
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "next_stage": {
+    "authorized": true,
+    "baseline_refresh_planning_permitted": true,
+    "candidate_bundle_review_permitted": true,
+    "live_provider_calls_permitted": false,
+    "name": "Synthetic Candidate QA Feedback and Baseline Refresh Gate",
+    "predecessor_status_required": "m26_8_preview_evidence_candidate_bundle_accepted",
+    "production_answer_serving_permitted": false,
+    "production_pointer_mutation_permitted": false,
+    "real_corpus_binding_permitted": false,
+    "stage_id": "M26.9",
+    "synthetic_only": true,
+    "verified_final_answer_permitted": false
+  },
+  "predecessor": {
+    "main_seal_sha": "e532403b3b1f0029b224f77374f5fae83b0f9e09",
+    "status": "m26_7_answer_presentation_non_serving_preview_accepted"
+  },
+  "quality_and_security": {
+    "answer_text_forbidden": true,
+    "candidate_bundle_only": true,
+    "candidate_citation_binding_identity_bound": true,
+    "candidate_claim_identity_bound": true,
+    "conflict_warning_preserved_as_identity": true,
+    "final_answer_forbidden": true,
+    "non_serving_preview_only": true,
+    "production_answer_serving_forbidden": true,
+    "production_pointer_mutation_forbidden": true,
+    "prompt_injection_warning_only": true,
+    "refusal_candidates_emit_no_claims": true,
+    "verified_final_answer_forbidden": true
+  },
+  "reconciliation": {
+    "all_frozen_artifact_digests_required": true,
+    "evidence_digest_required": true,
+    "exact_remote_identity_verified": true,
+    "implementation_merge_is_required_ancestor": true,
+    "no_new_authority_beyond_m26_9_entry": true
+  },
+  "required_workflows": {
+    "CI": 30037077973,
+    "M17 Architecture Canon Acceptance": 30037077978,
+    "M18 Graph v2 acceptance": 30037077738,
+    "M26.1 Architecture Authority": 30037078319,
+    "M26.4 Provider Mock Replay": 30037077912,
+    "M26.5 Draft Answer Contract": 30037078034,
+    "M26.6 Answer Evaluation Refusal Gate": 30037078341,
+    "M26.7 Answer Presentation Preview": 30037077993,
+    "M26.8 Preview Evidence Candidate Bundle": 30037077918,
+    "R2 Release Integration": 30037077952
+  },
+  "schema_version": "knowledge-engine-m26-8-acceptance/v1",
+  "self_sha256": "02b33c1dc8be7ad1b5b76aaa38c6e2bd9759f17e432d394f36466f25e1dbf680",
+  "status": "m26_8_preview_evidence_candidate_bundle_accepted"
+}
