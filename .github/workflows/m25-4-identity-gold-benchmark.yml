@@ -1,0 +1,209 @@
+name: M25.4 Identity Gold Benchmark
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-4-identity-gold-benchmark.yml'
+      - 'docs/architecture/m25/m25-4-*.md'
+      - 'pilot/m25/m25-4-*.json'
+      - 'schemas/m25-identity-*.schema.json'
+      - 'src/knowledge_engine/m25_identity_benchmark*.py'
+      - 'tests/test_m25_4_identity_benchmark*.py'
+      - 'pyproject.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  identity-gold-benchmark:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Verify accepted predecessor
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          acceptance = json.loads(
+              Path('pilot/m25/m25-3-acceptance.json').read_text(encoding='utf-8')
+          )
+          assert acceptance['status'] == 'm25_3_extraction_worker_accepted'
+          assert acceptance['next_stage']['stage_id'] == 'M25.4'
+          PY
+      - name: Lint M25.4 scope
+        run: >-
+          python -m ruff check
+          src/knowledge_engine/m25_identity_benchmark.py
+          src/knowledge_engine/m25_identity_benchmark_cli.py
+          tests/test_m25_4_identity_benchmark.py
+          tests/test_m25_4_identity_benchmark_contracts.py
+      - name: Test inherited resolver and M25.4 contracts
+        run: >-
+          python -m pytest -q
+          tests/test_m21_5_entity_resolution.py
+          tests/test_m25_3_reconciliation.py
+          tests/test_m25_4_identity_benchmark.py
+          tests/test_m25_4_identity_benchmark_contracts.py
+      - name: Rebuild and compare immutable provisional artifacts
+        run: |
+          rm -rf /tmp/m25-4-generated
+          knowledge-m25-identity-benchmark generate \
+            --annotation-policy pilot/m25/m25-4-annotation-policy.json \
+            --output-dir /tmp/m25-4-generated
+          cmp /tmp/m25-4-generated/gold-suite.json \
+            pilot/m25/m25-4-gold-suite.provisional.json
+          cmp /tmp/m25-4-generated/split-manifest.json \
+            pilot/m25/m25-4-split-manifest.json
+          cmp /tmp/m25-4-generated/adjudication-ledger.json \
+            pilot/m25/m25-4-adjudication-ledger.json
+          cmp /tmp/m25-4-generated/baseline-report.json \
+            pilot/m25/m25-4-baseline-report.provisional.json
+      - name: Enforce no calibration, leakage, approval or protected mutation
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python - <<'PY'
+          import ast
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          changed = set(
+              subprocess.check_output(
+                  ['git', 'diff', '--name-only', os.environ['BASE_SHA'], 'HEAD'],
+                  text=True,
+              ).splitlines()
+          )
+          forbidden_paths = (
+              'workers/',
+              'packages/',
+              'pilot/m24/',
+              'channels/production.json',
+              'src/knowledge_engine/m21_entity_resolution.py',
+              'src/knowledge_engine/resolution.py',
+              'src/knowledge_engine/compiler_resolution_v1.py',
+          )
+          assert not [path for path in changed if path.startswith(forbidden_paths)]
+
+          modules = [
+              Path('src/knowledge_engine/m25_identity_benchmark.py'),
+              Path('src/knowledge_engine/m25_identity_benchmark_cli.py'),
+          ]
+          forbidden_imports = {'boto3', 'httpx', 'requests', 'socket', 'subprocess'}
+          for module in modules:
+              tree = ast.parse(module.read_text(encoding='utf-8'))
+              observed = {
+                  node.names[0].name.split('.')[0]
+                  for node in ast.walk(tree)
+                  if isinstance(node, ast.Import)
+              }
+              observed.update(
+                  node.module.split('.')[0]
+                  for node in ast.walk(tree)
+                  if isinstance(node, ast.ImportFrom) and node.module
+              )
+              assert not (observed & forbidden_imports), (module, observed & forbidden_imports)
+
+          suite = json.loads(
+              Path('pilot/m25/m25-4-gold-suite.provisional.json').read_text()
+          )
+          report = json.loads(
+              Path('pilot/m25/m25-4-baseline-report.provisional.json').read_text()
+          )
+          gate = json.loads(
+              Path('pilot/m25/m25-4-daniel-annotation-gate.json').read_text()
+          )
+          assert suite['approval_status'] == 'pending_daniel'
+          assert all(
+              item['annotation_status'] == 'provisional_pending_daniel'
+              for item in suite['items']
+          )
+          assert report['resolver_threshold_or_code_changed'] is False
+          assert report['final_split_used_for_calibration'] is False
+          assert report['m25_5_authorized'] is False
+          assert gate['status'] == 'awaiting_daniel_decision'
+          assert gate['disputed_item_count'] == 0
+          assert all(value is False for value in gate['protected_mutations'].values())
+          PY
+      - name: Build exact-head benchmark evidence
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p .artifacts/m25-4
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(
+              Path('pilot/m25/m25-4-baseline-report.provisional.json').read_text()
+          )
+          gate = json.loads(
+              Path('pilot/m25/m25-4-daniel-annotation-gate.json').read_text()
+          )
+          paths = sorted(
+              [*Path('pilot/m25').glob('m25-4-*.json')]
+              + [*Path('schemas').glob('m25-identity-*.schema.json')]
+              + [*Path('docs/architecture/m25').glob('m25-4-*.md')]
+              + [*Path('src/knowledge_engine').glob('m25_identity_benchmark*.py')]
+              + [*Path('tests').glob('test_m25_4_identity_benchmark*.py')]
+          )
+          evidence = {
+              'schema_version': 'knowledge-engine-m25-4-ci-evidence/v1',
+              'head_sha': os.environ['HEAD_SHA'],
+              'exact_head_verified': True,
+              'annotation_status': 'pending_daniel',
+              'item_count': report['denominators']['total'],
+              'semantic_decision_accuracy': report['metrics']['semantic_decision_accuracy'],
+              'explanation_signal_coverage': report['metrics']['explanation_signal_coverage'],
+              'false_merge_count': report['metrics']['false_merge_count'],
+              'explanation_signal_gap_count': report['error_taxonomy']['explanation_signal_gap'],
+              'gate_sha256': gate['gate_sha256'],
+              'resolver_threshold_or_code_changed': False,
+              'final_split_used_for_calibration': False,
+              'm25_5_authorized': False,
+              'source_mutation_performed': False,
+              'files': {
+                  str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+                  for path in paths
+              },
+          }
+          raw = json.dumps(
+              evidence,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+          ).encode()
+          evidence['evidence_sha256'] = hashlib.sha256(raw).hexdigest()
+          Path('.artifacts/m25-4/evidence.json').write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-4-identity-gold-benchmark-evidence
+          path: .artifacts/m25-4/evidence.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Compile M25.4 scope
+        run: >-
+          python -m compileall -q
+          src/knowledge_engine/m25_identity_benchmark.py
+          src/knowledge_engine/m25_identity_benchmark_cli.py
+          tests/test_m25_4_identity_benchmark.py
+          tests/test_m25_4_identity_benchmark_contracts.py
