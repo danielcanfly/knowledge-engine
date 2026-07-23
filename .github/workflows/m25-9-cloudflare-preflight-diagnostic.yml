@@ -41,13 +41,38 @@ jobs:
         run: python -m pip install -q --disable-pip-version-check pytest ruff
       - name: Validate diagnostic implementation
         run: |
+          set +e
+          mkdir -p /tmp/m25-9-static-validation
           python -m ruff check --output-format=concise \
             scripts/m25_9_cloudflare_preflight_probe.py \
-            tests/test_m25_9_cloudflare_preflight_probe.py
-          python -m pytest -q tests/test_m25_9_cloudflare_preflight_probe.py
+            tests/test_m25_9_cloudflare_preflight_probe.py \
+            > /tmp/m25-9-static-validation/ruff.log 2>&1
+          ruff_status=$?
+          python -m pytest -q tests/test_m25_9_cloudflare_preflight_probe.py \
+            > /tmp/m25-9-static-validation/pytest.log 2>&1
+          pytest_status=$?
           python -m compileall -q \
             scripts/m25_9_cloudflare_preflight_probe.py \
-            tests/test_m25_9_cloudflare_preflight_probe.py
+            tests/test_m25_9_cloudflare_preflight_probe.py \
+            > /tmp/m25-9-static-validation/compileall.log 2>&1
+          compile_status=$?
+          printf 'ruff_status=%s\npytest_status=%s\ncompile_status=%s\n' \
+            "$ruff_status" "$pytest_status" "$compile_status" \
+            > /tmp/m25-9-static-validation/status.txt
+          cat /tmp/m25-9-static-validation/ruff.log
+          cat /tmp/m25-9-static-validation/pytest.log
+          cat /tmp/m25-9-static-validation/compileall.log
+          test "$ruff_status" = '0'
+          test "$pytest_status" = '0'
+          test "$compile_status" = '0'
+      - name: Upload static validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-static-validation-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/m25-9-static-validation/
+          if-no-files-found: error
+          retention-days: 30
       - name: Enforce zero-mutation changed-file boundary
         if: github.event_name == 'pull_request'
         run: |
