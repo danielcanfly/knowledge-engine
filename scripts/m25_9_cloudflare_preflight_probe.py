@@ -13,13 +13,13 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 API_ROOT = "https://api.cloudflare.com/client/v4"
 MAX_RESPONSE_BYTES = 512 * 1024
-RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 ACCOUNT_ID_PATTERN = re.compile(r"^[0-9a-fA-F]{32}$")
 
 
@@ -91,7 +91,7 @@ def first_error_code(payload: dict[str, Any] | None) -> int | str | None:
     if not isinstance(first, dict):
         return None
     code = first.get("code")
-    return code if isinstance(code, (int, str)) else None
+    return code if isinstance(code, int | str) else None
 
 
 def classify_response(response: HttpResponse, success: bool | None) -> tuple[str, bool]:
