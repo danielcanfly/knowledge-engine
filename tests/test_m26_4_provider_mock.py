@@ -19,7 +19,6 @@ from knowledge_engine.m26_retrieval_envelope import sha256_value, verify_self_di
 
 ROOT = Path(__file__).resolve().parents[1]
 PILOT = ROOT / "pilot" / "m26"
-SCHEMAS = ROOT / "schemas"
 DOCS = ROOT / "docs" / "architecture" / "m26"
 
 
@@ -38,6 +37,17 @@ def fixtures() -> dict[str, dict[str, Any]]:
         "retrieval_policy": load(PILOT / "m26-2-retrieval-policy.json"),
         "context_policy": load(PILOT / "m26-3-context-policy.json"),
         "provider_policy": load(PILOT / "m26-4-provider-policy.json"),
+    }
+
+
+def provider_kwargs(f: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {
+        "context_cases": f["context_cases"],
+        "retrieval_cases": f["retrieval_cases"],
+        "corpus": f["corpus"],
+        "retrieval_policy": f["retrieval_policy"],
+        "context_policy": f["context_policy"],
+        "provider_policy": f["provider_policy"],
     }
 
 
@@ -105,7 +115,7 @@ def test_provider_policy_fails_closed_on_live_provider_authority() -> None:
 
 def test_provider_benchmark_passes_all_synthetic_cases() -> None:
     f = fixtures()
-    report = run_provider_benchmark(**f)
+    report = run_provider_benchmark(f["provider_cases"], **provider_kwargs(f))
     verify_self_digest(report)
     assert report["status"] == "m26_4_provider_mock_ready"
     assert report["case_count"] == 10
@@ -155,7 +165,7 @@ def test_abstain_context_is_replayed_without_mock_draft_or_provider_call() -> No
         for case in f["provider_cases"]["cases"]
         if case["case_id"] == "provider_acl_negative_public"
     )
-    result = run_provider_case(provider_case, **f)
+    result = run_provider_case(provider_case, **provider_kwargs(f))
     assert result["passed"] is True
     assert result["status"] == "abstain_replayed"
     assert result["safe_for_m26_5"] is False
@@ -168,7 +178,7 @@ def test_conflict_and_prompt_injection_replays_preserve_warnings_without_raw_ins
     conflict_case = next(
         case for case in f["provider_cases"]["cases"] if case["case_id"] == "provider_conflict_public"
     )
-    conflict = run_provider_case(conflict_case, **f)
+    conflict = run_provider_case(conflict_case, **provider_kwargs(f))
     assert conflict["passed"] is True
     assert conflict["status"] == "mock_draft_with_warnings"
     assert "CONFLICTING_EVIDENCE" in conflict["reason_codes"]
@@ -201,7 +211,7 @@ def test_privacy_review_blocks_secret_like_mock_output() -> None:
         for case in f["provider_cases"]["cases"]
         if case["case_id"] == "provider_privacy_secret_block"
     )
-    result = run_provider_case(provider_case, **f)
+    result = run_provider_case(provider_case, **provider_kwargs(f))
     assert result["passed"] is True
     assert result["status"] == "privacy_blocked"
     assert result["safe_for_m26_5"] is False
