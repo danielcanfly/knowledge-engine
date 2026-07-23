@@ -1,0 +1,77 @@
+{
+  "$id": "https://knowledge-engine.local/schemas/m26-privacy-review-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "fail_closed": {
+      "const": true
+    },
+    "findings": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "allow",
+              "redact",
+              "block"
+            ]
+          },
+          "finding_type": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "surface",
+          "finding_type",
+          "action"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "input_surface_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "output_surface_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "redacted": {
+      "type": "boolean"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-privacy-review/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "blocked"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "status",
+    "findings",
+    "input_surface_count",
+    "output_surface_count",
+    "redacted",
+    "fail_closed",
+    "self_sha256"
+  ],
+  "title": "M26 Privacy Review",
+  "type": "object"
+}
