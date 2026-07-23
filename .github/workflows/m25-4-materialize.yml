@@ -103,13 +103,13 @@ jobs:
         run: |
           set -euo pipefail
           tmp="$(mktemp -d)"
-          knowledge-m25-identity-benchmark build --output-dir "$tmp"
-          cmp pilot/m25/m25-4-annotation-policy.json "$tmp/m25-4-annotation-policy.json"
-          cmp pilot/m25/m25-4-gold-suite.provisional.json "$tmp/m25-4-gold-suite.provisional.json"
-          cmp pilot/m25/m25-4-split-manifest.json "$tmp/m25-4-split-manifest.json"
-          cmp pilot/m25/m25-4-adjudication-ledger.json "$tmp/m25-4-adjudication-ledger.json"
-          cmp pilot/m25/m25-4-baseline-report.provisional.json "$tmp/m25-4-baseline-report.provisional.json"
-          cmp pilot/m25/m25-4-daniel-annotation-gate.json "$tmp/m25-4-daniel-annotation-gate.json"
+          knowledge-m25-identity-benchmark generate \
+            --annotation-policy pilot/m25/m25-4-annotation-policy.json \
+            --output-dir "$tmp"
+          cmp pilot/m25/m25-4-gold-suite.provisional.json "$tmp/gold-suite.json"
+          cmp pilot/m25/m25-4-split-manifest.json "$tmp/split-manifest.json"
+          cmp pilot/m25/m25-4-adjudication-ledger.json "$tmp/adjudication-ledger.json"
+          cmp pilot/m25/m25-4-baseline-report.provisional.json "$tmp/baseline-report.json"
       - name: Compile materialized scope
         run: >-
           python -m compileall -q
