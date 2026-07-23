@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-review-batch-v1.schema.json",
+  "title": "M25.6 review batch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "status", "predecessor_status", "predecessor_main_seal_sha",
+    "suite_sha256", "baseline_report_sha256", "policy_sha256", "calibrated_report_sha256",
+    "item_count", "class_counts", "split_counts", "all_items_individually_reviewable",
+    "bulk_approval_permitted", "incomplete_review_blocks_admission", "decision_actions",
+    "items", "authority", "canonical_knowledge", "production_authority",
+    "source_write_permitted", "github_pr_creation_permitted", "m25_7_authorized", "batch_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-6-review-batch/v1"},
+    "status": {"const": "m25_6_awaiting_daniel_browser_acceptance"},
+    "predecessor_status": {"const": "m25_5_identity_governance_accepted"},
+    "predecessor_main_seal_sha": {"pattern": "^[0-9a-f]{40}$"},
+    "suite_sha256": {"pattern": "^[0-9a-f]{64}$"},
+    "baseline_report_sha256": {"pattern": "^[0-9a-f]{64}$"},
+    "policy_sha256": {"pattern": "^[0-9a-f]{64}$"},
+    "calibrated_report_sha256": {"pattern": "^[0-9a-f]{64}$"},
+    "item_count": {"const": 30},
+    "class_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+    "split_counts": {"type": "object", "additionalProperties": false, "required": ["train", "calibration", "final"], "properties": {"train": {"const": 10}, "calibration": {"const": 10}, "final": {"const": 10}}},
+    "all_items_individually_reviewable": {"const": true},
+    "bulk_approval_permitted": {"const": false},
+    "incomplete_review_blocks_admission": {"const": true},
+    "decision_actions": {"type": "array", "minItems": 6, "maxItems": 6, "uniqueItems": true, "items": {"enum": ["approve", "map", "edit", "split", "reject", "defer"]}},
+    "items": {"type": "array", "minItems": 30, "maxItems": 30, "items": {"type": "object"}},
+    "authority": {"const": "admission_review_only"},
+    "canonical_knowledge": {"const": false},
+    "production_authority": {"const": false},
+    "source_write_permitted": {"const": false},
+    "github_pr_creation_permitted": {"const": false},
+    "m25_7_authorized": {"const": false},
+    "batch_sha256": {"pattern": "^[0-9a-f]{64}$"}
+  }
+}

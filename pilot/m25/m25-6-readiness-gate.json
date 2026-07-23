@@ -1,0 +1,37 @@
+{
+  "batch_sha256": "254e5a9dcd6bc970828a6a102daf02ff62921dd57533e4cca02ba33a9a41dced",
+  "browser_acceptance_plan_sha256": "576924034962df3ae869b6baad39efb5c3702ccba89e6c0f5e36dc82ca01df09",
+  "deliverables": {
+    "approve_map_edit_split_reject_defer": true,
+    "audit_export": true,
+    "batch_dashboard": true,
+    "candidate_comparison": true,
+    "decision_digest": true,
+    "explicit_diff": true,
+    "graph_neighborhood": true,
+    "source_reader": true
+  },
+  "exit_gates": {
+    "actions_replayable_and_auditable": true,
+    "daniel_browser_acceptance_recorded": false,
+    "hidden_batch_approval_absent": true,
+    "incomplete_review_blocks_admission": true
+  },
+  "gate_sha256": "7dab6a735d55962b5054202a6a56c4f3dcaf4f4ceb1bcfc5e0514c74883f8a58",
+  "github_pr_creation_permitted": false,
+  "m25_7_authorized": false,
+  "protected_mutations": {
+    "canonical_identity": false,
+    "foundation": false,
+    "large_scale_ingestion": false,
+    "production_pointer": false,
+    "qdrant": false,
+    "r2_production": false,
+    "release": false,
+    "serving": false,
+    "source": false
+  },
+  "schema_version": "knowledge-engine-m25-6-readiness-gate/v1",
+  "source_write_permitted": false,
+  "status": "m25_6_awaiting_daniel_browser_acceptance"
+}

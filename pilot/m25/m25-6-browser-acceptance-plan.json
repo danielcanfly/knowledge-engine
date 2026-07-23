@@ -1,0 +1,81 @@
+{
+  "acceptance_questions": [
+    "Are all six actions understandable and correctly constrained?",
+    "Is the evidence and comparison sufficient for an item-level decision?",
+    "Does stale/incomplete state visibly block admission?",
+    "Is the candidate-only and no-Source-write boundary clear?"
+  ],
+  "authentication": {
+    "mode": "http_basic",
+    "password_distributed_in_artifact": false,
+    "test_username": "browser-reviewer",
+    "unauthenticated_review_ui_permitted": false
+  },
+  "batch_sha256": "254e5a9dcd6bc970828a6a102daf02ff62921dd57533e4cca02ba33a9a41dced",
+  "daniel_browser_acceptance_required": true,
+  "m25_7_authorized": false,
+  "plan_sha256": "576924034962df3ae869b6baad39efb5c3702ccba89e6c0f5e36dc82ca01df09",
+  "predecessor_status": "m25_5_identity_governance_accepted",
+  "required_observations": [
+    "batch dashboard",
+    "source reader evidence locators",
+    "candidate comparison",
+    "ranked identity signals",
+    "graph neighbourhood",
+    "explicit diff",
+    "decision digest",
+    "audit export"
+  ],
+  "scenarios": [
+    {
+      "action": "approve",
+      "expected": "decision digest recorded",
+      "item_id": "gold_final_exact_match",
+      "scenario_id": "approve-exact"
+    },
+    {
+      "action": "map",
+      "expected": "mapping decision remains admission-only",
+      "item_id": "gold_final_duplicate",
+      "mapping_target": "kos_existing_target",
+      "scenario_id": "map-duplicate"
+    },
+    {
+      "action": "edit",
+      "edited_payload": {
+        "label": "Edited candidate label"
+      },
+      "expected": "edited payload appears in immutable ledger",
+      "item_id": "gold_final_near_match_distinct",
+      "scenario_id": "edit-near-match"
+    },
+    {
+      "action": "split",
+      "expected": "split plan requires two or more parts",
+      "item_id": "gold_final_parent_child_distinct",
+      "scenario_id": "split-parent-child",
+      "split_payload": [
+        {
+          "label": "Parent scope"
+        },
+        {
+          "label": "Child scope"
+        }
+      ]
+    },
+    {
+      "action": "reject",
+      "expected": "rejection is terminal without Source write",
+      "item_id": "gold_final_blocked_policy",
+      "scenario_id": "reject-policy-blocked"
+    },
+    {
+      "action": "defer",
+      "expected": "batch remains incomplete and mutation blocked",
+      "item_id": "gold_final_polysemy_ambiguous",
+      "scenario_id": "defer-polysemy"
+    }
+  ],
+  "schema_version": "knowledge-engine-m25-6-browser-acceptance-plan/v1",
+  "status": "awaiting_daniel_browser_acceptance"
+}
