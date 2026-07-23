@@ -25,8 +25,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git merge-base --is-ancestor cf56bad3b9128020214c3a30100ec741d6842e56 HEAD
       - name: Verify approval payload chunks and archive
+        id: verify
+        continue-on-error: true
         run: |
-          python - <<'PY'
+          python - <<'PY' > /tmp/m25-4-finalization-verify.txt 2>&1
           import base64
           import hashlib
           import io
@@ -53,15 +55,19 @@ jobs:
           encoded_parts = []
           for path, expected_size, expected_sha in chunks:
               raw = path.read_bytes()
+              actual_sha = hashlib.sha256(raw).hexdigest()
+              print(path, len(raw), actual_sha)
               assert len(raw) == expected_size, (path, len(raw), expected_size)
-              assert hashlib.sha256(raw).hexdigest() == expected_sha, path
+              assert actual_sha == expected_sha, path
               encoded_parts.append(raw)
 
           archive = base64.b64decode(b''.join(encoded_parts), validate=True)
+          actual_archive_sha = hashlib.sha256(archive).hexdigest()
+          print('archive', len(archive), actual_archive_sha)
           expected_archive_sha = (
               'dac32efba7eddff8fdeb58f28742a893ad06cc442880d8496b0c6c60580e3e9f'
           )
-          assert hashlib.sha256(archive).hexdigest() == expected_archive_sha
+          assert actual_archive_sha == expected_archive_sha
 
           expected_names = {
               'docs/architecture/m25/m25-4-daniel-approval.md',
@@ -76,6 +82,7 @@ jobs:
           with tarfile.open(fileobj=io.BytesIO(archive), mode='r:gz') as handle:
               members = handle.getmembers()
               names = {member.name for member in members}
+              print('members', sorted(names))
               assert names == expected_names, (names - expected_names, expected_names - names)
               for member in members:
                   path = PurePosixPath(member.name)
@@ -83,7 +90,23 @@ jobs:
                   assert '..' not in path.parts
                   assert member.isfile()
           Path('/tmp/m25-4-finalization.tar.gz').write_bytes(archive)
+          print('verification=success')
           PY
+      - name: Upload finalization verification diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-4-finalization-verification
+          path: /tmp/m25-4-finalization-verify.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce finalization verification
+        if: always()
+        env:
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          cat /tmp/m25-4-finalization-verify.txt
+          test "$VERIFY_OUTCOME" = success
       - name: Extract approval finalization
         run: |
           tar -xzf /tmp/m25-4-finalization.tar.gz -C .
