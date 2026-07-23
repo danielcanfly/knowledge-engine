@@ -8,8 +8,7 @@ on:
       - 'scripts/m25_9_cloudflare_preflight_probe.py'
       - 'tests/test_m25_9_cloudflare_preflight_probe.py'
   push:
-    branches:
-      - 'chatgpt/m25-9-cloudflare-preflight-diagnostic-v3'
+    branches: [main]
     paths:
       - '.github/workflows/m25-9-cloudflare-preflight-diagnostic.yml'
       - 'docs/architecture/m25/m25-9-cloudflare-preflight-diagnostic.md'
