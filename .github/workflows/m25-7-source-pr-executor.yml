@@ -5,8 +5,14 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '.github/workflows/m25-7-source-pr-executor.yml'
-      - 'docs/architecture/m25/m25-7-*.md'
-      - 'pilot/m25/m25-7-*.json'
+      - 'docs/architecture/m25/m25-7-source-pr-executor.md'
+      - 'pilot/m25/m25-7-audit-export.synthetic.json'
+      - 'pilot/m25/m25-7-item-authority.synthetic.json'
+      - 'pilot/m25/m25-7-m25-6-acceptance.synthetic.json'
+      - 'pilot/m25/m25-7-readiness-gate.json'
+      - 'pilot/m25/m25-7-review-batch.synthetic.json'
+      - 'pilot/m25/m25-7-source-baseline.synthetic.json'
+      - 'pilot/m25/m25-7-source-pr-plan.synthetic.json'
       - 'schemas/m25-source-*.schema.json'
       - 'src/knowledge_engine/m25_source_pr_*.py'
       - 'tests/test_m25_7_source_pr_executor*.py'
@@ -97,7 +103,7 @@ jobs:
           assert gate['m25_8_authorized'] is False
           PY
           changed="$(git diff --name-only origin/main...HEAD | sort)"
-          expected="$(printf '%s\n' \
+          implementation="$(printf '%s\n' \
             '.github/workflows/m25-7-source-pr-executor.yml' \
             'docs/architecture/m25/m25-7-source-pr-executor.md' \
             'pilot/m25/m25-7-audit-export.synthetic.json' \
@@ -117,7 +123,14 @@ jobs:
             'src/knowledge_engine/m25_source_pr_executor_cli.py' \
             'tests/test_m25_7_source_pr_executor.py' \
             'tests/test_m25_7_source_pr_executor_contracts.py' | sort)"
-          test "$changed" = "$expected"
+          closure="$(printf '%s\n' \
+            '.github/workflows/m25-7-benchmark-closure.yml' \
+            '.github/workflows/m25-7-source-pr-executor.yml' \
+            'docs/architecture/m25/m25-7-benchmark-closure.md' \
+            'pilot/m25/m25-7-benchmark-closure.json' \
+            'pilot/m25/m25-7-benchmark-decision-ledger.json' \
+            'tests/test_m25_7_benchmark_closure.py' | sort)"
+          test "$changed" = "$implementation" || test "$changed" = "$closure"
           ! printf '%s\n' "$changed" | grep -Eq '^(bundle/|provenance/|registry/|reviews/|foundation/|release/|r2/|qdrant/|production/|workers/|channels/)'
       - name: Assemble exact-head evidence
         env:
