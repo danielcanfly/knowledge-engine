@@ -6,7 +6,7 @@ on:
     paths:
       - '.github/workflows/m25-9-blog-batch-a.yml'
       - 'docs/architecture/m25/m25-9-blog-batch-a.md'
-      - 'pilot/m25/m25-9-blog-batch-a-plan.json'
+      - 'pilot/m25/blog-batch-a-plan.json'
       - 'schemas/m25-blog-batch-plan-v1.schema.json'
       - 'src/knowledge_engine/m25_blog_pilot.py'
       - 'tests/test_m25_blog_pilot.py'
@@ -79,7 +79,7 @@ jobs:
           from pathlib import Path
           import jsonschema
 
-          plan_path = Path('pilot/m25/m25-9-blog-batch-a-plan.json')
+          plan_path = Path('pilot/m25/blog-batch-a-plan.json')
           schema_path = Path('schemas/m25-blog-batch-plan-v1.schema.json')
           plan = json.loads(plan_path.read_text())
           schema = json.loads(schema_path.read_text())
@@ -161,7 +161,7 @@ jobs:
           expected="$(printf '%s\n' \
             '.github/workflows/m25-9-blog-batch-a.yml' \
             'docs/architecture/m25/m25-9-blog-batch-a.md' \
-            'pilot/m25/m25-9-blog-batch-a-plan.json' \
+            'pilot/m25/blog-batch-a-plan.json' \
             'schemas/m25-blog-batch-plan-v1.schema.json' \
             'src/knowledge_engine/m25_blog_pilot.py' \
             'tests/test_m25_blog_pilot.py' | sort)"
