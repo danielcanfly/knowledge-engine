@@ -51,18 +51,41 @@ jobs:
           PY
       - name: Lint and test M26.2
         run: |
+          set +e
+          mkdir -p /tmp/m26-2-diagnostics
           python -m ruff check \
             src/knowledge_engine/m26_retrieval_envelope.py \
             src/knowledge_engine/m26_retrieval_envelope_cli.py \
             tests/test_m26_2_retrieval_envelope.py \
-            tests/test_m26_2_retrieval_envelope_contracts.py
-          python -m pytest -q \
-            tests/test_m26_2_retrieval_envelope.py \
             tests/test_m26_2_retrieval_envelope_contracts.py \
-            tests/test_m26_1_architecture_authority.py \
-            tests/test_m26_1_reconciliation.py \
-            tests/test_m14_retrieval.py \
-            tests/test_m14_citation_evidence.py
+            > /tmp/m26-2-diagnostics/lint-test.log 2>&1
+          ruff_status=$?
+          pytest_status=0
+          if [ "$ruff_status" -eq 0 ]; then
+            python -m pytest -q \
+              tests/test_m26_2_retrieval_envelope.py \
+              tests/test_m26_2_retrieval_envelope_contracts.py \
+              tests/test_m26_1_architecture_authority.py \
+              tests/test_m26_1_reconciliation.py \
+              tests/test_m14_retrieval.py \
+              tests/test_m14_citation_evidence.py \
+              >> /tmp/m26-2-diagnostics/lint-test.log 2>&1
+            pytest_status=$?
+          fi
+          cat /tmp/m26-2-diagnostics/lint-test.log
+          printf '{"ruff_status":%s,"pytest_status":%s}\n' \
+            "$ruff_status" "$pytest_status" \
+            > /tmp/m26-2-diagnostics/status.json
+          test "$ruff_status" -eq 0
+          test "$pytest_status" -eq 0
+      - name: Upload lint and test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-2-lint-test-diagnostics
+          path: /tmp/m26-2-diagnostics
+          if-no-files-found: error
+          retention-days: 7
       - name: Rebuild deterministic benchmark
         run: |
           mkdir -p /tmp/m26-2-a /tmp/m26-2-b /tmp/m26-2-evidence
