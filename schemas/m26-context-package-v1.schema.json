@@ -1,0 +1,207 @@
+{
+  "$id": "knowledge-engine/m26/context-package-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "citations": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "citation_id": {
+            "pattern": "^C[0-9]+$",
+            "type": "string"
+          },
+          "context_manifest_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "passage_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "citation_id",
+          "passage_id",
+          "context_manifest_sha256"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "context_manifest": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "context_manifest_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "diagnostics": {
+      "additionalProperties": false,
+      "properties": {
+        "context_error": {
+          "type": "string"
+        },
+        "first_divergent_stage": {
+          "type": "string"
+        },
+        "gap_next_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prompt_injection_quarantined": {
+          "type": "boolean"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sufficiency": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sufficiency",
+        "first_divergent_stage",
+        "reason_codes",
+        "prompt_injection_quarantined",
+        "gap_next_action"
+      ],
+      "type": "object"
+    },
+    "evidence_budget": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "evidence_budget_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evidence_envelope_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "instruction_blocks": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "enum": [
+              "instruction",
+              "evidence"
+            ]
+          },
+          "block_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "system",
+              "context"
+            ]
+          },
+          "text": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "block_id",
+          "role",
+          "authority",
+          "text"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "next_stage": {
+      "enum": [
+        "m26_4_provider_mock",
+        "abstain"
+      ]
+    },
+    "production_answer_serving": {
+      "const": false
+    },
+    "provider_calls": {
+      "const": false
+    },
+    "release": {
+      "type": "object"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "safe_for_provider_mock": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-context-package/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "semantic_or_hybrid_serving": {
+      "const": false
+    },
+    "status": {
+      "enum": [
+        "compiled",
+        "compiled_with_warnings",
+        "abstain_required"
+      ]
+    },
+    "synthetic_only": {
+      "const": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "evidence_envelope_sha256",
+    "context_manifest",
+    "context_manifest_sha256",
+    "evidence_budget",
+    "evidence_budget_sha256",
+    "release",
+    "status",
+    "safe_for_provider_mock",
+    "synthetic_only",
+    "provider_calls",
+    "production_answer_serving",
+    "semantic_or_hybrid_serving",
+    "citations",
+    "instruction_blocks",
+    "diagnostics",
+    "next_stage",
+    "self_sha256"
+  ],
+  "title": "M26 Context Package",
+  "type": "object"
+}
