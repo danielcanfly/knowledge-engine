@@ -1,0 +1,73 @@
+{
+  "accepted_predecessor": {
+    "batch_a_inventory_sha256": "734b6d5d346ad1e283d8d420332e6dab0f6c77074f7a4ed445bbcba62144f879",
+    "batch_b_inventory_sha256": "f58b1be75093ad4f530e5317c35055a9b1cc21d56cef6b921550fd544b976988",
+    "knowledge_engine_merge_sha": "6286a21d67164ded2cb677618ffe95db8db10938",
+    "master_inventory_sha256": "ee8589e4e2ce19005507fc5b9f3aa47d3c0320ab34848e81948c5cdaad7f729e"
+  },
+  "acquisition": {
+    "drafts_permitted": false,
+    "frontmatter_validation": true,
+    "immutable_snapshots": true,
+    "series_alias_convergence": true,
+    "series_catalog_validation": true,
+    "transport": "github_git_tree_and_blob_api",
+    "verify_content_sha256": true,
+    "verify_git_blob_sha": true
+  },
+  "batch_id": "M25.9A-BLOG-B",
+  "boundary": {
+    "candidate_deployment": false,
+    "credential_mutation": false,
+    "m25_9b_authorized": false,
+    "m25_9c_authorized": false,
+    "production_pointer_mutation": false,
+    "production_release_mutation": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "source_merge": false,
+    "source_pr_creation": false,
+    "source_write": false,
+    "traffic_mutation": false
+  },
+  "candidate_graph": {
+    "edge_types": [
+      "part_of",
+      "contains",
+      "precedes"
+    ],
+    "node_types": [
+      "Series",
+      "Article",
+      "Section"
+    ],
+    "section_levels": [
+      2,
+      3
+    ],
+    "semantic_claim_promotion": false,
+    "series_source_lineage_required": true,
+    "source_line_locators_required": true
+  },
+  "issue_number": 1090,
+  "master_population": {
+    "expected_article_count": 156,
+    "formal_series_count": 24,
+    "language": "en",
+    "origin_commit": "97821b6547ce3c0b8b8acf11cbbf4795684df458",
+    "origin_repository": "huaihsuanbusiness/daniel-blog",
+    "parent_collection_count": 25,
+    "path_pattern": "src/content/blog/*/en.md"
+  },
+  "next_legal_action": "review_exact_batch_b_inventory_and_candidate_graph_before_source_write",
+  "partition": {
+    "batch_a_count": 78,
+    "batch_b_count": 78,
+    "batch_b_is_exact_complement": true,
+    "intersection_required": 0,
+    "missing_required": 0,
+    "real_series_must_remain_whole": true
+  },
+  "plan_sha256": "438e0b6d85e62777760bbf7176d838dc61f79e9b94be132db0de2a6a5e6291b0",
+  "schema_version": "knowledge-engine-m25-9-blog-batch-b-plan/v1"
+}

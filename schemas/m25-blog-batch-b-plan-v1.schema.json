@@ -1,0 +1,142 @@
+{
+  "$id": "knowledge-engine-m25-9-blog-batch-b-plan/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "accepted_predecessor": {
+      "additionalProperties": false,
+      "properties": {
+        "batch_a_inventory_sha256": {
+          "const": "734b6d5d346ad1e283d8d420332e6dab0f6c77074f7a4ed445bbcba62144f879"
+        },
+        "batch_b_inventory_sha256": {
+          "const": "f58b1be75093ad4f530e5317c35055a9b1cc21d56cef6b921550fd544b976988"
+        },
+        "knowledge_engine_merge_sha": {
+          "const": "6286a21d67164ded2cb677618ffe95db8db10938"
+        },
+        "master_inventory_sha256": {
+          "const": "ee8589e4e2ce19005507fc5b9f3aa47d3c0320ab34848e81948c5cdaad7f729e"
+        }
+      },
+      "required": [
+        "knowledge_engine_merge_sha",
+        "master_inventory_sha256",
+        "batch_a_inventory_sha256",
+        "batch_b_inventory_sha256"
+      ],
+      "type": "object"
+    },
+    "acquisition": {
+      "type": "object"
+    },
+    "batch_id": {
+      "const": "M25.9A-BLOG-B"
+    },
+    "boundary": {
+      "additionalProperties": {
+        "const": false
+      },
+      "type": "object"
+    },
+    "candidate_graph": {
+      "type": "object"
+    },
+    "issue_number": {
+      "const": 1090
+    },
+    "master_population": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_article_count": {
+          "const": 156
+        },
+        "formal_series_count": {
+          "const": 24
+        },
+        "language": {
+          "const": "en"
+        },
+        "origin_commit": {
+          "const": "97821b6547ce3c0b8b8acf11cbbf4795684df458"
+        },
+        "origin_repository": {
+          "const": "huaihsuanbusiness/daniel-blog"
+        },
+        "parent_collection_count": {
+          "const": 25
+        },
+        "path_pattern": {
+          "const": "src/content/blog/*/en.md"
+        }
+      },
+      "required": [
+        "origin_repository",
+        "origin_commit",
+        "path_pattern",
+        "language",
+        "expected_article_count",
+        "formal_series_count",
+        "parent_collection_count"
+      ],
+      "type": "object"
+    },
+    "next_legal_action": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "partition": {
+      "additionalProperties": false,
+      "properties": {
+        "batch_a_count": {
+          "const": 78
+        },
+        "batch_b_count": {
+          "const": 78
+        },
+        "batch_b_is_exact_complement": {
+          "const": true
+        },
+        "intersection_required": {
+          "const": 0
+        },
+        "missing_required": {
+          "const": 0
+        },
+        "real_series_must_remain_whole": {
+          "const": true
+        }
+      },
+      "required": [
+        "batch_a_count",
+        "batch_b_count",
+        "batch_b_is_exact_complement",
+        "real_series_must_remain_whole",
+        "intersection_required",
+        "missing_required"
+      ],
+      "type": "object"
+    },
+    "plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-9-blog-batch-b-plan/v1"
+    }
+  },
+  "required": [
+    "schema_version",
+    "issue_number",
+    "batch_id",
+    "accepted_predecessor",
+    "master_population",
+    "partition",
+    "acquisition",
+    "candidate_graph",
+    "boundary",
+    "next_legal_action",
+    "plan_sha256"
+  ],
+  "type": "object"
+}
