@@ -1,0 +1,52 @@
+name: M25.10 Live Candidate Diagnostics
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-10-blog-live-diagnostics.yml'
+      - 'src/knowledge_engine/m25_blog_live_candidate.py'
+      - 'tests/test_m25_10_blog_live_candidate.py'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: python -m pip install -q --disable-pip-version-check -e '.[dev]'
+      - name: Capture Ruff
+        run: |
+          mkdir -p /tmp/m25-diagnostics
+          python -m ruff check --output-format=concise \
+            src/knowledge_engine/m25_blog_live_candidate.py \
+            tests/test_m25_10_blog_live_candidate.py \
+            >/tmp/m25-diagnostics/ruff.txt 2>&1 || true
+      - name: Capture pytest
+        run: |
+          python -m pytest -q \
+            tests/test_m25_10_blog_live_candidate.py \
+            tests/test_m25_10_blog_candidate_release.py \
+            tests/test_m25_blog_series_convergence.py \
+            tests/test_m25_blog_pilot_batch_b.py \
+            >/tmp/m25-diagnostics/pytest.txt 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-10-live-candidate-findings
+          path: /tmp/m25-diagnostics/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Report findings
+        run: |
+          cat /tmp/m25-diagnostics/ruff.txt
+          cat /tmp/m25-diagnostics/pytest.txt
+          test ! -s /tmp/m25-diagnostics/ruff.txt
+          grep -Eq '^[0-9]+ passed' /tmp/m25-diagnostics/pytest.txt
