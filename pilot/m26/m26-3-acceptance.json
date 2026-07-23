@@ -1,0 +1,108 @@
+{
+  "authority_boundary": {
+    "canonical_identity_or_relation_mutation": false,
+    "foundation_mutation": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "provider_calls": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true
+  },
+  "benchmark": {
+    "abstain_required_count": 3,
+    "case_count": 9,
+    "compiled_context_count": 6,
+    "failed_count": 0,
+    "passed_count": 9,
+    "production_answer_serving_count": 0,
+    "provider_call_count": 0,
+    "real_corpus_binding_count": 0,
+    "semantic_or_hybrid_use_count": 0
+  },
+  "evidence_artifact": {
+    "artifact_id": 8559677787,
+    "digest": "sha256:94968939985158c349145d848ccea7e5b0a5573658ceda6bcf76a89797b7653e",
+    "name": "m26-3-context-compiler-evidence",
+    "retention_days": 30,
+    "workflow_run_id": 29997773101
+  },
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_escalations": 0,
+    "codex_used": false,
+    "daniel_gate_required": false
+  },
+  "frozen_identities": {
+    "benchmark_cases_sha256": "3a736c557b222f4fd182fa023a7f0580cd4f8390056af6520f9a3ae28ce1e9ff",
+    "context_package_schema_sha256": "7f07279d2e9ed1133b36cb4c561954261aeed13c749d1296f0761c45224547f5",
+    "context_policy_sha256": "8d6f1ae97a3598a37d4da65167c7fef343c75bc6c5c3c6e2ec72308f97b8c766",
+    "contract_registry_self_sha256": "19bf9127f774d67d892d8ce9e02a1e2f7940f2d366bd8275cddb24b15b5339af",
+    "entry_contract_sha256": "da286a63a257892eff9c723005e918df662683267d392ecb6c3595a19856f100",
+    "evidence_budget_schema_sha256": "7058edf9addc28e4702ef195c8491d06a497a6e391282403fa55b15727eb2e1c"
+  },
+  "implementation": {
+    "base_sha": "31d6aa093181cb9efbf48d1da70c70ae9181773b",
+    "changed_file_count": 10,
+    "expected_head_merge": true,
+    "final_head_sha": "56b00926957e10327be5910538b5b3b34b60b06d",
+    "merge_sha": "693fdc32c5f4f7d30505112be0b866bdb671143e",
+    "pull_request_number": 1066,
+    "unresolved_review_thread_count": 0
+  },
+  "issue": {
+    "number": 1064,
+    "repository": "danielcanfly/knowledge-engine",
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "next_stage": {
+    "authorized": true,
+    "live_provider_calls_permitted": false,
+    "name": "Provider Mock, Replay Contract and Privacy Review",
+    "predecessor_status_required": "m26_3_context_compiler_accepted",
+    "production_answer_serving_permitted": false,
+    "provider_mock_replay_permitted": true,
+    "real_corpus_binding_permitted": false,
+    "stage_id": "M26.4",
+    "synthetic_only": true
+  },
+  "predecessor": {
+    "main_seal_sha": "31d6aa093181cb9efbf48d1da70c70ae9181773b",
+    "status": "m26_2_retrieval_envelope_accepted"
+  },
+  "quality_and_security": {
+    "acl_filtered_text_excluded": true,
+    "budget_exclusions_accounted": true,
+    "citation_ids_require_selected_passage_ids": true,
+    "context_manifests_digest_bound": true,
+    "context_packages_deterministic": true,
+    "evidence_budgets_digest_bound": true,
+    "mandatory_conflict_evidence_preserved": true,
+    "no_silent_context_drop": true,
+    "prompt_injection_quoted_as_evidence_only": true,
+    "secret_like_text_excluded": true
+  },
+  "reconciliation": {
+    "all_frozen_artifact_digests_required": true,
+    "evidence_digest_required": true,
+    "exact_remote_identity_verified": true,
+    "implementation_merge_is_required_ancestor": true,
+    "no_new_authority_beyond_m26_4_entry": true
+  },
+  "required_workflows": {
+    "CI": 29997773433,
+    "M17 Architecture Canon Acceptance": 29997773114,
+    "M18 Graph v2 acceptance": 29997773188,
+    "M26.1 Architecture Authority": 29997773826,
+    "M26.3 Context Compiler": 29997773101,
+    "R2 Release Integration": 29997772995
+  },
+  "schema_version": "knowledge-engine-m26-3-acceptance/v1",
+  "self_sha256": "c01eb3e2cea758fcd7626a2e1322834777376dc0e896dabfbc24b28ca6d9bd77",
+  "status": "m26_3_context_compiler_accepted"
+}
