@@ -1,0 +1,86 @@
+{
+  "$id": "knowledge-engine/m26/evidence-budget-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "all_mandatory_preserved": {
+      "type": "boolean"
+    },
+    "budget_status": {
+      "enum": [
+        "within_budget"
+      ]
+    },
+    "evidence_envelope_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "excluded_passage_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "mandatory_passage_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "measured_token_estimate": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "reserved_instruction_tokens": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-evidence-budget/v1"
+    },
+    "selected_passage_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "token_budget": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "truncation_policy": {
+      "enum": [
+        "none",
+        "structure_aware",
+        "abstain"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "evidence_envelope_sha256",
+    "token_budget",
+    "reserved_instruction_tokens",
+    "measured_token_estimate",
+    "selected_passage_ids",
+    "mandatory_passage_ids",
+    "excluded_passage_ids",
+    "all_mandatory_preserved",
+    "budget_status",
+    "truncation_policy",
+    "self_sha256"
+  ],
+  "title": "M26 Evidence Budget",
+  "type": "object"
+}

@@ -1,0 +1,156 @@
+name: M26.3 Context Compiler
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m26-3-context-compiler.yml'
+      - 'docs/architecture/m26/m26-3-*.md'
+      - 'pilot/m26/m26-3-*.json'
+      - 'schemas/m26-context-package-v1.schema.json'
+      - 'schemas/m26-evidence-budget-v1.schema.json'
+      - 'src/knowledge_engine/m26_context_compiler.py'
+      - 'tests/test_m26_3_context_compiler.py'
+permissions:
+  contents: read
+jobs:
+  context-compiler:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact head and accepted predecessor
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          acceptance = json.loads(Path('pilot/m26/m26-2-acceptance.json').read_text())
+          entry = json.loads(Path('pilot/m26/m26-3-entry-contract.json').read_text())
+          assert acceptance['status'] == 'm26_2_retrieval_envelope_accepted'
+          assert acceptance['next_stage']['stage_id'] == 'M26.3'
+          assert acceptance['next_stage']['authorized'] is True
+          assert acceptance['next_stage']['synthetic_only'] is True
+          assert acceptance['next_stage']['provider_calls_permitted'] is False
+          assert acceptance['next_stage']['real_corpus_binding_permitted'] is False
+          assert entry['accepted_predecessor']['final_main_seal'] == (
+              '31d6aa093181cb9efbf48d1da70c70ae9181773b'
+          )
+          assert not any(
+              value
+              for key, value in entry['authority_boundary'].items()
+              if key != 'synthetic_only'
+          )
+          PY
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M26.3
+        run: |
+          python -m ruff check \
+            src/knowledge_engine/m26_context_compiler.py \
+            tests/test_m26_3_context_compiler.py
+      - name: Test M26.3 entry and registry
+        run: |
+          python -m pytest -q \
+            tests/test_m26_3_context_compiler.py::test_entry_contract_is_m26_2_accepted_and_synthetic_only \
+            tests/test_m26_3_context_compiler.py::test_context_contract_registry_is_digest_bound_and_closed \
+            tests/test_m26_3_context_compiler.py::test_context_policy_fails_closed_on_forbidden_authority
+      - name: Test M26.3 benchmark
+        run: |
+          python -m pytest -q tests/test_m26_3_context_compiler.py::test_context_benchmark_passes_all_synthetic_cases
+      - name: Test M26.3 conflict and ACL cases
+        run: |
+          python -m pytest -q \
+            tests/test_m26_3_context_compiler.py::test_conflicting_evidence_is_mandatory_and_cited \
+            tests/test_m26_3_context_compiler.py::test_acl_no_match_does_not_leak_restricted_text
+      - name: Test M26.3 prompt injection
+        run: |
+          python -m pytest -q tests/test_m26_3_context_compiler.py::test_prompt_injection_is_quarantined_as_evidence_not_instruction
+      - name: Test M26.3 mandatory budget
+        run: |
+          python -m pytest -q tests/test_m26_3_context_compiler.py::test_budget_too_small_for_mandatory_conflict_forces_abstention
+      - name: Test M26.3 docs
+        run: |
+          python -m pytest -q tests/test_m26_3_context_compiler.py::test_docs_pin_stop_lines_and_downstream_boundary
+      - name: Test M26 predecessor contracts
+        run: |
+          python -m pytest -q \
+            tests/test_m26_2_retrieval_envelope.py \
+            tests/test_m26_1_architecture_authority.py
+      - name: Rebuild deterministic context evidence
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p /tmp/m26-3
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from knowledge_engine.m26_context_compiler import run_context_benchmark
+
+          def load(path):
+              return json.loads(Path(path).read_text())
+
+          def digest(path):
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+          report = run_context_benchmark(
+              load('pilot/m26/m26-3-benchmark-cases.json'),
+              retrieval_cases=load('pilot/m26/m26-2-benchmark-cases.json'),
+              corpus=load('pilot/m26/m26-2-synthetic-corpus.json'),
+              retrieval_policy=load('pilot/m26/m26-2-retrieval-policy.json'),
+              context_policy=load('pilot/m26/m26-3-context-policy.json'),
+          )
+          assert report['status'] == 'm26_3_context_compiler_ready'
+          report_path = Path('/tmp/m26-3/context-benchmark-report.json')
+          report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
+          files = [
+              'pilot/m26/m26-3-entry-contract.json',
+              'pilot/m26/m26-3-context-policy.json',
+              'pilot/m26/m26-3-benchmark-cases.json',
+              'pilot/m26/m26-3-contract-registry.json',
+              'schemas/m26-context-package-v1.schema.json',
+              'schemas/m26-evidence-budget-v1.schema.json',
+          ]
+          evidence = {
+              'schema_version': 'knowledge-engine-m26-3-exact-head-evidence/v1',
+              'head_sha': os.environ['HEAD_SHA'],
+              'workflow_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'artifacts': {path: digest(path) for path in files},
+              'benchmark_report_sha256': hashlib.sha256(report_path.read_bytes()).hexdigest(),
+              'case_count': report['case_count'],
+              'passed_count': report['passed_count'],
+              'failed_count': report['failed_count'],
+              'synthetic_only': True,
+              'provider_calls': False,
+              'real_corpus_binding': False,
+              'semantic_or_hybrid_serving': False,
+              'production_answer_serving': False,
+          }
+          Path('/tmp/m26-3/evidence.json').write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+      - name: Reject protected mutations
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          printf '%s\n' "$changed"
+          ! printf '%s\n' "$changed" | grep -Eq '^(workers/|channels/|foundation/|release/|r2/|qdrant/|production/)'
+          ! printf '%s\n' "$changed" | grep -Eq '^(src/knowledge_engine/(m14_|m21_|m24_|m25_|m26_retrieval_envelope\.py))'
+          ! printf '%s\n' "$changed" | grep -Eq '^(pilot/m25/|docs/architecture/m25/)'
+          python -m compileall -q src/knowledge_engine/m26_context_compiler.py tests/test_m26_3_context_compiler.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m26-3-context-compiler-evidence
+          path: /tmp/m26-3
+          if-no-files-found: error
+          retention-days: 30

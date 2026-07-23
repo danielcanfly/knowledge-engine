@@ -1,0 +1,33 @@
+{
+  "accepted_predecessor_status": "m26_2_retrieval_envelope_accepted",
+  "authority": {
+    "production_answer_serving": false,
+    "provider_calls": false,
+    "qdrant_or_r2_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true
+  },
+  "bounds": {
+    "default_token_budget": 900,
+    "max_citations": 20,
+    "max_instruction_blocks": 2,
+    "reserved_instruction_tokens": 96
+  },
+  "predecessor_main_seal_sha": "31d6aa093181cb9efbf48d1da70c70ae9181773b",
+  "provider_profile": "m26-4-provider-mock-input/v1",
+  "rules": {
+    "acl_filtered_text_permitted": false,
+    "citation_without_passage_permitted": false,
+    "preserve_conflicting_evidence": true,
+    "quote_prompt_injection_as_evidence_only": true,
+    "secret_like_text_permitted": false,
+    "unknown_major_schema_version_fail_closed": true
+  },
+  "schema_version": "knowledge-engine-m26-context-policy/v1",
+  "self_sha256": "183c53efd5a685faa2c1cad27c0ca66a297dd7546ec3c282a2301c2b441560ba",
+  "stage_id": "M26.3",
+  "tokenizer_identity": "synthetic-token-estimator-v1"
+}

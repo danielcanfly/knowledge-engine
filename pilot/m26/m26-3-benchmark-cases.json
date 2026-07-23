@@ -1,0 +1,96 @@
+{
+  "authority": {
+    "production_answer_serving": false,
+    "provider_calls": false,
+    "real_corpus_binding": false,
+    "synthetic_only": true
+  },
+  "cases": [
+    {
+      "case_id": "context_direct_public",
+      "expected": {
+        "min_citations": 1,
+        "safe_for_provider_mock": true,
+        "status": "compiled"
+      },
+      "m26_2_case_id": "direct_public"
+    },
+    {
+      "case_id": "context_m26_1_fixture_compat",
+      "expected": {
+        "min_citations": 1,
+        "safe_for_provider_mock": true,
+        "status": "compiled"
+      },
+      "m26_2_case_id": "m26_1_fixture_compat"
+    },
+    {
+      "case_id": "context_multi_facet_internal",
+      "expected": {
+        "min_citations": 4,
+        "safe_for_provider_mock": true,
+        "status": "compiled"
+      },
+      "m26_2_case_id": "multi_facet_internal"
+    },
+    {
+      "case_id": "context_graph_public",
+      "expected": {
+        "min_citations": 2,
+        "safe_for_provider_mock": true,
+        "status": "compiled"
+      },
+      "m26_2_case_id": "graph_public"
+    },
+    {
+      "case_id": "context_acl_negative_public",
+      "expected": {
+        "forbidden_text_fragments": [
+          "visible only to the restricted audience",
+          "private operators"
+        ],
+        "safe_for_provider_mock": false,
+        "status": "abstain_required"
+      },
+      "m26_2_case_id": "acl_negative_public"
+    },
+    {
+      "case_id": "context_stale_public",
+      "expected": {
+        "safe_for_provider_mock": false,
+        "status": "abstain_required"
+      },
+      "m26_2_case_id": "stale_public"
+    },
+    {
+      "case_id": "context_conflict_public",
+      "expected": {
+        "min_citations": 2,
+        "requires_conflict_preservation": true,
+        "safe_for_provider_mock": true,
+        "status": "compiled_with_warnings"
+      },
+      "m26_2_case_id": "conflict_public"
+    },
+    {
+      "case_id": "context_prompt_injection_public",
+      "expected": {
+        "min_citations": 1,
+        "requires_prompt_injection_quarantine": true,
+        "safe_for_provider_mock": true,
+        "status": "compiled_with_warnings"
+      },
+      "m26_2_case_id": "prompt_injection_public"
+    },
+    {
+      "case_id": "context_no_match_public",
+      "expected": {
+        "safe_for_provider_mock": false,
+        "status": "abstain_required"
+      },
+      "m26_2_case_id": "no_match_public"
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-context-benchmark-cases/v1",
+  "self_sha256": "44170dcfdb09481009a4ab22a9dc64e57a1554ef89c6b2816c65a7a253b263ab"
+}
