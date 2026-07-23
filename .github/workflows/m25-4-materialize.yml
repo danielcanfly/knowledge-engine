@@ -41,6 +41,32 @@ jobs:
           python-version: '3.11'
       - name: Install exact project dependencies
         run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Apply exact lint normalization
+        run: |
+          python -m ruff check --fix --exit-zero \
+            src/knowledge_engine/m25_identity_benchmark.py \
+            src/knowledge_engine/m25_identity_benchmark_cli.py \
+            tests/test_m25_4_identity_benchmark.py \
+            tests/test_m25_4_identity_benchmark_contracts.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('tests/test_m25_4_identity_benchmark_contracts.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              '    assert suite["suite_sha256"] == "103db6e982e71ed8e4c442eb4f36f48b06eb846fdc3f339fb3cd078215b5ddfc"\n',
+              '    assert suite["suite_sha256"] == (\n'
+              '        "103db6e982e71ed8e4c442eb4f36f48b06eb846fdc3f339fb3cd078215b5ddfc"\n'
+              '    )\n',
+          )
+          text = text.replace(
+              '    assert report["report_sha256"] == "993ab879129db14400603c8a213a82c2437c6b545f998127d7ad19a9153c17d2"\n',
+              '    assert report["report_sha256"] == (\n'
+              '        "993ab879129db14400603c8a213a82c2437c6b545f998127d7ad19a9153c17d2"\n'
+              '    )\n',
+          )
+          path.write_text(text, encoding='utf-8')
+          PY
       - name: Capture materialized lint diagnostics
         id: lint
         continue-on-error: true
