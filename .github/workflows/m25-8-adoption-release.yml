@@ -47,12 +47,26 @@ jobs:
           PY
       - name: Install exact dependencies
         run: python -m pip install -q --disable-pip-version-check -e '.[dev]'
-      - name: Lint M25.8
+      - name: Capture M25.8 lint findings
         run: |
-          python -m ruff check \
+          mkdir -p /tmp/m25-8
+          python -m ruff check --output-format=concise \
             src/knowledge_engine/m25_adoption_release.py \
             src/knowledge_engine/m25_adoption_release_cli.py \
-            tests/test_m25_8_adoption_release.py
+            tests/test_m25_8_adoption_release.py \
+            >/tmp/m25-8/ruff-findings.txt 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-8-ruff-findings
+          path: /tmp/m25-8/ruff-findings.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce clean M25.8 lint
+        run: |
+          if test -s /tmp/m25-8/ruff-findings.txt; then
+            cat /tmp/m25-8/ruff-findings.txt
+            exit 1
+          fi
       - name: Validate schemas
         run: |
           python - <<'PY'
@@ -71,7 +85,6 @@ jobs:
             tests/test_m25_7_source_pr_executor_contracts.py
       - name: Rebuild deterministic readiness and synthetic receipt
         run: |
-          mkdir -p /tmp/m25-8
           knowledge-m25-adoption evaluate-gate \
             --predecessor pilot/m25/m25-7-benchmark-closure.json \
             --output /tmp/m25-8/readiness-gate.json \
