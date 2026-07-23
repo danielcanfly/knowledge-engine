@@ -1,0 +1,25 @@
+{
+  "benchmark_fixtures_reusable_as_pilot_sources": false,
+  "blockers": [
+    "m25_8_live_adoption_release_rollback_acceptance_missing",
+    "exact_50_100_source_inventory_manifest_missing",
+    "exact_inventory_digest_authority_missing",
+    "pilot_cost_and_stop_threshold_authority_missing"
+  ],
+  "candidate_release_build_permitted": false,
+  "gate_sha256": "c615ee125f52a3d96b81baabcb8efe7deb08d4de31e6e78a310766d5e2fb6427",
+  "m25_10_authorized": false,
+  "m25_8_engine_merge_sha": "b456c0c33efb84df94aa4e4668bdbce22e2d955b",
+  "m25_9b_authorized": false,
+  "m25_9c_authorized": false,
+  "next_legal_action": "curate_exact_inventory_and_present_daniel_inventory_start_gate",
+  "pilot_execution_permitted": false,
+  "predecessor_gate_sha256": "d9992e224b8ad026bf1c9fa1b36b9086b5bc6a8e94dc1344dab66c1aac6914d0",
+  "predecessor_status": "blocked_awaiting_real_approved_source_pr",
+  "production_pointer_mutation_permitted": false,
+  "production_release_mutation_permitted": false,
+  "provider_calls_permitted": false,
+  "schema_version": "knowledge-engine-m25-9-readiness-gate/v1",
+  "source_write_permitted": false,
+  "status": "blocked_awaiting_m25_8_live_acceptance_and_exact_inventory_authority"
+}
