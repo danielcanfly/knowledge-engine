@@ -1,6 +1,6 @@
 # M25.9 Blog Pilot Batch B
 
-Status: `implementation_in_progress_exact_batch_b_not_yet_bound`
+Status: `candidate_acquisition_ready_source_write_not_authorized`
 
 ## Objective
 
