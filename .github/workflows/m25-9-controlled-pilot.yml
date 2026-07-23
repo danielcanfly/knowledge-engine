@@ -46,15 +46,29 @@ jobs:
           PY
       - name: Install exact dependencies
         run: python -m pip install -q --disable-pip-version-check -e '.[dev]'
-      - name: Lint M25.9A
+      - name: Capture M25.9A lint findings
         run: |
-          python -m ruff check \
+          mkdir -p /tmp/m25-9
+          python -m ruff check --quiet --output-format=concise \
             src/knowledge_engine/m25_controlled_pilot.py \
             src/knowledge_engine/m25_controlled_pilot_common.py \
             src/knowledge_engine/m25_controlled_pilot_inventory.py \
             src/knowledge_engine/m25_controlled_pilot_run.py \
             src/knowledge_engine/m25_controlled_pilot_cli.py \
-            tests/test_m25_9_controlled_pilot.py
+            tests/test_m25_9_controlled_pilot.py \
+            >/tmp/m25-9/ruff-findings.txt 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-9a-ruff-findings
+          path: /tmp/m25-9/ruff-findings.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce clean M25.9A lint
+        run: |
+          if test -s /tmp/m25-9/ruff-findings.txt; then
+            cat /tmp/m25-9/ruff-findings.txt
+            exit 1
+          fi
       - name: Validate schemas and synthetic fixtures
         run: |
           python - <<'PY'
