@@ -48,10 +48,16 @@ jobs:
               if key != 'synthetic_only'
           )
           PY
-      - name: Install and test M26.3
+      - name: Install dev dependencies
         run: |
           python -m pip install --disable-pip-version-check -e '.[dev]'
-          python -m ruff check src/knowledge_engine/m26_context_compiler.py tests/test_m26_3_context_compiler.py
+      - name: Lint M26.3
+        run: |
+          python -m ruff check \
+            src/knowledge_engine/m26_context_compiler.py \
+            tests/test_m26_3_context_compiler.py
+      - name: Test M26.3
+        run: |
           python -m pytest -q \
             tests/test_m26_3_context_compiler.py \
             tests/test_m26_2_retrieval_envelope.py \
