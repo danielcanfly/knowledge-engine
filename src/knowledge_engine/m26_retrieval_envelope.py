@@ -383,9 +383,12 @@ def _query_specific_acl_count(
         source = edge.get("source", edge.get("from", edge.get("from_concept_id")))
         target = edge.get("target", edge.get("to", edge.get("to_concept_id")))
         for seed, neighbor in ((source, target), (target, source)):
-            if seed in selected and neighbor in node_audiences:
-                if AUDIENCE_RANK[node_audiences[str(neighbor)]] > maximum_audience_rank:
-                    filtered.add(f"graph-node:{neighbor}")
+            if (
+                seed in selected
+                and neighbor in node_audiences
+                and AUDIENCE_RANK[node_audiences[str(neighbor)]] > maximum_audience_rank
+            ):
+                filtered.add(f"graph-node:{neighbor}")
 
     allowed_relations = set(plan["graph"]["relation_types"])
     for edge in corpus.get("graph_v2", {}).get("edges", []):
@@ -418,9 +421,11 @@ def _query_specific_acl_count(
             if not isinstance(source, Mapping):
                 continue
             audience = source.get("audience")
-            if audience in AUDIENCE_RANK:
-                if AUDIENCE_RANK[str(audience)] > maximum_audience_rank:
-                    filtered.add(f"citation-source:{source.get('source_id', concept_id)}")
+            if (
+                audience in AUDIENCE_RANK
+                and AUDIENCE_RANK[str(audience)] > maximum_audience_rank
+            ):
+                filtered.add(f"citation-source:{source.get('source_id', concept_id)}")
     return len(filtered)
 
 
