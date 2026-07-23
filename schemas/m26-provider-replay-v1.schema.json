@@ -1,0 +1,154 @@
+{
+  "$id": "https://knowledge-engine.local/schemas/m26-provider-replay-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "citation_bindings": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "citation_id": {
+            "type": "string"
+          },
+          "context_manifest_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "passage_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "citation_id",
+          "passage_id",
+          "context_manifest_sha256"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "context_manifest_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "context_package_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "credentials_used": {
+      "const": false
+    },
+    "evidence_budget_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "mock_draft": {
+      "additionalProperties": false,
+      "properties": {
+        "citation_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "draft_id": {
+          "type": "string"
+        },
+        "draft_status": {
+          "enum": [
+            "non_final_mock_draft",
+            "non_final_mock_draft_with_warnings"
+          ]
+        },
+        "non_final": {
+          "const": true
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "draft_id",
+        "draft_status",
+        "text",
+        "citation_ids",
+        "non_final"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "network_called": {
+      "const": false
+    },
+    "next_stage": {
+      "enum": [
+        "m26_5_draft_answer_contract",
+        "abstain"
+      ]
+    },
+    "privacy_review": {
+      "type": "object"
+    },
+    "production_answer_serving": {
+      "const": false
+    },
+    "provider_called": {
+      "const": false
+    },
+    "replay_diagnostics": {
+      "type": "object"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "safe_for_m26_5": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-provider-replay/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "mock_draft",
+        "mock_draft_with_warnings",
+        "abstain_replayed",
+        "privacy_blocked"
+      ]
+    },
+    "synthetic_only": {
+      "const": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "context_package_sha256",
+    "status",
+    "safe_for_m26_5",
+    "synthetic_only",
+    "provider_called",
+    "credentials_used",
+    "network_called",
+    "production_answer_serving",
+    "mock_draft",
+    "citation_bindings",
+    "privacy_review",
+    "replay_diagnostics",
+    "next_stage",
+    "self_sha256"
+  ],
+  "title": "M26 Provider Mock Replay",
+  "type": "object"
+}

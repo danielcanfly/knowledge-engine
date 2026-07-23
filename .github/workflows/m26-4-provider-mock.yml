@@ -1,0 +1,160 @@
+name: M26.4 Provider Mock Replay
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m26-4-provider-mock.yml'
+      - 'docs/architecture/m26/m26-4-*.md'
+      - 'pilot/m26/m26-4-*.json'
+      - 'schemas/m26-provider-replay-v1.schema.json'
+      - 'schemas/m26-privacy-review-v1.schema.json'
+      - 'src/knowledge_engine/m26_provider_mock.py'
+      - 'tests/test_m26_4_provider_mock.py'
+      - 'pyproject.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  provider-mock:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact head and accepted predecessor
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          acceptance = json.loads(Path('pilot/m26/m26-3-acceptance.json').read_text())
+          entry = json.loads(Path('pilot/m26/m26-4-entry-contract.json').read_text())
+          assert acceptance['status'] == 'm26_3_context_compiler_accepted'
+          assert acceptance['next_stage']['stage_id'] == 'M26.4'
+          assert acceptance['next_stage']['authorized'] is True
+          assert acceptance['next_stage']['synthetic_only'] is True
+          assert acceptance['next_stage']['provider_mock_replay_permitted'] is True
+          assert acceptance['next_stage']['live_provider_calls_permitted'] is False
+          assert acceptance['next_stage']['real_corpus_binding_permitted'] is False
+          assert entry['accepted_predecessor']['final_main_seal'] == (
+              '7a5b757a227e3d7bd0dd859181fc44511e003420'
+          )
+          assert entry['authority_boundary']['synthetic_only'] is True
+          assert entry['authority_boundary']['provider_mock_replay_permitted'] is True
+          assert not any(
+              value
+              for key, value in entry['authority_boundary'].items()
+              if key not in {'synthetic_only', 'provider_mock_replay_permitted'}
+          )
+          PY
+      - name: Install dev dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M26.4
+        run: python -m ruff check src/knowledge_engine/m26_provider_mock.py tests/test_m26_4_provider_mock.py
+      - name: Test M26.4 entry registry policy
+        run: |
+          python -m pytest -q tests/test_m26_4_provider_mock.py \
+            -k 'entry_contract or registry or provider_policy'
+      - name: Test M26.4 benchmark
+        run: |
+          python -m pytest -q tests/test_m26_4_provider_mock.py \
+            -k 'provider_benchmark'
+      - name: Test M26.4 replay safety cases
+        run: |
+          python -m pytest -q tests/test_m26_4_provider_mock.py \
+            -k 'safe_context or abstain_context or conflict_and_prompt'
+      - name: Test M26.4 privacy and docs
+        run: |
+          python -m pytest -q tests/test_m26_4_provider_mock.py \
+            -k 'privacy_review or docs'
+      - name: Test M26 predecessors
+        run: |
+          python -m pytest -q \
+            tests/test_m26_3_context_compiler.py \
+            tests/test_m26_2_retrieval_envelope.py \
+            tests/test_m26_1_architecture_authority.py
+      - name: Rebuild deterministic provider mock evidence
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p /tmp/m26-4
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from knowledge_engine.m26_provider_mock import run_provider_benchmark
+
+          def load(path):
+              return json.loads(Path(path).read_text())
+
+          def digest(path):
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+          report = run_provider_benchmark(
+              load('pilot/m26/m26-4-benchmark-cases.json'),
+              context_cases=load('pilot/m26/m26-3-benchmark-cases.json'),
+              retrieval_cases=load('pilot/m26/m26-2-benchmark-cases.json'),
+              corpus=load('pilot/m26/m26-2-synthetic-corpus.json'),
+              retrieval_policy=load('pilot/m26/m26-2-retrieval-policy.json'),
+              context_policy=load('pilot/m26/m26-3-context-policy.json'),
+              provider_policy=load('pilot/m26/m26-4-provider-policy.json'),
+          )
+          assert report['status'] == 'm26_4_provider_mock_ready'
+          report_path = Path('/tmp/m26-4/provider-benchmark-report.json')
+          report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
+          files = [
+              'pilot/m26/m26-4-entry-contract.json',
+              'pilot/m26/m26-4-provider-policy.json',
+              'pilot/m26/m26-4-benchmark-cases.json',
+              'pilot/m26/m26-4-contract-registry.json',
+              'schemas/m26-provider-replay-v1.schema.json',
+              'schemas/m26-privacy-review-v1.schema.json',
+          ]
+          evidence = {
+              'schema_version': 'knowledge-engine-m26-4-exact-head-evidence/v1',
+              'head_sha': os.environ['HEAD_SHA'],
+              'workflow_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'artifacts': {path: digest(path) for path in files},
+              'benchmark_report_sha256': hashlib.sha256(report_path.read_bytes()).hexdigest(),
+              'case_count': report['case_count'],
+              'passed_count': report['passed_count'],
+              'failed_count': report['failed_count'],
+              'mock_draft_count': report['metrics']['mock_draft_count'],
+              'abstain_replay_count': report['metrics']['abstain_replay_count'],
+              'privacy_blocked_count': report['metrics']['privacy_blocked_count'],
+              'synthetic_only': True,
+              'provider_mock_replay': True,
+              'live_provider_calls': False,
+              'credentials_used': False,
+              'real_corpus_binding': False,
+              'semantic_or_hybrid_serving': False,
+              'production_answer_serving': False,
+          }
+          Path('/tmp/m26-4/evidence.json').write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+      - name: Reject protected mutations
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          printf '%s\n' "$changed"
+          ! printf '%s\n' "$changed" | grep -Eq '^(workers/|channels/|foundation/|release/|r2/|qdrant/|production/)'
+          ! printf '%s\n' "$changed" | grep -Eq '^(src/knowledge_engine/(m14_|m21_|m24_|m25_|m26_context_compiler\.py|m26_retrieval_envelope\.py))'
+          ! printf '%s\n' "$changed" | grep -Eq '^(pilot/m25/|docs/architecture/m25/)'
+          python -m compileall -q src/knowledge_engine/m26_provider_mock.py tests/test_m26_4_provider_mock.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m26-4-provider-mock-evidence
+          path: /tmp/m26-4
+          if-no-files-found: error
+          retention-days: 30
