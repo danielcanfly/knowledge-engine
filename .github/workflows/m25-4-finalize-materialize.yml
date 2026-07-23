@@ -24,6 +24,17 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git merge-base --is-ancestor cf56bad3b9128020214c3a30100ec741d6842e56 HEAD
+      - name: Verify approval payload chunks
+        run: |
+          set -euo pipefail
+          wc -c .m25-4-finalization-payload/chunk-*.b64
+          sha256sum .m25-4-finalization-payload/chunk-*.b64
+          test "$(wc -c < .m25-4-finalization-payload/chunk-01.b64)" = '12000'
+          test "$(wc -c < .m25-4-finalization-payload/chunk-02.b64)" = '12000'
+          test "$(wc -c < .m25-4-finalization-payload/chunk-03.b64)" = '6992'
+          echo 'b97ec560d2448e808d1b7bf558abe4a00a7c0f6de1bf172be6ec9a27771f589b  .m25-4-finalization-payload/chunk-01.b64' | sha256sum --check -
+          echo '9dbd5126744d8dc5f10cad46af04e2d38c8dca2d1ed137719c00d22ba9e0dacf  .m25-4-finalization-payload/chunk-02.b64' | sha256sum --check -
+          echo '2fd9fd41bcfd1d20b5c3b2136bc384c55f85d9b427d710c9eba58adf0bc7796c  .m25-4-finalization-payload/chunk-03.b64' | sha256sum --check -
       - name: Reassemble and verify approval payload
         run: |
           set -euo pipefail
