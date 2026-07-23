@@ -40,7 +40,7 @@ jobs:
                   target.parent.mkdir(parents=True, exist_ok=True)
                   target.write_bytes(data)
           PY
-          rm -rf .m25-5-payload .github/workflows/m25-5-materialize.yml
+          rm -rf .m25-5-payload
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -72,6 +72,7 @@ jobs:
           {
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            rm -f .github/workflows/m25-5-identity-governance.yml
             git add -A
             git diff --cached --stat
             git commit -m 'Implement M25.5 identity governance'
