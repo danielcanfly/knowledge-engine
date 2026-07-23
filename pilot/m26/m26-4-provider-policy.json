@@ -1,0 +1,40 @@
+{
+  "accepted_predecessor_status": "m26_3_context_compiler_accepted",
+  "authority": {
+    "credentials": false,
+    "live_provider_calls": false,
+    "network_execution": false,
+    "production_answer_serving": false,
+    "provider_mock_replay": true,
+    "provider_sdk": false,
+    "qdrant_or_r2_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true
+  },
+  "mock_runtime": {
+    "credentials": false,
+    "deterministic": true,
+    "live_provider": false,
+    "max_mock_citations": 6,
+    "max_mock_claims": 4,
+    "network": false,
+    "provider_sdk": false,
+    "temperature": 0
+  },
+  "privacy_rules": {
+    "block_actor_hash": true,
+    "block_credential_like_text": true,
+    "block_email_like_text": true,
+    "block_phone_like_text": true,
+    "block_secret_like_text": true,
+    "fail_closed": true,
+    "redaction_token": "[REDACTED]"
+  },
+  "provider_profile": "synthetic-provider-mock/replay-v1",
+  "schema_version": "knowledge-engine-m26-provider-mock-policy/v1",
+  "self_sha256": "457a1bcaada9eac14625b12cbe476810789891f3cc4654026e7d38cf823eda16",
+  "stage_id": "M26.4"
+}
