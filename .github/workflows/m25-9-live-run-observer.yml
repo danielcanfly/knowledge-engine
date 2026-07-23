@@ -170,3 +170,5 @@ jobs:
           publish_presence CLOUDFLARE_WORKERS_API_TOKEN "$VARIABLE_WORKERS_API_TOKEN"
           publish_presence CLOUDFLARE_API_TOKEN "$VARIABLE_CLOUDFLARE_API_TOKEN"
           publish_presence CF_API_TOKEN "$VARIABLE_CF_API_TOKEN"
+
+# Presence-only retest trigger: 2026-07-24
