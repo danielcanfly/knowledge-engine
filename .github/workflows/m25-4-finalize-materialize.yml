@@ -24,17 +24,48 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git merge-base --is-ancestor cf56bad3b9128020214c3a30100ec741d6842e56 HEAD
-      - name: Verify approval payload chunks
+      - name: Capture approval payload chunk diagnostics
+        id: chunks
+        continue-on-error: true
         run: |
-          set -euo pipefail
-          wc -c .m25-4-finalization-payload/chunk-*.b64
-          sha256sum .m25-4-finalization-payload/chunk-*.b64
-          test "$(wc -c < .m25-4-finalization-payload/chunk-01.b64)" = '12000'
-          test "$(wc -c < .m25-4-finalization-payload/chunk-02.b64)" = '12000'
-          test "$(wc -c < .m25-4-finalization-payload/chunk-03.b64)" = '6992'
-          echo 'b97ec560d2448e808d1b7bf558abe4a00a7c0f6de1bf172be6ec9a27771f589b  .m25-4-finalization-payload/chunk-01.b64' | sha256sum --check -
-          echo '9dbd5126744d8dc5f10cad46af04e2d38c8dca2d1ed137719c00d22ba9e0dacf  .m25-4-finalization-payload/chunk-02.b64' | sha256sum --check -
-          echo '2fd9fd41bcfd1d20b5c3b2136bc384c55f85d9b427d710c9eba58adf0bc7796c  .m25-4-finalization-payload/chunk-03.b64' | sha256sum --check -
+          set +e
+          {
+            wc -c .m25-4-finalization-payload/chunk-*.b64
+            sha256sum .m25-4-finalization-payload/chunk-*.b64
+            test "$(wc -c < .m25-4-finalization-payload/chunk-01.b64)" = '12000'
+            echo "chunk_01_size=$?"
+            test "$(wc -c < .m25-4-finalization-payload/chunk-02.b64)" = '12000'
+            echo "chunk_02_size=$?"
+            test "$(wc -c < .m25-4-finalization-payload/chunk-03.b64)" = '6992'
+            echo "chunk_03_size=$?"
+            echo 'b97ec560d2448e808d1b7bf558abe4a00a7c0f6de1bf172be6ec9a27771f589b  .m25-4-finalization-payload/chunk-01.b64' | sha256sum --check -
+            echo "chunk_01_sha=$?"
+            echo '9dbd5126744d8dc5f10cad46af04e2d38c8dca2d1ed137719c00d22ba9e0dacf  .m25-4-finalization-payload/chunk-02.b64' | sha256sum --check -
+            echo "chunk_02_sha=$?"
+            echo '2fd9fd41bcfd1d20b5c3b2136bc384c55f85d9b427d710c9eba58adf0bc7796c  .m25-4-finalization-payload/chunk-03.b64' | sha256sum --check -
+            echo "chunk_03_sha=$?"
+          } > /tmp/m25-4-finalization-chunks.txt 2>&1
+          grep -q 'chunk_01_size=0' /tmp/m25-4-finalization-chunks.txt
+          grep -q 'chunk_02_size=0' /tmp/m25-4-finalization-chunks.txt
+          grep -q 'chunk_03_size=0' /tmp/m25-4-finalization-chunks.txt
+          grep -q 'chunk_01_sha=0' /tmp/m25-4-finalization-chunks.txt
+          grep -q 'chunk_02_sha=0' /tmp/m25-4-finalization-chunks.txt
+          grep -q 'chunk_03_sha=0' /tmp/m25-4-finalization-chunks.txt
+      - name: Upload approval payload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-4-finalization-chunk-diagnostics
+          path: /tmp/m25-4-finalization-chunks.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce approval payload chunks
+        if: always()
+        env:
+          CHUNK_OUTCOME: ${{ steps.chunks.outcome }}
+        run: |
+          cat /tmp/m25-4-finalization-chunks.txt
+          test "$CHUNK_OUTCOME" = success
       - name: Reassemble and verify approval payload
         run: |
           set -euo pipefail
