@@ -56,9 +56,26 @@ jobs:
           python -m ruff check \
             src/knowledge_engine/m26_context_compiler.py \
             tests/test_m26_3_context_compiler.py
-      - name: Test M26.3 context compiler
+      - name: Test M26.3 entry and registry
         run: |
-          python -m pytest -q tests/test_m26_3_context_compiler.py
+          python -m pytest -q \
+            tests/test_m26_3_context_compiler.py::test_entry_contract_is_m26_2_accepted_and_synthetic_only \
+            tests/test_m26_3_context_compiler.py::test_context_contract_registry_is_digest_bound_and_closed \
+            tests/test_m26_3_context_compiler.py::test_context_policy_fails_closed_on_forbidden_authority
+      - name: Test M26.3 benchmark
+        run: |
+          python -m pytest -q tests/test_m26_3_context_compiler.py::test_context_benchmark_passes_all_synthetic_cases
+      - name: Test M26.3 conflict and ACL cases
+        run: |
+          python -m pytest -q \
+            tests/test_m26_3_context_compiler.py::test_conflicting_evidence_is_mandatory_and_cited \
+            tests/test_m26_3_context_compiler.py::test_acl_no_match_does_not_leak_restricted_text
+      - name: Test M26.3 injection, budget and docs
+        run: |
+          python -m pytest -q \
+            tests/test_m26_3_context_compiler.py::test_prompt_injection_is_quarantined_as_evidence_not_instruction \
+            tests/test_m26_3_context_compiler.py::test_budget_too_small_for_mandatory_conflict_forces_abstention \
+            tests/test_m26_3_context_compiler.py::test_docs_pin_stop_lines_and_downstream_boundary
       - name: Test M26 predecessor contracts
         run: |
           python -m pytest -q \
