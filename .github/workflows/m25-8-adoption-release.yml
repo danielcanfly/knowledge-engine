@@ -50,7 +50,7 @@ jobs:
       - name: Capture M25.8 lint findings
         run: |
           mkdir -p /tmp/m25-8
-          python -m ruff check --output-format=concise \
+          python -m ruff check --quiet --output-format=concise \
             src/knowledge_engine/m25_adoption_release.py \
             src/knowledge_engine/m25_adoption_release_cli.py \
             tests/test_m25_8_adoption_release.py \
