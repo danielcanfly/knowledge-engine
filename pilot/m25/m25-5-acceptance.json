@@ -1,0 +1,98 @@
+{
+  "schema_version": "knowledge-engine-m25-5-acceptance/v1",
+  "status": "m25_5_identity_governance_accepted",
+  "predecessor": {
+    "status": "m25_4_gold_benchmark_accepted",
+    "main_seal_sha": "3b35ed570e1a495e687259ae87a6c70139e5a9ac"
+  },
+  "issue": {
+    "repository": "danielcanfly/knowledge-engine",
+    "number": 1049,
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "implementation": {
+    "pull_request_number": 1050,
+    "base_sha": "3b35ed570e1a495e687259ae87a6c70139e5a9ac",
+    "final_head_sha": "525830b33af3baeb8bebe24fb696b3e32f19c502",
+    "merge_sha": "8ae3e77b8f9ffbd3df5ec820cca04b0b47413e02",
+    "changed_file_count": 14,
+    "unresolved_review_thread_count": 0,
+    "expected_head_merge": true
+  },
+  "frozen_identities": {
+    "calibration_policy_sha256": "97215c67c1a1d7663fe9ffdbb5ad680c41ec3502dfbd30b7c53973fbdf38811e",
+    "calibrated_report_sha256": "701d3da816c29bc3d468515bf9996d53123d6ec79944cfaf1fea96ef2c3b5bd0",
+    "governance_gate_sha256": "adbef1b764f0b2823d76d9a4f2ab7dc5a5cb85a8d012804835f88ed421bc26f4"
+  },
+  "population": {
+    "total": 30,
+    "calibration_population": 20,
+    "held_out_final_population": 10,
+    "final_split_used_for_calibration": false
+  },
+  "metrics": {
+    "semantic_decision_accuracy": 1.0,
+    "explanation_signal_coverage": 1.0,
+    "combined_governance_pass_rate": 1.0,
+    "final_split_governance_pass_rate": 1.0,
+    "false_merge_count": 0,
+    "critical_false_merge_risk_count": 0,
+    "destructive_decision_count": 0,
+    "relation_candidate_count_by_type": {
+      "narrower_than": 3,
+      "supersedes": 3
+    }
+  },
+  "governance": {
+    "candidate_only": true,
+    "review_required": true,
+    "canonical_knowledge": false,
+    "production_authority": false,
+    "alias_specific_threshold_enforced": true,
+    "ranked_identity_signal_required_for_alias": true,
+    "automatic_relation_write_permitted": false,
+    "automatic_tag_write_permitted": false
+  },
+  "required_workflows": {
+    "CI": 29981875995,
+    "M17 Architecture Canon Acceptance": 29981876073,
+    "M17 Independent Operator GA Acceptance": 29981876036,
+    "M18 Graph v2 acceptance": 29981875994,
+    "M25.2 Intake Orchestrator": 29981875977,
+    "M25.3 Extraction Worker": 29981875914,
+    "M25.4 Identity Gold Benchmark": 29981875982,
+    "M25.5 Identity Governance": 29981875922,
+    "R2 Release Integration": 29981875912
+  },
+  "evidence_artifact": {
+    "workflow_run_id": 29981875922,
+    "artifact_id": 8553489444,
+    "name": "m25-5-identity-governance-evidence",
+    "digest": "sha256:e78247796916a75e4cf0356f78de5a79112a02cd242ea318675e47e31c8dd2bb"
+  },
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_used": false,
+    "codex_escalations": 0,
+    "daniel_gate_required": false
+  },
+  "protected_mutations": {
+    "source": false,
+    "foundation": false,
+    "release": false,
+    "production_pointer": false,
+    "r2_production": false,
+    "qdrant": false,
+    "serving": false,
+    "canonical_identity": false,
+    "large_scale_ingestion": false
+  },
+  "next_stage": {
+    "stage_id": "M25.6",
+    "name": "Human Review and Admission Product Surface",
+    "authorized_by_m25_5_closure": true,
+    "not_authorized_by_candidate_gate_alone": true,
+    "daniel_browser_acceptance_required_before_m25_6_closure": true
+  }
+}
