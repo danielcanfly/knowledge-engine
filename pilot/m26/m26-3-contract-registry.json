@@ -1,0 +1,35 @@
+{
+  "accepted_predecessor_status": "m26_2_retrieval_envelope_accepted",
+  "authority": {
+    "production_answer_serving": false,
+    "provider_calls": false,
+    "real_corpus": false,
+    "semantic_or_hybrid": false,
+    "synthetic_only": true
+  },
+  "contracts": [
+    {
+      "path": "pilot/m26/m26-3-benchmark-cases.json",
+      "sha256": "3a736c557b222f4fd182fa023a7f0580cd4f8390056af6520f9a3ae28ce1e9ff"
+    },
+    {
+      "path": "pilot/m26/m26-3-context-policy.json",
+      "sha256": "8d6f1ae97a3598a37d4da65167c7fef343c75bc6c5c3c6e2ec72308f97b8c766"
+    },
+    {
+      "path": "pilot/m26/m26-3-entry-contract.json",
+      "sha256": "da286a63a257892eff9c723005e918df662683267d392ecb6c3595a19856f100"
+    },
+    {
+      "path": "schemas/m26-context-package-v1.schema.json",
+      "sha256": "7f07279d2e9ed1133b36cb4c561954261aeed13c749d1296f0761c45224547f5"
+    },
+    {
+      "path": "schemas/m26-evidence-budget-v1.schema.json",
+      "sha256": "7058edf9addc28e4702ef195c8491d06a497a6e391282403fa55b15727eb2e1c"
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-3-contract-registry/v1",
+  "self_sha256": "19bf9127f774d67d892d8ce9e02a1e2f7940f2d366bd8275cddb24b15b5339af",
+  "stage_id": "M26.3"
+}
