@@ -1,0 +1,139 @@
+{
+  "all_items_individually_reviewable": true,
+  "authority": "admission_review_only",
+  "baseline_report_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+  "batch_sha256": "776a03b95128709c6c45f8646769792ee3cd572044cdf42d2b6ef1653bedb848",
+  "bulk_approval_permitted": false,
+  "calibrated_report_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+  "canonical_knowledge": false,
+  "class_counts": {
+    "synthetic": 2
+  },
+  "decision_actions": [
+    "approve",
+    "defer",
+    "edit",
+    "map",
+    "reject",
+    "split"
+  ],
+  "github_pr_creation_permitted": false,
+  "incomplete_review_blocks_admission": true,
+  "item_count": 2,
+  "items": [
+    {
+      "allowed_actions": [
+        "approve",
+        "reject"
+      ],
+      "authority": "admission_review_only",
+      "candidate_comparison": {},
+      "candidate_summary": [
+        {
+          "candidate_id": "candidate-synthetic-create",
+          "label": "Approved Test Concept"
+        }
+      ],
+      "canonical_knowledge": false,
+      "class_label": "synthetic",
+      "explicit_diff": {
+        "after": {},
+        "before": [],
+        "unified_lines": []
+      },
+      "github_pr_creation_permitted": false,
+      "graph_neighborhood": {
+        "edges": [],
+        "nodes": [],
+        "read_only": true
+      },
+      "item_id": "synthetic-create",
+      "production_authority": false,
+      "proposals": {
+        "aliases": [],
+        "relations": [],
+        "tags": []
+      },
+      "queue_state": "pending_review",
+      "rationale": "Synthetic M25.7 executor fixture.",
+      "required_acknowledgements": [
+        "evidence_reviewed",
+        "comparison_reviewed",
+        "diff_reviewed"
+      ],
+      "review_item_id": "m25review_a225d5a5f0175a9ac4ad89ed651f460e",
+      "review_state_sha256": "a225d5a5f0175a9ac4ad89ed651f460e41259898b50f44314296ffd7c2bfbb4f",
+      "schema_version": "knowledge-engine-m25-6-review-item/v1",
+      "semantic_family_id": "family-synthetic-create",
+      "source_reader": {
+        "evidence_spans": [],
+        "source_concepts": []
+      },
+      "source_write_permitted": false,
+      "split": "test"
+    },
+    {
+      "allowed_actions": [
+        "approve",
+        "reject"
+      ],
+      "authority": "admission_review_only",
+      "candidate_comparison": {},
+      "candidate_summary": [
+        {
+          "candidate_id": "candidate-synthetic-reject",
+          "label": "Rejected Test Concept"
+        }
+      ],
+      "canonical_knowledge": false,
+      "class_label": "synthetic",
+      "explicit_diff": {
+        "after": {},
+        "before": [],
+        "unified_lines": []
+      },
+      "github_pr_creation_permitted": false,
+      "graph_neighborhood": {
+        "edges": [],
+        "nodes": [],
+        "read_only": true
+      },
+      "item_id": "synthetic-reject",
+      "production_authority": false,
+      "proposals": {
+        "aliases": [],
+        "relations": [],
+        "tags": []
+      },
+      "queue_state": "pending_review",
+      "rationale": "Synthetic M25.7 executor fixture.",
+      "required_acknowledgements": [
+        "evidence_reviewed",
+        "comparison_reviewed",
+        "diff_reviewed"
+      ],
+      "review_item_id": "m25review_303bc37fc2105e9e3d93e5fe4476158e",
+      "review_state_sha256": "303bc37fc2105e9e3d93e5fe4476158e03d2b5b478e8ea9e3817402de5ec1621",
+      "schema_version": "knowledge-engine-m25-6-review-item/v1",
+      "semantic_family_id": "family-synthetic-reject",
+      "source_reader": {
+        "evidence_spans": [],
+        "source_concepts": []
+      },
+      "source_write_permitted": false,
+      "split": "test"
+    }
+  ],
+  "m25_7_authorized": false,
+  "policy_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+  "predecessor_main_seal_sha": "d68be491f8d07a727bcf1f521a2e5e75256eede3",
+  "predecessor_status": "m25_5_identity_governance_accepted",
+  "production_authority": false,
+  "schema_version": "knowledge-engine-m25-6-review-batch/v1",
+  "source_write_permitted": false,
+  "split_counts": {
+    "test": 2
+  },
+  "status": "m25_6_awaiting_daniel_browser_acceptance",
+  "suite_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+}

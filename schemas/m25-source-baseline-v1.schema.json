@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-source-baseline-v1.schema.json",
+  "title": "M25.7 exact Source baseline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "mode", "source_repository", "source_base_sha", "file_count", "files", "manifest_sha256"],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-7-source-baseline/v1"},
+    "mode": {"enum": ["live", "test_only"]},
+    "source_repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+    "source_base_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "file_count": {"type": "integer", "minimum": 0, "maximum": 2000},
+    "files": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "content_utf8"],
+        "properties": {
+          "path": {"type": "string"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "content_utf8": {"type": "string"}
+        }
+      }
+    },
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

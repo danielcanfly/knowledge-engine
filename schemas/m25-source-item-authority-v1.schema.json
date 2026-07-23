@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-source-item-authority-v1.schema.json",
+  "title": "M25.7 item-level knowledge authority envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "mode", "actor", "actor_role", "authority_comment_id", "batch_sha256", "audit_sha256", "source_base_sha", "source_manifest_sha256", "canonical_decisions_attested", "source_pr_preparation_authorized", "source_pr_opening_authorized", "item_count", "decisions", "authority_sha256"],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-7-item-authority/v1"},
+    "mode": {"enum": ["live", "test_only"]},
+    "actor": {"type": "string", "minLength": 3, "maxLength": 128},
+    "actor_role": {"const": "knowledge_owner"},
+    "authority_comment_id": {"type": "integer", "minimum": 1},
+    "batch_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "audit_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_base_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "canonical_decisions_attested": {"const": true},
+    "source_pr_preparation_authorized": {"const": true},
+    "source_pr_opening_authorized": {"const": false},
+    "item_count": {"type": "integer", "minimum": 1, "maximum": 1000},
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["review_item_id", "decision_sha256", "review_state_sha256", "action", "source_operations"],
+        "properties": {
+          "review_item_id": {"type": "string"},
+          "decision_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "review_state_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "action": {"enum": ["approve", "map", "edit", "split", "reject"]},
+          "source_operations": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["operation_id", "disposition", "path", "expected_old_sha256", "new_content_utf8", "new_content_sha256", "rationale"],
+              "properties": {
+                "operation_id": {"type": "string"},
+                "disposition": {"enum": ["create", "replace", "delete", "no_write"]},
+                "path": {"type": ["string", "null"]},
+                "expected_old_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+                "new_content_utf8": {"type": ["string", "null"]},
+                "new_content_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+                "rationale": {"type": "string", "minLength": 1, "maxLength": 2000}
+              }
+            }
+          }
+        }
+      }
+    },
+    "authority_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "governance": {
+    "m25_7_authorized": false
+  },
+  "implementation": {
+    "merge_sha": "dd1559f7730c796933dfe0996acc0a558870a61e"
+  },
+  "next_stage": {
+    "stage_id": "M25.7"
+  },
+  "schema_version": "knowledge-engine-m25-6-acceptance/v1",
+  "status": "m25_6_review_surface_accepted"
+}

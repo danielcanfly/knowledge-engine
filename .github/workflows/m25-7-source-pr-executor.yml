@@ -1,0 +1,161 @@
+name: M25.7 Governed Source PR Executor
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/m25-7-source-pr-executor.yml'
+      - 'docs/architecture/m25/m25-7-*.md'
+      - 'pilot/m25/m25-7-*.json'
+      - 'schemas/m25-source-*.schema.json'
+      - 'src/knowledge_engine/m25_source_pr_*.py'
+      - 'tests/test_m25_7_source_pr_executor*.py'
+      - 'pyproject.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  source-pr-executor:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact head and accepted M25.6 ancestor
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git merge-base --is-ancestor 134edbcfa3841321d3ea1106d35243b866cb6913 HEAD
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          acceptance=json.loads(Path('pilot/m25/m25-6-acceptance.json').read_text())
+          assert acceptance['status']=='m25_6_review_surface_accepted'
+          assert acceptance['implementation']['merge_sha']=='dd1559f7730c796933dfe0996acc0a558870a61e'
+          assert acceptance['next_stage']['stage_id']=='M25.7'
+          assert acceptance['next_stage']['requires_separate_daniel_instruction'] is True
+          assert acceptance['governance']['source_write_permitted'] is False
+          assert acceptance['governance']['github_pr_creation_permitted'] is False
+          assert acceptance['governance']['m25_7_authorized'] is False
+          PY
+      - name: Install exact dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M25.7
+        run: |
+          python -m ruff check \
+            src/knowledge_engine/m25_source_pr_executor.py \
+            src/knowledge_engine/m25_source_pr_executor_cli.py \
+            tests/test_m25_7_source_pr_executor.py \
+            tests/test_m25_7_source_pr_executor_contracts.py
+      - name: Test executor, contracts and inherited review integrity
+        run: |
+          python -m pytest -q \
+            tests/test_m25_7_source_pr_executor.py \
+            tests/test_m25_7_source_pr_executor_contracts.py \
+            tests/test_m25_6_review_surface.py \
+            tests/test_m25_6_review_surface_contracts.py \
+            tests/test_m25_6_reconciliation.py
+      - name: Rebuild deterministic synthetic Source plan
+        run: |
+          mkdir -p /tmp/m25-7
+          knowledge-m25-source-pr prepare \
+            --batch pilot/m25/m25-7-review-batch.synthetic.json \
+            --audit pilot/m25/m25-7-audit-export.synthetic.json \
+            --acceptance pilot/m25/m25-7-m25-6-acceptance.synthetic.json \
+            --source-baseline pilot/m25/m25-7-source-baseline.synthetic.json \
+            --authority pilot/m25/m25-7-item-authority.synthetic.json \
+            --output /tmp/m25-7/source-pr-plan.json >/tmp/m25-7/prepare-output.json
+          cmp /tmp/m25-7/source-pr-plan.json pilot/m25/m25-7-source-pr-plan.synthetic.json
+          knowledge-m25-source-pr materialize-test \
+            --plan /tmp/m25-7/source-pr-plan.json \
+            --source-baseline pilot/m25/m25-7-source-baseline.synthetic.json \
+            --output-root /tmp/m25-7/materialized \
+            --receipt /tmp/m25-7/materialization-receipt.json \
+            >/tmp/m25-7/materialize-output.json
+      - name: Enforce authority and changed-file boundaries
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          gate=json.loads(Path('pilot/m25/m25-7-readiness-gate.json').read_text())
+          assert gate['status']=='m25_7_executor_implemented_awaiting_daniel_item_decisions'
+          assert gate['current_browser_evidence_is_canonical_authority'] is False
+          assert gate['complete_real_terminal_decision_population_available'] is False
+          assert gate['daniel_item_authority_envelope_available'] is False
+          assert gate['exact_live_source_baseline_available'] is False
+          assert gate['exact_source_plan_approved'] is False
+          assert gate['source_branch_write_permitted'] is False
+          assert gate['github_pr_creation_permitted'] is False
+          assert gate['source_pr_merge_permitted'] is False
+          assert gate['m25_8_authorized'] is False
+          PY
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/m25-7-source-pr-executor.yml' \
+            'docs/architecture/m25/m25-7-source-pr-executor.md' \
+            'pilot/m25/m25-7-audit-export.synthetic.json' \
+            'pilot/m25/m25-7-item-authority.synthetic.json' \
+            'pilot/m25/m25-7-m25-6-acceptance.synthetic.json' \
+            'pilot/m25/m25-7-readiness-gate.json' \
+            'pilot/m25/m25-7-review-batch.synthetic.json' \
+            'pilot/m25/m25-7-source-baseline.synthetic.json' \
+            'pilot/m25/m25-7-source-pr-plan.synthetic.json' \
+            'pyproject.toml' \
+            'schemas/m25-source-baseline-v1.schema.json' \
+            'schemas/m25-source-item-authority-v1.schema.json' \
+            'schemas/m25-source-opening-receipt-v1.schema.json' \
+            'schemas/m25-source-plan-approval-v1.schema.json' \
+            'schemas/m25-source-pr-plan-v1.schema.json' \
+            'src/knowledge_engine/m25_source_pr_executor.py' \
+            'src/knowledge_engine/m25_source_pr_executor_cli.py' \
+            'tests/test_m25_7_source_pr_executor.py' \
+            'tests/test_m25_7_source_pr_executor_contracts.py' | sort)"
+          test "$changed" = "$expected"
+          ! printf '%s\n' "$changed" | grep -Eq '^(bundle/|provenance/|registry/|reviews/|foundation/|release/|r2/|qdrant/|production/|workers/|channels/)'
+      - name: Assemble exact-head evidence
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          paths=[
+            Path('pilot/m25/m25-7-readiness-gate.json'),
+            Path('pilot/m25/m25-7-source-pr-plan.synthetic.json'),
+            Path('/tmp/m25-7/materialization-receipt.json'),
+          ]
+          evidence={
+            'schema_version':'knowledge-engine-m25-7-exact-head-evidence/v1',
+            'head_sha':os.environ['HEAD_SHA'],
+            'workflow_run_id':int(os.environ['GITHUB_RUN_ID']),
+            'artifacts':{str(path):hashlib.sha256(path.read_bytes()).hexdigest() for path in paths},
+            'm25_6_main_seal_sha':'134edbcfa3841321d3ea1106d35243b866cb6913',
+            'synthetic_only':True,
+            'real_item_decisions_recorded':False,
+            'source_branch_write_permitted':False,
+            'github_pr_creation_permitted':False,
+            'source_pr_merge_permitted':False,
+            'm25_8_authorized':False,
+          }
+          Path('/tmp/m25-7/exact-head-evidence.json').write_text(json.dumps(evidence,indent=2,sort_keys=True)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-7-source-pr-executor-evidence
+          path: /tmp/m25-7
+          if-no-files-found: error
+          retention-days: 30
+      - name: Compile M25.7
+        run: |
+          python -m compileall -q \
+            src/knowledge_engine/m25_source_pr_executor.py \
+            src/knowledge_engine/m25_source_pr_executor_cli.py \
+            tests/test_m25_7_source_pr_executor.py \
+            tests/test_m25_7_source_pr_executor_contracts.py

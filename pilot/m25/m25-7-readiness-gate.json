@@ -1,0 +1,19 @@
+{
+  "canonical_knowledge": false,
+  "complete_real_terminal_decision_population_available": false,
+  "current_browser_evidence_is_canonical_authority": false,
+  "daniel_item_authority_envelope_available": false,
+  "exact_live_source_baseline_available": false,
+  "exact_source_plan_approved": false,
+  "gate_sha256": "23dbea351397d98fb3b10eb1f7ce55381b4233f4ea7f5cf3cf4d2f8a3e7bca47",
+  "github_pr_creation_permitted": false,
+  "m25_8_authorized": false,
+  "predecessor_main_seal_sha": "134edbcfa3841321d3ea1106d35243b866cb6913",
+  "predecessor_status": "m25_6_review_surface_accepted",
+  "production_authority": false,
+  "schema_version": "knowledge-engine-m25-7-readiness-gate/v1",
+  "source_branch_write_permitted": false,
+  "source_pr_merge_permitted": false,
+  "status": "m25_7_executor_implemented_awaiting_daniel_item_decisions",
+  "synthetic_plan_sha256": "c7844406740447d8c9ffec321f5176837e52e59451cfa6af6f7234fdce80c9cf"
+}
