@@ -1,0 +1,37 @@
+{
+  "accepted_predecessor_status": "m26_4_provider_mock_replay_privacy_accepted",
+  "authority": {
+    "credentials": false,
+    "draft_answer_contract": true,
+    "live_provider_calls": false,
+    "production_answer_serving": false,
+    "real_corpus": false,
+    "semantic_or_hybrid": false,
+    "synthetic_only": true
+  },
+  "contracts": [
+    {
+      "path": "pilot/m26/m26-5-benchmark-cases.json",
+      "sha256": "e9bd25431cd57ae7e0a4a4094164182379f3e71cda5af61ac3d953480d43b5b9"
+    },
+    {
+      "path": "pilot/m26/m26-5-draft-answer-policy.json",
+      "sha256": "896fc36d0c73650b80bf18dfe22affcbf1df4e177d4316dd90896f2e0dc9d5c5"
+    },
+    {
+      "path": "pilot/m26/m26-5-entry-contract.json",
+      "sha256": "07eb081cb2ee9326d97296c88e6bde355fd0b87faa2b0a5ec58518d8947a24ff"
+    },
+    {
+      "path": "schemas/m26-5-draft-answer-v1.schema.json",
+      "sha256": "dabb255b26a7074ccf6cd687ab0992656c014eb0b9f365f04171fe22f427c7a4"
+    },
+    {
+      "path": "schemas/m26-citation-binding-v1.schema.json",
+      "sha256": "5078c97cf13fabeb8ce924a83999eced2bff65a8e555f6afdb45cb01e5949ea5"
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-5-contract-registry/v1",
+  "self_sha256": "2a4d525749eeffae83642bcc79ff37b2226e000311c73d6c2c0e7aa128873478",
+  "stage_id": "M26.5"
+}

@@ -1,0 +1,52 @@
+{
+  "accepted_predecessor": {
+    "acceptance_path": "pilot/m26/m26-4-acceptance.json",
+    "acceptance_self_sha256": "6f4b43f3ff7f573cc4530fd5fbd9cb8169577158d37760b4a1c6a9a14d33c87b",
+    "final_main_seal": "93d4dea5cf78463e89b4e6f0f68157bf08c6ee16",
+    "status": "m26_4_provider_mock_replay_privacy_accepted"
+  },
+  "authority_boundary": {
+    "canonical_identity_or_relation_mutation": false,
+    "credentials": false,
+    "draft_answer_contract_permitted": true,
+    "foundation_mutation": false,
+    "live_provider_calls": false,
+    "network_execution": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "provider_mock_replay_required": true,
+    "provider_sdk": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "name": "Draft Answer Contract and Citation Binding",
+  "next_stage_candidate": {
+    "live_provider_calls_permitted": false,
+    "name": "Synthetic Answer Evaluation and Refusal Gate",
+    "production_answer_serving_permitted": false,
+    "real_corpus_binding_permitted": false,
+    "requires_reconciliation": true,
+    "stage_id": "M26.6"
+  },
+  "required_inputs": [
+    "M26.4 provider replay record",
+    "M26.4 citation bindings",
+    "M26.4 privacy review",
+    "M26.3 context manifest digest"
+  ],
+  "required_outputs": [
+    "non-final draft answer package",
+    "claim-level citation bindings",
+    "abstain or privacy propagation package",
+    "deterministic benchmark report"
+  ],
+  "schema_version": "knowledge-engine-m26-5-entry-contract/v1",
+  "self_sha256": "ef604051edb3c2a79c12a43379f6e131879b008351012b450ef32d27154f15ad",
+  "stage_id": "M26.5"
+}
