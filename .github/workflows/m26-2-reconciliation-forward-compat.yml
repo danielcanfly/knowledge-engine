@@ -1,0 +1,39 @@
+name: M26.2 Reconciliation Forward Compatibility Repair
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m26-2-reconciliation-forward-compat.yml'
+      - 'scripts/m26_2_reconciliation_forward_compat.py'
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Repair bounded reconciliation compatibility
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python scripts/m26_2_reconciliation_forward_compat.py
+          git diff --check
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/m26-2-reconciliation.yml' \
+            '.github/workflows/m26-2-retrieval-envelope.yml' | sort)"
+          test "$changed" = "$expected"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add $changed
+          git commit -m 'Allow bounded M26.2 reconciliation surfaces'
+          git push origin "HEAD:$HEAD_BRANCH"
