@@ -52,9 +52,13 @@ jobs:
       - name: Reject protected mutations
         run: |
           set -euo pipefail
-          changed="$(git diff --name-only origin/main...HEAD | sort)"
-          printf '%s\n' "$changed"
-          test "$changed" = ".github/workflows/m26-4-reconciliation.yml
+          git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
+          cat /tmp/changed.txt
+          cat > /tmp/expected.txt <<'EOF'
+          .github/workflows/m26-4-reconciliation.yml
           docs/architecture/m26/m26-4-reconciliation.md
           pilot/m26/m26-4-acceptance.json
-          tests/test_m26_4_reconciliation.py"
+          tests/test_m26_4_reconciliation.py
+          EOF
+          sed -i 's/^          //' /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/changed.txt
