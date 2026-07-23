@@ -50,6 +50,9 @@ jobs:
         run: |
           python -m ruff check \
             src/knowledge_engine/m25_controlled_pilot.py \
+            src/knowledge_engine/m25_controlled_pilot_common.py \
+            src/knowledge_engine/m25_controlled_pilot_inventory.py \
+            src/knowledge_engine/m25_controlled_pilot_run.py \
             src/knowledge_engine/m25_controlled_pilot_cli.py \
             tests/test_m25_9_controlled_pilot.py
       - name: Validate schemas and synthetic fixtures
@@ -100,6 +103,7 @@ jobs:
           cmp /tmp/m25-9/inventory.json pilot/m25/m25-9-pilot-inventory.synthetic.json
           python -m knowledge_engine.m25_controlled_pilot_cli validate-run \
             --evidence pilot/m25/m25-9a-run-evidence.synthetic.json \
+            --inventory pilot/m25/m25-9-pilot-inventory.synthetic.json \
             --output /tmp/m25-9/run-receipt.json \
             >/tmp/m25-9/run-output.json
           cmp /tmp/m25-9/run-receipt.json pilot/m25/m25-9a-run-receipt.synthetic.json
@@ -121,6 +125,9 @@ jobs:
             'schemas/m25-pilot-run-evidence-v1.schema.json' \
             'schemas/m25-pilot-run-receipt-v1.schema.json' \
             'src/knowledge_engine/m25_controlled_pilot.py' \
+            'src/knowledge_engine/m25_controlled_pilot_common.py' \
+            'src/knowledge_engine/m25_controlled_pilot_inventory.py' \
+            'src/knowledge_engine/m25_controlled_pilot_run.py' \
             'src/knowledge_engine/m25_controlled_pilot_cli.py' \
             'tests/test_m25_9_controlled_pilot.py' | sort)"
           test "$changed" = "$expected"
@@ -175,5 +182,8 @@ jobs:
         run: |
           python -m compileall -q \
             src/knowledge_engine/m25_controlled_pilot.py \
+            src/knowledge_engine/m25_controlled_pilot_common.py \
+            src/knowledge_engine/m25_controlled_pilot_inventory.py \
+            src/knowledge_engine/m25_controlled_pilot_run.py \
             src/knowledge_engine/m25_controlled_pilot_cli.py \
             tests/test_m25_9_controlled_pilot.py
