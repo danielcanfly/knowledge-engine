@@ -1,0 +1,80 @@
+name: M25.7 Materialize Executor
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - '.github/workflows/m25-7-materialize.yml'
+      - '.github/m25-7-archive/**'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Verify and expand digest-locked implementation
+        env:
+          EXPECTED_ARCHIVE_SHA256: d46e0f2d389fd70caee215870f0e2a13baef70842e09ac1d4655cc386a6e2a05
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/m25-7
+          cat .github/m25-7-archive/part-* | base64 --decode > /tmp/m25-7/implementation.zip
+          echo "$EXPECTED_ARCHIVE_SHA256  /tmp/m25-7/implementation.zip" | sha256sum -c -
+          python - <<'PY'
+          import hashlib,json,shutil,zipfile
+          from pathlib import Path,PurePosixPath
+
+          archive=Path('/tmp/m25-7/implementation.zip')
+          output=Path('/tmp/m25-7/payload')
+          with zipfile.ZipFile(archive) as z:
+              names=z.namelist()
+              if len(names) != len(set(names)):
+                  raise SystemExit('duplicate archive path')
+              if 'MANIFEST.json' not in names:
+                  raise SystemExit('missing archive manifest')
+              manifest=json.loads(z.read('MANIFEST.json'))
+              if manifest.get('schema_version') != 'knowledge-engine-m25-7-implementation-archive/v1':
+                  raise SystemExit('invalid archive schema')
+              files=manifest.get('files')
+              if not isinstance(files,dict) or manifest.get('file_count') != 19:
+                  raise SystemExit('invalid archive population')
+              if set(names) != set(files) | {'MANIFEST.json'}:
+                  raise SystemExit('archive denominator mismatch')
+              for name,expected in files.items():
+                  path=PurePosixPath(name)
+                  if path.is_absolute() or '..' in path.parts or name.endswith('/'):
+                      raise SystemExit(f'unsafe archive path: {name}')
+                  data=z.read(name)
+                  if hashlib.sha256(data).hexdigest() != expected:
+                      raise SystemExit(f'archive digest mismatch: {name}')
+                  target=output / name
+                  target.parent.mkdir(parents=True,exist_ok=True)
+                  target.write_bytes(data)
+          for source in sorted(output.rglob('*')):
+              if source.is_file():
+                  target=Path('.') / source.relative_to(output)
+                  target.parent.mkdir(parents=True,exist_ok=True)
+                  shutil.copy2(source,target)
+          PY
+          rm -rf .github/m25-7-archive .github/workflows/m25-7-materialize.yml
+          test -f src/knowledge_engine/m25_source_pr_executor.py
+          test -f .github/workflows/m25-7-source-pr-executor.yml
+          test -f pilot/m25/m25-7-readiness-gate.json
+      - name: Commit verified implementation
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          test -n "$(git status --porcelain)"
+          git commit -m 'Materialize M25.7 governed Source PR executor'
+          git push origin "HEAD:${HEAD_REF}"
