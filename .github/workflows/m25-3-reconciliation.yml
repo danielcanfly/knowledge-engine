@@ -1,0 +1,210 @@
+name: M25.3 Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-3-reconciliation.yml'
+      - 'docs/architecture/m25/m25-3-reconciliation.md'
+      - 'pilot/m25/m25-3-acceptance.json'
+      - 'tests/test_m25_3_reconciliation.py'
+
+permissions:
+  actions: read
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  reconciliation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Resolve and verify implementation identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          repository = os.environ['GH_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          owner, name = repository.split('/', 1)
+          expected_head = 'd0fbd585215b35313d058d5e5921557a725276fa'
+          expected_merge = '2dfb8b705ea28ea4d3cc8513aa341d58098a5a10'
+          required = {
+              'CI': 29962705580,
+              'M17 Architecture Canon Acceptance': 29962705578,
+              'M17 Independent Operator GA Acceptance': 29962705723,
+              'M18 Graph v2 acceptance': 29962705640,
+              'M25.2 Intake Orchestrator': 29962705605,
+              'M25.3 Extraction Worker': 29962705632,
+              'R2 Release Integration': 29962705671,
+          }
+          evidence_name = 'm25-3-extraction-worker-evidence'
+          evidence_digest = (
+              'sha256:e440fe73a1f21a78c233399da31d8f4c57fea1b84735b95f46f336cc014c9518'
+          )
+
+          def request_json(url: str, *, body: dict | None = None) -> dict:
+              data = None if body is None else json.dumps(body).encode('utf-8')
+              request = urllib.request.Request(
+                  url,
+                  data=data,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'Content-Type': 'application/json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              with urllib.request.urlopen(request) as response:
+                  return json.load(response)
+
+          issue = request_json(f'https://api.github.com/repos/{repository}/issues/1043')
+          assert issue['state'] == 'closed'
+          assert issue['state_reason'] == 'completed'
+
+          pr = request_json(f'https://api.github.com/repos/{repository}/pulls/1044')
+          assert pr['merged'] is True
+          assert pr['head']['sha'] == expected_head
+          assert pr['merge_commit_sha'] == expected_merge
+          subprocess.run(['git', 'merge-base', '--is-ancestor', expected_merge, 'HEAD'], check=True)
+
+          query = urllib.parse.urlencode(
+              {'event': 'pull_request', 'head_sha': expected_head, 'per_page': 100}
+          )
+          runs = request_json(
+              f'https://api.github.com/repos/{repository}/actions/runs?{query}'
+          )['workflow_runs']
+          runs_by_id = {run['id']: run for run in runs if run['head_sha'] == expected_head}
+          for workflow_name, run_id in required.items():
+              run = runs_by_id[run_id]
+              assert run['name'] == workflow_name
+              assert run['status'] == 'completed'
+              assert run['conclusion'] == 'success'
+
+          artifacts = request_json(
+              f'https://api.github.com/repos/{repository}/actions/runs/'
+              f'{required["M25.3 Extraction Worker"]}/artifacts'
+          )['artifacts']
+          evidence = next(item for item in artifacts if item['name'] == evidence_name)
+          assert evidence['expired'] is False
+          assert evidence['digest'] == evidence_digest
+
+          graphql = request_json(
+              'https://api.github.com/graphql',
+              body={
+                  'query': '''
+                  query($owner: String!, $name: String!, $number: Int!) {
+                    repository(owner: $owner, name: $name) {
+                      pullRequest(number: $number) {
+                        reviewThreads(first: 100) {
+                          nodes { isResolved }
+                        }
+                      }
+                    }
+                  }
+                  ''',
+                  'variables': {'owner': owner, 'name': name, 'number': 1044},
+              },
+          )
+          threads = graphql['data']['repository']['pullRequest']['reviewThreads']['nodes']
+          unresolved_threads = sum(not thread['isResolved'] for thread in threads)
+          assert unresolved_threads == 0
+
+          acceptance_path = Path('pilot/m25/m25-3-acceptance.json')
+          acceptance_sha256 = hashlib.sha256(acceptance_path.read_bytes()).hexdigest()
+          resolved = {
+              'schema_version': 'knowledge-engine-m25-3-resolved-identity/v1',
+              'issue': {
+                  'number': 1043,
+                  'state': issue['state'],
+                  'state_reason': issue['state_reason'],
+              },
+              'implementation_pr': 1044,
+              'base_sha': pr['base']['sha'],
+              'head_sha': expected_head,
+              'merge_sha': expected_merge,
+              'merged_at': pr['merged_at'],
+              'implementation_merge_is_ancestor': True,
+              'unresolved_review_threads': unresolved_threads,
+              'workflow_runs': [
+                  {
+                      'name': workflow_name,
+                      'run_id': run_id,
+                      'run_number': runs_by_id[run_id]['run_number'],
+                      'conclusion': runs_by_id[run_id]['conclusion'],
+                      'head_sha': expected_head,
+                  }
+                  for workflow_name, run_id in sorted(required.items())
+              ],
+              'implementation_evidence': {
+                  'artifact_id': evidence['id'],
+                  'name': evidence['name'],
+                  'digest': evidence['digest'],
+                  'expired': evidence['expired'],
+              },
+              'acceptance_sha256': acceptance_sha256,
+              'codex_used': False,
+              'daniel_gate_required': False,
+              'protected_mutations_zero': True,
+          }
+          Path('/tmp/m25-3-resolved-identity.json').write_text(
+              json.dumps(resolved, sort_keys=True, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          PY
+      - name: Upload resolved implementation identity
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-3-resolved-identity
+          path: /tmp/m25-3-resolved-identity.json
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint reconciliation scope
+        run: python -m ruff check tests/test_m25_3_reconciliation.py
+      - name: Test reconciliation contract
+        run: python -m pytest -q tests/test_m25_3_reconciliation.py
+      - name: Reject protected or unrelated mutations
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+
+          changed = set(
+              subprocess.check_output(
+                  ['git', 'diff', '--name-only', os.environ['BASE_SHA'], 'HEAD'],
+                  text=True,
+              ).splitlines()
+          )
+          allowed = {
+              '.github/workflows/m25-3-reconciliation.yml',
+              'docs/architecture/m25/m25-3-reconciliation.md',
+              'pilot/m25/m25-3-acceptance.json',
+              'tests/test_m25_3_reconciliation.py',
+          }
+          assert changed == allowed, (changed - allowed, allowed - changed)
+          PY
+      - name: Compile reconciliation test
+        run: python -m compileall -q tests/test_m25_3_reconciliation.py
