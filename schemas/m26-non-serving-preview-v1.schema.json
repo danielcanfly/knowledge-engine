@@ -1,0 +1,35 @@
+{
+  "$id": "https://knowledge-engine.local/schemas/m26-non-serving-preview-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "final_answer": {
+      "const": false
+    },
+    "non_serving_preview": {
+      "const": true
+    },
+    "preview_only": {
+      "const": true
+    },
+    "production_answer_serving": {
+      "const": false
+    },
+    "production_pointer_mutation": {
+      "const": false
+    },
+    "verified_final_answer": {
+      "const": false
+    }
+  },
+  "required": [
+    "preview_only",
+    "non_serving_preview",
+    "final_answer",
+    "verified_final_answer",
+    "production_answer_serving",
+    "production_pointer_mutation"
+  ],
+  "title": "M26 Non Serving Preview Surface",
+  "type": "object"
+}
