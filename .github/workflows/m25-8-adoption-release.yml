@@ -100,6 +100,7 @@ jobs:
           git fetch --quiet --no-tags origin main
           changed="$(git diff --name-only origin/main...HEAD | sort)"
           expected="$(printf '%s\n' \
+            '.github/workflows/m25-7-benchmark-closure.yml' \
             '.github/workflows/m25-7-source-pr-executor.yml' \
             '.github/workflows/m25-8-adoption-release.yml' \
             'docs/architecture/m25/m25-8-adoption-release-rollback.md' \
