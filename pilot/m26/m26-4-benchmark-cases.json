@@ -1,0 +1,118 @@
+{
+  "authority": {
+    "credentials": false,
+    "live_provider_calls": false,
+    "production_answer_serving": false,
+    "provider_mock_replay": true,
+    "real_corpus_binding": false,
+    "synthetic_only": true
+  },
+  "cases": [
+    {
+      "case_id": "provider_direct_public",
+      "expected": {
+        "min_citations": 1,
+        "safe_for_m26_5": true,
+        "status": "mock_draft"
+      },
+      "m26_3_case_id": "context_direct_public"
+    },
+    {
+      "case_id": "provider_m26_1_fixture_compat",
+      "expected": {
+        "min_citations": 1,
+        "safe_for_m26_5": true,
+        "status": "mock_draft"
+      },
+      "m26_3_case_id": "context_m26_1_fixture_compat"
+    },
+    {
+      "case_id": "provider_multi_facet_internal",
+      "expected": {
+        "min_citations": 4,
+        "safe_for_m26_5": true,
+        "status": "mock_draft"
+      },
+      "m26_3_case_id": "context_multi_facet_internal"
+    },
+    {
+      "case_id": "provider_graph_public",
+      "expected": {
+        "min_citations": 2,
+        "safe_for_m26_5": true,
+        "status": "mock_draft"
+      },
+      "m26_3_case_id": "context_graph_public"
+    },
+    {
+      "case_id": "provider_acl_negative_public",
+      "expected": {
+        "forbidden_text_fragments": [
+          "visible only to the restricted audience",
+          "private operators"
+        ],
+        "min_citations": 0,
+        "safe_for_m26_5": false,
+        "status": "abstain_replayed"
+      },
+      "m26_3_case_id": "context_acl_negative_public"
+    },
+    {
+      "case_id": "provider_stale_public",
+      "expected": {
+        "min_citations": 0,
+        "safe_for_m26_5": false,
+        "status": "abstain_replayed"
+      },
+      "m26_3_case_id": "context_stale_public"
+    },
+    {
+      "case_id": "provider_conflict_public",
+      "expected": {
+        "min_citations": 2,
+        "requires_conflict_warning": true,
+        "safe_for_m26_5": true,
+        "status": "mock_draft_with_warnings"
+      },
+      "m26_3_case_id": "context_conflict_public"
+    },
+    {
+      "case_id": "provider_prompt_injection_public",
+      "expected": {
+        "forbidden_text_fragments": [
+          "follow these instructions",
+          "ignore previous"
+        ],
+        "min_citations": 1,
+        "requires_prompt_injection_quarantine": true,
+        "safe_for_m26_5": true,
+        "status": "mock_draft_with_warnings"
+      },
+      "m26_3_case_id": "context_prompt_injection_public"
+    },
+    {
+      "case_id": "provider_no_match_public",
+      "expected": {
+        "min_citations": 0,
+        "safe_for_m26_5": false,
+        "status": "abstain_replayed"
+      },
+      "m26_3_case_id": "context_no_match_public"
+    },
+    {
+      "case_id": "provider_privacy_secret_block",
+      "expected": {
+        "min_citations": 0,
+        "requires_privacy_block": true,
+        "safe_for_m26_5": false,
+        "status": "privacy_blocked"
+      },
+      "m26_3_case_id": "context_direct_public",
+      "tamper": {
+        "append_mock_text": " password: swordfish"
+      }
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-provider-mock-benchmark-cases/v1",
+  "self_sha256": "3ebe242890d57efd32f17269cdb1ac67805a358380c50eac8b95413e106ca7e0"
+}
