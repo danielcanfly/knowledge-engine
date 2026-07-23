@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '.github/workflows/m25-7-benchmark-closure.yml'
+      - '.github/workflows/m25-7-source-pr-executor.yml'
       - 'docs/architecture/m25/m25-7-benchmark-closure.md'
       - 'pilot/m25/m25-7-benchmark-*.json'
       - 'tests/test_m25_7_benchmark_closure.py'
@@ -65,7 +66,7 @@ jobs:
       - name: Enforce exact changed-file boundary
         run: |
           changed="$(git diff --name-only origin/main...HEAD | sort)"
-          expected="$(printf '%s\n' '.github/workflows/m25-7-benchmark-closure.yml' 'docs/architecture/m25/m25-7-benchmark-closure.md' 'pilot/m25/m25-7-benchmark-closure.json' 'pilot/m25/m25-7-benchmark-decision-ledger.json' 'tests/test_m25_7_benchmark_closure.py' | sort)"
+          expected="$(printf '%s\n' '.github/workflows/m25-7-benchmark-closure.yml' '.github/workflows/m25-7-source-pr-executor.yml' 'docs/architecture/m25/m25-7-benchmark-closure.md' 'pilot/m25/m25-7-benchmark-closure.json' 'pilot/m25/m25-7-benchmark-decision-ledger.json' 'tests/test_m25_7_benchmark_closure.py' | sort)"
           test "$changed" = "$expected"
           ! printf '%s\n' "$changed" | grep -Eq '^(bundle/|provenance/|registry/|reviews/|foundation/|release/|r2/|qdrant/|production/|workers/|channels/|src/)'
       - name: Assemble exact-head evidence
