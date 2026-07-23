@@ -1,0 +1,112 @@
+{
+  "$id": "knowledge-engine-m25-9-blog-batch-plan/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "acquisition": {
+      "type": "object"
+    },
+    "batch_id": {
+      "const": "M25.9A-BLOG-A"
+    },
+    "boundary": {
+      "additionalProperties": {
+        "const": false
+      },
+      "type": "object"
+    },
+    "candidate_graph": {
+      "type": "object"
+    },
+    "issue_number": {
+      "const": 1084
+    },
+    "master_population": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_article_count": {
+          "const": 156
+        },
+        "language": {
+          "const": "en"
+        },
+        "origin_commit": {
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "origin_repository": {
+          "const": "huaihsuanbusiness/daniel-blog"
+        },
+        "path_pattern": {
+          "const": "src/content/blog/*/en.md"
+        }
+      },
+      "required": [
+        "origin_repository",
+        "origin_commit",
+        "path_pattern",
+        "language",
+        "expected_article_count"
+      ],
+      "type": "object"
+    },
+    "next_legal_action": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "partition": {
+      "additionalProperties": false,
+      "properties": {
+        "batch_a_count": {
+          "const": 78
+        },
+        "batch_b_count": {
+          "const": 78
+        },
+        "batch_count": {
+          "const": 2
+        },
+        "intersection_required": {
+          "const": 0
+        },
+        "missing_required": {
+          "const": 0
+        },
+        "real_series_must_remain_whole": {
+          "const": true
+        },
+        "standalone_articles_may_partition_individually": {
+          "const": true
+        }
+      },
+      "required": [
+        "batch_count",
+        "batch_a_count",
+        "batch_b_count",
+        "real_series_must_remain_whole",
+        "standalone_articles_may_partition_individually",
+        "intersection_required",
+        "missing_required"
+      ],
+      "type": "object"
+    },
+    "plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-9-blog-batch-plan/v1"
+    }
+  },
+  "required": [
+    "schema_version",
+    "issue_number",
+    "batch_id",
+    "master_population",
+    "partition",
+    "acquisition",
+    "candidate_graph",
+    "boundary",
+    "next_legal_action",
+    "plan_sha256"
+  ],
+  "type": "object"
+}
