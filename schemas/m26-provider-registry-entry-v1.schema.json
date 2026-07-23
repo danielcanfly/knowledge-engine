@@ -1,0 +1,90 @@
+{
+  "$id": "knowledge-engine/m26/provider-registry-entry-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adapter_version": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "config_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "daniel_approval_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "max_data_class": {
+      "enum": [
+        "public",
+        "internal",
+        "confidential",
+        "restricted"
+      ]
+    },
+    "model_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "model_snapshot": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "network_browsing": {
+      "const": false
+    },
+    "provider_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "retention_policy_ref": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-provider-registry-entry/v1"
+    },
+    "secret_reference": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "disabled_pending_daniel_gate",
+        "approved_disabled",
+        "approved_enabled"
+      ]
+    },
+    "supports_streaming": {
+      "type": "boolean"
+    },
+    "supports_structured_output": {
+      "type": "boolean"
+    },
+    "tool_calls": {
+      "const": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "provider_id",
+    "adapter_version",
+    "status",
+    "model_id",
+    "model_snapshot",
+    "max_data_class",
+    "retention_policy_ref",
+    "secret_reference",
+    "tool_calls",
+    "network_browsing",
+    "supports_structured_output",
+    "supports_streaming",
+    "daniel_approval_ref",
+    "config_sha256"
+  ],
+  "title": "M26 Provider Registry Entry",
+  "type": "object"
+}
