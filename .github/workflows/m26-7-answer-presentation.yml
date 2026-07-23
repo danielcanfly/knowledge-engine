@@ -1,0 +1,178 @@
+name: M26.7 Answer Presentation Preview
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m26-7-answer-presentation.yml'
+      - 'docs/architecture/m26/m26-7-*.md'
+      - 'pilot/m26/m26-7-*.json'
+      - 'schemas/m26-7-answer-presentation-v1.schema.json'
+      - 'schemas/m26-non-serving-preview-v1.schema.json'
+      - 'src/knowledge_engine/m26_answer_presentation.py'
+      - 'tests/test_m26_7_answer_presentation.py'
+      - 'pyproject.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  answer-presentation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact head and accepted predecessor
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          acceptance = json.loads(Path('pilot/m26/m26-6-acceptance.json').read_text())
+          entry = json.loads(Path('pilot/m26/m26-7-entry-contract.json').read_text())
+          assert acceptance['status'] == 'm26_6_answer_evaluation_refusal_gate_accepted'
+          assert acceptance['next_stage']['stage_id'] == 'M26.7'
+          assert acceptance['next_stage']['authorized'] is True
+          assert acceptance['next_stage']['synthetic_only'] is True
+          assert acceptance['next_stage']['presentation_contract_permitted'] is True
+          assert acceptance['next_stage']['live_provider_calls_permitted'] is False
+          assert acceptance['next_stage']['real_corpus_binding_permitted'] is False
+          assert acceptance['next_stage']['verified_final_answer_permitted'] is False
+          assert acceptance['next_stage']['production_pointer_mutation_permitted'] is False
+          assert entry['accepted_predecessor']['final_main_seal'] == (
+              '1f2dfbba74d6df91baa946bbac82e343ea81750e'
+          )
+          assert entry['authority_boundary']['synthetic_only'] is True
+          assert entry['authority_boundary']['presentation_contract_permitted'] is True
+          assert entry['authority_boundary']['non_serving_preview_permitted'] is True
+          assert entry['authority_boundary']['answer_evaluation_required'] is True
+          assert not any(
+              value
+              for key, value in entry['authority_boundary'].items()
+              if key not in {
+                  'synthetic_only',
+                  'presentation_contract_permitted',
+                  'non_serving_preview_permitted',
+                  'answer_evaluation_required',
+              }
+          )
+          PY
+      - name: Install dev dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M26.7
+        run: python -m ruff check src/knowledge_engine/m26_answer_presentation.py tests/test_m26_7_answer_presentation.py
+      - name: Test M26.7 contracts and policy
+        run: |
+          python -m pytest -q tests/test_m26_7_answer_presentation.py \
+            -k 'entry_contract or registry'
+      - name: Test M26.7 benchmark
+        run: |
+          python -m pytest -q tests/test_m26_7_answer_presentation.py \
+            -k 'presentation_benchmark'
+      - name: Test M26.7 preview and safety
+        run: |
+          python -m pytest -q tests/test_m26_7_answer_presentation.py \
+            -k 'passing_preview or refusal_preview or conflict_and_prompt or authority_escalation or answer_text'
+      - name: Test M26 predecessors
+        run: |
+          python -m pytest -q \
+            tests/test_m26_6_answer_evaluation.py \
+            tests/test_m26_5_draft_answer.py \
+            tests/test_m26_4_provider_mock.py \
+            tests/test_m26_3_context_compiler.py \
+            tests/test_m26_2_retrieval_envelope.py \
+            tests/test_m26_1_architecture_authority.py
+      - name: Rebuild deterministic answer presentation evidence
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p /tmp/m26-7
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from knowledge_engine.m26_answer_presentation import run_presentation_benchmark
+
+          def load(path):
+              return json.loads(Path(path).read_text())
+
+          def digest(path):
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+          report = run_presentation_benchmark(
+              load('pilot/m26/m26-7-benchmark-cases.json'),
+              evaluation_cases=load('pilot/m26/m26-6-benchmark-cases.json'),
+              draft_cases=load('pilot/m26/m26-5-benchmark-cases.json'),
+              provider_cases=load('pilot/m26/m26-4-benchmark-cases.json'),
+              context_cases=load('pilot/m26/m26-3-benchmark-cases.json'),
+              retrieval_cases=load('pilot/m26/m26-2-benchmark-cases.json'),
+              corpus=load('pilot/m26/m26-2-synthetic-corpus.json'),
+              retrieval_policy=load('pilot/m26/m26-2-retrieval-policy.json'),
+              context_policy=load('pilot/m26/m26-3-context-policy.json'),
+              provider_policy=load('pilot/m26/m26-4-provider-policy.json'),
+              draft_policy=load('pilot/m26/m26-5-draft-answer-policy.json'),
+              evaluation_policy=load('pilot/m26/m26-6-answer-evaluation-policy.json'),
+              presentation_policy=load('pilot/m26/m26-7-presentation-policy.json'),
+          )
+          assert report['status'] == 'm26_7_answer_presentation_ready'
+          report_path = Path('/tmp/m26-7/presentation-benchmark-report.json')
+          report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
+          files = [
+              'pilot/m26/m26-7-entry-contract.json',
+              'pilot/m26/m26-7-presentation-policy.json',
+              'pilot/m26/m26-7-benchmark-cases.json',
+              'pilot/m26/m26-7-contract-registry.json',
+              'schemas/m26-7-answer-presentation-v1.schema.json',
+              'schemas/m26-non-serving-preview-v1.schema.json',
+          ]
+          evidence = {
+              'schema_version': 'knowledge-engine-m26-7-exact-head-evidence/v1',
+              'head_sha': os.environ['HEAD_SHA'],
+              'workflow_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'artifacts': {path: digest(path) for path in files},
+              'benchmark_report_sha256': hashlib.sha256(report_path.read_bytes()).hexdigest(),
+              'case_count': report['case_count'],
+              'passed_count': report['passed_count'],
+              'failed_count': report['failed_count'],
+              'non_serving_preview_count': report['metrics']['non_serving_preview_count'],
+              'non_serving_refusal_preview_count': report['metrics']['non_serving_refusal_preview_count'],
+              'warning_preview_count': report['metrics']['warning_preview_count'],
+              'synthetic_only': True,
+              'presentation_contract': True,
+              'non_serving_preview': True,
+              'live_provider_calls': False,
+              'credentials_used': False,
+              'network_execution': False,
+              'real_corpus_binding': False,
+              'semantic_or_hybrid_serving': False,
+              'production_answer_serving': False,
+              'verified_final_answers': False,
+              'production_pointer_mutation': False,
+          }
+          Path('/tmp/m26-7/evidence.json').write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+      - name: Reject protected mutations
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          printf '%s\n' "$changed"
+          ! printf '%s\n' "$changed" | grep -Eq '^(workers/|channels/|foundation/|release/|r2/|qdrant/|production/)'
+          ! printf '%s\n' "$changed" | grep -Eq '^(src/knowledge_engine/(m14_|m21_|m24_|m25_|m26_context_compiler\.py|m26_retrieval_envelope\.py|m26_provider_mock\.py|m26_draft_answer\.py|m26_answer_evaluation\.py))'
+          ! printf '%s\n' "$changed" | grep -Eq '^(pilot/m25/|docs/architecture/m25/)'
+          python -m compileall -q src/knowledge_engine/m26_answer_presentation.py tests/test_m26_7_answer_presentation.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m26-7-answer-presentation-evidence
+          path: /tmp/m26-7
+          if-no-files-found: error
+          retention-days: 30
