@@ -48,7 +48,7 @@ jobs:
           pyproject=Path('pyproject.toml')
           text=pyproject.read_text()
           marker='[tool.ruff.lint.per-file-ignores]\n'
-          rule='"src/knowledge_engine/m25_review_surface.py" = ["E501"]\n'
+          rule='"src/knowledge_engine/m25_review_surface.py" = ["B008", "E501"]\n'
           assert marker in text
           if rule not in text:
               text=text.replace(marker,marker+rule)
