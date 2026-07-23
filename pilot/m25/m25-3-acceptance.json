@@ -1,0 +1,127 @@
+{
+  "schema_version": "knowledge-engine-m25-3-acceptance/v1",
+  "status": "m25_3_extraction_worker_accepted",
+  "issue": {
+    "repository": "danielcanfly/knowledge-engine",
+    "number": 1043,
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "implementation": {
+    "pull_request_number": 1044,
+    "base_sha": "cc83a1e6bae1dce45fca50d3fdb515c26a70d0f9",
+    "head_sha": "d0fbd585215b35313d058d5e5921557a725276fa",
+    "merge_sha": "2dfb8b705ea28ea4d3cc8513aa341d58098a5a10",
+    "identity_resolution": "github_api_merge_ancestry_workflows_and_artifact_digest",
+    "merged_required": true,
+    "exact_head_workflows_required": true
+  },
+  "acceptance_gates": {
+    "dedicated_exact_head_ci_green": true,
+    "global_ci_green": true,
+    "m25_2_forward_compat_green": true,
+    "cross_stage_regressions_green": true,
+    "provider_neutral_interface": true,
+    "recorded_response_replay_only": true,
+    "deterministic_request_response_candidate_and_receipt": true,
+    "all_candidates_evidence_bound": true,
+    "provider_authority_escalation_fail_closed": true,
+    "secret_like_content_fail_closed": true,
+    "prompt_injection_findings_propagated": true,
+    "raw_source_text_absent_from_request_and_receipt": true,
+    "bounded_inputs_candidates_evidence_attempts_and_fallbacks": true,
+    "candidate_only_outputs": true,
+    "live_provider_calls_permitted": false,
+    "credentials_used": false,
+    "protected_mutations_zero": true,
+    "unresolved_review_threads": 0
+  },
+  "required_workflows": {
+    "CI": 29962705580,
+    "M17 Architecture Canon Acceptance": 29962705578,
+    "M17 Independent Operator GA Acceptance": 29962705723,
+    "M18 Graph v2 acceptance": 29962705640,
+    "M25.2 Intake Orchestrator": 29962705605,
+    "M25.3 Extraction Worker": 29962705632,
+    "R2 Release Integration": 29962705671
+  },
+  "implementation_evidence": {
+    "workflow_run_id": 29962705632,
+    "artifact_name": "m25-3-extraction-worker-evidence",
+    "artifact_digest": "sha256:e440fe73a1f21a78c233399da31d8f4c57fea1b84735b95f46f336cc014c9518",
+    "artifact_retention_days": 30
+  },
+  "accepted_artifact_paths": [
+    ".github/workflows/m25-3-extraction-worker.yml",
+    "docs/architecture/m25/examples/m25-3-recorded-response.example.json",
+    "docs/architecture/m25/m25-3-extraction-worker.md",
+    "pilot/m25/m25-3-authority-envelope.json",
+    "pilot/m25/m25-3-candidate-policy.json",
+    "pilot/m25/m25-3-contract-registry.json",
+    "pilot/m25/m25-3-entry-contract.json",
+    "pilot/m25/m25-3-model-policy.json",
+    "pilot/m25/m25-3-prompt-contract.json",
+    "pilot/m25/m25-3-provider-registry.json",
+    "schemas/m25-candidate-policy-v1.schema.json",
+    "schemas/m25-extraction-receipt-v1.schema.json",
+    "schemas/m25-model-policy-v1.schema.json",
+    "schemas/m25-prompt-contract-v1.schema.json",
+    "schemas/m25-provider-request-v1.schema.json",
+    "schemas/m25-provider-response-v1.schema.json",
+    "schemas/m25-recorded-response-set-v1.schema.json",
+    "src/knowledge_engine/m25_extraction_cli.py",
+    "src/knowledge_engine/m25_extraction_common.py",
+    "src/knowledge_engine/m25_extraction_inputs.py",
+    "src/knowledge_engine/m25_extraction_provider.py",
+    "src/knowledge_engine/m25_extraction_worker.py",
+    "tests/test_m25_3_extraction_contracts.py",
+    "tests/test_m25_3_extraction_integration.py",
+    "tests/test_m25_3_extraction_worker.py"
+  ],
+  "bounded_predecessor_hardening_paths": [
+    ".github/workflows/m25-2-intake-orchestrator.yml",
+    "docs/architecture/m25/m25-2-intake-orchestrator.md",
+    "pyproject.toml",
+    "src/knowledge_engine/m25_intake_adapters.py",
+    "src/knowledge_engine/m25_intake_batch.py",
+    "src/knowledge_engine/m25_intake_compat.py",
+    "src/knowledge_engine/m25_intake_inventory.py",
+    "src/knowledge_engine/m25_intake_orchestrator.py",
+    "src/knowledge_engine/m25_intake_persistence.py",
+    "src/knowledge_engine/m25_intake_registry.py",
+    "src/knowledge_engine/m25_intake_state.py",
+    "tests/test_m25_2_intake_orchestrator.py",
+    "tests/test_m25_2_intake_orchestrator_contracts.py"
+  ],
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_used": false,
+    "codex_escalations": 0,
+    "daniel_gate_required": false
+  },
+  "protected_mutations": {
+    "source_mutation": false,
+    "foundation_mutation": false,
+    "release_mutation": false,
+    "production_pointer_mutation": false,
+    "r2_production_mutation": false,
+    "qdrant_mutation": false,
+    "semantic_serving_enabled": false,
+    "hybrid_retrieval_enabled": false,
+    "production_answer_serving_enabled": false,
+    "large_scale_ingestion_enabled": false,
+    "live_provider_adapter_enabled": false
+  },
+  "reconciliation": {
+    "resolved_identity_artifact_required": true,
+    "implementation_merge_is_required_ancestor": true,
+    "implementation_evidence_digest_required": true,
+    "no_new_authority_granted": true
+  },
+  "next_stage": {
+    "authorized": true,
+    "stage_id": "M25.4",
+    "name": "Concept Identity Gold Set and Benchmark",
+    "predecessor_status_required": "m25_3_extraction_worker_accepted"
+  }
+}
