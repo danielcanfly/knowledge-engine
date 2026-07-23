@@ -1,0 +1,145 @@
+{
+  "$id": "https://knowledge-engine.local/schemas/m26-7-answer-presentation-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "answer_text": {
+      "const": ""
+    },
+    "diagnostics": {
+      "type": "object"
+    },
+    "display_binding_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "display_claims": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "binding_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "content_redacted": {
+            "const": true
+          },
+          "display_claim_id": {
+            "type": "string"
+          },
+          "ordinal": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "text": {
+            "const": ""
+          }
+        },
+        "required": [
+          "display_claim_id",
+          "ordinal",
+          "binding_ids",
+          "content_redacted",
+          "text"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "draft_package_sha256": {
+      "type": "string"
+    },
+    "evaluation_package_sha256": {
+      "type": "string"
+    },
+    "final_answer": {
+      "const": false
+    },
+    "non_serving_preview": {
+      "const": true
+    },
+    "presentation_status": {
+      "enum": [
+        "non_serving_preview_available",
+        "non_serving_preview_with_warnings",
+        "non_serving_refusal_preview",
+        "presentation_rejected_authority_escalation"
+      ]
+    },
+    "preview_only": {
+      "const": true
+    },
+    "production_answer_serving": {
+      "const": false
+    },
+    "production_pointer_mutation": {
+      "const": false
+    },
+    "refusal_reason_codes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "safe_for_m26_8": {
+      "const": true
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-answer-presentation/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "surface_blocks": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "synthetic_only": {
+      "const": true
+    },
+    "verified_final_answer": {
+      "const": false
+    },
+    "warning_banners": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "evaluation_package_sha256",
+    "draft_package_sha256",
+    "presentation_status",
+    "preview_only",
+    "non_serving_preview",
+    "safe_for_m26_8",
+    "synthetic_only",
+    "final_answer",
+    "verified_final_answer",
+    "production_answer_serving",
+    "production_pointer_mutation",
+    "answer_text",
+    "display_claims",
+    "display_binding_ids",
+    "warning_banners",
+    "refusal_reason_codes",
+    "surface_blocks",
+    "diagnostics",
+    "self_sha256"
+  ],
+  "title": "M26.7 Answer Presentation Package",
+  "type": "object"
+}

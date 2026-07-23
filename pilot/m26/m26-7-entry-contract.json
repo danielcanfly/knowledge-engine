@@ -1,0 +1,42 @@
+{
+  "accepted_predecessor": {
+    "evidence_artifact_id": 8565255191,
+    "evidence_digest": "sha256:8fe69d57c1f8f481b5aa6a2e0ff9f488ec9af745e1012c5bc819157c34e9977f",
+    "final_main_seal": "1f2dfbba74d6df91baa946bbac82e343ea81750e",
+    "implementation_head": "ecd596e2e4346d03f5463c0696127b98bdef8c95",
+    "implementation_merge": "dd65419933a135349b3d54b6a1813fd46c70e569",
+    "implementation_pr": 1079,
+    "reconciliation_pr": 1081,
+    "stage_id": "M26.6",
+    "status": "m26_6_answer_evaluation_refusal_gate_accepted"
+  },
+  "authority_boundary": {
+    "answer_evaluation_required": true,
+    "credentials": false,
+    "foundation_mutation": false,
+    "live_provider_calls": false,
+    "network_execution": false,
+    "non_serving_preview_permitted": true,
+    "presentation_contract_permitted": true,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "provider_sdk": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "next_stage": {
+    "authorized": false,
+    "requires_status": "m26_7_answer_presentation_non_serving_preview_accepted",
+    "stage_id": "M26.8"
+  },
+  "schema_version": "knowledge-engine-m26-7-entry-contract/v1",
+  "self_sha256": "04bb2b88c6be43c804ab5d0cf3d5032aff7b46cf65f7d07b753205ad293523ce",
+  "stage_id": "M26.7",
+  "stage_name": "Synthetic Answer Presentation Contract and Non-Serving Preview"
+}

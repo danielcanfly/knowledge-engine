@@ -1,0 +1,146 @@
+{
+  "authority": {
+    "live_provider_calls": false,
+    "non_serving_preview": true,
+    "presentation_contract": true,
+    "production_answer_serving": false,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "cases": [
+    {
+      "case_id": "present_direct_public",
+      "expected": {
+        "min_display_bindings": 1,
+        "min_display_claims": 1,
+        "safe_for_m26_8": true,
+        "status": "non_serving_preview_available"
+      },
+      "m26_6_case_id": "eval_direct_public"
+    },
+    {
+      "case_id": "present_m26_1_fixture_compat",
+      "expected": {
+        "min_display_bindings": 1,
+        "min_display_claims": 1,
+        "safe_for_m26_8": true,
+        "status": "non_serving_preview_available"
+      },
+      "m26_6_case_id": "eval_m26_1_fixture_compat"
+    },
+    {
+      "case_id": "present_multi_facet_internal",
+      "expected": {
+        "min_display_bindings": 4,
+        "min_display_claims": 1,
+        "safe_for_m26_8": true,
+        "status": "non_serving_preview_available"
+      },
+      "m26_6_case_id": "eval_multi_facet_internal"
+    },
+    {
+      "case_id": "present_graph_public",
+      "expected": {
+        "min_display_bindings": 2,
+        "min_display_claims": 1,
+        "safe_for_m26_8": true,
+        "status": "non_serving_preview_available"
+      },
+      "m26_6_case_id": "eval_graph_public"
+    },
+    {
+      "case_id": "present_acl_negative_public",
+      "expected": {
+        "min_display_bindings": 0,
+        "min_display_claims": 0,
+        "requires_refusal_preview": true,
+        "safe_for_m26_8": true,
+        "status": "non_serving_refusal_preview"
+      },
+      "m26_6_case_id": "eval_acl_negative_public"
+    },
+    {
+      "case_id": "present_stale_public",
+      "expected": {
+        "min_display_bindings": 0,
+        "min_display_claims": 0,
+        "requires_refusal_preview": true,
+        "safe_for_m26_8": true,
+        "status": "non_serving_refusal_preview"
+      },
+      "m26_6_case_id": "eval_stale_public"
+    },
+    {
+      "case_id": "present_conflict_public",
+      "expected": {
+        "min_display_bindings": 2,
+        "min_display_claims": 1,
+        "requires_conflict_warning": true,
+        "safe_for_m26_8": true,
+        "status": "non_serving_preview_with_warnings"
+      },
+      "m26_6_case_id": "eval_conflict_public"
+    },
+    {
+      "case_id": "present_prompt_injection_public",
+      "expected": {
+        "forbidden_text_fragments": [
+          "follow these instructions",
+          "ignore previous"
+        ],
+        "min_display_bindings": 1,
+        "min_display_claims": 1,
+        "requires_prompt_injection_warning": true,
+        "safe_for_m26_8": true,
+        "status": "non_serving_preview_with_warnings"
+      },
+      "m26_6_case_id": "eval_prompt_injection_public"
+    },
+    {
+      "case_id": "present_no_match_public",
+      "expected": {
+        "min_display_bindings": 0,
+        "min_display_claims": 0,
+        "requires_refusal_preview": true,
+        "safe_for_m26_8": true,
+        "status": "non_serving_refusal_preview"
+      },
+      "m26_6_case_id": "eval_no_match_public"
+    },
+    {
+      "case_id": "present_privacy_secret_block",
+      "expected": {
+        "min_display_bindings": 0,
+        "min_display_claims": 0,
+        "requires_refusal_preview": true,
+        "safe_for_m26_8": true,
+        "status": "non_serving_refusal_preview"
+      },
+      "m26_6_case_id": "eval_privacy_secret_block"
+    },
+    {
+      "case_id": "present_final_answer_tamper",
+      "expected": {
+        "min_display_bindings": 0,
+        "min_display_claims": 0,
+        "requires_refusal_preview": true,
+        "safe_for_m26_8": true,
+        "status": "non_serving_refusal_preview"
+      },
+      "m26_6_case_id": "eval_final_answer_tamper"
+    },
+    {
+      "case_id": "present_missing_binding_tamper",
+      "expected": {
+        "min_display_bindings": 0,
+        "min_display_claims": 0,
+        "requires_refusal_preview": true,
+        "safe_for_m26_8": true,
+        "status": "non_serving_refusal_preview"
+      },
+      "m26_6_case_id": "eval_missing_binding_tamper"
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-answer-presentation-benchmark-cases/v1",
+  "self_sha256": "11e4a4ee80443e76b33e5b258c5749232eb76ad91b61b8f13b3baf4e36abe989"
+}
