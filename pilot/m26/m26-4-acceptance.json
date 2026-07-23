@@ -1,0 +1,115 @@
+{
+  "authority_boundary": {
+    "canonical_identity_or_relation_mutation": false,
+    "credentials": false,
+    "foundation_mutation": false,
+    "live_provider_calls": false,
+    "network_execution": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "provider_mock_replay": true,
+    "provider_sdk": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true
+  },
+  "benchmark": {
+    "abstain_replay_count": 3,
+    "case_count": 10,
+    "credentials_used_count": 0,
+    "failed_count": 0,
+    "live_network_call_count": 0,
+    "mock_draft_count": 6,
+    "passed_count": 10,
+    "privacy_blocked_count": 1,
+    "production_answer_serving_count": 0,
+    "provider_call_count": 0,
+    "real_corpus_binding_count": 0,
+    "semantic_or_hybrid_use_count": 0
+  },
+  "evidence_artifact": {
+    "artifact_id": 8560942446,
+    "digest": "sha256:e247b94f9a452c0ea066dc646d3d9c1ce76ed569ac45fc5a919d0951d772782e",
+    "name": "m26-4-provider-mock-evidence",
+    "retention_days": 30,
+    "workflow_run_id": 30000885800
+  },
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_escalations": 0,
+    "codex_used": false,
+    "daniel_gate_required": false
+  },
+  "frozen_identities": {
+    "benchmark_cases_sha256": "cf7d57f5dce5ac6f4866e3148fab99e00ed19e8fdeb330f0db6d6a24a550a962",
+    "contract_registry_self_sha256": "5f4094ecc24ddb31490994a5b52504f2b28280de4ae9769fa0ff6e933c2586ca",
+    "entry_contract_sha256": "c24abdb0e1a894e7c2fecf4274320ee7ddf9e7885b926151adbb09b406cda289",
+    "privacy_review_schema_sha256": "d04f8548467c4bb456236253e4c42f6972d828f77af9e6712bf6af3c182649f9",
+    "provider_policy_sha256": "5fd82b673966eb8db8b9dd3d00184cad3f506b830e7238b5dabc17f6e5af89c7",
+    "provider_replay_schema_sha256": "1e03400cd21c862466699a60088e7307f97fff32b69912719d0896bfa9a1f958"
+  },
+  "implementation": {
+    "base_sha": "7a5b757a227e3d7bd0dd859181fc44511e003420",
+    "changed_file_count": 11,
+    "expected_head_merge": true,
+    "final_head_sha": "e4155ec6597a1e4d1585ea5a8dd303ff96a40a39",
+    "merge_sha": "ddc5ea7ad2e3a8bb1742a0ebc00ac8e320bf7870",
+    "pull_request_number": 1069,
+    "unresolved_review_thread_count": 0
+  },
+  "issue": {
+    "number": 1068,
+    "repository": "danielcanfly/knowledge-engine",
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "next_stage": {
+    "authorized": true,
+    "draft_answer_contract_permitted": true,
+    "live_provider_calls_permitted": false,
+    "name": "Draft Answer Contract and Citation Binding",
+    "predecessor_status_required": "m26_4_provider_mock_replay_privacy_accepted",
+    "production_answer_serving_permitted": false,
+    "real_corpus_binding_permitted": false,
+    "stage_id": "M26.5",
+    "synthetic_only": true
+  },
+  "predecessor": {
+    "main_seal_sha": "7a5b757a227e3d7bd0dd859181fc44511e003420",
+    "status": "m26_3_context_compiler_accepted"
+  },
+  "quality_and_security": {
+    "abstain_context_preserved_as_replay": true,
+    "citation_ids_require_selected_passage_ids": true,
+    "credentials_used_zero": true,
+    "mock_drafts_non_final": true,
+    "network_called_zero": true,
+    "privacy_review_fail_closed": true,
+    "prompt_injection_quoted_as_evidence_only": true,
+    "provider_calls_zero": true,
+    "replay_records_digest_bound": true,
+    "safe_context_required_for_mock_draft": true
+  },
+  "reconciliation": {
+    "all_frozen_artifact_digests_required": true,
+    "evidence_digest_required": true,
+    "exact_remote_identity_verified": true,
+    "implementation_merge_is_required_ancestor": true,
+    "no_new_authority_beyond_m26_5_entry": true
+  },
+  "required_workflows": {
+    "CI": 30000885710,
+    "M17 Architecture Canon Acceptance": 30000885776,
+    "M18 Graph v2 acceptance": 30000885819,
+    "M26.1 Architecture Authority": 30000885775,
+    "M26.4 Provider Mock Replay": 30000885800,
+    "R2 Release Integration": 30000885769
+  },
+  "schema_version": "knowledge-engine-m26-4-acceptance/v1",
+  "self_sha256": "6f4b43f3ff7f573cc4530fd5fbd9cb8169577158d37760b4a1c6a9a14d33c87b",
+  "status": "m26_4_provider_mock_replay_privacy_accepted"
+}
