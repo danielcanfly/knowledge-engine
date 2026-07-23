@@ -22,7 +22,8 @@ CATALOG = b"""export type BlogLang = 'en' | 'zh';
 const SERIES = [
   { slug: /^alpha-\\d+$/, key: 'alpha', order: 1, labelZh: '1. Alpha ZH', labelEn: '1. Alpha' },
   { slug: /^beta-\\d+$/, key: 'beta', order: 2, labelZh: '2. Beta ZH', labelEn: '2. Beta' },
-  { slug: /^fallback-\\d+$/, key: 'fallback', order: 3, labelZh: '3. Fallback ZH', labelEn: '3. Fallback' },
+  { slug: /^fallback-\\d+$/, key: 'fallback', order: 3,
+    labelZh: '3. Fallback ZH', labelEn: '3. Fallback' },
 ];
 """
 
