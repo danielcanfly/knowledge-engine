@@ -1,0 +1,122 @@
+{
+  "schema_version": "knowledge-engine-m25-6-acceptance/v1",
+  "status": "m25_6_review_surface_accepted",
+  "predecessor": {
+    "status": "m25_5_identity_governance_accepted",
+    "main_seal_sha": "d68be491f8d07a727bcf1f521a2e5e75256eede3"
+  },
+  "concurrent_main_context": {
+    "implementation_base_sha": "d3cf8cc72d951174f10c0a8328f848143c24e004",
+    "accepted_m26_1_history_preserved": true
+  },
+  "issue": {
+    "repository": "danielcanfly/knowledge-engine",
+    "number": 1053,
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "implementation": {
+    "pull_request_number": 1057,
+    "base_sha": "d3cf8cc72d951174f10c0a8328f848143c24e004",
+    "final_head_sha": "bf6ec965851f139e2dafa008c3efcab856ea6e77",
+    "merge_sha": "dd1559f7730c796933dfe0996acc0a558870a61e",
+    "changed_file_count": 17,
+    "unresolved_review_thread_count": 0,
+    "expected_head_merge": true
+  },
+  "daniel_browser_acceptance": {
+    "required": true,
+    "recorded": true,
+    "authority_comment_id": 5056370409,
+    "accepted_exact_head_sha": "bf6ec965851f139e2dafa008c3efcab856ea6e77",
+    "accepted_chromium_journeys": ["approve", "map", "edit", "split", "reject", "defer"],
+    "accepted_screenshot_count": 12,
+    "accepted_immutable_decision_ledger_evidence": true,
+    "does_not_authorize_m25_7": true,
+    "does_not_authorize_protected_mutations": true
+  },
+  "frozen_identities": {
+    "review_batch_file_sha256": "91a3037b27e5b31253b1d394ccbf095f115dc8e78f9f719f0e6eabc83ae06859",
+    "review_batch_content_sha256": "254e5a9dcd6bc970828a6a102daf02ff62921dd57533e4cca02ba33a9a41dced",
+    "browser_acceptance_plan_sha256": "86234f1394ad4eea45b16627d03820ad29a72d011ff4d3cc803baaaf6363e9de",
+    "readiness_gate_sha256": "1a17e35d80981a0cb84e15b3507007944c37e070db444378079315c180440f76",
+    "browser_evidence_sha256": "30eb6e742a061eb9e29e6ae90007f74eca9237304ed0a0519bf1d5c643d6ee26",
+    "audit_export_sha256": "efe40097895690014e41ff2197ae37d78c059ae57d935b39ab8dbd8bb618e839",
+    "audit_chain_sha256": "13fbfe86ded899aca8777ed44aa6eed6d6a5cd5b1fe9c370b07f6206ee9fd754",
+    "exact_head_evidence_sha256": "ac19cb28ac27ae37f1515c349039e9740db016300c20f72e04893ce9e77cb933"
+  },
+  "browser_population": {
+    "review_item_count": 30,
+    "scenario_count": 6,
+    "decision_count": 6,
+    "terminal_item_count": 5,
+    "deferred_item_count": 1,
+    "pending_item_count": 24,
+    "review_complete": false,
+    "admission_ready": false,
+    "unauthenticated_review_status": 401,
+    "all_scenarios_passed": true
+  },
+  "governance": {
+    "authenticated_review_ui": true,
+    "candidate_only": true,
+    "admission_decision_only": true,
+    "immutable_append_only_ledger": true,
+    "valid_hash_chain": true,
+    "stale_state_fails_closed": true,
+    "bulk_approval_permitted": false,
+    "canonical_knowledge": false,
+    "production_authority": false,
+    "source_write_permitted": false,
+    "github_pr_creation_permitted": false,
+    "m25_7_authorized": false
+  },
+  "required_workflows": {
+    "M25.6 Review Surface": 29990580001,
+    "CI": 29990580025,
+    "M17 Architecture Canon Acceptance": 29990580048,
+    "M17 Independent Operator GA Acceptance": 29990579963,
+    "M18 Graph v2 acceptance": 29990579959,
+    "M25.2 Intake Orchestrator": 29990580055,
+    "M25.3 Extraction Worker": 29990580015,
+    "M25.4 Identity Gold Benchmark": 29990580062,
+    "M25.5 Identity Governance": 29990579964,
+    "R2 Release Integration": 29990579975
+  },
+  "evidence_artifact": {
+    "workflow_run_id": 29990580001,
+    "artifact_id": 8556895980,
+    "name": "m25-6-review-surface-evidence",
+    "digest": "sha256:5013f7a2b8a655e48564d4769c175a3a6704b3ddde4c3222d9caa2588dcf01f0",
+    "screenshot_count": 12
+  },
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_used": false,
+    "codex_escalations": 0,
+    "daniel_gate_required": true,
+    "daniel_gate_satisfied": true
+  },
+  "protected_mutations": {
+    "source": false,
+    "source_pr_creation": false,
+    "foundation": false,
+    "release": false,
+    "production_pointer": false,
+    "r2_production": false,
+    "qdrant": false,
+    "semantic_serving": false,
+    "hybrid_retrieval": false,
+    "production_answer_serving": false,
+    "canonical_knowledge": false,
+    "large_scale_ingestion": false
+  },
+  "next_stage": {
+    "stage_id": "M25.7",
+    "name": "Governed Source PR Executor",
+    "authorized": false,
+    "eligible_only_after_m25_6_closure": true,
+    "requires_separate_daniel_instruction": true,
+    "not_authorized_by_browser_acceptance": true
+  }
+}
