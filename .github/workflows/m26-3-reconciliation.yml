@@ -1,0 +1,88 @@
+name: M26.3 Reconciliation
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m26-3-reconciliation.yml'
+      - 'docs/architecture/m26/m26-3-reconciliation.md'
+      - 'pilot/m26/m26-3-acceptance.json'
+      - 'tests/test_m26_3_reconciliation.py'
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+jobs:
+  reconciliation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify remote identity and evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git merge-base --is-ancestor 693fdc32c5f4f7d30505112be0b866bdb671143e HEAD
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          base = 'https://api.github.com/repos/danielcanfly/knowledge-engine'
+          token = os.environ['GH_TOKEN']
+
+          def get(path):
+              request = urllib.request.Request(
+                  base + path,
+                  headers={
+                      'Authorization': f'Bearer {token}',
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              return json.load(urllib.request.urlopen(request))
+
+          pr = get('/pulls/1066')
+          issue = get('/issues/1064')
+          assert pr['merged_at']
+          assert pr['head']['sha'] == '56b00926957e10327be5910538b5b3b34b60b06d'
+          assert pr['merge_commit_sha'] == '693fdc32c5f4f7d30505112be0b866bdb671143e'
+          assert issue['state'] == 'closed'
+
+          runs = {
+              'CI': 29997773433,
+              'M17 Architecture Canon Acceptance': 29997773114,
+              'M18 Graph v2 acceptance': 29997773188,
+              'M26.1 Architecture Authority': 29997773826,
+              'M26.3 Context Compiler': 29997773101,
+              'R2 Release Integration': 29997772995,
+          }
+          for run_id in runs.values():
+              run = get(f'/actions/runs/{run_id}')
+              assert run['head_sha'] == '56b00926957e10327be5910538b5b3b34b60b06d'
+              assert run['conclusion'] == 'success'
+
+          artifact = get('/actions/artifacts/8559677787')
+          assert artifact['name'] == 'm26-3-context-compiler-evidence'
+          assert artifact['digest'] == 'sha256:94968939985158c349145d848ccea7e5b0a5573658ceda6bcf76a89797b7653e'
+          PY
+      - name: Validate reconciliation contract
+        run: |
+          python -m pip install --disable-pip-version-check -e '.[dev]'
+          python -m ruff check tests/test_m26_3_reconciliation.py
+          python -m pytest -q tests/test_m26_3_reconciliation.py tests/test_m26_3_context_compiler.py
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          expected="$(printf '%s\n' '.github/workflows/m26-3-reconciliation.yml' 'docs/architecture/m26/m26-3-reconciliation.md' 'pilot/m26/m26-3-acceptance.json' 'tests/test_m26_3_reconciliation.py' | sort)"
+          test "$changed" = "$expected"
+          python -m compileall -q tests/test_m26_3_reconciliation.py
+      - name: Reject protected mutations
+        run: |
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          ! printf '%s\n' "$changed" | grep -Eq '^(workers/|channels/|foundation/|release/|r2/|qdrant/|production/|src/)'
