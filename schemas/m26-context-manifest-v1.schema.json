@@ -1,0 +1,177 @@
+{
+  "$id": "knowledge-engine/m26/context-manifest-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "context_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "derived_excerpts": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "excerpt_id": {
+            "type": "string"
+          },
+          "input_passage_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "text": {
+            "type": "string"
+          },
+          "text_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "transformation": {
+            "enum": [
+              "exact_excerpt",
+              "deterministic_whitespace_normalization"
+            ]
+          }
+        },
+        "required": [
+          "excerpt_id",
+          "input_passage_ids",
+          "transformation",
+          "text",
+          "text_sha256"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "evidence_envelope_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "exclusions": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "mandatory_conflict_passage_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "measured_token_estimate": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "provider_profile": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "release": {
+      "$id": "knowledge-engine/m26/release-identity-v1.schema.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "foundation_repository": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "foundation_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "release_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "knowledge-engine-m26-release-identity/v1"
+        },
+        "source_repository": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "source_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "vault_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "release_id",
+        "manifest_sha256",
+        "source_repository",
+        "source_sha",
+        "foundation_repository",
+        "foundation_sha"
+      ],
+      "title": "M26 Release Identity",
+      "type": "object"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-context-manifest/v1"
+    },
+    "selected_passage_ids": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "token_budget": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "tokenizer_identity": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "truncation_policy": {
+      "enum": [
+        "none",
+        "structure_aware",
+        "abstain"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "evidence_envelope_sha256",
+    "release",
+    "provider_profile",
+    "token_budget",
+    "measured_token_estimate",
+    "tokenizer_identity",
+    "selected_passage_ids",
+    "mandatory_conflict_passage_ids",
+    "derived_excerpts",
+    "exclusions",
+    "truncation_policy",
+    "context_sha256",
+    "self_sha256"
+  ],
+  "title": "M26 Context Manifest",
+  "type": "object"
+}

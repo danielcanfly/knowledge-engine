@@ -1,0 +1,194 @@
+{
+  "architecture_authority": {
+    "architecture_and_contract_writes_permitted": true,
+    "production_answer_serving_permitted": false,
+    "provider_calls_permitted": false,
+    "r2_or_qdrant_mutation_permitted": false,
+    "real_corpus_binding_permitted": false,
+    "release_or_pointer_mutation_permitted": false,
+    "semantic_or_hybrid_enable_permitted": false,
+    "source_or_foundation_mutation_permitted": false
+  },
+  "authority_matrix": {
+    "default": "deny",
+    "final_answer_authority": "verified_claims_only",
+    "principles": {
+      "canonical_source_mutation": false,
+      "citation_presence_equals_support": false,
+      "external_browsing_repair": false,
+      "model_confidence_grants_authority": false
+    },
+    "schema_version": "knowledge-engine-m26-answer-authority-matrix/v1"
+  },
+  "downstream_inputs_ref": {
+    "path": "pilot/m26/m26-1-downstream-inputs.json",
+    "sha256": "69137ab26db6956464cfe92f86b96c7127dd29073014c7293908527e4d2e7e20"
+  },
+  "entry_baseline_sha256": "3c11b7f137dd6eb0c0354dabf7537ada1a03a0fc901a5b9facd6f469131a85db",
+  "entry_engine_sha": "d68be491f8d07a727bcf1f521a2e5e75256eede3",
+  "exit_gate": {
+    "answer_authority_frozen": true,
+    "closed_schemas_frozen": true,
+    "m26_2_inputs_digest_bound": true,
+    "no_parallel_systems": true,
+    "protected_mutations_zero": true,
+    "provider_contract_frozen_without_calls": true,
+    "state_machine_closed_and_bounded": true,
+    "threats_and_default_off_flags_frozen": true
+  },
+  "feature_flags": {
+    "flags": [
+      {"default": true, "name": "M26_GLOBAL_OFF", "secret": false},
+      {"default": false, "name": "M26_ENABLED", "secret": false},
+      {"default": false, "name": "M26_REAL_CORPUS_ENABLED", "secret": false},
+      {"default": false, "name": "M26_RETRIEVAL_ENABLED", "secret": false},
+      {"default": false, "name": "M26_GRAPH_EXPANSION_ENABLED", "secret": false},
+      {"default": false, "name": "M26_CONTEXT_COMPILER_ENABLED", "secret": false},
+      {"default": false, "name": "M26_PROVIDER_CALLS_ENABLED", "secret": false},
+      {"default": false, "name": "M26_GENERATION_ENABLED", "secret": false},
+      {"default": false, "name": "M26_VERIFICATION_ENABLED", "secret": false},
+      {"default": false, "name": "M26_REPAIR_ENABLED", "secret": false},
+      {"default": false, "name": "M26_VERIFIED_STREAMING_ENABLED", "secret": false},
+      {"default": false, "name": "M26_ASK_UI_ENABLED", "secret": false},
+      {"default": false, "name": "M26_FEEDBACK_ENABLED", "secret": false},
+      {"default": false, "name": "M26_PILOT_ENABLED", "secret": false},
+      {"default": false, "name": "M26_PUBLIC_SERVING_ENABLED", "secret": false},
+      {"default": false, "name": "M26_SEMANTIC_RETRIEVAL_ENABLED", "secret": false},
+      {"default": false, "name": "M26_HYBRID_RETRIEVAL_ENABLED", "secret": false},
+      {"default": false, "name": "M26_PROVIDER_FALLBACK_ENABLED", "secret": false},
+      {"default": false, "name": "M26_CONTENT_LOGGING_ENABLED", "secret": false}
+    ],
+    "precedence": [
+      "M26_GLOBAL_OFF",
+      "accepted_stage_gate",
+      "Daniel_authority",
+      "server_configuration",
+      "request_policy"
+    ],
+    "rules": {
+      "client_override_forbidden": true,
+      "flags_contain_secrets": false,
+      "global_off_dominates": true,
+      "unknown_flag": "reject"
+    },
+    "schema_version": "knowledge-engine-m26-feature-flags/v1"
+  },
+  "issue_number": 1052,
+  "next_stage": {
+    "authorized": false,
+    "requires_status": "m26_1_architecture_authority_accepted",
+    "stage_id": "M26.2"
+  },
+  "provider_contract": {
+    "draft_contract": "knowledge-engine-m26-draft-answer/v1",
+    "interface_version": "knowledge-engine-m26-generation-provider/v1",
+    "live_provider_calls_permitted": false,
+    "max_attempts_per_route": 3,
+    "max_routes": 3,
+    "network_browsing_default": false,
+    "privacy_gate_required": true,
+    "provider_delta_authority": "draft_only",
+    "provider_output_authority": "draft_only",
+    "provider_sdk_imports_permitted": false,
+    "request_contract": "knowledge-engine-m26-generation-request/v1",
+    "result_contract": "knowledge-engine-m26-generation-result/v1",
+    "silent_fallback_permitted": false,
+    "tool_calls_default": false
+  },
+  "reuse_map": {
+    "items": [
+      {"component": "m14_retrieval.retrieve_wiki_first", "decision": "direct_reuse_via_adapter"},
+      {"component": "m19_graph_api.ReadOnlyGraphService", "decision": "direct_reuse"},
+      {"component": "M25 intake/v1 normalized references", "decision": "adapter"},
+      {"component": "m14 PublicAsk composed prose", "decision": "compatibility_only_not_final_authority"}
+    ],
+    "no_parallel_source_or_evidence_system": true,
+    "schema_version": "knowledge-engine-m26-reuse-map/v1"
+  },
+  "schema_registry_ref": {
+    "path": "pilot/m26/m26-1-schema-registry.json",
+    "sha256": "d57eb4349b9cf97094beae2f6e82f9ab0e1f2415df841ae35565e8809ad89abd"
+  },
+  "schema_version": "knowledge-engine-m26-1-architecture-freeze/v1",
+  "self_sha256": "c5bb4200f13e0c2673c515c528489e0510d6bb0397504c4cdc90b69d40521eff",
+  "state_machine": {
+    "rules": {
+      "adjacent_transition_only": true,
+      "max_repair_attempts": 2,
+      "provider_delta_is_never_final": true,
+      "safe_streaming_requires_verified_payload": true,
+      "terminal_reentry_forbidden": true
+    },
+    "schema_version": "knowledge-engine-m26-answer-state-machine/v1",
+    "states": [
+      "received", "authenticated", "policy_validated", "question_normalized",
+      "retrieval_planned", "retrieving", "evidence_envelope_ready",
+      "context_compiling", "context_ready", "generation_authorized",
+      "generation_started", "draft_received", "claims_extracted", "verifying",
+      "repair_planned", "repairing", "final_assembled", "safe_streaming",
+      "completed", "refused_policy", "rejected_acl", "no_match",
+      "insufficient_evidence", "conflicting_evidence", "context_budget_exceeded",
+      "provider_unavailable", "provider_timeout", "provider_schema_invalid",
+      "verification_failed", "citation_mismatch", "cost_budget_exceeded",
+      "cancelled", "internal_error_safe"
+    ],
+    "terminal_states": [
+      "completed", "refused_policy", "rejected_acl", "no_match",
+      "insufficient_evidence", "conflicting_evidence", "context_budget_exceeded",
+      "provider_unavailable", "provider_timeout", "provider_schema_invalid",
+      "verification_failed", "citation_mismatch", "cost_budget_exceeded",
+      "cancelled", "internal_error_safe"
+    ],
+    "transitions": {
+      "authenticated": ["policy_validated"],
+      "cancelled": [],
+      "citation_mismatch": [],
+      "claims_extracted": ["verifying"],
+      "completed": [],
+      "conflicting_evidence": [],
+      "context_budget_exceeded": [],
+      "context_compiling": ["context_ready"],
+      "context_ready": ["generation_authorized"],
+      "cost_budget_exceeded": [],
+      "draft_received": ["claims_extracted"],
+      "evidence_envelope_ready": ["context_compiling"],
+      "final_assembled": ["safe_streaming"],
+      "generation_authorized": ["generation_started"],
+      "generation_started": ["draft_received"],
+      "insufficient_evidence": [],
+      "internal_error_safe": [],
+      "no_match": [],
+      "policy_validated": ["question_normalized"],
+      "provider_schema_invalid": [],
+      "provider_timeout": [],
+      "provider_unavailable": [],
+      "question_normalized": ["retrieval_planned"],
+      "received": ["authenticated"],
+      "refused_policy": [],
+      "rejected_acl": [],
+      "repair_planned": ["repairing"],
+      "repairing": ["draft_received", "verification_failed"],
+      "retrieval_planned": ["retrieving"],
+      "retrieving": ["evidence_envelope_ready"],
+      "safe_streaming": ["completed"],
+      "verification_failed": [],
+      "verifying": [
+        "final_assembled", "repair_planned", "insufficient_evidence",
+        "conflicting_evidence", "verification_failed", "citation_mismatch"
+      ]
+    }
+  },
+  "threat_register": {
+    "schema_version": "knowledge-engine-m26-threat-register/v1",
+    "threats": [
+      {"id": "T01", "name": "Unsupported fluent claim", "severity": "critical"},
+      {"id": "T02", "name": "Citation theatre", "severity": "critical"},
+      {"id": "T03", "name": "ACL leakage", "severity": "critical"},
+      {"id": "T04", "name": "Prompt injection authority escape", "severity": "critical"},
+      {"id": "T05", "name": "Provider secret exposure", "severity": "critical"},
+      {"id": "T06", "name": "Unverified streaming", "severity": "critical"},
+      {"id": "T07", "name": "Cross-release evidence join", "severity": "critical"},
+      {"id": "T08", "name": "Cache audience collision", "severity": "critical"}
+    ]
+  }
+}

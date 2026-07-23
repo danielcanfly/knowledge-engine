@@ -1,0 +1,168 @@
+{
+  "$id": "knowledge-engine/m26/verification-report-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "can_finalize": {
+      "type": "boolean"
+    },
+    "claims": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "acl_rechecked": {
+            "const": true
+          },
+          "citation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "claim_id": {
+            "type": "string"
+          },
+          "freshness": {
+            "enum": [
+              "current",
+              "stale_qualified",
+              "unknown",
+              "not_applicable"
+            ]
+          },
+          "material": {
+            "type": "boolean"
+          },
+          "passage_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "verdict": {
+            "enum": [
+              "supported",
+              "supported_with_qualification",
+              "partially_supported",
+              "unsupported",
+              "contradicted",
+              "unverifiable",
+              "inaccessible"
+            ]
+          }
+        },
+        "required": [
+          "claim_id",
+          "material",
+          "verdict",
+          "passage_ids",
+          "citation_ids",
+          "acl_rechecked",
+          "freshness",
+          "reason_codes"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "evidence_envelope_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "generation_result_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "release": {
+      "$id": "knowledge-engine/m26/release-identity-v1.schema.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "foundation_repository": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "foundation_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "release_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "knowledge-engine-m26-release-identity/v1"
+        },
+        "source_repository": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "source_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "vault_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "release_id",
+        "manifest_sha256",
+        "source_repository",
+        "source_sha",
+        "foundation_repository",
+        "foundation_sha"
+      ],
+      "title": "M26 Release Identity",
+      "type": "object"
+    },
+    "repair_attempts": {
+      "maximum": 2,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-verification-report/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "unresolved_material_claims": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "generation_result_sha256",
+    "evidence_envelope_sha256",
+    "release",
+    "claims",
+    "repair_attempts",
+    "unresolved_material_claims",
+    "can_finalize",
+    "self_sha256"
+  ],
+  "title": "M26 Verification Report",
+  "type": "object"
+}

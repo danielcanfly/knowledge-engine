@@ -1,0 +1,52 @@
+{
+  "excluded_evidence": [],
+  "passages": [
+    {
+      "audience": "internal",
+      "concept_id": "concepts/bounded-verification",
+      "locator": {
+        "anchor": "verification",
+        "end_line": 14,
+        "heading": "Verification",
+        "page": null,
+        "paragraph": null,
+        "start_line": 10,
+        "timecode": null
+      },
+      "passage_id": "passage_cccccccccccccccccccccccccccccccc",
+      "prompt_injection_signals": [],
+      "rank": 1,
+      "relation_path_ids": [],
+      "retrieval_score": 12.0,
+      "section_id": "concepts/bounded-verification#verification",
+      "snapshot_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+      "source_id": "fixture-source-1",
+      "source_kind": "markdown",
+      "text": "A final answer is emitted only after every material claim is verified against authorised evidence.",
+      "text_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+      "uri": "fixture://source-1"
+    }
+  ],
+  "population": {
+    "acl_filtered": 0,
+    "excluded": 0,
+    "included": 1,
+    "retrieved": 1
+  },
+  "relation_paths": [],
+  "release": {
+    "foundation_repository": "fixture/foundation",
+    "foundation_sha": "3333333333333333333333333333333333333333",
+    "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "release_id": "fixture-release-001",
+    "schema_version": "knowledge-engine-m26-release-identity/v1",
+    "source_repository": "fixture/source",
+    "source_sha": "2222222222222222222222222222222222222222",
+    "vault_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "request_id": "m26req_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "retrieval_plan_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+  "schema_version": "knowledge-engine-m26-evidence-envelope/v1",
+  "self_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+  "sufficiency": "sufficient"
+}

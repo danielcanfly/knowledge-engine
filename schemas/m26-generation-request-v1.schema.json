@@ -1,0 +1,73 @@
+{
+  "$id": "knowledge-engine/m26/generation-request-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "context_manifest_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "idempotency_key": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "max_output_tokens": {
+      "maximum": 32768,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "network_access": {
+      "const": false
+    },
+    "privacy_class": {
+      "enum": [
+        "public",
+        "internal",
+        "confidential",
+        "restricted"
+      ]
+    },
+    "provider_registry_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-generation-request/v1"
+    },
+    "structured_output_schema": {
+      "const": "knowledge-engine-m26-draft-answer/v1"
+    },
+    "temperature": {
+      "maximum": 2,
+      "minimum": 0,
+      "type": "number"
+    },
+    "timeout_ms": {
+      "maximum": 30000,
+      "minimum": 100,
+      "type": "integer"
+    },
+    "tool_calls": {
+      "const": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "context_manifest_sha256",
+    "provider_registry_sha256",
+    "privacy_class",
+    "structured_output_schema",
+    "max_output_tokens",
+    "timeout_ms",
+    "temperature",
+    "idempotency_key",
+    "network_access",
+    "tool_calls"
+  ],
+  "title": "M26 Generation Request",
+  "type": "object"
+}

@@ -1,0 +1,248 @@
+{
+  "$id": "knowledge-engine/m26/generation-result-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority": {
+      "const": "draft_only"
+    },
+    "config_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "cost": {
+      "additionalProperties": false,
+      "properties": {
+        "amount": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "measured": {
+          "const": true
+        }
+      },
+      "required": [
+        "currency",
+        "amount",
+        "measured"
+      ],
+      "type": "object"
+    },
+    "draft": {
+      "$id": "knowledge-engine/m26/draft-answer-v1.schema.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "const": "draft_only"
+        },
+        "missing_evidence": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "proposed_claims": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "claim_id": {
+                "type": "string"
+              },
+              "material": {
+                "type": "boolean"
+              },
+              "proposed_passage_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "claim_id",
+              "text",
+              "material",
+              "proposed_passage_ids"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "knowledge-engine-m26-draft-answer/v1"
+        },
+        "sections": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "proposed_citation_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "section_id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "section_id",
+              "text",
+              "proposed_citation_ids"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "answered",
+            "answered_with_qualifications",
+            "conflicting_evidence",
+            "insufficient_evidence",
+            "not_found"
+          ]
+        },
+        "uncertainty": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "status",
+        "sections",
+        "proposed_claims",
+        "uncertainty",
+        "missing_evidence",
+        "authority"
+      ],
+      "title": "M26 Draft Answer",
+      "type": "object"
+    },
+    "fallback": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "finish_reason": {
+      "enum": [
+        "stop",
+        "length",
+        "content_filter",
+        "cancelled",
+        "error"
+      ]
+    },
+    "model_id": {
+      "type": "string"
+    },
+    "model_snapshot": {
+      "type": "string"
+    },
+    "provider_id": {
+      "type": "string"
+    },
+    "provider_request_id_hash": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "raw_response_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "retry_count": {
+      "maximum": 3,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-generation-result/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "timing_ms": {
+      "additionalProperties": false,
+      "properties": {
+        "first_delta": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "total": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total",
+        "first_delta"
+      ],
+      "type": "object"
+    },
+    "usage": {
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_tokens": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total_tokens": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "total_tokens"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "provider_id",
+    "model_id",
+    "model_snapshot",
+    "config_sha256",
+    "provider_request_id_hash",
+    "draft",
+    "finish_reason",
+    "usage",
+    "cost",
+    "timing_ms",
+    "retry_count",
+    "fallback",
+    "raw_response_sha256",
+    "authority",
+    "self_sha256"
+  ],
+  "title": "M26 Generation Result",
+  "type": "object"
+}
