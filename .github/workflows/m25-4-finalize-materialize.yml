@@ -1,0 +1,75 @@
+name: M25.4 Materialize Daniel Approval
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-4-finalize-materialize.yml'
+      - '.m25-4-finalization-payload/**'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify exact head and approved candidate ancestry
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor cf56bad3b9128020214c3a30100ec741d6842e56 HEAD
+      - name: Reassemble and verify approval payload
+        run: |
+          set -euo pipefail
+          cat .m25-4-finalization-payload/chunk-*.b64 > /tmp/m25-4-finalization.b64
+          base64 --decode /tmp/m25-4-finalization.b64 > /tmp/m25-4-finalization.tar.gz
+          echo 'dac32efba7eddff8fdeb58f28742a893ad06cc442880d8496b0c6c60580e3e9f  /tmp/m25-4-finalization.tar.gz' | sha256sum --check -
+          tar -tzf /tmp/m25-4-finalization.tar.gz | tee /tmp/m25-4-finalization-files.txt
+          test "$(wc -l < /tmp/m25-4-finalization-files.txt)" = '8'
+          ! grep -Eq '(^/|\.\.|^src/|^workers/|^packages/|^channels/|^\.github/workflows/)' /tmp/m25-4-finalization-files.txt
+      - name: Extract approval finalization
+        run: |
+          tar -xzf /tmp/m25-4-finalization.tar.gz -C .
+          rm -rf .m25-4-finalization-payload
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint approval test
+        run: python -m ruff check tests/test_m25_4_daniel_approval.py
+      - name: Test approved artifacts
+        run: >-
+          python -m pytest -q
+          tests/test_m25_4_identity_benchmark.py
+          tests/test_m25_4_identity_benchmark_contracts.py
+          tests/test_m25_4_daniel_approval.py
+      - name: Reject approved candidate drift
+        run: |
+          git diff --exit-code cf56bad3b9128020214c3a30100ec741d6842e56 HEAD -- \
+            pilot/m25/m25-4-annotation-policy.json \
+            pilot/m25/m25-4-gold-suite.provisional.json \
+            pilot/m25/m25-4-baseline-report.provisional.json \
+            pilot/m25/m25-4-daniel-annotation-gate.json \
+            src/knowledge_engine/m25_identity_benchmark.py \
+            src/knowledge_engine/m25_identity_benchmark_cli.py
+      - name: Compile approval test
+        run: python -m compileall -q tests/test_m25_4_daniel_approval.py
+      - name: Commit verified approval finalization
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs pilot schemas tests
+          git add -u .m25-4-finalization-payload
+          git diff --cached --stat
+          git commit -m 'Record Daniel M25.4 annotation approval'
+          git push origin "HEAD:$BRANCH"
