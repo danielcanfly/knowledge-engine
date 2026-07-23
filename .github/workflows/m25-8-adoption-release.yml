@@ -22,7 +22,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
+          fetch-depth: 200
+          show-progress: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -83,6 +84,7 @@ jobs:
           cmp /tmp/m25-8/adoption-receipt.json pilot/m25/m25-8-adoption-receipt.synthetic.json
       - name: Enforce changed-file and protected-mutation boundaries
         run: |
+          git fetch --quiet --no-tags origin main
           changed="$(git diff --name-only origin/main...HEAD | sort)"
           expected="$(printf '%s\n' \
             '.github/workflows/m25-8-adoption-release.yml' \
