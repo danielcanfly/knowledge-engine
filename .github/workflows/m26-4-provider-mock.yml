@@ -10,6 +10,7 @@ on:
       - 'schemas/m26-privacy-review-v1.schema.json'
       - 'src/knowledge_engine/m26_provider_mock.py'
       - 'tests/test_m26_4_provider_mock.py'
+      - 'pyproject.toml'
 
 permissions:
   contents: read
