@@ -1,0 +1,145 @@
+name: M25.8 Adoption Release Rollback
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/m25-8-adoption-release.yml'
+      - 'docs/architecture/m25/m25-8-adoption-release-rollback.md'
+      - 'pilot/m25/m25-8-*.json'
+      - 'schemas/m25-adoption-*.schema.json'
+      - 'src/knowledge_engine/m25_adoption_release*.py'
+      - 'tests/test_m25_8_adoption_release.py'
+      - 'pyproject.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  adoption-release-rollback:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact head and accepted M25.7 closure
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git merge-base --is-ancestor 209608c3821f2958b5238659e98a8f9fb7bd7840 HEAD
+          git merge-base --is-ancestor 4862761c2b90fbe5074f964bc234c42cce5bb5d5 HEAD
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          closure = json.loads(Path('pilot/m25/m25-7-benchmark-closure.json').read_text())
+          assert closure['status'] == 'm25_7_benchmark_batch_closed_no_write'
+          assert closure['result']['source_operations'] == 0
+          assert closure['result']['source_pr_created'] is False
+          assert closure['boundary']['m25_8_authorized'] is False
+          assert closure['boundary']['source_pr_merge'] is False
+          PY
+      - name: Install exact dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint M25.8
+        run: |
+          python -m ruff check \
+            src/knowledge_engine/m25_adoption_release.py \
+            src/knowledge_engine/m25_adoption_release_cli.py \
+            tests/test_m25_8_adoption_release.py
+      - name: Validate schemas
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import jsonschema
+          for path in sorted(Path('schemas').glob('m25-adoption-*.schema.json')):
+              jsonschema.Draft202012Validator.check_schema(json.loads(path.read_text()))
+          PY
+      - name: Test adoption, surfaces and rollback boundaries
+        run: |
+          python -m pytest -q \
+            tests/test_m25_8_adoption_release.py \
+            tests/test_m25_7_benchmark_closure.py \
+            tests/test_m25_7_source_pr_executor.py \
+            tests/test_m25_7_source_pr_executor_contracts.py
+      - name: Rebuild deterministic readiness and synthetic receipt
+        run: |
+          mkdir -p /tmp/m25-8
+          knowledge-m25-adoption evaluate-gate \
+            --predecessor pilot/m25/m25-7-benchmark-closure.json \
+            --output /tmp/m25-8/readiness-gate.json \
+            >/tmp/m25-8/gate-output.json
+          cmp /tmp/m25-8/readiness-gate.json pilot/m25/m25-8-readiness-gate.json
+          knowledge-m25-adoption validate \
+            --evidence pilot/m25/m25-8-adoption-evidence.synthetic.json \
+            --output /tmp/m25-8/adoption-receipt.json \
+            >/tmp/m25-8/validate-output.json
+          cmp /tmp/m25-8/adoption-receipt.json pilot/m25/m25-8-adoption-receipt.synthetic.json
+      - name: Enforce changed-file and protected-mutation boundaries
+        run: |
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/m25-8-adoption-release.yml' \
+            'docs/architecture/m25/m25-8-adoption-release-rollback.md' \
+            'pilot/m25/m25-8-adoption-evidence.synthetic.json' \
+            'pilot/m25/m25-8-adoption-receipt.synthetic.json' \
+            'pilot/m25/m25-8-readiness-gate.json' \
+            'pyproject.toml' \
+            'schemas/m25-adoption-evidence-v1.schema.json' \
+            'schemas/m25-adoption-receipt-v1.schema.json' \
+            'src/knowledge_engine/m25_adoption_release.py' \
+            'src/knowledge_engine/m25_adoption_release_cli.py' \
+            'tests/test_m25_8_adoption_release.py' | sort)"
+          test "$changed" = "$expected"
+          ! printf '%s\n' "$changed" | grep -Eq '^(bundle/|provenance/|registry/|reviews/|foundation/|release/|r2/|qdrant/|production/|workers/|channels/)'
+      - name: Assemble exact-head evidence
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          paths = [
+              Path('pilot/m25/m25-8-readiness-gate.json'),
+              Path('pilot/m25/m25-8-adoption-evidence.synthetic.json'),
+              Path('pilot/m25/m25-8-adoption-receipt.synthetic.json'),
+          ]
+          gate = json.loads(paths[0].read_text())
+          receipt = json.loads(paths[2].read_text())
+          evidence = {
+              'schema_version': 'knowledge-engine-m25-8-exact-head-evidence/v1',
+              'head_sha': os.environ['HEAD_SHA'],
+              'workflow_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'artifacts': {
+                  str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+                  for path in paths
+              },
+              'live_status': gate['status'],
+              'synthetic_status': receipt['status'],
+              'source_pr_merge_permitted': False,
+              'candidate_release_build_permitted': False,
+              'production_mutation_permitted': False,
+              'm25_9_authorized': False,
+          }
+          Path('/tmp/m25-8/exact-head-evidence.json').write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-8-adoption-release-evidence
+          path: /tmp/m25-8
+          if-no-files-found: error
+          retention-days: 30
+      - name: Compile M25.8
+        run: |
+          python -m compileall -q \
+            src/knowledge_engine/m25_adoption_release.py \
+            src/knowledge_engine/m25_adoption_release_cli.py \
+            tests/test_m25_8_adoption_release.py
