@@ -1,0 +1,45 @@
+{
+  "accepted_predecessor_status": "m26_6_answer_evaluation_refusal_gate_accepted",
+  "authority_boundary": {
+    "live_provider_calls": false,
+    "non_serving_preview": true,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "real_corpus_binding": false,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "contracts": [
+    {
+      "name": "entry_contract",
+      "path": "pilot/m26/m26-7-entry-contract.json",
+      "schema_version": "knowledge-engine-m26-7-entry-contract/v1",
+      "sha256": "04bb2b88c6be43c804ab5d0cf3d5032aff7b46cf65f7d07b753205ad293523ce"
+    },
+    {
+      "name": "presentation_policy",
+      "path": "pilot/m26/m26-7-presentation-policy.json",
+      "schema_version": "knowledge-engine-m26-answer-presentation-policy/v1",
+      "sha256": "1e712fb20de3eaf292bc1db28bc949df95f5c3c1e159c39eaf67e9c5f8ab092a"
+    },
+    {
+      "name": "benchmark_cases",
+      "path": "pilot/m26/m26-7-benchmark-cases.json",
+      "schema_version": "knowledge-engine-m26-answer-presentation-benchmark-cases/v1",
+      "sha256": "11e4a4ee80443e76b33e5b258c5749232eb76ad91b61b8f13b3baf4e36abe989"
+    },
+    {
+      "name": "presentation_schema",
+      "path": "schemas/m26-7-answer-presentation-v1.schema.json",
+      "schema_version": "json-schema/draft-2020-12"
+    },
+    {
+      "name": "non_serving_preview_schema",
+      "path": "schemas/m26-non-serving-preview-v1.schema.json",
+      "schema_version": "json-schema/draft-2020-12"
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-7-contract-registry/v1",
+  "self_sha256": "35c1a490fe13445cbed2eb51dcf0d5e63f9fa9bd826bc55ef5718701c0aa0bbe",
+  "stage_id": "M26.7"
+}
