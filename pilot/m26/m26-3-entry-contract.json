@@ -1,0 +1,32 @@
+{
+  "accepted_predecessor": {
+    "evidence_artifact_digest": "sha256:f6683b286f5db33af3fe0f8f7c05ce40649bd1ca7c9c4c247225980d338e0e8a",
+    "evidence_artifact_id": 8558250962,
+    "final_main_seal": "31d6aa093181cb9efbf48d1da70c70ae9181773b",
+    "implementation_head": "68604fc1d80015ea5706709a1c2eda205bd1feaa",
+    "implementation_merge": "7507c61f245f1027b1935c8cbcd1826f82d03e52",
+    "implementation_pr": 1059,
+    "reconciliation_pr": 1061,
+    "status": "m26_2_retrieval_envelope_accepted"
+  },
+  "authority_boundary": {
+    "foundation_mutation": false,
+    "production_answer_serving": false,
+    "provider_calls": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true
+  },
+  "next_stage": {
+    "authorized": false,
+    "requires_status": "m26_3_context_compiler_accepted",
+    "stage_id": "M26.4"
+  },
+  "schema_version": "knowledge-engine-m26-3-entry-contract/v1",
+  "self_sha256": "14d6f0daff5241ee1ab52be467dade5b23fd70187ac7373e52a5bc750efa4585",
+  "stage_id": "M26.3"
+}
