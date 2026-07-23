@@ -7,7 +7,7 @@ on:
       - 'packages/m25-blog-candidate-runtime/**'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   diagnostics:
@@ -20,19 +20,45 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Capture TypeScript findings
-        working-directory: packages/m25-blog-candidate-runtime
+      - name: Apply and push exact TypeScript repair
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
         run: |
-          mkdir -p /tmp/m25-ts
-          npm install --ignore-scripts >/tmp/m25-ts/npm-install.txt 2>&1
-          npm run check >/tmp/m25-ts/tsc.txt 2>&1 || true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: m25-10-worker-ts-findings
-          path: /tmp/m25-ts/
-          if-no-files-found: error
-          retention-days: 7
-      - name: Report findings
-        run: |
-          cat /tmp/m25-ts/tsc.txt
-          test ! -s /tmp/m25-ts/tsc.txt
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('packages/m25-blog-candidate-runtime/src/index.ts')
+          text = path.read_text()
+          old = '''  const object = response as Record<string, unknown>;
+          const text = object.response || (object.result as Record<string, unknown>)?.response;
+          '''
+          new = '''  if (
+            !response ||
+            typeof response !== "object" ||
+            response instanceof ReadableStream
+          ) {
+            throw new Error("answer model returned a non-object response");
+          }
+          const object = response as unknown as Record<string, unknown>;
+          const nested = object.result;
+          const nestedResponse =
+            nested && typeof nested === "object"
+              ? (nested as Record<string, unknown>).response
+              : undefined;
+          const text = object.response || nestedResponse;
+          '''
+          assert text.count(old) == 1
+          path.write_text(text.replace(old, new))
+          PY
+          cd packages/m25-blog-candidate-runtime
+          npm install --ignore-scripts
+          npm run check
+          npm audit --omit=dev --audit-level=high
+          cd ../..
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add packages/m25-blog-candidate-runtime/src/index.ts
+          git commit -m 'Guard M25 Worker response object type'
+          git push origin "HEAD:${HEAD_BRANCH}"
+          exit 1
