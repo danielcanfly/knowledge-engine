@@ -43,14 +43,13 @@ def fixtures() -> dict[str, dict[str, Any]]:
     }
 
 
-def provider_kwargs(f: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def context_kwargs(f: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {
         "context_cases": f["context_cases"],
         "retrieval_cases": f["retrieval_cases"],
         "corpus": f["corpus"],
         "retrieval_policy": f["retrieval_policy"],
         "context_policy": f["context_policy"],
-        "provider_policy": f["provider_policy"],
     }
 
 
@@ -73,7 +72,7 @@ def provider_case(f: dict[str, dict[str, Any]], case_id: str) -> dict[str, Any]:
 
 def replay_for(f: dict[str, dict[str, Any]], case_id: str) -> dict[str, Any]:
     case = provider_case(f, case_id)
-    package = build_context_package_for_case(case, **provider_kwargs(f))
+    package = build_context_package_for_case(case, **context_kwargs(f))
     tamper = case.get("tamper", {})
     suffix = str(tamper.get("append_mock_text", "")) if isinstance(tamper, dict) else ""
     return compile_provider_replay(package, f["provider_policy"], output_suffix=suffix)
