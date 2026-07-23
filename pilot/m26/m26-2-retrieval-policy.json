@@ -1,0 +1,47 @@
+{
+  "accepted_predecessor_status": "m26_1_architecture_authority_accepted",
+  "allowed_relation_types": [
+    "related_to",
+    "requires",
+    "constrained_by"
+  ],
+  "authority": {
+    "authoritative_retrieval_lane": "lexical",
+    "hybrid_retrieval": false,
+    "production_answer_serving": false,
+    "provider_calls": false,
+    "qdrant_or_r2_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_retrieval": false,
+    "source_mutation": false,
+    "synthetic_only": true
+  },
+  "bounds": {
+    "graph_max_depth": 1,
+    "graph_max_edges": 50,
+    "graph_max_nodes": 25,
+    "lexical_limit": 10,
+    "max_passage_chars": 12000,
+    "max_passages": 40
+  },
+  "entry_main_sha": "d3cf8cc72d951174f10c0a8328f848143c24e004",
+  "policy_id": "m26-2-retrieval-policy-v1",
+  "schema_version": "knowledge-engine-m26-retrieval-policy/v1",
+  "security": {
+    "acl_before_text_exposure": true,
+    "prompt_injection_is_signal_not_instruction": true,
+    "raw_fallback": false,
+    "secret_like_passage_excluded": true,
+    "source_text_is_untrusted": true
+  },
+  "self_sha256": "7e66cbc30e7c3f18aee303bc085a62bdfd0e7220af32fdfd8a2bb5671e546ed9",
+  "sufficiency_policy": {
+    "citation_presence_equals_support": false,
+    "claim_locator_required_for_material_support": true,
+    "concept_citation_can_satisfy_material_claim": false,
+    "contradicting_support_is_conflicting": true,
+    "missing_required_facet_is_partial": true,
+    "no_authorised_match_is_no_match": true
+  }
+}

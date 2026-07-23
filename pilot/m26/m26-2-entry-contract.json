@@ -1,0 +1,29 @@
+{
+  "allowed": {
+    "bounded_graph": true,
+    "diagnostics": true,
+    "evidence_assembly": true,
+    "lexical": true,
+    "synthetic_retrieval": true
+  },
+  "entry_main_sha": "d3cf8cc72d951174f10c0a8328f848143c24e004",
+  "forbidden": {
+    "production_answer_serving": true,
+    "provider_calls": true,
+    "real_corpus": true,
+    "release_pointer_r2_qdrant_mutation": true,
+    "semantic_or_hybrid": true,
+    "source_or_foundation_mutation": true
+  },
+  "issue_number": 1058,
+  "next_stage": {
+    "authorized": false,
+    "requires_status": "m26_2_retrieval_envelope_accepted",
+    "stage_id": "M26.3"
+  },
+  "predecessor_status": "m26_1_architecture_authority_accepted",
+  "schema_version": "knowledge-engine-m26-2-entry-contract/v1",
+  "self_sha256": "04f08843c2064becc54007af56e37962dca29fc7f2716e2a964b32968ba7b9d6",
+  "stage_id": "M26.2",
+  "target_status": "m26_2_retrieval_envelope_accepted"
+}

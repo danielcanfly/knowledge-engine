@@ -1,0 +1,377 @@
+{
+  "authority": {
+    "provider_calls": false,
+    "real_corpus": false,
+    "semantic_or_hybrid": false,
+    "synthetic_only": true
+  },
+  "cases": [
+    {
+      "case_id": "direct_public",
+      "expected": {
+        "min_passages": 1,
+        "required_concept_ids": [
+          "concepts/retrieval-envelope"
+        ],
+        "sufficiency": "sufficient"
+      },
+      "request": {
+        "actor_id_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "audience": "public",
+        "conversation_id": null,
+        "created_at": "2026-07-23T00:00:00Z",
+        "parent_request_id": null,
+        "policy": {
+          "allow_followup_rewrite": true,
+          "external_browsing": false,
+          "max_followup_turns": 4,
+          "policy_version": "fixture-policy/v1",
+          "tool_calls": false
+        },
+        "question": "What is a retrieval envelope?",
+        "release": {
+          "foundation_repository": "fixture/foundation",
+          "foundation_sha": "3333333333333333333333333333333333333333",
+          "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "release_id": "fixture-m26-2-release-001",
+          "schema_version": "knowledge-engine-m26-release-identity/v1",
+          "source_repository": "fixture/source",
+          "source_sha": "2222222222222222222222222222222222222222",
+          "vault_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "request_id": "m26req_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "requested_format": "standard",
+        "requested_language": "en",
+        "schema_version": "knowledge-engine-m26-question-request/v1"
+      }
+    },
+    {
+      "case_id": "m26_1_fixture_compat",
+      "expected": {
+        "min_passages": 1,
+        "required_concept_ids": [
+          "concepts/citation-verification"
+        ],
+        "sufficiency": "sufficient"
+      },
+      "request": {
+        "actor_id_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "audience": "public",
+        "conversation_id": null,
+        "created_at": "2026-07-23T00:00:00Z",
+        "parent_request_id": null,
+        "policy": {
+          "allow_followup_rewrite": true,
+          "external_browsing": false,
+          "max_followup_turns": 4,
+          "policy_version": "fixture-policy/v1",
+          "tool_calls": false
+        },
+        "question": "What does the fixture say about bounded verification?",
+        "release": {
+          "foundation_repository": "fixture/foundation",
+          "foundation_sha": "3333333333333333333333333333333333333333",
+          "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "release_id": "fixture-m26-2-release-001",
+          "schema_version": "knowledge-engine-m26-release-identity/v1",
+          "source_repository": "fixture/source",
+          "source_sha": "2222222222222222222222222222222222222222",
+          "vault_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "request_id": "m26req_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "requested_format": "standard",
+        "requested_language": "en",
+        "schema_version": "knowledge-engine-m26-question-request/v1"
+      }
+    },
+    {
+      "case_id": "multi_facet_internal",
+      "expected": {
+        "min_passages": 4,
+        "required_concept_ids": [
+          "concepts/retrieval-envelope",
+          "concepts/citation-verification",
+          "concepts/answer-completeness",
+          "concepts/latency-budget"
+        ],
+        "sufficiency": "sufficient"
+      },
+      "request": {
+        "actor_id_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "audience": "internal",
+        "conversation_id": null,
+        "created_at": "2026-07-23T00:00:00Z",
+        "parent_request_id": null,
+        "policy": {
+          "allow_followup_rewrite": true,
+          "external_browsing": false,
+          "max_followup_turns": 4,
+          "policy_version": "fixture-policy/v1",
+          "tool_calls": false
+        },
+        "question": "Explain retrieval envelope citation verification answer completeness and latency.",
+        "release": {
+          "foundation_repository": "fixture/foundation",
+          "foundation_sha": "3333333333333333333333333333333333333333",
+          "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "release_id": "fixture-m26-2-release-001",
+          "schema_version": "knowledge-engine-m26-release-identity/v1",
+          "source_repository": "fixture/source",
+          "source_sha": "2222222222222222222222222222222222222222",
+          "vault_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "request_id": "m26req_cccccccccccccccccccccccccccccccc",
+        "requested_format": "detailed",
+        "requested_language": "en",
+        "schema_version": "knowledge-engine-m26-question-request/v1"
+      }
+    },
+    {
+      "case_id": "graph_public",
+      "expected": {
+        "min_passages": 2,
+        "min_relation_paths": 1,
+        "required_concept_ids": [
+          "concepts/retrieval-envelope",
+          "concepts/citation-verification"
+        ],
+        "sufficiency": "sufficient"
+      },
+      "request": {
+        "actor_id_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "audience": "public",
+        "conversation_id": null,
+        "created_at": "2026-07-23T00:00:00Z",
+        "parent_request_id": null,
+        "policy": {
+          "allow_followup_rewrite": true,
+          "external_browsing": false,
+          "max_followup_turns": 4,
+          "policy_version": "fixture-policy/v1",
+          "tool_calls": false
+        },
+        "question": "How are retrieval envelope and citation verification related?",
+        "release": {
+          "foundation_repository": "fixture/foundation",
+          "foundation_sha": "3333333333333333333333333333333333333333",
+          "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "release_id": "fixture-m26-2-release-001",
+          "schema_version": "knowledge-engine-m26-release-identity/v1",
+          "source_repository": "fixture/source",
+          "source_sha": "2222222222222222222222222222222222222222",
+          "vault_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "request_id": "m26req_dddddddddddddddddddddddddddddddd",
+        "requested_format": "standard",
+        "requested_language": "en",
+        "schema_version": "knowledge-engine-m26-question-request/v1"
+      }
+    },
+    {
+      "case_id": "acl_negative_public",
+      "expected": {
+        "forbidden_text_fragments": [
+          "visible only to the restricted audience",
+          "private operators"
+        ],
+        "min_acl_filtered": 1,
+        "min_passages": 0,
+        "sufficiency": "no_match"
+      },
+      "request": {
+        "actor_id_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "audience": "public",
+        "conversation_id": null,
+        "created_at": "2026-07-23T00:00:00Z",
+        "parent_request_id": null,
+        "policy": {
+          "allow_followup_rewrite": true,
+          "external_browsing": false,
+          "max_followup_turns": 4,
+          "policy_version": "fixture-policy/v1",
+          "tool_calls": false
+        },
+        "question": "Explain the restricted secret procedure.",
+        "release": {
+          "foundation_repository": "fixture/foundation",
+          "foundation_sha": "3333333333333333333333333333333333333333",
+          "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "release_id": "fixture-m26-2-release-001",
+          "schema_version": "knowledge-engine-m26-release-identity/v1",
+          "source_repository": "fixture/source",
+          "source_sha": "2222222222222222222222222222222222222222",
+          "vault_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "request_id": "m26req_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "requested_format": "standard",
+        "requested_language": "en",
+        "schema_version": "knowledge-engine-m26-question-request/v1"
+      }
+    },
+    {
+      "case_id": "stale_public",
+      "expected": {
+        "min_passages": 0,
+        "required_reason_codes": [
+          "NO_EXACT_PASSAGE"
+        ],
+        "sufficiency": "insufficient"
+      },
+      "request": {
+        "actor_id_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "audience": "public",
+        "conversation_id": null,
+        "created_at": "2026-07-23T00:00:00Z",
+        "parent_request_id": null,
+        "policy": {
+          "allow_followup_rewrite": true,
+          "external_browsing": false,
+          "max_followup_turns": 4,
+          "policy_version": "fixture-policy/v1",
+          "tool_calls": false
+        },
+        "question": "Explain legacy obsolete unbounded traversal.",
+        "release": {
+          "foundation_repository": "fixture/foundation",
+          "foundation_sha": "3333333333333333333333333333333333333333",
+          "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "release_id": "fixture-m26-2-release-001",
+          "schema_version": "knowledge-engine-m26-release-identity/v1",
+          "source_repository": "fixture/source",
+          "source_sha": "2222222222222222222222222222222222222222",
+          "vault_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "request_id": "m26req_ffffffffffffffffffffffffffffffff",
+        "requested_format": "standard",
+        "requested_language": "en",
+        "schema_version": "knowledge-engine-m26-question-request/v1"
+      }
+    },
+    {
+      "case_id": "conflict_public",
+      "expected": {
+        "min_passages": 2,
+        "required_concept_ids": [
+          "concepts/conflicting-policy"
+        ],
+        "required_reason_codes": [
+          "CONFLICTING_EVIDENCE"
+        ],
+        "sufficiency": "conflicting"
+      },
+      "request": {
+        "actor_id_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+        "audience": "public",
+        "conversation_id": null,
+        "created_at": "2026-07-23T00:00:00Z",
+        "parent_request_id": null,
+        "policy": {
+          "allow_followup_rewrite": true,
+          "external_browsing": false,
+          "max_followup_turns": 4,
+          "policy_version": "fixture-policy/v1",
+          "tool_calls": false
+        },
+        "question": "What is the graph depth policy?",
+        "release": {
+          "foundation_repository": "fixture/foundation",
+          "foundation_sha": "3333333333333333333333333333333333333333",
+          "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "release_id": "fixture-m26-2-release-001",
+          "schema_version": "knowledge-engine-m26-release-identity/v1",
+          "source_repository": "fixture/source",
+          "source_sha": "2222222222222222222222222222222222222222",
+          "vault_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "request_id": "m26req_11111111111111111111111111111111",
+        "requested_format": "standard",
+        "requested_language": "en",
+        "schema_version": "knowledge-engine-m26-question-request/v1"
+      }
+    },
+    {
+      "case_id": "prompt_injection_public",
+      "expected": {
+        "min_passages": 1,
+        "prompt_injection_signal": true,
+        "required_concept_ids": [
+          "concepts/prompt-injection"
+        ],
+        "required_reason_codes": [
+          "PROMPT_INJECTION_SIGNAL_PRESENT"
+        ],
+        "sufficiency": "sufficient"
+      },
+      "request": {
+        "actor_id_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+        "audience": "public",
+        "conversation_id": null,
+        "created_at": "2026-07-23T00:00:00Z",
+        "parent_request_id": null,
+        "policy": {
+          "allow_followup_rewrite": true,
+          "external_browsing": false,
+          "max_followup_turns": 4,
+          "policy_version": "fixture-policy/v1",
+          "tool_calls": false
+        },
+        "question": "What does the prompt injection evidence say?",
+        "release": {
+          "foundation_repository": "fixture/foundation",
+          "foundation_sha": "3333333333333333333333333333333333333333",
+          "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "release_id": "fixture-m26-2-release-001",
+          "schema_version": "knowledge-engine-m26-release-identity/v1",
+          "source_repository": "fixture/source",
+          "source_sha": "2222222222222222222222222222222222222222",
+          "vault_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "request_id": "m26req_22222222222222222222222222222222",
+        "requested_format": "standard",
+        "requested_language": "en",
+        "schema_version": "knowledge-engine-m26-question-request/v1"
+      }
+    },
+    {
+      "case_id": "no_match_public",
+      "expected": {
+        "min_passages": 0,
+        "required_reason_codes": [
+          "NO_MATCH"
+        ],
+        "sufficiency": "no_match"
+      },
+      "request": {
+        "actor_id_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+        "audience": "public",
+        "conversation_id": null,
+        "created_at": "2026-07-23T00:00:00Z",
+        "parent_request_id": null,
+        "policy": {
+          "allow_followup_rewrite": true,
+          "external_browsing": false,
+          "max_followup_turns": 4,
+          "policy_version": "fixture-policy/v1",
+          "tool_calls": false
+        },
+        "question": "quantum banana orchestra",
+        "release": {
+          "foundation_repository": "fixture/foundation",
+          "foundation_sha": "3333333333333333333333333333333333333333",
+          "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "release_id": "fixture-m26-2-release-001",
+          "schema_version": "knowledge-engine-m26-release-identity/v1",
+          "source_repository": "fixture/source",
+          "source_sha": "2222222222222222222222222222222222222222",
+          "vault_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "request_id": "m26req_33333333333333333333333333333333",
+        "requested_format": "standard",
+        "requested_language": "en",
+        "schema_version": "knowledge-engine-m26-question-request/v1"
+      }
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-retrieval-benchmark-cases/v1",
+  "self_sha256": "a0654f669c74927575f95350a3a60c718729285d46f93f0fa238f87eced61584"
+}
