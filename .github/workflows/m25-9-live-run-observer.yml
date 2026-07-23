@@ -1,0 +1,93 @@
+name: M25.9 Live Run Observer
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-live-run-observer.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m25-9-live-run-observer.yml'
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 20
+          show-progress: false
+      - name: Verify observer boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test -f .github/workflows/m25-9-live-run-observer.yml
+          if test "${{ github.event_name }}" = 'pull_request'; then
+            git fetch --quiet --no-tags origin main
+            test "$(git diff --name-only origin/main...HEAD)" = \
+              '.github/workflows/m25-9-live-run-observer.yml'
+          fi
+
+  observe-existing-run:
+    if: github.event_name == 'push'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_SHA: 52d5c2a1284c05f326a1c6cfa6f31c093756a7f2
+      TARGET_WORKFLOW: M25.9 Blog Full-Population Candidate Pilot
+    steps:
+      - name: Locate exact existing push run
+        run: |
+          set -euo pipefail
+          run_id=''
+          for _ in $(seq 1 60); do
+            runs="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TARGET_SHA&per_page=100")"
+            run_id="$(jq -r \
+              --arg name "$TARGET_WORKFLOW" \
+              --arg sha "$TARGET_SHA" \
+              '[.workflow_runs[] | select(.name == $name and .head_sha == $sha and .event == "push")]
+               | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+            if test -n "$run_id"; then
+              break
+            fi
+            sleep 5
+          done
+          test -n "$run_id"
+          echo "TARGET_RUN_ID=$run_id" >> "$GITHUB_ENV"
+      - name: Publish exact run status on target commit
+        run: |
+          set -euo pipefail
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID")"
+          jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID/jobs?per_page=100")"
+          status="$(jq -r '.status' <<<"$run")"
+          conclusion="$(jq -r '.conclusion // ""' <<<"$run")"
+          attempt="$(jq -r '.run_attempt' <<<"$run")"
+          url="$(jq -r '.html_url' <<<"$run")"
+          if test "$status" != 'completed'; then
+            state='pending'
+          elif test "$conclusion" = 'success'; then
+            state='success'
+          elif test "$conclusion" = 'failure'; then
+            state='failure'
+          else
+            state='error'
+          fi
+          job_summary="$(jq -r '[.jobs[] | (.name + "=" + .status + "/" + (.conclusion // "-"))] | join(",")' <<<"$jobs")"
+          description="run $TARGET_RUN_ID a$attempt $status${conclusion:+/$conclusion}"
+          description="${description:0:140}"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$TARGET_SHA" \
+            -f state="$state" \
+            -f context='m25-9-live-run-observer' \
+            -f description="$description" \
+            -f target_url="$url" >/dev/null
+          printf '%s\n' "$job_summary"
