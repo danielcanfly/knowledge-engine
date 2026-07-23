@@ -1,0 +1,175 @@
+name: M25.9 Diagnostic Evidence Publication
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-diagnostic-evidence-publication.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m25-9-diagnostic-evidence-publication.yml'
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 20
+          show-progress: false
+      - name: Verify exact publication boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test -f .github/workflows/m25-9-diagnostic-evidence-publication.yml
+          if test "${{ github.event_name }}" = 'pull_request'; then
+            git fetch --quiet --no-tags origin main
+            test "$(git diff --name-only origin/main...HEAD)" = \
+              '.github/workflows/m25-9-diagnostic-evidence-publication.yml'
+          fi
+
+  publish-existing-evidence:
+    if: github.event_name == 'push'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_SHA: ee622bfd7486fd6b3d29f585749b967657165f34
+      TARGET_WORKFLOW: M25.9 Cloudflare Preflight Diagnostic
+      TARGET_ARTIFACT: m25-9-cloudflare-preflight-ee622bfd7486fd6b3d29f585749b967657165f34
+      EVIDENCE_DIR: /tmp/m25-9-existing-diagnostic
+    steps:
+      - name: Enforce one-time publication authority
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          mkdir -p "$EVIDENCE_DIR"
+      - name: Locate exact existing diagnostic run
+        run: |
+          set -euo pipefail
+          run_id=''
+          for _ in $(seq 1 60); do
+            runs="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TARGET_SHA&per_page=100")"
+            run_id="$(jq -r \
+              --arg name "$TARGET_WORKFLOW" \
+              --arg sha "$TARGET_SHA" \
+              '[.workflow_runs[] | select(.name == $name and .head_sha == $sha and .event == "push")]
+               | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+            if test -n "$run_id"; then
+              status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq '.status')"
+              if test "$status" = 'completed'; then
+                break
+              fi
+            fi
+            sleep 10
+          done
+          test -n "$run_id"
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+          test "$(jq -r '.head_sha' <<<"$run")" = "$TARGET_SHA"
+          test "$(jq -r '.event' <<<"$run")" = 'push'
+          test "$(jq -r '.run_attempt' <<<"$run")" = '1'
+          test "$(jq -r '.status' <<<"$run")" = 'completed'
+          test "$(jq -r '.conclusion' <<<"$run")" = 'success'
+          echo "DIAGNOSTIC_RUN_ID=$run_id" >> "$GITHUB_ENV"
+          echo "DIAGNOSTIC_RUN_URL=$(jq -r '.html_url' <<<"$run")" >> "$GITHUB_ENV"
+      - name: Download exact sanitized artifact
+        run: |
+          set -euo pipefail
+          gh run download "$DIAGNOSTIC_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$TARGET_ARTIFACT" \
+            --dir "$EVIDENCE_DIR"
+          test -s "$EVIDENCE_DIR/cloudflare-preflight-diagnostic.json"
+      - name: Validate and render safe evidence summary
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['EVIDENCE_DIR'])
+          path = root / 'cloudflare-preflight-diagnostic.json'
+          evidence = json.loads(path.read_text())
+          claimed = evidence.pop('evidence_sha256')
+          actual = hashlib.sha256(
+              json.dumps(evidence, sort_keys=True, separators=(',', ':')).encode()
+          ).hexdigest()
+          assert claimed == actual
+          assert evidence['schema_version'] == 'knowledge-engine-m25-9-cloudflare-preflight/v1'
+          assert evidence['status'] == 'diagnostic_complete'
+          assert evidence['mutations'] == 0
+          assert evidence['http_methods_used'] == ['GET']
+          assert evidence['raw_response_bodies_recorded'] is False
+          assert evidence['authorization_headers_recorded'] is False
+          assert evidence['secret_values_recorded'] is False
+
+          lines = [
+              '## M25.9 Cloudflare preflight diagnostic evidence',
+              '',
+              f"- exact diagnostic SHA: `{os.environ['TARGET_SHA']}`",
+              f"- workflow run: `{os.environ['DIAGNOSTIC_RUN_ID']}`",
+              f"- run URL: {os.environ['DIAGNOSTIC_RUN_URL']}",
+              '- run attempt: `1`',
+              '- external mutations: `0`',
+              f"- recommended topology: `{evidence['recommended_credential_topology']}`",
+              f"- root-cause classification: `{evidence['root_cause_classification']}`",
+              f"- evidence SHA-256: `{claimed}`",
+              '',
+              '### Credential capability summary',
+              '',
+              '| credential | present | token active | Pages project | Pages deployments | Access app | Access org |',
+              '|---|---:|---:|---:|---:|---:|---:|',
+          ]
+          for label, summary in evidence['credential_summaries'].items():
+              lines.append(
+                  '| {label} | {present} | {active} | {project} | {deployments} | {app} | {org} |'.format(
+                      label=label,
+                      present=summary['secret_present'],
+                      active=summary['token_active'],
+                      project=summary['target_pages_project_found'],
+                      deployments=summary['pages_deployments_read'],
+                      app=summary['target_access_application_found'],
+                      org=summary['access_organization_read'],
+                  )
+              )
+          lines.extend([
+              '',
+              '### Per-endpoint evidence',
+              '',
+              '| credential | endpoint | attempt | HTTP | CF success | CF code | category |',
+              '|---|---|---:|---:|---:|---:|---|',
+          ])
+          for item in evidence['probes']:
+              lines.append(
+                  '| {credential} | {endpoint} | {attempt} | {http} | {success} | {code} | {category} |'.format(
+                      credential=item['credential_label'],
+                      endpoint=item['endpoint'],
+                      attempt=item['attempt'],
+                      http=item['http_status'],
+                      success=item['cloudflare_success'],
+                      code=item['cloudflare_error_code'],
+                      category=item['cloudflare_error_category'],
+                  )
+              )
+          lines.extend([
+              '',
+              'This publication reused the already completed exact-SHA artifact. It did not rerun the Cloudflare probe and did not mutate R2, Qdrant, Worker, Pages, Access, DNS, Source, release, production pointer, or public traffic.',
+          ])
+          (root / 'issue-comment.md').write_text('\n'.join(lines) + '\n')
+          PY
+      - name: Publish diagnostic result to governing issue
+        run: |
+          set -euo pipefail
+          gh issue comment 1092 \
+            --repo "$GITHUB_REPOSITORY" \
+            --body-file "$EVIDENCE_DIR/issue-comment.md"
