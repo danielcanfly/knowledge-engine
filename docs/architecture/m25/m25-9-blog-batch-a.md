@@ -19,20 +19,23 @@ The Git commit and each Git blob SHA identify immutable bytes. The public site i
 
 ## Series identity
 
-Series resolution follows the site's production logic:
+Series resolution follows the site's production logic and a one-to-one identity convergence rule:
 
 1. Explicit article frontmatter `series` is authoritative for the displayed series title.
 2. The pinned `seriesMeta.ts` slug catalog supplies a series key and fallback title when frontmatter omits `series`.
-3. An article becomes standalone only when neither source provides a series.
+3. When an explicit title matches a normalized catalog English label but its slug is outside the catalog regex, the article converges to that catalog key.
+4. An article becomes standalone only when neither source provides a series.
+5. A canonical series title and series ID must have a one-to-one relationship.
 
 At the pinned commit this resolves to:
 
-- 25 formal series;
+- 24 formal series;
 - 2 true standalone articles;
-- 26 parent collections including the standalone collection;
-- 41 articles whose series is recovered through the catalog fallback.
+- 25 parent collections including the standalone collection;
+- 41 articles whose series is recovered through the catalog fallback;
+- 1 explicit-title alias convergence for the From RAG Appendix A article.
 
-This parity repair prevents AI Agentic Workflow, Build Your Own MCP Server, MCP Engineering Deep Dive, ComfyUI, OpenClaw and RAG Engineering articles from collapsing into a false standalone bucket.
+The catalog fallback prevents AI Agentic Workflow, Build Your Own MCP Server, MCP Engineering Deep Dive, ComfyUI, OpenClaw and RAG Engineering articles from collapsing into a false standalone bucket. The alias convergence prevents `From RAG to Enterprise-Grade RAG` from splitting into separate catalog-key and title-key series.
 
 ## Population contract
 
@@ -46,9 +49,10 @@ The builder must prove:
 - missing = 0;
 - every real series stays inside one batch;
 - only true standalone articles may be assigned individually;
+- every canonical series title maps to one series ID;
 - every article reaches `acquired_verified` or the run fails.
 
-If an exact 78/78 whole-series partition cannot be found, the run fails closed and prints the complete group population.
+If an exact 78/78 whole-series partition cannot be found, or any series title/key identity remains split, the run fails closed and prints the conflicting population.
 
 ## Source construction
 
@@ -63,7 +67,7 @@ Each article source record contains:
 - ownership, licence, trust and public audience;
 - terminal acquisition state.
 
-The master inventory separately pins the exact series catalog, its Git blob SHA, SHA-256 and parsed catalog records. Batch A materialises all 78 Markdown files as immutable evidence snapshots.
+The master inventory separately pins the exact series catalog, its Git blob SHA, SHA-256, parsed catalog records and alias-convergence count. Batch A materialises all 78 Markdown files as immutable evidence snapshots.
 
 ## Candidate nodes
 
@@ -74,7 +78,7 @@ This phase creates deterministic structural candidates only:
 - H2/H3 `Section` nodes;
 - `part_of`, `contains` and `precedes` edges.
 
-Every article and section node points to the exact upstream commit, path and source line range. These structural nodes are not automatically promoted semantic claims.
+Every article and section node points to the exact upstream commit, path and source line range. Series nodes are generated only after title/key convergence. These structural nodes are not automatically promoted semantic claims.
 
 ## Authority boundary
 
@@ -88,4 +92,4 @@ This phase does not permit:
 - production release, pointer, traffic or credential mutation;
 - M25.9B or M25.9C closure.
 
-After exact-head acquisition succeeds, the corrected Batch A inventory digest and candidate graph must be bound to Daniel's review authority before any Source write.
+After exact-head acquisition succeeds, the converged Batch A inventory digest and candidate graph must be bound to Daniel's review authority before any Source write.
