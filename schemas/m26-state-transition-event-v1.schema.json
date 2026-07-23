@@ -1,0 +1,102 @@
+{
+  "$id": "knowledge-engine/m26/state-transition-event-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "from_state": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason_code": {
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-state-transition-event/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "to_state": {
+      "enum": [
+        "received",
+        "authenticated",
+        "policy_validated",
+        "question_normalized",
+        "conversation_resolved",
+        "retrieval_planned",
+        "retrieving",
+        "evidence_envelope_ready",
+        "context_compiling",
+        "context_ready",
+        "generation_authorized",
+        "generation_started",
+        "draft_received",
+        "claims_extracted",
+        "verifying",
+        "repair_planned",
+        "repairing",
+        "final_assembled",
+        "safe_streaming",
+        "completed",
+        "refused_policy",
+        "rejected_acl",
+        "rejected_abuse",
+        "no_match",
+        "insufficient_evidence",
+        "conflicting_evidence",
+        "context_budget_exceeded",
+        "provider_unavailable",
+        "provider_timeout",
+        "provider_schema_invalid",
+        "verification_failed",
+        "citation_mismatch",
+        "cost_budget_exceeded",
+        "cancelled",
+        "internal_error_safe"
+      ],
+      "type": "string"
+    },
+    "upstream_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "event_id",
+    "revision",
+    "from_state",
+    "to_state",
+    "reason_code",
+    "upstream_sha256",
+    "created_at",
+    "self_sha256"
+  ],
+  "title": "M26 State Transition Event",
+  "type": "object"
+}

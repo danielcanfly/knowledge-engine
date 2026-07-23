@@ -1,0 +1,69 @@
+{
+  "$id": "knowledge-engine/m26/feedback-event-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "enum": [
+        "helpful",
+        "not_helpful",
+        "citation_not_supporting",
+        "missing_evidence",
+        "too_broad",
+        "too_narrow",
+        "source_conflict",
+        "sensitive_information"
+      ]
+    },
+    "actor_id_hash": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "answer_id": {
+      "type": "string"
+    },
+    "candidate_created": {
+      "type": "boolean"
+    },
+    "candidate_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "canonical_write": {
+      "const": false
+    },
+    "comment": {
+      "maxLength": 4000,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "feedback_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-feedback-event/v1"
+    }
+  },
+  "required": [
+    "schema_version",
+    "feedback_id",
+    "answer_id",
+    "actor_id_hash",
+    "action",
+    "comment",
+    "created_at",
+    "canonical_write",
+    "candidate_created",
+    "candidate_ref"
+  ],
+  "title": "M26 Feedback Event",
+  "type": "object"
+}

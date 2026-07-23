@@ -1,0 +1,29 @@
+{
+  "actor_id_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "audience": "internal",
+  "conversation_id": null,
+  "created_at": "2026-07-23T00:00:00Z",
+  "parent_request_id": null,
+  "policy": {
+    "allow_followup_rewrite": true,
+    "external_browsing": false,
+    "max_followup_turns": 4,
+    "policy_version": "fixture-policy/v1",
+    "tool_calls": false
+  },
+  "question": "What does the fixture say about bounded verification?",
+  "release": {
+    "foundation_repository": "fixture/foundation",
+    "foundation_sha": "3333333333333333333333333333333333333333",
+    "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "release_id": "fixture-release-001",
+    "schema_version": "knowledge-engine-m26-release-identity/v1",
+    "source_repository": "fixture/source",
+    "source_sha": "2222222222222222222222222222222222222222",
+    "vault_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "request_id": "m26req_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "requested_format": "standard",
+  "requested_language": "en",
+  "schema_version": "knowledge-engine-m26-question-request/v1"
+}

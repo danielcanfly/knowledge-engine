@@ -1,0 +1,319 @@
+{
+  "$id": "knowledge-engine/m26/evidence-envelope-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "excluded_evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "identity": {
+            "type": "string"
+          },
+          "material": {
+            "type": "boolean"
+          },
+          "reason": {
+            "enum": [
+              "acl",
+              "limit",
+              "duplicate",
+              "low_score",
+              "stale",
+              "invalid",
+              "unsafe",
+              "budget_precheck"
+            ]
+          }
+        },
+        "required": [
+          "identity",
+          "reason",
+          "material"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "passages": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "audience": {
+            "enum": [
+              "public",
+              "internal",
+              "confidential",
+              "restricted"
+            ]
+          },
+          "concept_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "locator": {
+            "additionalProperties": false,
+            "properties": {
+              "anchor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "end_line": {
+                "minimum": 1,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "heading": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "page": {
+                "type": [
+                  "integer",
+                  "string",
+                  "null"
+                ]
+              },
+              "paragraph": {
+                "type": [
+                  "integer",
+                  "string",
+                  "null"
+                ]
+              },
+              "start_line": {
+                "minimum": 1,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "timecode": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "heading",
+              "page",
+              "start_line",
+              "end_line",
+              "paragraph",
+              "timecode",
+              "anchor"
+            ],
+            "type": "object"
+          },
+          "passage_id": {
+            "pattern": "^passage_[a-f0-9]{32}$",
+            "type": "string"
+          },
+          "prompt_injection_signals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "rank": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "relation_path_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "retrieval_score": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "section_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "snapshot_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "source_kind": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "text": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "text_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "uri": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "passage_id",
+          "source_id",
+          "source_kind",
+          "uri",
+          "concept_id",
+          "section_id",
+          "audience",
+          "text",
+          "text_sha256",
+          "locator",
+          "rank",
+          "relation_path_ids",
+          "prompt_injection_signals"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "population": {
+      "additionalProperties": false,
+      "properties": {
+        "acl_filtered": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "excluded": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "included": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "retrieved": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "retrieved",
+        "included",
+        "excluded",
+        "acl_filtered"
+      ],
+      "type": "object"
+    },
+    "relation_paths": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "release": {
+      "$id": "knowledge-engine/m26/release-identity-v1.schema.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "foundation_repository": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "foundation_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "release_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "knowledge-engine-m26-release-identity/v1"
+        },
+        "source_repository": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "source_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "vault_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "release_id",
+        "manifest_sha256",
+        "source_repository",
+        "source_sha",
+        "foundation_repository",
+        "foundation_sha"
+      ],
+      "title": "M26 Release Identity",
+      "type": "object"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "retrieval_plan_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-evidence-envelope/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "sufficiency": {
+      "enum": [
+        "sufficient",
+        "partially_sufficient",
+        "conflicting",
+        "insufficient",
+        "no_match"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "retrieval_plan_sha256",
+    "release",
+    "sufficiency",
+    "passages",
+    "relation_paths",
+    "excluded_evidence",
+    "population",
+    "self_sha256"
+  ],
+  "title": "M26 Evidence Envelope",
+  "type": "object"
+}

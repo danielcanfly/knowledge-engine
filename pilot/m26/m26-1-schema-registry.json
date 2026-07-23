@@ -1,0 +1,106 @@
+{
+  "compatibility_policy": {
+    "cross_release_identity_mismatch": "reject",
+    "local_schema_reference_only": true,
+    "schema_downgrade": "reject",
+    "unknown_fields": "reject",
+    "unknown_major_version": "reject"
+  },
+  "entry_baseline_sha256": "3c11b7f137dd6eb0c0354dabf7537ada1a03a0fc901a5b9facd6f469131a85db",
+  "schema_version": "knowledge-engine-m26-1-schema-registry/v1",
+  "schemas": [
+    {
+      "first_writer_stage": "M26.1",
+      "path": "schemas/m26-release-identity-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-release-identity/v1",
+      "sha256": "9d2f8d68b694ea0a9e588bb2230efdf1458747bbf8bd2e646e97ab8fcb35749d",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M26.1",
+      "path": "schemas/m26-state-transition-event-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-state-transition-event/v1",
+      "sha256": "eb985bb7e1469c21d23a8e210f85c7ad44ecaca08747e3b0a4b73538005bbdf9",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M26.2",
+      "path": "schemas/m26-question-request-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-question-request/v1",
+      "sha256": "4b4023cbedac10e25cb68bda37fd992472c43894f0f1a24ed0ef89a4c73ae93e",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M26.2",
+      "path": "schemas/m26-retrieval-plan-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-retrieval-plan/v1",
+      "sha256": "1adb65680b54c4ec6f2fc936097e38bdfdb0943d9a64fc83293799f7436a6ad3",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M26.2",
+      "path": "schemas/m26-evidence-envelope-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-evidence-envelope/v1",
+      "sha256": "e444a3ae860c4e7e204ed926c22a12c8117d337334215d02676edfde9d07ed36",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M26.3",
+      "path": "schemas/m26-context-manifest-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-context-manifest/v1",
+      "sha256": "2cc51b8d8babfbdaa14a2f999500db2a72b6344c9aaad15d72766034e8ea9937",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M26.4",
+      "path": "schemas/m26-provider-registry-entry-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-provider-registry-entry/v1",
+      "sha256": "0cf2a9ff686878a7781eeae46c42f49def99988b6c67315e1484e7661ce3b61b",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M26.4",
+      "path": "schemas/m26-generation-request-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-generation-request/v1",
+      "sha256": "68c377b597b15b9e047c08d636cf99c3fb2c1d5478df7ec9dbfc6da11f9fafbc",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M26.4",
+      "path": "schemas/m26-generation-result-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-generation-result/v1",
+      "sha256": "576fe62cbe52481bab5aabfbec57f08d7d431142d8cba9321370346336384277",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M26.4",
+      "path": "schemas/m26-draft-answer-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-draft-answer/v1",
+      "sha256": "d082956e0441d3bca55fc11f071f48cc54589587d5a6a6473822a5c3d2773baf",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M26.5",
+      "path": "schemas/m26-verification-report-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-verification-report/v1",
+      "sha256": "cc9b9c5b0441d740ef22f81183dbfab1380c457b81cab9fbae16137582333aa1",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M26.5",
+      "path": "schemas/m26-final-answer-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-final-answer/v1",
+      "sha256": "1d4c6ab384f7fa6420dae828b20306f8b6af141f876095d0a39af030047f8ab5",
+      "status": "frozen_for_implementation"
+    },
+    {
+      "first_writer_stage": "M26.7",
+      "path": "schemas/m26-feedback-event-v1.schema.json",
+      "schema_version": "knowledge-engine-m26-feedback-event/v1",
+      "sha256": "e0762cfe43c32010256ad0d8fe0e7fb3acac8efac1cbd822a2846fb3d72001d0",
+      "status": "frozen_for_implementation"
+    }
+  ],
+  "self_sha256": "499dfa6f82e372b43396128eabf0b1fc527af325e624768c952e0650c12f28d1",
+  "status": "frozen_for_implementation"
+}

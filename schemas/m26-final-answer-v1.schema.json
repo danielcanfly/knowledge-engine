@@ -1,0 +1,251 @@
+{
+  "$id": "knowledge-engine/m26/final-answer-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "answer_id": {
+      "pattern": "^m26ans_[a-f0-9]{32}$",
+      "type": "string"
+    },
+    "answer_text": {
+      "type": "string"
+    },
+    "authority": {
+      "const": "verified_final"
+    },
+    "citations": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "citation_id": {
+            "type": "string"
+          },
+          "claim_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "locator": {
+            "additionalProperties": false,
+            "properties": {
+              "anchor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "end_line": {
+                "minimum": 1,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "heading": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "page": {
+                "type": [
+                  "integer",
+                  "string",
+                  "null"
+                ]
+              },
+              "paragraph": {
+                "type": [
+                  "integer",
+                  "string",
+                  "null"
+                ]
+              },
+              "start_line": {
+                "minimum": 1,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "timecode": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "heading",
+              "page",
+              "start_line",
+              "end_line",
+              "paragraph",
+              "timecode",
+              "anchor"
+            ],
+            "type": "object"
+          },
+          "passage_id": {
+            "type": "string"
+          },
+          "section_id": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "support_verdict": {
+            "enum": [
+              "supported",
+              "supported_with_qualification"
+            ]
+          }
+        },
+        "required": [
+          "citation_id",
+          "claim_ids",
+          "passage_id",
+          "source_id",
+          "section_id",
+          "locator",
+          "support_verdict"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "claims": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "citation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "claim_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "supported",
+              "supported_with_qualification"
+            ]
+          }
+        },
+        "required": [
+          "claim_id",
+          "text",
+          "verdict",
+          "citation_ids"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "model_configuration_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "release": {
+      "$id": "knowledge-engine/m26/release-identity-v1.schema.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "foundation_repository": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "foundation_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "release_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "knowledge-engine-m26-release-identity/v1"
+        },
+        "source_repository": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "source_sha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "vault_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "release_id",
+        "manifest_sha256",
+        "source_repository",
+        "source_sha",
+        "foundation_repository",
+        "foundation_sha"
+      ],
+      "title": "M26 Release Identity",
+      "type": "object"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-final-answer/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "answered",
+        "answered_with_qualifications",
+        "conflicting_evidence",
+        "insufficient_evidence",
+        "not_found",
+        "refused_policy",
+        "temporarily_unavailable"
+      ]
+    },
+    "verification_report_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "answer_id",
+    "request_id",
+    "status",
+    "answer_text",
+    "claims",
+    "citations",
+    "release",
+    "model_configuration_sha256",
+    "verification_report_sha256",
+    "authority",
+    "self_sha256"
+  ],
+  "title": "M26 Final Answer",
+  "type": "object"
+}
