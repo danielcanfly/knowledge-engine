@@ -33,6 +33,7 @@ jobs:
 
           archive=Path('/tmp/m25-7/implementation.zip')
           output=Path('/tmp/m25-7/payload')
+          workflow_path=PurePosixPath('.github/workflows/m25-7-source-pr-executor.yml')
           with zipfile.ZipFile(archive) as z:
               names=z.namelist()
               if len(names) != len(set(names)):
@@ -58,23 +59,23 @@ jobs:
                   target.parent.mkdir(parents=True,exist_ok=True)
                   target.write_bytes(data)
           for source in sorted(output.rglob('*')):
-              if source.is_file():
-                  target=Path('.') / source.relative_to(output)
+              relative=PurePosixPath(source.relative_to(output).as_posix())
+              if source.is_file() and relative != workflow_path:
+                  target=Path('.') / Path(*relative.parts)
                   target.parent.mkdir(parents=True,exist_ok=True)
                   shutil.copy2(source,target)
           PY
-          rm -rf .github/m25-7-archive .github/workflows/m25-7-materialize.yml
           test -f src/knowledge_engine/m25_source_pr_executor.py
-          test -f .github/workflows/m25-7-source-pr-executor.yml
           test -f pilot/m25/m25-7-readiness-gate.json
-      - name: Commit verified implementation
+          test ! -f .github/workflows/m25-7-source-pr-executor.yml
+      - name: Commit verified non-workflow implementation
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
+          git add docs pilot pyproject.toml schemas src tests
           test -n "$(git status --porcelain)"
           git commit -m 'Materialize M25.7 governed Source PR executor'
           git push origin "HEAD:${HEAD_REF}"
