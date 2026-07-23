@@ -153,6 +153,25 @@ def test_alias_ranking_is_exact_target_bound_and_non_writing() -> None:
     assert resolution["ranked_targets"][0]["targets"][0]["score"] >= 0.9
 
 
+def test_alias_gate_uses_alias_threshold_and_real_identity_signal() -> None:
+    item = _item("approved_alias")
+    base = _synthetic_runner(item["case"])
+    policy = build_calibration_policy(SUITE, BASELINE)
+    policy["merge_gate"]["minimum_alias_score"] = 10.0
+    policy = sign(policy, "policy_sha256")
+    packet = build_governance_packet(item["case"], base, policy)
+    resolution = packet["governed_resolutions"][0]
+    assert resolution["merge_gate_pass"] is False
+    assert resolution["blocks_destructive_action"] is True
+    assert packet["critical_false_merge_risk_count"] == 1
+    case = json.loads(json.dumps(item["case"]))
+    case["candidates"][0]["target_label"] = "Unrelated Target"
+    packet = build_governance_packet(case, base, build_calibration_policy(SUITE, BASELINE))
+    resolution = packet["governed_resolutions"][0]
+    assert resolution["merge_gate_pass"] is False
+    assert resolution["blocks_destructive_action"] is True
+
+
 def test_ambiguous_and_policy_blocked_items_fail_closed() -> None:
     policy = build_calibration_policy(SUITE, BASELINE)
     for class_label in ("polysemy_ambiguous", "ambiguous_insufficient_evidence", "blocked_policy"):

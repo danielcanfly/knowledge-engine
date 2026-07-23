@@ -583,10 +583,19 @@ def build_governance_packet(
             ),
             default=0.0,
         )
-        exact_signal_present = bool(signals & EXACT_SIGNALS) or outcome == "attach_alias_candidate"
+        ranking_exact_signal_present = any(
+            target["exact_identity_signal"]
+            for ranking in rankings
+            for target in ranking.get("targets", [])
+        )
+        exact_signal_present = bool(signals & EXACT_SIGNALS) or ranking_exact_signal_present
+        minimum_score = (
+            validated_policy["merge_gate"]["minimum_alias_score"]
+            if outcome == "attach_alias_candidate"
+            else validated_policy["merge_gate"]["minimum_exact_match_score"]
+        )
         merge_gate_pass = outcome not in MERGE_OUTCOMES or (
-            exact_signal_present
-            and top_score >= validated_policy["merge_gate"]["minimum_exact_match_score"]
+            exact_signal_present and top_score >= minimum_score
         )
         if outcome in MERGE_OUTCOMES and not merge_gate_pass:
             critical_false_merge_risk_count += 1
