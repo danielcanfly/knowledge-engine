@@ -1,0 +1,42 @@
+{
+  "accepted_predecessor": {
+    "evidence_artifact_id": 8562827517,
+    "evidence_digest": "sha256:aa00165e68767ceb598a44c026e3a91586f8e9f196d475caf80528d99112049a",
+    "final_main_seal": "c76fe00af61a9eef97614b0e78ede0506593e671",
+    "implementation_head": "488ccee804a31130311a5ec3ddb1aff908f5b332",
+    "implementation_merge": "f94f1ff4ccb8162b4e60112ccbd20c69744949c6",
+    "implementation_pr": 1074,
+    "reconciliation_pr": 1075,
+    "stage_id": "M26.5",
+    "status": "m26_5_draft_answer_contract_accepted"
+  },
+  "authority_boundary": {
+    "answer_evaluation_permitted": true,
+    "credentials": false,
+    "draft_answer_contract_required": true,
+    "foundation_mutation": false,
+    "live_provider_calls": false,
+    "network_execution": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "provider_sdk": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "real_corpus_binding": false,
+    "refusal_gate_permitted": true,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "next_stage": {
+    "authorized": false,
+    "requires_status": "m26_6_answer_evaluation_refusal_gate_accepted",
+    "stage_id": "M26.7"
+  },
+  "schema_version": "knowledge-engine-m26-6-entry-contract/v1",
+  "self_sha256": "48fc304e3a9429fe0868ee08d95709368d266c6541b42cb268441179e7e8a8bc",
+  "stage_id": "M26.6",
+  "stage_name": "Synthetic Answer Evaluation and Refusal Gate"
+}
