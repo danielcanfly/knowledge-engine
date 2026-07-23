@@ -27,9 +27,9 @@ Series resolution follows the site's production logic:
 
 At the pinned commit this resolves to:
 
-- 24 formal series;
+- 25 formal series;
 - 2 true standalone articles;
-- 25 parent collections including the standalone collection;
+- 26 parent collections including the standalone collection;
 - 41 articles whose series is recovered through the catalog fallback.
 
 This parity repair prevents AI Agentic Workflow, Build Your Own MCP Server, MCP Engineering Deep Dive, ComfyUI, OpenClaw and RAG Engineering articles from collapsing into a false standalone bucket.
