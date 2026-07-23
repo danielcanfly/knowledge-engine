@@ -1,0 +1,175 @@
+name: M25.4 Daniel Approval Finalization
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-4-daniel-approval.yml'
+      - 'docs/architecture/m25/m25-4-daniel-approval.md'
+      - 'pilot/m25/m25-4-daniel-approval.json'
+      - 'pilot/m25/m25-4-gold-suite.json'
+      - 'pilot/m25/m25-4-split-manifest.accepted.json'
+      - 'pilot/m25/m25-4-adjudication-ledger.approved.json'
+      - 'pilot/m25/m25-4-baseline-report.json'
+      - 'schemas/m25-4-daniel-approval-v1.schema.json'
+      - 'tests/test_m25_4_daniel_approval.py'
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  daniel-approval-finalization:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Verify exact workflow head and approved candidate ancestry
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor \
+            cf56bad3b9128020214c3a30100ec741d6842e56 \
+            "$EXPECTED_HEAD"
+      - name: Reject post-approval scope drift
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          approved = "cf56bad3b9128020214c3a30100ec741d6842e56"
+          changed = set(
+              subprocess.check_output(
+                  ["git", "diff", "--name-only", approved, "HEAD"],
+                  text=True,
+              ).splitlines()
+          )
+          allowed = {
+              ".github/workflows/m25-4-daniel-approval.yml",
+              "docs/architecture/m25/m25-4-daniel-approval.md",
+              "pilot/m25/m25-4-daniel-approval.json",
+              "pilot/m25/m25-4-gold-suite.json",
+              "pilot/m25/m25-4-split-manifest.accepted.json",
+              "pilot/m25/m25-4-adjudication-ledger.approved.json",
+              "pilot/m25/m25-4-baseline-report.json",
+              "schemas/m25-4-daniel-approval-v1.schema.json",
+              "tests/test_m25_4_daniel_approval.py",
+          }
+          assert changed == allowed, {
+              "unexpected": sorted(changed - allowed),
+              "missing": sorted(allowed - changed),
+          }
+          protected = [
+              "pilot/m25/m25-4-annotation-policy.json",
+              "pilot/m25/m25-4-gold-suite.provisional.json",
+              "pilot/m25/m25-4-baseline-report.provisional.json",
+              "pilot/m25/m25-4-daniel-annotation-gate.json",
+              "src/knowledge_engine/m25_identity_benchmark.py",
+              "src/knowledge_engine/m25_identity_benchmark_cli.py",
+          ]
+          subprocess.run(
+              ["git", "diff", "--exit-code", approved, "HEAD", "--", *protected],
+              check=True,
+          )
+          PY
+      - name: Verify Daniel authority comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          comment_id = 5053875354
+          expected = """Daniel authority decision for M25.4
+
+          I approve M25.4 PR #1047 exact head `cf56bad3b9128020214c3a30100ec741d6842e56` annotation/adjudication policy, all 30 provisional labels, and confirm disputed-item count is 0. This approval does not authorize M25.5.
+
+          User-provided approval text:
+
+          > 我批准 M25.4 PR #1047 exact head cf56bad3b9128020214c3a30100ec741d6842e56 的 annotation／adjudication policy、全部 30 個 provisional labels，並確認 disputed-item count 為 0。此批准不授權 M25.5。"""
+          expected = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in expected.splitlines()
+          )
+          request = urllib.request.Request(
+              f"https://api.github.com/repos/{os.environ['GH_REPOSITORY']}/issues/comments/{comment_id}",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urllib.request.urlopen(request) as response:
+              comment = json.load(response)
+          assert comment["id"] == comment_id
+          assert comment["user"]["login"] == "huaihsuanbusiness"
+          assert comment["body"] == expected
+          PY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact project dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint approval finalization
+        run: python -m ruff check tests/test_m25_4_daniel_approval.py
+      - name: Test approved suite and unchanged baseline
+        run: >-
+          python -m pytest -q
+          tests/test_m25_4_identity_benchmark.py
+          tests/test_m25_4_identity_benchmark_contracts.py
+          tests/test_m25_4_daniel_approval.py
+      - name: Build exact-head approval evidence
+        env:
+          FINAL_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          def load(path: str) -> dict:
+              return json.loads(Path(path).read_text(encoding="utf-8"))
+
+          approval = load("pilot/m25/m25-4-daniel-approval.json")
+          suite = load("pilot/m25/m25-4-gold-suite.json")
+          split = load("pilot/m25/m25-4-split-manifest.accepted.json")
+          ledger = load("pilot/m25/m25-4-adjudication-ledger.approved.json")
+          baseline = load("pilot/m25/m25-4-baseline-report.json")
+          evidence = {
+              "schema_version": "knowledge-engine-m25-4-approval-evidence/v1",
+              "approved_candidate_head": "cf56bad3b9128020214c3a30100ec741d6842e56",
+              "final_head": os.environ["FINAL_HEAD"],
+              "authority_actor": "huaihsuanbusiness",
+              "authority_comment_id": 5053875354,
+              "approval_record_sha256": approval["approval_record_sha256"],
+              "approved_suite_sha256": suite["suite_sha256"],
+              "accepted_split_manifest_sha256": split["manifest_sha256"],
+              "approved_ledger_sha256": ledger["ledger_sha256"],
+              "accepted_baseline_sha256": baseline["report_sha256"],
+              "m25_5_authorized": False,
+              "protected_mutations_zero": True,
+          }
+          Path("/tmp/m25-4-daniel-approval-evidence.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              hashlib.sha256(
+                  Path("/tmp/m25-4-daniel-approval-evidence.json").read_bytes()
+              ).hexdigest()
+          )
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-4-daniel-approval-evidence
+          path: /tmp/m25-4-daniel-approval-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Compile approval test
+        run: python -m compileall -q tests/test_m25_4_daniel_approval.py
