@@ -211,6 +211,7 @@ def test_budget_too_small_for_mandatory_conflict_forces_abstention() -> None:
     )
     context_policy = load(PILOT / "m26-3-context-policy.json")
     context_policy["bounds"]["default_token_budget"] = 128
+    context_policy["bounds"]["reserved_instruction_tokens"] = 127
     unsigned = dict(context_policy)
     unsigned.pop("self_sha256")
     context_policy["self_sha256"] = sha256_value(unsigned)
