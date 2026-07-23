@@ -32,17 +32,30 @@ jobs:
           git merge-base --is-ancestor 93f0a7761dee795488a3435f2bfecc6a4d6702e6 HEAD
       - name: Install
         run: python -m pip install -q --disable-pip-version-check -e '.[dev]'
-      - name: Capture Ruff findings
+      - name: Capture Ruff findings and fixed candidate
         run: |
-          mkdir -p /tmp/m25-10
+          mkdir -p /tmp/m25-10/fixed/src/knowledge_engine /tmp/m25-10/fixed/tests
+          cp src/knowledge_engine/m25_blog_candidate_release.py \
+            /tmp/m25-10/fixed/src/knowledge_engine/
+          cp tests/test_m25_10_blog_candidate_release.py \
+            /tmp/m25-10/fixed/tests/
           python -m ruff check --output-format=concise \
             src/knowledge_engine/m25_blog_candidate_release.py \
             tests/test_m25_10_blog_candidate_release.py \
             >/tmp/m25-10/ruff-findings.txt 2>&1 || true
+          python -m ruff check --fix \
+            /tmp/m25-10/fixed/src/knowledge_engine/m25_blog_candidate_release.py \
+            /tmp/m25-10/fixed/tests/test_m25_10_blog_candidate_release.py
       - uses: actions/upload-artifact@v4
         with:
           name: m25-10-blog-source-pack-ruff-findings
           path: /tmp/m25-10/ruff-findings.txt
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-10-blog-source-pack-ruff-fixed
+          path: /tmp/m25-10/fixed/
           if-no-files-found: error
           retention-days: 7
       - name: Enforce clean Ruff
