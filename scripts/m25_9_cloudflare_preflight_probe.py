@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 import re
-import socket
 import time
 import urllib.error
 import urllib.parse
@@ -61,7 +60,7 @@ def default_requester(
             content_type=exc.headers.get_content_type() if exc.headers else None,
             body=bounded_read(exc),
         )
-    except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+    except (urllib.error.URLError, TimeoutError) as exc:
         reason = getattr(exc, "reason", exc)
         return HttpResponse(
             status=None,
