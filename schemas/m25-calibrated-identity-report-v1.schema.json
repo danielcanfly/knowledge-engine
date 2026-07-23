@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m25-calibrated-identity-report-v1.schema.json",
+  "title": "M25.5 calibrated identity governance report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "predecessor_status",
+    "suite_id",
+    "suite_sha256",
+    "baseline_report_sha256",
+    "policy_sha256",
+    "final_split_used_for_calibration",
+    "denominators",
+    "metrics",
+    "gate",
+    "results",
+    "authority",
+    "review_required",
+    "canonical_knowledge",
+    "production_authority",
+    "m25_6_authorized",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-engine-m25-calibrated-identity-report/v1"},
+    "status": {"const": "m25_5_identity_governance_candidate"},
+    "predecessor_status": {"const": "m25_4_gold_benchmark_accepted"},
+    "suite_id": {"type": "string", "minLength": 1},
+    "suite_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "baseline_report_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "final_split_used_for_calibration": {"const": false},
+    "denominators": {"type": "object"},
+    "metrics": {
+      "type": "object",
+      "required": [
+        "semantic_decision_accuracy",
+        "explanation_signal_coverage",
+        "combined_governance_pass_rate",
+        "final_split_governance_pass_rate",
+        "false_merge_count",
+        "critical_false_merge_risk_count",
+        "destructive_decision_count"
+      ],
+      "properties": {
+        "semantic_decision_accuracy": {"const": 1.0},
+        "explanation_signal_coverage": {"const": 1.0},
+        "combined_governance_pass_rate": {"const": 1.0},
+        "final_split_governance_pass_rate": {"const": 1.0},
+        "false_merge_count": {"const": 0},
+        "critical_false_merge_risk_count": {"const": 0},
+        "destructive_decision_count": {"const": 0}
+      }
+    },
+    "gate": {"type": "object"},
+    "results": {"type": "array", "minItems": 30, "maxItems": 30},
+    "authority": {"const": "candidate_only"},
+    "review_required": {"const": true},
+    "canonical_knowledge": {"const": false},
+    "production_authority": {"const": false},
+    "m25_6_authorized": {"const": false},
+    "report_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}

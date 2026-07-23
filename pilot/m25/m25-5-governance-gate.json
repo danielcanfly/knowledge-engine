@@ -1,0 +1,31 @@
+{
+  "all_gates_passed": true,
+  "authority": "candidate_only",
+  "canonical_knowledge": false,
+  "gate_results": {
+    "explanation_coverage_one": true,
+    "final_split_pass_one": true,
+    "final_split_remained_held_out": true,
+    "semantic_accuracy_one": true,
+    "zero_critical_false_merges": true,
+    "zero_destructive_decisions": true
+  },
+  "gate_sha256": "adbef1b764f0b2823d76d9a4f2ab7dc5a5cb85a8d012804835f88ed421bc26f4",
+  "m25_6_authorized": false,
+  "policy_sha256": "97215c67c1a1d7663fe9ffdbb5ad680c41ec3502dfbd30b7c53973fbdf38811e",
+  "predecessor_status": "m25_4_gold_benchmark_accepted",
+  "production_authority": false,
+  "protected_mutations": {
+    "canonical_identity": false,
+    "foundation": false,
+    "production_pointer": false,
+    "qdrant": false,
+    "r2_production": false,
+    "release": false,
+    "serving": false,
+    "source": false
+  },
+  "report_sha256": "701d3da816c29bc3d468515bf9996d53123d6ec79944cfaf1fea96ef2c3b5bd0",
+  "schema_version": "knowledge-engine-m25-identity-governance-gate/v1",
+  "status": "m25_5_identity_governance_ready"
+}

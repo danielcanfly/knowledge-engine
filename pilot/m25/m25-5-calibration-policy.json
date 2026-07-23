@@ -1,0 +1,100 @@
+{
+  "authority": "candidate_only",
+  "baseline_report_sha256": "1cf1c8a245d800d7eb091cf15ca4fe203958a1f98969da0fdd570a4bebde83b8",
+  "calibration": {
+    "final_split_used": false,
+    "item_count": 20,
+    "item_ids": [
+      "gold_calibration_ambiguous_insufficient_evidence",
+      "gold_calibration_approved_alias",
+      "gold_calibration_blocked_policy",
+      "gold_calibration_contradiction_without_identity",
+      "gold_calibration_duplicate",
+      "gold_calibration_exact_match",
+      "gold_calibration_near_match_distinct",
+      "gold_calibration_parent_child_distinct",
+      "gold_calibration_polysemy_ambiguous",
+      "gold_calibration_supersession_without_identity_collapse",
+      "gold_train_ambiguous_insufficient_evidence",
+      "gold_train_approved_alias",
+      "gold_train_blocked_policy",
+      "gold_train_contradiction_without_identity",
+      "gold_train_duplicate",
+      "gold_train_exact_match",
+      "gold_train_near_match_distinct",
+      "gold_train_parent_child_distinct",
+      "gold_train_polysemy_ambiguous",
+      "gold_train_supersession_without_identity_collapse"
+    ],
+    "observed_explanation_gap_classes": [
+      "near_match_distinct",
+      "parent_child_distinct",
+      "polysemy_ambiguous",
+      "supersession_without_identity_collapse"
+    ],
+    "splits": [
+      "calibration",
+      "train"
+    ]
+  },
+  "canonical_knowledge": false,
+  "explanation_rules": {
+    "near_match_distinction": "lexical proximity without an exact identity owner",
+    "parent_child_distinction": "narrower scope or governed semantic hierarchy",
+    "polysemy_collision": "multiple exact owners for one surface form",
+    "supersession_distinction": "versioned or temporal stem match with different identity"
+  },
+  "held_out_evaluation": {
+    "item_count": 10,
+    "item_ids": [
+      "gold_final_ambiguous_insufficient_evidence",
+      "gold_final_approved_alias",
+      "gold_final_blocked_policy",
+      "gold_final_contradiction_without_identity",
+      "gold_final_duplicate",
+      "gold_final_exact_match",
+      "gold_final_near_match_distinct",
+      "gold_final_parent_child_distinct",
+      "gold_final_polysemy_ambiguous",
+      "gold_final_supersession_without_identity_collapse"
+    ],
+    "may_change_policy": false,
+    "split": "final"
+  },
+  "m25_6_authorized": false,
+  "merge_gate": {
+    "ambiguous_destructive_action_permitted": false,
+    "automatic_canonical_write_permitted": false,
+    "critical_false_merge_limit": 0,
+    "lexical_or_tag_only_merge_permitted": false,
+    "minimum_alias_score": 0.9,
+    "minimum_exact_match_score": 0.9
+  },
+  "policy_id": "m25-5-conservative-identity-governance-v1",
+  "policy_sha256": "97215c67c1a1d7663fe9ffdbb5ad680c41ec3502dfbd30b7c53973fbdf38811e",
+  "predecessor_status": "m25_4_gold_benchmark_accepted",
+  "production_authority": false,
+  "ranking_weights": {
+    "audience_mismatch_penalty": 2.0,
+    "exact_alias": 0.96,
+    "exact_term": 0.92,
+    "exact_title": 1.0,
+    "governed_tag_overlap": 0.05,
+    "sequence_similarity": 0.12,
+    "token_containment": 0.22,
+    "token_jaccard": 0.28,
+    "version_mismatch_penalty": 0.75
+  },
+  "relation_governance": {
+    "allowed_candidate_relations": [
+      "narrower_than",
+      "supersedes"
+    ],
+    "automatic_write_permitted": false,
+    "review_required": true
+  },
+  "review_required": true,
+  "schema_version": "knowledge-engine-m25-identity-calibration-policy/v1",
+  "suite_id": "m25-concept-identity-gold-v1",
+  "suite_sha256": "e52216c4fffd03b5cf4cbd68c049ca2fc688e539743761768d08a3348572a3e6"
+}
