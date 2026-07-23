@@ -1,0 +1,38 @@
+{
+  "accepted_predecessor_status": "m26_5_draft_answer_contract_accepted",
+  "authority": {
+    "answer_evaluation": true,
+    "credentials": false,
+    "live_provider_calls": false,
+    "production_answer_serving": false,
+    "real_corpus": false,
+    "refusal_gate": true,
+    "semantic_or_hybrid": false,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "contracts": [
+    {
+      "path": "pilot/m26/m26-6-answer-evaluation-policy.json",
+      "sha256": "1ca0228778bc73c1ae2e12f1b1a79b8c84d68245d46f8d48fc61975d031de833"
+    },
+    {
+      "path": "pilot/m26/m26-6-benchmark-cases.json",
+      "sha256": "8a5a8fcccf165e06071dbd7afbe99afa22ca5542be16bbad992387a6650393c0"
+    },
+    {
+      "path": "pilot/m26/m26-6-entry-contract.json",
+      "sha256": "5eae45220c15a7ddce718b7461ed19a36c0f3d29e0e9f1e05965b67fd7551f4c"
+    },
+    {
+      "path": "schemas/m26-6-answer-evaluation-v1.schema.json",
+      "sha256": "cfb7e14dbb56e8d643133721dd1a29e39bf5dcbd27095db598c3caa7d2ce3dd0"
+    },
+    {
+      "path": "schemas/m26-refusal-gate-v1.schema.json",
+      "sha256": "ba532f8b8cb3268eff30abf1ff3763a3431bf7e05c7dd09f2379b6391009b64c"
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-6-contract-registry/v1",
+  "self_sha256": "3eaecb2494241fd012d36b402dad9ff0e55bebfba0c7285b8be1d08013157c1a"
+}

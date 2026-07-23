@@ -1,0 +1,31 @@
+{
+  "$id": "knowledge-engine/m26/refusal-gate-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "refusal_reason_codes": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "refusal_required": {
+      "const": true
+    },
+    "safe_for_m26_7": {
+      "const": false
+    },
+    "status": {
+      "pattern": "^refusal_",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "refusal_required",
+    "refusal_reason_codes",
+    "safe_for_m26_7"
+  ],
+  "type": "object"
+}

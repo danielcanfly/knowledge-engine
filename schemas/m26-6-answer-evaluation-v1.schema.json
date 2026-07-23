@@ -1,0 +1,102 @@
+{
+  "$id": "knowledge-engine/m26/answer-evaluation-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "accepted_binding_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "accepted_claim_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "citation_coverage": {
+      "maximum": 1,
+      "minimum": 0,
+      "type": "number"
+    },
+    "diagnostics": {
+      "type": "object"
+    },
+    "draft_package_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "evaluation_passed": {
+      "type": "boolean"
+    },
+    "final_answer": {
+      "const": false
+    },
+    "production_answer_serving": {
+      "const": false
+    },
+    "refusal_reason_codes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "refusal_required": {
+      "type": "boolean"
+    },
+    "request_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "safe_for_m26_7": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-answer-evaluation/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "evaluation_passed_non_final",
+        "evaluation_passed_non_final_with_warnings",
+        "refusal_abstain_propagated",
+        "refusal_privacy_block_propagated",
+        "refusal_authority_escalation",
+        "refusal_citation_integrity",
+        "refusal_prompt_injection_leakage",
+        "refusal_fail_closed"
+      ],
+      "type": "string"
+    },
+    "synthetic_only": {
+      "const": true
+    },
+    "verified_final_answer": {
+      "const": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "draft_package_sha256",
+    "status",
+    "safe_for_m26_7",
+    "synthetic_only",
+    "final_answer",
+    "verified_final_answer",
+    "production_answer_serving",
+    "evaluation_passed",
+    "refusal_required",
+    "refusal_reason_codes",
+    "accepted_claim_ids",
+    "accepted_binding_ids",
+    "citation_coverage",
+    "diagnostics",
+    "self_sha256"
+  ],
+  "type": "object"
+}
