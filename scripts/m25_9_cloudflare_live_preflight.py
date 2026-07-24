@@ -273,24 +273,24 @@ def run_preflight(
                 raise PreflightFailure(f"{label}_token_not_active")
             token_payloads[label] = payload
 
-        records, pages_projects_payload = request_json(
+        encoded_project = urllib.parse.quote(pages_project, safe="")
+        records, pages_project_payload = request_json(
             label="pages_dedicated",
-            endpoint="pages_projects",
-            url=f"{API_ROOT}/accounts/{account_id}/pages/projects?per_page=100",
+            endpoint="pages_project",
+            url=f"{API_ROOT}/accounts/{account_id}/pages/projects/{encoded_project}",
             token=pages_token,
             requester=requester,
             timeout=timeout,
             max_attempts=max_attempts,
         )
         evidence["probes"].extend(records)
-        require_pass(records, "pages_projects")
-        projects = result_list(pages_projects_payload, "pages_projects")
-        project_found = any(item.get("name") == pages_project for item in projects)
+        require_pass(records, "pages_project")
+        project = result_object(pages_project_payload, "pages_project")
+        project_found = project.get("name") == pages_project
         evidence["resource_checks"]["target_pages_project_found"] = project_found
         if not project_found:
             raise PreflightFailure("target_pages_project_not_found")
 
-        encoded_project = urllib.parse.quote(pages_project, safe="")
         records, deployments_payload = request_json(
             label="pages_dedicated",
             endpoint="pages_deployments",
