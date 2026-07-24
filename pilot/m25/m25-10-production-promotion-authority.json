@@ -1,0 +1,25 @@
+{
+  "actor": "Daniel Huang",
+  "authorized_at_local_date": "2026-07-24",
+  "candidate_channel": "candidate-blog-m25-10",
+  "candidate_manifest_sha256": "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3",
+  "denied_authority": {
+    "access_policy_mutation": false,
+    "credential_creation": false,
+    "public_production_traffic_mutation_without_target": false,
+    "source_write": false
+  },
+  "issue": "danielcanfly/knowledge-engine#1092",
+  "production_authority": {
+    "candidate_identity_verification": true,
+    "immutable_production_manifest_creation": true,
+    "production_pointer_compare_and_swap": true,
+    "qdrant_read_verification": true,
+    "rollback_to_previous_pointer_on_failure": true
+  },
+  "previous_production_pointer_sha256": "38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5",
+  "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+  "schema_version": "knowledge-engine-m25-10-production-promotion-authority/v1",
+  "source_commit_sha": "5250f8422f4fa08c1f3dc84840dc756850817635",
+  "status": "owner_authorized_m25_10_production_promotion"
+}

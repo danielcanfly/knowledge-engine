@@ -1,0 +1,247 @@
+name: M25.10 Blog Production Promotion
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-10-blog-production-promotion.yml'
+      - 'docs/architecture/m25/m25-10-production-promotion.md'
+      - 'pilot/m25/m25-10-production-promotion-authority.json'
+      - 'src/knowledge_engine/m25_blog_production_promotion.py'
+      - 'tests/test_m25_10_blog_production_promotion.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m25-10-blog-production-promotion.yml'
+      - 'docs/architecture/m25/m25-10-production-promotion.md'
+      - 'pilot/m25/m25-10-production-promotion-authority.json'
+      - 'src/knowledge_engine/m25_blog_production_promotion.py'
+      - 'tests/test_m25_10_blog_production_promotion.py'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: m25-10-blog-production-promotion
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 200
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact production authority envelope
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(Path('pilot/m25/m25-10-production-promotion-authority.json').read_text())
+          assert value['status'] == 'owner_authorized_m25_10_production_promotion'
+          assert value['release_id'] == 'm25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043'
+          assert value['candidate_channel'] == 'candidate-blog-m25-10'
+          assert value['candidate_manifest_sha256'] == 'f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3'
+          assert value['previous_production_pointer_sha256'] == '38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5'
+          assert all(value['production_authority'].values())
+          assert not any(value['denied_authority'].values())
+          PY
+      - name: Install dependencies and run focused tests
+        run: |
+          set -euo pipefail
+          python -m pip install -q --disable-pip-version-check -e '.[dev]'
+          python -m ruff check --output-format=concise \
+            src/knowledge_engine/m25_blog_production_promotion.py \
+            tests/test_m25_10_blog_production_promotion.py
+          python -m pytest -q tests/test_m25_10_blog_production_promotion.py
+          python -m compileall -q \
+            src/knowledge_engine/m25_blog_production_promotion.py \
+            tests/test_m25_10_blog_production_promotion.py
+      - name: Enforce exact changed-file boundary
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git fetch --quiet --no-tags origin main
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/m25-10-blog-production-promotion.yml' \
+            'docs/architecture/m25/m25-10-production-promotion.md' \
+            'pilot/m25/m25-10-production-promotion-authority.json' \
+            'src/knowledge_engine/m25_blog_production_promotion.py' \
+            'tests/test_m25_10_blog_production_promotion.py' | sort)"
+          test "$changed" = "$expected"
+          ! printf '%s\n' "$changed" | grep -Eq \
+            '^(credentials/|secrets/|packages/m25-blog-candidate-runtime/|channels/production.json)'
+
+  promote:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[m25.10-production-authorized]')
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: m23-r3-diagnostic
+    env:
+      APP_ENV: staging
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID_WRITE }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY_WRITE }}
+      R2_REGION: auto
+      QDRANT_URL: ${{ secrets.QDRANT_URL }}
+      QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+      WORK_DIR: /tmp/m25-10-production-promotion
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 200
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify credentials and exact dispatch guard
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          case "$GITHUB_SHA" in
+            30032170246|30068964353|30079657989|30080787681|30099287682)
+              echo "historical failed run id was passed as SHA"; exit 2 ;;
+          esac
+          for name in \
+            R2_ENDPOINT_URL R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
+            QDRANT_URL QDRANT_API_KEY; do
+            test -n "${!name}"
+          done
+          mkdir -p "$WORK_DIR/evidence"
+      - name: Install promotion runtime
+        run: python -m pip install -q --disable-pip-version-check -e .
+      - name: Capture previous production pointer bytes
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store
+
+          root = Path(os.environ['WORK_DIR']) / 'evidence'
+          store = create_object_store(Settings.from_env())
+          raw = store.get('channels/production.json')
+          root.joinpath('production-pointer-before.json').write_bytes(raw)
+          sha = hashlib.sha256(raw).hexdigest()
+          root.joinpath('production-pointer-before.sha256').write_text(sha + '\n')
+          if sha not in {
+              '38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5',
+          }:
+              print(f'production_pointer_before_sha256={sha}')
+          PY
+      - name: Promote accepted M25.10 candidate pointer to production
+        run: |
+          set -euo pipefail
+          python -m knowledge_engine.m25_blog_production_promotion promote \
+            --verify-qdrant \
+            --output "$WORK_DIR/evidence/production-promotion-result.json"
+      - name: Verify production readback
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store, sha256_bytes
+
+          root = Path(os.environ['WORK_DIR']) / 'evidence'
+          result = json.loads(root.joinpath('production-promotion-result.json').read_text())
+          store = create_object_store(Settings.from_env())
+          pointer_bytes = store.get(result['production_pointer_key'])
+          root.joinpath('production-pointer-after.json').write_bytes(pointer_bytes)
+          pointer_sha = sha256_bytes(pointer_bytes)
+          root.joinpath('production-pointer-after.sha256').write_text(pointer_sha + '\n')
+          pointer = json.loads(pointer_bytes)
+          manifest = json.loads(store.get(pointer['manifest_key']))
+          if pointer['release_id'] != 'm25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043':
+              raise SystemExit('production pointer release drift')
+          if pointer['manifest_sha256'] != sha256_bytes(store.get(pointer['manifest_key'])):
+              raise SystemExit('production manifest sha drift')
+          if manifest['status'] != 'production':
+              raise SystemExit('production manifest status drift')
+          if manifest['authority']['production_pointer_authorized'] is not True:
+              raise SystemExit('production authority missing')
+          if manifest['authority']['public_production_traffic_authorized'] is not False:
+              raise SystemExit('public traffic authority drift')
+          acceptance = {
+              'schema_version': 'knowledge-engine-m25-10-production-promotion-acceptance/v1',
+              'status': result['status'],
+              'release_id': pointer['release_id'],
+              'production_manifest_sha256': pointer['manifest_sha256'],
+              'production_pointer_sha256': pointer_sha,
+              'production_pointer_mutated': result['production_pointer_mutated'],
+              'public_production_traffic_mutated': False,
+          }
+          root.joinpath('production-promotion-acceptance.json').write_text(
+              json.dumps(acceptance, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+      - name: Restore previous production pointer on failure after mutation
+        if: failure()
+        run: |
+          set +e
+          result="$WORK_DIR/evidence/production-promotion-result.json"
+          if test -f "$result" && jq -e '.production_pointer_mutated == true' "$result" >/dev/null; then
+            python -m knowledge_engine.m25_blog_production_promotion restore \
+              --previous-pointer "$WORK_DIR/evidence/production-pointer-before.json" \
+              --output "$WORK_DIR/evidence/production-pointer-rollback.json"
+          fi
+      - name: Upload production promotion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-10-production-promotion-${{ github.sha }}
+          path: /tmp/m25-10-production-promotion/evidence/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Record production promotion result on issue 1092
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          status='production_promotion_failed_or_rolled_back'
+          summary='result unavailable'
+          if test -f "$WORK_DIR/evidence/production-promotion-result.json"; then
+            summary="$(jq -c '{status,release_id,production_manifest_sha256,production_pointer_sha256,previous_pointer_sha256,production_pointer_mutated,public_production_traffic_mutated,qdrant}' "$WORK_DIR/evidence/production-promotion-result.json")"
+            status="$(jq -r '.status' "$WORK_DIR/evidence/production-promotion-result.json")"
+          fi
+          cat > "$WORK_DIR/issue-comment.md" <<EOF
+          ## M25.10 production promotion workflow result
+
+          - status: \`$status\`
+          - workflow run: \`${GITHUB_RUN_ID}\`
+          - attempt: \`${GITHUB_RUN_ATTEMPT}\`
+          - engine SHA: \`${GITHUB_SHA}\`
+          - production pointer mutation: see receipt
+          - public production traffic mutation: \`false\`
+
+          Receipt summary:
+
+          \`$summary\`
+          EOF
+          gh issue comment 1092 \
+            --repo danielcanfly/knowledge-engine \
+            --body-file "$WORK_DIR/issue-comment.md"
