@@ -4,10 +4,12 @@ on:
   pull_request:
     paths:
       - '.github/workflows/m25-9-preflight-repair-builder.yml'
+      - '.github/scripts/m25_9_apply_exact_project_repair.py'
   push:
     branches: [main]
     paths:
       - '.github/workflows/m25-9-preflight-repair-builder.yml'
+      - '.github/scripts/m25_9_apply_exact_project_repair.py'
 
 permissions:
   contents: write
@@ -22,15 +24,23 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 50
           show-progress: false
-      - name: Verify one-file builder boundary
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify builder boundary and syntax
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
           test -f .github/workflows/m25-9-preflight-repair-builder.yml
+          test -f .github/scripts/m25_9_apply_exact_project_repair.py
+          python -m py_compile .github/scripts/m25_9_apply_exact_project_repair.py
           if test "${{ github.event_name }}" = 'pull_request'; then
             git fetch --quiet --no-tags origin main
-            test "$(git diff --name-only origin/main...HEAD)" = \
-              '.github/workflows/m25-9-preflight-repair-builder.yml'
+            changed="$(git diff --name-only origin/main...HEAD | sort)"
+            expected="$(printf '%s\n' \
+              '.github/scripts/m25_9_apply_exact_project_repair.py' \
+              '.github/workflows/m25-9-preflight-repair-builder.yml' | sort)"
+            test "$changed" = "$expected"
           fi
 
   build-repair-branch:
@@ -59,124 +69,7 @@ jobs:
       - name: Apply deterministic Pages exact-project repair
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-
-          def replace_once(path: str, old: str, new: str) -> None:
-              file = Path(path)
-              text = file.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{path}: expected one replacement, found {count}')
-              file.write_text(text.replace(old, new, 1))
-
-          script = 'scripts/m25_9_cloudflare_live_preflight.py'
-          replace_once(
-              script,
-              '''        records, pages_projects_payload = request_json(
-              label="pages_dedicated",
-              endpoint="pages_projects",
-              url=f"{API_ROOT}/accounts/{account_id}/pages/projects?per_page=100",
-              token=pages_token,
-              requester=requester,
-              timeout=timeout,
-              max_attempts=max_attempts,
-          )
-          evidence["probes"].extend(records)
-          require_pass(records, "pages_projects")
-          projects = result_list(pages_projects_payload, "pages_projects")
-          project_found = any(item.get("name") == pages_project for item in projects)
-          evidence["resource_checks"]["target_pages_project_found"] = project_found
-          if not project_found:
-              raise PreflightFailure("target_pages_project_not_found")
-''',
-              '''        encoded_project = urllib.parse.quote(pages_project, safe="")
-          records, pages_project_payload = request_json(
-              label="pages_dedicated",
-              endpoint="pages_project",
-              url=f"{API_ROOT}/accounts/{account_id}/pages/projects/{encoded_project}",
-              token=pages_token,
-              requester=requester,
-              timeout=timeout,
-              max_attempts=max_attempts,
-          )
-          evidence["probes"].extend(records)
-          require_pass(records, "pages_project")
-          project = result_object(pages_project_payload, "pages_project")
-          project_found = project.get("name") == pages_project
-          evidence["resource_checks"]["target_pages_project_found"] = project_found
-          if not project_found:
-              raise PreflightFailure("target_pages_project_not_found")
-''',
-          )
-          replace_once(
-              script,
-              '''
-          encoded_project = urllib.parse.quote(pages_project, safe="")
-          records, deployments_payload = request_json(
-''',
-              '''
-          records, deployments_payload = request_json(
-''',
-          )
-
-          tests = 'tests/test_m25_9_cloudflare_live_preflight.py'
-          replace_once(
-              tests,
-              '''    if "/pages/projects?" in url:
-              return "pages_projects"
-''',
-              '''    if url.endswith(f"/pages/projects/{PROJECT}"):
-              return "pages_project"
-''',
-          )
-          replace_once(
-              tests,
-              '''    if endpoint == "pages_projects":
-              return {"success": True, "result": [{"name": PROJECT}]}
-''',
-              '''    if endpoint == "pages_project":
-              return {"success": True, "result": {"name": PROJECT}}
-''',
-          )
-          replace_once(
-              tests,
-              '''    for endpoint in ("pages_projects", "pages_deployments"):
-''',
-              '''    for endpoint in ("pages_project", "pages_deployments"):
-''',
-          )
-          replace_once(
-              tests,
-              '''    outcomes[("pages-token", "pages_projects")] = [
-''',
-              '''    outcomes[("pages-token", "pages_project")] = [
-''',
-          )
-          replace_once(
-              tests,
-              '''if item["endpoint"] == "pages_projects"][-1]
-''',
-              '''if item["endpoint"] == "pages_project"][-1]
-''',
-          )
-
-          workflow = '.github/workflows/m25-9-blog-full-population-pilot.yml'
-          replace_once(
-              workflow,
-              '''          expected="$(printf '%s\\n' \\
-              '.github/workflows/m25-9-blog-full-population-pilot.yml' \\
-              'docs/architecture/m25/m25-9-live-preflight-repair.md' \\
-              'scripts/m25_9_cloudflare_live_preflight.py' \\
-              'tests/test_m25_9_cloudflare_live_preflight.py' | sort)"
-''',
-              '''          expected="$(printf '%s\\n' \\
-              '.github/workflows/m25-9-blog-full-population-pilot.yml' \\
-              'scripts/m25_9_cloudflare_live_preflight.py' \\
-              'tests/test_m25_9_cloudflare_live_preflight.py' | sort)"
-''',
-          )
-          PY
+          python .github/scripts/m25_9_apply_exact_project_repair.py
       - name: Validate repaired implementation
         run: |
           set -euo pipefail
