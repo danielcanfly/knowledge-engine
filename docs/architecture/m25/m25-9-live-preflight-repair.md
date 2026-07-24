@@ -107,9 +107,12 @@ remains. A successful check performs exactly two bounded candidate mutations
 (one put and one delete) with zero residual objects. Production channel keys and
 public-production traffic remain untouched.
 
-The GitHub environment `m23-r3-diagnostic` must contain R2 S3 credentials with
+The GitHub environment `m23-r3-diagnostic` must contain dedicated R2 S3 write
+credentials named `R2_ACCESS_KEY_ID_WRITE` and `R2_SECRET_ACCESS_KEY_WRITE` with
 **Object Read & Write** (or Admin Read & Write) permission scoped to the exact
-bucket named by `R2_BUCKET`. Read-only credentials are not sufficient. Rotate
-both `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` together; the secret access key
-cannot be viewed again after token creation.
-
+bucket named by `R2_BUCKET`. The workflow maps those write-only secret names into
+the runtime `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` environment variables
+expected by the existing object-store settings. Existing read-only R2 credentials
+may remain available under their original names, but they are not sufficient for
+candidate publication. Rotate the write access key ID and secret access key
+together; the secret access key cannot be viewed again after token creation.
