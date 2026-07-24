@@ -5,7 +5,7 @@ import json
 import math
 import unicodedata
 import uuid
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
@@ -18,6 +18,8 @@ CLOUDFLARE_MODEL = "@cf/baai/bge-m3"
 CLOUDFLARE_PROVIDER = "cloudflare-workers-ai"
 VECTOR_DIMENSION = 1024
 MAX_BATCH_SIZE = 100
+MAX_BATCH_TEXT_CHARACTERS = 16_000
+CLOUDFLARE_CONTEXT_ERROR_CODE = 3030
 QDRANT_DISTANCE = "Cosine"
 QDRANT_VECTOR_NAME = "default"
 RECEIPT_SCHEMA = "knowledge-engine-m23-cloudflare-qdrant-receipt/v1"
@@ -224,7 +226,9 @@ def build_provider_contract(
             "unicode_normalization": "NFKC",
         },
         "batching": {
-            "batch_size": MAX_BATCH_SIZE,
+            "maximum_batch_size": MAX_BATCH_SIZE,
+            "maximum_batch_text_characters": MAX_BATCH_TEXT_CHARACTERS,
+            "context_limit_split": "recursive-halves",
             "preserve_input_order": True,
             "deterministic": True,
         },
@@ -279,9 +283,92 @@ def build_execution_plan(
     return plan
 
 
-def _chunks(values: Sequence[SectionInput], size: int) -> Iterable[Sequence[SectionInput]]:
-    for start in range(0, len(values), size):
-        yield values[start : start + size]
+def _batches_by_character_budget(
+    values: Sequence[SectionInput],
+) -> list[Sequence[SectionInput]]:
+    batches: list[Sequence[SectionInput]] = []
+    batch: list[SectionInput] = []
+    characters = 0
+    for value in values:
+        text_characters = len(value.text)
+        if batch and (
+            len(batch) >= MAX_BATCH_SIZE
+            or characters + text_characters > MAX_BATCH_TEXT_CHARACTERS
+        ):
+            batches.append(tuple(batch))
+            batch = []
+            characters = 0
+        batch.append(value)
+        characters += text_characters
+    if batch:
+        batches.append(tuple(batch))
+    return batches
+
+
+def _is_context_limit_response(response: httpx.Response) -> bool:
+    if getattr(response, "status_code", 200) != 400:
+        return False
+    try:
+        payload = response.json()
+    except ValueError:
+        return False
+    if not isinstance(payload, Mapping):
+        return False
+    errors = payload.get("errors")
+    if not isinstance(errors, list):
+        return False
+    for item in errors:
+        if not isinstance(item, Mapping):
+            continue
+        if str(item.get("code")) == str(CLOUDFLARE_CONTEXT_ERROR_CODE):
+            return True
+        message = item.get("message")
+        if isinstance(message, str):
+            lowered = message.lower()
+            if (
+                "max context reached" in lowered
+                and "model supports only" in lowered
+            ):
+                return True
+    return False
+
+
+def _embed_batch(
+    http: httpx.Client,
+    *,
+    url: str,
+    token: str,
+    batch: Sequence[SectionInput],
+) -> list[list[float]]:
+    response = http.post(
+        url,
+        headers={"Authorization": f"Bearer {token}"},
+        json=build_cloudflare_request(
+            [section.text for section in batch]
+        ),
+    )
+    if _is_context_limit_response(response) and len(batch) > 1:
+        midpoint = len(batch) // 2
+        return _embed_batch(
+            http,
+            url=url,
+            token=token,
+            batch=batch[:midpoint],
+        ) + _embed_batch(
+            http,
+            url=url,
+            token=token,
+            batch=batch[midpoint:],
+        )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, Mapping):
+        raise IntegrityError(
+            "M23-EMBED-120 provider response must be an object"
+        )
+    return parse_cloudflare_embeddings(
+        payload, expected_count=len(batch)
+    )
 
 
 def embed_sections(
@@ -290,26 +377,24 @@ def embed_sections(
     *,
     client: httpx.Client | None = None,
 ) -> list[list[float]]:
-    account_id = quote(_required_string(config.account_id, "account_id", 100), safe="")
+    account_id = quote(
+        _required_string(config.account_id, "account_id", 100), safe=""
+    )
     token = _required_string(config.api_token, "api_token", 10_000)
-    model = quote(_required_string(config.model, "model", 300), safe="@/")
-    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}"
+    model = quote(
+        _required_string(config.model, "model", 300), safe="@/"
+    )
+    url = (
+        "https://api.cloudflare.com/client/v4/accounts/"
+        f"{account_id}/ai/run/{model}"
+    )
     owned_client = client is None
     http = client or httpx.Client(timeout=config.timeout_seconds)
     vectors: list[list[float]] = []
     try:
-        for batch in _chunks(list(sections), MAX_BATCH_SIZE):
-            response = http.post(
-                url,
-                headers={"Authorization": f"Bearer {token}"},
-                json=build_cloudflare_request([section.text for section in batch]),
-            )
-            response.raise_for_status()
-            payload = response.json()
-            if not isinstance(payload, Mapping):
-                raise IntegrityError("M23-EMBED-120 provider response must be an object")
+        for batch in _batches_by_character_budget(list(sections)):
             vectors.extend(
-                parse_cloudflare_embeddings(payload, expected_count=len(batch))
+                _embed_batch(http, url=url, token=token, batch=batch)
             )
     finally:
         if owned_client:
