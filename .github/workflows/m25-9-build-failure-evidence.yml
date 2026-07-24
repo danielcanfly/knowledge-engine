@@ -1,0 +1,213 @@
+name: M25.9 Build Failure Evidence
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-build-failure-evidence.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m25-9-build-failure-evidence.yml'
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 20
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify one-file read-only boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test -f .github/workflows/m25-9-build-failure-evidence.yml
+          if test "${{ github.event_name }}" = 'pull_request'; then
+            git fetch --quiet --no-tags origin main
+            test "$(git diff --name-only origin/main...HEAD)" = \
+              '.github/workflows/m25-9-build-failure-evidence.yml'
+          fi
+
+  extract-existing-evidence:
+    if: github.event_name == 'push'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_RUN_ID: '30061441749'
+      TARGET_JOB_ID: '89383975673'
+      TARGET_SHA: 31a2ff0df1e44ab80681b138a53b3d1ff732726c
+      TARGET_ARTIFACT: m25-9-blog-full-population-pilot-31a2ff0df1e44ab80681b138a53b3d1ff732726c
+      EVIDENCE_DIR: /tmp/m25-9-build-failure-evidence
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 20
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify fresh extractor authority
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p "$EVIDENCE_DIR/input" "$EVIDENCE_DIR/output"
+      - name: Download existing run artifact and deploy log
+        run: |
+          set -euo pipefail
+          gh run download "$TARGET_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$TARGET_ARTIFACT" \
+            --dir "$EVIDENCE_DIR/input"
+          gh run view "$TARGET_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --job "$TARGET_JOB_ID" \
+            --log > "$EVIDENCE_DIR/input/deploy-job.log"
+      - name: Build sanitized failure summary
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ['EVIDENCE_DIR'])
+          input_dir = root / 'input'
+          output = root / 'output' / 'build-failure-summary.json'
+          selected_keys = {
+              'status', 'phase', 'error', 'error_type', 'failure', 'failure_phase',
+              'root_cause_classification', 'rollback', 'rollback_status',
+              'production_pointer_mutated', 'public_production_traffic_mutated',
+              'source_sha', 'engine_sha', 'channel', 'counts', 'qdrant', 'r2',
+              'published', 'verified', 'collection_name', 'collection',
+              'candidate_release_id', 'candidate_prefix', 'deleted', 'restored',
+          }
+
+          def sanitize_string(value: str) -> str:
+              value = re.sub(r'https?://\S+', '<redacted-url>', value)
+              value = re.sub(r'(?i)(bearer|token|secret|password|authorization)\s*[:=]?\s*\S+', r'\1=<redacted>', value)
+              value = re.sub(r'\b[0-9a-fA-F]{32,64}\b', '<redacted-hex>', value)
+              value = re.sub(r'\b[A-Za-z0-9_\-]{80,}\b', '<redacted-long-value>', value)
+              return value[:500]
+
+          def select(value, depth=0):
+              if depth > 5:
+                  return '<depth-limited>'
+              if isinstance(value, dict):
+                  result = {}
+                  for key, item in value.items():
+                      if key in selected_keys:
+                          result[key] = select(item, depth + 1)
+                  return result
+              if isinstance(value, list):
+                  return [select(item, depth + 1) for item in value[:20]]
+              if isinstance(value, str):
+                  return sanitize_string(value)
+              if isinstance(value, (bool, int, float)) or value is None:
+                  return value
+              return sanitize_string(str(value))
+
+          documents = []
+          for path in sorted(input_dir.rglob('*.json')):
+              try:
+                  payload = json.loads(path.read_text())
+              except Exception as exc:
+                  documents.append({
+                      'path': str(path.relative_to(input_dir)),
+                      'parse_error': type(exc).__name__,
+                  })
+                  continue
+              documents.append({
+                  'path': str(path.relative_to(input_dir)),
+                  'selected': select(payload),
+                  'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+              })
+
+          log_path = input_dir / 'deploy-job.log'
+          failure_lines = []
+          if log_path.exists():
+              keywords = ('error', 'traceback', 'exception', 'failed', 'failure', 'qdrant', 'r2')
+              for raw in log_path.read_text(errors='replace').splitlines():
+                  lower = raw.lower()
+                  if any(word in lower for word in keywords):
+                      line = sanitize_string(raw)
+                      if line not in failure_lines:
+                          failure_lines.append(line)
+              failure_lines = failure_lines[-60:]
+
+          summary = {
+              'schema_version': 'knowledge-engine-m25-9-build-failure-evidence/v1',
+              'source_run_id': int(os.environ['TARGET_RUN_ID']),
+              'source_job_id': int(os.environ['TARGET_JOB_ID']),
+              'source_engine_sha': os.environ['TARGET_SHA'],
+              'source_run_reexecuted': False,
+              'external_service_mutations': 0,
+              'raw_logs_recorded': False,
+              'authorization_headers_recorded': False,
+              'secret_values_recorded': False,
+              'documents': documents,
+              'sanitized_failure_lines': failure_lines,
+          }
+          summary['evidence_sha256'] = hashlib.sha256(
+              json.dumps(summary, sort_keys=True, separators=(',', ':')).encode()
+          ).hexdigest()
+          output.write_text(json.dumps(summary, indent=2, sort_keys=True) + '\n')
+
+          classifications = []
+          statuses = []
+          for document in documents:
+              selected = document.get('selected', {})
+              if isinstance(selected, dict):
+                  value = selected.get('root_cause_classification')
+                  if value:
+                      classifications.append(value)
+                  value = selected.get('status')
+                  if value:
+                      statuses.append(value)
+          print(json.dumps({
+              'documents': len(documents),
+              'classifications': classifications,
+              'statuses': statuses,
+              'failure_line_count': len(failure_lines),
+              'external_service_mutations': 0,
+          }, sort_keys=True))
+          PY
+      - name: Upload sanitized evidence summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-build-failure-evidence-${{ github.sha }}
+          path: /tmp/m25-9-build-failure-evidence/output/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish extractor result
+        run: |
+          set -euo pipefail
+          summary="$EVIDENCE_DIR/output/build-failure-summary.json"
+          digest="$(jq -r '.evidence_sha256' "$summary")"
+          documents="$(jq -r '.documents | length' "$summary")"
+          lines="$(jq -r '.sanitized_failure_lines | length' "$summary")"
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$TARGET_SHA" \
+            -f state='success' \
+            -f context='m25-9-build-failure-evidence' \
+            -f description="run $GITHUB_RUN_ID parsed $documents docs and $lines failure lines" \
+            -f target_url="$run_url" >/dev/null
+          gh issue comment 1092 \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "M25.9 existing-run build failure evidence extracted from run \`$TARGET_RUN_ID\` without rerun. Sanitized summary artifact: extractor run \`$GITHUB_RUN_ID\`, documents \`$documents\`, failure lines \`$lines\`, evidence SHA-256 \`$digest\`. External service mutations by extractor: \`0\`."
