@@ -41,8 +41,8 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
-      TARGET_SHA: 9f21f687ea513ed17be01a51beac1e89b12d7bfc
-      TARGET_WORKFLOW: M25.9 Blog Full-Population Candidate Pilot
+      TARGET_SHA: 5d675a8166091f3562bfa233508917bd67fde6c2
+      TARGET_WORKFLOW: M25.9 Context Budget Repair Builder
     steps:
       - name: Locate exact existing push run
         run: |
@@ -84,6 +84,6 @@ jobs:
           gh api --method POST \
             "repos/$GITHUB_REPOSITORY/statuses/$TARGET_SHA" \
             -f state="$state" \
-            -f context='m25-9-live-run-observer' \
+            -f context='m25-9-context-builder-run-observer' \
             -f description="${description:0:140}" \
             -f target_url="$url" >/dev/null
