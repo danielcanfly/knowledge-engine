@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 #!/usr/bin/env python3
 """Build an unreachable, exact-boundary M25.9 Workers AI credential repair commit."""
 
