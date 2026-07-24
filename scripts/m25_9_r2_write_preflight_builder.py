@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from textwrap import dedent
 
-
 WORKFLOW = Path(".github/workflows/m25-9-blog-full-population-pilot.yml")
 DOCS = Path("docs/architecture/m25/m25-9-live-preflight-repair.md")
 SCRIPT = Path("scripts/m25_9_r2_write_preflight.py")
@@ -30,14 +29,11 @@ def _find_prefix(lines: list[str], value: str, *, start: int = 0) -> int:
     raise RuntimeError(f"line prefix not found after {start}: {value!r}")
 
 
-def _replace_once_in_range(
-    lines: list[str], *, start: int, stop: int, old: str, new: str
-) -> None:
+def _replace_once_in_range(lines: list[str], *, start: int, stop: int, old: str, new: str) -> None:
     indexes = [index for index in range(start, stop) if lines[index] == old]
     if len(indexes) != 1:
         raise RuntimeError(
-            f"expected one line in range {start}:{stop}: {old!r}; "
-            f"found {len(indexes)}"
+            f"expected one line in range {start}:{stop}: {old!r}; found {len(indexes)}"
         )
     lines[indexes[0]] = new
 
@@ -50,8 +46,7 @@ def _insert_after_once(
     indexes = [index for index in range(start, stop) if lines[index] == anchor]
     if len(indexes) != 1:
         raise RuntimeError(
-            f"expected one anchor in range {start}:{stop}: {anchor!r}; "
-            f"found {len(indexes)}"
+            f"expected one anchor in range {start}:{stop}: {anchor!r}; found {len(indexes)}"
         )
     lines[indexes[0] + 1 : indexes[0] + 1] = values
 
@@ -59,13 +54,12 @@ def _insert_after_once(
 def write_script() -> None:
     SCRIPT.write_text(
         dedent(
-            '''
+            r"""
             from __future__ import annotations
 
             import argparse
             import hashlib
             import json
-            import os
             from pathlib import Path
             from typing import Any
 
@@ -74,7 +68,6 @@ def write_script() -> None:
             from knowledge_engine.config import Settings
             from knowledge_engine.errors import ReleaseConflictError
             from knowledge_engine.storage import ObjectStore, create_object_store, sha256_bytes
-
 
             SCHEMA_VERSION = "knowledge-engine-m25-9-r2-write-preflight/v1"
 
@@ -259,7 +252,7 @@ def write_script() -> None:
 
             if __name__ == "__main__":
                 raise SystemExit(main())
-            '''
+            """
         ).lstrip()
     )
 
@@ -267,15 +260,15 @@ def write_script() -> None:
 def write_tests() -> None:
     TESTS.write_text(
         dedent(
-            '''
+            r"""
             from __future__ import annotations
 
             from typing import Any
 
             from botocore.exceptions import ClientError
+            from scripts.m25_9_r2_write_preflight import run_preflight
 
             from knowledge_engine.storage import FileObjectStore
-            from scripts.m25_9_r2_write_preflight import run_preflight
 
 
             def _identity() -> dict[str, Any]:
@@ -388,7 +381,7 @@ def write_tests() -> None:
                 )
                 assert evidence["bounded_mutation_count"] == 0
                 assert store.get(key) == b"existing"
-            '''
+            """
         ).lstrip()
     )
 
@@ -473,16 +466,14 @@ def patch_workflow() -> None:
         values=["            tests/test_m25_9_r2_write_preflight.py \\"],
     )
 
-    boundary_start = _find(
-        lines, "      - name: Enforce exact repair changed-file boundary"
-    )
+    boundary_start = _find(lines, "      - name: Enforce exact repair changed-file boundary")
     expected_start = _find_prefix(
         lines, "          expected=\"$(printf '%s\\n'", start=boundary_start
     )
     expected_stop = next(
         index
         for index in range(expected_start + 1, len(lines))
-        if lines[index].endswith("| sort)\"")
+        if lines[index].endswith('| sort)"')
     )
     lines[expected_start + 1 : expected_stop + 1] = [
         "            '.github/workflows/m25-9-blog-full-population-pilot.yml' \\",
@@ -500,8 +491,11 @@ def patch_workflow() -> None:
         new="    needs: [verify, cloudflare-preflight, r2-write-preflight]",
     )
 
-    job = dedent(
-        '''
+    job = [
+        f"  {line}" if line else line
+        for line in (
+        dedent(
+            r"""
 
           r2-write-preflight:
             if: github.event_name == 'push'
@@ -578,11 +572,20 @@ def patch_workflow() -> None:
                     mutations="$(jq -r '.bounded_mutation_count' \
                       "$EVIDENCE_DIR/r2-write-preflight.json")"
                   fi
+                  body="M25.9 bounded R2 write preflight blocked at exact SHA "
+                  body+="\`$GITHUB_SHA\` (run \`$GITHUB_RUN_ID\`, "
+                  body+="attempt \`$GITHUB_RUN_ATTEMPT\`): \`$reason\`. "
+                  body+="Bounded mutations: \`$mutations\`; "
+                  body+="residual object present: \`$residual\`."
                   gh issue comment 1092 \
                     --repo "$GITHUB_REPOSITORY" \
-                    --body "M25.9 bounded R2 write preflight blocked at exact SHA \`$GITHUB_SHA\` (run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`): \`$reason\`. Bounded mutations: \`$mutations\`; residual object present: \`$residual\`."
-        '''
-    ).rstrip().splitlines()
+                    --body "$body"
+        """
+        )
+        .rstrip()
+        .splitlines()
+        )
+    ]
     lines[deploy_start:deploy_start] = job
     WORKFLOW.write_text("\n".join(lines) + "\n")
 
@@ -593,7 +596,7 @@ def patch_docs() -> None:
     if heading in text:
         raise RuntimeError("R2 object-write capability gate already documented")
     section = dedent(
-        '''
+        """
 
         ## R2 object-write capability gate
 
@@ -615,7 +618,7 @@ def patch_docs() -> None:
         bucket named by `R2_BUCKET`. Read-only credentials are not sufficient. Rotate
         both `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` together; the secret access key
         cannot be viewed again after token creation.
-        '''
+        """
     )
     DOCS.write_text(text.rstrip() + "\n" + section + "\n")
 
