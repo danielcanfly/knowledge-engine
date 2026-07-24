@@ -41,40 +41,44 @@ jobs:
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
-      REPAIR_BRANCH: chatgpt/m25-9-pages-exact-project-repair-v1
+      TRIGGER_BRANCH: chatgpt/m25-9-live-pilot-trigger-v1
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.REPAIR_BRANCH }}
+          ref: ${{ env.TRIGGER_BRANCH }}
           fetch-depth: 200
           show-progress: false
-      - name: Verify exact repaired branch
+      - name: Verify exact full-pilot trigger branch
         run: |
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = '1'
           grep -q 'endpoint="pages_project"' \
             scripts/m25_9_cloudflare_live_preflight.py
-          grep -q 'if url.endswith(f"/pages/projects/{PROJECT}")' \
-            tests/test_m25_9_cloudflare_live_preflight.py
+          grep -q 'all_explicit_dedicated_capabilities_pass' \
+            scripts/m25_9_cloudflare_live_preflight.py
+          grep -q 'Fresh full-pilot authority marker' \
+            docs/architecture/m25/m25-9-live-preflight-repair.md
           test -f .github/workflows/m25-9-blog-full-population-pilot.yml
-          test -f docs/architecture/m25/m25-9-live-preflight-repair.md
-      - name: Commit mode-only repair boundary
+          test -f tests/test_m25_9_cloudflare_live_preflight.py
+      - name: Commit mode-only full-pilot boundary
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git update-index --chmod=+x \
             .github/workflows/m25-9-blog-full-population-pilot.yml \
-            docs/architecture/m25/m25-9-live-preflight-repair.md
+            scripts/m25_9_cloudflare_live_preflight.py \
+            tests/test_m25_9_cloudflare_live_preflight.py
           changed="$(git diff --cached --name-only | sort)"
           expected="$(printf '%s\n' \
             '.github/workflows/m25-9-blog-full-population-pilot.yml' \
-            'docs/architecture/m25/m25-9-live-preflight-repair.md' | sort)"
+            'scripts/m25_9_cloudflare_live_preflight.py' \
+            'tests/test_m25_9_cloudflare_live_preflight.py' | sort)"
           test "$changed" = "$expected"
           git diff --cached --summary
-          git commit -m 'Align M25.9 exact repair boundary modes'
-          git push origin "HEAD:refs/heads/$REPAIR_BRANCH"
-          echo "REPAIR_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git commit -m 'Align M25.9 fresh full-pilot trigger boundary'
+          git push origin "HEAD:refs/heads/$TRIGGER_BRANCH"
+          echo "TRIGGER_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Publish boundary result
         run: |
           set -euo pipefail
@@ -83,8 +87,8 @@ jobs:
             "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
             -f state='success' \
             -f context='m25-9-boundary-mode-publisher' \
-            -f description="run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT boundary ready" \
+            -f description="run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT trigger ready" \
             -f target_url="$run_url" >/dev/null
           gh issue comment 1092 \
             --repo "$GITHUB_REPOSITORY" \
-            --body "M25.9 exact repair branch boundary is ready at \`$REPAIR_HEAD\` (run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`). The workflow and repair document changed by file mode only; script and tests carry the semantic repair. No external service mutation occurred."
+            --body "M25.9 fresh full-pilot trigger boundary is ready at \`$TRIGGER_HEAD\` (run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`). The workflow, preflight script, and focused test changed by file mode only; the repair document carries the immutable authority marker. No external service mutation occurred."
