@@ -10,7 +10,7 @@ on:
       - '.github/workflows/m25-9-preflight-repair-builder.yml'
 
 permissions:
-  contents: read
+  contents: write
   issues: write
   statuses: write
 
@@ -47,6 +47,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       ARTIFACT_DIR: /tmp/m25-9-pages-exact-project-repair
+      REPAIR_BRANCH: chatgpt/m25-9-pages-exact-project-repair-v1
     steps:
       - uses: actions/checkout@v4
         with:
@@ -103,16 +104,29 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
-      - name: Publish repair artifact evidence
+      - name: Publish script and test repair branch
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$REPAIR_BRANCH"
+          git add \
+            scripts/m25_9_cloudflare_live_preflight.py \
+            tests/test_m25_9_cloudflare_live_preflight.py
+          git commit -m 'Repair M25.9 Pages exact-project preflight'
+          git push origin "HEAD:refs/heads/$REPAIR_BRANCH"
+          echo "REPAIR_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "REPAIR_TREE=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_ENV"
+      - name: Publish repair evidence
         run: |
           set -euo pipefail
           run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           gh api --method POST \
             "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
             -f state='success' \
-            -f context='m25-9-repair-artifact-builder' \
-            -f description="run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT artifact ready" \
+            -f context='m25-9-repair-branch-builder' \
+            -f description="run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT branch ready" \
             -f target_url="$run_url" >/dev/null
           gh issue comment 1092 \
             --repo "$GITHUB_REPOSITORY" \
-            --body "M25.9 exact-project repair artifact is ready at run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`, exact SHA \`$GITHUB_SHA\`. It contains exactly the validated three-file repair. No external service mutation occurred."
+            --body "M25.9 script/test repair branch \`$REPAIR_BRANCH\` is ready at commit \`$REPAIR_HEAD\`, tree \`$REPAIR_TREE\` (run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`). The exact-project implementation passed Ruff, focused tests and compileall. No external service mutation occurred."
