@@ -39,6 +39,33 @@ jobs:
             test "$changed" = "$expected"
           fi
 
+  format-builder-script:
+    if: github.event_name == 'pull_request'
+    needs: validate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 20
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply and verify Ruff safe fixes
+        run: |
+          set -euo pipefail
+          python -m pip install -q --disable-pip-version-check 'ruff>=0.9,<1'
+          python -m ruff check --fix scripts/m25_9_context_budget_repair_builder.py
+          python -m ruff check scripts/m25_9_context_budget_repair_builder.py
+      - name: Upload exact fixed builder script
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-context-budget-builder-ruff-fixed-${{ github.event.pull_request.head.sha }}
+          path: scripts/m25_9_context_budget_repair_builder.py
+          if-no-files-found: error
+          retention-days: 7
+
   build-repair-blobs:
     if: github.event_name == 'push'
     needs: validate
