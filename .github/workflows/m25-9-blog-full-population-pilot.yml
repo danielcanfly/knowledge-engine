@@ -6,7 +6,9 @@ on:
       - '.github/workflows/m25-9-blog-full-population-pilot.yml'
       - 'docs/architecture/m25/m25-9-live-preflight-repair.md'
       - 'scripts/m25_9_r2_write_preflight.py'
+      - 'src/knowledge_engine/m25_blog_live_candidate.py'
       - 'tests/test_m25_9_r2_write_preflight.py'
+      - 'tests/test_m25_10_blog_live_candidate.py'
   push:
     branches: [main]
     paths:
@@ -16,6 +18,8 @@ on:
       - 'tests/test_m25_9_r2_write_preflight.py'
       - 'scripts/m25_9_cloudflare_live_preflight.py'
       - 'tests/test_m25_9_cloudflare_live_preflight.py'
+      - 'src/knowledge_engine/m25_blog_live_candidate.py'
+      - 'tests/test_m25_10_blog_live_candidate.py'
 
 permissions:
   contents: read
@@ -140,9 +144,9 @@ jobs:
           changed="$(git diff --name-only origin/main...HEAD | sort)"
           expected="$(printf '%s\n' \
             '.github/workflows/m25-9-blog-full-population-pilot.yml' \
-            'docs/architecture/m25/m25-9-live-preflight-repair.md' \
-            'scripts/m25_9_r2_write_preflight.py' \
-            'tests/test_m25_9_r2_write_preflight.py' | sort)"
+            '.github/workflows/m25-10-blog-live-candidate.yml' \
+            'src/knowledge_engine/m25_blog_live_candidate.py' \
+            'tests/test_m25_10_blog_live_candidate.py' | sort)"
           test "$changed" = "$expected"
           ! printf '%s\n' "$changed" | grep -Eq \
             '^(production/|release/production|r2/production|credentials/|secrets/)'
