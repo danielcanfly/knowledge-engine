@@ -1,12 +1,20 @@
 # M25.10 Live Blog Candidate Deployment
 
-Status: `exact_head_review_before_one_time_live_execution`
+Status: `owner_authorized_one_time_live_execution_pending`
 
 ## Authority
 
 The exact 156-article Daniel blog Source Pack is admitted at `danielcanfly/knowledge-source@5250f8422f4fa08c1f3dc84840dc756850817635`. Daniel authorised candidate embedding, candidate Qdrant write and readback, R2 candidate publication, an Access-protected Worker route, and deployment of the authenticated M24 internal product against the candidate identity.
 
 Production release pointers, public production traffic, Access policy mutation, credential creation, and production Qdrant mutation remain denied.
+
+## 2026-07-24 owner authorization
+
+Daniel confirmed M25.9 owner smoke acceptance and authorized M25.10 live candidate execution after the M25.9 candidate query and Obsidian vault checks passed against release `m25blog-5250f8422f4f-f5f01d82c7a1-0c10506d52fd`.
+
+The M25.10 deploy remains bounded by the workflow guard requiring a `main` push whose head commit message contains `[m25.10-authorized]`. This authorization does not grant production pointer mutation or public production traffic mutation.
+
+M25.10 uses the write-scoped R2 credential pair (`R2_ACCESS_KEY_ID_WRITE` and `R2_SECRET_ACCESS_KEY_WRITE`) and dedicated Cloudflare Pages, Workers, Access-read, and AI tokens. Read-only R2 credentials remain reserved for read paths.
 
 ## Candidate release
 
