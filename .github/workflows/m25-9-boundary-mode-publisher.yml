@@ -1,0 +1,90 @@
+name: M25.9 Boundary Mode Publisher
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-boundary-mode-publisher.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m25-9-boundary-mode-publisher.yml'
+
+permissions:
+  contents: write
+  issues: write
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 20
+          show-progress: false
+      - name: Verify one-file publisher boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test -f .github/workflows/m25-9-boundary-mode-publisher.yml
+          if test "${{ github.event_name }}" = 'pull_request'; then
+            git fetch --quiet --no-tags origin main
+            test "$(git diff --name-only origin/main...HEAD)" = \
+              '.github/workflows/m25-9-boundary-mode-publisher.yml'
+          fi
+
+  publish-mode-boundary:
+    if: github.event_name == 'push'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPAIR_BRANCH: chatgpt/m25-9-pages-exact-project-repair-v1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.REPAIR_BRANCH }}
+          fetch-depth: 200
+          show-progress: false
+      - name: Verify exact repaired branch
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          grep -q 'endpoint="pages_project"' \
+            scripts/m25_9_cloudflare_live_preflight.py
+          grep -q 'if url.endswith(f"/pages/projects/{PROJECT}")' \
+            tests/test_m25_9_cloudflare_live_preflight.py
+          test -f .github/workflows/m25-9-blog-full-population-pilot.yml
+          test -f docs/architecture/m25/m25-9-live-preflight-repair.md
+      - name: Commit mode-only repair boundary
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git update-index --chmod=+x \
+            .github/workflows/m25-9-blog-full-population-pilot.yml \
+            docs/architecture/m25/m25-9-live-preflight-repair.md
+          changed="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/m25-9-blog-full-population-pilot.yml' \
+            'docs/architecture/m25/m25-9-live-preflight-repair.md' | sort)"
+          test "$changed" = "$expected"
+          git diff --cached --summary
+          git commit -m 'Align M25.9 exact repair boundary modes'
+          git push origin "HEAD:refs/heads/$REPAIR_BRANCH"
+          echo "REPAIR_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Publish boundary result
+        run: |
+          set -euo pipefail
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state='success' \
+            -f context='m25-9-boundary-mode-publisher' \
+            -f description="run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT boundary ready" \
+            -f target_url="$run_url" >/dev/null
+          gh issue comment 1092 \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "M25.9 exact repair branch boundary is ready at \`$REPAIR_HEAD\` (run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`). The workflow and repair document changed by file mode only; script and tests carry the semantic repair. No external service mutation occurred."
