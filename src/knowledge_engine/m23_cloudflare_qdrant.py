@@ -306,7 +306,7 @@ def _batches_by_character_budget(
 
 
 def _is_context_limit_response(response: httpx.Response) -> bool:
-    if response.status_code != 400:
+    if getattr(response, "status_code", 200) != 400:
         return False
     try:
         payload = response.json()
@@ -347,21 +347,20 @@ def _embed_batch(
             [section.text for section in batch]
         ),
     )
-    if response.is_error:
-        if _is_context_limit_response(response) and len(batch) > 1:
-            midpoint = len(batch) // 2
-            return _embed_batch(
-                http,
-                url=url,
-                token=token,
-                batch=batch[:midpoint],
-            ) + _embed_batch(
-                http,
-                url=url,
-                token=token,
-                batch=batch[midpoint:],
-            )
-        response.raise_for_status()
+    if _is_context_limit_response(response) and len(batch) > 1:
+        midpoint = len(batch) // 2
+        return _embed_batch(
+            http,
+            url=url,
+            token=token,
+            batch=batch[:midpoint],
+        ) + _embed_batch(
+            http,
+            url=url,
+            token=token,
+            batch=batch[midpoint:],
+        )
+    response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, Mapping):
         raise IntegrityError(
