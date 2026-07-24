@@ -117,3 +117,5 @@ jobs:
       - name: Enforce successful preflight
         if: always()
         run: test "${PREFLIGHT_RC:-1}" = '0'
+
+# Retest marker v2: Pages token value refreshed in m23-r3-diagnostic.
