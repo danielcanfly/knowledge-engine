@@ -146,6 +146,14 @@ def test_qdrant_collection_name_is_engine_scoped() -> None:
         subject._qdrant_collection_name("release", "not-a-sha")
 
 
+def test_candidate_release_id_is_engine_scoped_for_immutable_r2_namespace() -> None:
+    assert subject._candidate_release_id(
+        "d9787ebb1400b1e908292642ae33138938ccac97"
+    ) == "m25blog-5250f8422f4f-f5f01d82c7a1-d9787ebb1400"
+    with pytest.raises(IntegrityError, match="engine SHA"):
+        subject._candidate_release_id("not-a-sha")
+
+
 def test_m25_obsidian_vault_zip_manifest_is_downloadable_candidate(
     tmp_path: Path,
 ) -> None:
