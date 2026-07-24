@@ -58,14 +58,17 @@ jobs:
           python -m pip install -q --disable-pip-version-check 'ruff>=0.9,<1'
           python -m ruff check --fix scripts/m25_9_context_budget_repair_builder.py
           python -m ruff check scripts/m25_9_context_budget_repair_builder.py
-      - name: Commit exact Ruff fix to PR branch
+      - name: Commit exact Ruff fix to PR branch when needed
         env:
           HEAD_REF: ${{ github.head_ref }}
         run: |
           set -euo pipefail
           test -n "$HEAD_REF"
-          test "$(git diff --name-only)" = \
-            'scripts/m25_9_context_budget_repair_builder.py'
+          changed="$(git diff --name-only)"
+          if test -z "$changed"; then
+            exit 0
+          fi
+          test "$changed" = 'scripts/m25_9_context_budget_repair_builder.py'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add scripts/m25_9_context_budget_repair_builder.py
@@ -182,3 +185,5 @@ jobs:
             -f context='m25-9-context-budget-repair-blobs' \
             -f description="run $GITHUB_RUN_ID a$GITHUB_RUN_ATTEMPT four validated blobs" \
             -f target_url="$run_url" >/dev/null
+
+# Ruff-fixed builder script applied v1
