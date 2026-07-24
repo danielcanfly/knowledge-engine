@@ -552,6 +552,13 @@ def _qdrant_query_body(
     }
 
 
+def _qdrant_collection_name(release_id: str, engine_sha: str) -> str:
+    suffix = engine_sha.strip().lower()[:12]
+    if len(suffix) != 12 or any(char not in "0123456789abcdef" for char in suffix):
+        raise IntegrityError("M25-LIVE-034 engine SHA suffix is invalid")
+    return f"m25_blog_{release_id.replace('-', '_').lower()}_{suffix}"
+
+
 def _create_qdrant_payload_indexes(
     client: httpx.Client,
     qdrant: QdrantConfig,
@@ -621,12 +628,13 @@ def index_candidate(
     semantic_rows: Sequence[Mapping[str, Any]],
     release_id: str,
     channel: str,
+    engine_sha: str,
 ) -> dict[str, Any]:
     cloudflare = CloudflareConfig(
         account_id=os.environ["CLOUDFLARE_ACCOUNT_ID"],
         api_token=os.environ["CLOUDFLARE_API_TOKEN"],
     )
-    collection = f"m25_blog_{release_id.replace('-', '_').lower()}"
+    collection = _qdrant_collection_name(release_id, engine_sha)
     qdrant = QdrantConfig(
         base_url=os.environ["QDRANT_URL"],
         api_key=os.environ["QDRANT_API_KEY"],
@@ -1179,6 +1187,7 @@ def prepare(
                 context["semantic_inputs"],
                 compiled.release_id,
                 channel,
+                engine_sha,
             )
             publication = publish_release(
                 store=store,
