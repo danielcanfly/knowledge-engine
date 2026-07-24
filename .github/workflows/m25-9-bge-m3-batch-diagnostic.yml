@@ -23,11 +23,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 20
           show-progress: false
-      - name: Verify one-file diagnostic boundary
+      - name: Verify one-file inference-only boundary
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
           test -f .github/workflows/m25-9-bge-m3-batch-diagnostic.yml
+          grep -q "BATCH_SIZE = 25" .github/workflows/m25-9-bge-m3-batch-diagnostic.yml
+          grep -q "external_storage_mutations': 0" \
+            .github/workflows/m25-9-bge-m3-batch-diagnostic.yml
           if test "${{ github.event_name }}" = 'pull_request'; then
             git fetch --quiet --no-tags origin main
             test "$(git diff --name-only origin/main...HEAD)" = \
@@ -38,7 +41,7 @@ jobs:
     if: github.event_name == 'push'
     needs: validate
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     environment: m23-r3-diagnostic
     env:
       GH_TOKEN: ${{ github.token }}
@@ -65,7 +68,7 @@ jobs:
           mkdir -p "$DIAGNOSTIC_DIR"
       - name: Install runtime dependencies
         run: python -m pip install -q --disable-pip-version-check -e '.[dev]'
-      - name: Probe BGE-M3 with bounded real-input batches
+      - name: Scan full BGE-M3 population in inference-only batches
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -82,6 +85,7 @@ jobs:
 
           from knowledge_engine import m25_blog_live_candidate as candidate
 
+          BATCH_SIZE = 25
           output_dir = Path(os.environ['DIAGNOSTIC_DIR'])
           pack_root = output_dir / 'source-pack'
           work_root = output_dir / 'candidate-preview'
@@ -102,7 +106,8 @@ jobs:
           headers = {
               'Authorization': f"Bearer {os.environ['CLOUDFLARE_AI_TOKEN']}",
               'Accept': 'application/json',
-              'User-Agent': 'knowledge-engine-m25.9-bge-m3-batch-diagnostic/1',
+              'Content-Type': 'application/json',
+              'User-Agent': 'knowledge-engine-m25.9-bge-m3-population-scan/1',
           }
 
           def sanitized_message(value):
@@ -112,29 +117,31 @@ jobs:
               value = re.sub(r'\b[0-9a-fA-F]{32,64}\b', '<redacted-hex>', value)
               return value[:500]
 
-          def probe(label, selected):
-              body = {'text': selected}
-              encoded = json.dumps(body, ensure_ascii=False, separators=(',', ':')).encode()
+          def probe(client, label, indexes):
+              selected = [texts[index] for index in indexes]
+              encoded = json.dumps(
+                  {'text': selected},
+                  ensure_ascii=False,
+                  separators=(',', ':'),
+              ).encode()
               try:
                   response = client.post(url, headers=headers, content=encoded)
                   status = response.status_code
-                  raw = response.content[:524288]
+                  raw = response.content
                   network_error = None
               except Exception as exc:
                   return {
                       'label': label,
+                      'start_index': indexes[0],
+                      'stop_index_exclusive': indexes[-1] + 1,
                       'text_count': len(selected),
                       'request_bytes': len(encoded),
                       'total_characters': sum(len(text) for text in selected),
-                      'maximum_characters': max((len(text) for text in selected), default=0),
-                      'maximum_utf8_bytes': max(
-                          (len(text.encode('utf-8')) for text in selected), default=0
-                      ),
+                      'maximum_characters': max(map(len, selected)),
                       'http_status': None,
                       'cloudflare_success': False,
                       'network_error_category': type(exc).__name__,
-                      'response_bytes': 0,
-                      'response_sha256': hashlib.sha256(b'').hexdigest(),
+                      'network_error_message': sanitized_message(str(exc)),
                       'raw_response_recorded': False,
                   }
               try:
@@ -147,15 +154,22 @@ jobs:
               result = payload.get('result') if isinstance(payload, dict) else None
               data = result.get('data') if isinstance(result, dict) else None
               shape = result.get('shape') if isinstance(result, dict) else None
+              passed = (
+                  status == 200
+                  and success is True
+                  and isinstance(data, list)
+                  and len(data) == len(selected)
+                  and shape == [len(selected), 1024]
+              )
               return {
                   'label': label,
+                  'start_index': indexes[0],
+                  'stop_index_exclusive': indexes[-1] + 1,
                   'text_count': len(selected),
                   'request_bytes': len(encoded),
                   'total_characters': sum(len(text) for text in selected),
-                  'maximum_characters': max((len(text) for text in selected), default=0),
-                  'maximum_utf8_bytes': max(
-                      (len(text.encode('utf-8')) for text in selected), default=0
-                  ),
+                  'maximum_characters': max(map(len, selected)),
+                  'maximum_utf8_bytes': max(len(text.encode('utf-8')) for text in selected),
                   'http_status': status,
                   'cloudflare_success': success,
                   'cloudflare_error_code': (
@@ -164,96 +178,148 @@ jobs:
                   'cloudflare_error_message': sanitized_message(
                       first_error.get('message') if isinstance(first_error, dict) else None
                   ),
-                  'result_shape': type(result).__name__ if result is not None else None,
                   'embedding_rows': len(data) if isinstance(data, list) else None,
                   'reported_shape': shape if isinstance(shape, list) else None,
                   'network_error_category': network_error,
                   'response_bytes': len(raw),
                   'response_sha256': hashlib.sha256(raw).hexdigest(),
+                  'passed': passed,
                   'raw_response_recorded': False,
               }
 
-          probes = []
-          with httpx.Client(timeout=180.0) as client:
-              probes.append(probe('synthetic_1', ['diagnostic sentence']))
-              for size in (1, 3, 10, 25, 50, 75, 100):
-                  probes.append(probe(f'real_first_{size}', texts[:size]))
+          lengths = [len(text) for text in texts]
+          ordered = sorted(range(len(texts)), key=lambda index: lengths[index])
+          representative_indexes = {
+              'shortest': ordered[0],
+              'median': ordered[len(ordered) // 2],
+              'longest': ordered[-1],
+          }
+          batch_records = []
+          failing_batch = None
+          individual_records = []
 
-          passing_real_sizes = [
-              item['text_count']
-              for item in probes
-              if item['label'].startswith('real_first_')
-              and item.get('http_status') == 200
-              and item.get('cloudflare_success') is True
+          with httpx.Client(timeout=180.0) as client:
+              representative_records = [
+                  probe(client, f'single_{label}', [index])
+                  for label, index in representative_indexes.items()
+              ]
+              for start in range(0, len(texts), BATCH_SIZE):
+                  stop = min(start + BATCH_SIZE, len(texts))
+                  indexes = list(range(start, stop))
+                  record = probe(client, f'batch_{start}_{stop - 1}', indexes)
+                  batch_records.append(record)
+                  print(json.dumps({
+                      'label': record['label'],
+                      'http_status': record.get('http_status'),
+                      'passed': record.get('passed'),
+                      'error_code': record.get('cloudflare_error_code'),
+                  }, sort_keys=True), flush=True)
+                  if record.get('passed') is not True:
+                      failing_batch = record
+                      for index in indexes:
+                          individual_records.append(
+                              probe(client, f'individual_{index}', [index])
+                          )
+                      break
+
+          failed_representatives = [
+              record for record in representative_records
+              if record.get('passed') is not True
           ]
-          failing_real = [
-              item
-              for item in probes
-              if item['label'].startswith('real_first_')
-              and not (
-                  item.get('http_status') == 200
-                  and item.get('cloudflare_success') is True
-              )
+          failed_individuals = [
+              record for record in individual_records
+              if record.get('passed') is not True
           ]
+          scanned_documents = sum(record['text_count'] for record in batch_records)
+
+          if failed_representatives:
+              classification = 'representative_single_input_failure'
+          elif failing_batch is None and scanned_documents == len(texts):
+              classification = 'all_4197_inputs_pass_at_batch_25'
+          elif failed_individuals:
+              classification = 'specific_input_failure'
+          elif failing_batch is not None:
+              classification = 'aggregate_batch_failure_at_25'
+          else:
+              classification = 'population_scan_incomplete'
+
           evidence = {
-              'schema_version': 'knowledge-engine-m25-9-bge-m3-batch-diagnostic/v1',
+              'schema_version': 'knowledge-engine-m25-9-bge-m3-population-scan/v1',
               'engine_sha': os.environ['GITHUB_SHA'],
+              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+              'workflow_run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
               'source_sha': candidate.SOURCE_SHA,
               'model': model,
+              'batch_size': BATCH_SIZE,
               'semantic_document_count': len(texts),
-              'inference_requests': len(probes),
+              'scanned_document_count': scanned_documents,
+              'batch_request_count': len(batch_records),
+              'individual_request_count': len(individual_records),
+              'representative_indexes': representative_indexes,
+              'text_character_distribution': {
+                  'minimum': min(lengths),
+                  'median': sorted(lengths)[len(lengths) // 2],
+                  'maximum': max(lengths),
+                  'total': sum(lengths),
+              },
+              'classification': classification,
+              'representative_records': representative_records,
+              'failing_batch': failing_batch,
+              'failed_individuals': failed_individuals,
+              'batch_records': batch_records,
+              'inference_requests_only': True,
               'external_storage_mutations': 0,
               'qdrant_requests': 0,
               'r2_requests': 0,
+              'worker_mutations': 0,
+              'pages_mutations': 0,
+              'production_pointer_mutations': 0,
+              'public_traffic_mutations': 0,
               'secret_values_recorded': False,
               'authorization_headers_recorded': False,
               'raw_response_bodies_recorded': False,
-              'largest_passing_real_batch': max(passing_real_sizes, default=0),
-              'first_failing_real_batch': (
-                  failing_real[0]['text_count'] if failing_real else None
-              ),
-              'probes': probes,
           }
           evidence['evidence_sha256'] = hashlib.sha256(
               json.dumps(evidence, sort_keys=True, separators=(',', ':')).encode()
           ).hexdigest()
-          path = output_dir / 'bge-m3-batch-diagnostic.json'
+          path = output_dir / 'bge-m3-population-scan.json'
           path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
           print(json.dumps({
-              'largest_passing_real_batch': evidence['largest_passing_real_batch'],
-              'first_failing_real_batch': evidence['first_failing_real_batch'],
-              'statuses': [
-                  {
-                      'label': item['label'],
-                      'http_status': item.get('http_status'),
-                      'error_code': item.get('cloudflare_error_code'),
-                      'error_message': item.get('cloudflare_error_message'),
-                  }
-                  for item in probes
+              'classification': classification,
+              'scanned_document_count': scanned_documents,
+              'batch_request_count': len(batch_records),
+              'failed_individual_indexes': [
+                  record['start_index'] for record in failed_individuals
               ],
               'external_storage_mutations': 0,
           }, sort_keys=True))
           PY
       - name: Upload sanitized diagnostic evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m25-9-bge-m3-batch-diagnostic-${{ github.sha }}
-          path: /tmp/m25-9-bge-m3-batch-diagnostic/bge-m3-batch-diagnostic.json
+          name: m25-9-bge-m3-population-scan-${{ github.sha }}
+          path: /tmp/m25-9-bge-m3-batch-diagnostic/bge-m3-population-scan.json
           if-no-files-found: error
           retention-days: 30
       - name: Publish diagnostic result
+        if: always()
         run: |
           set -euo pipefail
-          evidence="$DIAGNOSTIC_DIR/bge-m3-batch-diagnostic.json"
-          largest="$(jq -r '.largest_passing_real_batch' "$evidence")"
-          first_failure="$(jq -r '.first_failing_real_batch // "none"' "$evidence")"
+          evidence="$DIAGNOSTIC_DIR/bge-m3-population-scan.json"
+          classification='evidence_unavailable'
+          scanned='0'
+          if test -s "$evidence"; then
+            classification="$(jq -r '.classification' "$evidence")"
+            scanned="$(jq -r '.scanned_document_count' "$evidence")"
+          fi
           run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           gh api --method POST \
             "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
             -f state='success' \
-            -f context='m25-9-bge-m3-batch-diagnostic' \
-            -f description="run $GITHUB_RUN_ID pass=$largest fail=$first_failure" \
+            -f context='m25-9-bge-m3-population-scan' \
+            -f description="run $GITHUB_RUN_ID a$GITHUB_RUN_ATTEMPT $classification" \
             -f target_url="$run_url" >/dev/null
           gh issue comment 1092 \
             --repo "$GITHUB_REPOSITORY" \
-            --body "M25.9 BGE-M3 bounded batch diagnostic completed at exact SHA \`$GITHUB_SHA\`, run \`$GITHUB_RUN_ID\`: largest passing real batch \`$largest\`, first failing real batch \`$first_failure\`. Qdrant requests: \`0\`; R2 requests: \`0\`; external storage mutations: \`0\`."
+            --body "M25.9 BGE-M3 full-population inference-only scan completed at exact SHA \`$GITHUB_SHA\`, run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`: \`$classification\`; scanned \`$scanned/4197\`. Qdrant, R2, deployment, production-pointer and public-traffic mutations: \`0\`."
