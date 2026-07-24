@@ -15,8 +15,8 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
-      TARGET_RUN_ID: '30070203276'
-      TARGET_JOB_ID: '89409293164'
+      TARGET_RUN_ID: '30070357450'
+      TARGET_JOB_ID: '89409731578'
       OUTPUT_DIR: /tmp/m25-9-r2-builder-log
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
           test "$(git diff --name-only origin/main...HEAD)" = \
             '.github/workflows/m25-9-r2-builder-log-extractor.yml'
           mkdir -p "$OUTPUT_DIR"
-      - name: Extract sanitized traceback
+      - name: Extract sanitized validation failure
         run: |
           set -euo pipefail
           gh api "repos/$GITHUB_REPOSITORY/actions/jobs/$TARGET_JOB_ID/logs" \
@@ -44,14 +44,14 @@ jobs:
 
           root = Path(os.environ['OUTPUT_DIR'])
           lines = root.joinpath('full.log').read_text(errors='replace').splitlines()
-          selected = set(range(max(0, len(lines) - 110), len(lines)))
+          selected = set(range(max(0, len(lines) - 160), len(lines)))
           for index, line in enumerate(lines):
               if any(value in line for value in (
-                  'generated changed files', 'expected files', 'Traceback',
-                  'RuntimeError', 'SyntaxError', 'ValueError', 'line not found',
-                  'expected one', '##[error]', 'Process completed with exit code',
+                  'Traceback', 'RuntimeError', 'SyntaxError', 'ValueError',
+                  'AssertionError', 'FAILED', 'ERROR', 'F401', 'E501', 'I001',
+                  '##[error]', 'Process completed with exit code',
               )):
-                  selected.update(range(max(0, index - 12), min(len(lines), index + 40)))
+                  selected.update(range(max(0, index - 20), min(len(lines), index + 55)))
           def clean(value):
               value = re.sub(r'https?://\S+', '<redacted-url>', value)
               value = re.sub(r'\b[0-9a-fA-F]{40,64}\b', '<redacted-sha>', value)
