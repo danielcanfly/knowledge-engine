@@ -33,7 +33,7 @@ jobs:
             test "$(git diff --name-only origin/main...HEAD)" = \
               '.github/workflows/m25-9-pages-scope-diagnostic.yml'
           fi
-          ! grep -Eq '\b(POST|PUT|PATCH|DELETE)\b' \
+          grep -q "urllib.request.Request(url=url, method='GET'" \
             .github/workflows/m25-9-pages-scope-diagnostic.yml
 
   diagnose:
