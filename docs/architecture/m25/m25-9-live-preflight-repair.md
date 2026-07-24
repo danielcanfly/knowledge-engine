@@ -16,15 +16,16 @@ The previous workflow hid this evidence because it selected `dedicated || generi
 
 ## Repaired credential topology
 
-The M25.9 pilot uses three explicit credentials and never falls back silently:
+The M25.9 pilot uses four explicit credential roles and never falls back silently:
 
 | GitHub environment secret | Purpose | Minimum Cloudflare authority |
 |---|---|---|
+| `CLOUDFLARE_API_TOKEN`, exposed only as `CLOUDFLARE_AI_TOKEN` | Run BGE-M3 embedding through the Workers AI REST API | Account `Workers AI Read` and `Workers AI Edit`, scoped to the exact account |
 | `CLOUDFLARE_PAGES_TOKEN` | Read, deploy and roll back the existing Pages project | Account `Pages Write`, scoped to the exact account |
 | `CLOUDFLARE_WORKERS_TOKEN` | Read/deploy/delete the candidate Worker and manage its route | Account `Workers Scripts Write`; zone `Workers Routes Write` and `Zone Read`, scoped to `danielcanfly.com` |
 | `CLOUDFLARE_ACCESS_READ_TOKEN` | Read the exact Access application and Zero Trust organization | Account `Access: Apps and Policies Read` plus `Access: Organizations, Identity Providers, and Groups Read`, scoped to the exact account |
 
-The existing `CLOUDFLARE_ACCOUNT_ID` remains the account identity. Secret values must be entered only in GitHub Settings and must never be pasted into issues, pull requests, logs or chat.
+The existing `CLOUDFLARE_ACCOUNT_ID` remains the account identity. The Workers AI source secret is exposed to the candidate build only through the role-specific `CLOUDFLARE_AI_TOKEN` alias and is never used as a Pages, Workers management or Access fallback. Secret values must be entered only in GitHub Settings and must never be pasted into issues, pull requests, logs or chat.
 
 ## Repair behaviour
 
@@ -34,13 +35,14 @@ Before any embedding, Qdrant, R2, Worker or Pages mutation, the dedicated prefli
 
 1. requires run attempt `1` and the exact merged SHA;
 2. verifies every dedicated token independently;
-3. lists the exact Pages project and captures the previous production deployment;
-4. lists Workers scripts, resolves the exact active zone and verifies Workers route access;
-5. finds the exact Access application for `m24-internal.danielcanfly.com`;
-6. verifies the Access organization and auth-domain binding;
-7. records HTTP status, Cloudflare success, bounded error code/category and retry attempts;
-8. uploads only sanitized evidence;
-9. exits before external mutation if any capability is missing.
+3. validates the BGE-M3 Workers AI model schema with the role-specific AI credential;
+4. lists the exact Pages project and captures the previous production deployment;
+5. lists Workers scripts, resolves the exact active zone and verifies Workers route access;
+6. finds the exact Access application for `m24-internal.danielcanfly.com`;
+7. verifies the Access organization and auth-domain binding;
+8. records HTTP status, Cloudflare success, bounded error code/category and retry attempts;
+9. uploads only sanitized evidence;
+10. exits before external mutation if any capability is missing.
 
 Network errors, HTTP `429` and HTTP `5xx` receive bounded retries. HTTP `401`, `403` and `404` are terminal evidence, not retry candidates.
 
@@ -65,4 +67,4 @@ A successful automated run ends at `deployed_awaiting_authenticated_owner_accept
 
 ## Trigger boundary
 
-The repair pull request must remain unmerged until all three dedicated GitHub environment secrets exist. Merging its exact reviewed head is the one push-generated attempt-1 trigger for the full-population pilot. The failed historical run `30032170246` must never be rerun.
+The repair pull request must remain unmerged until all four credential roles exist in the GitHub environment. Merging its exact reviewed head is the one push-generated attempt-1 trigger for the full-population pilot. The failed historical run `30032170246` must never be rerun.
