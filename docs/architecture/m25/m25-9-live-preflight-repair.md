@@ -68,6 +68,7 @@ A successful automated run ends at `deployed_awaiting_authenticated_owner_accept
 ## Trigger boundary
 
 The repair pull request must remain unmerged until all four credential roles exist in the GitHub environment. Merging its exact reviewed head is the one push-generated attempt-1 trigger for the full-population pilot. The failed historical run `30032170246` must never be rerun.
+
 ## BGE-M3 context-budget repair authority
 
 Full-population inference-only scan run `30065403198` at exact SHA
@@ -84,3 +85,8 @@ characters. If Cloudflare still reports the explicit context-limit condition,
 only that batch is split into ordered halves recursively. All unrelated HTTP
 errors remain terminal, and a single-input context failure remains terminal.
 
+Compatibility publisher run `30068729673` verified the repair against the
+repository's established response adapters. The implementation now uses
+`raise_for_status()` as the terminal HTTP contract and a defensive
+`status_code` fallback only for identifying context-limit responses, while
+preserving recursive code `3030` splitting and input order.
