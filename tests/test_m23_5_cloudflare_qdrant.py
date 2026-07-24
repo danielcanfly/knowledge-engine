@@ -284,3 +284,119 @@ def test_cli_defaults_to_dry_run(tmp_path: Path):
     assert receipt["executed"] is False
     assert receipt["qdrant_write"] is False
     assert not (output_path / "qdrant-points.json").exists()
+def _sections_with_texts(texts: list[str]):
+    return validate_sections(
+        [
+            {
+                "section_id": f"budget-doc-{index}#0001",
+                "text": text,
+                "payload": {"document_id": f"budget-doc-{index}"},
+            }
+            for index, text in enumerate(texts)
+        ]
+    )
+
+
+def test_cloudflare_batches_preserve_full_text_under_character_budget():
+    texts = ["A" * 9000, "B" * 9000, "C" * 100]
+    observed_batches = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        selected = json.loads(request.content)["text"]
+        observed_batches.append(selected)
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "result": {"data": _vectors(len(selected))},
+            },
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        vectors = embed_sections(
+            _sections_with_texts(texts),
+            CloudflareConfig(account_id="account", api_token="secret"),
+            client=client,
+        )
+
+    assert len(vectors) == 3
+    assert [len(batch) for batch in observed_batches] == [1, 2]
+    assert [text for batch in observed_batches for text in batch] == texts
+
+
+def test_cloudflare_context_limit_recursively_splits_and_preserves_order():
+    texts = ["one", "two", "three", "four"]
+    observed_batches = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        selected = json.loads(request.content)["text"]
+        observed_batches.append(selected)
+        if len(selected) > 1:
+            return httpx.Response(
+                400,
+                json={
+                    "success": False,
+                    "errors": [
+                        {
+                            "code": 3030,
+                            "message": (
+                                "AiError: Max context reached 80825 tokens "
+                                "but model supports only 60000"
+                            ),
+                        }
+                    ],
+                },
+            )
+        return httpx.Response(
+            200,
+            json={"success": True, "result": {"data": _vectors(1)}},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        vectors = embed_sections(
+            _sections_with_texts(texts),
+            CloudflareConfig(account_id="account", api_token="secret"),
+            client=client,
+        )
+
+    assert len(vectors) == 4
+    assert [len(batch) for batch in observed_batches] == [
+        4,
+        2,
+        1,
+        1,
+        2,
+        1,
+        1,
+    ]
+    assert [
+        batch[0] for batch in observed_batches if len(batch) == 1
+    ] == texts
+
+
+def test_cloudflare_non_context_http_error_remains_fail_closed():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(json.loads(request.content)["text"])
+        return httpx.Response(
+            400,
+            json={
+                "success": False,
+                "errors": [
+                    {"code": 10000, "message": "permission denied"}
+                ],
+            },
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(httpx.HTTPStatusError):
+            embed_sections(
+                _sections(),
+                CloudflareConfig(
+                    account_id="account", api_token="secret"
+                ),
+                client=client,
+            )
+    assert len(calls) == 1
+

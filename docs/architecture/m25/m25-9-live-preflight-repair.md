@@ -68,3 +68,19 @@ A successful automated run ends at `deployed_awaiting_authenticated_owner_accept
 ## Trigger boundary
 
 The repair pull request must remain unmerged until all four credential roles exist in the GitHub environment. Merging its exact reviewed head is the one push-generated attempt-1 trigger for the full-population pilot. The failed historical run `30032170246` must never be rerun.
+## BGE-M3 context-budget repair authority
+
+Full-population inference-only scan run `30065403198` at exact SHA
+`eeaecfdfd95d6113b9d75013ccea47a3a829113b` scanned 3,975 semantic
+documents before isolating batch indexes `3950..3974`. Cloudflare returned
+HTTP `400`, code `3030`: the 25 complete inputs required 80,825 tokens while
+the managed BGE-M3 context supports 60,000. Every input in that batch passed
+individually. The scan performed zero Qdrant, R2, deployment, production
+pointer or public-traffic mutations.
+
+The repair preserves every admitted input without truncation. Deterministic
+initial batches are bounded by both 100 inputs and 16,000 normalized text
+characters. If Cloudflare still reports the explicit context-limit condition,
+only that batch is split into ordered halves recursively. All unrelated HTTP
+errors remain terminal, and a single-input context failure remains terminal.
+

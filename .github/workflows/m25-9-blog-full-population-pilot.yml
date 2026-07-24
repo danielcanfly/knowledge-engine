@@ -5,8 +5,8 @@ on:
     paths:
       - '.github/workflows/m25-9-blog-full-population-pilot.yml'
       - 'docs/architecture/m25/m25-9-live-preflight-repair.md'
-      - 'scripts/m25_9_cloudflare_live_preflight.py'
-      - 'tests/test_m25_9_cloudflare_live_preflight.py'
+      - 'src/knowledge_engine/m23_cloudflare_qdrant.py'
+      - 'tests/test_m23_5_cloudflare_qdrant.py'
   push:
     branches: [main]
     paths:
@@ -68,18 +68,23 @@ jobs:
         run: |
           python -m ruff check --output-format=concise \
             scripts/m25_9_cloudflare_live_preflight.py \
+            src/knowledge_engine/m23_cloudflare_qdrant.py \
             src/knowledge_engine/m25_blog_live_candidate.py \
+            tests/test_m23_5_cloudflare_qdrant.py \
             tests/test_m25_9_cloudflare_live_preflight.py \
             tests/test_m25_10_blog_live_candidate.py
           python -m pytest -q \
             tests/test_m25_9_cloudflare_live_preflight.py \
+            tests/test_m23_5_cloudflare_qdrant.py \
             tests/test_m25_10_blog_live_candidate.py \
             tests/test_m25_10_blog_candidate_release.py \
             tests/test_m25_blog_series_convergence.py \
             tests/test_m25_blog_pilot_batch_b.py
           python -m compileall -q \
             scripts/m25_9_cloudflare_live_preflight.py \
+            src/knowledge_engine/m23_cloudflare_qdrant.py \
             src/knowledge_engine/m25_blog_live_candidate.py \
+            tests/test_m23_5_cloudflare_qdrant.py \
             tests/test_m25_9_cloudflare_live_preflight.py \
             tests/test_m25_10_blog_live_candidate.py
       - name: Type-check candidate Worker
@@ -129,8 +134,8 @@ jobs:
           expected="$(printf '%s\n' \
             '.github/workflows/m25-9-blog-full-population-pilot.yml' \
             'docs/architecture/m25/m25-9-live-preflight-repair.md' \
-            'scripts/m25_9_cloudflare_live_preflight.py' \
-            'tests/test_m25_9_cloudflare_live_preflight.py' | sort)"
+            'src/knowledge_engine/m23_cloudflare_qdrant.py' \
+            'tests/test_m23_5_cloudflare_qdrant.py' | sort)"
           test "$changed" = "$expected"
           ! printf '%s\n' "$changed" | grep -Eq \
             '^(production/|release/production|r2/production|credentials/|secrets/)'
