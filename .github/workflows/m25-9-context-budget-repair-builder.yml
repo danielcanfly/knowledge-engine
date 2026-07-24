@@ -4,12 +4,12 @@ on:
   pull_request:
     paths:
       - '.github/workflows/m25-9-context-budget-repair-builder.yml'
-      - 'scripts/m25_9_context_budget_repair_builder.py'
+      - 'scripts/m25_9_context_budget_repair_driver.py'
   push:
     branches: [main]
     paths:
       - '.github/workflows/m25-9-context-budget-repair-builder.yml'
-      - 'scripts/m25_9_context_budget_repair_builder.py'
+      - 'scripts/m25_9_context_budget_repair_driver.py'
 
 permissions:
   contents: write
@@ -24,63 +24,20 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 20
           show-progress: false
-      - name: Verify two-file non-deploying builder boundary
+      - name: Verify two-file non-deploying driver boundary
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
           test -f .github/workflows/m25-9-context-budget-repair-builder.yml
-          test -f scripts/m25_9_context_budget_repair_builder.py
+          test -f scripts/m25_9_context_budget_repair_driver.py
           if test "${{ github.event_name }}" = 'pull_request'; then
             git fetch --quiet --no-tags origin main
             changed="$(git diff --name-only origin/main...HEAD | sort)"
             expected="$(printf '%s\n' \
               '.github/workflows/m25-9-context-budget-repair-builder.yml' \
-              'scripts/m25_9_context_budget_repair_builder.py' | sort)"
+              'scripts/m25_9_context_budget_repair_driver.py' | sort)"
             test "$changed" = "$expected"
           fi
-
-  format-builder-script:
-    if: github.event_name == 'pull_request'
-    needs: validate
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 20
-          show-progress: false
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Apply and verify Ruff safe fixes
-        run: |
-          set -euo pipefail
-          python -m pip install -q --disable-pip-version-check 'ruff>=0.9,<1'
-          python -m ruff check --fix scripts/m25_9_context_budget_repair_builder.py
-          python -m ruff check scripts/m25_9_context_budget_repair_builder.py
-      - name: Commit exact Ruff fix to PR branch when needed
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
-          set -euo pipefail
-          test -n "$HEAD_REF"
-          changed="$(git diff --name-only)"
-          if test -z "$changed"; then
-            exit 0
-          fi
-          test "$changed" = 'scripts/m25_9_context_budget_repair_builder.py'
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add scripts/m25_9_context_budget_repair_builder.py
-          git commit -m 'Apply Ruff fix to M25.9 repair builder'
-          git push origin "HEAD:refs/heads/$HEAD_REF"
-      - name: Upload exact fixed builder script
-        uses: actions/upload-artifact@v4
-        with:
-          name: m25-9-context-budget-builder-ruff-fixed-${{ github.event.pull_request.head.sha }}
-          path: scripts/m25_9_context_budget_repair_builder.py
-          if-no-files-found: error
-          retention-days: 7
 
   build-repair-blobs:
     if: github.event_name == 'push'
@@ -109,7 +66,7 @@ jobs:
       - name: Construct deterministic four-path repair
         run: |
           set -euo pipefail
-          python scripts/m25_9_context_budget_repair_builder.py
+          python scripts/m25_9_context_budget_repair_driver.py
           changed="$(git diff --name-only | sort)"
           expected="$(printf '%s\n' \
             '.github/workflows/m25-9-blog-full-population-pilot.yml' \
@@ -123,6 +80,7 @@ jobs:
           python -m pip install -q --disable-pip-version-check -e '.[dev]'
           python -m ruff check --output-format=concise \
             scripts/m25_9_context_budget_repair_builder.py \
+            scripts/m25_9_context_budget_repair_driver.py \
             src/knowledge_engine/m23_cloudflare_qdrant.py \
             tests/test_m23_5_cloudflare_qdrant.py
           python -m pytest -q \
@@ -131,6 +89,7 @@ jobs:
             tests/test_m25_10_blog_live_candidate.py
           python -m compileall -q \
             scripts/m25_9_context_budget_repair_builder.py \
+            scripts/m25_9_context_budget_repair_driver.py \
             src/knowledge_engine/m23_cloudflare_qdrant.py \
             tests/test_m23_5_cloudflare_qdrant.py
           grep -q 'MAX_BATCH_TEXT_CHARACTERS = 16_000' \
@@ -185,5 +144,3 @@ jobs:
             -f context='m25-9-context-budget-repair-blobs' \
             -f description="run $GITHUB_RUN_ID a$GITHUB_RUN_ATTEMPT four validated blobs" \
             -f target_url="$run_url" >/dev/null
-
-# Ruff-fixed builder script applied v1
