@@ -4,16 +4,15 @@ on:
   pull_request:
     paths:
       - '.github/workflows/m25-9-preflight-repair-builder.yml'
-      - '.github/scripts/m25_9_apply_exact_project_repair.py'
   push:
     branches: [main]
     paths:
       - '.github/workflows/m25-9-preflight-repair-builder.yml'
-      - '.github/scripts/m25_9_apply_exact_project_repair.py'
 
 permissions:
-  contents: write
+  contents: read
   issues: write
+  statuses: write
 
 jobs:
   validate:
@@ -36,21 +35,18 @@ jobs:
           python -m py_compile .github/scripts/m25_9_apply_exact_project_repair.py
           if test "${{ github.event_name }}" = 'pull_request'; then
             git fetch --quiet --no-tags origin main
-            changed="$(git diff --name-only origin/main...HEAD | sort)"
-            expected="$(printf '%s\n' \
-              '.github/scripts/m25_9_apply_exact_project_repair.py' \
-              '.github/workflows/m25-9-preflight-repair-builder.yml' | sort)"
-            test "$changed" = "$expected"
+            test "$(git diff --name-only origin/main...HEAD)" = \
+              '.github/workflows/m25-9-preflight-repair-builder.yml'
           fi
 
-  build-repair-branch:
+  build-repair-artifact:
     if: github.event_name == 'push'
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       GH_TOKEN: ${{ github.token }}
-      REPAIR_BRANCH: chatgpt/m25-9-pages-exact-project-repair-v1
+      ARTIFACT_DIR: /tmp/m25-9-pages-exact-project-repair
     steps:
       - uses: actions/checkout@v4
         with:
@@ -85,22 +81,37 @@ jobs:
             'scripts/m25_9_cloudflare_live_preflight.py' \
             'tests/test_m25_9_cloudflare_live_preflight.py' | sort)"
           test "$changed" = "$expected"
-      - name: Commit and publish repair branch
+      - name: Stage exact repaired files
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git switch -c "$REPAIR_BRANCH"
-          git add \
-            .github/workflows/m25-9-blog-full-population-pilot.yml \
-            scripts/m25_9_cloudflare_live_preflight.py \
-            tests/test_m25_9_cloudflare_live_preflight.py
-          git commit -m 'Repair M25.9 Pages exact-project preflight'
-          git push origin "HEAD:refs/heads/$REPAIR_BRANCH"
-          echo "REPAIR_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-      - name: Record repair branch evidence
+          mkdir -p \
+            "$ARTIFACT_DIR/.github/workflows" \
+            "$ARTIFACT_DIR/scripts" \
+            "$ARTIFACT_DIR/tests"
+          cp .github/workflows/m25-9-blog-full-population-pilot.yml \
+            "$ARTIFACT_DIR/.github/workflows/"
+          cp scripts/m25_9_cloudflare_live_preflight.py \
+            "$ARTIFACT_DIR/scripts/"
+          cp tests/test_m25_9_cloudflare_live_preflight.py \
+            "$ARTIFACT_DIR/tests/"
+          find "$ARTIFACT_DIR" -type f -print | sort
+      - name: Upload exact repaired files
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-pages-exact-project-repair-${{ github.sha }}
+          path: /tmp/m25-9-pages-exact-project-repair/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish repair artifact evidence
         run: |
           set -euo pipefail
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state='success' \
+            -f context='m25-9-repair-artifact-builder' \
+            -f description="run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT artifact ready" \
+            -f target_url="$run_url" >/dev/null
           gh issue comment 1092 \
             --repo "$GITHUB_REPOSITORY" \
-            --body "M25.9 deterministic preflight repair branch published: \`$REPAIR_BRANCH\` at exact head \`$REPAIR_HEAD\`. The repair replaces the invalid Pages project-list pagination request with the verified exact-project GET and changes exactly three files. No external service mutation occurred."
+            --body "M25.9 exact-project repair artifact is ready at run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`, exact SHA \`$GITHUB_SHA\`. It contains exactly the validated three-file repair. No external service mutation occurred."
