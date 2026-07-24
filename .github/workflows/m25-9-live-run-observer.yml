@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
-      TARGET_SHA: 834f33d456322979ff0c8a44952b2cf5a557e588
+      TARGET_SHA: 31a2ff0df1e44ab80681b138a53b3d1ff732726c
       TARGET_WORKFLOW: M25.9 Blog Full-Population Candidate Pilot
     steps:
       - name: Locate exact existing push run
