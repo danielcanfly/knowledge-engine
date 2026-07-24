@@ -41,8 +41,8 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
-      TARGET_SHA: 9f21f687ea513ed17be01a51beac1e89b12d7bfc
-      TARGET_WORKFLOW: M25.9 Blog Full-Population Candidate Pilot
+      TARGET_SHA: eeaecfdfd95d6113b9d75013ccea47a3a829113b
+      TARGET_WORKFLOW: M25.9 BGE-M3 Batch Diagnostic
     steps:
       - name: Locate exact existing push run
         run: |
@@ -84,6 +84,6 @@ jobs:
           gh api --method POST \
             "repos/$GITHUB_REPOSITORY/statuses/$TARGET_SHA" \
             -f state="$state" \
-            -f context='m25-9-live-run-observer' \
+            -f context='m25-9-population-scan-observer' \
             -f description="${description:0:140}" \
             -f target_url="$url" >/dev/null
