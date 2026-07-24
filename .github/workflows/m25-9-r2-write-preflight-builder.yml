@@ -58,6 +58,7 @@ jobs:
             'docs/architecture/m25/m25-9-live-preflight-repair.md' \
             'scripts/m25_9_r2_write_preflight.py' \
             'tests/test_m25_9_r2_write_preflight.py' | sort)"
+          printf 'generated changed files:\n%s\nexpected files:\n%s\n' "$changed" "$expected"
           test "$changed" = "$expected"
       - name: Validate generated repair
         run: |
