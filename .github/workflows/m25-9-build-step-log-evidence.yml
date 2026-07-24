@@ -42,9 +42,9 @@ jobs:
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
-      TARGET_RUN_ID: '30061441749'
-      TARGET_JOB_ID: '89383975673'
-      TARGET_SHA: 31a2ff0df1e44ab80681b138a53b3d1ff732726c
+      TARGET_RUN_ID: '30064286512'
+      TARGET_JOB_ID: '89392298008'
+      TARGET_SHA: 9f21f687ea513ed17be01a51beac1e89b12d7bfc
       TARGET_STEP: Build, embed, fully verify Qdrant, and publish R2 candidate
       EVIDENCE_DIR: /tmp/m25-9-build-step-log-evidence
     steps:
