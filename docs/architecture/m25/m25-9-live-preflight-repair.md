@@ -66,3 +66,5 @@ A successful automated run ends at `deployed_awaiting_authenticated_owner_accept
 ## Trigger boundary
 
 The repair pull request must remain unmerged until all three dedicated GitHub environment secrets exist. Merging its exact reviewed head is the one push-generated attempt-1 trigger for the full-population pilot. The failed historical run `30032170246` must never be rerun.
+
+Fresh full-pilot authority marker: all explicit dedicated capabilities passed at `1cadc58c83da4b847af025ff6a10ee41e658f4d5` in GET-only run `30063594433`.
