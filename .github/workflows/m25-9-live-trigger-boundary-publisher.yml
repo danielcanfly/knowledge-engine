@@ -89,3 +89,5 @@ jobs:
           gh issue comment 1092 \
             --repo "$GITHUB_REPOSITORY" \
             --body "M25.9 fresh full-pilot trigger branch completed at \`$TRIGGER_HEAD\` by run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`. Exactly three mode-only paths were added to the authority document change. External service mutations: \`0\`."
+
+# Trigger marker v2: workflow now existed on main before this push.
