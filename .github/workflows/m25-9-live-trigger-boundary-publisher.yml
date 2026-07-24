@@ -1,0 +1,91 @@
+name: M25.9 Live Trigger Boundary Publisher
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-live-trigger-boundary-publisher.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m25-9-live-trigger-boundary-publisher.yml'
+
+permissions:
+  contents: write
+  issues: write
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 20
+          show-progress: false
+      - name: Verify one-file publisher boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test -f .github/workflows/m25-9-live-trigger-boundary-publisher.yml
+          if test "${{ github.event_name }}" = 'pull_request'; then
+            git fetch --quiet --no-tags origin main
+            test "$(git diff --name-only origin/main...HEAD)" = \
+              '.github/workflows/m25-9-live-trigger-boundary-publisher.yml'
+          fi
+
+  publish-trigger-boundary:
+    if: github.event_name == 'push'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TRIGGER_BRANCH: chatgpt/m25-9-live-pilot-trigger-v1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TRIGGER_BRANCH }}
+          fetch-depth: 200
+          show-progress: false
+      - name: Verify exact trigger branch
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          grep -q 'Fresh full-pilot authority marker' \
+            docs/architecture/m25/m25-9-live-preflight-repair.md
+          grep -q 'endpoint="pages_project"' \
+            scripts/m25_9_cloudflare_live_preflight.py
+          test -f .github/workflows/m25-9-blog-full-population-pilot.yml
+          test -f tests/test_m25_9_cloudflare_live_preflight.py
+      - name: Add exact mode-only paths
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git update-index --chmod=+x \
+            .github/workflows/m25-9-blog-full-population-pilot.yml \
+            scripts/m25_9_cloudflare_live_preflight.py \
+            tests/test_m25_9_cloudflare_live_preflight.py
+          changed="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/m25-9-blog-full-population-pilot.yml' \
+            'scripts/m25_9_cloudflare_live_preflight.py' \
+            'tests/test_m25_9_cloudflare_live_preflight.py' | sort)"
+          test "$changed" = "$expected"
+          git commit -m 'Complete M25.9 fresh full-pilot trigger boundary'
+          git push origin "HEAD:refs/heads/$TRIGGER_BRANCH"
+          echo "TRIGGER_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Publish result
+        run: |
+          set -euo pipefail
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state='success' \
+            -f context='m25-9-live-trigger-boundary-publisher' \
+            -f description="run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT trigger ready" \
+            -f target_url="$run_url" >/dev/null
+          gh issue comment 1092 \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "M25.9 fresh full-pilot trigger branch completed at \`$TRIGGER_HEAD\` by run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`. Exactly three mode-only paths were added to the authority document change. External service mutations: \`0\`."
