@@ -1,0 +1,117 @@
+name: M25.9 Context Driver Log Extractor
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-context-driver-log-extractor.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_RUN_ID: '30067307767'
+      OUTPUT_DIR: /tmp/m25-9-context-driver-log
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 20
+          show-progress: false
+      - name: Verify exact one-file read-only boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git fetch --quiet --no-tags origin main
+          test "$(git diff --name-only origin/main...HEAD)" = \
+            '.github/workflows/m25-9-context-driver-log-extractor.yml'
+          mkdir -p "$OUTPUT_DIR/raw"
+      - name: Download and extract existing run logs
+        run: |
+          set -euo pipefail
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID/logs" \
+            > "$OUTPUT_DIR/run-logs.zip"
+          unzip -q "$OUTPUT_DIR/run-logs.zip" -d "$OUTPUT_DIR/raw"
+          find "$OUTPUT_DIR/raw" -type f -maxdepth 3 -print
+      - name: Build sanitized failure evidence
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ['OUTPUT_DIR'])
+          candidates = sorted(root.joinpath('raw').rglob('*'))
+          files = [path for path in candidates if path.is_file()]
+          selected = None
+          for path in files:
+              text = path.read_text(errors='replace')
+              if 'Construct deterministic four-path repair' in text:
+                  selected = (path, text)
+                  break
+          if selected is None:
+              raise SystemExit('build-repair-blobs log not found')
+          path, text = selected
+          lines = text.splitlines()
+          anchors = [
+              index for index, line in enumerate(lines)
+              if 'Construct deterministic four-path repair' in line
+          ]
+          start = anchors[-1] if anchors else max(0, len(lines) - 160)
+          excerpt = lines[start:start + 220]
+          if len(excerpt) < 40:
+              excerpt = lines[max(0, len(lines) - 220):]
+
+          redacted = []
+          for line in excerpt:
+              line = re.sub(r'Bearer\s+\S+', 'Bearer <redacted>', line)
+              line = re.sub(r'https?://\S+', '<redacted-url>', line)
+              line = re.sub(r'\b[0-9a-fA-F]{40,64}\b', '<redacted-sha>', line)
+              line = re.sub(r'ghs_[A-Za-z0-9_]+', '<redacted-token>', line)
+              redacted.append(line[:2000])
+
+          error_lines = [
+              line for line in redacted
+              if any(token in line for token in (
+                  'Traceback', 'RuntimeError', 'SystemExit', 'not found',
+                  'expected one', '##[error]', 'Error:', 'failed', 'exit code'
+              ))
+          ]
+          evidence = {
+              'schema_version': 'knowledge-engine-m25-9-context-driver-log-evidence/v1',
+              'target_run_id': os.environ['TARGET_RUN_ID'],
+              'source_log_file': path.name,
+              'source_log_sha256': hashlib.sha256(text.encode()).hexdigest(),
+              'excerpt_line_count': len(redacted),
+              'error_lines': error_lines[-40:],
+              'excerpt': redacted,
+              'existing_run_only': True,
+              'workflow_rerun': False,
+              'external_service_mutations': 0,
+              'secret_values_recorded': False,
+          }
+          output = root / 'context-driver-failure-evidence.json'
+          output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
+          print(json.dumps({
+              'source_log_file': path.name,
+              'error_lines': evidence['error_lines'],
+              'external_service_mutations': 0,
+          }, sort_keys=True))
+          PY
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-context-driver-failure-evidence-${{ github.event.pull_request.head.sha }}
+          path: /tmp/m25-9-context-driver-log/context-driver-failure-evidence.json
+          if-no-files-found: error
+          retention-days: 30
