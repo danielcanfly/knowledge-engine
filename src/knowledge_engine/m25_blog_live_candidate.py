@@ -309,13 +309,26 @@ def _manifest_artifact(path: Path, kind: str, release_id: str) -> dict[str, Any]
     }
 
 
+def _engine_sha_suffix(engine_sha: str) -> str:
+    suffix = engine_sha.strip().lower()[:12]
+    if len(engine_sha.strip()) != 40 or any(
+        char not in "0123456789abcdef" for char in engine_sha.strip().lower()
+    ):
+        raise IntegrityError("M25-LIVE-031 valid engine SHA required")
+    return suffix
+
+
+def _candidate_release_id(engine_sha: str) -> str:
+    return f"m25blog-{SOURCE_SHA[:12]}-{ADMISSION_SHA[:12]}-{_engine_sha_suffix(engine_sha)}"
+
+
 def build_candidate_release(
     pack_root: Path,
     output_root: Path,
     engine_sha: str,
 ) -> tuple[CompiledRelease, dict[str, Any]]:
     pack = validate_pack(pack_root)
-    release_id = f"m25blog-{SOURCE_SHA[:12]}-{ADMISSION_SHA[:12]}"
+    release_id = _candidate_release_id(engine_sha)
     release_root = output_root / "releases" / release_id
     if release_root.exists():
         shutil.rmtree(release_root)
@@ -553,10 +566,7 @@ def _qdrant_query_body(
 
 
 def _qdrant_collection_name(release_id: str, engine_sha: str) -> str:
-    suffix = engine_sha.strip().lower()[:12]
-    if len(suffix) != 12 or any(char not in "0123456789abcdef" for char in suffix):
-        raise IntegrityError("M25-LIVE-034 engine SHA suffix is invalid")
-    return f"m25_blog_{release_id.replace('-', '_').lower()}_{suffix}"
+    return f"m25_blog_{release_id.replace('-', '_').lower()}_{_engine_sha_suffix(engine_sha)}"
 
 
 def _create_qdrant_payload_indexes(

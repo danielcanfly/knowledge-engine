@@ -146,10 +146,16 @@ jobs:
             '.github/workflows/m25-10-blog-live-candidate.yml' \
             'src/knowledge_engine/m25_blog_live_candidate.py' \
             'tests/test_m25_10_blog_live_candidate.py' | sort)"
+          expected_m25_9_release_namespace_followup="$(printf '%s\n' \
+            '.github/workflows/m25-9-blog-full-population-pilot.yml' \
+            '.github/workflows/m25-10-blog-live-candidate.yml' \
+            'src/knowledge_engine/m25_blog_live_candidate.py' \
+            'tests/test_m25_10_blog_live_candidate.py' | sort)"
           test "$changed" = "$expected_m25_10" \
             || test "$changed" = "$expected_m25_9_containment" \
             || test "$changed" = "$expected_m25_9_lockfile_followup" \
-            || test "$changed" = "$expected_m25_9_bluegreen_followup"
+            || test "$changed" = "$expected_m25_9_bluegreen_followup" \
+            || test "$changed" = "$expected_m25_9_release_namespace_followup"
           ! printf '%s\n' "$changed" | grep -Eq \
             '^(production/|release/production|r2/production|credentials/|secrets/)'
 
