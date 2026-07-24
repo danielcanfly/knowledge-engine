@@ -1,0 +1,534 @@
+name: M25.9 Context Budget Repair Builder
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-context-budget-repair-builder.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m25-9-context-budget-repair-builder.yml'
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 20
+          show-progress: false
+      - name: Verify one-file non-deploying builder boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test -f .github/workflows/m25-9-context-budget-repair-builder.yml
+          if test "${{ github.event_name }}" = 'pull_request'; then
+            git fetch --quiet --no-tags origin main
+            test "$(git diff --name-only origin/main...HEAD)" = \
+              '.github/workflows/m25-9-context-budget-repair-builder.yml'
+          fi
+
+  build-repair-blobs:
+    if: github.event_name == 'push'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OUTPUT_DIR: /tmp/m25-9-context-budget-repair
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 200
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact non-deploying authority
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor eeaecfdfd95d6113b9d75013ccea47a3a829113b HEAD
+          mkdir -p "$OUTPUT_DIR"
+      - name: Construct deterministic four-path repair
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str) -> None:
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one exact replacement, found {count}')
+              path.write_text(text.replace(old, new, 1))
+
+          module = Path('src/knowledge_engine/m23_cloudflare_qdrant.py')
+          replace_once(
+              module,
+              'MAX_BATCH_SIZE = 100\n',
+              'MAX_BATCH_SIZE = 100\n'
+              'MAX_BATCH_TEXT_CHARACTERS = 16_000\n'
+              'CLOUDFLARE_CONTEXT_ERROR_CODE = 3030\n',
+          )
+          replace_once(
+              module,
+              '''        "batching": {
+              "batch_size": MAX_BATCH_SIZE,
+              "preserve_input_order": True,
+              "deterministic": True,
+          },''',
+              '''        "batching": {
+              "maximum_batch_size": MAX_BATCH_SIZE,
+              "maximum_batch_text_characters": MAX_BATCH_TEXT_CHARACTERS,
+              "context_limit_split": "recursive-halves",
+              "preserve_input_order": True,
+              "deterministic": True,
+          },''',
+          )
+          old_embed = '''def _chunks(values: Sequence[SectionInput], size: int) -> Iterable[Sequence[SectionInput]]:
+              for start in range(0, len(values), size):
+                  yield values[start : start + size]
+
+
+          def embed_sections(
+              sections: Sequence[SectionInput],
+              config: CloudflareConfig,
+              *,
+              client: httpx.Client | None = None,
+          ) -> list[list[float]]:
+              account_id = quote(_required_string(config.account_id, "account_id", 100), safe="")
+              token = _required_string(config.api_token, "api_token", 10_000)
+              model = quote(_required_string(config.model, "model", 300), safe="@/")
+              url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}"
+              owned_client = client is None
+              http = client or httpx.Client(timeout=config.timeout_seconds)
+              vectors: list[list[float]] = []
+              try:
+                  for batch in _chunks(list(sections), MAX_BATCH_SIZE):
+                      response = http.post(
+                          url,
+                          headers={"Authorization": f"Bearer {token}"},
+                          json=build_cloudflare_request([section.text for section in batch]),
+                      )
+                      response.raise_for_status()
+                      payload = response.json()
+                      if not isinstance(payload, Mapping):
+                          raise IntegrityError("M23-EMBED-120 provider response must be an object")
+                      vectors.extend(
+                          parse_cloudflare_embeddings(payload, expected_count=len(batch))
+                      )
+              finally:
+                  if owned_client:
+                      http.close()
+              return vectors
+'''
+          new_embed = '''def _batches_by_character_budget(
+              values: Sequence[SectionInput],
+          ) -> Iterable[Sequence[SectionInput]]:
+              batch: list[SectionInput] = []
+              characters = 0
+              for value in values:
+                  text_characters = len(value.text)
+                  if batch and (
+                      len(batch) >= MAX_BATCH_SIZE
+                      or characters + text_characters > MAX_BATCH_TEXT_CHARACTERS
+                  ):
+                      yield tuple(batch)
+                      batch = []
+                      characters = 0
+                  batch.append(value)
+                  characters += text_characters
+              if batch:
+                  yield tuple(batch)
+
+
+          def _is_context_limit_response(response: httpx.Response) -> bool:
+              if response.status_code != 400:
+                  return False
+              try:
+                  payload = response.json()
+              except ValueError:
+                  return False
+              if not isinstance(payload, Mapping):
+                  return False
+              errors = payload.get("errors")
+              if not isinstance(errors, list):
+                  return False
+              for item in errors:
+                  if not isinstance(item, Mapping):
+                      continue
+                  if item.get("code") == CLOUDFLARE_CONTEXT_ERROR_CODE:
+                      return True
+                  message = item.get("message")
+                  if isinstance(message, str):
+                      lowered = message.lower()
+                      if "max context reached" in lowered and "model supports only" in lowered:
+                          return True
+              return False
+
+
+          def _embed_batch(
+              http: httpx.Client,
+              *,
+              url: str,
+              token: str,
+              batch: Sequence[SectionInput],
+          ) -> list[list[float]]:
+              response = http.post(
+                  url,
+                  headers={"Authorization": f"Bearer {token}"},
+                  json=build_cloudflare_request([section.text for section in batch]),
+              )
+              if response.is_error:
+                  if _is_context_limit_response(response) and len(batch) > 1:
+                      midpoint = len(batch) // 2
+                      return _embed_batch(
+                          http,
+                          url=url,
+                          token=token,
+                          batch=batch[:midpoint],
+                      ) + _embed_batch(
+                          http,
+                          url=url,
+                          token=token,
+                          batch=batch[midpoint:],
+                      )
+                  response.raise_for_status()
+              payload = response.json()
+              if not isinstance(payload, Mapping):
+                  raise IntegrityError("M23-EMBED-120 provider response must be an object")
+              return parse_cloudflare_embeddings(payload, expected_count=len(batch))
+
+
+          def embed_sections(
+              sections: Sequence[SectionInput],
+              config: CloudflareConfig,
+              *,
+              client: httpx.Client | None = None,
+          ) -> list[list[float]]:
+              account_id = quote(_required_string(config.account_id, "account_id", 100), safe="")
+              token = _required_string(config.api_token, "api_token", 10_000)
+              model = quote(_required_string(config.model, "model", 300), safe="@/")
+              url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}"
+              owned_client = client is None
+              http = client or httpx.Client(timeout=config.timeout_seconds)
+              vectors: list[list[float]] = []
+              try:
+                  for batch in _batches_by_character_budget(list(sections)):
+                      vectors.extend(
+                          _embed_batch(http, url=url, token=token, batch=batch)
+                      )
+              finally:
+                  if owned_client:
+                      http.close()
+              return vectors
+'''
+          replace_once(module, old_embed, new_embed)
+
+          tests = Path('tests/test_m23_5_cloudflare_qdrant.py')
+          test_addition = '''
+
+          def _sections_with_texts(texts: list[str]):
+              return validate_sections(
+                  [
+                      {
+                          "section_id": f"budget-doc-{index}#0001",
+                          "text": text,
+                          "payload": {"document_id": f"budget-doc-{index}"},
+                      }
+                      for index, text in enumerate(texts)
+                  ]
+              )
+
+
+          def test_cloudflare_batches_preserve_full_text_under_character_budget():
+              texts = ["A" * 9000, "B" * 9000, "C" * 100]
+              observed_batches = []
+
+              def handler(request: httpx.Request) -> httpx.Response:
+                  selected = json.loads(request.content)["text"]
+                  observed_batches.append(selected)
+                  return httpx.Response(
+                      200,
+                      json={
+                          "success": True,
+                          "result": {"data": _vectors(len(selected))},
+                      },
+                  )
+
+              with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+                  vectors = embed_sections(
+                      _sections_with_texts(texts),
+                      CloudflareConfig(account_id="account", api_token="secret"),
+                      client=client,
+                  )
+
+              assert len(vectors) == 3
+              assert [len(batch) for batch in observed_batches] == [1, 2]
+              assert [text for batch in observed_batches for text in batch] == texts
+
+
+          def test_cloudflare_context_limit_recursively_splits_and_preserves_order():
+              texts = ["one", "two", "three", "four"]
+              observed_batches = []
+
+              def handler(request: httpx.Request) -> httpx.Response:
+                  selected = json.loads(request.content)["text"]
+                  observed_batches.append(selected)
+                  if len(selected) > 1:
+                      return httpx.Response(
+                          400,
+                          json={
+                              "success": False,
+                              "errors": [
+                                  {
+                                      "code": 3030,
+                                      "message": (
+                                          "AiError: Max context reached 80825 tokens "
+                                          "but model supports only 60000"
+                                      ),
+                                  }
+                              ],
+                          },
+                      )
+                  return httpx.Response(
+                      200,
+                      json={"success": True, "result": {"data": _vectors(1)}},
+                  )
+
+              with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+                  vectors = embed_sections(
+                      _sections_with_texts(texts),
+                      CloudflareConfig(account_id="account", api_token="secret"),
+                      client=client,
+                  )
+
+              assert len(vectors) == 4
+              assert [len(batch) for batch in observed_batches] == [4, 2, 1, 1, 2, 1, 1]
+              assert [batch[0] for batch in observed_batches if len(batch) == 1] == texts
+
+
+          def test_cloudflare_non_context_http_error_remains_fail_closed():
+              calls = []
+
+              def handler(request: httpx.Request) -> httpx.Response:
+                  calls.append(json.loads(request.content)["text"])
+                  return httpx.Response(
+                      400,
+                      json={
+                          "success": False,
+                          "errors": [{"code": 10000, "message": "permission denied"}],
+                      },
+                  )
+
+              with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+                  with pytest.raises(httpx.HTTPStatusError):
+                      embed_sections(
+                          _sections(),
+                          CloudflareConfig(account_id="account", api_token="secret"),
+                          client=client,
+                      )
+              assert len(calls) == 1
+          '''
+          text = tests.read_text()
+          marker = 'def _sections_with_texts(texts: list[str]):'
+          if marker in text:
+              raise SystemExit('focused context-budget tests already exist')
+          tests.write_text(text.rstrip() + '\n' + test_addition + '\n')
+
+          workflow = Path('.github/workflows/m25-9-blog-full-population-pilot.yml')
+          replace_once(
+              workflow,
+              '''  pull_request:
+              paths:
+                - '.github/workflows/m25-9-blog-full-population-pilot.yml'
+                - 'docs/architecture/m25/m25-9-live-preflight-repair.md'
+                - 'scripts/m25_9_cloudflare_live_preflight.py'
+                - 'tests/test_m25_9_cloudflare_live_preflight.py'
+          ''',
+              '''  pull_request:
+              paths:
+                - '.github/workflows/m25-9-blog-full-population-pilot.yml'
+                - 'docs/architecture/m25/m25-9-live-preflight-repair.md'
+                - 'src/knowledge_engine/m23_cloudflare_qdrant.py'
+                - 'tests/test_m23_5_cloudflare_qdrant.py'
+          ''',
+          )
+          replace_once(
+              workflow,
+              '''          python -m ruff check --output-format=concise \\
+                scripts/m25_9_cloudflare_live_preflight.py \\
+                src/knowledge_engine/m25_blog_live_candidate.py \\
+                tests/test_m25_9_cloudflare_live_preflight.py \\
+                tests/test_m25_10_blog_live_candidate.py
+          ''',
+              '''          python -m ruff check --output-format=concise \\
+                scripts/m25_9_cloudflare_live_preflight.py \\
+                src/knowledge_engine/m23_cloudflare_qdrant.py \\
+                src/knowledge_engine/m25_blog_live_candidate.py \\
+                tests/test_m23_5_cloudflare_qdrant.py \\
+                tests/test_m25_9_cloudflare_live_preflight.py \\
+                tests/test_m25_10_blog_live_candidate.py
+          ''',
+          )
+          replace_once(
+              workflow,
+              '''          python -m pytest -q \\
+                tests/test_m25_9_cloudflare_live_preflight.py \\
+          ''',
+              '''          python -m pytest -q \\
+                tests/test_m23_5_cloudflare_qdrant.py \\
+                tests/test_m25_9_cloudflare_live_preflight.py \\
+          ''',
+          )
+          replace_once(
+              workflow,
+              '''          python -m compileall -q \\
+                scripts/m25_9_cloudflare_live_preflight.py \\
+                src/knowledge_engine/m25_blog_live_candidate.py \\
+                tests/test_m25_9_cloudflare_live_preflight.py \\
+                tests/test_m25_10_blog_live_candidate.py
+          ''',
+              '''          python -m compileall -q \\
+                scripts/m25_9_cloudflare_live_preflight.py \\
+                src/knowledge_engine/m23_cloudflare_qdrant.py \\
+                src/knowledge_engine/m25_blog_live_candidate.py \\
+                tests/test_m23_5_cloudflare_qdrant.py \\
+                tests/test_m25_9_cloudflare_live_preflight.py \\
+                tests/test_m25_10_blog_live_candidate.py
+          ''',
+          )
+          replace_once(
+              workflow,
+              '''          expected="$(printf '%s\\n' \\
+                '.github/workflows/m25-9-blog-full-population-pilot.yml' \\
+                'docs/architecture/m25/m25-9-live-preflight-repair.md' \\
+                'scripts/m25_9_cloudflare_live_preflight.py' \\
+                'tests/test_m25_9_cloudflare_live_preflight.py' | sort)"
+          ''',
+              '''          expected="$(printf '%s\\n' \\
+                '.github/workflows/m25-9-blog-full-population-pilot.yml' \\
+                'docs/architecture/m25/m25-9-live-preflight-repair.md' \\
+                'src/knowledge_engine/m23_cloudflare_qdrant.py' \\
+                'tests/test_m23_5_cloudflare_qdrant.py' | sort)"
+          ''',
+          )
+
+          docs = Path('docs/architecture/m25/m25-9-live-preflight-repair.md')
+          section = '''
+
+          ## BGE-M3 context-budget repair authority
+
+          Full-population inference-only scan run `30065403198` at exact SHA
+          `eeaecfdfd95d6113b9d75013ccea47a3a829113b` scanned 3,975 semantic
+          documents before isolating batch indexes `3950..3974`. Cloudflare returned
+          HTTP `400`, code `3030`: the 25 complete inputs required 80,825 tokens while
+          the managed BGE-M3 context supports 60,000. Every input in that batch passed
+          individually. The scan performed zero Qdrant, R2, deployment, production
+          pointer or public-traffic mutations.
+
+          The repair preserves every admitted input without truncation. Deterministic
+          initial batches are bounded by both 100 inputs and 16,000 normalized text
+          characters. If Cloudflare still reports the explicit context-limit condition,
+          only that batch is split into ordered halves recursively. All unrelated HTTP
+          errors remain terminal, and a single-input context failure remains terminal.
+          '''
+          doc_text = docs.read_text()
+          if '## BGE-M3 context-budget repair authority' in doc_text:
+              raise SystemExit('context-budget authority already documented')
+          docs.write_text(doc_text.rstrip() + '\n' + section + '\n')
+
+          expected = [
+              '.github/workflows/m25-9-blog-full-population-pilot.yml',
+              'docs/architecture/m25/m25-9-live-preflight-repair.md',
+              'src/knowledge_engine/m23_cloudflare_qdrant.py',
+              'tests/test_m23_5_cloudflare_qdrant.py',
+          ]
+          for value in expected:
+              if not Path(value).is_file():
+                  raise SystemExit(f'missing repaired path: {value}')
+          PY
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/m25-9-blog-full-population-pilot.yml' \
+            'docs/architecture/m25/m25-9-live-preflight-repair.md' \
+            'src/knowledge_engine/m23_cloudflare_qdrant.py' \
+            'tests/test_m23_5_cloudflare_qdrant.py' | sort)"
+          test "$changed" = "$expected"
+      - name: Validate repair and focused boundaries
+        run: |
+          set -euo pipefail
+          python -m pip install -q --disable-pip-version-check -e '.[dev]'
+          python -m ruff check --output-format=concise \
+            src/knowledge_engine/m23_cloudflare_qdrant.py \
+            tests/test_m23_5_cloudflare_qdrant.py
+          python -m pytest -q \
+            tests/test_m23_5_cloudflare_qdrant.py \
+            tests/test_m25_9_cloudflare_live_preflight.py \
+            tests/test_m25_10_blog_live_candidate.py
+          python -m compileall -q \
+            src/knowledge_engine/m23_cloudflare_qdrant.py \
+            tests/test_m23_5_cloudflare_qdrant.py
+          grep -q 'MAX_BATCH_TEXT_CHARACTERS = 16_000' \
+            src/knowledge_engine/m23_cloudflare_qdrant.py
+          grep -q 'CLOUDFLARE_CONTEXT_ERROR_CODE = 3030' \
+            src/knowledge_engine/m23_cloudflare_qdrant.py
+          grep -q 'context_limit_split": "recursive-halves"' \
+            src/knowledge_engine/m23_cloudflare_qdrant.py
+      - name: Create validated Git blobs and metadata
+        run: |
+          set -euo pipefail
+          base_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$GITHUB_SHA" --jq '.tree.sha')"
+          python - <<'PY' > "$OUTPUT_DIR/paths.txt"
+          for path in (
+              '.github/workflows/m25-9-blog-full-population-pilot.yml',
+              'docs/architecture/m25/m25-9-live-preflight-repair.md',
+              'src/knowledge_engine/m23_cloudflare_qdrant.py',
+              'tests/test_m23_5_cloudflare_qdrant.py',
+          ):
+              print(path)
+          PY
+          printf '{\n  "parent_sha": "%s",\n  "base_tree_sha": "%s",\n  "entries": [\n' \
+            "$GITHUB_SHA" "$base_tree" > "$OUTPUT_DIR/repair-blobs.json"
+          first=true
+          while IFS= read -r path; do
+            encoded="$(base64 -w0 "$path")"
+            blob="$(gh api --method POST \
+              "repos/$GITHUB_REPOSITORY/git/blobs" \
+              -f content="$encoded" -f encoding='base64' --jq '.sha')"
+            if test "$first" = true; then
+              first=false
+            else
+              printf ',\n' >> "$OUTPUT_DIR/repair-blobs.json"
+            fi
+            printf '    {"path": "%s", "mode": "100644", "type": "blob", "sha": "%s"}' \
+              "$path" "$blob" >> "$OUTPUT_DIR/repair-blobs.json"
+          done < "$OUTPUT_DIR/paths.txt"
+          printf '\n  ],\n  "external_service_mutations": 0\n}\n' \
+            >> "$OUTPUT_DIR/repair-blobs.json"
+          jq -e '.entries | length == 4' "$OUTPUT_DIR/repair-blobs.json" >/dev/null
+      - name: Upload repair blob metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-context-budget-repair-blobs-${{ github.sha }}
+          path: /tmp/m25-9-context-budget-repair/repair-blobs.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish builder result
+        run: |
+          set -euo pipefail
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state='success' \
+            -f context='m25-9-context-budget-repair-blobs' \
+            -f description="run $GITHUB_RUN_ID a$GITHUB_RUN_ATTEMPT four validated blobs" \
+            -f target_url="$run_url" >/dev/null
