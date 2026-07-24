@@ -65,9 +65,9 @@ jobs:
       - name: Test M26 predecessors
         run: |
           python -m pytest -q \
-            tests/test_m26_4_provider_mock.py::test_m26_4_provider_mock_benchmark \
-            tests/test_m26_5_draft_answer.py::test_m26_5_draft_answer_benchmark \
-            tests/test_m26_6_answer_evaluation.py::test_m26_6_answer_evaluation_benchmark \
+            tests/test_m26_4_provider_mock.py::test_provider_benchmark_passes_all_synthetic_cases \
+            tests/test_m26_5_draft_answer.py::test_draft_benchmark_passes_all_synthetic_cases \
+            tests/test_m26_6_answer_evaluation.py::test_evaluation_benchmark_passes_all_synthetic_cases \
             tests/test_m26_7_answer_presentation.py::test_m26_7_presentation_benchmark \
             tests/test_m26_8_preview_candidate_bundle.py::test_m26_8_candidate_benchmark
       - name: Rebuild deterministic QA feedback evidence
