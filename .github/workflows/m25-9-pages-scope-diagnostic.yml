@@ -1,0 +1,246 @@
+name: M25.9 Pages Scope Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-pages-scope-diagnostic.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m25-9-pages-scope-diagnostic.yml'
+
+permissions:
+  contents: read
+  issues: write
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 20
+          show-progress: false
+      - name: Verify one-file zero-mutation boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test -f .github/workflows/m25-9-pages-scope-diagnostic.yml
+          if test "${{ github.event_name }}" = 'pull_request'; then
+            git fetch --quiet --no-tags origin main
+            test "$(git diff --name-only origin/main...HEAD)" = \
+              '.github/workflows/m25-9-pages-scope-diagnostic.yml'
+          fi
+          grep -q "urllib.request.Request(url=url, method='GET'" \
+            .github/workflows/m25-9-pages-scope-diagnostic.yml
+
+  diagnose:
+    if: github.event_name == 'push'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: m23-r3-diagnostic
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
+      PAGES_PROJECT: llm-wiki-m24-internal
+      EVIDENCE_DIR: /tmp/m25-9-pages-scope-diagnostic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 50
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify fresh attempt-1 authority
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_PAGES_TOKEN"
+          test -n "$PAGES_PROJECT"
+          mkdir -p "$EVIDENCE_DIR"
+      - name: Run GET-only Pages endpoint comparison
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          root = 'https://api.cloudflare.com/client/v4'
+          account = os.environ['CLOUDFLARE_ACCOUNT_ID']
+          token = os.environ['CLOUDFLARE_PAGES_TOKEN']
+          project = os.environ['PAGES_PROJECT']
+          out = Path(os.environ['EVIDENCE_DIR']) / 'pages-scope-diagnostic.json'
+          headers = {
+              'Authorization': f'Bearer {token}',
+              'Accept': 'application/json',
+              'User-Agent': 'knowledge-engine-m25.9-pages-scope-diagnostic/1',
+          }
+
+          def sanitize_text(value):
+              if not isinstance(value, str):
+                  return None
+              value = value.replace(account, '<redacted-account-id>')
+              value = re.sub(r'\b[0-9a-fA-F]{32}\b', '<redacted-32hex-id>', value)
+              return value[:500]
+
+          def probe(name, url):
+              request = urllib.request.Request(url=url, method='GET', headers=headers)
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      status = response.status
+                      body = response.read(524289)[:524288]
+                      content_type = response.headers.get_content_type()
+              except urllib.error.HTTPError as exc:
+                  status = exc.code
+                  body = exc.read(524289)[:524288]
+                  content_type = exc.headers.get_content_type() if exc.headers else None
+              except Exception as exc:
+                  return {
+                      'endpoint': name,
+                      'http_method': 'GET',
+                      'http_status': None,
+                      'network_error_category': type(exc).__name__,
+                      'success': False,
+                      'response_bytes': 0,
+                      'response_sha256': hashlib.sha256(b'').hexdigest(),
+                  }
+              try:
+                  payload = json.loads(body.decode('utf-8'))
+              except Exception:
+                  payload = None
+              errors = []
+              messages = []
+              if isinstance(payload, dict):
+                  for item in payload.get('errors', [])[:3]:
+                      if isinstance(item, dict):
+                          errors.append({
+                              'code': item.get('code'),
+                              'message': sanitize_text(item.get('message')),
+                          })
+                  for item in payload.get('messages', [])[:3]:
+                      if isinstance(item, dict):
+                          messages.append({
+                              'code': item.get('code'),
+                              'message': sanitize_text(item.get('message')),
+                          })
+                  success = payload.get('success') is True
+                  result = payload.get('result')
+              else:
+                  success = False
+                  result = None
+              result_shape = type(result).__name__ if result is not None else None
+              target_project_returned = (
+                  isinstance(result, dict) and result.get('name') == project
+              )
+              if isinstance(result, list):
+                  target_project_returned = any(
+                      isinstance(item, dict) and item.get('name') == project
+                      for item in result
+                  )
+              return {
+                  'endpoint': name,
+                  'http_method': 'GET',
+                  'http_status': status,
+                  'content_type': content_type,
+                  'success': success,
+                  'errors': errors,
+                  'messages': messages,
+                  'result_shape': result_shape,
+                  'target_project_returned': target_project_returned,
+                  'response_bytes': len(body),
+                  'response_sha256': hashlib.sha256(body).hexdigest(),
+                  'raw_body_recorded': False,
+              }
+
+          encoded = urllib.parse.quote(project, safe='')
+          probes = [
+              probe('token_verify', f'{root}/user/tokens/verify'),
+              probe('pages_projects_no_query', f'{root}/accounts/{account}/pages/projects'),
+              probe('pages_projects_per_page_20', f'{root}/accounts/{account}/pages/projects?per_page=20'),
+              probe('pages_project_exact', f'{root}/accounts/{account}/pages/projects/{encoded}'),
+          ]
+          exact = next(item for item in probes if item['endpoint'] == 'pages_project_exact')
+          evidence = {
+              'schema_version': 'knowledge-engine-m25-9-pages-scope-diagnostic/v1',
+              'engine_sha': os.environ['GITHUB_SHA'],
+              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+              'workflow_run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'http_methods_used': ['GET'],
+              'mutations': 0,
+              'secret_values_recorded': False,
+              'authorization_headers_recorded': False,
+              'raw_response_bodies_recorded': False,
+              'account_id_sha256': hashlib.sha256(account.encode()).hexdigest(),
+              'account_id_shape_valid': bool(re.fullmatch(r'[0-9a-fA-F]{32}', account)),
+              'pages_project': project,
+              'probes': probes,
+              'exact_project_accessible': bool(
+                  exact.get('success') and exact.get('target_project_returned')
+              ),
+          }
+          evidence['evidence_sha256'] = hashlib.sha256(
+              json.dumps(evidence, sort_keys=True, separators=(',', ':')).encode()
+          ).hexdigest()
+          out.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
+          print(json.dumps({
+              'exact_project_accessible': evidence['exact_project_accessible'],
+              'probes': [
+                  {
+                      'endpoint': p['endpoint'],
+                      'http_status': p.get('http_status'),
+                      'success': p.get('success'),
+                      'errors': p.get('errors'),
+                  }
+                  for p in probes
+              ],
+              'mutations': 0,
+          }, sort_keys=True))
+          PY
+      - name: Upload sanitized Pages scope evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-pages-scope-diagnostic-${{ github.sha }}
+          path: /tmp/m25-9-pages-scope-diagnostic/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish diagnostic status
+        if: always()
+        run: |
+          set -euo pipefail
+          evidence="$EVIDENCE_DIR/pages-scope-diagnostic.json"
+          exact='false'
+          if test -s "$evidence"; then
+            exact="$(jq -r '.exact_project_accessible' "$evidence")"
+          fi
+          if test "$exact" = 'true'; then
+            state='success'
+            result='exact_project_accessible'
+          else
+            state='failure'
+            result='exact_project_blocked'
+          fi
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state="$state" \
+            -f context='m25-9-pages-scope-diagnostic' \
+            -f description="run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT $result" \
+            -f target_url="$run_url" >/dev/null
+          gh issue comment 1092 \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "M25.9 Pages GET-only scope diagnostic at exact SHA \`$GITHUB_SHA\` (run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`): \`$result\`. External mutations: \`0\`."
