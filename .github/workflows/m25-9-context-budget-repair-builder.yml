@@ -144,3 +144,5 @@ jobs:
             -f context='m25-9-context-budget-repair-blobs' \
             -f description="run $GITHUB_RUN_ID a$GITHUB_RUN_ATTEMPT four validated blobs" \
             -f target_url="$run_url" >/dev/null
+
+# Structured module patch v1
