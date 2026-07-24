@@ -1,0 +1,321 @@
+name: M25.9 Workers Scope Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-workers-scope-diagnostic.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m25-9-workers-scope-diagnostic.yml'
+
+permissions:
+  contents: read
+  issues: write
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 20
+          show-progress: false
+      - name: Verify one-file GET-only diagnostic boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test -f .github/workflows/m25-9-workers-scope-diagnostic.yml
+          grep -q "urllib.request.Request(url=url, method='GET'" \
+            .github/workflows/m25-9-workers-scope-diagnostic.yml
+          if test "${{ github.event_name }}" = 'pull_request'; then
+            git fetch --quiet --no-tags origin main
+            test "$(git diff --name-only origin/main...HEAD)" = \
+              '.github/workflows/m25-9-workers-scope-diagnostic.yml'
+          fi
+
+  diagnose:
+    if: github.event_name == 'push'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: m23-r3-diagnostic
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
+      CLOUDFLARE_ZONE_NAME: danielcanfly.com
+      RUNTIME_NAME: llm-wiki-m25-blog-candidate-runtime
+      EVIDENCE_DIR: /tmp/m25-9-workers-scope-diagnostic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 50
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify fresh exact-SHA attempt-1 authority
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_WORKERS_TOKEN"
+          test -n "$CLOUDFLARE_ZONE_NAME"
+          mkdir -p "$EVIDENCE_DIR"
+      - name: Run GET-only Workers scope comparison
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          root = 'https://api.cloudflare.com/client/v4'
+          account = os.environ['CLOUDFLARE_ACCOUNT_ID']
+          token = os.environ['CLOUDFLARE_WORKERS_TOKEN']
+          zone_name = os.environ['CLOUDFLARE_ZONE_NAME']
+          runtime_name = os.environ['RUNTIME_NAME']
+          out = Path(os.environ['EVIDENCE_DIR']) / 'workers-scope-diagnostic.json'
+          headers = {
+              'Authorization': f'Bearer {token}',
+              'Accept': 'application/json',
+              'User-Agent': 'knowledge-engine-m25.9-workers-scope-diagnostic/1',
+          }
+
+          def sanitize_text(value):
+              if not isinstance(value, str):
+                  return None
+              value = value.replace(account, '<redacted-account-id>')
+              value = re.sub(r'\b[0-9a-fA-F]{32}\b', '<redacted-32hex-id>', value)
+              return value[:500]
+
+          def probe(name, url):
+              request = urllib.request.Request(url=url, method='GET', headers=headers)
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      status = response.status
+                      body = response.read(524289)[:524288]
+                      content_type = response.headers.get_content_type()
+              except urllib.error.HTTPError as exc:
+                  status = exc.code
+                  body = exc.read(524289)[:524288]
+                  content_type = exc.headers.get_content_type() if exc.headers else None
+              except Exception as exc:
+                  return {
+                      'endpoint': name,
+                      'http_method': 'GET',
+                      'http_status': None,
+                      'network_error_category': type(exc).__name__,
+                      'success': False,
+                      'response_bytes': 0,
+                      'response_sha256': hashlib.sha256(b'').hexdigest(),
+                      'raw_body_recorded': False,
+                  }, None
+              try:
+                  payload = json.loads(body.decode('utf-8'))
+              except Exception:
+                  payload = None
+              errors = []
+              messages = []
+              if isinstance(payload, dict):
+                  for item in payload.get('errors', [])[:3]:
+                      if isinstance(item, dict):
+                          errors.append({
+                              'code': item.get('code'),
+                              'message': sanitize_text(item.get('message')),
+                          })
+                  for item in payload.get('messages', [])[:3]:
+                      if isinstance(item, dict):
+                          messages.append({
+                              'code': item.get('code'),
+                              'message': sanitize_text(item.get('message')),
+                          })
+                  success = payload.get('success') is True
+                  result = payload.get('result')
+              else:
+                  success = False
+                  result = None
+              record = {
+                  'endpoint': name,
+                  'http_method': 'GET',
+                  'http_status': status,
+                  'content_type': content_type,
+                  'success': success,
+                  'errors': errors,
+                  'messages': messages,
+                  'result_shape': type(result).__name__ if result is not None else None,
+                  'response_bytes': len(body),
+                  'response_sha256': hashlib.sha256(body).hexdigest(),
+                  'raw_body_recorded': False,
+              }
+              return record, result
+
+          probes = []
+          record, _ = probe('token_verify', f'{root}/user/tokens/verify')
+          probes.append(record)
+
+          record, scripts = probe(
+              'workers_scripts_list',
+              f'{root}/accounts/{account}/workers/scripts',
+          )
+          if isinstance(scripts, list):
+              record['runtime_name_present'] = any(
+                  isinstance(item, dict) and item.get('id') == runtime_name
+                  for item in scripts
+              )
+          probes.append(record)
+
+          encoded_runtime = urllib.parse.quote(runtime_name, safe='')
+          record, _ = probe(
+              'worker_script_exact',
+              f'{root}/accounts/{account}/workers/scripts/{encoded_runtime}',
+          )
+          probes.append(record)
+
+          zone_query = urllib.parse.urlencode({
+              'name': zone_name,
+              'account.id': account,
+              'status': 'active',
+              'per_page': 50,
+          })
+          record, zones = probe('zones', f'{root}/zones?{zone_query}')
+          zone_id = None
+          if isinstance(zones, list):
+              zone_id = next((
+                  item.get('id')
+                  for item in zones
+                  if isinstance(item, dict)
+                  and item.get('name') == zone_name
+                  and isinstance(item.get('id'), str)
+                  and item.get('id')
+              ), None)
+          record['target_zone_found'] = bool(zone_id)
+          probes.append(record)
+
+          if zone_id:
+              record, routes = probe(
+                  'workers_routes',
+                  f'{root}/zones/{zone_id}/workers/routes',
+              )
+              record['result_is_list'] = isinstance(routes, list)
+              probes.append(record)
+          else:
+              probes.append({
+                  'endpoint': 'workers_routes',
+                  'http_method': 'GET',
+                  'skipped': True,
+                  'reason': 'target_zone_not_available_from_zone_probe',
+                  'raw_body_recorded': False,
+              })
+
+          by_name = {item['endpoint']: item for item in probes}
+          token_pass = by_name['token_verify'].get('success') is True
+          scripts_pass = by_name['workers_scripts_list'].get('success') is True
+          zone_pass = (
+              by_name['zones'].get('success') is True
+              and by_name['zones'].get('target_zone_found') is True
+          )
+          routes_pass = by_name['workers_routes'].get('success') is True
+          if not token_pass:
+              classification = 'workers_token_verify_failed'
+          elif not scripts_pass and zone_pass and routes_pass:
+              classification = 'workers_scripts_account_permission_or_scope_failure'
+          elif scripts_pass and not zone_pass:
+              classification = 'zone_read_permission_or_scope_failure'
+          elif scripts_pass and zone_pass and not routes_pass:
+              classification = 'workers_routes_permission_or_scope_failure'
+          elif not scripts_pass and not zone_pass:
+              classification = 'workers_account_and_zone_scope_failure'
+          elif not scripts_pass:
+              classification = 'workers_scripts_account_permission_or_scope_failure'
+          elif not routes_pass:
+              classification = 'workers_routes_permission_or_scope_failure'
+          else:
+              classification = 'all_workers_read_capabilities_pass'
+
+          evidence = {
+              'schema_version': 'knowledge-engine-m25-9-workers-scope-diagnostic/v1',
+              'engine_sha': os.environ['GITHUB_SHA'],
+              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+              'workflow_run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'http_methods_used': ['GET'],
+              'mutations': 0,
+              'secret_values_recorded': False,
+              'authorization_headers_recorded': False,
+              'raw_response_bodies_recorded': False,
+              'account_id_shape_valid': bool(re.fullmatch(r'[0-9a-fA-F]{32}', account)),
+              'account_id_sha256': hashlib.sha256(account.encode()).hexdigest(),
+              'zone_name': zone_name,
+              'runtime_name': runtime_name,
+              'probes': probes,
+              'root_cause_classification': classification,
+              'all_required_read_capabilities_pass': (
+                  token_pass and scripts_pass and zone_pass and routes_pass
+              ),
+          }
+          evidence['evidence_sha256'] = hashlib.sha256(
+              json.dumps(evidence, sort_keys=True, separators=(',', ':')).encode()
+          ).hexdigest()
+          out.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
+          print(json.dumps({
+              'classification': classification,
+              'all_required_read_capabilities_pass': (
+                  token_pass and scripts_pass and zone_pass and routes_pass
+              ),
+              'probes': [
+                  {
+                      'endpoint': item['endpoint'],
+                      'http_status': item.get('http_status'),
+                      'success': item.get('success'),
+                      'errors': item.get('errors'),
+                      'skipped': item.get('skipped', False),
+                  }
+                  for item in probes
+              ],
+              'mutations': 0,
+          }, sort_keys=True))
+          PY
+      - name: Upload sanitized Workers scope evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-workers-scope-diagnostic-${{ github.sha }}
+          path: /tmp/m25-9-workers-scope-diagnostic/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish diagnostic result
+        if: always()
+        run: |
+          set -euo pipefail
+          evidence="$EVIDENCE_DIR/workers-scope-diagnostic.json"
+          classification='evidence_unavailable'
+          passed='false'
+          if test -s "$evidence"; then
+            classification="$(jq -r '.root_cause_classification' "$evidence")"
+            passed="$(jq -r '.all_required_read_capabilities_pass' "$evidence")"
+          fi
+          if test "$passed" = 'true'; then
+            state='success'
+          else
+            state='failure'
+          fi
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state="$state" \
+            -f context='m25-9-workers-scope-diagnostic' \
+            -f description="run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT $classification" \
+            -f target_url="$run_url" >/dev/null
+          gh issue comment 1092 \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "M25.9 Workers GET-only scope diagnostic at exact SHA \`$GITHUB_SHA\` (run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`): \`$classification\`. External mutations: \`0\`."
