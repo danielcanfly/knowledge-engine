@@ -319,3 +319,5 @@ jobs:
           gh issue comment 1092 \
             --repo "$GITHUB_REPOSITORY" \
             --body "M25.9 Workers GET-only scope diagnostic at exact SHA \`$GITHUB_SHA\` (run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`): \`$classification\`. External mutations: \`0\`."
+
+# Workers token retest trigger: 2026-07-24T10:00+09:00
