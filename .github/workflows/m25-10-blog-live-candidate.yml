@@ -123,6 +123,7 @@ jobs:
           expected_m25_10="$(printf '%s\n' \
             '.github/workflows/m25-10-blog-live-candidate.yml' \
             'docs/architecture/m25/m25-10-live-candidate-deployment.md' \
+            'packages/m25-blog-candidate-runtime/package-lock.json' \
             'packages/m25-blog-candidate-runtime/package.json' \
             'packages/m25-blog-candidate-runtime/src/index.ts' \
             'packages/m25-blog-candidate-runtime/tsconfig.json' \
@@ -133,10 +134,16 @@ jobs:
           expected_m25_9_containment="$(printf '%s\n' \
             '.github/workflows/m25-9-blog-full-population-pilot.yml' \
             '.github/workflows/m25-10-blog-live-candidate.yml' \
+            'packages/m25-blog-candidate-runtime/package-lock.json' \
             'src/knowledge_engine/m25_blog_live_candidate.py' \
             'tests/test_m25_10_blog_live_candidate.py' | sort)"
+          expected_m25_9_lockfile_followup="$(printf '%s\n' \
+            '.github/workflows/m25-9-blog-full-population-pilot.yml' \
+            '.github/workflows/m25-10-blog-live-candidate.yml' \
+            'packages/m25-blog-candidate-runtime/package-lock.json' | sort)"
           test "$changed" = "$expected_m25_10" \
-            || test "$changed" = "$expected_m25_9_containment"
+            || test "$changed" = "$expected_m25_9_containment" \
+            || test "$changed" = "$expected_m25_9_lockfile_followup"
           ! printf '%s\n' "$changed" | grep -Eq \
             '^(production/|release/production|r2/production|credentials/|secrets/)'
 

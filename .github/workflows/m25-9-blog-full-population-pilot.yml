@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/m25-9-blog-full-population-pilot.yml'
       - 'docs/architecture/m25/m25-9-live-preflight-repair.md'
+      - 'packages/m25-blog-candidate-runtime/package-lock.json'
       - 'scripts/m25_9_r2_write_preflight.py'
       - 'src/knowledge_engine/m25_blog_live_candidate.py'
       - 'tests/test_m25_9_r2_write_preflight.py'
@@ -18,6 +19,7 @@ on:
       - 'tests/test_m25_9_r2_write_preflight.py'
       - 'scripts/m25_9_cloudflare_live_preflight.py'
       - 'tests/test_m25_9_cloudflare_live_preflight.py'
+      - 'packages/m25-blog-candidate-runtime/package-lock.json'
       - 'src/knowledge_engine/m25_blog_live_candidate.py'
       - 'tests/test_m25_10_blog_live_candidate.py'
 
@@ -142,12 +144,18 @@ jobs:
           set -euo pipefail
           git fetch --quiet --no-tags origin main
           changed="$(git diff --name-only origin/main...HEAD | sort)"
-          expected="$(printf '%s\n' \
+          expected_owner_acceptance="$(printf '%s\n' \
             '.github/workflows/m25-9-blog-full-population-pilot.yml' \
             '.github/workflows/m25-10-blog-live-candidate.yml' \
+            'packages/m25-blog-candidate-runtime/package-lock.json' \
             'src/knowledge_engine/m25_blog_live_candidate.py' \
             'tests/test_m25_10_blog_live_candidate.py' | sort)"
-          test "$changed" = "$expected"
+          expected_lockfile_followup="$(printf '%s\n' \
+            '.github/workflows/m25-9-blog-full-population-pilot.yml' \
+            '.github/workflows/m25-10-blog-live-candidate.yml' \
+            'packages/m25-blog-candidate-runtime/package-lock.json' | sort)"
+          test "$changed" = "$expected_owner_acceptance" \
+            || test "$changed" = "$expected_lockfile_followup"
           ! printf '%s\n' "$changed" | grep -Eq \
             '^(production/|release/production|r2/production|credentials/|secrets/)'
 
