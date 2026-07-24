@@ -54,8 +54,8 @@ class FakeRequester:
 def endpoint_from_url(url: str) -> str:
     if url.endswith("/user/tokens/verify"):
         return "user_token_verify"
-    if "/pages/projects?" in url:
-        return "pages_projects"
+    if url.endswith(f"/pages/projects/{PROJECT}"):
+        return "pages_project"
     if "/deployments?" in url:
         return "pages_deployments"
     if url.endswith("/workers/scripts"):
@@ -74,8 +74,8 @@ def endpoint_from_url(url: str) -> str:
 def payload_for(endpoint: str) -> dict[str, Any]:
     if endpoint == "user_token_verify":
         return {"success": True, "result": {"status": "active", "id": "hidden"}}
-    if endpoint == "pages_projects":
-        return {"success": True, "result": [{"name": PROJECT}]}
+    if endpoint == "pages_project":
+        return {"success": True, "result": {"name": PROJECT}}
     if endpoint == "pages_deployments":
         return {"success": True, "result": [{"id": "pages-deployment-1"}]}
     if endpoint == "workers_scripts":
@@ -103,7 +103,7 @@ def successful_outcomes() -> dict[tuple[str, str], list[dict[str, Any]]]:
         mapping[(token, "user_token_verify")] = [
             {"status": 200, "payload": payload_for("user_token_verify")}
         ]
-    for endpoint in ("pages_projects", "pages_deployments"):
+    for endpoint in ("pages_project", "pages_deployments"):
         mapping[("pages-token", endpoint)] = [
             {"status": 200, "payload": payload_for(endpoint)}
         ]
@@ -178,7 +178,7 @@ def test_missing_dedicated_token_blocks_before_network(tmp_path: Path) -> None:
 
 def test_pages_403_retains_status_and_cloudflare_code(tmp_path: Path) -> None:
     outcomes = successful_outcomes()
-    outcomes[("pages-token", "pages_projects")] = [
+    outcomes[("pages-token", "pages_project")] = [
         {
             "status": 403,
             "payload": {"success": False, "errors": [{"code": 10000}]},
@@ -192,7 +192,7 @@ def test_pages_403_retains_status_and_cloudflare_code(tmp_path: Path) -> None:
     else:
         raise AssertionError("403 should block")
     evidence = json.loads(evidence_path.read_text())
-    record = [item for item in evidence["probes"] if item["endpoint"] == "pages_projects"][-1]
+    record = [item for item in evidence["probes"] if item["endpoint"] == "pages_project"][-1]
     assert record["http_status"] == 403
     assert record["cloudflare_error_code"] == 10000
     assert record["cloudflare_error_category"] == "permission_or_resource_scope_failure"
