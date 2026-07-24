@@ -127,6 +127,18 @@ jobs:
             -f context='m25-9-repair-branch-builder' \
             -f description="run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT branch ready" \
             -f target_url="$run_url" >/dev/null
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state='success' \
+            -f context='m25-9-repair-head' \
+            -f description="$REPAIR_HEAD" \
+            -f target_url="$run_url" >/dev/null
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state='success' \
+            -f context='m25-9-repair-tree' \
+            -f description="$REPAIR_TREE" \
+            -f target_url="$run_url" >/dev/null
           gh issue comment 1092 \
             --repo "$GITHUB_REPOSITORY" \
             --body "M25.9 script/test repair branch \`$REPAIR_BRANCH\` is ready at commit \`$REPAIR_HEAD\`, tree \`$REPAIR_TREE\` (run \`$GITHUB_RUN_ID\`, attempt \`$GITHUB_RUN_ATTEMPT\`). The exact-project implementation passed Ruff, focused tests and compileall. No external service mutation occurred."
