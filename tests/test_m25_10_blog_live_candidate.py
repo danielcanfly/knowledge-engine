@@ -137,6 +137,15 @@ def test_qdrant_query_body_matches_runtime_authority_boundary() -> None:
     assert body["filter"] == subject._qdrant_authority_filter("release")
 
 
+def test_qdrant_collection_name_is_engine_scoped() -> None:
+    assert subject._qdrant_collection_name(
+        "m25blog-5250f8422f4f-f5f01d82c7a1",
+        "6ab3b6baa9bac48cf8a25fe95fd282c5b895c2fa",
+    ) == "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_6ab3b6baa9ba"
+    with pytest.raises(IntegrityError, match="engine SHA"):
+        subject._qdrant_collection_name("release", "not-a-sha")
+
+
 def test_m25_obsidian_vault_zip_manifest_is_downloadable_candidate(
     tmp_path: Path,
 ) -> None:

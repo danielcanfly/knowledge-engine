@@ -154,8 +154,14 @@ jobs:
             '.github/workflows/m25-9-blog-full-population-pilot.yml' \
             '.github/workflows/m25-10-blog-live-candidate.yml' \
             'packages/m25-blog-candidate-runtime/package-lock.json' | sort)"
+          expected_bluegreen_followup="$(printf '%s\n' \
+            '.github/workflows/m25-9-blog-full-population-pilot.yml' \
+            '.github/workflows/m25-10-blog-live-candidate.yml' \
+            'src/knowledge_engine/m25_blog_live_candidate.py' \
+            'tests/test_m25_10_blog_live_candidate.py' | sort)"
           test "$changed" = "$expected_owner_acceptance" \
-            || test "$changed" = "$expected_lockfile_followup"
+            || test "$changed" = "$expected_lockfile_followup" \
+            || test "$changed" = "$expected_bluegreen_followup"
           ! printf '%s\n' "$changed" | grep -Eq \
             '^(production/|release/production|r2/production|credentials/|secrets/)'
 
