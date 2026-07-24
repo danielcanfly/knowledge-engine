@@ -79,7 +79,8 @@ def test_m26_9_acceptance_frozen_identities_match_registry() -> None:
     acceptance = load(PILOT / "m26-9-acceptance.json")
     registry = load(PILOT / "m26-9-contract-registry.json")
     verify_self_digest(registry)
-    assert registry["self_sha256"] == acceptance["frozen_identities"]["contract_registry_self_sha256"]
+    frozen = acceptance["frozen_identities"]
+    assert registry["self_sha256"] == frozen["contract_registry_self_sha256"]
     for key, value in registry["artifacts"].items():
         acceptance_key = {
             "baseline_plan_schema_sha256": "baseline_plan_schema_sha256",
@@ -88,4 +89,4 @@ def test_m26_9_acceptance_frozen_identities_match_registry() -> None:
             "qa_feedback_schema_sha256": "qa_feedback_schema_sha256",
             "qa_policy_sha256": "qa_policy_sha256",
         }[key]
-        assert value == acceptance["frozen_identities"][acceptance_key]
+        assert value == frozen[acceptance_key]
