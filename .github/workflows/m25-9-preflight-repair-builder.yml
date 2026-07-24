@@ -100,6 +100,7 @@ jobs:
         with:
           name: m25-9-pages-exact-project-repair-${{ github.sha }}
           path: /tmp/m25-9-pages-exact-project-repair/
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
       - name: Publish repair artifact evidence
