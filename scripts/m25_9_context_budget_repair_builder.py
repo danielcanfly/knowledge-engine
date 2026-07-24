@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from textwrap import dedent
 
-
 MODULE = Path("src/knowledge_engine/m23_cloudflare_qdrant.py")
 TESTS = Path("tests/test_m23_5_cloudflare_qdrant.py")
 WORKFLOW = Path(".github/workflows/m25-9-blog-full-population-pilot.yml")
