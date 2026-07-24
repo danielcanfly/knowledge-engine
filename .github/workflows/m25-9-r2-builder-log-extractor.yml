@@ -15,8 +15,8 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
-      TARGET_RUN_ID: '30069999721'
-      TARGET_JOB_ID: '89408694775'
+      TARGET_RUN_ID: '30070203276'
+      TARGET_JOB_ID: '89409293164'
       OUTPUT_DIR: /tmp/m25-9-r2-builder-log
     steps:
       - uses: actions/checkout@v4
@@ -44,14 +44,14 @@ jobs:
 
           root = Path(os.environ['OUTPUT_DIR'])
           lines = root.joinpath('full.log').read_text(errors='replace').splitlines()
-          selected = set(range(max(0, len(lines) - 90), len(lines)))
+          selected = set(range(max(0, len(lines) - 110), len(lines)))
           for index, line in enumerate(lines):
               if any(value in line for value in (
-                  'Traceback', 'RuntimeError', 'SyntaxError', 'ValueError',
-                  'line not found', 'expected one', '##[error]',
-                  'Process completed with exit code',
+                  'generated changed files', 'expected files', 'Traceback',
+                  'RuntimeError', 'SyntaxError', 'ValueError', 'line not found',
+                  'expected one', '##[error]', 'Process completed with exit code',
               )):
-                  selected.update(range(max(0, index - 12), min(len(lines), index + 28)))
+                  selected.update(range(max(0, index - 12), min(len(lines), index + 40)))
           def clean(value):
               value = re.sub(r'https?://\S+', '<redacted-url>', value)
               value = re.sub(r'\b[0-9a-fA-F]{40,64}\b', '<redacted-sha>', value)
