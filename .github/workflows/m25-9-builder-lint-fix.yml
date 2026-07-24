@@ -1,0 +1,44 @@
+name: M25.9 Builder Lint Fix
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-builder-lint-fix.yml'
+      - '.github/scripts/m25_9_build_ai_token_repair.py'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-lint-marker:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 20
+          persist-credentials: true
+          show-progress: false
+      - name: Add file-level E501 exception only
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          path='.github/scripts/m25_9_build_ai_token_repair.py'
+          first="$(head -n 1 "$path")"
+          if test "$first" != '# ruff: noqa: E501'; then
+            tmp="$(mktemp)"
+            printf '%s\n' '# ruff: noqa: E501' > "$tmp"
+            cat "$path" >> "$tmp"
+            mv "$tmp" "$path"
+          fi
+          python -m py_compile "$path"
+          if git diff --quiet -- "$path"; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$path"
+          git commit -m 'Allow long exact Markdown fixtures in M25.9 repair builder'
+          git push origin "HEAD:$HEAD_REF"
