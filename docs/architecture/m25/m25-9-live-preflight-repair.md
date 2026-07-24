@@ -90,3 +90,29 @@ repository's established response adapters. The implementation now uses
 `raise_for_status()` as the terminal HTTP contract and a defensive
 `status_code` fallback only for identifying context-limit responses, while
 preserving recursive code `3030` splitting and input order.
+
+
+## R2 object-write capability gate
+
+Fresh full-pilot run `30068964353` passed Cloudflare preflight, Workers AI
+capability, production-pointer read, embedding, and Qdrant verification, then
+failed at R2 `PutObject` with `AccessDenied`. The same credentials successfully
+read `channels/production.json`, proving the endpoint, bucket and authentication
+identity were valid for reads while object-write authority was absent.
+
+Before any subsequent full-population embedding run, an independent bounded R2
+gate must create one unique canary under `diagnostics/m25-9/r2-write-preflight/`,
+read it back and verify its digest, delete it, and confirm that no residual object
+remains. A successful check performs exactly two bounded candidate mutations
+(one put and one delete) with zero residual objects. Production channel keys and
+public-production traffic remain untouched.
+
+The GitHub environment `m23-r3-diagnostic` must contain dedicated R2 S3 write
+credentials named `R2_ACCESS_KEY_ID_WRITE` and `R2_SECRET_ACCESS_KEY_WRITE` with
+**Object Read & Write** (or Admin Read & Write) permission scoped to the exact
+bucket named by `R2_BUCKET`. The workflow maps those write-only secret names into
+the runtime `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` environment variables
+expected by the existing object-store settings. Existing read-only R2 credentials
+may remain available under their original names, but they are not sufficient for
+candidate publication. Rotate the write access key ID and secret access key
+together; the secret access key cannot be viewed again after token creation.
