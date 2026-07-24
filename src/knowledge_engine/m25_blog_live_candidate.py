@@ -9,6 +9,7 @@ import shutil
 import struct
 import tempfile
 import urllib.parse
+import zipfile
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -55,6 +56,15 @@ SITE_PROJECT = "llm-wiki-m24-internal"
 SITE_HOSTNAME = "m24-internal.danielcanfly.com"
 RUNTIME_NAME = "llm-wiki-m25-blog-candidate-runtime"
 RUNTIME_ROUTE = f"{SITE_HOSTNAME}/api/m25/*"
+OBSIDIAN_VAULT_ZIP_RELATIVE = "downloads/llm-wiki-m25-blog-obsidian-vault.zip"
+ZIP_TIMESTAMP = (2026, 7, 24, 0, 0, 0)
+QDRANT_FILTER_INDEXES = {
+    "release_id": "keyword",
+    "source_commit_sha": "keyword",
+    "admission_sha256": "keyword",
+    "candidate_release_eligible": "bool",
+    "production_authority": "bool",
+}
 
 
 def _canonical(value: Any) -> bytes:
@@ -514,6 +524,88 @@ def _qdrant_request(
     return value
 
 
+def _qdrant_authority_filter(release_id: str) -> dict[str, Any]:
+    return {
+        "must": [
+            {"key": "release_id", "match": {"value": release_id}},
+            {"key": "source_commit_sha", "match": {"value": SOURCE_SHA}},
+            {"key": "admission_sha256", "match": {"value": ADMISSION_SHA}},
+            {"key": "candidate_release_eligible", "match": {"value": True}},
+            {"key": "production_authority", "match": {"value": False}},
+        ],
+    }
+
+
+def _qdrant_query_body(
+    vector: Sequence[float],
+    release_id: str,
+    *,
+    limit: int = 1,
+) -> dict[str, Any]:
+    return {
+        "query": list(vector),
+        "using": QDRANT_VECTOR_NAME,
+        "limit": limit,
+        "with_payload": True,
+        "with_vector": False,
+        "filter": _qdrant_authority_filter(release_id),
+    }
+
+
+def _create_qdrant_payload_indexes(
+    client: httpx.Client,
+    qdrant: QdrantConfig,
+    escaped_collection: str,
+) -> list[dict[str, str]]:
+    created = []
+    for field_name, field_schema in QDRANT_FILTER_INDEXES.items():
+        _qdrant_request(
+            client,
+            qdrant,
+            "PUT",
+            f"/collections/{escaped_collection}/index?wait=true",
+            {"field_name": field_name, "field_schema": field_schema},
+        )
+        created.append({"field_name": field_name, "field_schema": field_schema})
+    return created
+
+
+def _verify_qdrant_filtered_query(
+    client: httpx.Client,
+    qdrant: QdrantConfig,
+    escaped_collection: str,
+    expected_point: Mapping[str, Any],
+    release_id: str,
+) -> None:
+    vector_container = expected_point.get("vector")
+    if not isinstance(vector_container, Mapping):
+        raise IntegrityError("M25-LIVE-029 filtered query sample vector missing")
+    vector = vector_container.get(QDRANT_VECTOR_NAME)
+    if not isinstance(vector, list) or len(vector) != VECTOR_DIMENSION:
+        raise IntegrityError("M25-LIVE-030 filtered query vector malformed")
+    result = _qdrant_request(
+        client,
+        qdrant,
+        "POST",
+        f"/collections/{escaped_collection}/points/query?consistency=all",
+        _qdrant_query_body(vector, release_id),
+    )
+    rows = (result.get("result") or {}).get("points")
+    if not isinstance(rows, list) or not rows:
+        raise IntegrityError("M25-LIVE-031 filtered Qdrant query returned no rows")
+    payload = rows[0].get("payload") if isinstance(rows[0], Mapping) else None
+    if not isinstance(payload, Mapping):
+        raise IntegrityError("M25-LIVE-032 filtered Qdrant payload missing")
+    if (
+        payload.get("release_id") != release_id
+        or payload.get("source_commit_sha") != SOURCE_SHA
+        or payload.get("admission_sha256") != ADMISSION_SHA
+        or payload.get("candidate_release_eligible") is not True
+        or payload.get("production_authority") is not False
+    ):
+        raise IntegrityError("M25-LIVE-033 filtered Qdrant authority mismatch")
+
+
 def delete_collection(config: QdrantConfig) -> None:
     with httpx.Client(timeout=config.timeout_seconds) as client:
         response = client.delete(
@@ -584,6 +676,7 @@ def index_candidate(
         )
         if create.status_code not in {200, 201}:
             create.raise_for_status()
+        payload_indexes = _create_qdrant_payload_indexes(client, qdrant, escaped)
         snapshot = _qdrant_request(client, qdrant, "GET", f"/collections/{escaped}")
         before = snapshot["result"]
         if before.get("points_count") != 0:
@@ -633,6 +726,13 @@ def index_candidate(
         actual_fingerprint = _aggregate_fingerprint(returned)
         if actual_fingerprint != expected_fingerprint:
             raise IntegrityError("M25-LIVE-025 aggregate point fingerprint mismatch")
+        _verify_qdrant_filtered_query(
+            client,
+            qdrant,
+            escaped,
+            expected_by_id[ids[0]],
+            release_id,
+        )
         after = _qdrant_request(client, qdrant, "GET", f"/collections/{escaped}")[
             "result"
         ]
@@ -646,6 +746,8 @@ def index_candidate(
         "embedding_vectors_sha256": hashlib.sha256(_canonical(vectors)).hexdigest(),
         "embedding_model": CLOUDFLARE_MODEL,
         "vector_dimension": VECTOR_DIMENSION,
+        "payload_indexes": payload_indexes,
+        "filtered_query_readback": "authority_filter_query_pass",
         "readback": "all_ids_payloads_vectors_match",
     }
 
@@ -654,6 +756,7 @@ def _site_payloads(
     release_id: str,
     manifest_sha: str,
     context: Mapping[str, Any],
+    obsidian_manifest: Mapping[str, Any],
 ) -> dict[str, Any]:
     pack = context["pack"]
     graph_nodes = context["artifacts"]["graph_v2_nodes"]
@@ -823,14 +926,153 @@ def _site_payloads(
             "status": "candidate_semantic_runtime_enabled",
             "endpoint": "/api/m25/query",
         },
-        "obsidian-export-manifest.json": {
-            "release_id": release_id,
-            "status": "not_in_candidate_scope",
-        },
+        "obsidian-export-manifest.json": dict(obsidian_manifest),
         "m24-14-6-final-acceptance.json": {
             "release_id": release_id,
             "status": "m25_candidate_pending_authenticated_acceptance",
         },
+    }
+
+
+def _zip_entry(path: str, data: str | bytes) -> zipfile.ZipInfo:
+    info = zipfile.ZipInfo(path)
+    info.date_time = ZIP_TIMESTAMP
+    info.compress_type = zipfile.ZIP_DEFLATED
+    info.external_attr = 0o644 << 16
+    return info
+
+
+def _vault_title(value: str, fallback: str) -> str:
+    allowed = []
+    for char in value.strip() or fallback:
+        allowed.append(char if char.isalnum() or char in " -_." else "-")
+    normalized = " ".join("".join(allowed).split())
+    return normalized[:120].strip(" .-") or fallback
+
+
+def _build_obsidian_vault_zip(
+    output: Path,
+    release_id: str,
+    context: Mapping[str, Any],
+) -> dict[str, Any]:
+    pack = context["pack"]
+    downloads = output / "downloads"
+    downloads.mkdir(parents=True, exist_ok=True)
+    zip_path = output / OBSIDIAN_VAULT_ZIP_RELATIVE
+    articles = pack["article_by_id"]
+    series: dict[str, dict[str, Any]] = {}
+    for source_id, article in articles.items():
+        article_with_id = {"source_id": source_id, **article}
+        series.setdefault(
+            article["series_id"],
+            {
+                "series_id": article["series_id"],
+                "title": article["series_title"],
+                "sources": [],
+            },
+        )["sources"].append(article_with_id)
+    entries: list[tuple[str, str | bytes]] = [
+        (
+            ".obsidian/app.json",
+            json.dumps(
+                {"alwaysUpdateLinks": True, "newFileLocation": "folder"},
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n",
+        ),
+        (
+            "README.md",
+            "\n".join(
+                [
+                    "# M25 Blog Candidate Vault",
+                    "",
+                    f"Release ID: `{release_id}`",
+                    f"Source SHA: `{SOURCE_SHA}`",
+                    "",
+                    "This vault is an authenticated-internal candidate export.",
+                    "It is read-only evidence; write-back is not authorized.",
+                    "",
+                ]
+            ),
+        ),
+    ]
+    for series_id, item in sorted(series.items()):
+        title = _vault_title(item["title"], series_id)
+        links = [
+            f"- [[Sources/{source['source_id']}|{source['title']}]]"
+            for source in sorted(item["sources"], key=lambda source: source["source_id"])
+        ]
+        entries.append(
+            (
+                f"Series/{series_id} - {title}.md",
+                "\n".join(
+                    [
+                        "---",
+                        f"release_id: {release_id}",
+                        f"series_id: {series_id}",
+                        "production_authority: false",
+                        "write_back_authorized: false",
+                        "---",
+                        "",
+                        f"# {item['title']}",
+                        "",
+                        *links,
+                        "",
+                    ]
+                ),
+            )
+        )
+    for source_id, article in sorted(articles.items()):
+        body = pack["source_bytes"][source_id].decode("utf-8")
+        title = _vault_title(article["title"], source_id)
+        series_title = _vault_title(article["series_title"], article["series_id"])
+        series_link = (
+            f"[[Series/{article['series_id']} - {series_title}|"
+            f"{article['series_title']}]]"
+        )
+        entries.append(
+            (
+                f"Sources/{source_id} - {title}.md",
+                "\n".join(
+                    [
+                        "---",
+                        f"release_id: {release_id}",
+                        f"source_id: {source_id}",
+                        f"series_id: {article['series_id']}",
+                        f"source_commit_sha: {SOURCE_SHA}",
+                        "production_authority: false",
+                        "write_back_authorized: false",
+                        "---",
+                        "",
+                        f"# {article['title']}",
+                        "",
+                        f"Series: {series_link}",
+                        "",
+                        body,
+                        "",
+                    ]
+                ),
+            )
+        )
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        for path, data in sorted(entries, key=lambda item: item[0]):
+            archive.writestr(_zip_entry(path, data), data)
+    data = zip_path.read_bytes()
+    return {
+        "schema_version": "knowledge-engine-m25-9-obsidian-vault/v1",
+        "release_id": release_id,
+        "status": "candidate_vault_zip_ready",
+        "download_href": OBSIDIAN_VAULT_ZIP_RELATIVE,
+        "vault_zip_path": OBSIDIAN_VAULT_ZIP_RELATIVE,
+        "vault_zip_bytes": len(data),
+        "vault_zip_sha256": sha256_bytes(data),
+        "file_count": len(entries),
+        "concept_note_count": len(series),
+        "source_note_count": len(articles),
+        "write_back_authorized": False,
+        "production_authority": False,
     }
 
 
@@ -848,7 +1090,13 @@ def build_internal_site(
     if data_root.exists():
         shutil.rmtree(data_root)
     data_root.mkdir()
-    payloads = _site_payloads(compiled.release_id, manifest_sha, context)
+    obsidian_manifest = _build_obsidian_vault_zip(output, compiled.release_id, context)
+    payloads = _site_payloads(
+        compiled.release_id,
+        manifest_sha,
+        context,
+        obsidian_manifest,
+    )
     for filename, value in payloads.items():
         _write(data_root / filename, value)
     sources_root = data_root / "sources"
