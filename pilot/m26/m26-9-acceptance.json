@@ -1,0 +1,135 @@
+{
+  "authority_boundary": {
+    "baseline_refresh_execution": false,
+    "baseline_refresh_planning": true,
+    "candidate_qa_feedback": true,
+    "canonical_identity_or_relation_mutation": false,
+    "credentials": false,
+    "foundation_mutation": false,
+    "live_provider_calls": false,
+    "network_execution": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "provider_sdk": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "real_corpus_binding": false,
+    "release_mutation": false,
+    "semantic_or_hybrid_serving": false,
+    "source_mutation": false,
+    "synthetic_only": true,
+    "verified_final_answers": false
+  },
+  "benchmark": {
+    "baseline_refresh_execution_count": 0,
+    "baseline_refresh_plan_count": 1,
+    "case_count": 12,
+    "credentials_used_count": 0,
+    "failed_count": 0,
+    "live_network_call_count": 0,
+    "passed_count": 12,
+    "production_answer_serving_count": 0,
+    "production_pointer_mutation_count": 0,
+    "provider_call_count": 0,
+    "qa_feedback_count": 6,
+    "qa_refusal_feedback_count": 4,
+    "qa_rejected_authority_count": 2,
+    "real_corpus_binding_count": 0,
+    "semantic_or_hybrid_use_count": 0,
+    "verified_final_answer_count": 0,
+    "warning_feedback_count": 2
+  },
+  "evidence_artifact": {
+    "artifact_id": 8605302196,
+    "digest": "sha256:d7b702c0c8ccacba765e96160b46097e07d496b19e25767ab3aae17bdb8e9ec6",
+    "name": "m26-9-candidate-qa-evidence",
+    "retention_days": 90,
+    "workflow_run_id": 30115648240
+  },
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_escalations": 0,
+    "codex_used": false,
+    "daniel_gate_required": false
+  },
+  "frozen_identities": {
+    "baseline_plan_schema_sha256": "36e79f845e80ac7bee96e5877505ebdeb141e630f7bb3b774115595512dd7b4d",
+    "benchmark_cases_sha256": "7d500e765428c887eef4c2336862d22c082195b235c0a8e6e3c62d9b881646e1",
+    "contract_registry_self_sha256": "a5a873e38b1b1fef88f7159b872af96cfe46bfb153ab2fe9aebb0782101be24b",
+    "entry_contract_sha256": "dde3e8774f6e8c521558bc9748ad9be5cac54df7d0bc13fb91cb5e8b2a89dfc6",
+    "qa_feedback_schema_sha256": "4ea1b6d5f8c591c29677f51468486a87f62727430221c08d22c48fd65fb42a54",
+    "qa_policy_sha256": "ecc5faadf5711a64492d7d955c2b538572256b5bc54e34d8a6d3aee842cda6f3"
+  },
+  "implementation": {
+    "accepted_predecessor_main_seal_sha": "f75f2a427159b4dedbac032f36df3a47fda42ba5",
+    "base_sha": "fe499db2e043209bfa4c2390d513c5dc579727a2",
+    "changed_file_count": 11,
+    "expected_head_merge": true,
+    "final_head_sha": "926f2c1eefe0a4292c7ace41a51fca0f9897dc53",
+    "merge_sha": "f91d14f6b75053670c1ce2b517134e7c75ab8db0",
+    "pull_request_number": 1166,
+    "unresolved_review_thread_count": 0
+  },
+  "issue": {
+    "number": 1165,
+    "repository": "danielcanfly/knowledge-engine",
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "next_stage": {
+    "authorized": true,
+    "baseline_refresh_execution_permitted": false,
+    "baseline_refresh_review_permitted": true,
+    "final_authority_review_permitted": true,
+    "live_provider_calls_permitted": false,
+    "name": "Synthetic Baseline Refresh Review and Final Authority Gate",
+    "predecessor_status_required": "m26_9_candidate_qa_feedback_baseline_refresh_accepted",
+    "production_answer_serving_permitted": false,
+    "production_pointer_mutation_permitted": false,
+    "real_corpus_binding_permitted": false,
+    "stage_id": "M26.10",
+    "synthetic_only": true,
+    "verified_final_answer_permitted": false
+  },
+  "predecessor": {
+    "main_seal_sha": "f75f2a427159b4dedbac032f36df3a47fda42ba5",
+    "status": "m26_8_preview_evidence_candidate_bundle_accepted"
+  },
+  "quality_and_security": {
+    "answer_text_forbidden": true,
+    "baseline_refresh_execution_forbidden": true,
+    "baseline_refresh_plan_only": true,
+    "candidate_citation_binding_identity_bound": true,
+    "candidate_claim_identity_bound": true,
+    "conflict_warning_preserved_as_identity": true,
+    "final_answer_forbidden": true,
+    "production_answer_serving_forbidden": true,
+    "production_pointer_mutation_forbidden": true,
+    "prompt_injection_warning_only": true,
+    "refusal_feedback_emit_no_claims": true,
+    "verified_final_answer_forbidden": true
+  },
+  "reconciliation": {
+    "all_frozen_artifact_digests_required": true,
+    "evidence_digest_required": true,
+    "exact_remote_identity_verified": true,
+    "implementation_merge_is_required_ancestor": true,
+    "no_new_authority_beyond_m26_10_entry": true
+  },
+  "required_workflows": {
+    "CI": 30115648288,
+    "M17 Architecture Canon Acceptance": 30115648230,
+    "M18 Graph v2 acceptance": 30115648296,
+    "M26.1 Architecture Authority": 30115648260,
+    "M26.4 Provider Mock Replay": 30115648267,
+    "M26.5 Draft Answer Contract": 30115648548,
+    "M26.6 Answer Evaluation Refusal Gate": 30115648575,
+    "M26.7 Answer Presentation Preview": 30115648239,
+    "M26.8 Preview Evidence Candidate Bundle": 30115648254,
+    "M26.9 Candidate QA Feedback": 30115648240,
+    "R2 Release Integration": 30115648423
+  },
+  "schema_version": "knowledge-engine-m26-9-acceptance/v1",
+  "self_sha256": "919a2688787fcef9ff8520836f03af9d5928097b143f127433d7b97dc6b32289",
+  "status": "m26_9_candidate_qa_feedback_baseline_refresh_accepted"
+}
