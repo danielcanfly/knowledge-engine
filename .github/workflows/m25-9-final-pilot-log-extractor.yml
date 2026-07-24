@@ -1,0 +1,136 @@
+name: M25.9 Final Pilot Log Extractor
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-final-pilot-log-extractor.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_RUN_ID: '30068964353'
+      TARGET_JOB_ID: '89405748366'
+      OUTPUT_DIR: /tmp/m25-9-final-pilot-log
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 20
+          show-progress: false
+      - name: Verify exact one-file read-only boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git fetch --quiet --no-tags origin main
+          test "$(git diff --name-only origin/main...HEAD)" = \
+            '.github/workflows/m25-9-final-pilot-log-extractor.yml'
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID")"
+          test "$(jq -r '.status' <<<"$run")" = 'completed'
+          test "$(jq -r '.conclusion' <<<"$run")" = 'failure'
+          test "$(jq -r '.run_attempt' <<<"$run")" = '1'
+          mkdir -p "$OUTPUT_DIR"
+      - name: Download existing failed deploy job log
+        run: |
+          set -euo pipefail
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/$GITHUB_REPOSITORY/actions/jobs/$TARGET_JOB_ID/logs" \
+            > "$OUTPUT_DIR/full-job.log"
+          test -s "$OUTPUT_DIR/full-job.log"
+      - name: Extract sanitized build failure evidence
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ['OUTPUT_DIR'])
+          path = root / 'full-job.log'
+          text = path.read_text(errors='replace')
+          lines = text.splitlines()
+          anchors = (
+              'Build, embed, fully verify Qdrant, and publish R2 candidate',
+              'Traceback',
+              'HTTPStatusError',
+              'IntegrityError',
+              'RuntimeError',
+              'ValueError',
+              'SystemExit',
+              '##[error]',
+              'Process completed with exit code',
+          )
+          selected = set()
+          for index, line in enumerate(lines):
+              if any(anchor in line for anchor in anchors):
+                  selected.update(
+                      range(max(0, index - 25), min(len(lines), index + 45))
+                  )
+          selected.update(range(max(0, len(lines) - 160), len(lines)))
+
+          def sanitize(line: str) -> str:
+              line = re.sub(r'Bearer\s+\S+', 'Bearer <redacted>', line)
+              line = re.sub(r'AUTHORIZATION:\s*basic\s+\S+', 'AUTHORIZATION: <redacted>', line)
+              line = re.sub(r'https?://\S+', '<redacted-url>', line)
+              line = re.sub(r'\b[0-9a-fA-F]{40,64}\b', '<redacted-sha>', line)
+              line = re.sub(r'\b[A-Z0-9]{20,}\b', '<redacted-credential>', line)
+              return line[:2000]
+
+          excerpt = [
+              {'line_number': index + 1, 'text': sanitize(lines[index])}
+              for index in sorted(selected)
+          ]
+          error_lines = [
+              item for item in excerpt
+              if any(token in item['text'] for token in (
+                  'Traceback', 'HTTPStatusError', 'IntegrityError',
+                  'RuntimeError', 'ValueError', 'SystemExit', '##[error]',
+                  'Process completed with exit code', 'Error:', 'Exception:'
+              ))
+          ]
+          evidence = {
+              'schema_version': 'knowledge-engine-m25-9-final-pilot-log-evidence/v1',
+              'source_run_id': int(os.environ['TARGET_RUN_ID']),
+              'source_job_id': int(os.environ['TARGET_JOB_ID']),
+              'source_run_attempt': 1,
+              'source_run_conclusion': 'failure',
+              'source_step': 'Build, embed, fully verify Qdrant, and publish R2 candidate',
+              'full_log_line_count': len(lines),
+              'full_log_sha256': hashlib.sha256(text.encode()).hexdigest(),
+              'selected_line_count': len(excerpt),
+              'error_lines': error_lines,
+              'excerpt': excerpt,
+              'raw_full_log_retained_in_artifact': False,
+              'source_run_rerun': False,
+              'external_service_mutations': 0,
+              'secret_values_recorded': False,
+          }
+          evidence['evidence_sha256'] = hashlib.sha256(
+              json.dumps(evidence, sort_keys=True, separators=(',', ':')).encode()
+          ).hexdigest()
+          output = root / 'final-pilot-failure-evidence.json'
+          output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
+          path.unlink()
+          print(json.dumps({
+              'source_run_id': evidence['source_run_id'],
+              'error_lines': evidence['error_lines'][-20:],
+              'external_service_mutations': 0,
+              'source_run_rerun': False,
+          }, sort_keys=True))
+          PY
+      - name: Upload sanitized failure evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-final-pilot-failure-evidence-${{ github.event.pull_request.head.sha }}
+          path: /tmp/m25-9-final-pilot-log/final-pilot-failure-evidence.json
+          if-no-files-found: error
+          retention-days: 30
