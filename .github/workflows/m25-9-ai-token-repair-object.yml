@@ -1,0 +1,96 @@
+name: M25.9 Workers AI Credential Repair Object
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-9-ai-token-repair-object.yml'
+      - '.github/scripts/m25_9_build_ai_token_repair.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m25-9-ai-token-repair-object.yml'
+      - '.github/scripts/m25_9_build_ai_token_repair.py'
+
+permissions:
+  contents: write
+  issues: write
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 50
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify two-file builder boundary and syntax
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test -f .github/workflows/m25-9-ai-token-repair-object.yml
+          test -f .github/scripts/m25_9_build_ai_token_repair.py
+          python -m py_compile .github/scripts/m25_9_build_ai_token_repair.py
+          if test "${{ github.event_name }}" = 'pull_request'; then
+            git fetch --quiet --no-tags origin main
+            changed="$(git diff --name-only origin/main...HEAD | sort)"
+            expected="$(printf '%s\n' \
+              '.github/scripts/m25_9_build_ai_token_repair.py' \
+              '.github/workflows/m25-9-ai-token-repair-object.yml' | sort)"
+            test "$changed" = "$expected"
+          fi
+
+  build-repair-object:
+    if: github.event_name == 'push'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OUTPUT_DIR: /tmp/m25-9-ai-token-repair
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 200
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify fresh attempt-1 builder authority
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 31a2ff0df1e44ab80681b138a53b3d1ff732726c HEAD
+          mkdir -p "$OUTPUT_DIR"
+      - name: Install focused test dependencies
+        run: python -m pip install -q --disable-pip-version-check -e '.[dev]'
+      - name: Build and validate unreachable repair commit object
+        run: python .github/scripts/m25_9_build_ai_token_repair.py
+      - name: Upload exact repair object evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m25-9-ai-token-repair-object-${{ github.sha }}
+          path: /tmp/m25-9-ai-token-repair/repair-commit.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish repair object result
+        run: |
+          set -euo pipefail
+          evidence="$OUTPUT_DIR/repair-commit.json"
+          commit="$(jq -r '.commit_sha' "$evidence")"
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state='success' \
+            -f context='m25-9-ai-token-repair-object' \
+            -f description="run $GITHUB_RUN_ID repair object ready" \
+            -f target_url="$run_url" >/dev/null
+          gh issue comment 1092 \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "M25.9 role-isolated Workers AI credential repair object created at commit \`$commit\` from exact parent \`$GITHUB_SHA\`. It adds a GET-only BGE-M3 model-schema gate and exposes the existing AI source secret only through the role-specific AI credential alias. External service mutations: \`0\`."
