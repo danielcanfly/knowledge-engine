@@ -1,0 +1,99 @@
+{
+  "schema_version": "knowledge-engine-m26-10-acceptance/v1",
+  "status": "m26_10_synthetic_final_authority_gate_accepted",
+  "authority_boundary": {
+    "synthetic_only": true,
+    "baseline_refresh_review": true,
+    "final_authority_review": true,
+    "baseline_refresh_execution": false,
+    "live_provider_calls": false,
+    "credentials": false,
+    "provider_sdk": false,
+    "network_execution": false,
+    "real_corpus_binding": false,
+    "semantic_or_hybrid_serving": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "verified_final_answers": false,
+    "source_mutation": false,
+    "foundation_mutation": false,
+    "release_mutation": false,
+    "r2_production_mutation": false,
+    "qdrant_mutation": false,
+    "canonical_identity_or_relation_mutation": false
+  },
+  "benchmark": {
+    "case_count": 12,
+    "passed_count": 12,
+    "failed_count": 0,
+    "approved_for_future_gate_count": 2,
+    "held_for_repair_count": 6,
+    "rejected_authority_escalation_count": 4,
+    "baseline_refresh_execution_count": 0,
+    "provider_call_count": 0,
+    "real_corpus_binding_count": 0,
+    "semantic_or_hybrid_use_count": 0,
+    "production_answer_serving_count": 0,
+    "production_pointer_mutation_count": 0,
+    "verified_final_answer_count": 0
+  },
+  "evidence_artifact": {
+    "artifact_id": 8613421036,
+    "name": "m26-10-final-authority-evidence",
+    "digest": "sha256:a1b6971d4b97eee3d95e393d1b51a78b4501741593acfc999289333530117a7a",
+    "workflow_run_id": 30137800565,
+    "retention_days": 90
+  },
+  "implementation": {
+    "pull_request_number": 1170,
+    "base_sha": "7976e0fcf9f44c72c9b0a39f9887ca0558a82a54",
+    "final_head_sha": "b857503b43f5896a5a10ba505859d61ae28d14bb",
+    "merge_sha": "9fdafee36202366c66aeb111d6943cbc279953f9",
+    "changed_file_count": 10,
+    "expected_head_merge": true,
+    "unresolved_review_thread_count": 0
+  },
+  "issue": {
+    "number": 1169,
+    "repository": "danielcanfly/knowledge-engine",
+    "state": "closed",
+    "state_reason": "completed"
+  },
+  "frozen_identities": {
+    "entry_contract_sha256": "b2376dde79c49afaf926618899d75c7bff3b91195adb9edde8df7b76df895557",
+    "final_authority_policy_sha256": "fa7eca03d265458f6399fe81d946b7c90a33e8eff84b27521810a0f9b998c15c",
+    "benchmark_cases_sha256": "7afcd2d7505347beb83b6f77283860b5cae31a79c178958bab41d6b64a1914ce",
+    "contract_registry_self_sha256": "5dbb9d5648cc455806b373a2a6ce390d5d7d2792624a31483e7f2bd912eb2cf3",
+    "review_schema_sha256": "b6c55718c256d9c7af154da8329b02f5e5e9aafa00625c5351459fb607fac229",
+    "closure_schema_sha256": "2b172cfbbd9f337a704146801427681061b2274a415cb7ff7d49d3811efa88fc"
+  },
+  "required_workflows": {
+    "M26.10 Synthetic Final Authority Gate": 30137800565,
+    "CI": 30137800441,
+    "R2 Release Integration": 30137800476,
+    "M17 Architecture Canon Acceptance": 30137800602,
+    "M18 Graph v2 acceptance": 30137800449,
+    "M26.1 Architecture Authority": 30137800456
+  },
+  "quality_and_security": {
+    "answer_text_forbidden": true,
+    "baseline_refresh_execution_forbidden": true,
+    "production_answer_serving_forbidden": true,
+    "production_pointer_mutation_forbidden": true,
+    "verified_final_answer_forbidden": true,
+    "approved_for_future_gate_is_not_production_authority": true,
+    "warning_and_refusal_records_fail_closed": true
+  },
+  "execution_roles": {
+    "chatgpt_primary_executor": true,
+    "codex_used": false,
+    "codex_escalations": 0,
+    "daniel_gate_required": false
+  },
+  "closure": {
+    "m26_synthetic_chain_complete": true,
+    "production_authority_granted": false,
+    "future_live_corpus_or_provider_work_requires_new_explicit_authorization": true
+  },
+  "self_sha256": "6626e2a5ef67580a455a5b744c53efd134ee7a5d08a93799f0506cf70764abfc"
+}
