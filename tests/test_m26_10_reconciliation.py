@@ -41,8 +41,16 @@ def test_m26_10_acceptance_metrics_and_boundary() -> None:
     assert benchmark["held_for_repair_count"] == 6
     assert benchmark["rejected_authority_escalation_count"] == 4
     authority = acceptance["authority_boundary"]
-    allowed_true = {"synthetic_only", "baseline_refresh_review", "final_authority_review"}
-    assert all(value is False for key, value in authority.items() if key not in allowed_true)
+    allowed_true = {
+        "synthetic_only",
+        "baseline_refresh_review",
+        "final_authority_review",
+    }
+    assert all(
+        value is False
+        for key, value in authority.items()
+        if key not in allowed_true
+    )
 
 
 def test_m26_10_acceptance_evidence_and_closure() -> None:
@@ -56,4 +64,7 @@ def test_m26_10_acceptance_evidence_and_closure() -> None:
     closure = acceptance["closure"]
     assert closure["m26_synthetic_chain_complete"] is True
     assert closure["production_authority_granted"] is False
-    assert closure["future_live_corpus_or_provider_work_requires_new_explicit_authorization"] is True
+    future_gate_required = (
+        closure["future_live_corpus_or_provider_work_requires_new_explicit_authorization"]
+    )
+    assert future_gate_required is True
