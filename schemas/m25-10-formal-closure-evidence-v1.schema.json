@@ -1,0 +1,55 @@
+{
+  "$id": "knowledge-engine-m25-10-formal-closure-evidence/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "decision_gate": {
+      "properties": {
+        "decision_required": {
+          "const": true
+        },
+        "valid_outcomes": {
+          "items": {
+            "enum": [
+              "approved_bounded_large_scale_ingestion",
+              "approved_with_conditions",
+              "governed_defer",
+              "rejected_pending_redesign"
+            ]
+          },
+          "minItems": 4,
+          "type": "array"
+        }
+      },
+      "required": [
+        "decision_required",
+        "valid_outcomes"
+      ],
+      "type": "object"
+    },
+    "protected_mutations": {
+      "additionalProperties": {
+        "const": false
+      },
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-10-formal-closure-evidence/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "status": {
+      "const": "m25_10_formal_closure_evidence_ready_awaiting_owner_decision"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "self_sha256",
+    "protected_mutations",
+    "decision_gate"
+  ],
+  "type": "object"
+}

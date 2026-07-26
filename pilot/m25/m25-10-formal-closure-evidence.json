@@ -1,0 +1,276 @@
+{
+  "closure_issue": {
+    "number": 1177,
+    "repository": "danielcanfly/knowledge-engine",
+    "title": "M25.10 Formal Scale Readiness, Authority Decision, and Closure",
+    "url": "https://github.com/danielcanfly/knowledge-engine/issues/1177"
+  },
+  "decision_gate": {
+    "decision_required": true,
+    "no_default_or_inferred_decision": true,
+    "valid_outcomes": [
+      "approved_bounded_large_scale_ingestion",
+      "approved_with_conditions",
+      "governed_defer",
+      "rejected_pending_redesign"
+    ]
+  },
+  "denominator_accounting": {
+    "admitted_blog_corpus": {
+      "articles": 156,
+      "documents": 156,
+      "graph_edges": 8525,
+      "graph_nodes": 4222,
+      "section_nodes": 4041,
+      "semantic_documents": 4197,
+      "series_or_collections": 25
+    },
+    "batch_a_articles": 78,
+    "batch_b_articles": 78,
+    "missing_articles": 0,
+    "unaccounted_sources": 0
+  },
+  "evidence_chain": [
+    {
+      "disposition": "accepted",
+      "evidence_path": "pilot/m25/m25-1-acceptance.json",
+      "implementation_pr": 1038,
+      "merge_sha": "8a3e798352f6d16e146b0dc25e1812cc9583cc7f",
+      "stage": "M25.1",
+      "status": "m25_1_architecture_freeze_accepted"
+    },
+    {
+      "disposition": "accepted",
+      "evidence_path": "pilot/m25/m25-2-acceptance.json",
+      "implementation_pr": 1041,
+      "stage": "M25.2",
+      "status": "m25_2_intake_orchestrator_accepted"
+    },
+    {
+      "disposition": "accepted",
+      "evidence_path": "pilot/m25/m25-3-acceptance.json",
+      "implementation_pr": 1044,
+      "merge_sha": "2dfb8b705ea28ea4d3cc8513aa341d58098a5a10",
+      "stage": "M25.3",
+      "status": "m25_3_extraction_worker_accepted"
+    },
+    {
+      "disposition": "accepted",
+      "evidence_path": "pilot/m25/m25-4-acceptance.json",
+      "implementation_pr": 1047,
+      "merge_sha": "9b75e467678889980aa91d31f1c41bfb72e41ee6",
+      "stage": "M25.4",
+      "status": "m25_4_gold_benchmark_accepted"
+    },
+    {
+      "disposition": "accepted",
+      "evidence_path": "pilot/m25/m25-5-acceptance.json",
+      "implementation_pr": 1050,
+      "merge_sha": "8ae3e77b8f9ffbd3df5ec820cca04b0b47413e02",
+      "stage": "M25.5",
+      "status": "m25_5_identity_governance_accepted"
+    },
+    {
+      "disposition": "accepted",
+      "evidence_path": "pilot/m25/m25-6-acceptance.json",
+      "implementation_pr": 1057,
+      "merge_sha": "dd1559f7730c796933dfe0996acc0a558870a61e",
+      "stage": "M25.6",
+      "status": "m25_6_review_surface_accepted"
+    },
+    {
+      "disposition": "accepted_no_write",
+      "evidence_path": "pilot/m25/m25-7-benchmark-closure.json",
+      "stage": "M25.7",
+      "status": "m25_7_benchmark_batch_closed_no_write"
+    },
+    {
+      "disposition": "superseded_by_later_live_admission_and_promotion",
+      "evidence_path": "pilot/m25/m25-8-readiness-gate.json",
+      "stage": "M25.8",
+      "status": "blocked_awaiting_real_approved_source_pr"
+    },
+    {
+      "disposition": "superseded_by_exact_156_article_blog_candidate",
+      "evidence_path": "pilot/m25/m25-9-readiness-gate.json",
+      "stage": "M25.9",
+      "status": "blocked_awaiting_m25_8_live_acceptance_and_exact_inventory_authority"
+    },
+    {
+      "candidate_manifest_sha256": "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3",
+      "disposition": "production_pointer_promoted",
+      "evidence_paths": [
+        "pilot/m25/m25-10-live-candidate-authority.json",
+        "pilot/m25/m25-10-production-promotion-authority.json",
+        "docs/architecture/m25/m25-10-live-candidate-deployment.md",
+        "docs/architecture/m25/m25-10-production-promotion.md"
+      ],
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "stage": "M25.10",
+      "status": "production_pointer_promoted"
+    }
+  ],
+  "incident_and_rollback_runbook": [
+    {
+      "detection_signal": "production pointer SHA differs from 4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9 without an accepted later promotion",
+      "incident": "production_pointer_drift",
+      "owner": "Daniel plus release operator",
+      "rollback_class": "restore exact previous or last accepted pointer bytes by CAS after Daniel authorization",
+      "severity": "critical",
+      "stop_condition": "stop all dependent M26 production activation work"
+    },
+    {
+      "detection_signal": "production manifest SHA differs from 72bb03e3fa22e453735719ab43898adfd4c7f186f818ed71685efb4fcd87de2b",
+      "incident": "production_manifest_drift",
+      "owner": "release operator",
+      "rollback_class": "do not rewrite immutable manifest; create incident evidence and require new promotion decision",
+      "severity": "critical",
+      "stop_condition": "block closure and successor activation"
+    },
+    {
+      "detection_signal": "Qdrant filtered count for accepted collection is not 4197",
+      "incident": "qdrant_authority_filter_drift",
+      "owner": "runtime operator",
+      "rollback_class": "remove serving dependency and rebuild candidate collection only under fresh authority",
+      "severity": "high",
+      "stop_condition": "disable dependent semantic retrieval claims"
+    },
+    {
+      "detection_signal": "Vault zip SHA or file count differs from accepted owner-smoke manifest",
+      "incident": "vault_artifact_drift",
+      "owner": "release operator",
+      "rollback_class": "restore accepted candidate deployment artifact or regenerate under exact-source evidence",
+      "severity": "medium",
+      "stop_condition": "block Vault-based handoff claims"
+    },
+    {
+      "detection_signal": "Cloudflare Access unauthenticated denial fails or public route appears without authority",
+      "incident": "acl_or_public_traffic_drift",
+      "owner": "Cloudflare operator",
+      "rollback_class": "restore Access policy or route configuration under separate Cloudflare authority",
+      "severity": "critical",
+      "stop_condition": "stop public traffic and incident-review before M26 use"
+    },
+    {
+      "detection_signal": "review queue age or unresolved ambiguity exceeds the selected Daniel outcome conditions",
+      "incident": "reviewer_capacity_overload",
+      "owner": "Daniel",
+      "rollback_class": "pause ingestion, preserve queue ledger, and require new scale decision",
+      "severity": "medium",
+      "stop_condition": "no expanded batch execution"
+    },
+    {
+      "detection_signal": "measured or forecast cost exceeds approved budget stop",
+      "incident": "cost_budget_breach",
+      "owner": "Daniel plus finance/release operator",
+      "rollback_class": "stop new provider calls and preserve billing evidence",
+      "severity": "high",
+      "stop_condition": "no continuous discovery or expanded batch"
+    }
+  ],
+  "m26_forward_state": {
+    "current_main_sha": "e88b50cb8f0084a6ec1ea1d9aadc9af7bce54bf6",
+    "drift_classification": "harmless_forward_commits_with_successor_caveat",
+    "m26_11_status": "m26_11_production_authority_activation_contract_accepted",
+    "m26_caveat": "M26.11 starts a production-activation contract chain but still denies live provider calls, verified final answers, public traffic and production pointer mutation. M25 final closure remains separately required for any stage that requires m25_closed."
+  },
+  "production_identities": {
+    "admission_sha256": "f5f01d82c7a1a38cf15fc54c890b904c4c015f608e2d25e294f9469f9b1927f2",
+    "candidate_manifest_sha256": "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3",
+    "foundation_sha": "e53af5833193a644a4d7397b7d466ababb5e1373",
+    "previous_production_pointer_sha256": "38e12c8686ee4ccf2beae0f073dead41b78e8f4548fdf7a4b0d0e273353906b5",
+    "production_control_plane_sha": "a7bc1383df79c519d389a9b135397b8e4d193e06",
+    "production_manifest_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/promotion/m25-10-production-manifest.json",
+    "production_manifest_sha256": "72bb03e3fa22e453735719ab43898adfd4c7f186f818ed71685efb4fcd87de2b",
+    "production_pointer_sha256": "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9",
+    "promotion_result_sha256": "8b208d6a4c7191a067c2b99370cda1aad103cd091aea613edcdf3c09026fd506",
+    "promotion_workflow_run": 30115946458,
+    "qdrant_collection": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043",
+    "qdrant_filtered_points": 4197,
+    "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+    "source_sha": "5250f8422f4fa08c1f3dc84840dc756850817635"
+  },
+  "protected_mutations": {
+    "access": false,
+    "answer_serving": false,
+    "credentials": false,
+    "dns": false,
+    "foundation": false,
+    "pages": false,
+    "production_pointer": false,
+    "public_traffic": false,
+    "qdrant": false,
+    "r2_production": false,
+    "semantic_or_hybrid_serving": false,
+    "source": false,
+    "workers": false
+  },
+  "residual_risks": [
+    "M25.8 and M25.9 readiness gates remain recorded as blocked in their original control-plane artifacts and are treated as superseded by the exact M25.10 live blog path, not silently passed.",
+    "Public production traffic is not authorized and has no target hostname/path in the M25 closure evidence.",
+    "Production runtime still uses the authenticated internal M25 route and candidate-authority Qdrant payload filter; full public answer serving remains outside M25 authority.",
+    "Cost and reviewer throughput evidence is sufficient for bounded decision-making only; expanded or continuous ingestion requires new measured runs and Daniel approval.",
+    "M26.11 forward work exists on main and must not be interpreted as M25 final closure."
+  ],
+  "scale_readiness": {
+    "bounded_manual": {
+      "authority_status": "eligible_for_owner_decision",
+      "max_articles": 156,
+      "max_graph_edges": 8525,
+      "max_graph_nodes": 4222,
+      "max_semantic_documents": 4197,
+      "reviewer_model": "Daniel owner-smoke plus exact evidence review; no automatic canonical writes",
+      "stop_thresholds": [
+        "any unaccounted source",
+        "any production pointer or manifest drift",
+        "any Access or public traffic drift",
+        "any Qdrant filtered count drift",
+        "any unresolved Daniel decision ambiguity"
+      ]
+    },
+    "continuous_discovery": {
+      "authority_status": "denied",
+      "reason": "no continuous inventory, scheduler, cost budget, reviewer queue or public traffic authority"
+    },
+    "controlled_batch": {
+      "authority_status": "requires_owner_conditions",
+      "required_conditions": [
+        "fixed source denominator",
+        "maximum provider and Cloudflare cost",
+        "reviewer throughput and queue-age SLO",
+        "checkpoint/resume proof",
+        "rollback drill before serving"
+      ]
+    },
+    "expanded_batch": {
+      "authority_status": "deferred",
+      "required_conditions": [
+        "measured p95/p99 ingestion and embedding durations",
+        "budget stop enforcement",
+        "dead-letter and retry ledger",
+        "independent security review",
+        "Daniel approval for exact population"
+      ]
+    }
+  },
+  "schema_version": "knowledge-engine-m25-10-formal-closure-evidence/v1",
+  "security_and_slo_cost_review": {
+    "cost_evidence": {
+      "classification": "bounded measured candidate execution plus estimates only",
+      "hard_budget_stop": "must be supplied by Daniel before controlled or expanded batch authority",
+      "zero_cost_claim_forbidden": true
+    },
+    "reviewer_capacity": {
+      "automatic_canonical_write": false,
+      "escalation_threshold": "any ambiguous owner decision or queue age beyond selected outcome conditions",
+      "required_owner": "Daniel"
+    },
+    "slo_evidence": {
+      "accepted_runtime_evidence": "M25.10 workflow 30106645175 completed exact live candidate deploy and M25.10 workflow 30115946458 completed production pointer promotion",
+      "synthetic_latency_forbidden": true,
+      "tail_latency_status": "not sufficient for expanded or continuous ingestion authority"
+    }
+  },
+  "self_sha256": "664febbb054a31d0eb804073b73363b093a2aecad69d31a84b85a4e779cfbea2",
+  "status": "m25_10_formal_closure_evidence_ready_awaiting_owner_decision"
+}
