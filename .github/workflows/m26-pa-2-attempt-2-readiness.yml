@@ -4,12 +4,11 @@ on:
   pull_request:
     paths:
       - '.github/workflows/m26-pa-2-attempt-2-readiness.yml'
-      - '.github/workflows/m26-pa-2-real-corpus-binding.yml'
       - 'docs/architecture/m26/m26-pa-2-attempt-2-readiness.md'
-      - 'pilot/m26/m26-pa-2-attempt-2-readiness.json'
-      - 'pilot/m26/m26-pa-2-live-attempt-1-failure.json'
-      - 'schemas/m26-pa-2-attempt-2-readiness-v1.schema.json'
-      - 'schemas/m26-pa-2-live-attempt-failure-v1.schema.json'
+      - 'pilot/m26/pa2-attempt-2-readiness.json'
+      - 'pilot/m26/pa2-live-attempt-1-failure.json'
+      - 'schemas/pa2-attempt-2-readiness-v1.schema.json'
+      - 'schemas/pa2-live-attempt-failure-v1.schema.json'
       - 'tests/test_m26_pa_2_attempt_2_readiness.py'
 
 permissions:
@@ -64,26 +63,25 @@ jobs:
           from pathlib import Path
 
           readiness = json.loads(
-              Path('pilot/m26/m26-pa-2-attempt-2-readiness.json').read_text()
+              Path('pilot/m26/pa2-attempt-2-readiness.json').read_text()
           )
           assert readiness['authorized'] is False
           assert readiness['triggerable'] is False
           assert not any(readiness['authority'].values())
           PY
 
-      - name: Enforce exact eight-file readiness surface
+      - name: Enforce exact seven-file readiness surface
         run: |
           set -euo pipefail
           git fetch origin main --depth=1
           git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'FILES'
           .github/workflows/m26-pa-2-attempt-2-readiness.yml
-          .github/workflows/m26-pa-2-real-corpus-binding.yml
           docs/architecture/m26/m26-pa-2-attempt-2-readiness.md
-          pilot/m26/m26-pa-2-attempt-2-readiness.json
-          pilot/m26/m26-pa-2-live-attempt-1-failure.json
-          schemas/m26-pa-2-attempt-2-readiness-v1.schema.json
-          schemas/m26-pa-2-live-attempt-failure-v1.schema.json
+          pilot/m26/pa2-attempt-2-readiness.json
+          pilot/m26/pa2-live-attempt-1-failure.json
+          schemas/pa2-attempt-2-readiness-v1.schema.json
+          schemas/pa2-live-attempt-failure-v1.schema.json
           tests/test_m26_pa_2_attempt_2_readiness.py
           FILES
           cmp /tmp/expected.txt /tmp/changed.txt
