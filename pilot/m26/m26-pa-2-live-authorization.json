@@ -1,0 +1,67 @@
+{
+  "acceptance_requires_independent_reconciliation": true,
+  "authorized": true,
+  "denied_authority": {
+    "answer_generation": false,
+    "live_provider_calls": false,
+    "production_pointer_mutation": false,
+    "public_shadow_canary_traffic": false,
+    "qdrant_writes": false,
+    "r2_writes": false,
+    "secret_persistence": false,
+    "source_foundation_release_mutation": false,
+    "stage_acceptance": false
+  },
+  "execution": {
+    "environment": "m23-r3-diagnostic",
+    "evidence_mode": "live_read_only",
+    "query_id": "m26-pa-2-production-binding-v1",
+    "run_attempt": 1,
+    "trigger_marker": "[m26.pa2-live-authorized]",
+    "workflow_head_is_authorization_merge": true,
+    "workflow_name": "M26.PA.2 Exact Live Read-Only Evidence"
+  },
+  "implementation": {
+    "head_sha": "11db7672f0a24c4531ac0203ca89e2c4d0a6e975",
+    "issue_number": 1186,
+    "merge_sha": "ecad7b2bfb2e6d472bf0ed76d2e0adc818124dd9",
+    "pull_request_number": 1187,
+    "required_ancestor": true
+  },
+  "owner_decision": {
+    "decided_by": "Daniel Huang",
+    "instruction_date": "2026-07-27",
+    "instruction_text": "繼續完成PA-2 然後繼續依序從PA-3往下做",
+    "scope": "exact_pa2_read_only_live_evidence_attempt_1"
+  },
+  "read_surface": {
+    "qdrant_collection": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043",
+    "qdrant_expected_point_count": 4197,
+    "qdrant_operations": [
+      "count",
+      "scroll"
+    ],
+    "qdrant_page_size": 256,
+    "qdrant_sample_size": 5,
+    "r2_keys": [
+      "channels/production.json",
+      "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/promotion/m25-10-production-manifest.json"
+    ],
+    "r2_operations": [
+      "get"
+    ],
+    "raw_source_body_reads": false,
+    "vectors": false
+  },
+  "schema_version": "knowledge-engine-m26-pa-2-live-authorization/v1",
+  "secret_names": [
+    "R2_ENDPOINT_URL",
+    "R2_BUCKET",
+    "R2_ACCESS_KEY_ID_READ",
+    "R2_SECRET_ACCESS_KEY_READ",
+    "QDRANT_URL",
+    "QDRANT_READ_ONLY_API_KEY"
+  ],
+  "self_sha256": "76730d76b56652914603b9226653257c8fbcdfb10e30c8a78f9167d1c64b6f77",
+  "stage_id": "M26.PA.2"
+}

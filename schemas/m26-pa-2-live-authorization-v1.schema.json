@@ -1,0 +1,85 @@
+{
+  "$id": "knowledge-engine/m26-pa-2-live-authorization-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "acceptance_requires_independent_reconciliation": {"const": true},
+    "authorized": {"const": true},
+    "denied_authority": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_generation": {"const": false},
+        "live_provider_calls": {"const": false},
+        "production_pointer_mutation": {"const": false},
+        "public_shadow_canary_traffic": {"const": false},
+        "qdrant_writes": {"const": false},
+        "r2_writes": {"const": false},
+        "secret_persistence": {"const": false},
+        "source_foundation_release_mutation": {"const": false},
+        "stage_acceptance": {"const": false}
+      },
+      "required": ["answer_generation","live_provider_calls","production_pointer_mutation","public_shadow_canary_traffic","qdrant_writes","r2_writes","source_foundation_release_mutation","secret_persistence","stage_acceptance"],
+      "type": "object"
+    },
+    "execution": {
+      "additionalProperties": false,
+      "properties": {
+        "environment": {"const": "m23-r3-diagnostic"},
+        "evidence_mode": {"const": "live_read_only"},
+        "query_id": {"const": "m26-pa-2-production-binding-v1"},
+        "run_attempt": {"const": 1},
+        "trigger_marker": {"const": "[m26.pa2-live-authorized]"},
+        "workflow_head_is_authorization_merge": {"const": true},
+        "workflow_name": {"const": "M26.PA.2 Exact Live Read-Only Evidence"}
+      },
+      "required": ["workflow_name","environment","run_attempt","query_id","evidence_mode","trigger_marker","workflow_head_is_authorization_merge"],
+      "type": "object"
+    },
+    "implementation": {
+      "additionalProperties": false,
+      "properties": {
+        "head_sha": {"const": "11db7672f0a24c4531ac0203ca89e2c4d0a6e975"},
+        "issue_number": {"const": 1186},
+        "merge_sha": {"const": "ecad7b2bfb2e6d472bf0ed76d2e0adc818124dd9"},
+        "pull_request_number": {"const": 1187},
+        "required_ancestor": {"const": true}
+      },
+      "required": ["issue_number","pull_request_number","head_sha","merge_sha","required_ancestor"],
+      "type": "object"
+    },
+    "owner_decision": {
+      "additionalProperties": false,
+      "properties": {
+        "decided_by": {"const": "Daniel Huang"},
+        "instruction_date": {"const": "2026-07-27"},
+        "instruction_text": {"const": "繼續完成PA-2 然後繼續依序從PA-3往下做"},
+        "scope": {"const": "exact_pa2_read_only_live_evidence_attempt_1"}
+      },
+      "required": ["decided_by","instruction_date","instruction_text","scope"],
+      "type": "object"
+    },
+    "read_surface": {
+      "additionalProperties": false,
+      "properties": {
+        "qdrant_collection": {"const": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043"},
+        "qdrant_expected_point_count": {"const": 4197},
+        "qdrant_operations": {"const": ["count","scroll"]},
+        "qdrant_page_size": {"const": 256},
+        "qdrant_sample_size": {"const": 5},
+        "r2_keys": {"const": ["channels/production.json","releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/promotion/m25-10-production-manifest.json"]},
+        "r2_operations": {"const": ["get"]},
+        "raw_source_body_reads": {"const": false},
+        "vectors": {"const": false}
+      },
+      "required": ["r2_operations","r2_keys","qdrant_operations","qdrant_collection","qdrant_expected_point_count","qdrant_page_size","qdrant_sample_size","vectors","raw_source_body_reads"],
+      "type": "object"
+    },
+    "schema_version": {"const": "knowledge-engine-m26-pa-2-live-authorization/v1"},
+    "secret_names": {"const": ["R2_ENDPOINT_URL","R2_BUCKET","R2_ACCESS_KEY_ID_READ","R2_SECRET_ACCESS_KEY_READ","QDRANT_URL","QDRANT_READ_ONLY_API_KEY"]},
+    "self_sha256": {"pattern": "^[0-9a-f]{64}$","type": "string"},
+    "stage_id": {"const": "M26.PA.2"}
+  },
+  "required": ["schema_version","stage_id","authorized","owner_decision","implementation","execution","read_surface","secret_names","denied_authority","acceptance_requires_independent_reconciliation","self_sha256"],
+  "title": "M26.PA.2 exact live read-only authorization",
+  "type": "object"
+}
