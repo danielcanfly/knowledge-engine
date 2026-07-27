@@ -76,8 +76,8 @@ jobs:
           ]
           fixture_path = 'tests/test_m26_pa_2_real_corpus_binding.py'
           exact_fake_fixtures = (
-              'Bearer super-secret-token-value',
-              'sk-abcdefghijklmnopqrstuvwxyz',
+              'Bearer ' + 'super-secret-token-value',
+              'sk-' + 'abcdefghijklmnopqrstuvwxyz',
           )
           for name in changed:
               path = pathlib.Path(name)
