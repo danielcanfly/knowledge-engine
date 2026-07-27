@@ -106,5 +106,8 @@ identity, determinism, and evidence tests. It includes digest-preserving structu
 so validation cannot pass merely because a modified object was rehashed.
 
 The PR workflow also reruns G0, PA.1/M26.11, and M25 closure/reconciliation regressions,
-builds non-live evidence twice and compares the bytes, enforces the exact eleven-file
-surface, scans for secret values, and uploads only the non-live contract evidence.
+builds non-live evidence twice and compares the bytes, enforces the exact twelve-file
+surface, scans for secret values, and uploads only the non-live contract evidence. The
+additional twelfth file is the existing M26.1 authority workflow, repaired only to admit the
+single exact PA.2 read-only runtime path while continuing to reject every other protected
+runtime mutation.
