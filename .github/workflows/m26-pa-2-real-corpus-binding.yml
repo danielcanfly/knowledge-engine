@@ -12,7 +12,7 @@ on:
       - 'tests/test_m26_pa_2_real_corpus_binding.py'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   non-live-repair:
@@ -48,30 +48,6 @@ jobs:
           test -z "${QDRANT_URL:-}"
           ! grep -nE '\$\{\{[[:space:]]*secrets\.' \
             .github/workflows/m26-pa-2-real-corpus-binding.yml
-
-      - name: One-shot branch-local Ruff normalization
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
-          set -euo pipefail
-          test "$HEAD_REF" = 'chatgpt/m26-pa-2-real-corpus-binding'
-          files=(
-            src/knowledge_engine/m26_real_corpus_binding.py
-            tests/test_m26_pa_2_contracts.py
-            tests/test_m26_pa_2_real_corpus_binding.py
-          )
-          python -m ruff check --fix "${files[@]}" || true
-          python -m ruff format "${files[@]}"
-          git diff --name-only | sort > /tmp/ruff-changed.txt
-          if test -s /tmp/ruff-changed.txt; then
-            printf '%s\n' "${files[@]}" | sort > /tmp/ruff-allowed.txt
-            test -z "$(comm -23 /tmp/ruff-changed.txt /tmp/ruff-allowed.txt)"
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add "${files[@]}"
-            git commit -m 'M26.PA.2 normalize Python formatting'
-            git push origin "HEAD:${HEAD_REF}"
-          fi
 
       - name: Lint and compile PA.2
         run: |
