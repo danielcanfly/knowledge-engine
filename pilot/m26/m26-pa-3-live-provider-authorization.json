@@ -23,8 +23,8 @@
     "environment": "m23-r3-diagnostic",
     "github_run_attempt_expected": 1,
     "live_job_pr_side_skipped": true,
-    "logical_attempt": 1,
-    "trigger_marker": "[m26.pa3-provider-authorized-attempt-1]",
+    "logical_attempt": 2,
+    "trigger_marker": "[m26.pa3-provider-authorized-attempt-2]",
     "workflow_name": "M26.PA.3 Live Provider Execution Gate"
   },
   "issue": {
@@ -32,11 +32,11 @@
     "repository": "danielcanfly/knowledge-engine",
     "title": "M26.PA.3 Live Provider Execution Gate"
   },
-  "logical_attempt": 1,
+  "logical_attempt": 2,
   "owner_decision": {
     "decided_by": "Daniel Huang",
-    "instruction_date": "2026-07-27",
-    "instruction_summary": "Use MiniMax M3 with credential name MINIMAX_API_KEY; Codex recommends the remaining conservative gate parameters.",
+    "instruction_date": "2026-07-28",
+    "instruction_summary": "Use MiniMax M3 with credential name MINIMAX_API_KEY; Daniel refreshed the key after attempt 1 failed with invalid_api_key, and Codex keeps the same conservative gate parameters.",
     "recommendation_adopted_by_gate": true
   },
   "payload_scope": {
@@ -58,6 +58,19 @@
     "pa2_reconciliation_merge_sha": "8ed2da47d04f6410e55d5855d78f734341aecf2e",
     "pa2_reconciliation_pull_request": 1196,
     "pa2_status": "m26_pa_2_real_corpus_retrieval_binding_accepted"
+  },
+  "prior_attempts": {
+    "attempt_1": {
+      "artifact_emitted": false,
+      "conclusion": "failure",
+      "failure_class": "invalid_api_key",
+      "head_sha": "44bbe10117803fae71abb5072a270b0b213a259a",
+      "http_status": 401,
+      "logical_attempt": 1,
+      "receipt_emitted": false,
+      "rerun_forbidden": true,
+      "run_id": 30271818416
+    }
   },
   "production_evidence": {
     "pa2_artifact_id": 8650470968,
@@ -97,7 +110,7 @@
     "user_task": "Acknowledge the bounded provider gate using only the supplied metadata. Return JSON with keys status, provider, model, pa2_status, release_id, qdrant_point_count, and no_production_answer."
   },
   "schema_version": "knowledge-engine-m26-pa-3-live-provider-authorization/v1",
-  "self_sha256": "1eb3545bc7bee9c483c8713c60f5c3711ba925e96efdb5eedd307a5cf139f6cd",
+  "self_sha256": "691d3383005f0439f9e41c8d480f0951e69075355ef1e23341293a4088f4eba6",
   "stage_id": "M26.PA.3",
-  "status": "m26_pa_3_live_provider_execution_authorized_pending_main_push"
+  "status": "m26_pa_3_live_provider_execution_attempt_2_authorized_pending_main_push"
 }

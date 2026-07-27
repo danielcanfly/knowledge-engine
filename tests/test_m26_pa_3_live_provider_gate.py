@@ -56,9 +56,10 @@ def test_pa3_authorization_is_self_digested_and_schema_valid() -> None:
     candidate = dict(authorization)
     candidate["self_sha256"] = ""
     assert sha256_value(candidate) == expected
-    assert expected == "1eb3545bc7bee9c483c8713c60f5c3711ba925e96efdb5eedd307a5cf139f6cd"
+    assert expected == "691d3383005f0439f9e41c8d480f0951e69075355ef1e23341293a4088f4eba6"
     assert authorization["stage_id"] == "M26.PA.3"
     assert authorization["authorized"] is True
+    assert authorization["logical_attempt"] == 2
 
 
 def test_pa3_gate_binds_pa2_and_daniel_provider_decision() -> None:
@@ -85,7 +86,21 @@ def test_pa3_gate_binds_pa2_and_daniel_provider_decision() -> None:
         "thinking": {"mode": "not_requested"},
     }
     assert authorization["owner_decision"]["decided_by"] == "Daniel Huang"
+    assert authorization["owner_decision"]["instruction_date"] == "2026-07-28"
     assert authorization["owner_decision"]["recommendation_adopted_by_gate"] is True
+    assert authorization["prior_attempts"] == {
+        "attempt_1": {
+            "artifact_emitted": False,
+            "conclusion": "failure",
+            "failure_class": "invalid_api_key",
+            "head_sha": "44bbe10117803fae71abb5072a270b0b213a259a",
+            "http_status": 401,
+            "logical_attempt": 1,
+            "receipt_emitted": False,
+            "rerun_forbidden": True,
+            "run_id": 30271818416,
+        }
+    }
 
 
 def test_pa3_budget_payload_and_receipt_policy_are_minimal() -> None:
@@ -160,11 +175,11 @@ def test_pa3_receipt_schema_accepts_sanitized_provider_receipt_only() -> None:
             "schema_version": "knowledge-engine-m26-pa-3-live-provider-receipt/v1",
             "stage_id": "M26.PA.3",
             "status": "live_provider_execution_verified",
-            "generated_at": "2026-07-27T12:30:00Z",
+            "generated_at": "2026-07-28T12:30:00Z",
             "authorization": {
                 "authorization_self_sha256": "a" * 64,
-                "logical_attempt": 1,
-                "trigger_marker": "[m26.pa3-provider-authorized-attempt-1]",
+                "logical_attempt": 2,
+                "trigger_marker": "[m26.pa3-provider-authorized-attempt-2]",
             },
             "workflow": {
                 "workflow_name": "M26.PA.3 Live Provider Execution Gate",
@@ -226,9 +241,10 @@ def test_pa3_workflow_is_bounded_and_pr_safe() -> None:
     assert "R2_ACCESS_KEY_ID_READ" not in text
     assert "QDRANT_READ_ONLY" not in text
     assert "github.event_name == 'push'" in text
-    assert "[m26.pa3-provider-authorized-attempt-1]" in text
+    assert "[m26.pa3-provider-authorized-attempt-2]" in text
+    assert "[m26.pa3-provider-authorized-attempt-1]" not in text
     assert "test -z \"${MINIMAX_API_KEY:-}\"" in text
-    assert "m26-pa-3-live-provider-evidence-attempt-1" in text
+    assert "m26-pa-3-live-provider-evidence-attempt-2" in text
     assert "response_text_persisted" in text
     assert "response_text" not in text.replace("response_text_sha256", "").replace(
         "response_text_persisted",
@@ -240,6 +256,9 @@ def test_pa3_doc_keeps_downstream_authority_closed() -> None:
     text = (DOCS / "m26-pa-3-live-provider-execution.md").read_text(encoding="utf-8")
     assert "MiniMax-M3" in text
     assert "MINIMAX_API_KEY" in text
+    assert "30271818416" in text
+    assert "invalid_api_key" in text
+    assert "[m26.pa3-provider-authorized-attempt-2]" in text
     assert "no raw corpus text" in text
     assert "not a production answer" in text
     assert "Production answer serving" in text
