@@ -1,0 +1,186 @@
+{
+  "$id": "knowledge-engine/m26-pa-2-failure-receipt-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_generation_operations": {
+          "const": 0
+        },
+        "production_pointer_mutations": {
+          "const": 0
+        },
+        "provider_calls": {
+          "const": 0
+        },
+        "public_shadow_canary_traffic_operations": {
+          "const": 0
+        },
+        "qdrant_write_operations": {
+          "const": 0
+        },
+        "r2_write_operations": {
+          "const": 0
+        },
+        "raw_text_persisted": {
+          "const": false
+        },
+        "secrets_persisted": {
+          "const": false
+        },
+        "vectors_persisted": {
+          "const": false
+        }
+      },
+      "required": [
+        "r2_write_operations",
+        "qdrant_write_operations",
+        "production_pointer_mutations",
+        "provider_calls",
+        "answer_generation_operations",
+        "public_shadow_canary_traffic_operations",
+        "raw_text_persisted",
+        "vectors_persisted",
+        "secrets_persisted"
+      ],
+      "type": "object"
+    },
+    "error": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "enum": [
+            "integrity",
+            "authority",
+            "security",
+            "transport",
+            "internal"
+          ]
+        },
+        "code": {
+          "maxLength": 64,
+          "pattern": "^M26-PA2-[A-Z0-9-]+$",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "category",
+        "retryable",
+        "message"
+      ],
+      "type": "object"
+    },
+    "generated_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "type": "string"
+    },
+    "operation_counts": {
+      "additionalProperties": false,
+      "properties": {
+        "qdrant_count_requests": {
+          "maximum": 2,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "qdrant_scroll_requests": {
+          "maximum": 36,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "r2_reads": {
+          "maximum": 2,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "r2_reads",
+        "qdrant_count_requests",
+        "qdrant_scroll_requests"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-2-failure-receipt/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "status": {
+      "const": "real_corpus_retrieval_binding_failed"
+    },
+    "workflow": {
+      "additionalProperties": false,
+      "properties": {
+        "environment": {
+          "const": "m23-r3-diagnostic"
+        },
+        "evidence_mode": {
+          "const": "live_read_only"
+        },
+        "head_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "query_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repository": {
+          "const": "danielcanfly/knowledge-engine"
+        },
+        "run_attempt": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "workflow_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "workflow_name",
+        "run_id",
+        "run_attempt",
+        "head_sha",
+        "environment",
+        "query_id",
+        "evidence_mode"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "generated_at",
+    "workflow",
+    "error",
+    "operation_counts",
+    "authority",
+    "self_sha256"
+  ],
+  "title": "M26.PA.2 sanitized failure receipt",
+  "type": "object"
+}

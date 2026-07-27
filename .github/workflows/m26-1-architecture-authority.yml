@@ -53,7 +53,10 @@ jobs:
         run: |
           set -euo pipefail
           changed="$(git diff --name-only origin/main...HEAD)"
-          ! printf '%s\n' "$changed" | grep -Eq '^(src/|workers/|channels/|foundation/|release/|r2/|qdrant/|production/|pilot/m24/|pilot/m25/)'
+          protected="$(printf '%s\n' "$changed" | grep -E '^(src/|workers/|channels/|foundation/|release/|r2/|qdrant/|production/|pilot/m24/|pilot/m25/)' || true)"
+          allowed_pa2_runtime='src/knowledge_engine/m26_real_corpus_binding.py'
+          unexpected="$(printf '%s\n' "$protected" | grep -vFx "$allowed_pa2_runtime" || true)"
+          test -z "$unexpected"
           python - <<'PY'
           import pathlib
           import re
@@ -71,10 +74,18 @@ jobs:
                   re.I,
               ),
           ]
+          fixture_path = 'tests/test_m26_pa_2_real_corpus_binding.py'
+          exact_fake_fixtures = (
+              'Bearer ' + 'super-secret-token-value',
+              'sk-' + 'abcdefghijklmnopqrstuvwxyz',
+          )
           for name in changed:
               path = pathlib.Path(name)
               if path.is_file() and path.suffix in {'.json', '.md', '.py', '.yml', '.yaml'}:
                   text = path.read_text(errors='ignore')
+                  if name == fixture_path:
+                      for fixture in exact_fake_fixtures:
+                          text = text.replace(fixture, '')
                   assert not any(pattern.search(text) for pattern in patterns), name
           PY
       - name: Build exact-head evidence
