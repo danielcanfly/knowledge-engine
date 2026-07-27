@@ -1,0 +1,97 @@
+name: M25 Final Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m25-final-reconciliation.yml'
+      - 'docs/architecture/m25/m25-final-reconciliation.md'
+      - 'pilot/m25/m25-final-reconciliation.json'
+      - 'schemas/m25-final-reconciliation-v1.schema.json'
+      - 'src/knowledge_engine/m25_reconciliation.py'
+      - 'tests/test_m25_reconciliation.py'
+
+permissions:
+  contents: read
+
+jobs:
+  final-reconciliation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact head and closure merge ancestry
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git merge-base --is-ancestor dd373e932b75c89de3bdea45e581fd0df512c40b HEAD
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          reconciliation = json.loads(
+              Path('pilot/m25/m25-final-reconciliation.json').read_text()
+          )
+          assert reconciliation['result'] == 'm25_closed'
+          assert reconciliation['closure_pr']['merge_sha'] == (
+              'dd373e932b75c89de3bdea45e581fd0df512c40b'
+          )
+          assert reconciliation['owner_decision']['outcome'] == (
+              'approved_bounded_large_scale_ingestion'
+          )
+          assert reconciliation['final_acceptance']['status'] == 'm25_closed'
+          assert reconciliation['authority_boundaries']['production_pointer_mutation'] is False
+          PY
+      - name: Install dev dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+      - name: Lint and test final reconciliation
+        run: |
+          python -m ruff check \
+            src/knowledge_engine/m25_reconciliation.py \
+            tests/test_m25_reconciliation.py
+          python -m pytest -q \
+            tests/test_m25_formal_closure.py \
+            tests/test_m25_reconciliation.py
+      - name: Rebuild deterministic final reconciliation report
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          from knowledge_engine.m25_reconciliation import validate_repository_reconciliation
+
+          report = validate_repository_reconciliation(Path('.'))
+          Path('m25-final-reconciliation-report.json').write_text(
+              json.dumps(report, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          assert report['result'] == 'm25_closed'
+          PY
+      - name: Reject protected mutation paths
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          printf '%s\n' "$changed"
+          expected="$(printf '%s\n' \
+            '.github/workflows/m25-final-reconciliation.yml' \
+            'docs/architecture/m25/m25-final-reconciliation.md' \
+            'pilot/m25/m25-final-reconciliation.json' \
+            'schemas/m25-final-reconciliation-v1.schema.json' \
+            'src/knowledge_engine/m25_reconciliation.py' \
+            'tests/test_m25_reconciliation.py' | sort)"
+          test "$changed" = "$expected"
+          forbidden='^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)'
+          ! printf '%s\n' "$changed" | grep -E "$forbidden"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m25-final-reconciliation-report
+          path: m25-final-reconciliation-report.json
+          if-no-files-found: error
+          retention-days: 90

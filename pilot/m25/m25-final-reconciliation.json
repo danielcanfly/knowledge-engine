@@ -1,0 +1,95 @@
+{
+  "authority_boundaries": {
+    "bounded_large_scale_ingestion_readiness": true,
+    "cloudflare_access_mutation": false,
+    "credential_mutation": false,
+    "dns_mutation": false,
+    "foundation_mutation": false,
+    "m25_closed": true,
+    "m26_production_answer_serving": false,
+    "new_ingestion_workload_execution": false,
+    "production_pointer_mutation": false,
+    "public_production_traffic_expansion": false,
+    "qdrant_mutation": false,
+    "r2_production_mutation": false,
+    "semantic_or_hybrid_serving_expansion": false,
+    "source_mutation": false
+  },
+  "changed_file_boundary": {
+    "bounded_ci_repair_files": [
+      "pilot/m23/r3-8/authorizations/29696136508.json",
+      "pilot/m23/r3-8/authorizations/29712598908.json",
+      "pilot/m23/r3-8/authorizations/29713148161.json"
+    ],
+    "closure_pr_changed_file_count": 11,
+    "protected_surface_mutation_files": []
+  },
+  "closure_evidence": {
+    "artifact_path": "pilot/m25/m25-10-formal-closure-evidence.json",
+    "self_sha256": "0fd453e708ab940dbc123577f239fb45cf1d8b6057ec6223dbc6fbbc55167a91",
+    "status": "m25_closed"
+  },
+  "closure_pr": {
+    "base_sha": "e88b50cb8f0084a6ec1ea1d9aadc9af7bce54bf6",
+    "expected_head_merge": true,
+    "head_sha": "7a8d68c2c3d8486ae1ff45eff46b5f60ddd11165",
+    "merge_sha": "dd373e932b75c89de3bdea45e581fd0df512c40b",
+    "merged_at_utc": "2026-07-27T03:49:26Z",
+    "number": 1179,
+    "url": "https://github.com/danielcanfly/knowledge-engine/pull/1179"
+  },
+  "closure_workflow_artifact": {
+    "artifact_id": 8641465641,
+    "digest": "sha256:7203dfa9b935dd0f05a30227ce7ae4aa81a29ede776d1b4bc3500d0e11cb7f48",
+    "name": "m25-10-formal-closure-evidence-report",
+    "run_id": 30235403669,
+    "size_in_bytes": 346
+  },
+  "closure_workflow_runs": {
+    "architecture-canon": 30235403717,
+    "formal-closure-evidence": 30235403669,
+    "graph-v2": 30235403673,
+    "identity-governance": 30235403671,
+    "release-lifecycle": 30235403691,
+    "test": 30235403680
+  },
+  "final_acceptance": {
+    "artifact_path": "pilot/m25/m25-10-final-acceptance.json",
+    "self_sha256": "15012cfa708c7c19cf1be91ac6ea566886c3728b880fdf42d4b9d7b5f0bbc4ed",
+    "status": "m25_closed"
+  },
+  "m25_stage_reconciliation": {
+    "final_acceptance_on_main": true,
+    "m25_10_production_pointer_promoted": true,
+    "m25_1_through_m25_10_present": true,
+    "m25_8_original_blocker_preserved_as_superseded": true,
+    "m25_9_original_blocker_preserved_as_superseded": true,
+    "required_stage_count": 10
+  },
+  "owner_decision": {
+    "artifact_path": "pilot/m25/m25-10-owner-decision.json",
+    "decided_at_utc": "2026-07-27T03:36:26Z",
+    "decided_by": "Daniel Huang",
+    "outcome": "approved_bounded_large_scale_ingestion",
+    "self_sha256": "4a340df130df29c57e32bac80eaebc9e5b428aae80b6e8cdda4bff7e98809629"
+  },
+  "production_identities": {
+    "candidate_manifest_sha256": "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3",
+    "production_manifest_sha256": "72bb03e3fa22e453735719ab43898adfd4c7f186f818ed71685efb4fcd87de2b",
+    "production_pointer_sha256": "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9",
+    "promotion_workflow_run": 30115946458,
+    "qdrant_collection": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043",
+    "qdrant_filtered_points": 4197,
+    "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+  },
+  "reconciled_at_utc": "2026-07-27T03:49:26Z",
+  "reconciliation_issue": {
+    "number": 1180,
+    "repository": "danielcanfly/knowledge-engine",
+    "url": "https://github.com/danielcanfly/knowledge-engine/issues/1180"
+  },
+  "result": "m25_closed",
+  "schema_version": "knowledge-engine-m25-final-reconciliation/v1",
+  "self_sha256": "e1f12ca7159dbcfbe4236108055f0582d951a76f16be9c9d6f35392dc74c5d3d",
+  "status": "m25_final_reconciliation_ready"
+}
