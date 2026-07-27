@@ -1,6 +1,6 @@
 # M26.PA.2 Exact Live Read-Only Evidence
 
-This batch authorises logical attempt 4 for exact PA.2 live evidence after implementation PR
+This batch authorises logical attempt 5 for exact PA.2 live evidence after implementation PR
 `#1187`
 merged at head `11db7672f0a24c4531ac0203ca89e2c4d0a6e975` as main seal
 `ecad7b2bfb2e6d472bf0ed76d2e0adc818124dd9`.
@@ -8,7 +8,7 @@ merged at head `11db7672f0a24c4531ac0203ca89e2c4d0a6e975` as main seal
 ## Owner authority
 
 Daniel's 2026-07-27 clarification, `這個我叫它 QDRANT_API_KEY_READ 已經給你了`, is
-recorded only as authority to construct and merge the PA.2 logical attempt 4 read-only
+recorded only as authority to construct and merge the PA.2 logical attempt 5 read-only
 evidence authorization. The exact GitHub environment secret was then provisioned under the
 required name `QDRANT_READ_ONLY_API_KEY`.
 It does not borrow PA.3 provider authority and does not accept PA.2 by itself.
@@ -18,14 +18,17 @@ runtime installation and before any data-plane operation. It must not be rerun.
 Logical attempt 3 is also immutable: GitHub Actions run `30252530599` failed closed after
 one R2 read, before any Qdrant count or scroll, because the frozen payload policy required
 `article_id` while the production Qdrant payloads omit that field.
+Logical attempt 4 is also immutable: GitHub Actions run `30258197935` failed closed after
+one R2 read, before any Qdrant count or scroll, because the GitHub environment read-only
+R2 secrets were stale; they were then re-synced from `.env` under the same names.
 
 ## Exact run
 
 - workflow: `M26.PA.2 Exact Live Read-Only Evidence`
 - environment: `m23-r3-diagnostic`
-- logical attempt: `4`
+- logical attempt: `5`
 - GitHub run attempt: `1`
-- trigger marker: `[m26.pa2-live-authorized-attempt-4]`
+- trigger marker: `[m26.pa2-live-authorized-attempt-5]`
 - R2 operations: two exact `get` calls
 - Qdrant operations: exact filtered `count` and complete bounded `scroll`
 - expected population: `4,197`
@@ -38,7 +41,7 @@ one R2 read, before any Qdrant count or scroll, because the frozen payload polic
 
 The workflow is installed through a normal pull request. Its pull-request job validates the
 authorization without secrets. The live job can run only on the fresh main push whose merge
-commit contains the exact attempt-4 trigger marker.
+commit contains the exact attempt-5 trigger marker.
 
 ## Credential boundary
 
@@ -57,7 +60,7 @@ artifacts, or copied into issues, pull requests, or handoffs.
 
 ## Workflow compatibility boundary
 
-The live evidence workflow recognises only this exact attempt-4 authorization surface. It
+The live evidence workflow recognises only this exact attempt-5 authorization surface. It
 does not admit arbitrary `m26-pa-2-*` changes and retains `contents: read`.
 
 ## Evidence boundary

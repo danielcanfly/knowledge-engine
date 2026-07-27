@@ -17,19 +17,19 @@
     "evidence_mode": "live_read_only",
     "query_id": "m26-pa-2-production-binding-v1",
     "run_attempt": 1,
-    "trigger_marker": "[m26.pa2-live-authorized-attempt-4]",
+    "trigger_marker": "[m26.pa2-live-authorized-attempt-5]",
     "workflow_head_is_authorization_merge": true,
     "workflow_name": "M26.PA.2 Exact Live Read-Only Evidence"
   },
   "future_exact_run": {
     "environment": "m23-r3-diagnostic",
     "github_run_attempt_expected": 1,
-    "logical_attempt": 4,
+    "logical_attempt": 5,
     "new_authorization_and_main_push_required": true,
     "same_read_surface_as_attempt_1": true,
-    "trigger_marker": "[m26.pa2-live-authorized-attempt-4]",
+    "trigger_marker": "[m26.pa2-live-authorized-attempt-5]",
     "workflow_name": "M26.PA.2 Exact Live Read-Only Evidence",
-    "rerun_of_attempt_3_forbidden": true
+    "rerun_of_attempt_4_forbidden": true
   },
   "implementation": {
     "head_sha": "11db7672f0a24c4531ac0203ca89e2c4d0a6e975",
@@ -38,21 +38,28 @@
     "pull_request_number": 1187,
     "required_ancestor": true
   },
-  "logical_attempt": 4,
+  "logical_attempt": 5,
   "owner_decision": {
     "decided_by": "Daniel Huang",
     "instruction_date": "2026-07-27",
     "instruction_text": "這個我叫它 QDRANT_API_KEY_READ 已經給你了",
-    "scope": "exact_pa2_read_only_live_evidence_attempt_4"
+    "scope": "exact_pa2_read_only_live_evidence_attempt_5"
   },
   "predecessor": {
-    "logical_attempt": 3,
-    "run_id": 30252530599,
-    "failure_self_sha256": "41aaf5532c19904656bb39bb5f18868be1fcdd29ca21ab76247ea87969b17b11",
+    "logical_attempt": 4,
+    "run_id": 30258197935,
+    "failure_self_sha256": "5a633e41110dc857abe944ead2fd22d9b9bd76f30fd0a9e449906301215defd8",
     "failed_closed": true,
     "data_plane_operations": 1,
-    "failure_stage": "qdrant-payload-identity-field-missing",
-    "missing_payload_field": "article_id"
+    "failure_stage": "r2-first-read-failed",
+    "synced_secret_names": [
+      "R2_ENDPOINT_URL",
+      "R2_BUCKET",
+      "R2_ACCESS_KEY_ID_READ",
+      "R2_SECRET_ACCESS_KEY_READ",
+      "QDRANT_URL",
+      "QDRANT_READ_ONLY_API_KEY"
+    ]
   },
   "read_surface": {
     "qdrant_collection": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043",
@@ -87,6 +94,6 @@
     "QDRANT_URL",
     "QDRANT_READ_ONLY_API_KEY"
   ],
-  "self_sha256": "cdb115c57f445a473c93ea21981c8bec4b20e3964979d6d0b98c32a1026b550c",
+  "self_sha256": "ef5939fd167a236024e4f50c558aaf4e6c14f097b277475d1468bf162311f8a9",
   "stage_id": "M26.PA.2"
 }

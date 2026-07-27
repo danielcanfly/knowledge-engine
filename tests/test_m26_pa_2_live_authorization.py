@@ -34,30 +34,37 @@ def test_live_authorization_is_strict_and_self_digested() -> None:
     expected = value["self_sha256"]
     value["self_sha256"] = ""
     assert hashlib.sha256(canonical_bytes(value)).hexdigest() == expected
-    assert expected == "cdb115c57f445a473c93ea21981c8bec4b20e3964979d6d0b98c32a1026b550c"
+    assert expected == "ef5939fd167a236024e4f50c558aaf4e6c14f097b277475d1468bf162311f8a9"
 
 
 def test_authorization_binds_exact_implementation_and_attempt() -> None:
     value = json.loads(AUTHORIZATION.read_text(encoding="utf-8"))
-    assert value["logical_attempt"] == 4
+    assert value["logical_attempt"] == 5
     assert value["predecessor"] == {
-        "logical_attempt": 3,
-        "run_id": 30252530599,
-        "failure_self_sha256": "41aaf5532c19904656bb39bb5f18868be1fcdd29ca21ab76247ea87969b17b11",
+        "logical_attempt": 4,
+        "run_id": 30258197935,
+        "failure_self_sha256": "5a633e41110dc857abe944ead2fd22d9b9bd76f30fd0a9e449906301215defd8",
         "failed_closed": True,
         "data_plane_operations": 1,
-        "failure_stage": "qdrant-payload-identity-field-missing",
-        "missing_payload_field": "article_id",
+        "failure_stage": "r2-first-read-failed",
+        "synced_secret_names": [
+            "R2_ENDPOINT_URL",
+            "R2_BUCKET",
+            "R2_ACCESS_KEY_ID_READ",
+            "R2_SECRET_ACCESS_KEY_READ",
+            "QDRANT_URL",
+            "QDRANT_READ_ONLY_API_KEY",
+        ],
     }
     assert value["future_exact_run"] == {
         "workflow_name": "M26.PA.2 Exact Live Read-Only Evidence",
         "environment": "m23-r3-diagnostic",
-        "logical_attempt": 4,
+        "logical_attempt": 5,
         "github_run_attempt_expected": 1,
         "same_read_surface_as_attempt_1": True,
         "new_authorization_and_main_push_required": True,
-        "rerun_of_attempt_3_forbidden": True,
-        "trigger_marker": "[m26.pa2-live-authorized-attempt-4]",
+        "rerun_of_attempt_4_forbidden": True,
+        "trigger_marker": "[m26.pa2-live-authorized-attempt-5]",
     }
     assert value["implementation"] == {
         "issue_number": 1186,
@@ -68,7 +75,7 @@ def test_authorization_binds_exact_implementation_and_attempt() -> None:
     }
     assert value["execution"]["environment"] == "m23-r3-diagnostic"
     assert value["execution"]["run_attempt"] == 1
-    assert value["execution"]["trigger_marker"] == "[m26.pa2-live-authorized-attempt-4]"
+    assert value["execution"]["trigger_marker"] == "[m26.pa2-live-authorized-attempt-5]"
     assert value["acceptance_requires_independent_reconciliation"] is True
 
 
@@ -88,14 +95,14 @@ def test_authorization_is_read_only_and_non_accepting() -> None:
     assert value["denied_authority"]["stage_acceptance"] is False
 
 
-def test_workflow_is_exact_logical_attempt_four_and_read_only() -> None:
+def test_workflow_is_exact_logical_attempt_five_and_read_only() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "permissions:\n  contents: read" in text
     assert "contents: write" not in text
     assert "environment: m23-r3-diagnostic" in text
     assert "test \"$GITHUB_RUN_ATTEMPT\" = '1'" in text
-    assert "[m26.pa2-live-authorized-attempt-4]" in text
-    assert "m26-pa-2-live-read-only-evidence-attempt-4" in text
+    assert "[m26.pa2-live-authorized-attempt-5]" in text
+    assert "m26-pa-2-live-read-only-evidence-attempt-5" in text
     assert "workflow_dispatch" not in text
     assert "QDRANT_READ_ONLY_API_KEY" in text
     assert "R2_ACCESS_KEY_ID_READ" in text
