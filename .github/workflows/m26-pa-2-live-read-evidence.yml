@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/m26-pa-2-live-read-evidence.yml'
+      - '.github/workflows/m26-pa-2-real-corpus-binding.yml'
       - 'docs/architecture/m26/m26-pa-2-live-read-evidence.md'
       - 'pilot/m26/m26-pa-2-contract-registry.json'
       - 'pilot/m26/m26-pa-2-live-authorization.json'
@@ -19,6 +20,7 @@ on:
       - main
     paths:
       - '.github/workflows/m26-pa-2-live-read-evidence.yml'
+      - '.github/workflows/m26-pa-2-real-corpus-binding.yml'
       - 'docs/architecture/m26/m26-pa-2-live-read-evidence.md'
       - 'pilot/m26/m26-pa-2-contract-registry.json'
       - 'pilot/m26/m26-pa-2-live-authorization.json'
@@ -79,6 +81,7 @@ jobs:
           git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'FILES'
           .github/workflows/m26-pa-2-live-read-evidence.yml
+          .github/workflows/m26-pa-2-real-corpus-binding.yml
           docs/architecture/m26/m26-pa-2-live-read-evidence.md
           pilot/m26/m26-pa-2-contract-registry.json
           pilot/m26/m26-pa-2-live-authorization.json
