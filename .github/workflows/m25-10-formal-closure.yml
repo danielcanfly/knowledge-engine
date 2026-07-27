@@ -5,6 +5,9 @@ on:
     paths:
       - '.github/workflows/m25-10-formal-closure.yml'
       - 'docs/architecture/m25/m25-10-formal-closure.md'
+      - 'pilot/m23/r3-8/authorizations/29696136508.json'
+      - 'pilot/m23/r3-8/authorizations/29712598908.json'
+      - 'pilot/m23/r3-8/authorizations/29713148161.json'
       - 'pilot/m25/m25-10-owner-decision.json'
       - 'pilot/m25/m25-10-final-acceptance.json'
       - 'pilot/m25/m25-10-formal-closure-evidence.json'
@@ -78,6 +81,9 @@ jobs:
           expected="$(printf '%s\n' \
             '.github/workflows/m25-10-formal-closure.yml' \
             'docs/architecture/m25/m25-10-formal-closure.md' \
+            'pilot/m23/r3-8/authorizations/29696136508.json' \
+            'pilot/m23/r3-8/authorizations/29712598908.json' \
+            'pilot/m23/r3-8/authorizations/29713148161.json' \
             'pilot/m25/m25-10-owner-decision.json' \
             'pilot/m25/m25-10-final-acceptance.json' \
             'pilot/m25/m25-10-formal-closure-evidence.json' \
