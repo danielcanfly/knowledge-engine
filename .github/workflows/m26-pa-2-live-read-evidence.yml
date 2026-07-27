@@ -62,7 +62,7 @@ jobs:
           test -z "${R2_SECRET_ACCESS_KEY_READ:-}"
           test -z "${QDRANT_READ_ONLY_API_KEY:-}"
 
-      - name: Enforce exact attempt-6 authorization surface
+      - name: Enforce exact attempt-6 authorization or reconciliation surface
         run: |
           set -euo pipefail
           git fetch origin main --depth=1
@@ -75,7 +75,16 @@ jobs:
           schemas/m26-pa-2-live-authorization-v1.schema.json
           tests/test_m26_pa_2_live_authorization.py
           FILES
-          cmp /tmp/expected.txt /tmp/changed.txt
+          cat > /tmp/expected-reconciliation.txt <<'FILES'
+          .github/workflows/m26-pa-2-live-read-evidence.yml
+          .github/workflows/m26-pa-2-real-corpus-binding.yml
+          .github/workflows/m26-pa-2-reconciliation.yml
+          docs/architecture/m26/m26-pa-2-reconciliation.md
+          pilot/m26/m26-pa-2-acceptance.json
+          tests/test_m26_pa_2_reconciliation.py
+          FILES
+          cmp /tmp/expected.txt /tmp/changed.txt \
+            || cmp /tmp/expected-reconciliation.txt /tmp/changed.txt
           ! grep -E \
             '^(src/|source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)' \
             /tmp/changed.txt

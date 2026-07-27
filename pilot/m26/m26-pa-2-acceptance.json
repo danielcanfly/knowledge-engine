@@ -1,0 +1,183 @@
+{
+  "authority_boundary": {
+    "answer_generation": false,
+    "live_provider_calls": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "public_shadow_canary_traffic": false,
+    "qdrant_read_only_count_scroll": true,
+    "qdrant_writes": false,
+    "r2_read_only_get": true,
+    "r2_writes": false,
+    "raw_text_persisted": false,
+    "real_corpus_retrieval_binding": true,
+    "release_mutation": false,
+    "secret_persistence": false,
+    "source_foundation_mutation": false,
+    "vectors_requested_or_returned": false,
+    "worker_pages_dns_access_mutation": false
+  },
+  "effective_only_on_reconciliation_merge": true,
+  "implementation": {
+    "additions": 3417,
+    "base_sha": "728df7da4e6b9320c25abb904a65a32b15e62bb1",
+    "changed_file_count": 12,
+    "deletions": 1,
+    "expected_head_merge": true,
+    "final_head_sha": "11db7672f0a24c4531ac0203ca89e2c4d0a6e975",
+    "issue_number": 1186,
+    "merge_sha": "ecad7b2bfb2e6d472bf0ed76d2e0adc818124dd9",
+    "pull_request_number": 1187,
+    "unresolved_review_thread_count": 0
+  },
+  "issue": {
+    "number": 1186,
+    "repository": "danielcanfly/knowledge-engine",
+    "state_after_reconciliation_merge": "closed",
+    "state_before_reconciliation_pr": "open",
+    "state_reason_after_reconciliation_merge": "completed"
+  },
+  "live_authorization": {
+    "authorization_self_sha256": "1db8a863205228c29d1f93a33b6344c5f7ef157c54ac64b09589c13b48a860bd",
+    "changed_file_count": 6,
+    "final_head_sha": "72e6dd2de3b78383195a4c861b244b12134e2cb4",
+    "logical_attempt": 6,
+    "merge_sha": "4d6e5ec166ee98276f494efb7d522b444aad87b8",
+    "pull_request_number": 1195,
+    "trigger_marker": "[m26.pa2-live-authorized-attempt-6]"
+  },
+  "live_evidence": {
+    "artifact_archive_digest": "sha256:dc32791ff15764f0c014af453c16be539c116f3bd13de7d82fca7ef403010520",
+    "artifact_expires_at": "2026-10-25T10:55:49Z",
+    "artifact_id": 8650470968,
+    "artifact_name": "m26-pa-2-live-read-only-evidence-attempt-6",
+    "artifact_retention_days": 90,
+    "artifact_size_in_bytes": 4634,
+    "generated_at": "2026-07-27T10:56:12Z",
+    "head_sha": "4d6e5ec166ee98276f494efb7d522b444aad87b8",
+    "job_id": 89957254566,
+    "receipt_self_sha256": "389e31e91c265f29bafe0fa54274228d5fa5b7e842ea3bccb60de625d91936e9",
+    "receipt_sha256": "65320ad967faccc5ca38d55db5f16744b9071580fa19128ea06c4cd8941bf8d0",
+    "run_attempt": 1,
+    "run_id": 30259956089,
+    "run_number": 18,
+    "status": "real_corpus_retrieval_binding_verified",
+    "workflow_name": "M26.PA.2 Exact Live Read-Only Evidence"
+  },
+  "next_stage": {
+    "authorized": true,
+    "daniel_provider_gate_required": true,
+    "issue_and_branch_permitted_after_this_merge": true,
+    "live_provider_calls_permitted_by_this_reconciliation": false,
+    "name": "Live Provider Execution",
+    "predecessor_status_required": "m26_pa_2_real_corpus_retrieval_binding_accepted",
+    "production_answer_serving_permitted": false,
+    "production_pointer_mutation_permitted": false,
+    "public_shadow_canary_traffic_permitted": false,
+    "stage_id": "M26.PA.3"
+  },
+  "predecessors": {
+    "g0_main_seal_sha": "728df7da4e6b9320c25abb904a65a32b15e62bb1",
+    "g0_status": "m26_g0_milestone_reconciliation_accepted",
+    "m25_final_reconciliation_merge_sha": "4d7e661a21397ba5c88ba7160f3d0be3bd45cee3",
+    "m25_final_reconciliation_self_sha256": "e1f12ca7159dbcfbe4236108055f0582d951a76f16be9c9d6f35392dc74c5d3d",
+    "m25_status": "m25_closed",
+    "pa1_status": "m26_pa_1_production_activation_authority_freeze_accepted"
+  },
+  "prior_attempts": {
+    "all_failed_or_skipped_runs_forbidden_to_rerun": true,
+    "attempt_1_run_id": 30242723869,
+    "attempt_2_run_id": 30249384010,
+    "attempt_3_run_id": 30252530599,
+    "attempt_4_run_id": 30258197935,
+    "attempt_5_run_id": 30259333185,
+    "successful_logical_attempt": 6
+  },
+  "receipt": {
+    "artifact_digests": {
+      "contract_registry_sha256": "39d347c8e4e80d1c95d7923902e8802a939421f4c70a1d2221246e287c1c9da3",
+      "entry_contract_sha256": "fcc47cfaf43dd7dc976665210c61ee6a7da2097a532f2a6e133f8c132a5f17d2",
+      "failure_schema_sha256": "a89254fee7bd4f82b2f1cfefccbf292c73be6ae83730b79a71fc6b3fab68e6af",
+      "receipt_schema_sha256": "915ee55764bd04aa5f916c4a95c73e4cbd4568a6d1b77f931e6d97fe25093447",
+      "retrieval_policy_sha256": "0cb01492395e1ec847bd3d4e42112c294fd307efed77abedc3980e392eab38d9"
+    },
+    "authority": {
+      "answer_generation_operations": 0,
+      "production_pointer_mutations": 0,
+      "provider_calls": 0,
+      "public_shadow_canary_traffic_operations": 0,
+      "qdrant_count_operations": 1,
+      "qdrant_scroll_operations": 17,
+      "qdrant_transport_attempts": 18,
+      "qdrant_write_operations": 0,
+      "r2_read_operations": 2,
+      "r2_write_operations": 0,
+      "raw_text_persisted": false,
+      "read_only_credentials_verified": true,
+      "secrets_persisted": false,
+      "vectors_requested": false,
+      "vectors_returned": false
+    },
+    "qdrant": {
+      "collection": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043",
+      "duplicate_point_ids": false,
+      "duplicate_section_ids": false,
+      "expected_point_count": 4197,
+      "filter_sha256": "10bc73382e0e687037bae53527321fbb231753742c3883b8562433884f5d3e31",
+      "observed_point_count": 4197,
+      "page_count": 17,
+      "page_size": 256,
+      "pagination_trace_sha256": "663b7d0a671ef9c3119b87c891d26115768440e0fc0c2ba57f97e9a07daf9f5e",
+      "point_ids_sha256": "ad124658f5d7f28da02b5144994a1da5513247ea6e078f686d9e0212d33818b2",
+      "sample_seed_sha256": "9906aa78d4d8da36fe6b026538caf62e7d27af880d85b03c4b74d975b5ec55a6",
+      "sample_sha256": "c0c505c1bcaf3e37a9cd58a1e5ad33fdb6b357b4a00a5c1903a7512e76fdaf21",
+      "sample_size": 5,
+      "with_payload": [
+        "section_id",
+        "source_id",
+        "release_id",
+        "source_commit_sha",
+        "admission_sha256",
+        "candidate_release_eligible",
+        "production_authority",
+        "text_sha256"
+      ],
+      "with_vector": false
+    },
+    "release": {
+      "admission_sha256": "f5f01d82c7a1a38cf15fc54c890b904c4c015f608e2d25e294f9469f9b1927f2",
+      "artifact_count": 8,
+      "artifact_inventory_sha256": "3ca8800576c6a3282667eb2e2276c210ffe4a773d235cb72a8eaa1bb2fade8a0",
+      "engine_sha": "fe499db2e043209bfa4c2390d513c5dc579727a2",
+      "foundation_sha": "e53af5833193a644a4d7397b7d466ababb5e1373",
+      "manifest_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/promotion/m25-10-production-manifest.json",
+      "manifest_sha256": "72bb03e3fa22e453735719ab43898adfd4c7f186f818ed71685efb4fcd87de2b",
+      "pointer_key": "channels/production.json",
+      "pointer_sha256": "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "source_sha": "5250f8422f4fa08c1f3dc84840dc756850817635"
+    }
+  },
+  "reconciliation": {
+    "all_frozen_artifact_digests_required": true,
+    "exact_remote_identity_verified": true,
+    "implementation_merge_is_required_ancestor": true,
+    "issue_closure_required_after_merge": true,
+    "live_artifact_digest_required": true,
+    "live_receipt_schema_and_digest_required": true,
+    "mutation_record_zero": true,
+    "no_new_authority_beyond_pa3_entry": true,
+    "production_identity_bound": true,
+    "qdrant_population_and_sample_bound": true
+  },
+  "residual_risks": {
+    "answer_generation_still_forbidden": true,
+    "pa3_provider_budget_privacy_gate_pending": true,
+    "production_serving_still_forbidden": true,
+    "public_shadow_canary_still_forbidden": true
+  },
+  "schema_version": "knowledge-engine-m26-pa-2-acceptance/v1",
+  "self_sha256": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67",
+  "stage_id": "M26.PA.2",
+  "status": "m26_pa_2_real_corpus_retrieval_binding_accepted"
+}
