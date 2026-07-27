@@ -92,12 +92,12 @@ jobs:
           cmp /tmp/m26-pa-2-evidence-a.json /tmp/m26-pa-2-evidence-b.json
           cp /tmp/m26-pa-2-evidence-a.json m26-pa-2-non-live-repair-evidence.json
 
-      - name: Enforce exact twelve-file repair surface
+      - name: Enforce exact PA.2 implementation or live-authorization surface
         run: |
           set -euo pipefail
           git fetch origin main --depth=1
           git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
-          cat > /tmp/expected.txt <<'FILES'
+          cat > /tmp/expected-implementation.txt <<'FILES'
           .github/workflows/m26-1-architecture-authority.yml
           .github/workflows/m26-pa-2-real-corpus-binding.yml
           docs/architecture/m26/m26-pa-2-real-corpus-binding.md
@@ -111,7 +111,16 @@ jobs:
           tests/test_m26_pa_2_contracts.py
           tests/test_m26_pa_2_real_corpus_binding.py
           FILES
-          cmp /tmp/expected.txt /tmp/changed.txt
+          cat > /tmp/expected-live-authorization.txt <<'FILES'
+          .github/workflows/m26-pa-2-live-read-evidence.yml
+          .github/workflows/m26-pa-2-real-corpus-binding.yml
+          docs/architecture/m26/m26-pa-2-live-read-evidence.md
+          pilot/m26/m26-pa-2-live-authorization.json
+          schemas/m26-pa-2-live-authorization-v1.schema.json
+          tests/test_m26_pa_2_live_authorization.py
+          FILES
+          cmp /tmp/expected-implementation.txt /tmp/changed.txt \
+            || cmp /tmp/expected-live-authorization.txt /tmp/changed.txt
           ! grep -E \
             '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)' \
             /tmp/changed.txt
