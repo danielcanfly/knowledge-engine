@@ -1,0 +1,124 @@
+name: M26.G0 Milestone Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-g0-milestone-reconciliation.yml"
+      - "docs/architecture/m26/m26-g0-v3-repository-adoption.md"
+      - "pilot/m26/m26-g0-*.json"
+      - "schemas/m26-g0-*.schema.json"
+      - "src/knowledge_engine/m26_governance_reconciliation.py"
+      - "tests/test_m26_g0_governance_reconciliation.py"
+
+permissions:
+  contents: read
+
+jobs:
+  governance-adoption:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify exact head and G0 base ancestry
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git merge-base --is-ancestor 4d7e661a21397ba5c88ba7160f3d0be3bd45cee3 HEAD
+
+      - name: Install development dependencies
+        run: python -m pip install --disable-pip-version-check -e ".[dev]"
+
+      - name: Lint and compile G0
+        run: |
+          python -m ruff check \
+            src/knowledge_engine/m26_governance_reconciliation.py \
+            tests/test_m26_g0_governance_reconciliation.py
+          python -m compileall -q \
+            src/knowledge_engine/m26_governance_reconciliation.py \
+            tests/test_m26_g0_governance_reconciliation.py
+
+      - name: Run focused G0 tests
+        run: python -m pytest -q tests/test_m26_g0_governance_reconciliation.py
+
+      - name: Run predecessor and cross-stage regressions
+        run: |
+          python -m pytest -q \
+            tests/test_m26_9_candidate_qa_feedback.py \
+            tests/test_m26_10_final_authority_gate.py \
+            tests/test_m26_10_reconciliation.py \
+            tests/test_m26_11_production_authority.py \
+            tests/test_m26_11_reconciliation.py \
+            tests/test_m25_formal_closure.py \
+            tests/test_m25_reconciliation.py
+
+      - name: Build deterministic governance evidence twice
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from knowledge_engine.m26_governance_reconciliation import validate_m26_g0
+
+          report = validate_m26_g0(Path("."))
+          payload = json.dumps(report, indent=2, sort_keys=True) + "\n"
+          Path("m26-g0-governance-evidence-a.json").write_text(payload, encoding="utf-8")
+          PY
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from knowledge_engine.m26_governance_reconciliation import validate_m26_g0
+
+          report = validate_m26_g0(Path("."))
+          payload = json.dumps(report, indent=2, sort_keys=True) + "\n"
+          Path("m26-g0-governance-evidence-b.json").write_text(payload, encoding="utf-8")
+          PY
+          cmp m26-g0-governance-evidence-a.json m26-g0-governance-evidence-b.json
+          cp m26-g0-governance-evidence-a.json m26-g0-governance-evidence.json
+
+      - name: Enforce exact changed-file allowlist
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/m26-g0-milestone-reconciliation.yml' \
+            'docs/architecture/m26/m26-g0-v3-repository-adoption.md' \
+            'pilot/m26/m26-g0-contract-registry.json' \
+            'pilot/m26/m26-g0-legacy-pa2-candidate.json' \
+            'pilot/m26/m26-g0-milestone-alias-map.json' \
+            'pilot/m26/m26-g0-owner-decision.json' \
+            'pilot/m26/m26-g0-pa1-ratification.json' \
+            'pilot/m26/m26-g0-stage-registry.json' \
+            'schemas/m26-g0-governance-adoption-v1.schema.json' \
+            'schemas/m26-g0-pa1-ratification-v1.schema.json' \
+            'src/knowledge_engine/m26_governance_reconciliation.py' \
+            'tests/test_m26_g0_governance_reconciliation.py' | sort)"
+          printf '%s\n' "$changed"
+          test "$changed" = "$expected"
+          ! printf '%s\n' "$changed" | grep -E \
+            '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)'
+
+      - name: Scan changed files for secret values
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only origin/main...HEAD)"
+          ! xargs -r grep -En \
+            '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{20,})' \
+            <<<"$changed"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m26-g0-governance-evidence
+          path: m26-g0-governance-evidence.json
+          if-no-files-found: error
+          retention-days: 90
