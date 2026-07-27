@@ -51,12 +51,14 @@
       "minimum_count": 6,
       "release_path_escape_rejected": true,
       "required_kinds": [
-        "okf_bundle",
+        "document_pack_admission",
+        "document_source_index",
         "graph",
         "graph_v2",
         "lexical_index",
         "provenance",
-        "build_report"
+        "semantic_inputs",
+        "source_documents"
       ],
       "unknown_artifact_fields_rejected": true
     },
@@ -67,7 +69,6 @@
     "allowlist": [
       "section_id",
       "source_id",
-      "article_id",
       "release_id",
       "source_commit_sha",
       "admission_sha256",
@@ -83,7 +84,6 @@
     "required_fields": [
       "section_id",
       "source_id",
-      "article_id",
       "release_id",
       "source_commit_sha",
       "admission_sha256",
@@ -111,7 +111,6 @@
     "with_payload": [
       "section_id",
       "source_id",
-      "article_id",
       "release_id",
       "source_commit_sha",
       "admission_sha256",
@@ -148,6 +147,6 @@
     }
   },
   "schema_version": "knowledge-engine-m26-pa-2-retrieval-policy/v1",
-  "self_sha256": "a85ed66dd9666e22a2ec79fc3dc98671e66b82760a40d694349b86f874fe1c7b",
+  "self_sha256": "d1ab88afd48658e52d07d780312c4ca017a15e6056bacb5367cd17ab5d01e59a",
   "stage_id": "M26.PA.2"
 }

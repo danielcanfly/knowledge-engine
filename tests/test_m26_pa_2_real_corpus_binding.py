@@ -255,7 +255,6 @@ class FakeQdrant:
             "payload": {
                 "section_id": f"section-{index:05d}",
                 "source_id": f"source-{index % 156:03d}",
-                "article_id": f"article-{index % 156:03d}",
                 "release_id": identity["release_id"],
                 "source_commit_sha": identity["source_sha"],
                 "admission_sha256": identity["admission_sha256"],
@@ -532,7 +531,7 @@ def test_malicious_payload_value_rejected(value: str, match: str, tmp_path: Path
         bind_real_corpus(
             root=root,
             store=FakeStore(root, pointer, manifest),
-            qdrant=FakeQdrant(root, mutate_row=mutate_payload("article_id", value)),
+            qdrant=FakeQdrant(root, mutate_row=mutate_payload("source_id", value)),
             generated_at=GENERATED_AT,
             workflow=WORKFLOW,
         )
@@ -542,7 +541,7 @@ def test_nested_payload_rejected_recursively(tmp_path: Path) -> None:
     root, pointer, manifest = bound_root(tmp_path)
 
     def mutation(_: int, row: dict[str, Any]) -> None:
-        row["payload"]["article_id"] = {"nested": {"body": "raw"}}
+        row["payload"]["source_id"] = {"nested": {"body": "raw"}}
 
     with pytest.raises(RealCorpusBindingError, match="raw-text-like key|nested material"):
         bind_real_corpus(
@@ -969,7 +968,7 @@ def test_nested_list_raw_text_is_rejected(tmp_path: Path) -> None:
     root, pointer, manifest = bound_root(tmp_path)
 
     def mutation(_: int, row: dict[str, Any]) -> None:
-        row["payload"]["article_id"] = [{"passage": "raw"}]
+        row["payload"]["source_id"] = [{"passage": "raw"}]
 
     with pytest.raises(RealCorpusBindingError, match="raw-text-like key"):
         bind_real_corpus(

@@ -4,21 +4,31 @@ on:
   pull_request:
     paths:
       - '.github/workflows/m26-pa-2-live-read-evidence.yml'
-      - '.github/workflows/m26-pa-2-real-corpus-binding.yml'
       - 'docs/architecture/m26/m26-pa-2-live-read-evidence.md'
+      - 'pilot/m26/m26-pa-2-contract-registry.json'
       - 'pilot/m26/m26-pa-2-live-authorization.json'
+      - 'pilot/m26/m26-pa-2-retrieval-policy.json'
+      - 'schemas/m26-pa-2-contracts-v1.schema.json'
       - 'schemas/m26-pa-2-live-authorization-v1.schema.json'
+      - 'schemas/m26-pa-2-real-corpus-receipt-v1.schema.json'
+      - 'tests/test_m26_pa_2_contracts.py'
       - 'tests/test_m26_pa_2_live_authorization.py'
+      - 'tests/test_m26_pa_2_real_corpus_binding.py'
   push:
     branches:
       - main
     paths:
       - '.github/workflows/m26-pa-2-live-read-evidence.yml'
-      - '.github/workflows/m26-pa-2-real-corpus-binding.yml'
       - 'docs/architecture/m26/m26-pa-2-live-read-evidence.md'
+      - 'pilot/m26/m26-pa-2-contract-registry.json'
       - 'pilot/m26/m26-pa-2-live-authorization.json'
+      - 'pilot/m26/m26-pa-2-retrieval-policy.json'
+      - 'schemas/m26-pa-2-contracts-v1.schema.json'
       - 'schemas/m26-pa-2-live-authorization-v1.schema.json'
+      - 'schemas/m26-pa-2-real-corpus-receipt-v1.schema.json'
+      - 'tests/test_m26_pa_2_contracts.py'
       - 'tests/test_m26_pa_2_live_authorization.py'
+      - 'tests/test_m26_pa_2_real_corpus_binding.py'
 
 permissions:
   contents: read
@@ -62,18 +72,23 @@ jobs:
           test -z "${R2_SECRET_ACCESS_KEY_READ:-}"
           test -z "${QDRANT_READ_ONLY_API_KEY:-}"
 
-      - name: Enforce exact six-file authorization surface
+      - name: Enforce exact attempt-4 authorization surface
         run: |
           set -euo pipefail
           git fetch origin main --depth=1
           git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'FILES'
           .github/workflows/m26-pa-2-live-read-evidence.yml
-          .github/workflows/m26-pa-2-real-corpus-binding.yml
           docs/architecture/m26/m26-pa-2-live-read-evidence.md
+          pilot/m26/m26-pa-2-contract-registry.json
           pilot/m26/m26-pa-2-live-authorization.json
+          pilot/m26/m26-pa-2-retrieval-policy.json
+          schemas/m26-pa-2-contracts-v1.schema.json
           schemas/m26-pa-2-live-authorization-v1.schema.json
+          schemas/m26-pa-2-real-corpus-receipt-v1.schema.json
+          tests/test_m26_pa_2_contracts.py
           tests/test_m26_pa_2_live_authorization.py
+          tests/test_m26_pa_2_real_corpus_binding.py
           FILES
           cmp /tmp/expected.txt /tmp/changed.txt
           ! grep -E \
@@ -83,7 +98,7 @@ jobs:
   live-read-only:
     if: >-
       github.event_name == 'push' &&
-      contains(github.event.head_commit.message, '[m26.pa2-live-authorized-attempt-3]')
+      contains(github.event.head_commit.message, '[m26.pa2-live-authorized-attempt-4]')
     runs-on: ubuntu-24.04
     environment: m23-r3-diagnostic
     env:
@@ -279,7 +294,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: m26-pa-2-live-read-only-evidence-attempt-3
+          name: m26-pa-2-live-read-only-evidence-attempt-4
           path: /tmp/m26-pa-2-live-evidence
           if-no-files-found: error
           retention-days: 90
