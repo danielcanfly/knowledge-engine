@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/m26-pa-2-live-read-evidence.yml'
+      - '.github/workflows/m26-pa-2-real-corpus-binding.yml'
       - 'docs/architecture/m26/m26-pa-2-live-read-evidence.md'
       - 'pilot/m26/m26-pa-2-live-authorization.json'
       - 'schemas/m26-pa-2-live-authorization-v1.schema.json'
@@ -13,6 +14,7 @@ on:
       - main
     paths:
       - '.github/workflows/m26-pa-2-live-read-evidence.yml'
+      - '.github/workflows/m26-pa-2-real-corpus-binding.yml'
       - 'docs/architecture/m26/m26-pa-2-live-read-evidence.md'
       - 'pilot/m26/m26-pa-2-live-authorization.json'
       - 'schemas/m26-pa-2-live-authorization-v1.schema.json'
@@ -60,13 +62,14 @@ jobs:
           test -z "${R2_SECRET_ACCESS_KEY_READ:-}"
           test -z "${QDRANT_READ_ONLY_API_KEY:-}"
 
-      - name: Enforce exact five-file authorization surface
+      - name: Enforce exact six-file authorization surface
         run: |
           set -euo pipefail
           git fetch origin main --depth=1
           git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'FILES'
           .github/workflows/m26-pa-2-live-read-evidence.yml
+          .github/workflows/m26-pa-2-real-corpus-binding.yml
           docs/architecture/m26/m26-pa-2-live-read-evidence.md
           pilot/m26/m26-pa-2-live-authorization.json
           schemas/m26-pa-2-live-authorization-v1.schema.json
