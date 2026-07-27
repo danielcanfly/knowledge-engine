@@ -6,7 +6,7 @@
     "max_live_call_count": 1,
     "max_output_tokens": 256,
     "max_spend_usd": 0.05,
-    "pricing_reference": "MiniMax pay-as-you-go pricing checked 2026-07-27; M3 standard tier is expected to remain below this cap for one bounded smoke request"
+    "pricing_reference": "MiniMax account balance and short-window usage availability confirmed by Daniel on 2026-07-28; M3 standard tier is expected to remain below this cap for one bounded smoke request"
   },
   "denied_authority": {
     "production_answer_serving": false,
@@ -23,8 +23,8 @@
     "environment": "m23-r3-diagnostic",
     "github_run_attempt_expected": 1,
     "live_job_pr_side_skipped": true,
-    "logical_attempt": 2,
-    "trigger_marker": "[m26.pa3-provider-authorized-attempt-2]",
+    "logical_attempt": 3,
+    "trigger_marker": "[m26.pa3-provider-authorized-attempt-3]",
     "workflow_name": "M26.PA.3 Live Provider Execution Gate"
   },
   "issue": {
@@ -32,11 +32,11 @@
     "repository": "danielcanfly/knowledge-engine",
     "title": "M26.PA.3 Live Provider Execution Gate"
   },
-  "logical_attempt": 2,
+  "logical_attempt": 3,
   "owner_decision": {
     "decided_by": "Daniel Huang",
     "instruction_date": "2026-07-28",
-    "instruction_summary": "Use MiniMax M3 with credential name MINIMAX_API_KEY; Daniel refreshed the key after attempt 1 failed with invalid_api_key, and Codex keeps the same conservative gate parameters.",
+    "instruction_summary": "Use MiniMax M3 with credential name MINIMAX_API_KEY; Daniel confirmed the MiniMax account balance and short-window usage availability after attempt 2 returned HTTP 402, refreshed the GitHub environment secret again, and Codex keeps the same conservative gate parameters for attempt 3.",
     "recommendation_adopted_by_gate": true
   },
   "payload_scope": {
@@ -70,6 +70,17 @@
       "receipt_emitted": false,
       "rerun_forbidden": true,
       "run_id": 30271818416
+    },
+    "attempt_2": {
+      "artifact_emitted": false,
+      "conclusion": "failure",
+      "failure_class": "provider_http_402_after_secret_refresh",
+      "head_sha": "8f46de92e1f5ad9b04e38bda508410d092fda97b",
+      "http_status": 402,
+      "logical_attempt": 2,
+      "receipt_emitted": false,
+      "rerun_forbidden": true,
+      "run_id": 30287306002
     }
   },
   "production_evidence": {
@@ -87,7 +98,7 @@
   "provider": {
     "api_style": "anthropic_compatible_messages",
     "base_url": "https://api.minimax.io/anthropic",
-    "docs_checked_at": "2026-07-27",
+    "docs_checked_at": "2026-07-28",
     "endpoint": "https://api.minimax.io/anthropic/v1/messages",
     "model_id": "MiniMax-M3",
     "provider_id": "minimax",
@@ -99,6 +110,7 @@
   },
   "receipt_policy": {
     "artifact_retention_days": 30,
+    "persist_failure_artifact_on_error": true,
     "persist_error_body_hash_only": true,
     "persist_provider_response_hash": true,
     "persist_provider_response_text": false,
@@ -110,7 +122,7 @@
     "user_task": "Acknowledge the bounded provider gate using only the supplied metadata. Return JSON with keys status, provider, model, pa2_status, release_id, qdrant_point_count, and no_production_answer."
   },
   "schema_version": "knowledge-engine-m26-pa-3-live-provider-authorization/v1",
-  "self_sha256": "691d3383005f0439f9e41c8d480f0951e69075355ef1e23341293a4088f4eba6",
+  "self_sha256": "4e92f188897831e20c2990324e2c7d68a172fdc050197eb3ece7c0c74578f2cc",
   "stage_id": "M26.PA.3",
-  "status": "m26_pa_3_live_provider_execution_attempt_2_authorized_pending_main_push"
+  "status": "m26_pa_3_live_provider_execution_attempt_3_authorized_pending_main_push"
 }

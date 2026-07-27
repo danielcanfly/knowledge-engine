@@ -56,8 +56,8 @@
         "environment": {"const": "m23-r3-diagnostic"},
         "github_run_attempt_expected": {"const": 1},
         "live_job_pr_side_skipped": {"const": true},
-        "logical_attempt": {"const": 2},
-        "trigger_marker": {"const": "[m26.pa3-provider-authorized-attempt-2]"},
+        "logical_attempt": {"const": 3},
+        "trigger_marker": {"const": "[m26.pa3-provider-authorized-attempt-3]"},
         "workflow_name": {"const": "M26.PA.3 Live Provider Execution Gate"}
       },
       "required": [
@@ -80,7 +80,7 @@
       "required": ["number", "repository", "title"],
       "type": "object"
     },
-    "logical_attempt": {"const": 2},
+    "logical_attempt": {"const": 3},
     "owner_decision": {
       "additionalProperties": false,
       "properties": {
@@ -125,9 +125,35 @@
             "rerun_forbidden"
           ],
           "type": "object"
+        },
+        "attempt_2": {
+          "additionalProperties": false,
+          "properties": {
+            "artifact_emitted": {"const": false},
+            "conclusion": {"const": "failure"},
+            "failure_class": {"const": "provider_http_402_after_secret_refresh"},
+            "head_sha": {"const": "8f46de92e1f5ad9b04e38bda508410d092fda97b"},
+            "http_status": {"const": 402},
+            "logical_attempt": {"const": 2},
+            "receipt_emitted": {"const": false},
+            "rerun_forbidden": {"const": true},
+            "run_id": {"const": 30287306002}
+          },
+          "required": [
+            "logical_attempt",
+            "run_id",
+            "head_sha",
+            "conclusion",
+            "http_status",
+            "failure_class",
+            "artifact_emitted",
+            "receipt_emitted",
+            "rerun_forbidden"
+          ],
+          "type": "object"
         }
       },
-      "required": ["attempt_1"],
+      "required": ["attempt_1", "attempt_2"],
       "type": "object"
     },
     "payload_scope": {
@@ -227,7 +253,7 @@
       "properties": {
         "api_style": {"const": "anthropic_compatible_messages"},
         "base_url": {"const": "https://api.minimax.io/anthropic"},
-        "docs_checked_at": {"const": "2026-07-27"},
+        "docs_checked_at": {"const": "2026-07-28"},
         "endpoint": {"const": "https://api.minimax.io/anthropic/v1/messages"},
         "model_id": {"const": "MiniMax-M3"},
         "provider_id": {"const": "minimax"},
@@ -257,6 +283,7 @@
       "additionalProperties": false,
       "properties": {
         "artifact_retention_days": {"const": 30},
+        "persist_failure_artifact_on_error": {"const": true},
         "persist_error_body_hash_only": {"const": true},
         "persist_provider_response_hash": {"const": true},
         "persist_provider_response_text": {"const": false},
@@ -268,6 +295,7 @@
         "persist_provider_response_hash",
         "persist_provider_response_text",
         "persist_usage",
+        "persist_failure_artifact_on_error",
         "persist_error_body_hash_only",
         "artifact_retention_days"
       ],
@@ -288,7 +316,7 @@
     "self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
     "stage_id": {"const": "M26.PA.3"},
     "status": {
-      "const": "m26_pa_3_live_provider_execution_attempt_2_authorized_pending_main_push"
+      "const": "m26_pa_3_live_provider_execution_attempt_3_authorized_pending_main_push"
     }
   },
   "required": [
