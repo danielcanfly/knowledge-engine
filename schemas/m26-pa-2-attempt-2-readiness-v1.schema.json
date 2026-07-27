@@ -1,0 +1,180 @@
+{
+  "$id": "knowledge-engine/m26-pa-2-attempt-2-readiness-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "already_present_environment_names": {
+      "const": [
+        "R2_ENDPOINT_URL",
+        "R2_BUCKET",
+        "QDRANT_URL"
+      ]
+    },
+    "authority": {
+      "additionalProperties": false,
+      "properties": {
+        "live_read_execution": {
+          "const": false
+        },
+        "pa3_execution": {
+          "const": false
+        },
+        "secret_provisioning_execution": {
+          "const": false
+        },
+        "stage_acceptance": {
+          "const": false
+        }
+      },
+      "required": [
+        "secret_provisioning_execution",
+        "live_read_execution",
+        "stage_acceptance",
+        "pa3_execution"
+      ],
+      "type": "object"
+    },
+    "authorized": {
+      "const": false
+    },
+    "future_exact_run": {
+      "additionalProperties": false,
+      "properties": {
+        "environment": {
+          "const": "m23-r3-diagnostic"
+        },
+        "github_run_attempt_expected": {
+          "const": 1
+        },
+        "logical_attempt": {
+          "const": 2
+        },
+        "new_authorization_and_main_push_required": {
+          "const": true
+        },
+        "rerun_of_attempt_1_forbidden": {
+          "const": true
+        },
+        "same_read_surface_as_attempt_1": {
+          "const": true
+        },
+        "workflow_name": {
+          "const": "M26.PA.2 Exact Live Read-Only Evidence"
+        }
+      },
+      "required": [
+        "workflow_name",
+        "github_run_attempt_expected",
+        "logical_attempt",
+        "environment",
+        "same_read_surface_as_attempt_1",
+        "new_authorization_and_main_push_required",
+        "rerun_of_attempt_1_forbidden"
+      ],
+      "type": "object"
+    },
+    "logical_attempt": {
+      "const": 2
+    },
+    "predecessor": {
+      "additionalProperties": false,
+      "properties": {
+        "data_plane_operations": {
+          "const": 0
+        },
+        "failed_closed": {
+          "const": true
+        },
+        "failure_self_sha256": {
+          "const": "9724218f4cebbd82d6d35093d913d5105f2098343194e1a2c10748323301c6f5"
+        },
+        "logical_attempt": {
+          "const": 1
+        },
+        "run_id": {
+          "const": 30242723869
+        }
+      },
+      "required": [
+        "logical_attempt",
+        "run_id",
+        "failure_self_sha256",
+        "failed_closed",
+        "data_plane_operations"
+      ],
+      "type": "object"
+    },
+    "provisioning_requirements": {
+      "additionalProperties": false,
+      "properties": {
+        "all_required_names_must_be_nonempty_before_authorization": {
+          "const": true
+        },
+        "qdrant_api_key_must_be_read_only": {
+          "const": true
+        },
+        "r2_credentials_must_be_read_only": {
+          "const": true
+        },
+        "secret_values_must_not_be_logged_or_persisted": {
+          "const": true
+        },
+        "write_scoped_substitution_forbidden": {
+          "const": true
+        }
+      },
+      "required": [
+        "r2_credentials_must_be_read_only",
+        "qdrant_api_key_must_be_read_only",
+        "write_scoped_substitution_forbidden",
+        "secret_values_must_not_be_logged_or_persisted",
+        "all_required_names_must_be_nonempty_before_authorization"
+      ],
+      "type": "object"
+    },
+    "required_environment": {
+      "const": "m23-r3-diagnostic"
+    },
+    "required_secret_names": {
+      "const": [
+        "R2_ACCESS_KEY_ID_READ",
+        "R2_SECRET_ACCESS_KEY_READ",
+        "QDRANT_READ_ONLY_API_KEY"
+      ]
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-2-attempt-2-readiness/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "stage_id": {
+      "const": "M26.PA.2"
+    },
+    "status": {
+      "const": "blocked_on_exact_read_only_credentials"
+    },
+    "triggerable": {
+      "const": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "logical_attempt",
+    "status",
+    "authorized",
+    "triggerable",
+    "predecessor",
+    "required_environment",
+    "required_secret_names",
+    "already_present_environment_names",
+    "provisioning_requirements",
+    "future_exact_run",
+    "authority",
+    "self_sha256"
+  ],
+  "title": "M26.PA.2 logical attempt 2 readiness",
+  "type": "object"
+}
