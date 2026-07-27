@@ -86,7 +86,7 @@ jobs:
   live-provider:
     if: >-
       github.event_name == 'push' &&
-      contains(github.event.head_commit.message, '[m26.pa3-provider-authorized-attempt-2]')
+      contains(github.event.head_commit.message, '[m26.pa3-provider-authorized-attempt-3]')
     runs-on: ubuntu-24.04
     environment: m23-r3-diagnostic
     env:
@@ -211,14 +211,30 @@ jobs:
               json=payload,
               timeout=60,
           )
-          response_json = response.json()
+          try:
+              response_json = response.json()
+              error_body_sha256 = sha256_value(response_json)
+          except json.JSONDecodeError:
+              response_json = {}
+              error_body_sha256 = hashlib.sha256(response.content).hexdigest()
           if response.status_code >= 400:
               failure = {
                   "schema_version": "knowledge-engine-m26-pa-3-live-provider-failure/v1",
                   "stage_id": "M26.PA.3",
                   "status": "live_provider_execution_failed",
+                  "authorization": {
+                      "authorization_self_sha256": authorization["self_sha256"],
+                      "logical_attempt": authorization["logical_attempt"],
+                      "trigger_marker": authorization["execution"]["trigger_marker"],
+                  },
+                  "workflow": {
+                      "workflow_name": authorization["execution"]["workflow_name"],
+                      "run_id": os.environ["GITHUB_RUN_ID"],
+                      "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+                      "head_sha": os.environ["GITHUB_SHA"],
+                  },
                   "http_status": response.status_code,
-                  "error_body_sha256": sha256_value(response_json),
+                  "error_body_sha256": error_body_sha256,
                   "secret_values_persisted": False,
               }
               (evidence_dir / "m26-pa-3-live-provider-failure.json").write_text(
@@ -320,8 +336,9 @@ jobs:
           PY
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: m26-pa-3-live-provider-evidence-attempt-2
+          name: m26-pa-3-live-provider-evidence-attempt-3
           path: /tmp/m26-pa-3-live-provider-evidence
           if-no-files-found: error
           retention-days: 30
