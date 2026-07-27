@@ -1,0 +1,67 @@
+{
+  "$id": "knowledge-engine-m25-final-reconciliation/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "authority_boundaries": {
+      "properties": {
+        "m25_closed": {
+          "const": true
+        },
+        "new_ingestion_workload_execution": {
+          "const": false
+        },
+        "production_pointer_mutation": {
+          "const": false
+        },
+        "public_production_traffic_expansion": {
+          "const": false
+        }
+      },
+      "required": [
+        "m25_closed",
+        "new_ingestion_workload_execution",
+        "production_pointer_mutation",
+        "public_production_traffic_expansion"
+      ],
+      "type": "object"
+    },
+    "closure_pr": {
+      "properties": {
+        "head_sha": {
+          "const": "7a8d68c2c3d8486ae1ff45eff46b5f60ddd11165"
+        },
+        "merge_sha": {
+          "const": "dd373e932b75c89de3bdea45e581fd0df512c40b"
+        }
+      },
+      "required": [
+        "head_sha",
+        "merge_sha"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "const": "m25_closed"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-final-reconciliation/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "status": {
+      "const": "m25_final_reconciliation_ready"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "result",
+    "self_sha256",
+    "closure_pr",
+    "authority_boundaries"
+  ],
+  "type": "object"
+}
