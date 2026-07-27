@@ -53,6 +53,7 @@ jobs:
           git fetch origin main --depth=1
           changed="$(git diff --name-only origin/main...HEAD | sort)"
           expected="$(printf '%s\n' \
+            '.github/workflows/m26-g0-milestone-reconciliation.yml' \
             '.github/workflows/m26-g0-reconciliation.yml' \
             'docs/architecture/m26/m26-g0-reconciliation.md' \
             'pilot/m26/m26-g0-acceptance.json' \
