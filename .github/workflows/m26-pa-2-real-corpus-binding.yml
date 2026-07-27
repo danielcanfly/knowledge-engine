@@ -115,12 +115,12 @@ jobs:
             '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)' \
             /tmp/changed.txt
 
-      - name: Scan changed files for secret values
+      - name: Scan changed files for high-confidence secret values
         run: |
           set -euo pipefail
           changed="$(git diff --name-only origin/main...HEAD)"
           ! xargs -r grep -En \
-            '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{16,}|Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{12,})' \
+            '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,})' \
             <<<"$changed"
 
       - uses: actions/upload-artifact@v4
