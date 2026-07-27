@@ -41,6 +41,12 @@ Only the following environment secrets may be read:
 
 No write-scoped substitute is permitted. Missing read-only credentials fail closed.
 
+## Workflow compatibility boundary
+
+The existing PA.2 non-live workflow is changed only to recognise two explicit file sets: the
+accepted 12-file implementation surface and this exact six-file live-authorization surface.
+It does not admit arbitrary `m26-pa-2-*` changes. Both workflows retain `contents: read`.
+
 ## Evidence boundary
 
 Success produces a strict self-digested metadata-only receipt. Failure produces a sanitized
