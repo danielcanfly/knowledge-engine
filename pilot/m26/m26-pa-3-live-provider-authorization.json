@@ -1,0 +1,103 @@
+{
+  "authorized": true,
+  "budget": {
+    "fail_if_usage_missing": true,
+    "max_input_tokens_budget": 4096,
+    "max_live_call_count": 1,
+    "max_output_tokens": 256,
+    "max_spend_usd": 0.05,
+    "pricing_reference": "MiniMax pay-as-you-go pricing checked 2026-07-27; M3 standard tier is expected to remain below this cap for one bounded smoke request"
+  },
+  "denied_authority": {
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "public_shadow_canary_traffic": false,
+    "qdrant_writes": false,
+    "r2_writes": false,
+    "raw_text_persistence": false,
+    "secret_persistence": false,
+    "source_foundation_release_mutation": false,
+    "verified_final_answers": false
+  },
+  "execution": {
+    "environment": "m23-r3-diagnostic",
+    "github_run_attempt_expected": 1,
+    "live_job_pr_side_skipped": true,
+    "logical_attempt": 1,
+    "trigger_marker": "[m26.pa3-provider-authorized-attempt-1]",
+    "workflow_name": "M26.PA.3 Live Provider Execution Gate"
+  },
+  "issue": {
+    "number": 1197,
+    "repository": "danielcanfly/knowledge-engine",
+    "title": "M26.PA.3 Live Provider Execution Gate"
+  },
+  "logical_attempt": 1,
+  "owner_decision": {
+    "decided_by": "Daniel Huang",
+    "instruction_date": "2026-07-27",
+    "instruction_summary": "Use MiniMax M3 with credential name MINIMAX_API_KEY; Codex recommends the remaining conservative gate parameters.",
+    "recommendation_adopted_by_gate": true
+  },
+  "payload_scope": {
+    "include_pa2_receipt_identity": true,
+    "include_qdrant_population": true,
+    "include_release_identity": true,
+    "include_sample_digest": true,
+    "max_prompt_bytes": 12000,
+    "production_metadata_hashes": true,
+    "raw_corpus_text": false,
+    "secret_values": false,
+    "user_query": false,
+    "vectors": false
+  },
+  "predecessor": {
+    "pa2_acceptance_self_sha256": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67",
+    "pa2_issue_number": 1186,
+    "pa2_issue_state_after_merge": "closed",
+    "pa2_reconciliation_merge_sha": "8ed2da47d04f6410e55d5855d78f734341aecf2e",
+    "pa2_reconciliation_pull_request": 1196,
+    "pa2_status": "m26_pa_2_real_corpus_retrieval_binding_accepted"
+  },
+  "production_evidence": {
+    "pa2_artifact_id": 8650470968,
+    "pa2_artifact_sha256": "sha256:dc32791ff15764f0c014af453c16be539c116f3bd13de7d82fca7ef403010520",
+    "pa2_live_run_id": 30259956089,
+    "pa2_receipt_sha256": "65320ad967faccc5ca38d55db5f16744b9071580fa19128ea06c4cd8941bf8d0",
+    "qdrant_collection": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043",
+    "qdrant_observed_point_count": 4197,
+    "qdrant_sample_sha256": "c0c505c1bcaf3e37a9cd58a1e5ad33fdb6b357b4a00a5c1903a7512e76fdaf21",
+    "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+    "release_manifest_sha256": "72bb03e3fa22e453735719ab43898adfd4c7f186f818ed71685efb4fcd87de2b",
+    "release_pointer_sha256": "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9"
+  },
+  "provider": {
+    "api_style": "anthropic_compatible_messages",
+    "base_url": "https://api.minimax.io/anthropic",
+    "docs_checked_at": "2026-07-27",
+    "endpoint": "https://api.minimax.io/anthropic/v1/messages",
+    "model_id": "MiniMax-M3",
+    "provider_id": "minimax",
+    "secret_name": "MINIMAX_API_KEY",
+    "stream": false,
+    "thinking": {
+      "mode": "not_requested"
+    }
+  },
+  "receipt_policy": {
+    "artifact_retention_days": 30,
+    "persist_error_body_hash_only": true,
+    "persist_provider_response_hash": true,
+    "persist_provider_response_text": false,
+    "persist_request_payload_hash": true,
+    "persist_usage": true
+  },
+  "request_template": {
+    "system": "You are executing a bounded integration smoke check for M26.PA.3. Return compact JSON only. Do not answer a user question. Do not claim production serving authority.",
+    "user_task": "Acknowledge the bounded provider gate using only the supplied metadata. Return JSON with keys status, provider, model, pa2_status, release_id, qdrant_point_count, and no_production_answer."
+  },
+  "schema_version": "knowledge-engine-m26-pa-3-live-provider-authorization/v1",
+  "self_sha256": "1eb3545bc7bee9c483c8713c60f5c3711ba925e96efdb5eedd307a5cf139f6cd",
+  "stage_id": "M26.PA.3",
+  "status": "m26_pa_3_live_provider_execution_authorized_pending_main_push"
+}

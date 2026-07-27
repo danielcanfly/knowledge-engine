@@ -1,0 +1,280 @@
+{
+  "$id": "knowledge-engine/m26-pa-3-live-provider-authorization-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authorized": {"const": true},
+    "budget": {
+      "additionalProperties": false,
+      "properties": {
+        "fail_if_usage_missing": {"const": true},
+        "max_input_tokens_budget": {"maximum": 4096, "minimum": 1, "type": "integer"},
+        "max_live_call_count": {"const": 1},
+        "max_output_tokens": {"maximum": 256, "minimum": 1, "type": "integer"},
+        "max_spend_usd": {"maximum": 0.05, "minimum": 0, "type": "number"},
+        "pricing_reference": {"minLength": 1, "type": "string"}
+      },
+      "required": [
+        "max_spend_usd",
+        "max_live_call_count",
+        "max_input_tokens_budget",
+        "max_output_tokens",
+        "fail_if_usage_missing",
+        "pricing_reference"
+      ],
+      "type": "object"
+    },
+    "denied_authority": {
+      "additionalProperties": false,
+      "properties": {
+        "production_answer_serving": {"const": false},
+        "production_pointer_mutation": {"const": false},
+        "public_shadow_canary_traffic": {"const": false},
+        "qdrant_writes": {"const": false},
+        "r2_writes": {"const": false},
+        "raw_text_persistence": {"const": false},
+        "secret_persistence": {"const": false},
+        "source_foundation_release_mutation": {"const": false},
+        "verified_final_answers": {"const": false}
+      },
+      "required": [
+        "production_answer_serving",
+        "production_pointer_mutation",
+        "public_shadow_canary_traffic",
+        "qdrant_writes",
+        "r2_writes",
+        "raw_text_persistence",
+        "secret_persistence",
+        "source_foundation_release_mutation",
+        "verified_final_answers"
+      ],
+      "type": "object"
+    },
+    "execution": {
+      "additionalProperties": false,
+      "properties": {
+        "environment": {"const": "m23-r3-diagnostic"},
+        "github_run_attempt_expected": {"const": 1},
+        "live_job_pr_side_skipped": {"const": true},
+        "logical_attempt": {"const": 1},
+        "trigger_marker": {"const": "[m26.pa3-provider-authorized-attempt-1]"},
+        "workflow_name": {"const": "M26.PA.3 Live Provider Execution Gate"}
+      },
+      "required": [
+        "workflow_name",
+        "environment",
+        "logical_attempt",
+        "github_run_attempt_expected",
+        "trigger_marker",
+        "live_job_pr_side_skipped"
+      ],
+      "type": "object"
+    },
+    "issue": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {"const": 1197},
+        "repository": {"const": "danielcanfly/knowledge-engine"},
+        "title": {"const": "M26.PA.3 Live Provider Execution Gate"}
+      },
+      "required": ["number", "repository", "title"],
+      "type": "object"
+    },
+    "logical_attempt": {"const": 1},
+    "owner_decision": {
+      "additionalProperties": false,
+      "properties": {
+        "decided_by": {"const": "Daniel Huang"},
+        "instruction_date": {"const": "2026-07-27"},
+        "instruction_summary": {"minLength": 1, "type": "string"},
+        "recommendation_adopted_by_gate": {"const": true}
+      },
+      "required": [
+        "decided_by",
+        "instruction_date",
+        "instruction_summary",
+        "recommendation_adopted_by_gate"
+      ],
+      "type": "object"
+    },
+    "payload_scope": {
+      "additionalProperties": false,
+      "properties": {
+        "include_pa2_receipt_identity": {"const": true},
+        "include_qdrant_population": {"const": true},
+        "include_release_identity": {"const": true},
+        "include_sample_digest": {"const": true},
+        "max_prompt_bytes": {"maximum": 12000, "minimum": 1, "type": "integer"},
+        "production_metadata_hashes": {"const": true},
+        "raw_corpus_text": {"const": false},
+        "secret_values": {"const": false},
+        "user_query": {"const": false},
+        "vectors": {"const": false}
+      },
+      "required": [
+        "production_metadata_hashes",
+        "include_release_identity",
+        "include_qdrant_population",
+        "include_sample_digest",
+        "include_pa2_receipt_identity",
+        "raw_corpus_text",
+        "vectors",
+        "secret_values",
+        "user_query",
+        "max_prompt_bytes"
+      ],
+      "type": "object"
+    },
+    "predecessor": {
+      "additionalProperties": false,
+      "properties": {
+        "pa2_acceptance_self_sha256": {
+          "const": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67"
+        },
+        "pa2_issue_number": {"const": 1186},
+        "pa2_issue_state_after_merge": {"const": "closed"},
+        "pa2_reconciliation_merge_sha": {
+          "const": "8ed2da47d04f6410e55d5855d78f734341aecf2e"
+        },
+        "pa2_reconciliation_pull_request": {"const": 1196},
+        "pa2_status": {"const": "m26_pa_2_real_corpus_retrieval_binding_accepted"}
+      },
+      "required": [
+        "pa2_status",
+        "pa2_acceptance_self_sha256",
+        "pa2_reconciliation_pull_request",
+        "pa2_reconciliation_merge_sha",
+        "pa2_issue_number",
+        "pa2_issue_state_after_merge"
+      ],
+      "type": "object"
+    },
+    "production_evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "pa2_artifact_id": {"const": 8650470968},
+        "pa2_artifact_sha256": {
+          "const": "sha256:dc32791ff15764f0c014af453c16be539c116f3bd13de7d82fca7ef403010520"
+        },
+        "pa2_live_run_id": {"const": 30259956089},
+        "pa2_receipt_sha256": {
+          "const": "65320ad967faccc5ca38d55db5f16744b9071580fa19128ea06c4cd8941bf8d0"
+        },
+        "qdrant_collection": {
+          "const": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043"
+        },
+        "qdrant_observed_point_count": {"const": 4197},
+        "qdrant_sample_sha256": {
+          "const": "c0c505c1bcaf3e37a9cd58a1e5ad33fdb6b357b4a00a5c1903a7512e76fdaf21"
+        },
+        "release_id": {"const": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"},
+        "release_manifest_sha256": {
+          "const": "72bb03e3fa22e453735719ab43898adfd4c7f186f818ed71685efb4fcd87de2b"
+        },
+        "release_pointer_sha256": {
+          "const": "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9"
+        }
+      },
+      "required": [
+        "release_id",
+        "release_manifest_sha256",
+        "release_pointer_sha256",
+        "qdrant_collection",
+        "qdrant_observed_point_count",
+        "qdrant_sample_sha256",
+        "pa2_live_run_id",
+        "pa2_artifact_id",
+        "pa2_artifact_sha256",
+        "pa2_receipt_sha256"
+      ],
+      "type": "object"
+    },
+    "provider": {
+      "additionalProperties": false,
+      "properties": {
+        "api_style": {"const": "anthropic_compatible_messages"},
+        "base_url": {"const": "https://api.minimax.io/anthropic"},
+        "docs_checked_at": {"const": "2026-07-27"},
+        "endpoint": {"const": "https://api.minimax.io/anthropic/v1/messages"},
+        "model_id": {"const": "MiniMax-M3"},
+        "provider_id": {"const": "minimax"},
+        "secret_name": {"const": "MINIMAX_API_KEY"},
+        "stream": {"const": false},
+        "thinking": {
+          "additionalProperties": false,
+          "properties": {"mode": {"const": "not_requested"}},
+          "required": ["mode"],
+          "type": "object"
+        }
+      },
+      "required": [
+        "provider_id",
+        "model_id",
+        "api_style",
+        "base_url",
+        "endpoint",
+        "secret_name",
+        "stream",
+        "thinking",
+        "docs_checked_at"
+      ],
+      "type": "object"
+    },
+    "receipt_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_retention_days": {"const": 30},
+        "persist_error_body_hash_only": {"const": true},
+        "persist_provider_response_hash": {"const": true},
+        "persist_provider_response_text": {"const": false},
+        "persist_request_payload_hash": {"const": true},
+        "persist_usage": {"const": true}
+      },
+      "required": [
+        "persist_request_payload_hash",
+        "persist_provider_response_hash",
+        "persist_provider_response_text",
+        "persist_usage",
+        "persist_error_body_hash_only",
+        "artifact_retention_days"
+      ],
+      "type": "object"
+    },
+    "request_template": {
+      "additionalProperties": false,
+      "properties": {
+        "system": {"minLength": 1, "type": "string"},
+        "user_task": {"minLength": 1, "type": "string"}
+      },
+      "required": ["system", "user_task"],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-3-live-provider-authorization/v1"
+    },
+    "self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "stage_id": {"const": "M26.PA.3"},
+    "status": {"const": "m26_pa_3_live_provider_execution_authorized_pending_main_push"}
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "status",
+    "logical_attempt",
+    "authorized",
+    "issue",
+    "owner_decision",
+    "predecessor",
+    "provider",
+    "budget",
+    "payload_scope",
+    "production_evidence",
+    "request_template",
+    "receipt_policy",
+    "execution",
+    "denied_authority",
+    "self_sha256"
+  ],
+  "title": "M26.PA.3 live provider authorization",
+  "type": "object"
+}
