@@ -86,7 +86,7 @@ jobs:
   live-provider:
     if: >-
       github.event_name == 'push' &&
-      contains(github.event.head_commit.message, '[m26.pa3-provider-authorized-attempt-3]')
+      contains(github.event.head_commit.message, '[m26.pa3-provider-authorized-attempt-4]')
     runs-on: ubuntu-24.04
     environment: m23-r3-diagnostic
     env:
@@ -338,7 +338,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: m26-pa-3-live-provider-evidence-attempt-3
+          name: m26-pa-3-live-provider-evidence-attempt-4
           path: /tmp/m26-pa-3-live-provider-evidence
           if-no-files-found: error
           retention-days: 30

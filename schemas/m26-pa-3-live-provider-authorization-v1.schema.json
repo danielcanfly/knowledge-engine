@@ -56,8 +56,8 @@
         "environment": {"const": "m23-r3-diagnostic"},
         "github_run_attempt_expected": {"const": 1},
         "live_job_pr_side_skipped": {"const": true},
-        "logical_attempt": {"const": 3},
-        "trigger_marker": {"const": "[m26.pa3-provider-authorized-attempt-3]"},
+        "logical_attempt": {"const": 4},
+        "trigger_marker": {"const": "[m26.pa3-provider-authorized-attempt-4]"},
         "workflow_name": {"const": "M26.PA.3 Live Provider Execution Gate"}
       },
       "required": [
@@ -80,7 +80,7 @@
       "required": ["number", "repository", "title"],
       "type": "object"
     },
-    "logical_attempt": {"const": 3},
+    "logical_attempt": {"const": 4},
     "owner_decision": {
       "additionalProperties": false,
       "properties": {
@@ -151,9 +151,35 @@
             "rerun_forbidden"
           ],
           "type": "object"
+        },
+        "attempt_3": {
+          "additionalProperties": false,
+          "properties": {
+            "artifact_emitted": {"const": false},
+            "conclusion": {"const": "failure"},
+            "failure_class": {"const": "provider_http_402_after_secret_refresh"},
+            "head_sha": {"const": "fc73623a23115f35b31c1a430cf7ffbf336ece94"},
+            "http_status": {"const": 402},
+            "logical_attempt": {"const": 3},
+            "receipt_emitted": {"const": false},
+            "rerun_forbidden": {"const": true},
+            "run_id": {"const": 30293923868}
+          },
+          "required": [
+            "logical_attempt",
+            "run_id",
+            "head_sha",
+            "conclusion",
+            "http_status",
+            "failure_class",
+            "artifact_emitted",
+            "receipt_emitted",
+            "rerun_forbidden"
+          ],
+          "type": "object"
         }
       },
-      "required": ["attempt_1", "attempt_2"],
+      "required": ["attempt_1", "attempt_2", "attempt_3"],
       "type": "object"
     },
     "payload_scope": {
@@ -316,7 +342,7 @@
     "self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
     "stage_id": {"const": "M26.PA.3"},
     "status": {
-      "const": "m26_pa_3_live_provider_execution_attempt_3_authorized_pending_main_push"
+      "const": "m26_pa_3_live_provider_execution_attempt_4_authorized_pending_main_push"
     }
   },
   "required": [
