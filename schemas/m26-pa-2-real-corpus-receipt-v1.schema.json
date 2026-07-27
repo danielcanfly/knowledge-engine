@@ -1,0 +1,411 @@
+{
+  "$id": "knowledge-engine/m26-pa-2-real-corpus-receipt-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_digests": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_registry_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "entry_contract_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "failure_schema_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "receipt_schema_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "retrieval_policy_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entry_contract_sha256",
+        "retrieval_policy_sha256",
+        "contract_registry_sha256",
+        "receipt_schema_sha256",
+        "failure_schema_sha256"
+      ],
+      "type": "object"
+    },
+    "authority": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_generation_operations": {
+          "const": 0
+        },
+        "production_pointer_mutations": {
+          "const": 0
+        },
+        "provider_calls": {
+          "const": 0
+        },
+        "public_shadow_canary_traffic_operations": {
+          "const": 0
+        },
+        "qdrant_count_operations": {
+          "const": 1
+        },
+        "qdrant_scroll_operations": {
+          "maximum": 18,
+          "minimum": 17,
+          "type": "integer"
+        },
+        "qdrant_transport_attempts": {
+          "maximum": 38,
+          "minimum": 18,
+          "type": "integer"
+        },
+        "qdrant_write_operations": {
+          "const": 0
+        },
+        "r2_read_operations": {
+          "const": 2
+        },
+        "r2_write_operations": {
+          "const": 0
+        },
+        "raw_text_persisted": {
+          "const": false
+        },
+        "read_only_credentials_verified": {
+          "const": true
+        },
+        "secrets_persisted": {
+          "const": false
+        },
+        "vectors_requested": {
+          "const": false
+        },
+        "vectors_returned": {
+          "const": false
+        }
+      },
+      "required": [
+        "r2_read_operations",
+        "qdrant_count_operations",
+        "qdrant_scroll_operations",
+        "qdrant_transport_attempts",
+        "r2_write_operations",
+        "qdrant_write_operations",
+        "production_pointer_mutations",
+        "provider_calls",
+        "answer_generation_operations",
+        "public_shadow_canary_traffic_operations",
+        "vectors_requested",
+        "vectors_returned",
+        "raw_text_persisted",
+        "secrets_persisted",
+        "read_only_credentials_verified"
+      ],
+      "type": "object"
+    },
+    "generated_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "type": "string"
+    },
+    "qdrant": {
+      "additionalProperties": false,
+      "properties": {
+        "collection": {
+          "const": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043"
+        },
+        "duplicate_point_ids": {
+          "const": false
+        },
+        "duplicate_section_ids": {
+          "const": false
+        },
+        "expected_point_count": {
+          "const": 4197
+        },
+        "filter_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "observed_point_count": {
+          "const": 4197
+        },
+        "page_count": {
+          "maximum": 18,
+          "minimum": 17,
+          "type": "integer"
+        },
+        "page_size": {
+          "const": 256
+        },
+        "pagination_trace_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "point_ids_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "sample_seed_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "sample_size": {
+          "const": 5
+        },
+        "with_payload": {
+          "const": [
+            "section_id",
+            "source_id",
+            "article_id",
+            "release_id",
+            "source_commit_sha",
+            "admission_sha256",
+            "candidate_release_eligible",
+            "production_authority",
+            "text_sha256"
+          ]
+        },
+        "with_vector": {
+          "const": false
+        }
+      },
+      "required": [
+        "collection",
+        "filter_sha256",
+        "expected_point_count",
+        "observed_point_count",
+        "page_size",
+        "page_count",
+        "sample_size",
+        "sample_seed_sha256",
+        "pagination_trace_sha256",
+        "point_ids_sha256",
+        "with_payload",
+        "with_vector",
+        "duplicate_point_ids",
+        "duplicate_section_ids"
+      ],
+      "type": "object"
+    },
+    "release": {
+      "additionalProperties": false,
+      "properties": {
+        "admission_sha256": {
+          "const": "f5f01d82c7a1a38cf15fc54c890b904c4c015f608e2d25e294f9469f9b1927f2"
+        },
+        "artifact_count": {
+          "minimum": 6,
+          "type": "integer"
+        },
+        "artifact_inventory_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "counts": {
+          "additionalProperties": false,
+          "properties": {
+            "document_articles": {
+              "const": 156
+            },
+            "document_graph_edges": {
+              "const": 8525
+            },
+            "document_graph_nodes": {
+              "const": 4222
+            },
+            "document_sections": {
+              "const": 4041
+            },
+            "document_series": {
+              "const": 25
+            },
+            "document_sources": {
+              "const": 156
+            },
+            "semantic_documents": {
+              "const": 4197
+            }
+          },
+          "required": [
+            "document_sources",
+            "document_series",
+            "document_articles",
+            "document_sections",
+            "document_graph_nodes",
+            "document_graph_edges",
+            "semantic_documents"
+          ],
+          "type": "object"
+        },
+        "engine_sha": {
+          "const": "fe499db2e043209bfa4c2390d513c5dc579727a2"
+        },
+        "foundation_sha": {
+          "const": "e53af5833193a644a4d7397b7d466ababb5e1373"
+        },
+        "manifest_key": {
+          "const": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/promotion/m25-10-production-manifest.json"
+        },
+        "manifest_sha256": {
+          "const": "72bb03e3fa22e453735719ab43898adfd4c7f186f818ed71685efb4fcd87de2b"
+        },
+        "pointer_key": {
+          "const": "channels/production.json"
+        },
+        "pointer_sha256": {
+          "const": "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9"
+        },
+        "release_id": {
+          "const": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+        },
+        "source_sha": {
+          "const": "5250f8422f4fa08c1f3dc84840dc756850817635"
+        }
+      },
+      "required": [
+        "pointer_key",
+        "pointer_sha256",
+        "release_id",
+        "manifest_key",
+        "manifest_sha256",
+        "engine_sha",
+        "source_sha",
+        "foundation_sha",
+        "admission_sha256",
+        "artifact_count",
+        "artifact_inventory_sha256",
+        "counts"
+      ],
+      "type": "object"
+    },
+    "sample": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "article_id_sha256": {
+            "oneOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payload_identity_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "point_id_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "section_id_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "source_id_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "text_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "point_id_sha256",
+          "section_id_sha256",
+          "source_id_sha256",
+          "article_id_sha256",
+          "text_sha256",
+          "payload_identity_sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 5,
+      "minItems": 5,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-2-real-corpus-receipt/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "status": {
+      "const": "real_corpus_retrieval_binding_verified"
+    },
+    "workflow": {
+      "additionalProperties": false,
+      "properties": {
+        "environment": {
+          "const": "m23-r3-diagnostic"
+        },
+        "evidence_mode": {
+          "const": "live_read_only"
+        },
+        "head_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "query_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repository": {
+          "const": "danielcanfly/knowledge-engine"
+        },
+        "run_attempt": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "workflow_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "workflow_name",
+        "run_id",
+        "run_attempt",
+        "head_sha",
+        "environment",
+        "query_id",
+        "evidence_mode"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "generated_at",
+    "workflow",
+    "release",
+    "qdrant",
+    "sample",
+    "authority",
+    "artifact_digests",
+    "self_sha256"
+  ],
+  "title": "M26.PA.2 metadata-only live read receipt",
+  "type": "object"
+}
