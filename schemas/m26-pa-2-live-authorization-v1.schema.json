@@ -28,7 +28,7 @@
         "evidence_mode": {"const": "live_read_only"},
         "query_id": {"const": "m26-pa-2-production-binding-v1"},
         "run_attempt": {"const": 1},
-        "trigger_marker": {"const": "[m26.pa2-live-authorized-attempt-2]"},
+        "trigger_marker": {"const": "[m26.pa2-live-authorized-attempt-3]"},
         "workflow_head_is_authorization_merge": {"const": true},
         "workflow_name": {"const": "M26.PA.2 Exact Live Read-Only Evidence"}
       },
@@ -40,14 +40,14 @@
       "properties": {
         "environment": {"const": "m23-r3-diagnostic"},
         "github_run_attempt_expected": {"const": 1},
-        "logical_attempt": {"const": 2},
+        "logical_attempt": {"const": 3},
         "new_authorization_and_main_push_required": {"const": true},
-        "rerun_of_attempt_1_forbidden": {"const": true},
+        "rerun_of_attempt_2_forbidden": {"const": true},
         "same_read_surface_as_attempt_1": {"const": true},
-        "trigger_marker": {"const": "[m26.pa2-live-authorized-attempt-2]"},
+        "trigger_marker": {"const": "[m26.pa2-live-authorized-attempt-3]"},
         "workflow_name": {"const": "M26.PA.2 Exact Live Read-Only Evidence"}
       },
-      "required": ["workflow_name","environment","logical_attempt","github_run_attempt_expected","same_read_surface_as_attempt_1","new_authorization_and_main_push_required","rerun_of_attempt_1_forbidden","trigger_marker"],
+      "required": ["workflow_name","environment","logical_attempt","github_run_attempt_expected","same_read_surface_as_attempt_1","new_authorization_and_main_push_required","rerun_of_attempt_2_forbidden","trigger_marker"],
       "type": "object"
     },
     "implementation": {
@@ -62,14 +62,14 @@
       "required": ["issue_number","pull_request_number","head_sha","merge_sha","required_ancestor"],
       "type": "object"
     },
-    "logical_attempt": {"const": 2},
+    "logical_attempt": {"const": 3},
     "owner_decision": {
       "additionalProperties": false,
       "properties": {
         "decided_by": {"const": "Daniel Huang"},
         "instruction_date": {"const": "2026-07-27"},
-        "instruction_text": {"const": ".env / m23-r3-diagnostic 都好了"},
-        "scope": {"const": "exact_pa2_read_only_live_evidence_attempt_2"}
+        "instruction_text": {"const": "這個我叫它 QDRANT_API_KEY_READ 已經給你了"},
+        "scope": {"const": "exact_pa2_read_only_live_evidence_attempt_3"}
       },
       "required": ["decided_by","instruction_date","instruction_text","scope"],
       "type": "object"
@@ -79,11 +79,13 @@
       "properties": {
         "data_plane_operations": {"const": 0},
         "failed_closed": {"const": true},
-        "failure_self_sha256": {"const": "9724218f4cebbd82d6d35093d913d5105f2098343194e1a2c10748323301c6f5"},
-        "logical_attempt": {"const": 1},
-        "run_id": {"const": 30242723869}
+        "failure_self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "failure_stage": {"const": "credential-presence-gate"},
+        "logical_attempt": {"const": 2},
+        "missing_secret_name": {"const": "QDRANT_READ_ONLY_API_KEY"},
+        "run_id": {"const": 30249384010}
       },
-      "required": ["logical_attempt","run_id","failure_self_sha256","failed_closed","data_plane_operations"],
+      "required": ["logical_attempt","run_id","failure_self_sha256","failed_closed","data_plane_operations","failure_stage","missing_secret_name"],
       "type": "object"
     },
     "read_surface": {
