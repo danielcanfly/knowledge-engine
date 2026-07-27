@@ -26,3 +26,16 @@ reconciliation.
 No live provider call, answer generation, secret access, traffic, production pointer,
 Source, Foundation, release, R2, Qdrant, Worker, Pages, DNS, or Access mutation is
 performed or authorised by this reconciliation.
+
+## Bounded CI compatibility repair
+
+The first reconciliation head correctly triggered the original G0 workflow because the
+acceptance artifact matches `pilot/m26/m26-g0-*.json`. That workflow validated every
+contract and deterministic evidence step, then failed only because its change-surface gate
+recognised the original 12-file implementation set and not the independent reconciliation
+set. Run `30237010744` records that fail-closed result.
+
+The reconciliation therefore adds one bounded workflow compatibility repair: the original
+12-file allowlist remains exact, and a second exact five-file reconciliation allowlist is
+accepted. Protected paths, authority boundaries, implementation evidence, and historical
+artifacts are not relaxed or rewritten.
