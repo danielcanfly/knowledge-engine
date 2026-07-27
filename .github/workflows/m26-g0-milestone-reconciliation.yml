@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
-          cat > /tmp/expected.txt <<'EOF'
+          cat > /tmp/implementation.txt <<'EOF'
           .github/workflows/m26-g0-milestone-reconciliation.yml
           docs/architecture/m26/m26-g0-v3-repository-adoption.md
           pilot/m26/m26-g0-contract-registry.json
@@ -70,8 +70,24 @@ jobs:
           src/knowledge_engine/m26_governance_reconciliation.py
           tests/test_m26_g0_governance_reconciliation.py
           EOF
-          diff -u /tmp/expected.txt /tmp/changed.txt
-          ! grep -E '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/)' \
+          cat > /tmp/reconciliation.txt <<'EOF'
+          .github/workflows/m26-g0-milestone-reconciliation.yml
+          .github/workflows/m26-g0-reconciliation.yml
+          docs/architecture/m26/m26-g0-reconciliation.md
+          pilot/m26/m26-g0-acceptance.json
+          tests/test_m26_g0_reconciliation.py
+          EOF
+          if cmp -s /tmp/implementation.txt /tmp/changed.txt; then
+            echo 'validated exact implementation surface'
+          elif cmp -s /tmp/reconciliation.txt /tmp/changed.txt; then
+            echo 'validated exact independent reconciliation surface'
+          else
+            echo 'unexpected G0 change surface' >&2
+            diff -u /tmp/implementation.txt /tmp/changed.txt || true
+            diff -u /tmp/reconciliation.txt /tmp/changed.txt || true
+            exit 1
+          fi
+          ! grep -E '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/|src/)' \
             /tmp/changed.txt
       - uses: actions/upload-artifact@v4
         with:
