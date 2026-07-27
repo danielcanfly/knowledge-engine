@@ -22,7 +22,7 @@ def test_g0_acceptance_self_digest_and_statuses() -> None:
     acceptance = load(PILOT / "m26-g0-acceptance.json")
     verify_self_digest(acceptance, "m26_g0_acceptance")
     assert acceptance["self_sha256"] == (
-        "77d6344fe9e2f5654ff0606261c4fac8aeeaf282c1921a6f1f1faedb31acd8a7"
+        "a7fbd51e126414ff66fe1cf0fea5e7ab1f07476d3e7596914c2c8568e730084e"
     )
     assert acceptance["status"] == "m26_g0_milestone_reconciliation_accepted"
     assert acceptance["pa1_status"] == (
@@ -140,3 +140,16 @@ def test_m25_closure_and_legacy_pa2_are_not_overstated() -> None:
     assert legacy["accepted"] is False
     assert legacy["requires_fresh_post_g0_branch"] is True
     assert legacy["p0_p1_repair_required"] is True
+
+
+def test_reconciliation_ci_repair_is_bounded() -> None:
+    acceptance = load(PILOT / "m26-g0-acceptance.json")
+    repair = acceptance["reconciliation_ci_repair"]
+    assert repair["failure_run_id"] == 30237010744
+    assert repair["failure_step"] == "Enforce exact change surface"
+    assert repair["changed_file"] == (
+        ".github/workflows/m26-g0-milestone-reconciliation.yml"
+    )
+    assert repair["implementation_evidence_rewritten"] is False
+    assert repair["authority_expansion"] is False
+    assert repair["protected_path_relaxation"] is False
