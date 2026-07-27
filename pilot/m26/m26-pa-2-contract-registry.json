@@ -1,0 +1,28 @@
+{
+  "accepted": false,
+  "artifacts": {
+    "entry_contract_sha256": "fcc47cfaf43dd7dc976665210c61ee6a7da2097a532f2a6e133f8c132a5f17d2",
+    "retrieval_policy_sha256": "387d58b0b6f7ac401e7c8bb350da809f22ff0acb550855a4220857047628c125"
+  },
+  "legacy_candidate": {
+    "classification": "candidate_patch_only",
+    "head_sha": "40061ebf66b057dca490708b7abbaa5988b4edb8",
+    "live_run": false,
+    "merged": false
+  },
+  "live_execution": false,
+  "predecessor_identities": {
+    "g0_acceptance_self_sha256": "4fa28aed8b7d1f63ccc5c7e35869acc08a20174882969a9ddddadacc3264efc5",
+    "m25_final_reconciliation_self_sha256": "e1f12ca7159dbcfbe4236108055f0582d951a76f16be9c9d6f35392dc74c5d3d"
+  },
+  "schema_version": "knowledge-engine-m26-pa-2-contract-registry/v1",
+  "schemas": {
+    "contracts_schema_sha256": "c053f45de9e2cca95182e7c41602da8cec1b5d67de0a8514ec826f1bc826cc5d",
+    "failure_schema_sha256": "a89254fee7bd4f82b2f1cfefccbf292c73be6ae83730b79a71fc6b3fab68e6af",
+    "receipt_schema_sha256": "61afcc80d0d11bfd3b68ff4d7fb7cc63d13d0f9ac5203363cc5907e8be820cab"
+  },
+  "self_sha256": "888e2f339e1820fcd409d7a7b93c60dcb64d8440b6ac140e99a47b9de6703a24",
+  "stage_id": "M26.PA.2",
+  "stage_package_sha256": "f9529b30d9b33943d6bc658f8d60b97b35acf76de2c42c46c46b1e52cdc67a69",
+  "unified_spec_sha256": "6e71ca5981e3eb45987d188c9c7fb2851a4b5f31803655dd2fc7e28ed4bd22a9"
+}
