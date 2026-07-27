@@ -1,0 +1,45 @@
+{
+  "approval_date": "2026-07-26",
+  "approval_must_not_be_inferred_beyond_scope": true,
+  "approved_scope": [
+    "repository_governance_adoption",
+    "milestone_alias_registry",
+    "canonical_stage_registry",
+    "strict_schemas",
+    "deterministic_validator",
+    "non_live_tests",
+    "exact_head_workflow",
+    "independent_reconciliation"
+  ],
+  "decision_id": "m26-g0-unified-v3-owner-approval-2026-07-26",
+  "denied_authority": [
+    "answer_generation",
+    "credential_or_secret_access",
+    "dns_or_access_mutation",
+    "foundation_mutation",
+    "live_provider_calls",
+    "production_pointer_mutation",
+    "public_or_shadow_or_canary_traffic",
+    "qdrant_read_or_write",
+    "r2_read_or_write",
+    "real_corpus_live_reads",
+    "release_mutation",
+    "source_mutation",
+    "worker_or_pages_mutation"
+  ],
+  "execution_packages": {
+    "g0_stage_package_sha256": "65a2e6ae16837c66acf9b79d7f5ffa7e9b4e082d0d2e268ebf508630ef12407a",
+    "governance_execution_handoff_sha256": "d0f2fa40fa1c1d490bf4ee1d55f1840ff379976ba53742734978e2fbfdaf30d8"
+  },
+  "historical_artifact_rewrite_permitted": false,
+  "live_permission_granted": false,
+  "owner": "Daniel",
+  "repository": "danielcanfly/knowledge-engine",
+  "schema_version": "knowledge-engine-m26-g0-owner-decision/v1",
+  "self_sha256": "dafdbc049b354412a8cc955cf4e6ee615d2b6f8c20b49d8889b0049572edede5",
+  "specification": {
+    "authority": "sole_highest_specification",
+    "name": "LLM_Wiki_M26_Unified_Highest_Specification_and_Production_Activation_Supersession_v3_2026-07-26.zip",
+    "sha256": "6e71ca5981e3eb45987d188c9c7fb2851a4b5f31803655dd2fc7e28ed4bd22a9"
+  }
+}
