@@ -37,8 +37,8 @@ def validate_and_verify(name: str, schema_name: str) -> dict[str, object]:
 
 def test_attempt_1_failure_is_strict_and_zero_operation() -> None:
     value = validate_and_verify(
-        "m26-pa-2-live-attempt-1-failure.json",
-        "m26-pa-2-live-attempt-failure-v1.schema.json",
+        "pa2-live-attempt-1-failure.json",
+        "pa2-live-attempt-failure-v1.schema.json",
     )
     assert value["self_sha256"] == (
         "9724218f4cebbd82d6d35093d913d5105f2098343194e1a2c10748323301c6f5"
@@ -51,8 +51,8 @@ def test_attempt_1_failure_is_strict_and_zero_operation() -> None:
 
 def test_attempt_2_is_blocked_and_non_authorizing() -> None:
     value = validate_and_verify(
-        "m26-pa-2-attempt-2-readiness.json",
-        "m26-pa-2-attempt-2-readiness-v1.schema.json",
+        "pa2-attempt-2-readiness.json",
+        "pa2-attempt-2-readiness-v1.schema.json",
     )
     assert value["self_sha256"] == (
         "0bf622ea104ecde8f808aa80f827ad4c4ec98f972c1786818934666b3b63f6fe"
@@ -69,7 +69,7 @@ def test_attempt_2_is_blocked_and_non_authorizing() -> None:
 
 def test_attempt_2_requires_new_run_not_rerun() -> None:
     value = json.loads(
-        (PILOT / "m26-pa-2-attempt-2-readiness.json").read_text(encoding="utf-8")
+        (PILOT / "pa2-attempt-2-readiness.json").read_text(encoding="utf-8")
     )
     future = value["future_exact_run"]
     assert future["logical_attempt"] == 2
