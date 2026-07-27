@@ -1,0 +1,153 @@
+{
+  "expected_counts": {
+    "document_articles": 156,
+    "document_graph_edges": 8525,
+    "document_graph_nodes": 4222,
+    "document_sections": 4041,
+    "document_series": 25,
+    "document_sources": 156,
+    "semantic_documents": 4197
+  },
+  "failure_policy": {
+    "fail_closed_on": [
+      "pointer_digest_drift",
+      "pointer_schema_drift",
+      "manifest_digest_drift",
+      "manifest_schema_drift",
+      "manifest_identity_drift",
+      "manifest_authority_drift",
+      "manifest_count_drift",
+      "artifact_inventory_drift",
+      "write_capable_client_surface",
+      "credential_scope_drift",
+      "credential_contract_drift",
+      "payload_unknown_field",
+      "payload_nested_material",
+      "payload_raw_text",
+      "payload_secret",
+      "payload_credential_url",
+      "vector_requested_or_returned",
+      "qdrant_count_drift",
+      "qdrant_non_ok",
+      "qdrant_http_4xx_or_5xx",
+      "qdrant_malformed_json",
+      "qdrant_timeout_or_retry_exhaustion",
+      "partial_or_empty_page",
+      "pagination_loop",
+      "page_limit_exceeded",
+      "duplicate_point_id",
+      "duplicate_section_id",
+      "incomplete_population",
+      "sample_incomplete",
+      "receipt_schema_or_digest_drift"
+    ],
+    "raw_exception_persistence": false,
+    "sanitized_receipt_required": true
+  },
+  "manifest": {
+    "artifact_inventory": {
+      "duplicate_keys_rejected": true,
+      "duplicate_kinds_rejected": true,
+      "minimum_count": 6,
+      "release_path_escape_rejected": true,
+      "required_kinds": [
+        "okf_bundle",
+        "graph",
+        "graph_v2",
+        "lexical_index",
+        "provenance",
+        "build_report"
+      ],
+      "unknown_artifact_fields_rejected": true
+    },
+    "maximum_manifest_bytes": 4194304,
+    "maximum_pointer_bytes": 65536
+  },
+  "payload": {
+    "allowlist": [
+      "section_id",
+      "source_id",
+      "article_id",
+      "release_id",
+      "source_commit_sha",
+      "admission_sha256",
+      "candidate_release_eligible",
+      "production_authority",
+      "text_sha256"
+    ],
+    "credential_bearing_urls_rejected": true,
+    "maximum_string_bytes": 1024,
+    "nested_values_rejected": true,
+    "recursive_raw_text_scan": true,
+    "recursive_secret_scan": true,
+    "required_fields": [
+      "section_id",
+      "source_id",
+      "article_id",
+      "release_id",
+      "source_commit_sha",
+      "admission_sha256",
+      "candidate_release_eligible",
+      "production_authority",
+      "text_sha256"
+    ],
+    "unknown_fields_rejected": true
+  },
+  "qdrant": {
+    "expected_point_count": 4197,
+    "filter": {
+      "admission_sha256": "f5f01d82c7a1a38cf15fc54c890b904c4c015f608e2d25e294f9469f9b1927f2",
+      "candidate_release_eligible": true,
+      "production_authority": false,
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "source_commit_sha": "5250f8422f4fa08c1f3dc84840dc756850817635"
+    },
+    "maximum_pages": 18,
+    "maximum_retries": 1,
+    "page_size": 256,
+    "sample_seed": "m26-pa-2-real-corpus-binding-v1",
+    "sample_size": 5,
+    "timeout_seconds": 15.0,
+    "with_payload": [
+      "section_id",
+      "source_id",
+      "article_id",
+      "release_id",
+      "source_commit_sha",
+      "admission_sha256",
+      "candidate_release_eligible",
+      "production_authority",
+      "text_sha256"
+    ],
+    "with_vector": false
+  },
+  "read_only": {
+    "qdrant": {
+      "allowed_operations": [
+        "count",
+        "scroll"
+      ],
+      "credential_contract_sha256": "fbcc36fda02d3b8eaf0af777531ab2c2b7b5c357df72ae3cebe50e44b57dc42f",
+      "scope": "read_only",
+      "secret_names": [
+        "QDRANT_READ_ONLY_API_KEY"
+      ],
+      "surface": "qdrant"
+    },
+    "r2": {
+      "allowed_operations": [
+        "get"
+      ],
+      "credential_contract_sha256": "28929389da704c879907f66af6934f90e587f3260333bea72d3df4ffb2ffb0e0",
+      "scope": "read_only",
+      "secret_names": [
+        "R2_ACCESS_KEY_ID_READ",
+        "R2_SECRET_ACCESS_KEY_READ"
+      ],
+      "surface": "r2"
+    }
+  },
+  "schema_version": "knowledge-engine-m26-pa-2-retrieval-policy/v1",
+  "self_sha256": "a85ed66dd9666e22a2ec79fc3dc98671e66b82760a40d694349b86f874fe1c7b",
+  "stage_id": "M26.PA.2"
+}
