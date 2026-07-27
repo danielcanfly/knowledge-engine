@@ -1,21 +1,26 @@
 # M26.PA.2 Exact Live Read-Only Evidence
 
-This batch authorises one exact PA.2 live evidence attempt after implementation PR `#1187`
+This batch authorises logical attempt 2 for exact PA.2 live evidence after implementation PR
+`#1187`
 merged at head `11db7672f0a24c4531ac0203ca89e2c4d0a6e975` as main seal
 `ecad7b2bfb2e6d472bf0ed76d2e0adc818124dd9`.
 
 ## Owner authority
 
-Daniel's 2026-07-27 instruction, `繼續完成PA-2 然後繼續依序從PA-3往下做`, is
-recorded only as authority for PA.2 read-only evidence attempt 1. It does not borrow PA.3
-provider authority and does not accept PA.2 by itself.
+Daniel's 2026-07-27 confirmation, `.env / m23-r3-diagnostic 都好了`, is recorded only as
+authority to construct and merge the PA.2 logical attempt 2 read-only evidence authorization.
+It does not borrow PA.3 provider authority and does not accept PA.2 by itself.
+
+Logical attempt 1 is immutable: GitHub Actions run `30242723869` failed closed before
+runtime installation and before any data-plane operation. It must not be rerun.
 
 ## Exact run
 
 - workflow: `M26.PA.2 Exact Live Read-Only Evidence`
 - environment: `m23-r3-diagnostic`
-- attempt: `1`
-- trigger marker: `[m26.pa2-live-authorized]`
+- logical attempt: `2`
+- GitHub run attempt: `1`
+- trigger marker: `[m26.pa2-live-authorized-attempt-2]`
 - R2 operations: two exact `get` calls
 - Qdrant operations: exact filtered `count` and complete bounded `scroll`
 - expected population: `4,197`
@@ -25,8 +30,8 @@ provider authority and does not accept PA.2 by itself.
 - raw source-body reads: disabled
 
 The workflow is installed through a normal pull request. Its pull-request job validates the
-authorization without secrets. The live job can run only on the main push whose merge commit
-contains the exact trigger marker.
+authorization without secrets. The live job can run only on the fresh main push whose merge
+commit contains the exact attempt-2 trigger marker.
 
 ## Credential boundary
 
@@ -39,7 +44,9 @@ Only the following environment secrets may be read:
 - `QDRANT_URL`
 - `QDRANT_READ_ONLY_API_KEY`
 
-No write-scoped substitute is permitted. Missing read-only credentials fail closed.
+No write-scoped substitute is permitted. Missing read-only credentials fail closed. The
+read-only R2 and Qdrant secret values must never be logged, committed, printed, attached to
+artifacts, or copied into issues, pull requests, or handoffs.
 
 ## Workflow compatibility boundary
 
