@@ -1,0 +1,83 @@
+name: M26.G0 Independent Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-g0-reconciliation.yml"
+      - "docs/architecture/m26/m26-g0-reconciliation.md"
+      - "pilot/m26/m26-g0-acceptance.json"
+      - "tests/test_m26_g0_reconciliation.py"
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify exact head and implementation ancestry
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git merge-base --is-ancestor a53eeae85265c2a8c3988f06371ee95849a22917 HEAD
+
+      - name: Install development dependencies
+        run: python -m pip install --disable-pip-version-check -e ".[dev]"
+
+      - name: Lint and compile reconciliation
+        run: |
+          python -m ruff check tests/test_m26_g0_reconciliation.py
+          python -m compileall -q tests/test_m26_g0_reconciliation.py
+
+      - name: Revalidate implementation and reconciliation
+        run: |
+          python -m pytest -q \
+            tests/test_m26_g0_governance_reconciliation.py \
+            tests/test_m26_g0_reconciliation.py
+
+      - name: Verify exact reconciliation file boundary
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/m26-g0-reconciliation.yml' \
+            'docs/architecture/m26/m26-g0-reconciliation.md' \
+            'pilot/m26/m26-g0-acceptance.json' \
+            'tests/test_m26_g0_reconciliation.py' | sort)"
+          printf '%s\n' "$changed"
+          test "$changed" = "$expected"
+          ! printf '%s\n' "$changed" | grep -E \
+            '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/|src/)'
+
+      - name: Rebuild deterministic acceptance digest
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("pilot/m26/m26-g0-acceptance.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          expected = value["self_sha256"]
+          value["self_sha256"] = ""
+          payload = json.dumps(
+              value,
+              sort_keys=True,
+              separators=(",", ":"),
+              ensure_ascii=False,
+          ).encode("utf-8")
+          assert hashlib.sha256(payload).hexdigest() == expected
+          PY
