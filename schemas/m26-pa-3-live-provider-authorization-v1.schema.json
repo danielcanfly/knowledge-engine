@@ -56,8 +56,8 @@
         "environment": {"const": "m23-r3-diagnostic"},
         "github_run_attempt_expected": {"const": 1},
         "live_job_pr_side_skipped": {"const": true},
-        "logical_attempt": {"const": 1},
-        "trigger_marker": {"const": "[m26.pa3-provider-authorized-attempt-1]"},
+        "logical_attempt": {"const": 2},
+        "trigger_marker": {"const": "[m26.pa3-provider-authorized-attempt-2]"},
         "workflow_name": {"const": "M26.PA.3 Live Provider Execution Gate"}
       },
       "required": [
@@ -80,12 +80,12 @@
       "required": ["number", "repository", "title"],
       "type": "object"
     },
-    "logical_attempt": {"const": 1},
+    "logical_attempt": {"const": 2},
     "owner_decision": {
       "additionalProperties": false,
       "properties": {
         "decided_by": {"const": "Daniel Huang"},
-        "instruction_date": {"const": "2026-07-27"},
+        "instruction_date": {"const": "2026-07-28"},
         "instruction_summary": {"minLength": 1, "type": "string"},
         "recommendation_adopted_by_gate": {"const": true}
       },
@@ -95,6 +95,39 @@
         "instruction_summary",
         "recommendation_adopted_by_gate"
       ],
+      "type": "object"
+    },
+    "prior_attempts": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_1": {
+          "additionalProperties": false,
+          "properties": {
+            "artifact_emitted": {"const": false},
+            "conclusion": {"const": "failure"},
+            "failure_class": {"const": "invalid_api_key"},
+            "head_sha": {"const": "44bbe10117803fae71abb5072a270b0b213a259a"},
+            "http_status": {"const": 401},
+            "logical_attempt": {"const": 1},
+            "receipt_emitted": {"const": false},
+            "rerun_forbidden": {"const": true},
+            "run_id": {"const": 30271818416}
+          },
+          "required": [
+            "logical_attempt",
+            "run_id",
+            "head_sha",
+            "conclusion",
+            "http_status",
+            "failure_class",
+            "artifact_emitted",
+            "receipt_emitted",
+            "rerun_forbidden"
+          ],
+          "type": "object"
+        }
+      },
+      "required": ["attempt_1"],
       "type": "object"
     },
     "payload_scope": {
@@ -254,7 +287,9 @@
     },
     "self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
     "stage_id": {"const": "M26.PA.3"},
-    "status": {"const": "m26_pa_3_live_provider_execution_authorized_pending_main_push"}
+    "status": {
+      "const": "m26_pa_3_live_provider_execution_attempt_2_authorized_pending_main_push"
+    }
   },
   "required": [
     "schema_version",
@@ -265,6 +300,7 @@
     "issue",
     "owner_decision",
     "predecessor",
+    "prior_attempts",
     "provider",
     "budget",
     "payload_scope",
