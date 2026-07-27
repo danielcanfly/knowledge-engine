@@ -161,7 +161,6 @@
           "const": [
             "section_id",
             "source_id",
-            "article_id",
             "release_id",
             "source_commit_sha",
             "admission_sha256",

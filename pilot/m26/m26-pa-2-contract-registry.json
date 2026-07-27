@@ -2,7 +2,7 @@
   "accepted": false,
   "artifacts": {
     "entry_contract_sha256": "fcc47cfaf43dd7dc976665210c61ee6a7da2097a532f2a6e133f8c132a5f17d2",
-    "retrieval_policy_sha256": "387d58b0b6f7ac401e7c8bb350da809f22ff0acb550855a4220857047628c125"
+    "retrieval_policy_sha256": "0cb01492395e1ec847bd3d4e42112c294fd307efed77abedc3980e392eab38d9"
   },
   "legacy_candidate": {
     "classification": "candidate_patch_only",
@@ -17,11 +17,11 @@
   },
   "schema_version": "knowledge-engine-m26-pa-2-contract-registry/v1",
   "schemas": {
-    "contracts_schema_sha256": "a23252f6ecac116a2651fe13c4eb92ff7448937f1bd4ca62d4dfab3731a6ab86",
+    "contracts_schema_sha256": "8946d87a5106c3fb67db1c747d279585f31e1d9f6a8c214953b12f13e94119d8",
     "failure_schema_sha256": "a89254fee7bd4f82b2f1cfefccbf292c73be6ae83730b79a71fc6b3fab68e6af",
-    "receipt_schema_sha256": "61afcc80d0d11bfd3b68ff4d7fb7cc63d13d0f9ac5203363cc5907e8be820cab"
+    "receipt_schema_sha256": "915ee55764bd04aa5f916c4a95c73e4cbd4568a6d1b77f931e6d97fe25093447"
   },
-  "self_sha256": "e9fde54dfdd9f549852d7a92efb3fb201e15505e4c60066b22c56aa7b000b961",
+  "self_sha256": "ebd5a88827cccad6e1b6a59c9c4155adb98afccec841b62fb1cd074065a5d4df",
   "stage_id": "M26.PA.2",
   "stage_package_sha256": "f9529b30d9b33943d6bc658f8d60b97b35acf76de2c42c46c46b1e52cdc67a69",
   "unified_spec_sha256": "6e71ca5981e3eb45987d188c9c7fb2851a4b5f31803655dd2fc7e28ed4bd22a9"

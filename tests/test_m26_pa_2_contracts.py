@@ -74,7 +74,7 @@ def test_contract_chain_validates() -> None:
     assert report["answer_generation"] is False
     assert report["production_mutation"] is False
     assert report["expected_point_count"] == 4197
-    assert report["payload_field_count"] == 9
+    assert report["payload_field_count"] == 8
     assert report["legacy_candidate_merged"] is False
 
 
@@ -201,6 +201,7 @@ def test_payload_policy_omits_raw_heading_and_origin_path() -> None:
     assert "content" not in fields
     assert "heading" not in fields
     assert "origin_path" not in fields
+    assert "article_id" not in fields
     assert fields == set(policy["payload"]["required_fields"])
 
 

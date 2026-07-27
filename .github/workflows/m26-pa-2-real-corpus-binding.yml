@@ -111,15 +111,20 @@ jobs:
           tests/test_m26_pa_2_contracts.py
           tests/test_m26_pa_2_real_corpus_binding.py
           FILES
-          # Attempt 2 uses the same bounded live-authorization file surface.
-          # Attempt 3 uses the same bounded live-authorization file surface.
+          # Attempt 4 uses the same bounded live-authorization file surface.
           cat > /tmp/expected-live-authorization.txt <<'FILES'
           .github/workflows/m26-pa-2-live-read-evidence.yml
           .github/workflows/m26-pa-2-real-corpus-binding.yml
           docs/architecture/m26/m26-pa-2-live-read-evidence.md
+          pilot/m26/m26-pa-2-contract-registry.json
           pilot/m26/m26-pa-2-live-authorization.json
+          pilot/m26/m26-pa-2-retrieval-policy.json
+          schemas/m26-pa-2-contracts-v1.schema.json
           schemas/m26-pa-2-live-authorization-v1.schema.json
+          schemas/m26-pa-2-real-corpus-receipt-v1.schema.json
+          tests/test_m26_pa_2_contracts.py
           tests/test_m26_pa_2_live_authorization.py
+          tests/test_m26_pa_2_real_corpus_binding.py
           FILES
           cmp /tmp/expected-implementation.txt /tmp/changed.txt \
             || cmp /tmp/expected-live-authorization.txt /tmp/changed.txt
