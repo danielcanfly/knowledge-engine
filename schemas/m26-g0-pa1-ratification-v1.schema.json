@@ -1,0 +1,98 @@
+{
+  "$id": "knowledge-engine/m26-g0-pa1-ratification-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_type": {
+      "const": "pa1_ratification"
+    },
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "access_mutation": {"const": false},
+        "answer_generation": {"const": false},
+        "canary_traffic": {"const": false},
+        "dns_mutation": {"const": false},
+        "foundation_mutation": {"const": false},
+        "live_provider_calls": {"const": false},
+        "pages_mutation": {"const": false},
+        "production_answer_serving": {"const": false},
+        "production_pointer_mutation": {"const": false},
+        "public_traffic": {"const": false},
+        "qdrant_mutation": {"const": false},
+        "r2_mutation": {"const": false},
+        "real_corpus_live_reads": {"const": false},
+        "release_mutation": {"const": false},
+        "secret_access": {"const": false},
+        "secret_persistence": {"const": false},
+        "shadow_traffic": {"const": false},
+        "source_mutation": {"const": false},
+        "worker_mutation": {"const": false}
+      },
+      "required": ["access_mutation","answer_generation","canary_traffic","dns_mutation","foundation_mutation","live_provider_calls","pages_mutation","production_answer_serving","production_pointer_mutation","public_traffic","qdrant_mutation","r2_mutation","real_corpus_live_reads","release_mutation","secret_access","secret_persistence","shadow_traffic","source_mutation","worker_mutation"],
+      "type": "object"
+    },
+    "canonical_status": {"const": "m26_pa_1_production_activation_authority_freeze_accepted"},
+    "frozen_identities": {
+      "additionalProperties": false,
+      "properties": {
+        "authority_matrix_self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "contract_registry_self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "entry_contract_self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "production_gates_self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": ["authority_matrix_self_sha256","contract_registry_self_sha256","entry_contract_self_sha256","production_gates_self_sha256"],
+      "type": "object"
+    },
+    "historical_evidence_artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {"const": 8614361478},
+        "digest": {"const": "sha256:70f38b731e7f2101f1e57e8f95db7df2581701271c4b68762336e5246a705fdd"},
+        "name": {"const": "m26-11-production-authority-evidence"},
+        "retention_days": {"const": 90},
+        "workflow_run_id": {"const": 30140764239}
+      },
+      "required": ["artifact_id","name","digest","workflow_run_id","retention_days"],
+      "type": "object"
+    },
+    "historical_identity": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptance_path": {"const": "pilot/m26/m26-11-acceptance.json"},
+        "acceptance_self_sha256": {"const": "ca8236314c8ab67812979e0525f588ed2e11341382149adad96baf479cfa4f3e"},
+        "historical_main_seal_sha": {"const": "e88b50cb8f0084a6ec1ea1d9aadc9af7bce54bf6"},
+        "historical_stage_id": {"const": "M26.11"},
+        "historical_status": {"const": "m26_11_production_authority_activation_contract_accepted"},
+        "implementation_base_sha": {"const": "d5204a0e75bc8a8a529e0f71e719dd47509bc726"},
+        "implementation_head_sha": {"const": "3cbfbcca9cc8c54e76fb63120bc0f34254904257"},
+        "implementation_merge_sha": {"const": "e8b5c63ea57a8df581a2792af267f3b22a65db3c"},
+        "implementation_pr_number": {"const": 1174},
+        "issue_number": {"const": 1173},
+        "reconciliation_pr_number": {"const": 1175}
+      },
+      "required": ["historical_stage_id","historical_status","issue_number","implementation_pr_number","implementation_base_sha","implementation_head_sha","implementation_merge_sha","reconciliation_pr_number","historical_main_seal_sha","acceptance_path","acceptance_self_sha256"],
+      "type": "object"
+    },
+    "ratification": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_alias_added": {"const": true},
+        "historical_artifacts_rewritten": {"const": false},
+        "live_authority_granted": {"const": false},
+        "mutation_authority_granted": {"const": false},
+        "provider_authority_granted": {"const": false},
+        "real_corpus_live_read_authority_granted": {"const": false},
+        "traffic_authority_granted": {"const": false}
+      },
+      "required": ["historical_artifacts_rewritten","canonical_alias_added","live_authority_granted","provider_authority_granted","real_corpus_live_read_authority_granted","traffic_authority_granted","mutation_authority_granted"],
+      "type": "object"
+    },
+    "schema_version": {"const": "knowledge-engine-m26-g0-pa1-ratification/v1"},
+    "self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "stage_id": {"const": "M26.PA.1"}
+  },
+  "required": ["artifact_type","schema_version","stage_id","canonical_status","historical_identity","historical_evidence_artifact","frozen_identities","ratification","authority_boundary","self_sha256"],
+  "title": "M26.G0 PA.1 Historical Ratification",
+  "type": "object"
+}
