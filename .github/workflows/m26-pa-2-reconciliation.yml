@@ -1,0 +1,246 @@
+name: M26.PA.2 Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m26-pa-2-reconciliation.yml'
+      - '.github/workflows/m26-pa-2-live-read-evidence.yml'
+      - '.github/workflows/m26-pa-2-real-corpus-binding.yml'
+      - 'docs/architecture/m26/m26-pa-2-reconciliation.md'
+      - 'pilot/m26/m26-pa-2-acceptance.json'
+      - 'tests/test_m26_pa_2_reconciliation.py'
+
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  reconciliation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify exact head and accepted live-evidence ancestry
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git merge-base --is-ancestor 4d6e5ec166ee98276f494efb7d522b444aad87b8 HEAD
+          git merge-base --is-ancestor ecad7b2bfb2e6d472bf0ed76d2e0adc818124dd9 HEAD
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+
+      - name: Validate acceptance contract and PA.2 regressions
+        run: |
+          set -euo pipefail
+          python -m ruff check tests/test_m26_pa_2_reconciliation.py
+          python -m pytest -q \
+            tests/test_m26_pa_2_reconciliation.py \
+            tests/test_m26_pa_2_live_authorization.py \
+            tests/test_m26_pa_2_contracts.py \
+            tests/test_m26_pa_2_real_corpus_binding.py \
+            tests/test_m26_g0_reconciliation.py \
+            tests/test_m26_11_reconciliation.py \
+            tests/test_m25_reconciliation.py
+          python -m compileall -q tests/test_m26_pa_2_reconciliation.py
+
+      - name: Verify remote live evidence and artifact receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import io
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+          import zipfile
+          from pathlib import Path
+          from typing import Any
+
+          from jsonschema import Draft202012Validator
+
+          repository = "danielcanfly/knowledge-engine"
+          token = os.environ["GH_TOKEN"]
+          api = "https://api.github.com"
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {token}",
+              "User-Agent": "knowledge-engine-m26-pa2-reconciliation/1",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+          acceptance = json.loads(
+              Path("pilot/m26/m26-pa-2-acceptance.json").read_text(encoding="utf-8")
+          )
+
+          def canonical_bytes(value: object) -> bytes:
+              return json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  allow_nan=False,
+              ).encode("utf-8")
+
+          def request_json(path: str) -> Any:
+              request = urllib.request.Request(api + path, headers=headers, method="GET")
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      return json.loads(response.read().decode("utf-8"))
+              except urllib.error.HTTPError as error:
+                  raise RuntimeError(
+                      f"GitHub API request failed for {path} with HTTP {error.code}"
+                  ) from None
+
+          class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          no_redirect_opener = urllib.request.build_opener(NoRedirectHandler)
+
+          def request_bytes(path: str) -> bytes:
+              request = urllib.request.Request(api + path, headers=headers, method="GET")
+              try:
+                  with no_redirect_opener.open(request, timeout=30) as response:
+                      return response.read()
+              except urllib.error.HTTPError as error:
+                  location = error.headers.get("Location")
+                  if error.code in {302, 303, 307, 308} and location:
+                      signed_request = urllib.request.Request(
+                          location,
+                          headers={"User-Agent": headers["User-Agent"]},
+                          method="GET",
+                      )
+                      with urllib.request.urlopen(signed_request, timeout=60) as response:
+                          return response.read()
+                  raise RuntimeError(
+                      f"GitHub artifact request failed for {path} with HTTP {error.code}"
+                  ) from None
+
+          implementation = request_json(f"/repos/{repository}/pulls/1187")
+          assert implementation["merged_at"]
+          assert implementation["head"]["sha"] == acceptance["implementation"]["final_head_sha"]
+          assert implementation["merge_commit_sha"] == acceptance["implementation"]["merge_sha"]
+          assert implementation["changed_files"] == acceptance["implementation"]["changed_file_count"]
+          assert implementation["additions"] == acceptance["implementation"]["additions"]
+          assert implementation["deletions"] == acceptance["implementation"]["deletions"]
+
+          authorization = request_json(f"/repos/{repository}/pulls/1195")
+          assert authorization["merged_at"]
+          assert authorization["head"]["sha"] == acceptance["live_authorization"]["final_head_sha"]
+          assert authorization["merge_commit_sha"] == acceptance["live_authorization"]["merge_sha"]
+          assert authorization["changed_files"] == acceptance["live_authorization"]["changed_file_count"]
+
+          issue = request_json(f"/repos/{repository}/issues/1186")
+          assert issue["number"] == acceptance["issue"]["number"]
+          assert issue["state"] == acceptance["issue"]["state_before_reconciliation_pr"]
+
+          live = acceptance["live_evidence"]
+          run = request_json(f"/repos/{repository}/actions/runs/{live['run_id']}")
+          assert run["event"] == "push"
+          assert run["status"] == "completed"
+          assert run["conclusion"] == "success"
+          assert run["head_sha"] == live["head_sha"]
+          assert int(run["run_attempt"]) == live["run_attempt"]
+          assert run["name"] == live["workflow_name"]
+          assert int(run["run_number"]) == live["run_number"]
+
+          jobs = request_json(f"/repos/{repository}/actions/runs/{live['run_id']}/jobs?per_page=100")
+          live_jobs = [
+              item
+              for item in jobs.get("jobs", [])
+              if item.get("name") == "live-read-only"
+          ]
+          assert len(live_jobs) == 1
+          assert int(live_jobs[0]["id"]) == live["job_id"]
+          assert live_jobs[0]["conclusion"] == "success"
+
+          artifact = request_json(f"/repos/{repository}/actions/artifacts/{live['artifact_id']}")
+          assert artifact["name"] == live["artifact_name"]
+          assert artifact["digest"] == live["artifact_archive_digest"]
+          assert artifact["size_in_bytes"] == live["artifact_size_in_bytes"]
+          assert artifact["expired"] is False
+          assert artifact["expires_at"] == live["artifact_expires_at"]
+          assert artifact["workflow_run"]["id"] == live["run_id"]
+          assert artifact["workflow_run"]["head_sha"] == live["head_sha"]
+
+          archive = request_bytes(f"/repos/{repository}/actions/artifacts/{live['artifact_id']}/zip")
+          with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
+              names = set(bundle.namelist())
+              assert names == {
+                  "authorization.json",
+                  "m26-pa-2-live-receipt.json",
+                  "m26-pa-2-live-receipt.sha256",
+                  "status.txt",
+              }
+              assert bundle.read("status.txt").decode("utf-8").strip() == "success"
+              receipt_bytes = bundle.read("m26-pa-2-live-receipt.json")
+              receipt_sha = hashlib.sha256(receipt_bytes).hexdigest()
+              assert receipt_sha == live["receipt_sha256"]
+              assert (
+                  bundle.read("m26-pa-2-live-receipt.sha256").decode("utf-8").strip()
+                  == live["receipt_sha256"]
+              )
+              receipt = json.loads(receipt_bytes.decode("utf-8"))
+              schema = json.loads(
+                  Path("schemas/m26-pa-2-real-corpus-receipt-v1.schema.json").read_text(
+                      encoding="utf-8"
+                  )
+              )
+              errors = list(Draft202012Validator(schema).iter_errors(receipt))
+              assert errors == []
+              candidate = dict(receipt)
+              candidate["self_sha256"] = ""
+              assert hashlib.sha256(canonical_bytes(candidate)).hexdigest() == receipt["self_sha256"]
+              assert receipt["self_sha256"] == live["receipt_self_sha256"]
+              assert receipt["status"] == live["status"]
+              assert receipt["generated_at"] == live["generated_at"]
+              assert receipt["workflow"]["run_id"] == str(live["run_id"])
+              assert receipt["workflow"]["run_attempt"] == str(live["run_attempt"])
+              assert receipt["workflow"]["head_sha"] == live["head_sha"]
+              assert receipt["authority"] == acceptance["receipt"]["authority"]
+              receipt_qdrant = dict(receipt["qdrant"])
+              receipt_qdrant["sample_sha256"] = hashlib.sha256(
+                  canonical_bytes(receipt["sample"])
+              ).hexdigest()
+              assert receipt_qdrant == acceptance["receipt"]["qdrant"]
+              for key, expected in acceptance["receipt"]["release"].items():
+                  assert receipt["release"][key] == expected
+              assert receipt["artifact_digests"] == acceptance["receipt"]["artifact_digests"]
+          PY
+
+      - name: Enforce exact reconciliation surface and no secret material
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
+          cat > /tmp/expected.txt <<'FILES'
+          .github/workflows/m26-pa-2-live-read-evidence.yml
+          .github/workflows/m26-pa-2-real-corpus-binding.yml
+          .github/workflows/m26-pa-2-reconciliation.yml
+          docs/architecture/m26/m26-pa-2-reconciliation.md
+          pilot/m26/m26-pa-2-acceptance.json
+          tests/test_m26_pa_2_reconciliation.py
+          FILES
+          cmp /tmp/expected.txt /tmp/changed.txt
+          ! grep -E \
+            '^(src/|source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)' \
+            /tmp/changed.txt
+          ! xargs -r grep -En \
+            '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{12,})' \
+            </tmp/changed.txt
