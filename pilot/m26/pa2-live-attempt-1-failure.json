@@ -1,0 +1,60 @@
+{
+  "credential_presence": {
+    "missing": [
+      "R2_ACCESS_KEY_ID_READ",
+      "R2_SECRET_ACCESS_KEY_READ",
+      "QDRANT_READ_ONLY_API_KEY"
+    ],
+    "present": [
+      "R2_ENDPOINT_URL",
+      "R2_BUCKET",
+      "QDRANT_URL"
+    ],
+    "values_persisted": false
+  },
+  "disposition": {
+    "failed_closed": true,
+    "pa2_accepted": false,
+    "pa3_unlocked": false,
+    "rerun_authorized": false,
+    "superseded_by_logical_attempt": 2
+  },
+  "evidence": {
+    "authorization_merge_sha": "94b7d9d81ab3f56f62df25a6722bed5f2c038347",
+    "observer_issue_comment_id": 5088082704,
+    "observer_merge_sha": "6c8443913199e2e60bed07bd89cf53ca47140ba0",
+    "operator_issue_comment_id": 5088104200
+  },
+  "failure": {
+    "artifact_created": false,
+    "before_data_plane_execution": true,
+    "before_runtime_install": true,
+    "class": "credential_presence_gate",
+    "failed_step": "Verify exact attempt, authorization, and implementation ancestry",
+    "receipt_created": false
+  },
+  "github_run": {
+    "conclusion": "failure",
+    "environment": "m23-r3-diagnostic",
+    "event": "push",
+    "head_sha": "94b7d9d81ab3f56f62df25a6722bed5f2c038347",
+    "run_attempt": 1,
+    "run_id": 30242723869,
+    "workflow_name": "M26.PA.2 Exact Live Read-Only Evidence"
+  },
+  "logical_attempt": 1,
+  "operations": {
+    "answer_generation": 0,
+    "production_pointer_mutations": 0,
+    "provider_calls": 0,
+    "public_shadow_canary_traffic": 0,
+    "qdrant_count": 0,
+    "qdrant_scroll": 0,
+    "qdrant_writes": 0,
+    "r2_reads": 0,
+    "r2_writes": 0
+  },
+  "schema_version": "knowledge-engine-m26-pa-2-live-attempt-failure/v1",
+  "self_sha256": "9724218f4cebbd82d6d35093d913d5105f2098343194e1a2c10748323301c6f5",
+  "stage_id": "M26.PA.2"
+}
