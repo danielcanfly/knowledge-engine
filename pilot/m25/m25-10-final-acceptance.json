@@ -1,0 +1,49 @@
+{
+  "accepted_at_utc": "2026-07-27T03:36:26Z",
+  "accepted_by": "Daniel Huang",
+  "authority_boundaries": {
+    "bounded_large_scale_ingestion_readiness": true,
+    "cloudflare_access_mutation": false,
+    "credential_mutation": false,
+    "dns_mutation": false,
+    "foundation_mutation": false,
+    "m26_production_answer_serving": false,
+    "new_ingestion_workload_execution": false,
+    "production_pointer_mutation": false,
+    "public_production_traffic_expansion": false,
+    "semantic_or_hybrid_serving_expansion": false,
+    "source_mutation": false
+  },
+  "closure_evidence": {
+    "path": "pilot/m25/m25-10-formal-closure-evidence.json",
+    "schema_version": "knowledge-engine-m25-10-formal-closure-evidence/v1",
+    "status": "m25_closed"
+  },
+  "finality": {
+    "m25_1_through_m25_10_reconciled": true,
+    "m25_8_and_m25_9_original_blockers_preserved_as_superseded": true,
+    "m25_closed": true,
+    "successor_activation_requires_separate_authority": true
+  },
+  "issue_and_pr": {
+    "closure_issue": 1177,
+    "closure_pr": 1179,
+    "repository": "danielcanfly/knowledge-engine"
+  },
+  "owner_decision": {
+    "decided_at_utc": "2026-07-27T03:36:26Z",
+    "outcome": "approved_bounded_large_scale_ingestion",
+    "path": "pilot/m25/m25-10-owner-decision.json"
+  },
+  "production_identities": {
+    "candidate_manifest_sha256": "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3",
+    "production_manifest_sha256": "72bb03e3fa22e453735719ab43898adfd4c7f186f818ed71685efb4fcd87de2b",
+    "production_pointer_sha256": "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9",
+    "promotion_workflow_run": 30115946458,
+    "qdrant_filtered_points": 4197,
+    "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+  },
+  "schema_version": "knowledge-engine-m25-10-final-acceptance/v1",
+  "self_sha256": "15012cfa708c7c19cf1be91ac6ea566886c3728b880fdf42d4b9d7b5f0bbc4ed",
+  "status": "m25_closed"
+}

@@ -1,0 +1,95 @@
+{
+  "$id": "knowledge-engine-m25-10-formal-closure-evidence/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "decision_gate": {
+      "properties": {
+        "decision_required": {
+          "const": false
+        },
+        "selected_outcome": {
+          "const": "approved_bounded_large_scale_ingestion"
+        },
+        "valid_outcomes": {
+          "items": {
+            "enum": [
+              "approved_bounded_large_scale_ingestion",
+              "approved_with_conditions",
+              "governed_defer",
+              "rejected_pending_redesign"
+            ]
+          },
+          "minItems": 4,
+          "type": "array"
+        }
+      },
+      "required": [
+        "decision_required",
+        "selected_outcome",
+        "valid_outcomes"
+      ],
+      "type": "object"
+    },
+    "final_acceptance": {
+      "properties": {
+        "path": {
+          "const": "pilot/m25/m25-10-final-acceptance.json"
+        },
+        "status": {
+          "const": "m25_closed"
+        }
+      },
+      "required": [
+        "path",
+        "status"
+      ],
+      "type": "object"
+    },
+    "owner_decision": {
+      "properties": {
+        "decided_at_utc": {
+          "const": "2026-07-27T03:36:26Z"
+        },
+        "outcome": {
+          "const": "approved_bounded_large_scale_ingestion"
+        },
+        "path": {
+          "const": "pilot/m25/m25-10-owner-decision.json"
+        }
+      },
+      "required": [
+        "path",
+        "outcome",
+        "decided_at_utc"
+      ],
+      "type": "object"
+    },
+    "protected_mutations": {
+      "additionalProperties": {
+        "const": false
+      },
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m25-10-formal-closure-evidence/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "status": {
+      "const": "m25_closed"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "self_sha256",
+    "protected_mutations",
+    "decision_gate",
+    "owner_decision",
+    "final_acceptance"
+  ],
+  "type": "object"
+}
