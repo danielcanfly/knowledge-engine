@@ -56,10 +56,10 @@ def test_pa3_authorization_is_self_digested_and_schema_valid() -> None:
     candidate = dict(authorization)
     candidate["self_sha256"] = ""
     assert sha256_value(candidate) == expected
-    assert expected == "4e92f188897831e20c2990324e2c7d68a172fdc050197eb3ece7c0c74578f2cc"
+    assert expected == "81053fe45f14eb76bd908770f79a9d01fe6750614d05723d71ed1f0358edd6e6"
     assert authorization["stage_id"] == "M26.PA.3"
     assert authorization["authorized"] is True
-    assert authorization["logical_attempt"] == 3
+    assert authorization["logical_attempt"] == 4
 
 
 def test_pa3_gate_binds_pa2_and_daniel_provider_decision() -> None:
@@ -110,6 +110,17 @@ def test_pa3_gate_binds_pa2_and_daniel_provider_decision() -> None:
             "receipt_emitted": False,
             "rerun_forbidden": True,
             "run_id": 30287306002,
+        },
+        "attempt_3": {
+            "artifact_emitted": False,
+            "conclusion": "failure",
+            "failure_class": "provider_http_402_after_secret_refresh",
+            "head_sha": "fc73623a23115f35b31c1a430cf7ffbf336ece94",
+            "http_status": 402,
+            "logical_attempt": 3,
+            "receipt_emitted": False,
+            "rerun_forbidden": True,
+            "run_id": 30293923868,
         },
     }
 
@@ -190,8 +201,8 @@ def test_pa3_receipt_schema_accepts_sanitized_provider_receipt_only() -> None:
             "generated_at": "2026-07-28T12:30:00Z",
             "authorization": {
                 "authorization_self_sha256": "a" * 64,
-                "logical_attempt": 3,
-                "trigger_marker": "[m26.pa3-provider-authorized-attempt-3]",
+                "logical_attempt": 4,
+                "trigger_marker": "[m26.pa3-provider-authorized-attempt-4]",
             },
             "workflow": {
                 "workflow_name": "M26.PA.3 Live Provider Execution Gate",
@@ -253,11 +264,12 @@ def test_pa3_workflow_is_bounded_and_pr_safe() -> None:
     assert "R2_ACCESS_KEY_ID_READ" not in text
     assert "QDRANT_READ_ONLY" not in text
     assert "github.event_name == 'push'" in text
-    assert "[m26.pa3-provider-authorized-attempt-3]" in text
+    assert "[m26.pa3-provider-authorized-attempt-4]" in text
+    assert "[m26.pa3-provider-authorized-attempt-3]" not in text
     assert "[m26.pa3-provider-authorized-attempt-2]" not in text
     assert "[m26.pa3-provider-authorized-attempt-1]" not in text
     assert "test -z \"${MINIMAX_API_KEY:-}\"" in text
-    assert "m26-pa-3-live-provider-evidence-attempt-3" in text
+    assert "m26-pa-3-live-provider-evidence-attempt-4" in text
     assert "if: always()" in text
     assert "m26-pa-3-live-provider-failure.json" in text
     assert "response_text_persisted" in text
@@ -273,9 +285,10 @@ def test_pa3_doc_keeps_downstream_authority_closed() -> None:
     assert "MINIMAX_API_KEY" in text
     assert "30271818416" in text
     assert "30287306002" in text
+    assert "30293923868" in text
     assert "invalid_api_key" in text
     assert "provider_http_402_after_secret_refresh" in text
-    assert "[m26.pa3-provider-authorized-attempt-3]" in text
+    assert "[m26.pa3-provider-authorized-attempt-4]" in text
     assert "no raw corpus text" in text
     assert "not a production answer" in text
     assert "Production answer serving" in text
