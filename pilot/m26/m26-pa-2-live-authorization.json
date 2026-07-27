@@ -17,19 +17,19 @@
     "evidence_mode": "live_read_only",
     "query_id": "m26-pa-2-production-binding-v1",
     "run_attempt": 1,
-    "trigger_marker": "[m26.pa2-live-authorized-attempt-5]",
+    "trigger_marker": "[m26.pa2-live-authorized-attempt-6]",
     "workflow_head_is_authorization_merge": true,
     "workflow_name": "M26.PA.2 Exact Live Read-Only Evidence"
   },
   "future_exact_run": {
     "environment": "m23-r3-diagnostic",
     "github_run_attempt_expected": 1,
-    "logical_attempt": 5,
+    "logical_attempt": 6,
     "new_authorization_and_main_push_required": true,
     "same_read_surface_as_attempt_1": true,
-    "trigger_marker": "[m26.pa2-live-authorized-attempt-5]",
+    "trigger_marker": "[m26.pa2-live-authorized-attempt-6]",
     "workflow_name": "M26.PA.2 Exact Live Read-Only Evidence",
-    "rerun_of_attempt_4_forbidden": true
+    "rerun_of_attempt_5_forbidden": true
   },
   "implementation": {
     "head_sha": "11db7672f0a24c4531ac0203ca89e2c4d0a6e975",
@@ -38,28 +38,22 @@
     "pull_request_number": 1187,
     "required_ancestor": true
   },
-  "logical_attempt": 5,
+  "logical_attempt": 6,
   "owner_decision": {
     "decided_by": "Daniel Huang",
     "instruction_date": "2026-07-27",
     "instruction_text": "這個我叫它 QDRANT_API_KEY_READ 已經給你了",
-    "scope": "exact_pa2_read_only_live_evidence_attempt_5"
+    "scope": "exact_pa2_read_only_live_evidence_attempt_6"
   },
   "predecessor": {
-    "logical_attempt": 4,
-    "run_id": 30258197935,
-    "failure_self_sha256": "5a633e41110dc857abe944ead2fd22d9b9bd76f30fd0a9e449906301215defd8",
-    "failed_closed": true,
-    "data_plane_operations": 1,
-    "failure_stage": "r2-first-read-failed",
-    "synced_secret_names": [
-      "R2_ENDPOINT_URL",
-      "R2_BUCKET",
-      "R2_ACCESS_KEY_ID_READ",
-      "R2_SECRET_ACCESS_KEY_READ",
-      "QDRANT_URL",
-      "QDRANT_READ_ONLY_API_KEY"
-    ]
+    "logical_attempt": 5,
+    "run_id": 30259333185,
+    "head_sha": "429e25416d05bf3a0851cbd6b824b43687f3c42d",
+    "conclusion": "skipped",
+    "closed_without_data_plane": true,
+    "data_plane_operations": 0,
+    "skip_stage": "push-commit-marker-gate",
+    "artifact_emitted": false
   },
   "read_surface": {
     "qdrant_collection": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043",
@@ -94,6 +88,6 @@
     "QDRANT_URL",
     "QDRANT_READ_ONLY_API_KEY"
   ],
-  "self_sha256": "ef5939fd167a236024e4f50c558aaf4e6c14f097b277475d1468bf162311f8a9",
+  "self_sha256": "1db8a863205228c29d1f93a33b6344c5f7ef157c54ac64b09589c13b48a860bd",
   "stage_id": "M26.PA.2"
 }
