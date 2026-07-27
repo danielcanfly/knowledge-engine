@@ -6,7 +6,10 @@
     "decision_gate": {
       "properties": {
         "decision_required": {
-          "const": true
+          "const": false
+        },
+        "selected_outcome": {
+          "const": "approved_bounded_large_scale_ingestion"
         },
         "valid_outcomes": {
           "items": {
@@ -23,7 +26,42 @@
       },
       "required": [
         "decision_required",
+        "selected_outcome",
         "valid_outcomes"
+      ],
+      "type": "object"
+    },
+    "final_acceptance": {
+      "properties": {
+        "path": {
+          "const": "pilot/m25/m25-10-final-acceptance.json"
+        },
+        "status": {
+          "const": "m25_closed"
+        }
+      },
+      "required": [
+        "path",
+        "status"
+      ],
+      "type": "object"
+    },
+    "owner_decision": {
+      "properties": {
+        "decided_at_utc": {
+          "const": "2026-07-27T03:36:26Z"
+        },
+        "outcome": {
+          "const": "approved_bounded_large_scale_ingestion"
+        },
+        "path": {
+          "const": "pilot/m25/m25-10-owner-decision.json"
+        }
+      },
+      "required": [
+        "path",
+        "outcome",
+        "decided_at_utc"
       ],
       "type": "object"
     },
@@ -41,7 +79,7 @@
       "type": "string"
     },
     "status": {
-      "const": "m25_10_formal_closure_evidence_ready_awaiting_owner_decision"
+      "const": "m25_closed"
     }
   },
   "required": [
@@ -49,7 +87,9 @@
     "status",
     "self_sha256",
     "protected_mutations",
-    "decision_gate"
+    "decision_gate",
+    "owner_decision",
+    "final_acceptance"
   ],
   "type": "object"
 }

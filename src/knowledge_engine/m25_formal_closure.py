@@ -10,7 +10,7 @@ class M25FormalClosureError(ValueError):
     pass
 
 
-EXPECTED_STATUS = "m25_10_formal_closure_evidence_ready_awaiting_owner_decision"
+EXPECTED_STATUS = "m25_closed"
 EXPECTED_RELEASE_ID = "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
 EXPECTED_PRODUCTION_POINTER_SHA256 = (
     "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9"
@@ -20,6 +20,10 @@ EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
 )
 EXPECTED_PROMOTION_RUN = 30115946458
 EXPECTED_LATEST_MAIN = "e88b50cb8f0084a6ec1ea1d9aadc9af7bce54bf6"
+EXPECTED_OWNER_OUTCOME = "approved_bounded_large_scale_ingestion"
+EXPECTED_OWNER_DECISION_TIME = "2026-07-27T03:36:26Z"
+EXPECTED_OWNER_DECISION_PATH = "pilot/m25/m25-10-owner-decision.json"
+EXPECTED_FINAL_ACCEPTANCE_PATH = "pilot/m25/m25-10-final-acceptance.json"
 VALID_OUTCOMES = {
     "approved_bounded_large_scale_ingestion",
     "approved_with_conditions",
@@ -70,6 +74,24 @@ def validate_closure_evidence(path: Path) -> dict[str, Any]:
         raise M25FormalClosureError("closure evidence status mismatch")
     if evidence.get("self_sha256") != self_digest(evidence):
         raise M25FormalClosureError("self digest mismatch")
+
+    owner_decision = evidence.get("owner_decision")
+    if not isinstance(owner_decision, dict):
+        raise M25FormalClosureError("owner decision missing")
+    if owner_decision.get("path") != EXPECTED_OWNER_DECISION_PATH:
+        raise M25FormalClosureError("owner decision path mismatch")
+    if owner_decision.get("outcome") != EXPECTED_OWNER_OUTCOME:
+        raise M25FormalClosureError("owner decision outcome mismatch")
+    if owner_decision.get("decided_at_utc") != EXPECTED_OWNER_DECISION_TIME:
+        raise M25FormalClosureError("owner decision timestamp mismatch")
+
+    final_acceptance = evidence.get("final_acceptance")
+    if not isinstance(final_acceptance, dict):
+        raise M25FormalClosureError("final acceptance missing")
+    if final_acceptance.get("path") != EXPECTED_FINAL_ACCEPTANCE_PATH:
+        raise M25FormalClosureError("final acceptance path mismatch")
+    if final_acceptance.get("status") != "m25_closed":
+        raise M25FormalClosureError("final acceptance status mismatch")
 
     identities = evidence.get("production_identities")
     if not isinstance(identities, dict):
@@ -123,8 +145,10 @@ def validate_closure_evidence(path: Path) -> dict[str, Any]:
     decision_gate = evidence.get("decision_gate")
     if not isinstance(decision_gate, dict):
         raise M25FormalClosureError("decision gate missing")
-    if decision_gate.get("decision_required") is not True:
-        raise M25FormalClosureError("owner decision must remain required")
+    if decision_gate.get("decision_required") is not False:
+        raise M25FormalClosureError("owner decision should be resolved")
+    if decision_gate.get("selected_outcome") != EXPECTED_OWNER_OUTCOME:
+        raise M25FormalClosureError("selected outcome mismatch")
     if set(decision_gate.get("valid_outcomes", [])) != VALID_OUTCOMES:
         raise M25FormalClosureError("valid owner outcomes mismatch")
 
@@ -141,7 +165,7 @@ def validate_closure_evidence(path: Path) -> dict[str, Any]:
         "release_id": identities["release_id"],
         "stage_count": len(chain),
         "protected_mutation_count": len(protected),
-        "decision_required": True,
+        "decision_required": False,
     }
 
 

@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/m25-10-formal-closure.yml'
       - 'docs/architecture/m25/m25-10-formal-closure.md'
+      - 'pilot/m25/m25-10-owner-decision.json'
+      - 'pilot/m25/m25-10-final-acceptance.json'
       - 'pilot/m25/m25-10-formal-closure-evidence.json'
       - 'schemas/m25-10-formal-closure-evidence-v1.schema.json'
       - 'src/knowledge_engine/m25_formal_closure.py'
@@ -37,11 +39,13 @@ jobs:
           from pathlib import Path
 
           evidence = json.loads(Path('pilot/m25/m25-10-formal-closure-evidence.json').read_text())
-          assert evidence['status'] == 'm25_10_formal_closure_evidence_ready_awaiting_owner_decision'
+          assert evidence['status'] == 'm25_closed'
           assert evidence['production_identities']['release_id'] == 'm25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043'
           assert evidence['production_identities']['production_pointer_sha256'] == '4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9'
-          assert evidence['decision_gate']['decision_required'] is True
-          assert 'decision' not in evidence
+          assert evidence['decision_gate']['decision_required'] is False
+          assert evidence['decision_gate']['selected_outcome'] == 'approved_bounded_large_scale_ingestion'
+          assert evidence['owner_decision']['path'] == 'pilot/m25/m25-10-owner-decision.json'
+          assert evidence['final_acceptance']['path'] == 'pilot/m25/m25-10-final-acceptance.json'
           PY
       - name: Install dev dependencies
         run: python -m pip install --disable-pip-version-check -e '.[dev]'
@@ -64,7 +68,7 @@ jobs:
               json.dumps(report, indent=2, sort_keys=True) + '\n',
               encoding='utf-8',
           )
-          assert report['decision_required'] is True
+          assert report['decision_required'] is False
           PY
       - name: Reject protected mutation paths
         run: |
@@ -74,6 +78,8 @@ jobs:
           expected="$(printf '%s\n' \
             '.github/workflows/m25-10-formal-closure.yml' \
             'docs/architecture/m25/m25-10-formal-closure.md' \
+            'pilot/m25/m25-10-owner-decision.json' \
+            'pilot/m25/m25-10-final-acceptance.json' \
             'pilot/m25/m25-10-formal-closure-evidence.json' \
             'schemas/m25-10-formal-closure-evidence-v1.schema.json' \
             'src/knowledge_engine/m25_formal_closure.py' \

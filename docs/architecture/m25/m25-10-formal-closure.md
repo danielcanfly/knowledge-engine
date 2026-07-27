@@ -1,6 +1,6 @@
 # M25.10 Formal Closure and Scale Authority Gate
 
-Status: `m25_10_formal_closure_evidence_ready_awaiting_owner_decision`
+Status: `m25_closed`
 
 ## Scope
 
@@ -32,6 +32,14 @@ The closure issue is `danielcanfly/knowledge-engine#1177`.
 The machine-readable closure evidence is:
 
 `pilot/m25/m25-10-formal-closure-evidence.json`
+
+Daniel's machine-readable owner decision is:
+
+`pilot/m25/m25-10-owner-decision.json`
+
+The final acceptance artifact is:
+
+`pilot/m25/m25-10-final-acceptance.json`
 
 It records one disposition for every M25.1-M25.10 stage. M25.8 and M25.9
 remain recorded with their original blocked readiness-gate statuses and are
@@ -92,17 +100,30 @@ The closure evidence records incident entries for:
 Every incident blocks successor production activation until restoration evidence
 and a post-incident decision gate exist.
 
-## Owner Decision Gate
+## Owner Decision
 
-Daniel must select exactly one valid outcome:
+Daniel selected exactly one valid outcome:
+
+`approved_bounded_large_scale_ingestion`
+
+The decision was recorded at `2026-07-27T03:36:26Z` and authorizes M25 formal
+closure, independent reconciliation and bounded large-scale ingestion readiness
+for the accepted 156-article M25.10 corpus. It does not authorize a new
+ingestion workload, Source/Foundation mutation, DNS or Cloudflare Access
+mutation, credential mutation, production pointer mutation, public traffic
+expansion, semantic/hybrid serving expansion or M26 production answer serving.
+
+## Decision Gate Record
+
+The valid outcomes were:
 
 - `approved_bounded_large_scale_ingestion`
 - `approved_with_conditions`
 - `governed_defer`
 - `rejected_pending_redesign`
 
-No default outcome is inferred from this PR. Until Daniel records one of those
-outcomes, M25 cannot honestly be sealed as `m25_closed`.
+No default outcome was inferred from this PR. M25 is sealed only because Daniel
+recorded the exact owner decision above.
 
 ## Protected Boundaries
 

@@ -6,8 +6,9 @@
     "url": "https://github.com/danielcanfly/knowledge-engine/issues/1177"
   },
   "decision_gate": {
-    "decision_required": true,
+    "decision_required": false,
     "no_default_or_inferred_decision": true,
+    "selected_outcome": "approved_bounded_large_scale_ingestion",
     "valid_outcomes": [
       "approved_bounded_large_scale_ingestion",
       "approved_with_conditions",
@@ -110,6 +111,10 @@
       "status": "production_pointer_promoted"
     }
   ],
+  "final_acceptance": {
+    "path": "pilot/m25/m25-10-final-acceptance.json",
+    "status": "m25_closed"
+  },
   "incident_and_rollback_runbook": [
     {
       "detection_signal": "production pointer SHA differs from 4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9 without an accepted later promotion",
@@ -173,6 +178,31 @@
     "drift_classification": "harmless_forward_commits_with_successor_caveat",
     "m26_11_status": "m26_11_production_authority_activation_contract_accepted",
     "m26_caveat": "M26.11 starts a production-activation contract chain but still denies live provider calls, verified final answers, public traffic and production pointer mutation. M25 final closure remains separately required for any stage that requires m25_closed."
+  },
+  "owner_decision": {
+    "authority_scope": {
+      "bounded_large_scale_ingestion_readiness": true,
+      "bounded_large_scale_ingestion_workload_execution": false,
+      "m25_formal_closure": true,
+      "m25_reconciliation": true
+    },
+    "decided_at_utc": "2026-07-27T03:36:26Z",
+    "decided_by": "Daniel Huang",
+    "outcome": "approved_bounded_large_scale_ingestion",
+    "path": "pilot/m25/m25-10-owner-decision.json",
+    "restrictions": {
+      "cloudflare_access_mutation": false,
+      "credential_mutation": false,
+      "dns_mutation": false,
+      "extra_m25_10_scope": false,
+      "foundation_mutation": false,
+      "m26_production_answer_serving": false,
+      "new_ingestion_workload_execution": false,
+      "production_pointer_mutation": false,
+      "public_production_traffic_expansion": false,
+      "semantic_or_hybrid_serving_expansion": false,
+      "source_mutation": false
+    }
   },
   "production_identities": {
     "admission_sha256": "f5f01d82c7a1a38cf15fc54c890b904c4c015f608e2d25e294f9469f9b1927f2",
@@ -271,6 +301,6 @@
       "tail_latency_status": "not sufficient for expanded or continuous ingestion authority"
     }
   },
-  "self_sha256": "664febbb054a31d0eb804073b73363b093a2aecad69d31a84b85a4e779cfbea2",
-  "status": "m25_10_formal_closure_evidence_ready_awaiting_owner_decision"
+  "self_sha256": "0fd453e708ab940dbc123577f239fb45cf1d8b6057ec6223dbc6fbbc55167a91",
+  "status": "m25_closed"
 }

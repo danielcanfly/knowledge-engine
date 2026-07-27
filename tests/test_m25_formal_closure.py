@@ -24,27 +24,35 @@ def test_m25_formal_closure_evidence_validates() -> None:
         "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
         "stage_count": 10,
         "protected_mutation_count": 13,
-        "decision_required": True,
+        "decision_required": False,
     }
 
 
 def test_m25_formal_closure_evidence_self_digest_is_stable() -> None:
     evidence = load_json(EVIDENCE)
     assert evidence["self_sha256"] == self_digest(evidence)
-    assert evidence["self_sha256"] == (
-        "664febbb054a31d0eb804073b73363b093a2aecad69d31a84b85a4e779cfbea2"
-    )
+    assert evidence["status"] == "m25_closed"
+    assert evidence["owner_decision"]["outcome"] == "approved_bounded_large_scale_ingestion"
+    assert evidence["decision_gate"]["selected_outcome"] == "approved_bounded_large_scale_ingestion"
 
 
-def test_m25_formal_closure_keeps_owner_decision_pending() -> None:
+def test_m25_formal_closure_records_owner_decision_and_acceptance() -> None:
     evidence = load_json(EVIDENCE)
-    assert evidence["status"] == (
-        "m25_10_formal_closure_evidence_ready_awaiting_owner_decision"
-    )
-    assert evidence["decision_gate"]["decision_required"] is True
+    owner = load_json(ROOT / "pilot" / "m25" / "m25-10-owner-decision.json")
+    acceptance = load_json(ROOT / "pilot" / "m25" / "m25-10-final-acceptance.json")
+    assert owner["outcome"] == "approved_bounded_large_scale_ingestion"
+    assert owner["status"] == "owner_decision_recorded"
+    assert owner["decided_at_utc"] == "2026-07-27T03:36:26Z"
+    assert owner["self_sha256"] == self_digest(owner)
+    assert acceptance["status"] == "m25_closed"
+    assert acceptance["finality"]["m25_closed"] is True
+    assert acceptance["self_sha256"] == self_digest(acceptance)
+    assert evidence["status"] == "m25_closed"
+    assert evidence["decision_gate"]["decision_required"] is False
     assert set(evidence["decision_gate"]["valid_outcomes"]) == VALID_OUTCOMES
-    assert "decision" not in evidence
-    assert evidence["status"] != "m25_closed"
+    assert evidence["decision_gate"]["selected_outcome"] == "approved_bounded_large_scale_ingestion"
+    assert evidence["owner_decision"]["path"] == "pilot/m25/m25-10-owner-decision.json"
+    assert evidence["final_acceptance"]["path"] == "pilot/m25/m25-10-final-acceptance.json"
 
 
 def test_m25_formal_closure_protected_mutations_are_all_denied() -> None:
