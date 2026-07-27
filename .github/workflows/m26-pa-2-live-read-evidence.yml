@@ -62,7 +62,7 @@ jobs:
           test -z "${R2_SECRET_ACCESS_KEY_READ:-}"
           test -z "${QDRANT_READ_ONLY_API_KEY:-}"
 
-      - name: Enforce exact attempt-4 authorization surface
+      - name: Enforce exact attempt-6 authorization surface
         run: |
           set -euo pipefail
           git fetch origin main --depth=1
@@ -83,7 +83,7 @@ jobs:
   live-read-only:
     if: >-
       github.event_name == 'push' &&
-      contains(github.event.head_commit.message, '[m26.pa2-live-authorized-attempt-5]')
+      contains(github.event.head_commit.message, '[m26.pa2-live-authorized-attempt-6]')
     runs-on: ubuntu-24.04
     environment: m23-r3-diagnostic
     env:
@@ -279,7 +279,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: m26-pa-2-live-read-only-evidence-attempt-5
+          name: m26-pa-2-live-read-only-evidence-attempt-6
           path: /tmp/m26-pa-2-live-evidence
           if-no-files-found: error
           retention-days: 90
