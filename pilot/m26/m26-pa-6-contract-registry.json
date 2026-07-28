@@ -1,0 +1,23 @@
+{
+  "accepted": false,
+  "accepted_predecessor_status": "m26_pa_5_controlled_internal_shadow_pilot_accepted",
+  "artifacts": {
+    "benchmark_cases_sha256": "02f256a0d0f3eaf13ba3ff266224a5b07bab9d347cf7fe225930fa5592bed838",
+    "entry_contract_sha256": "e0e1fbab4f8f97cdb08a642a0768c01665d2bb1341cac10a28a471b93bdf4ba7",
+    "policy_sha256": "af3e8dfe7265e954def30da0eb287e95023b711340816698ac473bf88a004ec8"
+  },
+  "implementation": {
+    "module": "src/knowledge_engine/m26_canary_slo_rollback.py"
+  },
+  "report": {
+    "self_sha256": "0a83a741f534ca359b25bb93acd41342f2d786f1b81d58e144fb1049501fc52f",
+    "status": "m26_pa_6_canary_slo_rollback_ready"
+  },
+  "schema_version": "knowledge-engine-m26-pa-6-contract-registry/v1",
+  "schemas": {
+    "benchmark_schema_sha256": "41f483c803048bb27339a9bb5b44f73b0b3498caecd633d84e702c603f2190a4",
+    "record_schema_sha256": "4ad90a955c646468bc7d864ac5b0b0479ee0122bb756e72a6799608f801b2339"
+  },
+  "self_sha256": "734c09a69e13f26aa242c62fd64e872627966b2c43b02a8bc56a40eeee677ae6",
+  "stage_id": "M26.PA.6"
+}

@@ -1,0 +1,55 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-production-closure-benchmark-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "case_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "failed_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "metrics": {
+      "type": "object"
+    },
+    "passed_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "record_sha256s": {
+      "type": "array"
+    },
+    "results": {
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-7-production-closure-benchmark/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "stage_id": {
+      "const": "M26.PA.7"
+    },
+    "status": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "status",
+    "case_count",
+    "passed_count",
+    "failed_count",
+    "metrics",
+    "record_sha256s",
+    "results",
+    "self_sha256"
+  ],
+  "title": "M26.PA.7 production closure benchmark",
+  "type": "object"
+}

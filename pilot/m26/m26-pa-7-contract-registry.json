@@ -1,0 +1,23 @@
+{
+  "accepted": false,
+  "accepted_predecessor_status": "m26_pa_6_canary_slo_rollback_accepted",
+  "artifacts": {
+    "decision_cases_sha256": "35284c87c75ce1c0ded42bac13a0a32be1e03c11c2adf920a90d64fa59afe76f",
+    "entry_contract_sha256": "f445a6cc758c6c9f6228369302eae359d55da8416f86ca7868dcbfe38ddc078b",
+    "policy_sha256": "3738c4e33cf530ac552139490e2d6915458edf44f424dbb982499fff52b93865"
+  },
+  "implementation": {
+    "module": "src/knowledge_engine/m26_production_promotion_closure.py"
+  },
+  "report": {
+    "self_sha256": "0cec880005debc636719fd362a37d702c653a676f71a4fbec2bc99a2bcb8f28f",
+    "status": "m26_pa_7_production_answer_authority_and_closure_ready"
+  },
+  "schema_version": "knowledge-engine-m26-pa-7-contract-registry/v1",
+  "schemas": {
+    "benchmark_schema_sha256": "9552cb80b5f61e641f35b1231402341fd7cf55a3cf857ad6bd0742d58f8aaf51",
+    "record_schema_sha256": "a5df0cff80394a32c419bd771987bfe68842175bb5f7f3a635af8f552f43a27f"
+  },
+  "self_sha256": "bd16d704d1e39990b7a4de040c59ef35b105ada601df33c70ddc672319496119",
+  "stage_id": "M26.PA.7"
+}

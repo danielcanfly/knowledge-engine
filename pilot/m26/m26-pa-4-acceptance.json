@@ -1,0 +1,59 @@
+{
+  "authority_boundary": {
+    "abstention": true,
+    "bounded_repair": true,
+    "citation_binding": true,
+    "complete_denominator": true,
+    "deterministic_evidence": true,
+    "live_provider_calls": false,
+    "material_claim_extraction": true,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "public_shadow_canary_traffic": false,
+    "qdrant_writes": false,
+    "r2_writes": false,
+    "raw_text_persistence": false,
+    "secret_persistence": false,
+    "source_foundation_release_mutation": false,
+    "support_verification": true,
+    "verified_final_answers": false
+  },
+  "benchmark": {
+    "case_count": 12,
+    "failed_count": 0,
+    "metrics": {
+      "abstention_count": 6,
+      "authority_rejection_count": 1,
+      "bounded_repair_count": 1,
+      "citation_binding_denominator": 7,
+      "material_claim_denominator": 7,
+      "production_answer_serving_count": 0,
+      "production_pointer_mutation_count": 0,
+      "public_shadow_canary_traffic_count": 0,
+      "verified_answer_ready_count": 6,
+      "verified_final_answer_count": 0
+    },
+    "passed_count": 12,
+    "report_self_sha256": "0b8ae36f6fcee20858f53a858beb3090fa9946b5df1a1c03133d90a2cf7f9e9e"
+  },
+  "candidate_acceptance": true,
+  "contract_registry_self_sha256": "fb3259d8ca23b85911c7beebfe98d23ee5dd1053f27ccc0440e05f7fec30a0bd",
+  "effective_only_on_reconciliation_merge": true,
+  "next_stage": {
+    "name": "Controlled Internal Shadow Pilot",
+    "population_max": 500,
+    "population_min": 200,
+    "predecessor_status_required": "m26_pa_4_verified_answer_citation_gate_accepted",
+    "public_answers_permitted": false,
+    "stage_id": "M26.PA.5"
+  },
+  "predecessor": {
+    "acceptance_path": "pilot/m26/m26-pa-3-acceptance.json",
+    "acceptance_self_sha256": "1b773bace2469f2b8b344a5535365d633e2123fb13c0bdfe447aed9d53609179",
+    "status": "m26_pa_3_live_provider_execution_accepted"
+  },
+  "schema_version": "knowledge-engine-m26-pa-4-acceptance/v1",
+  "self_sha256": "5b2fcd3eb5b53e8565415628bb6c21ec30cee956dfd3e7783df076866b7c1467",
+  "stage_id": "M26.PA.4",
+  "status": "m26_pa_4_verified_answer_citation_gate_accepted"
+}

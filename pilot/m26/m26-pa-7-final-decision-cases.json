@@ -1,0 +1,418 @@
+{
+  "cases": [
+    {
+      "case_id": "pa7-approved",
+      "conditions": [],
+      "decision_maker": "Daniel Huang",
+      "decision_status": "approved_bounded_production_promotion",
+      "evidence_chain": [
+        {
+          "evidence_sha256": "0fd453e708ab940dbc123577f239fb45cf1d8b6057ec6223dbc6fbbc55167a91",
+          "stage_id": "M25.closed",
+          "status": "m25_closed"
+        },
+        {
+          "evidence_sha256": "4fa28aed8b7d1f63ccc5c7e35869acc08a20174882969a9ddddadacc3264efc5",
+          "stage_id": "M26.m26_g0_milestone_reconciliation_accepted",
+          "status": "m26_g0_milestone_reconciliation_accepted"
+        },
+        {
+          "evidence_sha256": "ad630156dfe42368738aafc2d1153d8df140745b228d7b765f554f9b25f1bf1c",
+          "stage_id": "M26.m26_pa_1_production_activation_authority_freeze_accepted",
+          "status": "m26_pa_1_production_activation_authority_freeze_accepted"
+        },
+        {
+          "evidence_sha256": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67",
+          "stage_id": "M26.m26_pa_2_real_corpus_retrieval_binding_accepted",
+          "status": "m26_pa_2_real_corpus_retrieval_binding_accepted"
+        },
+        {
+          "evidence_sha256": "1b773bace2469f2b8b344a5535365d633e2123fb13c0bdfe447aed9d53609179",
+          "stage_id": "M26.m26_pa_3_live_provider_execution_accepted",
+          "status": "m26_pa_3_live_provider_execution_accepted"
+        },
+        {
+          "evidence_sha256": "5b2fcd3eb5b53e8565415628bb6c21ec30cee956dfd3e7783df076866b7c1467",
+          "stage_id": "M26.m26_pa_4_verified_answer_citation_gate_accepted",
+          "status": "m26_pa_4_verified_answer_citation_gate_accepted"
+        },
+        {
+          "evidence_sha256": "4f70cedb7b047636e88cfff7e31b6c4a3c115e8da03a60711dba576edd16a736",
+          "stage_id": "M26.m26_pa_5_controlled_internal_shadow_pilot_accepted",
+          "status": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
+        },
+        {
+          "evidence_sha256": "29bd42f64ace00e4e72afe905d38e3cab67de9188e7deb382f4938224d90a091",
+          "stage_id": "M26.m26_pa_6_canary_slo_rollback_accepted",
+          "status": "m26_pa_6_canary_slo_rollback_accepted"
+        }
+      ],
+      "expected": {
+        "requires_promotion_authority": true,
+        "status": "approved_bounded_production_promotion"
+      },
+      "protected_mutations": {
+        "qdrant_write": false,
+        "r2_write": false,
+        "secret_persistence": false,
+        "source_foundation_release_mutation": false,
+        "unbounded_public_traffic": false
+      }
+    },
+    {
+      "case_id": "pa7-approved-with-conditions",
+      "conditions": [
+        "promotion must execute only through the governed operator path",
+        "rollback proof from PA.6 remains attached"
+      ],
+      "decision_maker": "Daniel Huang",
+      "decision_status": "approved_with_conditions",
+      "evidence_chain": [
+        {
+          "evidence_sha256": "0fd453e708ab940dbc123577f239fb45cf1d8b6057ec6223dbc6fbbc55167a91",
+          "stage_id": "M25.closed",
+          "status": "m25_closed"
+        },
+        {
+          "evidence_sha256": "4fa28aed8b7d1f63ccc5c7e35869acc08a20174882969a9ddddadacc3264efc5",
+          "stage_id": "M26.m26_g0_milestone_reconciliation_accepted",
+          "status": "m26_g0_milestone_reconciliation_accepted"
+        },
+        {
+          "evidence_sha256": "ad630156dfe42368738aafc2d1153d8df140745b228d7b765f554f9b25f1bf1c",
+          "stage_id": "M26.m26_pa_1_production_activation_authority_freeze_accepted",
+          "status": "m26_pa_1_production_activation_authority_freeze_accepted"
+        },
+        {
+          "evidence_sha256": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67",
+          "stage_id": "M26.m26_pa_2_real_corpus_retrieval_binding_accepted",
+          "status": "m26_pa_2_real_corpus_retrieval_binding_accepted"
+        },
+        {
+          "evidence_sha256": "1b773bace2469f2b8b344a5535365d633e2123fb13c0bdfe447aed9d53609179",
+          "stage_id": "M26.m26_pa_3_live_provider_execution_accepted",
+          "status": "m26_pa_3_live_provider_execution_accepted"
+        },
+        {
+          "evidence_sha256": "5b2fcd3eb5b53e8565415628bb6c21ec30cee956dfd3e7783df076866b7c1467",
+          "stage_id": "M26.m26_pa_4_verified_answer_citation_gate_accepted",
+          "status": "m26_pa_4_verified_answer_citation_gate_accepted"
+        },
+        {
+          "evidence_sha256": "4f70cedb7b047636e88cfff7e31b6c4a3c115e8da03a60711dba576edd16a736",
+          "stage_id": "M26.m26_pa_5_controlled_internal_shadow_pilot_accepted",
+          "status": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
+        },
+        {
+          "evidence_sha256": "29bd42f64ace00e4e72afe905d38e3cab67de9188e7deb382f4938224d90a091",
+          "stage_id": "M26.m26_pa_6_canary_slo_rollback_accepted",
+          "status": "m26_pa_6_canary_slo_rollback_accepted"
+        }
+      ],
+      "expected": {
+        "requires_promotion_authority": true,
+        "status": "approved_with_conditions"
+      },
+      "protected_mutations": {
+        "qdrant_write": false,
+        "r2_write": false,
+        "secret_persistence": false,
+        "source_foundation_release_mutation": false,
+        "unbounded_public_traffic": false
+      }
+    },
+    {
+      "case_id": "pa7-governed-defer",
+      "conditions": [],
+      "decision_maker": "Daniel Huang",
+      "decision_status": "governed_defer",
+      "evidence_chain": [
+        {
+          "evidence_sha256": "0fd453e708ab940dbc123577f239fb45cf1d8b6057ec6223dbc6fbbc55167a91",
+          "stage_id": "M25.closed",
+          "status": "m25_closed"
+        },
+        {
+          "evidence_sha256": "4fa28aed8b7d1f63ccc5c7e35869acc08a20174882969a9ddddadacc3264efc5",
+          "stage_id": "M26.m26_g0_milestone_reconciliation_accepted",
+          "status": "m26_g0_milestone_reconciliation_accepted"
+        },
+        {
+          "evidence_sha256": "ad630156dfe42368738aafc2d1153d8df140745b228d7b765f554f9b25f1bf1c",
+          "stage_id": "M26.m26_pa_1_production_activation_authority_freeze_accepted",
+          "status": "m26_pa_1_production_activation_authority_freeze_accepted"
+        },
+        {
+          "evidence_sha256": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67",
+          "stage_id": "M26.m26_pa_2_real_corpus_retrieval_binding_accepted",
+          "status": "m26_pa_2_real_corpus_retrieval_binding_accepted"
+        },
+        {
+          "evidence_sha256": "1b773bace2469f2b8b344a5535365d633e2123fb13c0bdfe447aed9d53609179",
+          "stage_id": "M26.m26_pa_3_live_provider_execution_accepted",
+          "status": "m26_pa_3_live_provider_execution_accepted"
+        },
+        {
+          "evidence_sha256": "5b2fcd3eb5b53e8565415628bb6c21ec30cee956dfd3e7783df076866b7c1467",
+          "stage_id": "M26.m26_pa_4_verified_answer_citation_gate_accepted",
+          "status": "m26_pa_4_verified_answer_citation_gate_accepted"
+        },
+        {
+          "evidence_sha256": "4f70cedb7b047636e88cfff7e31b6c4a3c115e8da03a60711dba576edd16a736",
+          "stage_id": "M26.m26_pa_5_controlled_internal_shadow_pilot_accepted",
+          "status": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
+        },
+        {
+          "evidence_sha256": "29bd42f64ace00e4e72afe905d38e3cab67de9188e7deb382f4938224d90a091",
+          "stage_id": "M26.m26_pa_6_canary_slo_rollback_accepted",
+          "status": "m26_pa_6_canary_slo_rollback_accepted"
+        }
+      ],
+      "expected": {
+        "requires_promotion_authority": false,
+        "status": "governed_defer"
+      },
+      "protected_mutations": {
+        "qdrant_write": false,
+        "r2_write": false,
+        "secret_persistence": false,
+        "source_foundation_release_mutation": false,
+        "unbounded_public_traffic": false
+      }
+    },
+    {
+      "case_id": "pa7-redesign",
+      "conditions": [],
+      "decision_maker": "Daniel Huang",
+      "decision_status": "rejected_pending_redesign",
+      "evidence_chain": [
+        {
+          "evidence_sha256": "0fd453e708ab940dbc123577f239fb45cf1d8b6057ec6223dbc6fbbc55167a91",
+          "stage_id": "M25.closed",
+          "status": "m25_closed"
+        },
+        {
+          "evidence_sha256": "4fa28aed8b7d1f63ccc5c7e35869acc08a20174882969a9ddddadacc3264efc5",
+          "stage_id": "M26.m26_g0_milestone_reconciliation_accepted",
+          "status": "m26_g0_milestone_reconciliation_accepted"
+        },
+        {
+          "evidence_sha256": "ad630156dfe42368738aafc2d1153d8df140745b228d7b765f554f9b25f1bf1c",
+          "stage_id": "M26.m26_pa_1_production_activation_authority_freeze_accepted",
+          "status": "m26_pa_1_production_activation_authority_freeze_accepted"
+        },
+        {
+          "evidence_sha256": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67",
+          "stage_id": "M26.m26_pa_2_real_corpus_retrieval_binding_accepted",
+          "status": "m26_pa_2_real_corpus_retrieval_binding_accepted"
+        },
+        {
+          "evidence_sha256": "1b773bace2469f2b8b344a5535365d633e2123fb13c0bdfe447aed9d53609179",
+          "stage_id": "M26.m26_pa_3_live_provider_execution_accepted",
+          "status": "m26_pa_3_live_provider_execution_accepted"
+        },
+        {
+          "evidence_sha256": "5b2fcd3eb5b53e8565415628bb6c21ec30cee956dfd3e7783df076866b7c1467",
+          "stage_id": "M26.m26_pa_4_verified_answer_citation_gate_accepted",
+          "status": "m26_pa_4_verified_answer_citation_gate_accepted"
+        },
+        {
+          "evidence_sha256": "4f70cedb7b047636e88cfff7e31b6c4a3c115e8da03a60711dba576edd16a736",
+          "stage_id": "M26.m26_pa_5_controlled_internal_shadow_pilot_accepted",
+          "status": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
+        },
+        {
+          "evidence_sha256": "29bd42f64ace00e4e72afe905d38e3cab67de9188e7deb382f4938224d90a091",
+          "stage_id": "M26.m26_pa_6_canary_slo_rollback_accepted",
+          "status": "m26_pa_6_canary_slo_rollback_accepted"
+        }
+      ],
+      "expected": {
+        "requires_promotion_authority": false,
+        "status": "rejected_pending_redesign"
+      },
+      "protected_mutations": {
+        "qdrant_write": false,
+        "r2_write": false,
+        "secret_persistence": false,
+        "source_foundation_release_mutation": false,
+        "unbounded_public_traffic": false
+      }
+    },
+    {
+      "case_id": "pa7-invalid-decision",
+      "conditions": [],
+      "decision_maker": "Daniel Huang",
+      "decision_status": "promote_now",
+      "evidence_chain": [
+        {
+          "evidence_sha256": "0fd453e708ab940dbc123577f239fb45cf1d8b6057ec6223dbc6fbbc55167a91",
+          "stage_id": "M25.closed",
+          "status": "m25_closed"
+        },
+        {
+          "evidence_sha256": "4fa28aed8b7d1f63ccc5c7e35869acc08a20174882969a9ddddadacc3264efc5",
+          "stage_id": "M26.m26_g0_milestone_reconciliation_accepted",
+          "status": "m26_g0_milestone_reconciliation_accepted"
+        },
+        {
+          "evidence_sha256": "ad630156dfe42368738aafc2d1153d8df140745b228d7b765f554f9b25f1bf1c",
+          "stage_id": "M26.m26_pa_1_production_activation_authority_freeze_accepted",
+          "status": "m26_pa_1_production_activation_authority_freeze_accepted"
+        },
+        {
+          "evidence_sha256": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67",
+          "stage_id": "M26.m26_pa_2_real_corpus_retrieval_binding_accepted",
+          "status": "m26_pa_2_real_corpus_retrieval_binding_accepted"
+        },
+        {
+          "evidence_sha256": "1b773bace2469f2b8b344a5535365d633e2123fb13c0bdfe447aed9d53609179",
+          "stage_id": "M26.m26_pa_3_live_provider_execution_accepted",
+          "status": "m26_pa_3_live_provider_execution_accepted"
+        },
+        {
+          "evidence_sha256": "5b2fcd3eb5b53e8565415628bb6c21ec30cee956dfd3e7783df076866b7c1467",
+          "stage_id": "M26.m26_pa_4_verified_answer_citation_gate_accepted",
+          "status": "m26_pa_4_verified_answer_citation_gate_accepted"
+        },
+        {
+          "evidence_sha256": "4f70cedb7b047636e88cfff7e31b6c4a3c115e8da03a60711dba576edd16a736",
+          "stage_id": "M26.m26_pa_5_controlled_internal_shadow_pilot_accepted",
+          "status": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
+        },
+        {
+          "evidence_sha256": "29bd42f64ace00e4e72afe905d38e3cab67de9188e7deb382f4938224d90a091",
+          "stage_id": "M26.m26_pa_6_canary_slo_rollback_accepted",
+          "status": "m26_pa_6_canary_slo_rollback_accepted"
+        }
+      ],
+      "expected": {
+        "requires_promotion_authority": false,
+        "status": "rejected_pending_redesign"
+      },
+      "protected_mutations": {
+        "qdrant_write": false,
+        "r2_write": false,
+        "secret_persistence": false,
+        "source_foundation_release_mutation": false,
+        "unbounded_public_traffic": false
+      }
+    },
+    {
+      "case_id": "pa7-incomplete-chain",
+      "conditions": [],
+      "decision_maker": "Daniel Huang",
+      "decision_status": "approved_bounded_production_promotion",
+      "evidence_chain": [
+        {
+          "evidence_sha256": "0fd453e708ab940dbc123577f239fb45cf1d8b6057ec6223dbc6fbbc55167a91",
+          "stage_id": "M25.closed",
+          "status": "m25_closed"
+        },
+        {
+          "evidence_sha256": "4fa28aed8b7d1f63ccc5c7e35869acc08a20174882969a9ddddadacc3264efc5",
+          "stage_id": "M26.m26_g0_milestone_reconciliation_accepted",
+          "status": "m26_g0_milestone_reconciliation_accepted"
+        },
+        {
+          "evidence_sha256": "ad630156dfe42368738aafc2d1153d8df140745b228d7b765f554f9b25f1bf1c",
+          "stage_id": "M26.m26_pa_1_production_activation_authority_freeze_accepted",
+          "status": "m26_pa_1_production_activation_authority_freeze_accepted"
+        },
+        {
+          "evidence_sha256": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67",
+          "stage_id": "M26.m26_pa_2_real_corpus_retrieval_binding_accepted",
+          "status": "m26_pa_2_real_corpus_retrieval_binding_accepted"
+        },
+        {
+          "evidence_sha256": "1b773bace2469f2b8b344a5535365d633e2123fb13c0bdfe447aed9d53609179",
+          "stage_id": "M26.m26_pa_3_live_provider_execution_accepted",
+          "status": "m26_pa_3_live_provider_execution_accepted"
+        },
+        {
+          "evidence_sha256": "5b2fcd3eb5b53e8565415628bb6c21ec30cee956dfd3e7783df076866b7c1467",
+          "stage_id": "M26.m26_pa_4_verified_answer_citation_gate_accepted",
+          "status": "m26_pa_4_verified_answer_citation_gate_accepted"
+        },
+        {
+          "evidence_sha256": "4f70cedb7b047636e88cfff7e31b6c4a3c115e8da03a60711dba576edd16a736",
+          "stage_id": "M26.m26_pa_5_controlled_internal_shadow_pilot_accepted",
+          "status": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
+        }
+      ],
+      "expected": {
+        "requires_promotion_authority": false,
+        "status": "governed_defer"
+      },
+      "protected_mutations": {
+        "qdrant_write": false,
+        "r2_write": false,
+        "secret_persistence": false,
+        "source_foundation_release_mutation": false,
+        "unbounded_public_traffic": false
+      }
+    },
+    {
+      "case_id": "pa7-protected-mutation",
+      "conditions": [],
+      "decision_maker": "Daniel Huang",
+      "decision_status": "approved_bounded_production_promotion",
+      "evidence_chain": [
+        {
+          "evidence_sha256": "0fd453e708ab940dbc123577f239fb45cf1d8b6057ec6223dbc6fbbc55167a91",
+          "stage_id": "M25.closed",
+          "status": "m25_closed"
+        },
+        {
+          "evidence_sha256": "4fa28aed8b7d1f63ccc5c7e35869acc08a20174882969a9ddddadacc3264efc5",
+          "stage_id": "M26.m26_g0_milestone_reconciliation_accepted",
+          "status": "m26_g0_milestone_reconciliation_accepted"
+        },
+        {
+          "evidence_sha256": "ad630156dfe42368738aafc2d1153d8df140745b228d7b765f554f9b25f1bf1c",
+          "stage_id": "M26.m26_pa_1_production_activation_authority_freeze_accepted",
+          "status": "m26_pa_1_production_activation_authority_freeze_accepted"
+        },
+        {
+          "evidence_sha256": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67",
+          "stage_id": "M26.m26_pa_2_real_corpus_retrieval_binding_accepted",
+          "status": "m26_pa_2_real_corpus_retrieval_binding_accepted"
+        },
+        {
+          "evidence_sha256": "1b773bace2469f2b8b344a5535365d633e2123fb13c0bdfe447aed9d53609179",
+          "stage_id": "M26.m26_pa_3_live_provider_execution_accepted",
+          "status": "m26_pa_3_live_provider_execution_accepted"
+        },
+        {
+          "evidence_sha256": "5b2fcd3eb5b53e8565415628bb6c21ec30cee956dfd3e7783df076866b7c1467",
+          "stage_id": "M26.m26_pa_4_verified_answer_citation_gate_accepted",
+          "status": "m26_pa_4_verified_answer_citation_gate_accepted"
+        },
+        {
+          "evidence_sha256": "4f70cedb7b047636e88cfff7e31b6c4a3c115e8da03a60711dba576edd16a736",
+          "stage_id": "M26.m26_pa_5_controlled_internal_shadow_pilot_accepted",
+          "status": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
+        },
+        {
+          "evidence_sha256": "29bd42f64ace00e4e72afe905d38e3cab67de9188e7deb382f4938224d90a091",
+          "stage_id": "M26.m26_pa_6_canary_slo_rollback_accepted",
+          "status": "m26_pa_6_canary_slo_rollback_accepted"
+        }
+      ],
+      "expected": {
+        "requires_promotion_authority": false,
+        "status": "rejected_pending_redesign"
+      },
+      "protected_mutations": {
+        "qdrant_write": false,
+        "r2_write": false,
+        "secret_persistence": true,
+        "source_foundation_release_mutation": false,
+        "unbounded_public_traffic": false
+      }
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-pa-7-final-decision-cases/v1",
+  "self_sha256": "c0f67132e5c257bc8a5d02a4f787873c26b0cdc8d7d5aa1a226881ba572c7bbd",
+  "stage_id": "M26.PA.7"
+}

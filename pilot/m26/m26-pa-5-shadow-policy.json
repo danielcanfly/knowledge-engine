@@ -1,0 +1,40 @@
+{
+  "accepted_predecessor_status": "m26_pa_4_verified_answer_citation_gate_accepted",
+  "authority": {
+    "abstention_evidence": true,
+    "authenticated_internal_only": true,
+    "citation_evidence": true,
+    "complete_denominator": true,
+    "controlled_internal_shadow": true,
+    "cost_evidence": true,
+    "latency_evidence": true,
+    "multiple_reviewers": true,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "public_answers": false,
+    "public_traffic": false,
+    "qdrant_writes": false,
+    "quality_evidence": true,
+    "r2_writes": false,
+    "secret_persistence": false,
+    "source_foundation_release_mutation": false
+  },
+  "pilot_policy": {
+    "latency_p95_ms": 900,
+    "max_cost_usd_per_question": 0.01,
+    "min_citation_precision": 0.9,
+    "min_quality_score": 0.82,
+    "min_reviewer_count": 2,
+    "population_max": 500,
+    "population_min": 200
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-shadow-policy/v1",
+  "self_sha256": "1d897c9a613eadbb82e5806bf3f24dca6eed49fac93985d03b536f6f668d5b82",
+  "stage_id": "M26.PA.5",
+  "status_policy": {
+    "abstention_status": "shadow_abstention_reviewed",
+    "answer_status": "shadow_answer_reviewed",
+    "authority_rejected_status": "shadow_rejected_authority_escalation",
+    "hold_status": "shadow_hold_for_repair"
+  }
+}

@@ -1,0 +1,265 @@
+{
+  "cases": [
+    {
+      "canary": {
+        "allowlisted_audience": true,
+        "allowlisted_route": true,
+        "cost_usd": 0.004,
+        "error_rate": 0.001,
+        "full_production_traffic": false,
+        "kill_switch_available": true,
+        "latency_p95_ms": 620,
+        "production_pointer_mutation": false,
+        "rollback_drill_completed": true,
+        "rollback_required": false,
+        "stop_codes": [],
+        "traffic_percent": 0.1,
+        "unsupported_claim_count": 0
+      },
+      "case_id": "pa6-ready-001",
+      "expected": {
+        "status": "canary_ready"
+      }
+    },
+    {
+      "canary": {
+        "allowlisted_audience": true,
+        "allowlisted_route": true,
+        "cost_usd": 0.004,
+        "error_rate": 0.001,
+        "full_production_traffic": false,
+        "kill_switch_available": true,
+        "latency_p95_ms": 620,
+        "production_pointer_mutation": false,
+        "rollback_drill_completed": true,
+        "rollback_required": false,
+        "stop_codes": [],
+        "traffic_percent": 0.25,
+        "unsupported_claim_count": 0
+      },
+      "case_id": "pa6-ready-002",
+      "expected": {
+        "status": "canary_ready"
+      }
+    },
+    {
+      "canary": {
+        "allowlisted_audience": true,
+        "allowlisted_route": true,
+        "cost_usd": 0.004,
+        "error_rate": 0.001,
+        "full_production_traffic": false,
+        "kill_switch_available": true,
+        "latency_p95_ms": 620,
+        "production_pointer_mutation": false,
+        "rollback_drill_completed": true,
+        "rollback_required": false,
+        "stop_codes": [],
+        "traffic_percent": 0.5,
+        "unsupported_claim_count": 0
+      },
+      "case_id": "pa6-ready-003",
+      "expected": {
+        "status": "canary_ready"
+      }
+    },
+    {
+      "canary": {
+        "allowlisted_audience": true,
+        "allowlisted_route": true,
+        "cost_usd": 0.004,
+        "error_rate": 0.001,
+        "full_production_traffic": false,
+        "kill_switch_available": true,
+        "latency_p95_ms": 620,
+        "production_pointer_mutation": false,
+        "rollback_drill_completed": true,
+        "rollback_required": false,
+        "stop_codes": [],
+        "traffic_percent": 0.75,
+        "unsupported_claim_count": 0
+      },
+      "case_id": "pa6-ready-004",
+      "expected": {
+        "status": "canary_ready"
+      }
+    },
+    {
+      "canary": {
+        "allowlisted_audience": true,
+        "allowlisted_route": true,
+        "cost_usd": 0.004,
+        "error_rate": 0.001,
+        "full_production_traffic": false,
+        "kill_switch_available": true,
+        "latency_p95_ms": 620,
+        "production_pointer_mutation": false,
+        "rollback_drill_completed": true,
+        "rollback_required": false,
+        "stop_codes": [],
+        "traffic_percent": 1.0,
+        "unsupported_claim_count": 0
+      },
+      "case_id": "pa6-ready-005",
+      "expected": {
+        "status": "canary_ready"
+      }
+    },
+    {
+      "canary": {
+        "allowlisted_audience": true,
+        "allowlisted_route": true,
+        "cost_usd": 0.004,
+        "error_rate": 0.001,
+        "full_production_traffic": false,
+        "kill_switch_available": true,
+        "latency_p95_ms": 620,
+        "production_pointer_mutation": false,
+        "rollback_drill_completed": true,
+        "rollback_required": false,
+        "stop_codes": [],
+        "traffic_percent": 0.4,
+        "unsupported_claim_count": 0
+      },
+      "case_id": "pa6-ready-006",
+      "expected": {
+        "status": "canary_ready"
+      }
+    },
+    {
+      "canary": {
+        "allowlisted_audience": true,
+        "allowlisted_route": true,
+        "cost_usd": 0.004,
+        "error_rate": 0.001,
+        "full_production_traffic": false,
+        "kill_switch_available": true,
+        "latency_p95_ms": 940,
+        "production_pointer_mutation": false,
+        "rollback_drill_completed": true,
+        "rollback_required": false,
+        "stop_codes": [
+          "latency_slo_breached"
+        ],
+        "traffic_percent": 0.5,
+        "unsupported_claim_count": 0
+      },
+      "case_id": "pa6-latency-stop",
+      "expected": {
+        "status": "canary_stopped_by_slo"
+      }
+    },
+    {
+      "canary": {
+        "allowlisted_audience": true,
+        "allowlisted_route": true,
+        "cost_usd": 0.004,
+        "error_rate": 0.02,
+        "full_production_traffic": false,
+        "kill_switch_available": true,
+        "latency_p95_ms": 620,
+        "production_pointer_mutation": false,
+        "rollback_drill_completed": true,
+        "rollback_required": false,
+        "stop_codes": [
+          "error_budget_exhausted"
+        ],
+        "traffic_percent": 0.5,
+        "unsupported_claim_count": 0
+      },
+      "case_id": "pa6-error-stop",
+      "expected": {
+        "status": "canary_stopped_by_slo"
+      }
+    },
+    {
+      "canary": {
+        "allowlisted_audience": true,
+        "allowlisted_route": true,
+        "cost_usd": 0.004,
+        "error_rate": 0.001,
+        "full_production_traffic": false,
+        "kill_switch_available": true,
+        "latency_p95_ms": 620,
+        "production_pointer_mutation": false,
+        "rollback_drill_completed": true,
+        "rollback_required": false,
+        "stop_codes": [
+          "unsupported_claim_detected"
+        ],
+        "traffic_percent": 0.5,
+        "unsupported_claim_count": 1
+      },
+      "case_id": "pa6-unsupported-stop",
+      "expected": {
+        "status": "canary_stopped_by_slo"
+      }
+    },
+    {
+      "canary": {
+        "allowlisted_audience": true,
+        "allowlisted_route": true,
+        "cost_usd": 0.004,
+        "error_rate": 0.001,
+        "full_production_traffic": false,
+        "kill_switch_available": false,
+        "latency_p95_ms": 620,
+        "production_pointer_mutation": false,
+        "rollback_drill_completed": true,
+        "rollback_required": false,
+        "stop_codes": [],
+        "traffic_percent": 0.5,
+        "unsupported_claim_count": 0
+      },
+      "case_id": "pa6-rollback-hold",
+      "expected": {
+        "status": "canary_hold_for_rollback"
+      }
+    },
+    {
+      "canary": {
+        "allowlisted_audience": false,
+        "allowlisted_route": true,
+        "cost_usd": 0.004,
+        "error_rate": 0.001,
+        "full_production_traffic": false,
+        "kill_switch_available": true,
+        "latency_p95_ms": 620,
+        "production_pointer_mutation": false,
+        "rollback_drill_completed": true,
+        "rollback_required": false,
+        "stop_codes": [],
+        "traffic_percent": 0.5,
+        "unsupported_claim_count": 0
+      },
+      "case_id": "pa6-audience-reject",
+      "expected": {
+        "status": "canary_rejected_authority_escalation"
+      }
+    },
+    {
+      "canary": {
+        "allowlisted_audience": true,
+        "allowlisted_route": true,
+        "cost_usd": 0.004,
+        "error_rate": 0.001,
+        "full_production_traffic": true,
+        "kill_switch_available": true,
+        "latency_p95_ms": 620,
+        "production_pointer_mutation": false,
+        "rollback_drill_completed": true,
+        "rollback_required": false,
+        "stop_codes": [],
+        "traffic_percent": 2.0,
+        "unsupported_claim_count": 0
+      },
+      "case_id": "pa6-full-production-reject",
+      "expected": {
+        "status": "canary_rejected_authority_escalation"
+      }
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-pa-6-canary-benchmark-cases/v1",
+  "self_sha256": "b6bbbbc0130375f2b587f6bdf9218de7b28c5362379a6ffd5799270a0819e746",
+  "stage_id": "M26.PA.6"
+}

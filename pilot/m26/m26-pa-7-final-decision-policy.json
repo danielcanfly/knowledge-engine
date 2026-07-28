@@ -1,0 +1,27 @@
+{
+  "accepted_predecessor_status": "m26_pa_6_canary_slo_rollback_accepted",
+  "authority": {
+    "bounded_outcome_required": true,
+    "complete_evidence_chain": true,
+    "daniel_final_decision": true,
+    "formal_m26_closure": true,
+    "independent_final_reconciliation": true,
+    "qdrant_writes_without_approval": false,
+    "r2_writes_without_approval": false,
+    "secret_persistence": false,
+    "source_foundation_release_mutation": false,
+    "unbounded_production_promotion": false
+  },
+  "decision_policy": {
+    "closure_ready_status": "m26_pa_7_final_decision_closure_ready",
+    "valid_outcomes": [
+      "approved_bounded_production_promotion",
+      "approved_with_conditions",
+      "governed_defer",
+      "rejected_pending_redesign"
+    ]
+  },
+  "schema_version": "knowledge-engine-m26-pa-7-final-decision-policy/v1",
+  "self_sha256": "a28d18bc40a4d357bd397f1e75fa95ee2788c3db2932037b1ed0aa9971794f6a",
+  "stage_id": "M26.PA.7"
+}

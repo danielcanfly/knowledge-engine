@@ -1,0 +1,51 @@
+{
+  "effective_only_on_reconciliation_merge": true,
+  "implementation": {
+    "authorization_head_sha": "32cf010cc6f0f180698562162100428174cc5754",
+    "authorization_merge_sha": "3bac0c44e62341322901e8fa7d2503a68ca04b6e",
+    "authorization_pull_request": 1201,
+    "expected_head_merge": true,
+    "issue_number": 1197,
+    "unresolved_review_thread_count": 0
+  },
+  "live_evidence": {
+    "artifact_id": 8664397892,
+    "artifact_local_receipt_path": "/tmp/m26-pa3-attempt4-artifact-1785178119/m26-pa-3-live-provider-receipt.json",
+    "artifact_name": "m26-pa-3-live-provider-evidence-attempt-4",
+    "receipt_file_sha256": "9fc30e5d4cb79aadfa7cd3ab03083197931e2d7cc5481d6104b86a40d2ed7352",
+    "receipt_self_sha256": "eca49a290d587449b9c3d0dc369ac7893890bc83767a983abd097bce7adecec2",
+    "run_attempt": 1,
+    "run_id": 30295355209,
+    "workflow_name": "M26.PA.3 Live Provider Execution Gate"
+  },
+  "next_stage": {
+    "name": "Verified Answer and Citation Gate",
+    "predecessor_status_required": "m26_pa_3_live_provider_execution_accepted",
+    "production_serving_permitted": false,
+    "public_shadow_canary_traffic_permitted": false,
+    "stage_id": "M26.PA.4",
+    "verified_answer_candidate_policy_required": true
+  },
+  "predecessor": {
+    "pa2_acceptance_self_sha256": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67",
+    "pa2_status": "m26_pa_2_real_corpus_retrieval_binding_accepted"
+  },
+  "receipt_authority": {
+    "credential_names": [
+      "MINIMAX_API_KEY"
+    ],
+    "provider_calls": 1,
+    "public_shadow_canary_traffic_operations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0,
+    "raw_text_persisted": false,
+    "secret_values_persisted": false,
+    "source_foundation_release_mutations": 0,
+    "vectors_requested": false,
+    "vectors_returned": false
+  },
+  "schema_version": "knowledge-engine-m26-pa-3-acceptance/v1",
+  "self_sha256": "1b773bace2469f2b8b344a5535365d633e2123fb13c0bdfe447aed9d53609179",
+  "stage_id": "M26.PA.3",
+  "status": "m26_pa_3_live_provider_execution_accepted"
+}

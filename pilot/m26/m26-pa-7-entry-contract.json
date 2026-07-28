@@ -1,0 +1,24 @@
+{
+  "acceptance_status_reserved": "m26_pa_7_production_answer_authority_and_closure_accepted",
+  "accepted_predecessor": {
+    "acceptance_path": "pilot/m26/m26-pa-6-acceptance.json",
+    "acceptance_self_sha256": "29bd42f64ace00e4e72afe905d38e3cab67de9188e7deb382f4938224d90a091",
+    "status": "m26_pa_6_canary_slo_rollback_accepted"
+  },
+  "authority_boundary": {
+    "bounded_outcome_required": true,
+    "complete_evidence_chain": true,
+    "daniel_final_decision": true,
+    "formal_m26_closure": true,
+    "independent_final_reconciliation": true,
+    "qdrant_writes_without_approval": false,
+    "r2_writes_without_approval": false,
+    "secret_persistence": false,
+    "source_foundation_release_mutation": false,
+    "unbounded_production_promotion": false
+  },
+  "schema_version": "knowledge-engine-m26-pa-7-entry-contract/v1",
+  "self_sha256": "3521be1f854b5bce3399a94af1450c8fed080b9e2c05601770624bc423240685",
+  "stage_id": "M26.PA.7",
+  "status": "m26_pa_7_entry_ready"
+}

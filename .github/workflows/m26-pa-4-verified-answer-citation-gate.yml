@@ -1,0 +1,67 @@
+name: M26.PA.4 Verified Answer and Citation Gate
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m26-pa-4-verified-answer-citation-gate.yml'
+      - 'docs/architecture/m26/m26-pa-3-reconciliation.md'
+      - 'docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md'
+      - 'docs/architecture/m26/m26-pa-4-reconciliation.md'
+      - 'pilot/m26/m26-pa-3-acceptance.json'
+      - 'pilot/m26/m26-pa-4-*.json'
+      - 'schemas/m26-pa-4-*.schema.json'
+      - 'src/knowledge_engine/m26_verified_answer_citation_gate.py'
+      - 'tests/test_m26_pa_3_reconciliation.py'
+      - 'tests/test_m26_pa_4_verified_answer_citation_gate.py'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/m26-pa-4-verified-answer-citation-gate.yml'
+      - 'docs/architecture/m26/m26-pa-3-reconciliation.md'
+      - 'docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md'
+      - 'docs/architecture/m26/m26-pa-4-reconciliation.md'
+      - 'pilot/m26/m26-pa-3-acceptance.json'
+      - 'pilot/m26/m26-pa-4-*.json'
+      - 'schemas/m26-pa-4-*.schema.json'
+      - 'src/knowledge_engine/m26_verified_answer_citation_gate.py'
+      - 'tests/test_m26_pa_3_reconciliation.py'
+      - 'tests/test_m26_pa_4_verified_answer_citation_gate.py'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+
+      - name: Lint and validate PA.4
+        run: |
+          set -euo pipefail
+          python -m ruff check \
+            src/knowledge_engine/m26_verified_answer_citation_gate.py \
+            tests/test_m26_pa_3_reconciliation.py \
+            tests/test_m26_pa_4_verified_answer_citation_gate.py
+          python -m compileall -q \
+            src/knowledge_engine/m26_verified_answer_citation_gate.py \
+            tests/test_m26_pa_3_reconciliation.py \
+            tests/test_m26_pa_4_verified_answer_citation_gate.py
+          python -m pytest -q \
+            tests/test_m26_pa_3_reconciliation.py \
+            tests/test_m26_pa_3_live_provider_gate.py \
+            tests/test_m26_pa_2_reconciliation.py \
+            tests/test_m26_pa_4_verified_answer_citation_gate.py
+

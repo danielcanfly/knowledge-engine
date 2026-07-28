@@ -1,0 +1,440 @@
+{
+  "cases": [
+    {
+      "candidate": {
+        "answer_text_sha256": "88f6e918872a0097c9ef009160b715da413cbf954eec1fef88127e1b82674e40",
+        "authority": {
+          "live_provider_calls": false,
+          "production_answer_serving": false,
+          "production_pointer_mutation": false,
+          "public_shadow_canary_traffic": false,
+          "qdrant_write": false,
+          "r2_write": false,
+          "raw_text_persistence": false,
+          "secret_persistence": false,
+          "verified_final_answer": false
+        },
+        "citation_binding_ids": [
+          "pa4-direct-supported-binding-1"
+        ],
+        "diagnostics": {},
+        "material_claim_ids": [
+          "pa4-direct-supported-claim-1"
+        ],
+        "repair_attempts": 0,
+        "support_verdicts": [
+          "supported"
+        ],
+        "warning_codes": []
+      },
+      "case_id": "pa4-direct-supported",
+      "expected": {
+        "min_verified_bindings": 1,
+        "min_verified_claims": 1,
+        "requires_abstention": false,
+        "requires_repair": false,
+        "status": "verified_answer_ready"
+      }
+    },
+    {
+      "candidate": {
+        "answer_text_sha256": "77b900c43066fcfe44f7356745eb18bb8ed22947bcb49f2b6baf413fd3d1752f",
+        "authority": {
+          "live_provider_calls": false,
+          "production_answer_serving": false,
+          "production_pointer_mutation": false,
+          "public_shadow_canary_traffic": false,
+          "qdrant_write": false,
+          "r2_write": false,
+          "raw_text_persistence": false,
+          "secret_persistence": false,
+          "verified_final_answer": false
+        },
+        "citation_binding_ids": [
+          "pa4-graph-supported-binding-1"
+        ],
+        "diagnostics": {},
+        "material_claim_ids": [
+          "pa4-graph-supported-claim-1"
+        ],
+        "repair_attempts": 0,
+        "support_verdicts": [
+          "supported"
+        ],
+        "warning_codes": []
+      },
+      "case_id": "pa4-graph-supported",
+      "expected": {
+        "min_verified_bindings": 1,
+        "min_verified_claims": 1,
+        "requires_abstention": false,
+        "requires_repair": false,
+        "status": "verified_answer_ready"
+      }
+    },
+    {
+      "candidate": {
+        "answer_text_sha256": "85add2051fce4b83c7e69003c107cb6ffcc80aae1484a50e52a8809b31ea11fb",
+        "authority": {
+          "live_provider_calls": false,
+          "production_answer_serving": false,
+          "production_pointer_mutation": false,
+          "public_shadow_canary_traffic": false,
+          "qdrant_write": false,
+          "r2_write": false,
+          "raw_text_persistence": false,
+          "secret_persistence": false,
+          "verified_final_answer": false
+        },
+        "citation_binding_ids": [
+          "pa4-multi-claim-binding-1",
+          "pa4-multi-claim-binding-2"
+        ],
+        "diagnostics": {},
+        "material_claim_ids": [
+          "pa4-multi-claim-claim-1",
+          "pa4-multi-claim-claim-2"
+        ],
+        "repair_attempts": 0,
+        "support_verdicts": [
+          "supported",
+          "supported"
+        ],
+        "warning_codes": []
+      },
+      "case_id": "pa4-multi-claim",
+      "expected": {
+        "min_verified_bindings": 2,
+        "min_verified_claims": 2,
+        "requires_abstention": false,
+        "requires_repair": false,
+        "status": "verified_answer_ready"
+      }
+    },
+    {
+      "candidate": {
+        "answer_text_sha256": "d1cc1d8e89f90a730dd2d8e0e436e9eae6149bcd9a574767a9dd82c3801a8919",
+        "authority": {
+          "live_provider_calls": false,
+          "production_answer_serving": false,
+          "production_pointer_mutation": false,
+          "public_shadow_canary_traffic": false,
+          "qdrant_write": false,
+          "r2_write": false,
+          "raw_text_persistence": false,
+          "secret_persistence": false,
+          "verified_final_answer": false
+        },
+        "citation_binding_ids": [
+          "pa4-bounded-repair-binding-1"
+        ],
+        "diagnostics": {},
+        "material_claim_ids": [
+          "pa4-bounded-repair-claim-1"
+        ],
+        "repair_attempts": 1,
+        "support_verdicts": [
+          "repairable"
+        ],
+        "warning_codes": []
+      },
+      "case_id": "pa4-bounded-repair",
+      "expected": {
+        "min_verified_bindings": 1,
+        "min_verified_claims": 1,
+        "requires_abstention": false,
+        "requires_repair": true,
+        "status": "verified_answer_ready_after_bounded_repair"
+      }
+    },
+    {
+      "candidate": {
+        "answer_text_sha256": "79df3e011f16864def2fe65fde699a25e66d7f118121d7d903c644465d41bafc",
+        "authority": {
+          "live_provider_calls": false,
+          "production_answer_serving": false,
+          "production_pointer_mutation": false,
+          "public_shadow_canary_traffic": false,
+          "qdrant_write": false,
+          "r2_write": false,
+          "raw_text_persistence": false,
+          "secret_persistence": false,
+          "verified_final_answer": false
+        },
+        "citation_binding_ids": [
+          "pa4-conflict-warning-binding-1"
+        ],
+        "diagnostics": {},
+        "material_claim_ids": [
+          "pa4-conflict-warning-claim-1"
+        ],
+        "repair_attempts": 0,
+        "support_verdicts": [
+          "supported"
+        ],
+        "warning_codes": [
+          "conflict_warning"
+        ]
+      },
+      "case_id": "pa4-conflict-warning",
+      "expected": {
+        "min_verified_bindings": 1,
+        "min_verified_claims": 1,
+        "requires_abstention": false,
+        "requires_repair": false,
+        "status": "verified_answer_ready_with_warnings"
+      }
+    },
+    {
+      "candidate": {
+        "answer_text_sha256": "d69852e4dd6b88881eb445a53be3f231cb4e63d68c139329d54e85ef5cf3f871",
+        "authority": {
+          "live_provider_calls": false,
+          "production_answer_serving": false,
+          "production_pointer_mutation": false,
+          "public_shadow_canary_traffic": false,
+          "qdrant_write": false,
+          "r2_write": false,
+          "raw_text_persistence": false,
+          "secret_persistence": false,
+          "verified_final_answer": false
+        },
+        "citation_binding_ids": [
+          "pa4-prompt-warning-binding-1"
+        ],
+        "diagnostics": {},
+        "material_claim_ids": [
+          "pa4-prompt-warning-claim-1"
+        ],
+        "repair_attempts": 0,
+        "support_verdicts": [
+          "supported"
+        ],
+        "warning_codes": [
+          "prompt_injection_quarantined"
+        ]
+      },
+      "case_id": "pa4-prompt-warning",
+      "expected": {
+        "min_verified_bindings": 1,
+        "min_verified_claims": 1,
+        "requires_abstention": false,
+        "requires_repair": false,
+        "status": "verified_answer_ready_with_warnings"
+      }
+    },
+    {
+      "candidate": {
+        "answer_text_sha256": "01ee81493d05d1a5fddad23cc00d82745961461e4e7991929532bb3f8ed0ccfb",
+        "authority": {
+          "live_provider_calls": false,
+          "production_answer_serving": false,
+          "production_pointer_mutation": false,
+          "public_shadow_canary_traffic": false,
+          "qdrant_write": false,
+          "r2_write": false,
+          "raw_text_persistence": false,
+          "secret_persistence": false,
+          "verified_final_answer": false
+        },
+        "citation_binding_ids": [],
+        "diagnostics": {},
+        "material_claim_ids": [],
+        "repair_attempts": 0,
+        "support_verdicts": [],
+        "warning_codes": []
+      },
+      "case_id": "pa4-no-match-abstention",
+      "expected": {
+        "min_verified_bindings": 0,
+        "min_verified_claims": 0,
+        "requires_abstention": true,
+        "requires_repair": false,
+        "status": "abstention_required"
+      }
+    },
+    {
+      "candidate": {
+        "answer_text_sha256": "7be92d7681cd6ee1527c2b7e8b9388714f2ff7512fbbbc64f4a3fba407cd3ad6",
+        "authority": {
+          "live_provider_calls": false,
+          "production_answer_serving": false,
+          "production_pointer_mutation": false,
+          "public_shadow_canary_traffic": false,
+          "qdrant_write": false,
+          "r2_write": false,
+          "raw_text_persistence": false,
+          "secret_persistence": false,
+          "verified_final_answer": false
+        },
+        "citation_binding_ids": [
+          "pa4-unsupported-abstention-binding-1"
+        ],
+        "diagnostics": {},
+        "material_claim_ids": [
+          "pa4-unsupported-abstention-claim-1"
+        ],
+        "repair_attempts": 0,
+        "support_verdicts": [
+          "unsupported"
+        ],
+        "warning_codes": []
+      },
+      "case_id": "pa4-unsupported-abstention",
+      "expected": {
+        "min_verified_bindings": 0,
+        "min_verified_claims": 0,
+        "requires_abstention": true,
+        "requires_repair": false,
+        "status": "abstention_required"
+      }
+    },
+    {
+      "candidate": {
+        "answer_text_sha256": "14b47771d85f2c145e1e1d6b42218e8447e18c9ef4ac028ff402b5bbf8119232",
+        "authority": {
+          "live_provider_calls": false,
+          "production_answer_serving": false,
+          "production_pointer_mutation": false,
+          "public_shadow_canary_traffic": false,
+          "qdrant_write": false,
+          "r2_write": false,
+          "raw_text_persistence": false,
+          "secret_persistence": false,
+          "verified_final_answer": false
+        },
+        "citation_binding_ids": [
+          "pa4-contradicted-abstention-binding-1"
+        ],
+        "diagnostics": {},
+        "material_claim_ids": [
+          "pa4-contradicted-abstention-claim-1"
+        ],
+        "repair_attempts": 0,
+        "support_verdicts": [
+          "contradicted"
+        ],
+        "warning_codes": []
+      },
+      "case_id": "pa4-contradicted-abstention",
+      "expected": {
+        "min_verified_bindings": 0,
+        "min_verified_claims": 0,
+        "requires_abstention": true,
+        "requires_repair": false,
+        "status": "abstention_required"
+      }
+    },
+    {
+      "candidate": {
+        "answer_text_sha256": "fdb0d494fa32385eaf75cbc3cfd02b529683135e26ee62aca84cda46683f9708",
+        "authority": {
+          "live_provider_calls": false,
+          "production_answer_serving": false,
+          "production_pointer_mutation": false,
+          "public_shadow_canary_traffic": false,
+          "qdrant_write": false,
+          "r2_write": false,
+          "raw_text_persistence": false,
+          "secret_persistence": false,
+          "verified_final_answer": false
+        },
+        "citation_binding_ids": [
+          "pa4-stale-abstention-binding-1"
+        ],
+        "diagnostics": {},
+        "material_claim_ids": [
+          "pa4-stale-abstention-claim-1"
+        ],
+        "repair_attempts": 0,
+        "support_verdicts": [
+          "stale"
+        ],
+        "warning_codes": []
+      },
+      "case_id": "pa4-stale-abstention",
+      "expected": {
+        "min_verified_bindings": 0,
+        "min_verified_claims": 0,
+        "requires_abstention": true,
+        "requires_repair": false,
+        "status": "abstention_required"
+      }
+    },
+    {
+      "candidate": {
+        "answer_text_sha256": "e82d97abf1ebfe3c70161782e3193b4074f36dc21fd601998f216e8e0aced8e1",
+        "authority": {
+          "live_provider_calls": false,
+          "production_answer_serving": false,
+          "production_pointer_mutation": false,
+          "public_shadow_canary_traffic": false,
+          "qdrant_write": false,
+          "r2_write": false,
+          "raw_text_persistence": false,
+          "secret_persistence": false,
+          "verified_final_answer": false
+        },
+        "citation_binding_ids": [
+          "pa4-privacy-abstention-binding-1"
+        ],
+        "diagnostics": {},
+        "material_claim_ids": [
+          "pa4-privacy-abstention-claim-1"
+        ],
+        "repair_attempts": 0,
+        "support_verdicts": [
+          "privacy_block"
+        ],
+        "warning_codes": []
+      },
+      "case_id": "pa4-privacy-abstention",
+      "expected": {
+        "min_verified_bindings": 0,
+        "min_verified_claims": 0,
+        "requires_abstention": true,
+        "requires_repair": false,
+        "status": "abstention_required"
+      }
+    },
+    {
+      "candidate": {
+        "answer_text_sha256": "174e553fe4db2e71a4dab58974634078c71eee97f2b2b5dafff2a7f7348761a8",
+        "authority": {
+          "live_provider_calls": false,
+          "production_answer_serving": true,
+          "production_pointer_mutation": false,
+          "public_shadow_canary_traffic": false,
+          "qdrant_write": false,
+          "r2_write": false,
+          "raw_text_persistence": false,
+          "secret_persistence": false,
+          "verified_final_answer": false
+        },
+        "citation_binding_ids": [
+          "pa4-authority-escalation-binding-1"
+        ],
+        "diagnostics": {},
+        "material_claim_ids": [
+          "pa4-authority-escalation-claim-1"
+        ],
+        "repair_attempts": 0,
+        "support_verdicts": [
+          "supported"
+        ],
+        "warning_codes": []
+      },
+      "case_id": "pa4-authority-escalation",
+      "expected": {
+        "min_verified_bindings": 0,
+        "min_verified_claims": 0,
+        "requires_abstention": true,
+        "requires_repair": false,
+        "status": "verified_answer_rejected_authority_escalation"
+      }
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-pa-4-verified-answer-benchmark-cases/v1",
+  "self_sha256": "39d26272a7281c2a2bec72303b2aac551bdbbda749c093d43680e778197827c4",
+  "stage_id": "M26.PA.4"
+}

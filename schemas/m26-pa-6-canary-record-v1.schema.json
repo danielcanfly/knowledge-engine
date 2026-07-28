@@ -1,0 +1,71 @@
+{
+  "$id": "knowledge-engine/m26-pa-6-canary-record-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "allowlisted_audience": {},
+    "allowlisted_route": {},
+    "bounded_canary": {},
+    "canary_status": {
+      "type": "string"
+    },
+    "case_id": {
+      "type": "string"
+    },
+    "cost_usd": {},
+    "error_rate": {},
+    "full_production_traffic": {},
+    "kill_switch_available": {},
+    "latency_p95_ms": {},
+    "predecessor_status": {
+      "type": "string"
+    },
+    "production_pointer_mutation": {},
+    "rollback_drill_completed": {},
+    "safe_for_pa7": {},
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-6-canary-record/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "source_foundation_release_mutation": {},
+    "stage_id": {
+      "const": "M26.PA.6"
+    },
+    "stop_codes": {
+      "type": "array"
+    },
+    "traffic_percent": {},
+    "unsupported_claim_count": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "case_id",
+    "predecessor_status",
+    "canary_status",
+    "bounded_canary",
+    "allowlisted_audience",
+    "allowlisted_route",
+    "traffic_percent",
+    "latency_p95_ms",
+    "error_rate",
+    "cost_usd",
+    "unsupported_claim_count",
+    "kill_switch_available",
+    "rollback_drill_completed",
+    "stop_codes",
+    "full_production_traffic",
+    "production_pointer_mutation",
+    "source_foundation_release_mutation",
+    "safe_for_pa7",
+    "self_sha256"
+  ],
+  "title": "M26.PA.6 canary record",
+  "type": "object"
+}

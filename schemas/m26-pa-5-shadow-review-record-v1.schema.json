@@ -1,0 +1,81 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-shadow-review-record-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "abstention_appropriate": {},
+    "authenticated_internal_only": {},
+    "citation_precision": {},
+    "complete_denominator_record": {},
+    "controlled_shadow": {},
+    "cost_usd": {},
+    "latency_ms": {},
+    "predecessor_status": {
+      "type": "string"
+    },
+    "production_answer_serving": {},
+    "production_pointer_mutation": {},
+    "public_answer": {},
+    "public_traffic": {},
+    "quality_score": {},
+    "question_id": {
+      "type": "string"
+    },
+    "refusal_reason_codes": {
+      "type": "array"
+    },
+    "reviewer_agreement": {},
+    "reviewer_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "reviewer_ids": {
+      "type": "array"
+    },
+    "safe_for_pa6": {},
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-5-shadow-review-record/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "shadow_review_status": {
+      "type": "string"
+    },
+    "stage_id": {
+      "const": "M26.PA.5"
+    },
+    "verified_answer_status": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "question_id",
+    "predecessor_status",
+    "shadow_review_status",
+    "authenticated_internal_only",
+    "controlled_shadow",
+    "complete_denominator_record",
+    "reviewer_ids",
+    "reviewer_count",
+    "verified_answer_status",
+    "quality_score",
+    "citation_precision",
+    "abstention_appropriate",
+    "latency_ms",
+    "cost_usd",
+    "reviewer_agreement",
+    "refusal_reason_codes",
+    "public_answer",
+    "public_traffic",
+    "production_answer_serving",
+    "production_pointer_mutation",
+    "safe_for_pa6",
+    "self_sha256"
+  ],
+  "title": "M26.PA.5 shadow review record",
+  "type": "object"
+}

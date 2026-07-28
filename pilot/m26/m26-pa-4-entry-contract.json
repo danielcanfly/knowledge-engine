@@ -1,0 +1,31 @@
+{
+  "acceptance_status_reserved": "m26_pa_4_verified_answer_citation_gate_accepted",
+  "accepted_predecessor": {
+    "acceptance_path": "pilot/m26/m26-pa-3-acceptance.json",
+    "acceptance_self_sha256": "1b773bace2469f2b8b344a5535365d633e2123fb13c0bdfe447aed9d53609179",
+    "status": "m26_pa_3_live_provider_execution_accepted"
+  },
+  "authority_boundary": {
+    "abstention": true,
+    "bounded_repair": true,
+    "citation_binding": true,
+    "complete_denominator": true,
+    "deterministic_evidence": true,
+    "live_provider_calls": false,
+    "material_claim_extraction": true,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "public_shadow_canary_traffic": false,
+    "qdrant_writes": false,
+    "r2_writes": false,
+    "raw_text_persistence": false,
+    "secret_persistence": false,
+    "source_foundation_release_mutation": false,
+    "support_verification": true,
+    "verified_final_answers": false
+  },
+  "schema_version": "knowledge-engine-m26-pa-4-entry-contract/v1",
+  "self_sha256": "07914b1a4c68827bc36989e94838bfde9c6c59e530a49a431246ed8ac02e6450",
+  "stage_id": "M26.PA.4",
+  "status": "m26_pa_4_entry_ready"
+}

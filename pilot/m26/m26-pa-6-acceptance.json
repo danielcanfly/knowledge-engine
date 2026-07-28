@@ -1,0 +1,53 @@
+{
+  "authority_boundary": {
+    "audience_allowlist": true,
+    "automatic_stop_conditions": true,
+    "bounded_canary": true,
+    "error_budget": true,
+    "full_production_promotion": false,
+    "kill_switch": true,
+    "rollback_drill_completed": true,
+    "rollback_plan": true,
+    "slo_enforcement": true,
+    "source_foundation_release_mutation": false,
+    "traffic_allowlist": true
+  },
+  "benchmark": {
+    "case_count": 12,
+    "failed_count": 0,
+    "metrics": {
+      "authority_rejection_count": 2,
+      "automatic_stop_condition_count": 10,
+      "canary_ready_count": 6,
+      "canary_stopped_count": 3,
+      "full_production_traffic_count": 0,
+      "kill_switch_verified": true,
+      "max_attempted_traffic_percent": 2.0,
+      "max_authorized_traffic_percent": 1.0,
+      "production_pointer_mutation_count": 0,
+      "rollback_drill_completed": true,
+      "rollback_hold_count": 1
+    },
+    "passed_count": 12,
+    "report_self_sha256": "0a83a741f534ca359b25bb93acd41342f2d786f1b81d58e144fb1049501fc52f"
+  },
+  "candidate_acceptance": true,
+  "contract_registry_self_sha256": "734c09a69e13f26aa242c62fd64e872627966b2c43b02a8bc56a40eeee677ae6",
+  "effective_only_on_reconciliation_merge": true,
+  "next_stage": {
+    "daniel_final_decision_required": true,
+    "independent_final_reconciliation_required": true,
+    "name": "Production Promotion, Answer Authority, and Closure",
+    "predecessor_status_required": "m26_pa_6_canary_slo_rollback_accepted",
+    "stage_id": "M26.PA.7"
+  },
+  "predecessor": {
+    "acceptance_path": "pilot/m26/m26-pa-5-acceptance.json",
+    "acceptance_self_sha256": "4f70cedb7b047636e88cfff7e31b6c4a3c115e8da03a60711dba576edd16a736",
+    "status": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
+  },
+  "schema_version": "knowledge-engine-m26-pa-6-acceptance/v1",
+  "self_sha256": "29bd42f64ace00e4e72afe905d38e3cab67de9188e7deb382f4938224d90a091",
+  "stage_id": "M26.PA.6",
+  "status": "m26_pa_6_canary_slo_rollback_accepted"
+}

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+# ruff: noqa: E402, I001
+
+import sys
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -7,11 +10,15 @@ from typing import Any
 
 import pytest
 
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
 from knowledge_engine.compiler import compile_release
 from knowledge_engine.publisher import publish_release
 from knowledge_engine.storage import FileObjectStore
 
-ROOT = Path(__file__).resolve().parents[1]
 _M23_INGESTION_TEST_MODULE = "test_m23_6_2_qdrant_ingestion_manifest"
 _FIXED_ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 

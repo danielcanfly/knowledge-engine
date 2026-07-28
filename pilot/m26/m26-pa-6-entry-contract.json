@@ -1,0 +1,25 @@
+{
+  "acceptance_status_reserved": "m26_pa_6_canary_slo_rollback_accepted",
+  "accepted_predecessor": {
+    "acceptance_path": "pilot/m26/m26-pa-5-acceptance.json",
+    "acceptance_self_sha256": "4f70cedb7b047636e88cfff7e31b6c4a3c115e8da03a60711dba576edd16a736",
+    "status": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
+  },
+  "authority_boundary": {
+    "audience_allowlist": true,
+    "automatic_stop_conditions": true,
+    "bounded_canary": true,
+    "error_budget": true,
+    "full_production_promotion": false,
+    "kill_switch": true,
+    "rollback_drill_completed": true,
+    "rollback_plan": true,
+    "slo_enforcement": true,
+    "source_foundation_release_mutation": false,
+    "traffic_allowlist": true
+  },
+  "schema_version": "knowledge-engine-m26-pa-6-entry-contract/v1",
+  "self_sha256": "ca5fcce2a3f3afc4617e72a7454eeb94cc00e04afb6b96b8b5b51aa55d4247f8",
+  "stage_id": "M26.PA.6",
+  "status": "m26_pa_6_entry_ready"
+}

@@ -1,0 +1,60 @@
+{
+  "authority_boundary": {
+    "abstention_evidence": true,
+    "authenticated_internal_only": true,
+    "citation_evidence": true,
+    "complete_denominator": true,
+    "controlled_internal_shadow": true,
+    "cost_evidence": true,
+    "latency_evidence": true,
+    "multiple_reviewers": true,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "public_answers": false,
+    "public_traffic": false,
+    "qdrant_writes": false,
+    "quality_evidence": true,
+    "r2_writes": false,
+    "secret_persistence": false,
+    "source_foundation_release_mutation": false
+  },
+  "benchmark": {
+    "failed_count": 0,
+    "metrics": {
+      "abstention_reviewed_count": 10,
+      "answer_reviewed_count": 184,
+      "authority_rejection_count": 0,
+      "hold_for_repair_count": 6,
+      "latency_p95_ms": 605,
+      "min_reviewer_agreement": 0.86,
+      "min_reviewer_count": 3,
+      "production_answer_serving_count": 0,
+      "production_pointer_mutation_count": 0,
+      "public_answer_count": 0,
+      "public_traffic_count": 0,
+      "total_cost_usd": 0.3793
+    },
+    "passed_count": 200,
+    "question_count": 200,
+    "report_self_sha256": "39fa2558a687d7300af4ba1fbeb95e4787431bb2f61810d9c84a61e0e0c72608"
+  },
+  "candidate_acceptance": true,
+  "contract_registry_self_sha256": "ed819ff9d8b9b4e547eac57ab75929fc68c23b9a238881f3848ceeadc356a55e",
+  "effective_only_on_reconciliation_merge": true,
+  "next_stage": {
+    "bounded_canary_permitted": true,
+    "full_production_promotion_permitted": false,
+    "name": "Canary, SLO, and Rollback",
+    "predecessor_status_required": "m26_pa_5_controlled_internal_shadow_pilot_accepted",
+    "stage_id": "M26.PA.6"
+  },
+  "predecessor": {
+    "acceptance_path": "pilot/m26/m26-pa-4-acceptance.json",
+    "acceptance_self_sha256": "5b2fcd3eb5b53e8565415628bb6c21ec30cee956dfd3e7783df076866b7c1467",
+    "status": "m26_pa_4_verified_answer_citation_gate_accepted"
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-acceptance/v1",
+  "self_sha256": "4f70cedb7b047636e88cfff7e31b6c4a3c115e8da03a60711dba576edd16a736",
+  "stage_id": "M26.PA.5",
+  "status": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
+}
