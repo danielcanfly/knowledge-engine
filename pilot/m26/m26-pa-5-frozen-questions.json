@@ -1,0 +1,5440 @@
+{
+  "population_frozen": true,
+  "questions": [
+    {
+      "abstention_appropriate": true,
+      "citation_precision": 0.0,
+      "cost_usd": 0.0015,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_abstention_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 420,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.0,
+      "question": "Frozen PA5 internal shadow question 001",
+      "question_id": "pa5-shadow-q001",
+      "refusal_reason_codes": [
+        "ABSTENTION_REQUIRED"
+      ],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "abstention_required"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0016,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 425,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 002",
+      "question_id": "pa5-shadow-q002",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0017,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 430,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 003",
+      "question_id": "pa5-shadow-q003",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0018,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 435,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 004",
+      "question_id": "pa5-shadow-q004",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0019,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 440,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 005",
+      "question_id": "pa5-shadow-q005",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.002,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 445,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 006",
+      "question_id": "pa5-shadow-q006",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0021,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 450,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 007",
+      "question_id": "pa5-shadow-q007",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0022,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 455,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 008",
+      "question_id": "pa5-shadow-q008",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0023,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 460,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 009",
+      "question_id": "pa5-shadow-q009",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0015,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 465,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 010",
+      "question_id": "pa5-shadow-q010",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0016,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 470,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 011",
+      "question_id": "pa5-shadow-q011",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0017,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 475,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 012",
+      "question_id": "pa5-shadow-q012",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0018,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 480,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 013",
+      "question_id": "pa5-shadow-q013",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0019,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 485,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 014",
+      "question_id": "pa5-shadow-q014",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.002,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 490,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 015",
+      "question_id": "pa5-shadow-q015",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0021,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 495,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 016",
+      "question_id": "pa5-shadow-q016",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0022,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 500,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 017",
+      "question_id": "pa5-shadow-q017",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0023,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 505,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 018",
+      "question_id": "pa5-shadow-q018",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0015,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 510,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 019",
+      "question_id": "pa5-shadow-q019",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0016,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 515,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 020",
+      "question_id": "pa5-shadow-q020",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": true,
+      "citation_precision": 0.0,
+      "cost_usd": 0.0017,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_abstention_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 520,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.0,
+      "question": "Frozen PA5 internal shadow question 021",
+      "question_id": "pa5-shadow-q021",
+      "refusal_reason_codes": [
+        "ABSTENTION_REQUIRED"
+      ],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "abstention_required"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0018,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 525,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 022",
+      "question_id": "pa5-shadow-q022",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0019,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 530,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 023",
+      "question_id": "pa5-shadow-q023",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.002,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 535,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 024",
+      "question_id": "pa5-shadow-q024",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0021,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 540,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 025",
+      "question_id": "pa5-shadow-q025",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0022,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 545,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 026",
+      "question_id": "pa5-shadow-q026",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0023,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 550,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 027",
+      "question_id": "pa5-shadow-q027",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0015,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 555,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 028",
+      "question_id": "pa5-shadow-q028",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0016,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 560,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 029",
+      "question_id": "pa5-shadow-q029",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0017,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 565,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 030",
+      "question_id": "pa5-shadow-q030",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0018,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 570,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 031",
+      "question_id": "pa5-shadow-q031",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.88,
+      "cost_usd": 0.0019,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_hold_for_repair"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 575,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.72,
+      "question": "Frozen PA5 internal shadow question 032",
+      "question_id": "pa5-shadow-q032",
+      "refusal_reason_codes": [
+        "SHADOW_REPAIR"
+      ],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.002,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 580,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 033",
+      "question_id": "pa5-shadow-q033",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0021,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 585,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 034",
+      "question_id": "pa5-shadow-q034",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0022,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 590,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 035",
+      "question_id": "pa5-shadow-q035",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0023,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 595,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 036",
+      "question_id": "pa5-shadow-q036",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0015,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 600,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 037",
+      "question_id": "pa5-shadow-q037",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0016,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 605,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 038",
+      "question_id": "pa5-shadow-q038",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0017,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 610,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 039",
+      "question_id": "pa5-shadow-q039",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0018,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 615,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 040",
+      "question_id": "pa5-shadow-q040",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": true,
+      "citation_precision": 0.0,
+      "cost_usd": 0.0019,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_abstention_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 420,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.0,
+      "question": "Frozen PA5 internal shadow question 041",
+      "question_id": "pa5-shadow-q041",
+      "refusal_reason_codes": [
+        "ABSTENTION_REQUIRED"
+      ],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "abstention_required"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.002,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 425,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 042",
+      "question_id": "pa5-shadow-q042",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0021,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 430,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 043",
+      "question_id": "pa5-shadow-q043",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0022,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 435,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 044",
+      "question_id": "pa5-shadow-q044",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0023,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 440,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 045",
+      "question_id": "pa5-shadow-q045",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0015,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 445,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 046",
+      "question_id": "pa5-shadow-q046",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0016,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 450,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 047",
+      "question_id": "pa5-shadow-q047",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0017,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 455,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 048",
+      "question_id": "pa5-shadow-q048",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0018,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 460,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 049",
+      "question_id": "pa5-shadow-q049",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0019,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 465,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 050",
+      "question_id": "pa5-shadow-q050",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.002,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 470,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 051",
+      "question_id": "pa5-shadow-q051",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0021,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 475,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 052",
+      "question_id": "pa5-shadow-q052",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0022,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 480,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 053",
+      "question_id": "pa5-shadow-q053",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0023,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 485,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 054",
+      "question_id": "pa5-shadow-q054",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0015,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 490,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 055",
+      "question_id": "pa5-shadow-q055",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0016,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 495,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 056",
+      "question_id": "pa5-shadow-q056",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0017,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 500,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 057",
+      "question_id": "pa5-shadow-q057",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0018,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 505,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 058",
+      "question_id": "pa5-shadow-q058",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0019,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 510,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 059",
+      "question_id": "pa5-shadow-q059",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.002,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 515,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 060",
+      "question_id": "pa5-shadow-q060",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": true,
+      "citation_precision": 0.0,
+      "cost_usd": 0.0021,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_abstention_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 520,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.0,
+      "question": "Frozen PA5 internal shadow question 061",
+      "question_id": "pa5-shadow-q061",
+      "refusal_reason_codes": [
+        "ABSTENTION_REQUIRED"
+      ],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "abstention_required"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0022,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 525,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 062",
+      "question_id": "pa5-shadow-q062",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.88,
+      "cost_usd": 0.0023,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_hold_for_repair"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 530,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.72,
+      "question": "Frozen PA5 internal shadow question 063",
+      "question_id": "pa5-shadow-q063",
+      "refusal_reason_codes": [
+        "SHADOW_REPAIR"
+      ],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0015,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 535,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 064",
+      "question_id": "pa5-shadow-q064",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0016,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 540,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 065",
+      "question_id": "pa5-shadow-q065",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0017,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 545,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 066",
+      "question_id": "pa5-shadow-q066",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0018,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 550,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 067",
+      "question_id": "pa5-shadow-q067",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0019,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 555,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 068",
+      "question_id": "pa5-shadow-q068",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.002,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 560,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 069",
+      "question_id": "pa5-shadow-q069",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0021,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 565,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 070",
+      "question_id": "pa5-shadow-q070",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0022,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 570,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 071",
+      "question_id": "pa5-shadow-q071",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0023,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 575,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 072",
+      "question_id": "pa5-shadow-q072",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0015,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 580,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 073",
+      "question_id": "pa5-shadow-q073",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0016,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 585,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 074",
+      "question_id": "pa5-shadow-q074",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0017,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 590,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 075",
+      "question_id": "pa5-shadow-q075",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0018,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 595,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 076",
+      "question_id": "pa5-shadow-q076",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0019,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 600,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 077",
+      "question_id": "pa5-shadow-q077",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.002,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 605,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 078",
+      "question_id": "pa5-shadow-q078",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0021,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 610,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 079",
+      "question_id": "pa5-shadow-q079",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0022,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 615,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 080",
+      "question_id": "pa5-shadow-q080",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": true,
+      "citation_precision": 0.0,
+      "cost_usd": 0.0023,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_abstention_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 420,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.0,
+      "question": "Frozen PA5 internal shadow question 081",
+      "question_id": "pa5-shadow-q081",
+      "refusal_reason_codes": [
+        "ABSTENTION_REQUIRED"
+      ],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "abstention_required"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0015,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 425,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 082",
+      "question_id": "pa5-shadow-q082",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0016,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 430,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 083",
+      "question_id": "pa5-shadow-q083",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0017,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 435,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 084",
+      "question_id": "pa5-shadow-q084",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0018,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 440,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 085",
+      "question_id": "pa5-shadow-q085",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0019,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 445,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 086",
+      "question_id": "pa5-shadow-q086",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.002,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 450,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 087",
+      "question_id": "pa5-shadow-q087",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0021,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 455,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 088",
+      "question_id": "pa5-shadow-q088",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0022,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 460,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 089",
+      "question_id": "pa5-shadow-q089",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0023,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 465,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 090",
+      "question_id": "pa5-shadow-q090",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0015,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 470,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 091",
+      "question_id": "pa5-shadow-q091",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0016,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 475,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 092",
+      "question_id": "pa5-shadow-q092",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0017,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 480,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 093",
+      "question_id": "pa5-shadow-q093",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.88,
+      "cost_usd": 0.0018,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_hold_for_repair"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 485,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.72,
+      "question": "Frozen PA5 internal shadow question 094",
+      "question_id": "pa5-shadow-q094",
+      "refusal_reason_codes": [
+        "SHADOW_REPAIR"
+      ],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0019,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 490,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 095",
+      "question_id": "pa5-shadow-q095",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.002,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 495,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 096",
+      "question_id": "pa5-shadow-q096",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0021,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 500,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 097",
+      "question_id": "pa5-shadow-q097",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0022,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 505,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 098",
+      "question_id": "pa5-shadow-q098",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0023,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 510,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 099",
+      "question_id": "pa5-shadow-q099",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0015,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 515,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 100",
+      "question_id": "pa5-shadow-q100",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": true,
+      "citation_precision": 0.0,
+      "cost_usd": 0.0016,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_abstention_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 520,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.0,
+      "question": "Frozen PA5 internal shadow question 101",
+      "question_id": "pa5-shadow-q101",
+      "refusal_reason_codes": [
+        "ABSTENTION_REQUIRED"
+      ],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "abstention_required"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0017,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 525,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 102",
+      "question_id": "pa5-shadow-q102",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0018,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 530,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 103",
+      "question_id": "pa5-shadow-q103",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0019,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 535,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 104",
+      "question_id": "pa5-shadow-q104",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.002,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 540,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 105",
+      "question_id": "pa5-shadow-q105",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0021,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 545,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 106",
+      "question_id": "pa5-shadow-q106",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0022,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 550,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 107",
+      "question_id": "pa5-shadow-q107",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0023,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 555,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 108",
+      "question_id": "pa5-shadow-q108",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0015,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 560,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 109",
+      "question_id": "pa5-shadow-q109",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0016,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 565,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 110",
+      "question_id": "pa5-shadow-q110",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0017,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 570,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 111",
+      "question_id": "pa5-shadow-q111",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0018,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 575,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 112",
+      "question_id": "pa5-shadow-q112",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0019,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 580,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 113",
+      "question_id": "pa5-shadow-q113",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.002,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 585,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 114",
+      "question_id": "pa5-shadow-q114",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0021,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 590,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 115",
+      "question_id": "pa5-shadow-q115",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0022,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 595,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 116",
+      "question_id": "pa5-shadow-q116",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0023,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 600,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 117",
+      "question_id": "pa5-shadow-q117",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0015,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 605,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 118",
+      "question_id": "pa5-shadow-q118",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0016,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 610,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 119",
+      "question_id": "pa5-shadow-q119",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0017,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 615,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 120",
+      "question_id": "pa5-shadow-q120",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": true,
+      "citation_precision": 0.0,
+      "cost_usd": 0.0018,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_abstention_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 420,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.0,
+      "question": "Frozen PA5 internal shadow question 121",
+      "question_id": "pa5-shadow-q121",
+      "refusal_reason_codes": [
+        "ABSTENTION_REQUIRED"
+      ],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "abstention_required"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0019,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 425,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 122",
+      "question_id": "pa5-shadow-q122",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.002,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 430,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 123",
+      "question_id": "pa5-shadow-q123",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0021,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 435,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 124",
+      "question_id": "pa5-shadow-q124",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.88,
+      "cost_usd": 0.0022,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_hold_for_repair"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 440,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.72,
+      "question": "Frozen PA5 internal shadow question 125",
+      "question_id": "pa5-shadow-q125",
+      "refusal_reason_codes": [
+        "SHADOW_REPAIR"
+      ],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0023,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 445,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 126",
+      "question_id": "pa5-shadow-q126",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0015,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 450,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 127",
+      "question_id": "pa5-shadow-q127",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0016,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 455,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 128",
+      "question_id": "pa5-shadow-q128",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0017,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 460,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 129",
+      "question_id": "pa5-shadow-q129",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0018,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 465,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 130",
+      "question_id": "pa5-shadow-q130",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0019,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 470,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 131",
+      "question_id": "pa5-shadow-q131",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.002,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 475,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 132",
+      "question_id": "pa5-shadow-q132",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0021,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 480,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 133",
+      "question_id": "pa5-shadow-q133",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0022,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 485,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 134",
+      "question_id": "pa5-shadow-q134",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0023,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 490,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 135",
+      "question_id": "pa5-shadow-q135",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0015,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 495,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 136",
+      "question_id": "pa5-shadow-q136",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0016,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 500,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 137",
+      "question_id": "pa5-shadow-q137",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0017,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 505,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 138",
+      "question_id": "pa5-shadow-q138",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0018,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 510,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 139",
+      "question_id": "pa5-shadow-q139",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0019,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 515,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 140",
+      "question_id": "pa5-shadow-q140",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": true,
+      "citation_precision": 0.0,
+      "cost_usd": 0.002,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_abstention_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 520,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.0,
+      "question": "Frozen PA5 internal shadow question 141",
+      "question_id": "pa5-shadow-q141",
+      "refusal_reason_codes": [
+        "ABSTENTION_REQUIRED"
+      ],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "abstention_required"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0021,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 525,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 142",
+      "question_id": "pa5-shadow-q142",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0022,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 530,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 143",
+      "question_id": "pa5-shadow-q143",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0023,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 535,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 144",
+      "question_id": "pa5-shadow-q144",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0015,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 540,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 145",
+      "question_id": "pa5-shadow-q145",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0016,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 545,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 146",
+      "question_id": "pa5-shadow-q146",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0017,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 550,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 147",
+      "question_id": "pa5-shadow-q147",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0018,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 555,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 148",
+      "question_id": "pa5-shadow-q148",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0019,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 560,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 149",
+      "question_id": "pa5-shadow-q149",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.002,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 565,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 150",
+      "question_id": "pa5-shadow-q150",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0021,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 570,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 151",
+      "question_id": "pa5-shadow-q151",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0022,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 575,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 152",
+      "question_id": "pa5-shadow-q152",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0023,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 580,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 153",
+      "question_id": "pa5-shadow-q153",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0015,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 585,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 154",
+      "question_id": "pa5-shadow-q154",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0016,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 590,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 155",
+      "question_id": "pa5-shadow-q155",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.88,
+      "cost_usd": 0.0017,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_hold_for_repair"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 595,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.72,
+      "question": "Frozen PA5 internal shadow question 156",
+      "question_id": "pa5-shadow-q156",
+      "refusal_reason_codes": [
+        "SHADOW_REPAIR"
+      ],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0018,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 600,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 157",
+      "question_id": "pa5-shadow-q157",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0019,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 605,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 158",
+      "question_id": "pa5-shadow-q158",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.002,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 610,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 159",
+      "question_id": "pa5-shadow-q159",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0021,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 615,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 160",
+      "question_id": "pa5-shadow-q160",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": true,
+      "citation_precision": 0.0,
+      "cost_usd": 0.0022,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_abstention_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 420,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.0,
+      "question": "Frozen PA5 internal shadow question 161",
+      "question_id": "pa5-shadow-q161",
+      "refusal_reason_codes": [
+        "ABSTENTION_REQUIRED"
+      ],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "abstention_required"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0023,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 425,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 162",
+      "question_id": "pa5-shadow-q162",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0015,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 430,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 163",
+      "question_id": "pa5-shadow-q163",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0016,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 435,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 164",
+      "question_id": "pa5-shadow-q164",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0017,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 440,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 165",
+      "question_id": "pa5-shadow-q165",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0018,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 445,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 166",
+      "question_id": "pa5-shadow-q166",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0019,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 450,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 167",
+      "question_id": "pa5-shadow-q167",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.002,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 455,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 168",
+      "question_id": "pa5-shadow-q168",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0021,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 460,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 169",
+      "question_id": "pa5-shadow-q169",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0022,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 465,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 170",
+      "question_id": "pa5-shadow-q170",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0023,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 470,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 171",
+      "question_id": "pa5-shadow-q171",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0015,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 475,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 172",
+      "question_id": "pa5-shadow-q172",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0016,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 480,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 173",
+      "question_id": "pa5-shadow-q173",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0017,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 485,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 174",
+      "question_id": "pa5-shadow-q174",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0018,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 490,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 175",
+      "question_id": "pa5-shadow-q175",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0019,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 495,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 176",
+      "question_id": "pa5-shadow-q176",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.002,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 500,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 177",
+      "question_id": "pa5-shadow-q177",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0021,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 505,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 178",
+      "question_id": "pa5-shadow-q178",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0022,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 510,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 179",
+      "question_id": "pa5-shadow-q179",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0023,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 515,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 180",
+      "question_id": "pa5-shadow-q180",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": true,
+      "citation_precision": 0.0,
+      "cost_usd": 0.0015,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_abstention_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 520,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.0,
+      "question": "Frozen PA5 internal shadow question 181",
+      "question_id": "pa5-shadow-q181",
+      "refusal_reason_codes": [
+        "ABSTENTION_REQUIRED"
+      ],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "abstention_required"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0016,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 525,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 182",
+      "question_id": "pa5-shadow-q182",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0017,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 530,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 183",
+      "question_id": "pa5-shadow-q183",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0018,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 535,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 184",
+      "question_id": "pa5-shadow-q184",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0019,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 540,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 185",
+      "question_id": "pa5-shadow-q185",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.002,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 545,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 186",
+      "question_id": "pa5-shadow-q186",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.88,
+      "cost_usd": 0.0021,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_hold_for_repair"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 550,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.72,
+      "question": "Frozen PA5 internal shadow question 187",
+      "question_id": "pa5-shadow-q187",
+      "refusal_reason_codes": [
+        "SHADOW_REPAIR"
+      ],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0022,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 555,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 188",
+      "question_id": "pa5-shadow-q188",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0023,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 560,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 189",
+      "question_id": "pa5-shadow-q189",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.94,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0015,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 565,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 190",
+      "question_id": "pa5-shadow-q190",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.95,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0016,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 570,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 191",
+      "question_id": "pa5-shadow-q191",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.96,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0017,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 575,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 192",
+      "question_id": "pa5-shadow-q192",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.97,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0018,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 580,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.88,
+      "question": "Frozen PA5 internal shadow question 193",
+      "question_id": "pa5-shadow-q193",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.86,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0019,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 585,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.89,
+      "question": "Frozen PA5 internal shadow question 194",
+      "question_id": "pa5-shadow-q194",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.87,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.002,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 590,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.9,
+      "question": "Frozen PA5 internal shadow question 195",
+      "question_id": "pa5-shadow-q195",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.88,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.93,
+      "cost_usd": 0.0021,
+      "difficulty": "easy",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "lookup",
+      "internal_authenticated": true,
+      "latency_ms": 595,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.91,
+      "question": "Frozen PA5 internal shadow question 196",
+      "question_id": "pa5-shadow-q196",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.89,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-3"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.94,
+      "cost_usd": 0.0022,
+      "difficulty": "medium",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "trace_source",
+      "internal_authenticated": true,
+      "latency_ms": 600,
+      "locale": "en-US",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.92,
+      "question": "Frozen PA5 internal shadow question 197",
+      "question_id": "pa5-shadow-q197",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.9,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-4"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.95,
+      "cost_usd": 0.0023,
+      "difficulty": "hard",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "compare",
+      "internal_authenticated": true,
+      "latency_ms": 605,
+      "locale": "zh-TW",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.93,
+      "question": "Frozen PA5 internal shadow question 198",
+      "question_id": "pa5-shadow-q198",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.91,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-5"
+      ],
+      "verified_answer_status": "verified_answer_ready_with_warnings"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.96,
+      "cost_usd": 0.0015,
+      "difficulty": "conflict",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "navigate_graph",
+      "internal_authenticated": true,
+      "latency_ms": 610,
+      "locale": "ja-JP",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.94,
+      "question": "Frozen PA5 internal shadow question 199",
+      "question_id": "pa5-shadow-q199",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.92,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-6"
+      ],
+      "verified_answer_status": "verified_answer_ready"
+    },
+    {
+      "abstention_appropriate": false,
+      "citation_precision": 0.97,
+      "cost_usd": 0.0016,
+      "difficulty": "stale",
+      "expected": {
+        "requires_public_answer_zero": true,
+        "status": "shadow_answer_reviewed"
+      },
+      "intent": "adversarial",
+      "internal_authenticated": true,
+      "latency_ms": 615,
+      "locale": "mixed",
+      "public_answer": false,
+      "public_traffic": false,
+      "quality_score": 0.95,
+      "question": "Frozen PA5 internal shadow question 200",
+      "question_id": "pa5-shadow-q200",
+      "refusal_reason_codes": [],
+      "reviewer_agreement": 0.93,
+      "reviewer_ids": [
+        "reviewer-pa5-a",
+        "reviewer-pa5-b",
+        "reviewer-pa5-7"
+      ],
+      "verified_answer_status": "verified_answer_ready_after_bounded_repair"
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-pa-5-shadow-question-population/v1",
+  "self_sha256": "5e64f9186fa4ccead46f90b328167a1fd61ece5f8a78b23fae62ff029ea02720",
+  "stage_id": "M26.PA.5"
+}

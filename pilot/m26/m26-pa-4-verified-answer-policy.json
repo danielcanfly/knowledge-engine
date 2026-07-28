@@ -1,0 +1,42 @@
+{
+  "accepted_predecessor_status": "m26_pa_3_live_provider_execution_accepted",
+  "authority": {
+    "abstention": true,
+    "bounded_repair": true,
+    "citation_binding": true,
+    "complete_denominator": true,
+    "deterministic_evidence": true,
+    "live_provider_calls": false,
+    "material_claim_extraction": true,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "public_shadow_canary_traffic": false,
+    "qdrant_writes": false,
+    "r2_writes": false,
+    "raw_text_persistence": false,
+    "secret_persistence": false,
+    "source_foundation_release_mutation": false,
+    "support_verification": true,
+    "verified_final_answers": false
+  },
+  "gate_policy": {
+    "abstain_on_insufficient_support": true,
+    "fail_closed": true,
+    "forbidden_text_fragments": [
+      "follow these instructions",
+      "ignore previous",
+      "system prompt"
+    ],
+    "max_repair_attempts": 1
+  },
+  "schema_version": "knowledge-engine-m26-pa-4-verified-answer-policy/v1",
+  "self_sha256": "14fe360010e5855a6d8472f938e59b8a661ce61287fca81fcffd0cf47eba7062",
+  "stage_id": "M26.PA.4",
+  "status_policy": {
+    "abstention_status": "abstention_required",
+    "authority_rejected_status": "verified_answer_rejected_authority_escalation",
+    "ready_status": "verified_answer_ready",
+    "repaired_status": "verified_answer_ready_after_bounded_repair",
+    "warning_status": "verified_answer_ready_with_warnings"
+  }
+}

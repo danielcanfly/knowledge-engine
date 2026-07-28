@@ -1,0 +1,76 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-final-decision-record-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bounded_outcome": {},
+    "case_id": {
+      "type": "string"
+    },
+    "closure_status": {
+      "type": "string"
+    },
+    "conditions_or_reasons": {
+      "type": "array"
+    },
+    "decision_maker": {
+      "type": "string"
+    },
+    "decision_status": {
+      "type": "string"
+    },
+    "evidence_chain_complete": {
+      "type": "boolean"
+    },
+    "evidence_chain_statuses": {
+      "type": "array"
+    },
+    "formal_m26_closure": {},
+    "independent_final_reconciliation_required": {
+      "type": "boolean"
+    },
+    "predecessor_status": {
+      "type": "string"
+    },
+    "production_pointer_mutation": {},
+    "production_promotion_authorized": {},
+    "production_promotion_execution": {},
+    "public_traffic_mutation": {},
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-7-final-decision-record/v1"
+    },
+    "secret_values_persisted": {},
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "source_foundation_release_mutation": {},
+    "stage_id": {
+      "const": "M26.PA.7"
+    }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "case_id",
+    "predecessor_status",
+    "decision_status",
+    "decision_maker",
+    "evidence_chain_complete",
+    "evidence_chain_statuses",
+    "bounded_outcome",
+    "production_promotion_authorized",
+    "production_promotion_execution",
+    "production_pointer_mutation",
+    "public_traffic_mutation",
+    "secret_values_persisted",
+    "source_foundation_release_mutation",
+    "independent_final_reconciliation_required",
+    "formal_m26_closure",
+    "conditions_or_reasons",
+    "closure_status",
+    "self_sha256"
+  ],
+  "title": "M26.PA.7 final decision record",
+  "type": "object"
+}

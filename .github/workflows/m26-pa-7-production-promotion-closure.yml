@@ -1,0 +1,68 @@
+name: M26.PA.7 Production Promotion and Closure
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m26-pa-7-production-promotion-closure.yml'
+      - 'docs/architecture/m26/m26-pa-6-reconciliation.md'
+      - 'docs/architecture/m26/m26-pa-7-production-promotion-closure.md'
+      - 'docs/architecture/m26/m26-pa-7-reconciliation.md'
+      - 'pilot/m26/m26-pa-6-acceptance.json'
+      - 'pilot/m26/m26-pa-7-*.json'
+      - 'schemas/m26-pa-7-*.schema.json'
+      - 'src/knowledge_engine/m26_production_promotion_closure.py'
+      - 'tests/test_m26_pa_6_canary_slo_rollback.py'
+      - 'tests/test_m26_pa_7_production_promotion_closure.py'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/m26-pa-7-production-promotion-closure.yml'
+      - 'docs/architecture/m26/m26-pa-6-reconciliation.md'
+      - 'docs/architecture/m26/m26-pa-7-production-promotion-closure.md'
+      - 'docs/architecture/m26/m26-pa-7-reconciliation.md'
+      - 'pilot/m26/m26-pa-6-acceptance.json'
+      - 'pilot/m26/m26-pa-7-*.json'
+      - 'schemas/m26-pa-7-*.schema.json'
+      - 'src/knowledge_engine/m26_production_promotion_closure.py'
+      - 'tests/test_m26_pa_6_canary_slo_rollback.py'
+      - 'tests/test_m26_pa_7_production_promotion_closure.py'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+
+      - name: Lint and validate PA.7
+        run: |
+          set -euo pipefail
+          python -m ruff check \
+            src/knowledge_engine/m26_production_promotion_closure.py \
+            tests/test_m26_pa_6_canary_slo_rollback.py \
+            tests/test_m26_pa_7_production_promotion_closure.py
+          python -m compileall -q \
+            src/knowledge_engine/m26_production_promotion_closure.py \
+            tests/test_m26_pa_6_canary_slo_rollback.py \
+            tests/test_m26_pa_7_production_promotion_closure.py
+          python -m pytest -q \
+            tests/test_m26_pa_3_reconciliation.py \
+            tests/test_m26_pa_4_verified_answer_citation_gate.py \
+            tests/test_m26_pa_5_controlled_internal_shadow_pilot.py \
+            tests/test_m26_pa_6_canary_slo_rollback.py \
+            tests/test_m26_pa_7_production_promotion_closure.py
+

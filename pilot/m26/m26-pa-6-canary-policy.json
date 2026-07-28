@@ -1,0 +1,64 @@
+{
+  "accepted_predecessor_status": "m26_pa_5_controlled_internal_shadow_pilot_accepted",
+  "authority": {
+    "audience_allowlist": true,
+    "automatic_stop_conditions": true,
+    "bounded_canary": true,
+    "error_budget": true,
+    "full_production_promotion": false,
+    "kill_switch": true,
+    "rollback_drill_completed": true,
+    "rollback_plan": true,
+    "slo_enforcement": true,
+    "source_foundation_release_mutation": false,
+    "traffic_allowlist": true
+  },
+  "canary_policy": {
+    "audience_allowlist": [
+      "daniel",
+      "internal-reviewer",
+      "codex-shadow"
+    ],
+    "automatic_stop_conditions": [
+      "acl_leakage_detected",
+      "unsupported_claim_detected",
+      "citation_binding_failure",
+      "secret_leakage_detected",
+      "prompt_injection_executed",
+      "provider_cost_ceiling_exceeded",
+      "latency_slo_breached",
+      "error_budget_exhausted",
+      "pointer_identity_drift",
+      "rollback_verification_failed"
+    ],
+    "kill_switch": {
+      "enabled": true,
+      "name": "M26_PA_CANARY_DISABLED"
+    },
+    "max_traffic_percent": 1.0,
+    "rollback": {
+      "drill_completed": true,
+      "expected_previous_pointer_sha256": "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9",
+      "rollback_plan_id": "m26-pa-6-bounded-rollback-drill-v1"
+    },
+    "slo": {
+      "latency_p95_ms": 800,
+      "max_cost_usd": 0.02,
+      "max_error_rate": 0.01
+    },
+    "traffic_allowlist": [
+      "/internal/ask",
+      "/shadow/ask",
+      "/canary/ask"
+    ]
+  },
+  "schema_version": "knowledge-engine-m26-pa-6-canary-policy/v1",
+  "self_sha256": "e57021350318070435106eeab0af5eeda040e3695474bcf534c851df6c83db28",
+  "stage_id": "M26.PA.6",
+  "status_policy": {
+    "authority_rejected_status": "canary_rejected_authority_escalation",
+    "ready_status": "canary_ready",
+    "rollback_hold_status": "canary_hold_for_rollback",
+    "stopped_status": "canary_stopped_by_slo"
+  }
+}

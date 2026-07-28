@@ -1,0 +1,23 @@
+{
+  "accepted": false,
+  "accepted_predecessor_status": "m26_pa_3_live_provider_execution_accepted",
+  "artifacts": {
+    "benchmark_cases_sha256": "d7a056776bb7124199b0ab2f2e8ed8055904e9cba2ac2c207f4fc992cc5cafe7",
+    "entry_contract_sha256": "b248bd7add43f4de70df71669f0586e6bd5540abe74d015595dba81ad5b00553",
+    "policy_sha256": "6390da6c104f201e310372a9cb2e475140fcaa831fbeaae8de682c8d7b078ff0"
+  },
+  "implementation": {
+    "module": "src/knowledge_engine/m26_verified_answer_citation_gate.py"
+  },
+  "report": {
+    "self_sha256": "0b8ae36f6fcee20858f53a858beb3090fa9946b5df1a1c03133d90a2cf7f9e9e",
+    "status": "m26_pa_4_verified_answer_citation_gate_ready"
+  },
+  "schema_version": "knowledge-engine-m26-pa-4-contract-registry/v1",
+  "schemas": {
+    "benchmark_schema_sha256": "5eb389745e943dfde061a6c40468b82200551f3feb43dc80ed44bb2d20d134c1",
+    "record_schema_sha256": "33d2c08976f9a1f884db45a01ecda30d68cbacab50a72e1ceecef8c960645d10"
+  },
+  "self_sha256": "fb3259d8ca23b85911c7beebfe98d23ee5dd1053f27ccc0440e05f7fec30a0bd",
+  "stage_id": "M26.PA.4"
+}

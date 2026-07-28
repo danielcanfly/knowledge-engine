@@ -1,0 +1,23 @@
+{
+  "accepted": false,
+  "accepted_predecessor_status": "m26_pa_4_verified_answer_citation_gate_accepted",
+  "artifacts": {
+    "entry_contract_sha256": "7a9589d076e4482dd93089a93ba297df7bc02373c9a17d8f56e9be84a1e7304e",
+    "frozen_questions_sha256": "5679de5bee77c3a5ed5b76ab6fb9e08c75ad70a7c27e8d59b9b25b4737d312d6",
+    "policy_sha256": "dcd92b53201c1b9311277b01f8404929c93e32f1f4e95aaa0d9403ee03571b94"
+  },
+  "implementation": {
+    "module": "src/knowledge_engine/m26_controlled_internal_shadow_pilot.py"
+  },
+  "report": {
+    "self_sha256": "39fa2558a687d7300af4ba1fbeb95e4787431bb2f61810d9c84a61e0e0c72608",
+    "status": "m26_pa_5_controlled_internal_shadow_pilot_ready"
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-contract-registry/v1",
+  "schemas": {
+    "benchmark_schema_sha256": "942f17c273aaaee34b27d5ce26ec50bb3d047770f2b9704053a8524072708475",
+    "record_schema_sha256": "ade21cbfa6a661e7a59c37e4681f829aaa041e39adebc5632ccbe321c7133845"
+  },
+  "self_sha256": "ed819ff9d8b9b4e547eac57ab75929fc68c23b9a238881f3848ceeadc356a55e",
+  "stage_id": "M26.PA.5"
+}

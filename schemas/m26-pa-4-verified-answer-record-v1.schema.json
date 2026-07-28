@@ -1,0 +1,89 @@
+{
+  "$id": "knowledge-engine/m26-pa-4-verified-answer-record-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "abstention_required": {
+      "type": "boolean"
+    },
+    "case_id": {
+      "type": "string"
+    },
+    "citation_binding": {},
+    "complete_denominator_record": {},
+    "diagnostics": {
+      "type": "object"
+    },
+    "live_provider_calls": {},
+    "material_claim_extraction": {},
+    "predecessor_status": {
+      "type": "string"
+    },
+    "production_answer_serving": {},
+    "production_pointer_mutation": {},
+    "public_shadow_canary_traffic": {},
+    "raw_text_persisted": {},
+    "refusal_reason_codes": {
+      "type": "array"
+    },
+    "repair_attempt_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "safe_for_pa5": {},
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-4-verified-answer-record/v1"
+    },
+    "secret_values_persisted": {},
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "stage_id": {
+      "const": "M26.PA.4"
+    },
+    "support_verification": {},
+    "verified_answer_status": {
+      "type": "string"
+    },
+    "verified_binding_ids": {
+      "type": "array"
+    },
+    "verified_claim_ids": {
+      "type": "array"
+    },
+    "verified_final_answer": {},
+    "warning_codes": {
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "case_id",
+    "predecessor_status",
+    "verified_answer_status",
+    "safe_for_pa5",
+    "material_claim_extraction",
+    "citation_binding",
+    "support_verification",
+    "complete_denominator_record",
+    "verified_claim_ids",
+    "verified_binding_ids",
+    "warning_codes",
+    "refusal_reason_codes",
+    "repair_attempt_count",
+    "abstention_required",
+    "production_answer_serving",
+    "production_pointer_mutation",
+    "public_shadow_canary_traffic",
+    "verified_final_answer",
+    "live_provider_calls",
+    "secret_values_persisted",
+    "raw_text_persisted",
+    "diagnostics",
+    "self_sha256"
+  ],
+  "title": "M26.PA.4 verified answer record",
+  "type": "object"
+}
