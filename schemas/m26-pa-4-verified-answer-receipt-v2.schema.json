@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "aggregate_diagnostics": {"$ref": "#/$defs/aggregate_diagnostics"},
+    "authority": {"$ref": "#/$defs/authority"},
+    "case_diagnostics": {
+      "items": {"$ref": "#/$defs/case_diagnostic"},
+      "maxItems": 12,
+      "minItems": 12,
+      "type": "array"
+    },
+    "evidence_summary": {"$ref": "#/$defs/evidence_summary"},
+    "generated_at": {"pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$", "type": "string"},
+    "items": {
+      "items": {"additionalProperties": true, "type": "object"},
+      "maxItems": 12,
+      "minItems": 12,
+      "type": "array"
+    },
+    "logical_attempt": {"const": 2},
+    "owner_decision": {"$ref": "#/$defs/owner_decision"},
+    "policy": {"$ref": "#/$defs/policy"},
+    "population": {"$ref": "#/$defs/population"},
+    "provider": {"$ref": "#/$defs/provider"},
+    "request_receipts": {
+      "items": {"$ref": "#/$defs/request_receipt"},
+      "maxItems": 24,
+      "minItems": 1,
+      "type": "array"
+    },
+    "schema_version": {"const": "knowledge-engine-m26-pa-4-verified-answer-receipt/v2"},
+    "self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "stage_id": {"const": "M26.PA.4"},
+    "status": {"const": "real_verified_answer_citation_gate_verified"},
+    "summary": {"$ref": "#/$defs/summary"},
+    "usage": {"$ref": "#/$defs/usage"},
+    "workflow": {"$ref": "#/$defs/workflow"}
+  },
+  "required": [
+    "aggregate_diagnostics",
+    "authority",
+    "case_diagnostics",
+    "evidence_summary",
+    "generated_at",
+    "items",
+    "logical_attempt",
+    "owner_decision",
+    "policy",
+    "population",
+    "provider",
+    "request_receipts",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "summary",
+    "usage",
+    "workflow"
+  ],
+  "title": "M26.PA.4 verified answer receipt v2",
+  "type": "object",
+  "$defs": {
+    "aggregate_diagnostics": {
+      "additionalProperties": false,
+      "properties": {
+        "reason_code_counts": {"additionalProperties": {"type": "integer", "minimum": 1}, "type": "object"},
+        "result_class_counts": {"additionalProperties": {"type": "integer", "minimum": 1}, "type": "object"},
+        "terminal_status_counts": {"additionalProperties": {"type": "integer", "minimum": 1}, "type": "object"}
+      },
+      "required": ["reason_code_counts", "result_class_counts", "terminal_status_counts"],
+      "type": "object"
+    },
+    "authority": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_writes": {"const": 0},
+        "credential_names": {"items": {"const": "MINIMAX_API_KEY"}, "maxItems": 1, "minItems": 1, "type": "array"},
+        "production_answer_serving": {"const": false},
+        "production_pointer_mutations": {"const": 0},
+        "provider_calls": {"maximum": 24, "minimum": 1, "type": "integer"},
+        "provider_response_text_persisted": {"const": false},
+        "public_shadow_canary_traffic_operations": {"const": 0},
+        "qdrant_write_operations": {"const": 0},
+        "r2_write_operations": {"const": 0},
+        "raw_corpus_text_persisted": {"const": false},
+        "raw_corpus_text_sent_to_provider": {"const": true},
+        "secret_values_persisted": {"const": false},
+        "source_foundation_release_mutations": {"const": 0},
+        "vectors_persisted": {"const": false},
+        "vectors_requested": {"const": false},
+        "vectors_returned": {"const": false}
+      },
+      "required": [
+        "canonical_writes",
+        "credential_names",
+        "production_answer_serving",
+        "production_pointer_mutations",
+        "provider_calls",
+        "provider_response_text_persisted",
+        "public_shadow_canary_traffic_operations",
+        "qdrant_write_operations",
+        "r2_write_operations",
+        "raw_corpus_text_persisted",
+        "raw_corpus_text_sent_to_provider",
+        "secret_values_persisted",
+        "source_foundation_release_mutations",
+        "vectors_persisted",
+        "vectors_requested",
+        "vectors_returned"
+      ],
+      "type": "object"
+    },
+    "case_diagnostic": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_text_persisted": {"const": false},
+        "case_id": {"type": "string", "minLength": 1},
+        "category": {"enum": ["direct_material_claim", "security_adversarial"]},
+        "citation_count": {"type": "integer", "minimum": 0},
+        "claim_count": {"type": "integer", "minimum": 0},
+        "expected_terminal_policy": {"enum": ["candidate_or_abstention", "abstention_required"]},
+        "initial_reason_codes": {"items": {"type": "string", "minLength": 1}, "type": "array"},
+        "initial_result_class": {"type": "string", "minLength": 1},
+        "locator": {"$ref": "#/$defs/locator"},
+        "provider_call_count": {"type": "integer", "minimum": 0, "maximum": 2},
+        "provider_output_char_count": {"type": "integer", "minimum": 0, "maximum": 12000},
+        "provider_output_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "provider_response_text_persisted": {"const": false},
+        "raw_corpus_text_persisted": {"const": false},
+        "repair_attempted": {"type": "boolean"},
+        "repair_reason_codes": {"items": {"type": "string", "minLength": 1}, "type": "array"},
+        "repair_result_class": {"type": ["string", "null"]},
+        "secret_values_persisted": {"const": false},
+        "supported_claim_count": {"type": "integer", "minimum": 0},
+        "terminal_status": {"type": "string", "minLength": 1},
+        "unsupported_claim_count": {"type": "integer", "minimum": 0},
+        "usage": {"$ref": "#/$defs/usage"},
+        "vectors_persisted": {"const": false}
+      },
+      "required": [
+        "answer_text_persisted",
+        "case_id",
+        "category",
+        "citation_count",
+        "claim_count",
+        "expected_terminal_policy",
+        "initial_reason_codes",
+        "initial_result_class",
+        "locator",
+        "provider_call_count",
+        "provider_output_char_count",
+        "provider_output_sha256",
+        "provider_response_text_persisted",
+        "raw_corpus_text_persisted",
+        "repair_attempted",
+        "repair_reason_codes",
+        "repair_result_class",
+        "secret_values_persisted",
+        "supported_claim_count",
+        "terminal_status",
+        "unsupported_claim_count",
+        "usage",
+        "vectors_persisted"
+      ],
+      "type": "object"
+    },
+    "evidence_summary": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "locator": {
+      "additionalProperties": false,
+      "properties": {
+        "locator_digest": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "locator_id": {"type": "string", "minLength": 1},
+        "passage_text_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "section_id": {"type": "string", "minLength": 1},
+        "source_id": {"type": "string", "minLength": 1}
+      },
+      "required": ["locator_digest", "locator_id", "passage_text_sha256", "section_id", "source_id"],
+      "type": "object"
+    },
+    "owner_decision": {
+      "additionalProperties": false,
+      "properties": {
+        "exact_instruction_text_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "owner_decision_self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": ["exact_instruction_text_sha256", "owner_decision_self_sha256"],
+      "type": "object"
+    },
+    "policy": {
+      "additionalProperties": false,
+      "properties": {
+        "max_provider_calls_per_item_including_repair": {"const": 2},
+        "max_repair_attempts": {"const": 1},
+        "minimum_abstention_items": {"const": 2},
+        "minimum_ready_candidate_items": {"const": 8},
+        "policy_self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "support_threshold": {"const": 1.0}
+      },
+      "required": [
+        "max_provider_calls_per_item_including_repair",
+        "max_repair_attempts",
+        "minimum_abstention_items",
+        "minimum_ready_candidate_items",
+        "policy_self_sha256",
+        "support_threshold"
+      ],
+      "type": "object"
+    },
+    "population": {
+      "additionalProperties": false,
+      "properties": {
+        "benchmark_population_count": {"const": 12},
+        "population_self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "population_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": ["benchmark_population_count", "population_self_sha256", "population_sha256"],
+      "type": "object"
+    },
+    "provider": {
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {"type": "string", "minLength": 1},
+        "model_id": {"const": "MiniMax-M3"},
+        "provider_id": {"const": "minimax"},
+        "provider_response_text_persisted": {"const": false}
+      },
+      "required": ["endpoint", "model_id", "provider_id", "provider_response_text_persisted"],
+      "type": "object"
+    },
+    "request_receipt": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {"enum": [1, 2]},
+        "case_id": {"type": "string", "minLength": 1},
+        "payload_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "prompt_bytes": {"type": "integer", "minimum": 1},
+        "provider_response_id_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "provider_response_json_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "provider_response_text_persisted": {"const": false},
+        "provider_response_text_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "raw_corpus_text_persisted": {"const": false},
+        "response_model": {"type": "string"},
+        "stop_reason": {},
+        "usage": {"$ref": "#/$defs/usage"}
+      },
+      "required": [
+        "attempt",
+        "case_id",
+        "payload_sha256",
+        "prompt_bytes",
+        "provider_response_id_sha256",
+        "provider_response_json_sha256",
+        "provider_response_text_persisted",
+        "provider_response_text_sha256",
+        "raw_corpus_text_persisted",
+        "response_model",
+        "stop_reason",
+        "usage"
+      ],
+      "type": "object"
+    },
+    "summary": {
+      "additionalProperties": false,
+      "properties": {
+        "abstention_count": {"minimum": 2, "type": "integer"},
+        "all_non_abstained_material_claims_supported": {"const": true},
+        "benchmark_population_count": {"const": 12},
+        "citation_precision": {"const": 1.0},
+        "material_claim_count": {"type": "integer", "minimum": 8},
+        "ready_candidate_count": {"minimum": 8, "type": "integer"},
+        "supported_material_claim_count": {"type": "integer", "minimum": 8},
+        "unsupported_material_claim_count": {"const": 0}
+      },
+      "required": [
+        "abstention_count",
+        "all_non_abstained_material_claims_supported",
+        "benchmark_population_count",
+        "citation_precision",
+        "material_claim_count",
+        "ready_candidate_count",
+        "supported_material_claim_count",
+        "unsupported_material_claim_count"
+      ],
+      "type": "object"
+    },
+    "usage": {
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": {"type": "integer", "minimum": 0},
+        "output_tokens": {"type": "integer", "minimum": 0},
+        "total_tokens": {"type": "integer", "minimum": 0}
+      },
+      "required": ["input_tokens", "output_tokens", "total_tokens"],
+      "type": "object"
+    },
+    "workflow": {
+      "additionalProperties": false,
+      "properties": {
+        "environment": {"const": "m23-r3-diagnostic"},
+        "head_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "repository": {"const": "danielcanfly/knowledge-engine"},
+        "run_attempt": {"const": "1"},
+        "run_id": {"type": "string", "minLength": 1},
+        "workflow_name": {"const": "M26.PA.4 Real Verified Answer and Citation Gate"}
+      },
+      "required": ["environment", "head_sha", "repository", "run_attempt", "run_id", "workflow_name"],
+      "type": "object"
+    }
+  }
+}

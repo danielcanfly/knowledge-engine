@@ -14,7 +14,7 @@ response text, no vectors, and no secrets.
 ## Live Gate
 
 The main-branch live job is triggered only by the marker
-`[m26.pa4-real-verified-answer-authorized-attempt-1]`.
+`[m26.pa4-real-verified-answer-authorized-attempt-2]`.
 
 For each benchmark item the live job:
 
@@ -32,6 +32,25 @@ repair attempt. A non-abstained material claim is accepted only when the claim t
 the provider is an exact passage span in the cited locator. Unsupported claims, missing
 locators, unresolved conflict or stale temporal conditions, privacy/security findings, or
 exhausted repair budget force abstention.
+
+Attempt 2 preserves the original useful-answer floor instead of accepting pure
+abstention: at least 8 of the 10 candidate-eligible cases must become ready candidates,
+the 2 mandatory-abstention cases must abstain, citation support must remain 100%, and
+unsupported accepted material claims must remain 0.
+
+## Attempt-2 Diagnostic Contract
+
+Both success and failed-closed receipts use strict v2 schemas and self-digests. A final
+threshold failure must preserve the sanitized per-case diagnostics collected before the
+threshold is applied, including result class, safe reason codes, repair class, terminal
+status, provider call count, token usage, output length and hash, claim/support/citation
+counts, locator identity, and persistence-denial booleans.
+
+Receipts also include aggregate reason-code, result-class, and terminal-status
+histograms plus population-fitness diagnostics. Population fitness records only case
+identity, requested claim type, passage length/hash, selected-span existence, selected
+span hash, and locator identity. It never stores raw provider response text, raw corpus
+text, complete prompts, user queries, answer text, secret values, or vectors.
 
 ## Denied Authority
 

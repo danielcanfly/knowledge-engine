@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import time
+from collections import Counter
 from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
@@ -17,7 +18,8 @@ OWNER_DECISION_SCHEMA = "knowledge-engine-m26-pa-4-owner-decision/v1"
 POLICY_SCHEMA = "knowledge-engine-m26-pa-4-verified-answer-policy/v1"
 POPULATION_SCHEMA = "knowledge-engine-m26-pa-4-benchmark-population/v1"
 REGISTRY_SCHEMA = "knowledge-engine-m26-pa-4-contract-registry/v1"
-RECEIPT_SCHEMA = "knowledge-engine-m26-pa-4-verified-answer-receipt/v1"
+RECEIPT_SCHEMA = "knowledge-engine-m26-pa-4-verified-answer-receipt/v2"
+FAILURE_RECEIPT_SCHEMA = "knowledge-engine-m26-pa-4-failure-receipt/v2"
 
 PREDECESSOR_STATUS = "m26_pa_3_live_provider_execution_accepted"
 ACCEPTED_STATUS = "m26_pa_4_verified_answer_citation_gate_accepted"
@@ -29,7 +31,7 @@ POLICY_PATH = "pilot/m26/m26-pa-4-verified-answer-policy.json"
 POPULATION_PATH = "pilot/m26/m26-pa-4-benchmark-population.json"
 REGISTRY_PATH = "pilot/m26/m26-pa-4-contract-registry.json"
 PA3_ACCEPTANCE_PATH = "pilot/m26/m26-pa-3-acceptance.json"
-RECEIPT_SCHEMA_PATH = "schemas/m26-pa-4-verified-answer-receipt-v1.schema.json"
+RECEIPT_SCHEMA_PATH = "schemas/m26-pa-4-verified-answer-receipt-v2.schema.json"
 
 SUPPORTED_ANSWER_TEXT = "non-final draft candidate; see material_claims"
 MAX_PROVIDER_OUTPUT_CHARS = 12_000
@@ -83,12 +85,14 @@ class VerifiedAnswerGateError(IntegrityError):
         *,
         category: str = "integrity",
         retryable: bool = False,
+        failure_receipt: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.safe_message = message
         self.category = category
         self.retryable = retryable
+        self.failure_receipt = dict(failure_receipt) if failure_receipt is not None else None
 
 
 def canonical_bytes(value: Any) -> bytes:
@@ -138,9 +142,20 @@ def verify_self_digest(value: Mapping[str, Any], label: str = "artifact") -> Non
 
 
 def _failure(
-    code: str, message: str, *, category: str = "integrity", retryable: bool = False
+    code: str,
+    message: str,
+    *,
+    category: str = "integrity",
+    retryable: bool = False,
+    failure_receipt: Mapping[str, Any] | None = None,
 ) -> VerifiedAnswerGateError:
-    return VerifiedAnswerGateError(code, message, category=category, retryable=retryable)
+    return VerifiedAnswerGateError(
+        code,
+        message,
+        category=category,
+        retryable=retryable,
+        failure_receipt=failure_receipt,
+    )
 
 
 def _object(value: Any, label: str) -> dict[str, Any]:
@@ -378,6 +393,9 @@ def _string(value: Any, label: str, *, max_len: int) -> str:
     return value
 
 
+JSON_FENCE = re.compile(r"^```(?:json)?\s*\n(?P<body>.*?)\n```\s*$", re.DOTALL)
+
+
 def _parse_provider_json(text: str) -> dict[str, Any]:
     if len(text) > MAX_PROVIDER_OUTPUT_CHARS:
         raise _failure("M26-PA4-043", "provider output exceeded bounded length")
@@ -387,15 +405,22 @@ def _parse_provider_json(text: str) -> dict[str, Any]:
     try:
         value = json.loads(stripped)
     except json.JSONDecodeError:
-        start = stripped.find("{")
-        end = stripped.rfind("}")
-        if start < 0 or end <= start:
-            raise _failure("M26-PA4-045", "provider output is not JSON") from None
+        match = JSON_FENCE.fullmatch(stripped)
+        if match is None:
+            raise _failure(
+                "M26-PA4-045", "provider output is not one unambiguous JSON object"
+            ) from None
         try:
-            value = json.loads(stripped[start : end + 1])
+            value = json.loads(match.group("body"))
         except json.JSONDecodeError as exc:
             raise _failure("M26-PA4-046", "provider output JSON is malformed") from exc
-    return _object(value, "provider JSON")
+    parsed = _object(value, "provider JSON")
+    _strict_keys(
+        parsed,
+        label="provider JSON",
+        required={"status", "answer_text", "claims", "reason_codes"},
+    )
+    return parsed
 
 
 def build_provider_payload(
@@ -427,13 +452,34 @@ def build_provider_payload(
         "previous_reason_codes": previous_reason_codes or [],
         "output_contract": {
             "status_values": ["draft_candidate", "abstain"],
-            "non_final_answer_text": SUPPORTED_ANSWER_TEXT,
+            "answer_text": (
+                "The runtime owns the non-final answer label. Return an empty string or "
+                f"{SUPPORTED_ANSWER_TEXT!r}; it will not be persisted or served."
+            ),
             "claims": (
-                "For draft_candidate, return exactly 1 material_claim. The claim_text must be "
-                "copied exactly from the passage and must cite the supplied locator_id. For "
-                "abstain, return an empty claims array and reason_codes."
+                "For draft_candidate, return exactly 1 claim. The claim_text must be copied "
+                "byte-for-byte from the supplied passage and must cite the supplied locator_id. "
+                "For abstain, return an empty claims array and safe reason_codes."
             ),
             "required_json_keys": ["status", "answer_text", "claims", "reason_codes"],
+            "draft_candidate_json_example": {
+                "status": "draft_candidate",
+                "answer_text": "",
+                "claims": [
+                    {
+                        "claim_id": "claim_1",
+                        "claim_text": "COPY ONE EXACT SPAN FROM THE PASSAGE",
+                        "citation": {"locator_id": locator["locator_id"]},
+                    }
+                ],
+                "reason_codes": [],
+            },
+            "abstain_json_example": {
+                "status": "abstain",
+                "answer_text": "",
+                "claims": [],
+                "reason_codes": ["INSUFFICIENT_SUPPORT"],
+            },
         },
         "forbidden": [
             "final answer label",
@@ -451,9 +497,9 @@ def build_provider_payload(
         "stream": False,
         "system": (
             "You are executing a bounded M26.PA.4 verified-answer citation gate. "
-            "Return compact JSON only. Use only the supplied passage. Do not produce "
-            "final answers. If support, locator, conflict, temporal freshness, privacy, "
-            "or security is insufficient, return status abstain."
+            "Return one compact JSON object only, with no leading or trailing prose. Use only "
+            "the supplied passage. Do not produce final answers. If support, locator, conflict, "
+            "temporal freshness, privacy, or security is insufficient, return status abstain."
         ),
         "messages": [
             {
@@ -502,8 +548,13 @@ def verify_provider_output(
         )
     if status != "draft_candidate":
         raise _failure("M26-PA4-050", "provider status is not terminal")
-    if parsed.get("answer_text") != SUPPORTED_ANSWER_TEXT:
-        raise _failure("M26-PA4-051", "answer text contains unextracted material claims")
+    answer_text = parsed.get("answer_text")
+    if (
+        not isinstance(answer_text, str)
+        or len(answer_text) > 512
+        or _secret_findings(answer_text)
+    ):
+        raise _failure("M26-PA4-051", "answer text is outside the bounded runtime-owned label")
     raw_claims = _list(parsed.get("claims"), "provider claims")
     if not raw_claims:
         raise _failure("M26-PA4-052", "draft candidate has no material claims")
@@ -513,10 +564,16 @@ def verify_provider_output(
     claim_records: list[dict[str, Any]] = []
     for index, raw_claim in enumerate(raw_claims, start=1):
         claim = _object(raw_claim, "provider claim")
+        _strict_keys(
+            claim,
+            label="provider claim",
+            required={"claim_id", "claim_text", "citation"},
+        )
         claim_text = _string(claim.get("claim_text"), "claim_text", max_len=512)
         if _secret_findings(claim_text):
             raise _failure("M26-PA4-054", "claim text contains secret-like material")
         citation = _object(claim.get("citation"), "provider claim citation")
+        _strict_keys(citation, label="provider claim citation", required={"locator_id"})
         if citation.get("locator_id") != locator["locator_id"]:
             raise _failure("M26-PA4-055", "claim citation locator mismatch")
         start = passage_text.find(claim_text)
@@ -544,7 +601,7 @@ def verify_provider_output(
         "terminal_status": "verified_answer_ready_candidate",
         "expected_terminal_policy": expected_policy,
         "draft_answer": {
-            "answer_text_sha256": sha256_bytes(str(parsed["answer_text"]).encode("utf-8")),
+            "answer_text_sha256": sha256_bytes(SUPPORTED_ANSWER_TEXT.encode("utf-8")),
             "provider_response_text_sha256": sha256_bytes(provider_text.encode("utf-8")),
             "answer_text_persisted": False,
             "provider_response_text_persisted": False,
@@ -708,36 +765,75 @@ def run_verified_answer_benchmark(
         datetime.strptime(generated_at, "%Y-%m-%dT%H:%M:%SZ")
     except ValueError as exc:
         raise _failure("M26-PA4-061", "generated_at is not valid UTC") from exc
+
     items: list[dict[str, Any]] = []
+    case_diagnostics: list[dict[str, Any]] = []
     provider_calls = 0
     usage_totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
     request_receipts: list[dict[str, Any]] = []
+    evidence_summary_with_fitness = dict(evidence_summary)
+    evidence_summary_with_fitness["population_fitness_diagnostics"] = (
+        _population_fitness_diagnostics(population, passages_by_case_id)
+    )
+
     for case in population["cases"]:
         case_id = str(case["case_id"])
         passage_text = _string(passages_by_case_id.get(case_id), "passage_text", max_len=4096)
+        case_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        case_provider_calls = 0
+        initial_result_class = "not_started"
+        initial_reason_codes: list[str] = []
+        repair_attempted = False
+        repair_result_class: str | None = None
+        repair_reason_codes: list[str] = []
+        provider_output_char_count = 0
+        provider_output_sha256 = sha256_bytes(b"")
+
         first_payload = build_provider_payload(
             policy=policy, case=case, passage_text=passage_text, repair=False
         )
         _validate_payload_budget(first_payload, policy)
         try:
-            first_result = provider_call(first_payload)
             provider_calls += 1
+            case_provider_calls += 1
+            first_result = provider_call(first_payload)
+            first_provider_text = str(first_result["provider_text"])
+            provider_output_char_count = len(first_provider_text)
+            provider_output_sha256 = sha256_bytes(first_provider_text.encode("utf-8"))
             _accumulate_usage(usage_totals, first_result["usage"])
+            _accumulate_usage(case_usage, first_result["usage"])
             request_receipts.append(
                 _request_receipt(
                     case_id=case_id, attempt=1, payload=first_payload, result=first_result
                 )
             )
         except VerifiedAnswerGateError as error:
-            items.append(
-                _abstention_item(
+            initial_result_class = "provider_call_failed"
+            initial_reason_codes = [error.code, "PROVIDER_CALL_FAILED"]
+            item = _abstention_item(
+                case=case,
+                reason_codes=initial_reason_codes,
+                provider_text="",
+                repair_attempts_used=0,
+            )
+            items.append(item)
+            case_diagnostics.append(
+                _case_diagnostic(
                     case=case,
-                    reason_codes=[error.code, "PROVIDER_CALL_FAILED"],
-                    provider_text="",
-                    repair_attempts_used=0,
+                    item=item,
+                    initial_result_class=initial_result_class,
+                    initial_reason_codes=initial_reason_codes,
+                    repair_attempted=repair_attempted,
+                    repair_result_class=repair_result_class,
+                    repair_reason_codes=repair_reason_codes,
+                    provider_call_count=case_provider_calls,
+                    usage=case_usage,
+                    provider_output_char_count=provider_output_char_count,
+                    provider_output_sha256=provider_output_sha256,
                 )
             )
             continue
+
         try:
             item = verify_provider_output(
                 case=case,
@@ -745,7 +841,11 @@ def run_verified_answer_benchmark(
                 provider_text=first_result["provider_text"],
                 policy=policy,
             )
+            initial_result_class = _result_class(item)
+            initial_reason_codes = _item_reason_codes(item)
         except VerifiedAnswerGateError as error:
+            initial_result_class = "provider_output_rejected"
+            initial_reason_codes = [error.code]
             max_repair = int(policy["budget"]["max_repair_attempts"])
             if max_repair <= 0:
                 item = _abstention_item(
@@ -755,6 +855,7 @@ def run_verified_answer_benchmark(
                     repair_attempts_used=0,
                 )
             else:
+                repair_attempted = True
                 repair_payload = build_provider_payload(
                     policy=policy,
                     case=case,
@@ -764,9 +865,14 @@ def run_verified_answer_benchmark(
                 )
                 _validate_payload_budget(repair_payload, policy)
                 try:
-                    repair_result = provider_call(repair_payload)
                     provider_calls += 1
+                    case_provider_calls += 1
+                    repair_result = provider_call(repair_payload)
+                    repair_provider_text = str(repair_result["provider_text"])
+                    provider_output_char_count = len(repair_provider_text)
+                    provider_output_sha256 = sha256_bytes(repair_provider_text.encode("utf-8"))
                     _accumulate_usage(usage_totals, repair_result["usage"])
+                    _accumulate_usage(case_usage, repair_result["usage"])
                     request_receipts.append(
                         _request_receipt(
                             case_id=case_id,
@@ -776,16 +882,32 @@ def run_verified_answer_benchmark(
                         )
                     )
                 except VerifiedAnswerGateError as repair_call_error:
-                    items.append(
-                        _abstention_item(
+                    repair_result_class = "repair_call_failed"
+                    repair_reason_codes = [repair_call_error.code, "REPAIR_CALL_FAILED"]
+                    item = _abstention_item(
+                        case=case,
+                        reason_codes=[
+                            error.code,
+                            repair_call_error.code,
+                            "REPAIR_CALL_FAILED",
+                        ],
+                        provider_text="",
+                        repair_attempts_used=1,
+                    )
+                    items.append(item)
+                    case_diagnostics.append(
+                        _case_diagnostic(
                             case=case,
-                            reason_codes=[
-                                error.code,
-                                repair_call_error.code,
-                                "REPAIR_CALL_FAILED",
-                            ],
-                            provider_text="",
-                            repair_attempts_used=1,
+                            item=item,
+                            initial_result_class=initial_result_class,
+                            initial_reason_codes=initial_reason_codes,
+                            repair_attempted=repair_attempted,
+                            repair_result_class=repair_result_class,
+                            repair_reason_codes=repair_reason_codes,
+                            provider_call_count=case_provider_calls,
+                            usage=case_usage,
+                            provider_output_char_count=provider_output_char_count,
+                            provider_output_sha256=provider_output_sha256,
                         )
                     )
                     continue
@@ -805,20 +927,103 @@ def run_verified_answer_benchmark(
                         item["terminal_status"] = (
                             "verified_answer_ready_candidate_after_bounded_repair"
                         )
+                    repair_result_class = _result_class(item)
+                    repair_reason_codes = _item_reason_codes(item)
                 except VerifiedAnswerGateError as repair_error:
+                    repair_result_class = "repair_output_rejected"
+                    repair_reason_codes = [repair_error.code, "REPAIR_BUDGET_EXHAUSTED"]
                     item = _abstention_item(
                         case=case,
                         reason_codes=[error.code, repair_error.code, "REPAIR_BUDGET_EXHAUSTED"],
                         provider_text=repair_result["provider_text"],
                         repair_attempts_used=1,
                     )
+
         items.append(item)
-    _validate_receipt_thresholds(policy=policy, items=items, provider_calls=provider_calls)
+        case_diagnostics.append(
+            _case_diagnostic(
+                case=case,
+                item=item,
+                initial_result_class=initial_result_class,
+                initial_reason_codes=initial_reason_codes,
+                repair_attempted=repair_attempted,
+                repair_result_class=repair_result_class,
+                repair_reason_codes=repair_reason_codes,
+                provider_call_count=case_provider_calls,
+                usage=case_usage,
+                provider_output_char_count=provider_output_char_count,
+                provider_output_sha256=provider_output_sha256,
+            )
+        )
+
     summary = _summary(items)
-    receipt = with_self_digest(
+    aggregate_diagnostics = _aggregate_diagnostics(case_diagnostics)
+    threshold_error = _threshold_error(policy=policy, items=items, provider_calls=provider_calls)
+    if threshold_error is not None:
+        failure_receipt = _failure_receipt(
+            generated_at=generated_at,
+            workflow=workflow,
+            owner=owner,
+            policy=policy,
+            population=population,
+            evidence_summary=evidence_summary_with_fitness,
+            summary=summary,
+            usage=usage_totals,
+            provider_calls=provider_calls,
+            case_diagnostics=case_diagnostics,
+            aggregate_diagnostics=aggregate_diagnostics,
+            error=threshold_error,
+        )
+        raise _failure(
+            str(threshold_error["code"]),
+            str(threshold_error["message"]),
+            category=str(threshold_error["category"]),
+            retryable=bool(threshold_error["retryable"]),
+            failure_receipt=failure_receipt,
+        )
+
+    receipt = _success_receipt(
+        generated_at=generated_at,
+        workflow=workflow,
+        owner=owner,
+        policy=policy,
+        population=population,
+        evidence_summary=evidence_summary_with_fitness,
+        request_receipts=request_receipts,
+        items=items,
+        summary=summary,
+        usage=usage_totals,
+        provider_calls=provider_calls,
+        case_diagnostics=case_diagnostics,
+        aggregate_diagnostics=aggregate_diagnostics,
+    )
+    serialized = pretty_bytes(receipt).decode("utf-8")
+    if _secret_findings(serialized):
+        raise _failure("M26-PA4-062", "receipt contains secret-like material")
+    return receipt
+
+
+def _success_receipt(
+    *,
+    generated_at: str,
+    workflow: Mapping[str, Any],
+    owner: Mapping[str, Any],
+    policy: Mapping[str, Any],
+    population: Mapping[str, Any],
+    evidence_summary: Mapping[str, Any],
+    request_receipts: list[dict[str, Any]],
+    items: list[dict[str, Any]],
+    summary: Mapping[str, Any],
+    usage: Mapping[str, int],
+    provider_calls: int,
+    case_diagnostics: list[dict[str, Any]],
+    aggregate_diagnostics: Mapping[str, Any],
+) -> dict[str, Any]:
+    return with_self_digest(
         {
             "schema_version": RECEIPT_SCHEMA,
             "stage_id": "M26.PA.4",
+            "logical_attempt": 2,
             "status": LIVE_VERIFIED_STATUS,
             "generated_at": generated_at,
             "owner_decision": {
@@ -834,6 +1039,10 @@ def run_verified_answer_benchmark(
                 ],
                 "max_repair_attempts": policy["budget"]["max_repair_attempts"],
                 "support_threshold": policy["verification"]["support_threshold"],
+                "minimum_ready_candidate_items": policy["verification"][
+                    "minimum_ready_candidate_items"
+                ],
+                "minimum_abstention_items": policy["verification"]["minimum_abstention_items"],
             },
             "population": {
                 "benchmark_population_count": population["benchmark_population_count"],
@@ -850,32 +1059,281 @@ def run_verified_answer_benchmark(
             "evidence_summary": dict(evidence_summary),
             "request_receipts": request_receipts,
             "items": items,
-            "summary": summary,
-            "usage": usage_totals,
-            "authority": {
-                "provider_calls": provider_calls,
-                "credential_names": ["MINIMAX_API_KEY"],
-                "secret_values_persisted": False,
-                "raw_corpus_text_sent_to_provider": True,
-                "raw_corpus_text_persisted": False,
-                "provider_response_text_persisted": False,
-                "vectors_requested": False,
-                "vectors_returned": False,
-                "vectors_persisted": False,
-                "r2_write_operations": 0,
-                "qdrant_write_operations": 0,
-                "source_foundation_release_mutations": 0,
-                "production_pointer_mutations": 0,
-                "public_shadow_canary_traffic_operations": 0,
-                "production_answer_serving": False,
-                "canonical_writes": 0,
+            "case_diagnostics": case_diagnostics,
+            "aggregate_diagnostics": dict(aggregate_diagnostics),
+            "summary": dict(summary),
+            "usage": dict(usage),
+            "authority": _authority(provider_calls),
+        }
+    )
+
+
+def _failure_receipt(
+    *,
+    generated_at: str,
+    workflow: Mapping[str, Any],
+    owner: Mapping[str, Any],
+    policy: Mapping[str, Any],
+    population: Mapping[str, Any],
+    evidence_summary: Mapping[str, Any],
+    summary: Mapping[str, Any],
+    usage: Mapping[str, int],
+    provider_calls: int,
+    case_diagnostics: list[dict[str, Any]],
+    aggregate_diagnostics: Mapping[str, Any],
+    error: Mapping[str, Any],
+) -> dict[str, Any]:
+    receipt = with_self_digest(
+        {
+            "schema_version": FAILURE_RECEIPT_SCHEMA,
+            "stage_id": "M26.PA.4",
+            "logical_attempt": 2,
+            "status": "real_verified_answer_citation_gate_failed_closed",
+            "generated_at": generated_at,
+            "workflow": dict(workflow),
+            "owner_decision": {
+                "owner_decision_self_sha256": owner["self_sha256"],
+                "exact_instruction_text_sha256": sha256_bytes(
+                    owner["exact_instruction_text"].encode("utf-8")
+                ),
             },
+            "policy": {
+                "policy_self_sha256": policy["self_sha256"],
+                "minimum_ready_candidate_items": policy["verification"][
+                    "minimum_ready_candidate_items"
+                ],
+                "minimum_abstention_items": policy["verification"]["minimum_abstention_items"],
+                "support_threshold": policy["verification"]["support_threshold"],
+            },
+            "population": {
+                "benchmark_population_count": population["benchmark_population_count"],
+                "population_sha256": population["population_sha256"],
+                "population_self_sha256": population["self_sha256"],
+            },
+            "provider": {
+                "provider_id": policy["provider"]["provider_id"],
+                "model_id": policy["provider"]["model_id"],
+                "provider_response_text_persisted": False,
+            },
+            "evidence_summary": dict(evidence_summary),
+            "summary": dict(summary),
+            "usage": dict(usage),
+            "case_diagnostics": case_diagnostics,
+            "aggregate_diagnostics": dict(aggregate_diagnostics),
+            "operation_counts": {
+                "provider_calls": provider_calls,
+                "r2_reads": int(evidence_summary.get("r2_read_operations", 0)),
+                "qdrant_count_requests": int(evidence_summary.get("qdrant_count_operations", 0)),
+                "qdrant_scroll_requests": int(evidence_summary.get("qdrant_scroll_operations", 0)),
+            },
+            "authority": _authority(provider_calls),
+            "error": dict(error),
         }
     )
     serialized = pretty_bytes(receipt).decode("utf-8")
     if _secret_findings(serialized):
-        raise _failure("M26-PA4-062", "receipt contains secret-like material")
+        raise _failure("M26-PA4-091", "failure receipt contains secret-like material")
     return receipt
+
+
+def _authority(provider_calls: int) -> dict[str, Any]:
+    return {
+        "provider_calls": provider_calls,
+        "credential_names": ["MINIMAX_API_KEY"],
+        "secret_values_persisted": False,
+        "raw_corpus_text_sent_to_provider": True,
+        "raw_corpus_text_persisted": False,
+        "provider_response_text_persisted": False,
+        "vectors_requested": False,
+        "vectors_returned": False,
+        "vectors_persisted": False,
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "source_foundation_release_mutations": 0,
+        "production_pointer_mutations": 0,
+        "public_shadow_canary_traffic_operations": 0,
+        "production_answer_serving": False,
+        "canonical_writes": 0,
+    }
+
+
+def _threshold_error(
+    *, policy: Mapping[str, Any], items: list[Mapping[str, Any]], provider_calls: int
+) -> dict[str, Any] | None:
+    maximum = len(items) * int(policy["budget"]["max_provider_calls_per_item_including_repair"])
+    summary = _summary(items)
+    if provider_calls > maximum:
+        return _safe_error("M26-PA4-065", "provider call budget exceeded")
+    if summary["citation_precision"] < float(policy["verification"]["support_threshold"]):
+        return _safe_error("M26-PA4-066", "citation support threshold not met")
+    if summary["unsupported_material_claim_count"] != 0:
+        return _safe_error("M26-PA4-067", "unsupported material claims accepted")
+    minimum_ready = int(policy["verification"]["minimum_ready_candidate_items"])
+    if summary["ready_candidate_count"] < minimum_ready:
+        return _safe_error("M26-PA4-068", "too few ready candidates in real run")
+    minimum_abstentions = int(policy["verification"]["minimum_abstention_items"])
+    if summary["abstention_count"] < minimum_abstentions:
+        return _safe_error("M26-PA4-069", "abstention coverage was not exercised")
+    return None
+
+
+def _safe_error(code: str, message: str) -> dict[str, Any]:
+    return {"code": code, "message": message, "category": "integrity", "retryable": False}
+
+
+def _result_class(item: Mapping[str, Any]) -> str:
+    status = str(item.get("terminal_status", "unknown"))
+    if status.startswith("verified_answer_ready_candidate"):
+        return "ready_candidate"
+    if status == "abstention_required":
+        return "abstention"
+    return "unknown_terminal_status"
+
+
+def _item_reason_codes(item: Mapping[str, Any]) -> list[str]:
+    abstention = item.get("abstention")
+    if isinstance(abstention, Mapping):
+        return sorted(str(code) for code in abstention.get("reason_codes", []) if str(code))
+    if str(item.get("terminal_status", "")).startswith("verified_answer_ready_candidate"):
+        return ["EXACT_SPAN_MATCH"]
+    return ["UNKNOWN_TERMINAL_STATUS"]
+
+
+def _case_diagnostic(
+    *,
+    case: Mapping[str, Any],
+    item: Mapping[str, Any],
+    initial_result_class: str,
+    initial_reason_codes: list[str],
+    repair_attempted: bool,
+    repair_result_class: str | None,
+    repair_reason_codes: list[str],
+    provider_call_count: int,
+    usage: Mapping[str, int],
+    provider_output_char_count: int,
+    provider_output_sha256: str,
+) -> dict[str, Any]:
+    locator = _object(case.get("passage_locator"), "case passage locator")
+    support = _object(item.get("support_verification"), "support verification")
+    claim_count = int(support.get("material_claim_count", 0))
+    return {
+        "case_id": str(case["case_id"]),
+        "category": str(case["category"]),
+        "expected_terminal_policy": str(case["expected_terminal_policy"]),
+        "initial_result_class": initial_result_class,
+        "initial_reason_codes": sorted(set(initial_reason_codes)),
+        "repair_attempted": repair_attempted,
+        "repair_result_class": repair_result_class,
+        "repair_reason_codes": sorted(set(repair_reason_codes)),
+        "terminal_status": str(item["terminal_status"]),
+        "provider_call_count": provider_call_count,
+        "usage": {
+            "input_tokens": int(usage["input_tokens"]),
+            "output_tokens": int(usage["output_tokens"]),
+            "total_tokens": int(usage["total_tokens"]),
+        },
+        "provider_output_char_count": provider_output_char_count,
+        "provider_output_sha256": provider_output_sha256,
+        "claim_count": claim_count,
+        "supported_claim_count": int(support.get("supported_claim_count", 0)),
+        "unsupported_claim_count": int(support.get("unsupported_claim_count", 0)),
+        "citation_count": claim_count,
+        "locator": {
+            "locator_id": str(locator["locator_id"]),
+            "locator_digest": sha256_bytes(str(locator["locator_id"]).encode("utf-8")),
+            "source_id": str(locator["source_id"]),
+            "section_id": str(locator["section_id"]),
+            "passage_text_sha256": str(locator["text_sha256"]),
+        },
+        "provider_response_text_persisted": False,
+        "raw_corpus_text_persisted": False,
+        "answer_text_persisted": False,
+        "secret_values_persisted": False,
+        "vectors_persisted": False,
+    }
+
+
+def _aggregate_diagnostics(case_diagnostics: list[Mapping[str, Any]]) -> dict[str, Any]:
+    reason_counts: Counter[str] = Counter()
+    status_counts: Counter[str] = Counter()
+    result_class_counts: Counter[str] = Counter()
+    for diagnostic in case_diagnostics:
+        status_counts[str(diagnostic["terminal_status"])] += 1
+        result_class_counts[str(diagnostic["initial_result_class"])] += 1
+        repair_class = diagnostic.get("repair_result_class")
+        if repair_class is not None:
+            result_class_counts[str(repair_class)] += 1
+        for field in ("initial_reason_codes", "repair_reason_codes"):
+            for code in diagnostic.get(field, []):
+                reason_counts[str(code)] += 1
+    return {
+        "reason_code_counts": dict(sorted(reason_counts.items())),
+        "terminal_status_counts": dict(sorted(status_counts.items())),
+        "result_class_counts": dict(sorted(result_class_counts.items())),
+    }
+
+
+def _population_fitness_diagnostics(
+    population: Mapping[str, Any], passages_by_case_id: Mapping[str, str]
+) -> list[dict[str, Any]]:
+    diagnostics: list[dict[str, Any]] = []
+    for case in _list(population.get("cases"), "population cases"):
+        case_obj = _object(case, "population case")
+        case_id = str(case_obj["case_id"])
+        locator = _object(case_obj.get("passage_locator"), "case passage locator")
+        passage_text = str(passages_by_case_id.get(case_id, ""))
+        selected_span = _plausible_span(
+            passage_text=passage_text,
+            material_claim_type=str(case_obj["material_claim_type"]),
+        )
+        diagnostics.append(
+            {
+                "case_id": case_id,
+                "material_claim_type": str(case_obj["material_claim_type"]),
+                "expected_terminal_policy": str(case_obj["expected_terminal_policy"]),
+                "passage_char_count": len(passage_text),
+                "passage_sha256": sha256_bytes(passage_text.encode("utf-8")),
+                "selected_span_exists": selected_span is not None,
+                "selected_span_sha256": sha256_bytes(
+                    (selected_span or "").encode("utf-8")
+                ),
+                "locator_id": str(locator["locator_id"]),
+                "locator_digest": sha256_bytes(str(locator["locator_id"]).encode("utf-8")),
+                "raw_corpus_text_persisted": False,
+            }
+        )
+    return diagnostics
+
+
+def _plausible_span(*, passage_text: str, material_claim_type: str) -> str | None:
+    patterns = {
+        "date": (
+            r"\b(?:\d{4}-\d{2}-\d{2}|\d{4}|Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|"
+            r"Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|"
+            r"Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b"
+        ),
+        "number": r"\b\d+(?:[.,]\d+)*(?:%|ms|s|x|k|M|B)?\b",
+        "relationship": (
+            r"\b(?:is|are|was|were|has|have|uses|supports|maps|belongs|depends|"
+            r"connects|links|from|to|with|between|of|for)\b"
+        ),
+        "status": (
+            r"\b(?:accepted|blocked|closed|enabled|disabled|implemented|merged|pending|"
+            r"required|supports|must|is|are|not)\b"
+        ),
+        "causal_or_temporal": (
+            r"\b(?:after|before|because|during|when|while|until|then|requires|required|"
+            r"must|if|once|current|today|\d{4})\b"
+        ),
+        "entity": r"(?:`[^`]{2,80}`|\b[A-Z][A-Za-z0-9._/-]{2,}\b)",
+    }
+    pattern = patterns.get(material_claim_type, patterns["entity"])
+    match = re.search(pattern, passage_text)
+    if match is None:
+        return None
+    start = max(0, match.start() - 80)
+    end = min(len(passage_text), match.end() + 80)
+    return passage_text[start:end]
 
 
 def _validate_payload_budget(payload: Mapping[str, Any], policy: Mapping[str, Any]) -> None:
