@@ -54,8 +54,9 @@ jobs:
           set -euo pipefail
           changed="$(git diff --name-only origin/main...HEAD)"
           protected="$(printf '%s\n' "$changed" | grep -E '^(src/|workers/|channels/|foundation/|release/|r2/|qdrant/|production/|pilot/m24/|pilot/m25/)' || true)"
-          allowed_pa2_runtime='src/knowledge_engine/m26_real_corpus_binding.py'
-          unexpected="$(printf '%s\n' "$protected" | grep -vFx "$allowed_pa2_runtime" || true)"
+          unexpected="$(printf '%s\n' "$protected" | grep -vFx \
+            -e 'src/knowledge_engine/m26_real_corpus_binding.py' \
+            -e 'src/knowledge_engine/m26_verified_answer_citation_gate.py' || true)"
           test -z "$unexpected"
           python - <<'PY'
           import pathlib

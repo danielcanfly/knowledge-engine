@@ -3,6 +3,7 @@ name: M26.PA.4 Real Verified Answer and Citation Gate
 on:
   pull_request:
     paths:
+      - '.github/workflows/m26-1-architecture-authority.yml'
       - '.github/workflows/m26-pa-4-verified-answer-citation-gate.yml'
       - 'docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md'
       - 'pilot/m26/m26-pa-4-benchmark-population.json'
@@ -19,6 +20,7 @@ on:
     branches:
       - main
     paths:
+      - '.github/workflows/m26-1-architecture-authority.yml'
       - '.github/workflows/m26-pa-4-verified-answer-citation-gate.yml'
       - 'docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md'
       - 'pilot/m26/m26-pa-4-benchmark-population.json'
@@ -92,6 +94,7 @@ jobs:
           git fetch origin main --depth=1
           git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'FILES'
+          .github/workflows/m26-1-architecture-authority.yml
           .github/workflows/m26-pa-4-verified-answer-citation-gate.yml
           docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md
           pilot/m26/m26-pa-4-benchmark-population.json
