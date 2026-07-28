@@ -1,0 +1,124 @@
+{
+  "authority_boundary": {
+    "answer_generation": false,
+    "live_provider_calls_after_reconciliation": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "public_shadow_canary_traffic": false,
+    "qdrant_writes": false,
+    "r2_writes": false,
+    "raw_text_persisted": false,
+    "release_mutation": false,
+    "secret_persistence": false,
+    "source_foundation_mutation": false,
+    "vectors_requested_or_returned": false,
+    "verified_final_answers": false,
+    "worker_pages_dns_access_mutation": false
+  },
+  "effective_only_on_reconciliation_merge": true,
+  "issue": {
+    "number": 1203,
+    "repository": "danielcanfly/knowledge-engine",
+    "state_before_reconciliation_pr": "open",
+    "title": "M26.PA.3 independent live-provider reconciliation"
+  },
+  "live_authorization": {
+    "authorization_head_sha": "32cf010cda1c588a757b554ddab103674c5a492b",
+    "authorization_merge_sha": "3bac0c44e62341322901e8fa7d2503a68ca04b6e",
+    "authorization_pull_request": 1201,
+    "authorization_self_sha256": "81053fe45f14eb76bd908770f79a9d01fe6750614d05723d71ed1f0358edd6e6",
+    "credential_name": "MINIMAX_API_KEY",
+    "expected_head_merge": true,
+    "logical_attempt": 4,
+    "model_id": "MiniMax-M3",
+    "provider_id": "minimax",
+    "source_issue_number": 1197,
+    "trigger_marker": "[m26.pa3-provider-authorized-attempt-4]",
+    "workflow_name": "M26.PA.3 Live Provider Execution Gate"
+  },
+  "live_evidence": {
+    "artifact_archive_digest": "sha256:09c685bdd1a4ad59d98b1f95eaa6d1c137a57ce873ccc9a184e130056051533d",
+    "artifact_entry_names": [
+      "m26-pa-3-live-provider-receipt.json",
+      "m26-pa-3-live-provider-receipt.sha256",
+      "status.txt"
+    ],
+    "artifact_expires_at": "2026-08-26T18:47:54Z",
+    "artifact_id": 8664397892,
+    "artifact_name": "m26-pa-3-live-provider-evidence-attempt-4",
+    "artifact_size_in_bytes": 1514,
+    "created_at": "2026-07-27T18:47:55Z",
+    "live_provider_job_conclusion": "success",
+    "live_provider_job_id": 90074887677,
+    "receipt_file_sha256": "9fc30e5d4cb79aadfa7cd3ab03083197931e2d7cc5481d6104b86a40d2ed7352",
+    "receipt_schema_version": "knowledge-engine-m26-pa-3-live-provider-receipt/v1",
+    "receipt_self_sha256": "eca49a290d587449b9c3d0dc369ac7893890bc83767a983abd097bce7adecec2",
+    "receipt_sha256_file_value": "9fc30e5d4cb79aadfa7cd3ab03083197931e2d7cc5481d6104b86a40d2ed7352",
+    "receipt_status": "live_provider_execution_verified",
+    "run_attempt": 1,
+    "run_event": "push",
+    "run_id": 30295355209,
+    "run_number": 9,
+    "status_file_value": "success",
+    "workflow_head_sha": "3bac0c44e62341322901e8fa7d2503a68ca04b6e",
+    "workflow_name": "M26.PA.3 Live Provider Execution Gate"
+  },
+  "next_stage": {
+    "authorized": true,
+    "daniel_pa4_gate_required": true,
+    "name": "Real Verified Answer and Citation Gate",
+    "predecessor_status_required": "m26_pa_3_live_provider_execution_accepted",
+    "production_answer_serving_permitted": false,
+    "public_shadow_canary_traffic_permitted": false,
+    "stage_id": "M26.PA.4"
+  },
+  "predecessor": {
+    "pa2_acceptance_self_sha256": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67",
+    "pa2_issue_number": 1186,
+    "pa2_reconciliation_merge_sha": "8ed2da47d04f6410e55d5855d78f734341aecf2e",
+    "pa2_reconciliation_pull_request": 1196,
+    "pa2_status": "m26_pa_2_real_corpus_retrieval_binding_accepted"
+  },
+  "receipt_authority": {
+    "credential_names": [
+      "MINIMAX_API_KEY"
+    ],
+    "provider_calls": 1,
+    "public_shadow_canary_traffic_operations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0,
+    "raw_text_persisted": false,
+    "secret_values_persisted": false,
+    "source_foundation_release_mutations": 0,
+    "vectors_requested": false,
+    "vectors_returned": false
+  },
+  "reconciliation": {
+    "artifact_archive_digest_verified": true,
+    "authorization_self_digest_verified": true,
+    "dedicated_issue_number": 1203,
+    "no_new_provider_call": true,
+    "no_new_runtime_or_pa4_files": true,
+    "receipt_file_digest_verified": true,
+    "receipt_self_digest_verified": true,
+    "remote_run_and_artifact_verified": true
+  },
+  "request_privacy": {
+    "max_output_tokens": 256,
+    "payload_sha256": "4e6fecd7f8cb8ad92c8cd925c85e68d7c218eb51ac2a1fe6390a285a5c6eb949",
+    "prompt_bytes": 1511,
+    "raw_corpus_text_sent": false,
+    "stream": false,
+    "user_query_sent": false,
+    "vectors_sent": false
+  },
+  "schema_version": "knowledge-engine-m26-pa-3-acceptance/v1",
+  "self_sha256": "a895104a04724fe64a85380d8a83f7382d332fde707eb06e335cd1c2c8067e83",
+  "stage_id": "M26.PA.3",
+  "status": "m26_pa_3_live_provider_execution_accepted",
+  "usage": {
+    "input_tokens": 652,
+    "output_tokens": 104,
+    "total_tokens": 756
+  }
+}

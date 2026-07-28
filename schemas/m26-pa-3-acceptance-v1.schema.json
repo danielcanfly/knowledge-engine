@@ -1,0 +1,310 @@
+{
+  "$id": "knowledge-engine/m26-pa-3-acceptance-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_generation": {"const": false},
+        "live_provider_calls_after_reconciliation": {"const": false},
+        "production_answer_serving": {"const": false},
+        "production_pointer_mutation": {"const": false},
+        "public_shadow_canary_traffic": {"const": false},
+        "qdrant_writes": {"const": false},
+        "r2_writes": {"const": false},
+        "raw_text_persisted": {"const": false},
+        "release_mutation": {"const": false},
+        "secret_persistence": {"const": false},
+        "source_foundation_mutation": {"const": false},
+        "vectors_requested_or_returned": {"const": false},
+        "verified_final_answers": {"const": false},
+        "worker_pages_dns_access_mutation": {"const": false}
+      },
+      "required": [
+        "answer_generation",
+        "live_provider_calls_after_reconciliation",
+        "production_answer_serving",
+        "production_pointer_mutation",
+        "public_shadow_canary_traffic",
+        "qdrant_writes",
+        "r2_writes",
+        "raw_text_persisted",
+        "release_mutation",
+        "secret_persistence",
+        "source_foundation_mutation",
+        "vectors_requested_or_returned",
+        "verified_final_answers",
+        "worker_pages_dns_access_mutation"
+      ],
+      "type": "object"
+    },
+    "effective_only_on_reconciliation_merge": {"const": true},
+    "issue": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {"const": 1203},
+        "repository": {"const": "danielcanfly/knowledge-engine"},
+        "state_before_reconciliation_pr": {"const": "open"},
+        "title": {"const": "M26.PA.3 independent live-provider reconciliation"}
+      },
+      "required": ["number", "repository", "state_before_reconciliation_pr", "title"],
+      "type": "object"
+    },
+    "live_authorization": {
+      "additionalProperties": false,
+      "properties": {
+        "authorization_head_sha": {"const": "32cf010cda1c588a757b554ddab103674c5a492b"},
+        "authorization_merge_sha": {"const": "3bac0c44e62341322901e8fa7d2503a68ca04b6e"},
+        "authorization_pull_request": {"const": 1201},
+        "authorization_self_sha256": {
+          "const": "81053fe45f14eb76bd908770f79a9d01fe6750614d05723d71ed1f0358edd6e6"
+        },
+        "credential_name": {"const": "MINIMAX_API_KEY"},
+        "expected_head_merge": {"const": true},
+        "logical_attempt": {"const": 4},
+        "model_id": {"const": "MiniMax-M3"},
+        "provider_id": {"const": "minimax"},
+        "source_issue_number": {"const": 1197},
+        "trigger_marker": {"const": "[m26.pa3-provider-authorized-attempt-4]"},
+        "workflow_name": {"const": "M26.PA.3 Live Provider Execution Gate"}
+      },
+      "required": [
+        "authorization_head_sha",
+        "authorization_merge_sha",
+        "authorization_pull_request",
+        "authorization_self_sha256",
+        "credential_name",
+        "expected_head_merge",
+        "logical_attempt",
+        "model_id",
+        "provider_id",
+        "source_issue_number",
+        "trigger_marker",
+        "workflow_name"
+      ],
+      "type": "object"
+    },
+    "live_evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_archive_digest": {
+          "const": "sha256:09c685bdd1a4ad59d98b1f95eaa6d1c137a57ce873ccc9a184e130056051533d"
+        },
+        "artifact_entry_names": {
+          "items": {"type": "string"},
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "artifact_expires_at": {"const": "2026-08-26T18:47:54Z"},
+        "artifact_id": {"const": 8664397892},
+        "artifact_name": {"const": "m26-pa-3-live-provider-evidence-attempt-4"},
+        "artifact_size_in_bytes": {"const": 1514},
+        "created_at": {"const": "2026-07-27T18:47:55Z"},
+        "live_provider_job_conclusion": {"const": "success"},
+        "live_provider_job_id": {"const": 90074887677},
+        "receipt_file_sha256": {
+          "const": "9fc30e5d4cb79aadfa7cd3ab03083197931e2d7cc5481d6104b86a40d2ed7352"
+        },
+        "receipt_schema_version": {
+          "const": "knowledge-engine-m26-pa-3-live-provider-receipt/v1"
+        },
+        "receipt_self_sha256": {
+          "const": "eca49a290d587449b9c3d0dc369ac7893890bc83767a983abd097bce7adecec2"
+        },
+        "receipt_sha256_file_value": {
+          "const": "9fc30e5d4cb79aadfa7cd3ab03083197931e2d7cc5481d6104b86a40d2ed7352"
+        },
+        "receipt_status": {"const": "live_provider_execution_verified"},
+        "run_attempt": {"const": 1},
+        "run_event": {"const": "push"},
+        "run_id": {"const": 30295355209},
+        "run_number": {"const": 9},
+        "status_file_value": {"const": "success"},
+        "workflow_head_sha": {"const": "3bac0c44e62341322901e8fa7d2503a68ca04b6e"},
+        "workflow_name": {"const": "M26.PA.3 Live Provider Execution Gate"}
+      },
+      "required": [
+        "artifact_archive_digest",
+        "artifact_entry_names",
+        "artifact_expires_at",
+        "artifact_id",
+        "artifact_name",
+        "artifact_size_in_bytes",
+        "created_at",
+        "live_provider_job_conclusion",
+        "live_provider_job_id",
+        "receipt_file_sha256",
+        "receipt_schema_version",
+        "receipt_self_sha256",
+        "receipt_sha256_file_value",
+        "receipt_status",
+        "run_attempt",
+        "run_event",
+        "run_id",
+        "run_number",
+        "status_file_value",
+        "workflow_head_sha",
+        "workflow_name"
+      ],
+      "type": "object"
+    },
+    "next_stage": {
+      "additionalProperties": false,
+      "properties": {
+        "authorized": {"const": true},
+        "daniel_pa4_gate_required": {"const": true},
+        "name": {"const": "Real Verified Answer and Citation Gate"},
+        "predecessor_status_required": {
+          "const": "m26_pa_3_live_provider_execution_accepted"
+        },
+        "production_answer_serving_permitted": {"const": false},
+        "public_shadow_canary_traffic_permitted": {"const": false},
+        "stage_id": {"const": "M26.PA.4"}
+      },
+      "required": [
+        "authorized",
+        "daniel_pa4_gate_required",
+        "name",
+        "predecessor_status_required",
+        "production_answer_serving_permitted",
+        "public_shadow_canary_traffic_permitted",
+        "stage_id"
+      ],
+      "type": "object"
+    },
+    "predecessor": {
+      "additionalProperties": false,
+      "properties": {
+        "pa2_acceptance_self_sha256": {
+          "const": "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67"
+        },
+        "pa2_issue_number": {"const": 1186},
+        "pa2_reconciliation_merge_sha": {
+          "const": "8ed2da47d04f6410e55d5855d78f734341aecf2e"
+        },
+        "pa2_reconciliation_pull_request": {"const": 1196},
+        "pa2_status": {"const": "m26_pa_2_real_corpus_retrieval_binding_accepted"}
+      },
+      "required": [
+        "pa2_acceptance_self_sha256",
+        "pa2_issue_number",
+        "pa2_reconciliation_merge_sha",
+        "pa2_reconciliation_pull_request",
+        "pa2_status"
+      ],
+      "type": "object"
+    },
+    "receipt_authority": {
+      "additionalProperties": false,
+      "properties": {
+        "credential_names": {"const": ["MINIMAX_API_KEY"]},
+        "provider_calls": {"const": 1},
+        "public_shadow_canary_traffic_operations": {"const": 0},
+        "qdrant_write_operations": {"const": 0},
+        "r2_write_operations": {"const": 0},
+        "raw_text_persisted": {"const": false},
+        "secret_values_persisted": {"const": false},
+        "source_foundation_release_mutations": {"const": 0},
+        "vectors_requested": {"const": false},
+        "vectors_returned": {"const": false}
+      },
+      "required": [
+        "credential_names",
+        "provider_calls",
+        "public_shadow_canary_traffic_operations",
+        "qdrant_write_operations",
+        "r2_write_operations",
+        "raw_text_persisted",
+        "secret_values_persisted",
+        "source_foundation_release_mutations",
+        "vectors_requested",
+        "vectors_returned"
+      ],
+      "type": "object"
+    },
+    "reconciliation": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_archive_digest_verified": {"const": true},
+        "authorization_self_digest_verified": {"const": true},
+        "dedicated_issue_number": {"const": 1203},
+        "no_new_provider_call": {"const": true},
+        "no_new_runtime_or_pa4_files": {"const": true},
+        "receipt_file_digest_verified": {"const": true},
+        "receipt_self_digest_verified": {"const": true},
+        "remote_run_and_artifact_verified": {"const": true}
+      },
+      "required": [
+        "artifact_archive_digest_verified",
+        "authorization_self_digest_verified",
+        "dedicated_issue_number",
+        "no_new_provider_call",
+        "no_new_runtime_or_pa4_files",
+        "receipt_file_digest_verified",
+        "receipt_self_digest_verified",
+        "remote_run_and_artifact_verified"
+      ],
+      "type": "object"
+    },
+    "request_privacy": {
+      "additionalProperties": false,
+      "properties": {
+        "max_output_tokens": {"const": 256},
+        "payload_sha256": {
+          "const": "4e6fecd7f8cb8ad92c8cd925c85e68d7c218eb51ac2a1fe6390a285a5c6eb949"
+        },
+        "prompt_bytes": {"const": 1511},
+        "raw_corpus_text_sent": {"const": false},
+        "stream": {"const": false},
+        "user_query_sent": {"const": false},
+        "vectors_sent": {"const": false}
+      },
+      "required": [
+        "max_output_tokens",
+        "payload_sha256",
+        "prompt_bytes",
+        "raw_corpus_text_sent",
+        "stream",
+        "user_query_sent",
+        "vectors_sent"
+      ],
+      "type": "object"
+    },
+    "schema_version": {"const": "knowledge-engine-m26-pa-3-acceptance/v1"},
+    "self_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "stage_id": {"const": "M26.PA.3"},
+    "status": {"const": "m26_pa_3_live_provider_execution_accepted"},
+    "usage": {
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": {"const": 652},
+        "output_tokens": {"const": 104},
+        "total_tokens": {"const": 756}
+      },
+      "required": ["input_tokens", "output_tokens", "total_tokens"],
+      "type": "object"
+    }
+  },
+  "required": [
+    "authority_boundary",
+    "effective_only_on_reconciliation_merge",
+    "issue",
+    "live_authorization",
+    "live_evidence",
+    "next_stage",
+    "predecessor",
+    "receipt_authority",
+    "reconciliation",
+    "request_privacy",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "usage"
+  ],
+  "title": "M26.PA.3 acceptance",
+  "type": "object"
+}
