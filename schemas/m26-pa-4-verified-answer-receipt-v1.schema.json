@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority": {
+      "additionalProperties": true,
+      "properties": {
+        "canonical_writes": {"const": 0},
+        "production_answer_serving": {"const": false},
+        "production_pointer_mutations": {"const": 0},
+        "provider_calls": {"type": "integer", "minimum": 1, "maximum": 24},
+        "provider_response_text_persisted": {"const": false},
+        "public_shadow_canary_traffic_operations": {"const": 0},
+        "qdrant_write_operations": {"const": 0},
+        "r2_write_operations": {"const": 0},
+        "raw_corpus_text_persisted": {"const": false},
+        "secret_values_persisted": {"const": false},
+        "vectors_persisted": {"const": false},
+        "vectors_requested": {"const": false},
+        "vectors_returned": {"const": false}
+      },
+      "required": [
+        "canonical_writes",
+        "production_answer_serving",
+        "production_pointer_mutations",
+        "provider_calls",
+        "provider_response_text_persisted",
+        "public_shadow_canary_traffic_operations",
+        "qdrant_write_operations",
+        "r2_write_operations",
+        "raw_corpus_text_persisted",
+        "secret_values_persisted",
+        "vectors_persisted",
+        "vectors_requested",
+        "vectors_returned"
+      ],
+      "type": "object"
+    },
+    "evidence_summary": {"additionalProperties": true, "type": "object"},
+    "generated_at": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T"},
+    "items": {
+      "items": {"additionalProperties": true, "type": "object"},
+      "maxItems": 12,
+      "minItems": 12,
+      "type": "array"
+    },
+    "owner_decision": {"additionalProperties": true, "type": "object"},
+    "policy": {"additionalProperties": true, "type": "object"},
+    "population": {
+      "additionalProperties": false,
+      "properties": {
+        "benchmark_population_count": {"const": 12},
+        "population_self_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "population_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "required": [
+        "benchmark_population_count",
+        "population_self_sha256",
+        "population_sha256"
+      ],
+      "type": "object"
+    },
+    "provider": {
+      "additionalProperties": true,
+      "properties": {
+        "model_id": {"const": "MiniMax-M3"},
+        "provider_id": {"const": "minimax"},
+        "provider_response_text_persisted": {"const": false}
+      },
+      "required": ["model_id", "provider_id", "provider_response_text_persisted"],
+      "type": "object"
+    },
+    "request_receipts": {
+      "items": {"additionalProperties": true, "type": "object"},
+      "maxItems": 24,
+      "minItems": 1,
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-4-verified-answer-receipt/v1"
+    },
+    "self_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "stage_id": {"const": "M26.PA.4"},
+    "status": {"const": "real_verified_answer_citation_gate_verified"},
+    "summary": {
+      "additionalProperties": true,
+      "properties": {
+        "all_non_abstained_material_claims_supported": {"const": true},
+        "benchmark_population_count": {"const": 12},
+        "citation_precision": {"const": 1.0},
+        "unsupported_material_claim_count": {"const": 0}
+      },
+      "required": [
+        "all_non_abstained_material_claims_supported",
+        "benchmark_population_count",
+        "citation_precision",
+        "unsupported_material_claim_count"
+      ],
+      "type": "object"
+    },
+    "usage": {"additionalProperties": true, "type": "object"},
+    "workflow": {"additionalProperties": true, "type": "object"}
+  },
+  "required": [
+    "authority",
+    "evidence_summary",
+    "generated_at",
+    "items",
+    "owner_decision",
+    "policy",
+    "population",
+    "provider",
+    "request_receipts",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "summary",
+    "usage",
+    "workflow"
+  ],
+  "title": "M26.PA.4 verified answer receipt",
+  "type": "object"
+}

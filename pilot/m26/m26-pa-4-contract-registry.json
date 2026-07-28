@@ -1,0 +1,12 @@
+{
+  "accepted": false,
+  "artifacts": {
+    "benchmark_population_sha256": "74dca959d53039816a1dfc806001688d2b24cf87439faad956936cc1d03e9a50",
+    "owner_decision_sha256": "e66f35afd970d568eccb16b1b9df92a4437cf9a2ae6309e54d7708a85a843408",
+    "verified_answer_policy_sha256": "81428923cf83c8f668ee279a7e013b5617b7c508b28a2451da9a79645ab467d3"
+  },
+  "predecessor_status": "m26_pa_3_live_provider_execution_accepted",
+  "schema_version": "knowledge-engine-m26-pa-4-contract-registry/v1",
+  "self_sha256": "a8776e676e45b61757d8261aafbf4bde0e66e4f4c2f9bf02d584a8a43b9a649b",
+  "stage_id": "M26.PA.4"
+}

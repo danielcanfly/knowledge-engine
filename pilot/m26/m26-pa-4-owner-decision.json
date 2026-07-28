@@ -1,0 +1,32 @@
+{
+  "decision_id": "m26-pa4-real-verified-answer-gate-approval-2026-07-28",
+  "denied_authority": {
+    "canonical_writes": false,
+    "pointer_mutation": false,
+    "production_serving": false,
+    "public_traffic": false,
+    "raw_corpus_persistence": false,
+    "release_mutation": false,
+    "secret_values": false,
+    "vector_persistence": false
+  },
+  "exact_instruction_text": "I approve M26.PA.4 real verified-answer gate with:\nprovider/model: MiniMax / MiniMax-M3\ncredential name/environment: MINIMAX_API_KEY / m23-r3-diagnostic\nfrozen benchmark population count/digest: 12 / to be frozen before run and recorded as SHA-256\nmaximum provider calls including repair: 2 per benchmark item\nmaximum spend: USD 1.00\nmaterial-claim definition: any factual answer assertion that depends on corpus evidence, including entity, date, number, relationship, status, or causal/temporal claim\nminimum citation precision/support threshold: 100% of non-abstained material claims must bind to exact source/section/passage locators and verify as supported; unsupported material claims are not allowed\nconflict and temporal policy: unresolved conflict, stale temporal evidence, missing locator, or contradictory source evidence must trigger bounded repair or abstention\nmaximum repair attempts: 1\nabstention policy: abstain when support is insufficient, locator binding fails, conflict remains unresolved, temporal evidence is stale, privacy/security risk appears, or repair budget is exhausted\npayload/privacy boundary: no secret values, no raw corpus persistence, no vector persistence, no production serving, no public traffic, no pointer mutation, no canonical writes\nThis does not authorize production serving, public traffic, pointer mutation or canonical writes.",
+  "owner": "Daniel Huang",
+  "parsed_parameters": {
+    "benchmark_population_count": 12,
+    "citation_precision_support_threshold": 1.0,
+    "credential_name": "MINIMAX_API_KEY",
+    "environment": "m23-r3-diagnostic",
+    "max_provider_calls_per_item_including_repair": 2,
+    "max_repair_attempts": 1,
+    "max_spend_usd": 1.0,
+    "model_id": "MiniMax-M3",
+    "population_digest_state": "to_be_frozen_before_run",
+    "provider_id": "minimax",
+    "provider_label": "MiniMax"
+  },
+  "recorded_at": "2026-07-28T14:59:20Z",
+  "schema_version": "knowledge-engine-m26-pa-4-owner-decision/v1",
+  "self_sha256": "16321b161eb35cb0df1515b0d0bfb9635fabfb118cdb4bf7cf10bf84ab232894",
+  "stage_id": "M26.PA.4"
+}

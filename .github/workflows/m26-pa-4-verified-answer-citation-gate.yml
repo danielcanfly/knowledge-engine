@@ -1,0 +1,360 @@
+name: M26.PA.4 Real Verified Answer and Citation Gate
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m26-pa-4-verified-answer-citation-gate.yml'
+      - 'docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md'
+      - 'pilot/m26/m26-pa-4-benchmark-population.json'
+      - 'pilot/m26/m26-pa-4-contract-registry.json'
+      - 'pilot/m26/m26-pa-4-owner-decision.json'
+      - 'pilot/m26/m26-pa-4-verified-answer-policy.json'
+      - 'schemas/m26-pa-4-benchmark-population-v1.schema.json'
+      - 'schemas/m26-pa-4-owner-decision-v1.schema.json'
+      - 'schemas/m26-pa-4-verified-answer-policy-v1.schema.json'
+      - 'schemas/m26-pa-4-verified-answer-receipt-v1.schema.json'
+      - 'src/knowledge_engine/m26_verified_answer_citation_gate.py'
+      - 'tests/test_m26_pa_4_verified_answer_citation_gate.py'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/m26-pa-4-verified-answer-citation-gate.yml'
+      - 'docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md'
+      - 'pilot/m26/m26-pa-4-benchmark-population.json'
+      - 'pilot/m26/m26-pa-4-contract-registry.json'
+      - 'pilot/m26/m26-pa-4-owner-decision.json'
+      - 'pilot/m26/m26-pa-4-verified-answer-policy.json'
+      - 'schemas/m26-pa-4-benchmark-population-v1.schema.json'
+      - 'schemas/m26-pa-4-owner-decision-v1.schema.json'
+      - 'schemas/m26-pa-4-verified-answer-policy-v1.schema.json'
+      - 'schemas/m26-pa-4-verified-answer-receipt-v1.schema.json'
+      - 'src/knowledge_engine/m26_verified_answer_citation_gate.py'
+      - 'tests/test_m26_pa_4_verified_answer_citation_gate.py'
+
+permissions:
+  contents: read
+
+jobs:
+  static-authorization:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify exact head and PA.3 acceptance ancestry
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git merge-base --is-ancestor ae130666813ec30f082020c89c02a75384d5068e HEAD
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+
+      - name: Validate PA.4 implementation without live credentials
+        run: |
+          set -euo pipefail
+          python -m ruff check \
+            src/knowledge_engine/m26_verified_answer_citation_gate.py \
+            tests/test_m26_pa_4_verified_answer_citation_gate.py
+          python -m pytest -q \
+            tests/test_m26_pa_4_verified_answer_citation_gate.py \
+            tests/test_m26_pa_3_reconciliation.py \
+            tests/test_m26_pa_3_live_provider_gate.py \
+            tests/test_m26_pa_2_reconciliation.py \
+            tests/test_m26_pa_2_live_authorization.py \
+            tests/test_m26_pa_2_contracts.py \
+            tests/test_m26_pa_2_real_corpus_binding.py
+          python -m compileall -q \
+            src/knowledge_engine/m26_verified_answer_citation_gate.py \
+            tests/test_m26_pa_4_verified_answer_citation_gate.py
+          test -z "${MINIMAX_API_KEY:-}"
+          test -z "${R2_ENDPOINT_URL:-}"
+          test -z "${R2_BUCKET:-}"
+          test -z "${R2_ACCESS_KEY_ID_READ:-}"
+          test -z "${R2_SECRET_ACCESS_KEY_READ:-}"
+          test -z "${QDRANT_URL:-}"
+          test -z "${QDRANT_API_KEY_READ:-}"
+
+      - name: Enforce exact PA.4 implementation surface
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
+          cat > /tmp/expected.txt <<'FILES'
+          .github/workflows/m26-pa-4-verified-answer-citation-gate.yml
+          docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md
+          pilot/m26/m26-pa-4-benchmark-population.json
+          pilot/m26/m26-pa-4-contract-registry.json
+          pilot/m26/m26-pa-4-owner-decision.json
+          pilot/m26/m26-pa-4-verified-answer-policy.json
+          schemas/m26-pa-4-benchmark-population-v1.schema.json
+          schemas/m26-pa-4-owner-decision-v1.schema.json
+          schemas/m26-pa-4-verified-answer-policy-v1.schema.json
+          schemas/m26-pa-4-verified-answer-receipt-v1.schema.json
+          src/knowledge_engine/m26_verified_answer_citation_gate.py
+          tests/test_m26_pa_4_verified_answer_citation_gate.py
+          FILES
+          cmp /tmp/expected.txt /tmp/changed.txt
+          ! grep -E \
+            '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)' \
+            /tmp/changed.txt
+          ! xargs -r grep -En \
+            '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{12,})' \
+            </tmp/changed.txt
+
+  live-verified-answer:
+    if: >-
+      github.event_name == 'push' &&
+      contains(github.event.head_commit.message, '[m26.pa4-real-verified-answer-authorized-attempt-1]')
+    runs-on: ubuntu-24.04
+    environment: m23-r3-diagnostic
+    env:
+      EVIDENCE_DIR: /tmp/m26-pa-4-live-evidence
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      QDRANT_API_KEY_READ: ${{ secrets.QDRANT_API_KEY_READ }}
+      QDRANT_URL: ${{ secrets.QDRANT_URL }}
+      R2_ACCESS_KEY_ID_READ: ${{ secrets.R2_ACCESS_KEY_ID_READ }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+      R2_REGION: auto
+      R2_SECRET_ACCESS_KEY_READ: ${{ secrets.R2_SECRET_ACCESS_KEY_READ }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify exact live attempt and credentials
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor ae130666813ec30f082020c89c02a75384d5068e HEAD
+          test -n "$MINIMAX_API_KEY"
+          test -n "$R2_ENDPOINT_URL"
+          test -n "$R2_BUCKET"
+          test -n "$R2_ACCESS_KEY_ID_READ"
+          test -n "$R2_SECRET_ACCESS_KEY_READ"
+          test -n "$QDRANT_URL"
+          test -n "$QDRANT_API_KEY_READ"
+          mkdir -p "$EVIDENCE_DIR"
+
+      - name: Install runtime dependencies and validate contracts
+        run: |
+          python -m pip install --disable-pip-version-check -e '.[dev]'
+          python -m pytest -q tests/test_m26_pa_4_verified_answer_citation_gate.py
+
+      - name: Execute bounded MiniMax M3 verified-answer gate
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+          from typing import Any, Mapping
+
+          from jsonschema import Draft202012Validator
+
+          from knowledge_engine.m26_real_corpus_binding import (
+              Boto3ReadOnlyObjectStore,
+              HttpxReadOnlyQdrantClient,
+              receipt_bytes,
+          )
+          from knowledge_engine.m26_verified_answer_citation_gate import (
+              MiniMaxM3Client,
+              VerifiedAnswerGateError,
+              build_live_evidence_bundle,
+              load_json,
+              run_verified_answer_benchmark,
+          )
+
+          root = Path(".")
+          evidence_dir = Path(os.environ["EVIDENCE_DIR"])
+
+          class CountingStore:
+              def __init__(self, delegate: Any) -> None:
+                  self._delegate = delegate
+                  self.reads = 0
+
+              def get(self, key: str) -> bytes:
+                  if not (
+                      key == "channels/production.json"
+                      or key.startswith("releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/")
+                  ):
+                      raise RuntimeError("R2 key is outside the PA.4 release boundary")
+                  self.reads += 1
+                  return self._delegate.get(key)
+
+          class CountingQdrant:
+              def __init__(self, delegate: Any) -> None:
+                  self._delegate = delegate
+                  self.count_requests = 0
+                  self.scroll_requests = 0
+
+              def count(
+                  self,
+                  *,
+                  collection: str,
+                  query_filter: Mapping[str, Any],
+                  timeout_seconds: float,
+              ) -> Any:
+                  self.count_requests += 1
+                  return self._delegate.count(
+                      collection=collection,
+                      query_filter=query_filter,
+                      timeout_seconds=timeout_seconds,
+                  )
+
+              def scroll(
+                  self,
+                  *,
+                  collection: str,
+                  request: Mapping[str, Any],
+                  timeout_seconds: float,
+              ) -> Any:
+                  self.scroll_requests += 1
+                  return self._delegate.scroll(
+                      collection=collection,
+                      request=request,
+                      timeout_seconds=timeout_seconds,
+                  )
+
+          generated_at = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+          workflow = {
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "workflow_name": "M26.PA.4 Real Verified Answer and Citation Gate",
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "head_sha": os.environ["GITHUB_SHA"],
+              "environment": "m23-r3-diagnostic",
+          }
+
+          store = CountingStore(
+              Boto3ReadOnlyObjectStore(
+                  endpoint_url=os.environ["R2_ENDPOINT_URL"],
+                  bucket=os.environ["R2_BUCKET"],
+                  access_key_id=os.environ["R2_ACCESS_KEY_ID_READ"],
+                  secret_access_key=os.environ["R2_SECRET_ACCESS_KEY_READ"],
+                  region=os.environ["R2_REGION"],
+              )
+          )
+          qdrant = CountingQdrant(
+              HttpxReadOnlyQdrantClient(
+                  base_url=os.environ["QDRANT_URL"],
+                  api_key=os.environ["QDRANT_API_KEY_READ"],
+                  maximum_retries=1,
+              )
+          )
+          provider = MiniMaxM3Client(
+              api_key=os.environ["MINIMAX_API_KEY"],
+              endpoint="https://api.minimax.io/anthropic/v1/messages",
+          )
+          try:
+              population = load_json(root / "pilot/m26/m26-pa-4-benchmark-population.json")
+              passages, evidence_summary = build_live_evidence_bundle(
+                  root=root,
+                  store=store,
+                  qdrant=qdrant,
+                  population=population,
+              )
+              evidence_summary["r2_read_operations"] = store.reads
+              evidence_summary["qdrant_count_operations"] = qdrant.count_requests
+              evidence_summary["qdrant_scroll_operations"] = qdrant.scroll_requests
+              receipt = run_verified_answer_benchmark(
+                  root=root,
+                  passages_by_case_id=passages,
+                  provider_call=provider,
+                  generated_at=generated_at,
+                  workflow=workflow,
+                  evidence_summary=evidence_summary,
+              )
+              schema = load_json(root / "schemas/m26-pa-4-verified-answer-receipt-v1.schema.json")
+              errors = sorted(
+                  Draft202012Validator(schema).iter_errors(receipt),
+                  key=lambda error: list(error.absolute_path),
+              )
+              if errors:
+                  raise RuntimeError("PA.4 receipt schema validation failed")
+              output = evidence_dir / "m26-pa-4-live-verified-answer-receipt.json"
+              output.write_bytes(receipt_bytes(receipt))
+              (evidence_dir / "m26-pa-4-live-verified-answer-receipt.sha256").write_text(
+                  hashlib.sha256(output.read_bytes()).hexdigest() + "\n",
+                  encoding="utf-8",
+              )
+              for path in (
+                  "pilot/m26/m26-pa-4-owner-decision.json",
+                  "pilot/m26/m26-pa-4-verified-answer-policy.json",
+                  "pilot/m26/m26-pa-4-benchmark-population.json",
+                  "pilot/m26/m26-pa-4-contract-registry.json",
+              ):
+                  target = evidence_dir / Path(path).name
+                  target.write_bytes(Path(path).read_bytes())
+              (evidence_dir / "status.txt").write_text("success\n", encoding="utf-8")
+              print("m26_pa4_live_verified_answer_status=success")
+          except Exception as error:
+              code = error.code if isinstance(error, VerifiedAnswerGateError) else "M26-PA4-UNEXPECTED"
+              failure = {
+                  "schema_version": "knowledge-engine-m26-pa-4-failure-receipt/v1",
+                  "stage_id": "M26.PA.4",
+                  "status": "real_verified_answer_citation_gate_failed_closed",
+                  "generated_at": generated_at,
+                  "workflow": workflow,
+                  "error": {
+                      "code": code,
+                      "category": getattr(error, "category", "internal"),
+                      "retryable": getattr(error, "retryable", False),
+                      "message": getattr(
+                          error,
+                          "safe_message",
+                          "unexpected bounded verified-answer gate failure",
+                      ),
+                  },
+                  "operation_counts": {
+                      "r2_reads": store.reads,
+                      "qdrant_count_requests": qdrant.count_requests,
+                      "qdrant_scroll_requests": qdrant.scroll_requests,
+                  },
+                  "authority": {
+                      "provider_response_text_persisted": False,
+                      "raw_corpus_text_persisted": False,
+                      "secret_values_persisted": False,
+                      "vectors_persisted": False,
+                      "r2_write_operations": 0,
+                      "qdrant_write_operations": 0,
+                      "production_pointer_mutations": 0,
+                      "public_shadow_canary_traffic_operations": 0,
+                  },
+              }
+              output = evidence_dir / "m26-pa-4-live-failure-receipt.json"
+              output.write_text(json.dumps(failure, indent=2, sort_keys=True) + "\n")
+              (evidence_dir / "status.txt").write_text("failed_closed\n", encoding="utf-8")
+              print("m26_pa4_live_verified_answer_status=failed_closed")
+              raise
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m26-pa-4-live-verified-answer-evidence-attempt-1
+          path: /tmp/m26-pa-4-live-evidence
+          if-no-files-found: error
+          retention-days: 30

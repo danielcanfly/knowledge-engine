@@ -1,0 +1,48 @@
+{
+  "accepted_predecessor_status": "m26_pa_3_live_provider_execution_accepted",
+  "benchmark": {
+    "population_count": 12,
+    "population_sha256": "f0a2bc69ea76fba5387050d0a2a25309ec4db86d94203d6f6eb21da9e305fe5b",
+    "qdrant_collection": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043",
+    "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+    "semantic_inputs_sha256": "377c8b8ec3b52aad03481008c50ac3c1f8203537928477de0a3d1bf89d26e7e0"
+  },
+  "budget": {
+    "max_output_tokens_per_call": 512,
+    "max_passage_bytes_per_item": 2048,
+    "max_prompt_bytes_per_item": 12000,
+    "max_provider_calls_per_item_including_repair": 2,
+    "max_repair_attempts": 1,
+    "max_spend_usd": 1.0
+  },
+  "material_claim_definition": "any factual answer assertion that depends on corpus evidence, including entity, date, number, relationship, status, or causal/temporal claim",
+  "owner_decision_self_sha256": "16321b161eb35cb0df1515b0d0bfb9635fabfb118cdb4bf7cf10bf84ab232894",
+  "privacy_boundary": {
+    "canonical_writes": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "public_traffic": false,
+    "raw_corpus_text_persisted": false,
+    "raw_corpus_text_sent_to_provider": true,
+    "secret_values_persisted": false,
+    "vectors_persisted": false
+  },
+  "provider": {
+    "api_style": "anthropic_compatible_messages",
+    "endpoint": "https://api.minimax.io/anthropic/v1/messages",
+    "model_id": "MiniMax-M3",
+    "provider_id": "minimax",
+    "secret_name": "MINIMAX_API_KEY",
+    "stream": false
+  },
+  "schema_version": "knowledge-engine-m26-pa-4-verified-answer-policy/v1",
+  "self_sha256": "56d7743ded108309fefbbeede2ed2eb6e5ae295540c41f458ab5ec5a2fad6069",
+  "stage_id": "M26.PA.4",
+  "verification": {
+    "allow_unsupported_material_claims": false,
+    "max_claims_per_item": 1,
+    "minimum_abstention_items": 2,
+    "minimum_ready_candidate_items": 8,
+    "support_threshold": 1.0
+  }
+}
