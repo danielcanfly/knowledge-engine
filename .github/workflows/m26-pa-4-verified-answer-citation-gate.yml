@@ -93,7 +93,7 @@ jobs:
           set -euo pipefail
           git fetch origin main --depth=1
           git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
-          cat > /tmp/expected.txt <<'FILES'
+          cat > /tmp/expected-initial.txt <<'FILES'
           .github/workflows/m26-1-architecture-authority.yml
           .github/workflows/m26-pa-4-verified-answer-citation-gate.yml
           docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md
@@ -108,7 +108,19 @@ jobs:
           src/knowledge_engine/m26_verified_answer_citation_gate.py
           tests/test_m26_pa_4_verified_answer_citation_gate.py
           FILES
-          cmp /tmp/expected.txt /tmp/changed.txt
+          cat > /tmp/expected-live-abstention-threshold.txt <<'FILES'
+          .github/workflows/m26-pa-4-verified-answer-citation-gate.yml
+          pilot/m26/m26-pa-4-contract-registry.json
+          pilot/m26/m26-pa-4-verified-answer-policy.json
+          schemas/m26-pa-4-verified-answer-policy-v1.schema.json
+          FILES
+          if ! cmp -s /tmp/expected-initial.txt /tmp/changed.txt \
+            && ! cmp -s /tmp/expected-live-abstention-threshold.txt /tmp/changed.txt; then
+            echo "Unexpected PA.4 implementation surface"
+            diff -u /tmp/expected-initial.txt /tmp/changed.txt || true
+            diff -u /tmp/expected-live-abstention-threshold.txt /tmp/changed.txt || true
+            exit 1
+          fi
           ! grep -E \
             '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)' \
             /tmp/changed.txt

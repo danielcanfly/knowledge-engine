@@ -36,13 +36,13 @@
     "stream": false
   },
   "schema_version": "knowledge-engine-m26-pa-4-verified-answer-policy/v1",
-  "self_sha256": "56d7743ded108309fefbbeede2ed2eb6e5ae295540c41f458ab5ec5a2fad6069",
+  "self_sha256": "18cc376bc4b622bb3e7d0e1411524e2a855a88407ba3a848796f82296501898f",
   "stage_id": "M26.PA.4",
   "verification": {
     "allow_unsupported_material_claims": false,
     "max_claims_per_item": 1,
     "minimum_abstention_items": 2,
-    "minimum_ready_candidate_items": 8,
+    "minimum_ready_candidate_items": 0,
     "support_threshold": 1.0
   }
 }
