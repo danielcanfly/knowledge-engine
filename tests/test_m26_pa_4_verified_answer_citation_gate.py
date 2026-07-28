@@ -10,8 +10,10 @@ from jsonschema import Draft202012Validator
 
 from knowledge_engine.m26_verified_answer_citation_gate import (
     ACCEPTED_STATUS,
+    FAILURE_RECEIPT_SCHEMA,
     RECEIPT_SCHEMA,
     SUPPORTED_ANSWER_TEXT,
+    VerifiedAnswerGateError,
     build_provider_payload,
     canonical_sha256,
     run_verified_answer_benchmark,
@@ -70,6 +72,8 @@ def test_policy_population_and_registry_are_strict_and_bound() -> None:
         "m26-pa-4-verified-answer-policy-v1.schema.json",
         "m26-pa-4-benchmark-population-v1.schema.json",
         "m26-pa-4-verified-answer-receipt-v1.schema.json",
+        "m26-pa-4-verified-answer-receipt-v2.schema.json",
+        "m26-pa-4-failure-receipt-v2.schema.json",
     ):
         Draft202012Validator.check_schema(load(SCHEMAS / path))
     assert validate_policy(policy, owner_decision=owner)["stage_id"] == "M26.PA.4"
@@ -207,6 +211,42 @@ def test_verify_provider_output_rejects_unsupported_or_mismatched_claims() -> No
         )
 
 
+def test_provider_output_contract_accepts_fenced_json_and_rejects_mixed_prose() -> None:
+    population = load(PILOT / "m26-pa-4-benchmark-population.json")
+    case = population["cases"][1]
+    policy = load(PILOT / "m26-pa-4-verified-answer-policy.json")
+    provider_payload = {
+        "status": "draft_candidate",
+        "answer_text": "runtime should ignore this non-final label",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_text": "beta gamma",
+                "citation": {"locator_id": case["passage_locator"]["locator_id"]},
+            }
+        ],
+        "reason_codes": [],
+    }
+    fenced = "```json\n" + json.dumps(provider_payload, sort_keys=True) + "\n```"
+    verified = verify_provider_output(
+        case=case,
+        passage_text="Alpha beta gamma delta.",
+        provider_text=fenced,
+        policy=policy,
+    )
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+    assert verified["draft_answer"]["answer_text_persisted"] is False
+
+    mixed = "Here is the JSON:\n" + json.dumps(provider_payload, sort_keys=True)
+    with pytest.raises(Exception, match="unambiguous JSON object"):
+        verify_provider_output(
+            case=case,
+            passage_text="Alpha beta gamma delta.",
+            provider_text=mixed,
+            policy=policy,
+        )
+
+
 def test_run_verified_answer_benchmark_compiles_sanitized_receipt() -> None:
     population = load(PILOT / "m26-pa-4-benchmark-population.json")
     passages = {case["case_id"]: "Alpha beta gamma delta." for case in population["cases"]}
@@ -273,14 +313,101 @@ def test_run_verified_answer_benchmark_compiles_sanitized_receipt() -> None:
             "vectors_requested": False,
         },
     )
-    schema = load(SCHEMAS / "m26-pa-4-verified-answer-receipt-v1.schema.json")
+    schema = load(SCHEMAS / "m26-pa-4-verified-answer-receipt-v2.schema.json")
     assert list(Draft202012Validator(schema).iter_errors(receipt)) == []
+    assert receipt["logical_attempt"] == 2
     assert receipt["summary"]["benchmark_population_count"] == 12
     assert receipt["summary"]["ready_candidate_count"] == 10
     assert receipt["summary"]["abstention_count"] == 2
     assert receipt["summary"]["unsupported_material_claim_count"] == 0
     assert receipt["authority"]["provider_calls"] == 12
     assert receipt["authority"]["raw_corpus_text_persisted"] is False
+    assert len(receipt["evidence_summary"]["population_fitness_diagnostics"]) == 12
+    assert all(
+        "selected_span_sha256" in item
+        and item["raw_corpus_text_persisted"] is False
+        and "selected_span_text" not in item
+        for item in receipt["evidence_summary"]["population_fitness_diagnostics"]
+    )
+    assert len(receipt["case_diagnostics"]) == 12
+    assert receipt["aggregate_diagnostics"]["terminal_status_counts"] == {
+        "abstention_required": 2,
+        "verified_answer_ready_candidate": 10,
+    }
+
+
+def test_threshold_failure_preserves_sanitized_case_diagnostics() -> None:
+    population = load(PILOT / "m26-pa-4-benchmark-population.json")
+    passages = {case["case_id"]: "Alpha beta gamma delta." for case in population["cases"]}
+
+    def abstaining_provider(payload: dict[str, Any]) -> dict[str, Any]:
+        task = json.loads(payload["messages"][0]["content"][0]["text"])
+        provider_text = json.dumps(
+            {
+                "status": "abstain",
+                "answer_text": "",
+                "claims": [],
+                "reason_codes": ["PROVIDER_ABSTAINED"],
+            },
+            sort_keys=True,
+        )
+        return {
+            "response_json": {
+                "id": f"msg_{task['case_id']}",
+                "model": "MiniMax-M3",
+                "stop_reason": "end_turn",
+                "content": [{"type": "text", "text": provider_text}],
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+            },
+            "provider_text": provider_text,
+            "usage": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+            "provider_response_id": f"msg_{task['case_id']}",
+            "response_model": "MiniMax-M3",
+            "stop_reason": "end_turn",
+        }
+
+    with pytest.raises(VerifiedAnswerGateError) as exc:
+        run_verified_answer_benchmark(
+            root=ROOT,
+            passages_by_case_id=passages,
+            provider_call=abstaining_provider,
+            generated_at="2026-07-28T00:00:00Z",
+            workflow={
+                "repository": "danielcanfly/knowledge-engine",
+                "workflow_name": "M26.PA.4 Real Verified Answer and Citation Gate",
+                "run_id": "30296000001",
+                "run_attempt": "1",
+                "head_sha": "ae130666813ec30f082020c89c02a75384d5068e",
+                "environment": "m23-r3-diagnostic",
+            },
+            evidence_summary={
+                "release_id": population["release"]["release_id"],
+                "raw_corpus_text_persisted": False,
+                "vectors_requested": False,
+            },
+        )
+
+    error = exc.value
+    assert error.code == "M26-PA4-068"
+    failure = error.failure_receipt
+    assert failure is not None
+    assert failure["schema_version"] == FAILURE_RECEIPT_SCHEMA
+    assert failure["summary"]["ready_candidate_count"] == 0
+    assert failure["summary"]["abstention_count"] == 12
+    assert failure["policy"]["minimum_ready_candidate_items"] == 8
+    assert len(failure["evidence_summary"]["population_fitness_diagnostics"]) == 12
+    assert len(failure["case_diagnostics"]) == 12
+    assert failure["aggregate_diagnostics"]["reason_code_counts"] == {
+        "CASE_POLICY_REQUIRES_ABSTENTION": 2,
+        "PROVIDER_ABSTAINED": 12,
+    }
+    assert all(
+        item["provider_response_text_persisted"] is False
+        for item in failure["case_diagnostics"]
+    )
+    schema = load(SCHEMAS / "m26-pa-4-failure-receipt-v2.schema.json")
+    Draft202012Validator.check_schema(schema)
+    assert list(Draft202012Validator(schema).iter_errors(failure)) == []
 
 
 def test_build_provider_payload_is_bounded_and_metadata_only() -> None:
@@ -306,14 +433,14 @@ def test_workflow_and_receipt_schema_are_bounded() -> None:
     assert "environment: m23-r3-diagnostic" in workflow
     assert "QDRANT_API_KEY_READ" in workflow
     assert "MINIMAX_API_KEY" in workflow
-    assert "[m26.pa4-real-verified-answer-authorized-attempt-1]" in workflow
+    assert "[m26.pa4-real-verified-answer-authorized-attempt-2]" in workflow
     assert "workflow_dispatch" not in workflow
     assert "contents: write" not in workflow
     assert "production serving" not in workflow
     assert "pointer mutation" not in workflow
     assert "canonical writes" not in workflow
 
-    schema = load(SCHEMAS / "m26-pa-4-verified-answer-receipt-v1.schema.json")
+    schema = load(SCHEMAS / "m26-pa-4-verified-answer-receipt-v2.schema.json")
     Draft202012Validator.check_schema(schema)
     item = {
         "case_id": "pa4_case_01_date_claim",
@@ -367,6 +494,7 @@ def test_workflow_and_receipt_schema_are_bounded() -> None:
         {
             "schema_version": RECEIPT_SCHEMA,
             "stage_id": "M26.PA.4",
+            "logical_attempt": 2,
             "status": "real_verified_answer_citation_gate_verified",
             "generated_at": "2026-07-28T00:00:00Z",
             "owner_decision": {
@@ -377,6 +505,8 @@ def test_workflow_and_receipt_schema_are_bounded() -> None:
                 "policy_self_sha256": "c" * 64,
                 "max_provider_calls_per_item_including_repair": 2,
                 "max_repair_attempts": 1,
+                "minimum_abstention_items": 2,
+                "minimum_ready_candidate_items": 8,
                 "support_threshold": 1.0,
             },
             "population": {
@@ -384,7 +514,14 @@ def test_workflow_and_receipt_schema_are_bounded() -> None:
                 "population_self_sha256": "d" * 64,
                 "population_sha256": "e" * 64,
             },
-            "workflow": {"repository": "danielcanfly/knowledge-engine"},
+            "workflow": {
+                "repository": "danielcanfly/knowledge-engine",
+                "workflow_name": "M26.PA.4 Real Verified Answer and Citation Gate",
+                "run_id": "30296000002",
+                "run_attempt": "1",
+                "head_sha": "ae130666813ec30f082020c89c02a75384d5068e",
+                "environment": "m23-r3-diagnostic",
+            },
             "provider": {
                 "provider_id": "minimax",
                 "model_id": "MiniMax-M3",
@@ -410,10 +547,49 @@ def test_workflow_and_receipt_schema_are_bounded() -> None:
             ]
             * 12,
             "items": [item] * 12,
+            "case_diagnostics": [
+                {
+                    "answer_text_persisted": False,
+                    "case_id": "pa4_case_01_date_claim",
+                    "category": "direct_material_claim",
+                    "citation_count": 1,
+                    "claim_count": 1,
+                    "expected_terminal_policy": "candidate_or_abstention",
+                    "initial_reason_codes": ["EXACT_SPAN_MATCH"],
+                    "initial_result_class": "ready_candidate",
+                    "locator": {
+                        "locator_digest": "7" * 64,
+                        "locator_id": "m26-pa4-01",
+                        "passage_text_sha256": "6" * 64,
+                        "section_id": "section",
+                        "source_id": "source",
+                    },
+                    "provider_call_count": 1,
+                    "provider_output_char_count": 120,
+                    "provider_output_sha256": "8" * 64,
+                    "provider_response_text_persisted": False,
+                    "raw_corpus_text_persisted": False,
+                    "repair_attempted": False,
+                    "repair_reason_codes": [],
+                    "repair_result_class": None,
+                    "secret_values_persisted": False,
+                    "supported_claim_count": 1,
+                    "terminal_status": "verified_answer_ready_candidate",
+                    "unsupported_claim_count": 0,
+                    "usage": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+                    "vectors_persisted": False,
+                }
+            ]
+            * 12,
+            "aggregate_diagnostics": {
+                "reason_code_counts": {"EXACT_SPAN_MATCH": 12},
+                "result_class_counts": {"ready_candidate": 12},
+                "terminal_status_counts": {"verified_answer_ready_candidate": 12},
+            },
             "summary": {
                 "benchmark_population_count": 12,
                 "ready_candidate_count": 12,
-                "abstention_count": 0,
+                "abstention_count": 2,
                 "material_claim_count": 12,
                 "supported_material_claim_count": 12,
                 "unsupported_material_claim_count": 0,
