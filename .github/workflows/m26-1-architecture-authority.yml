@@ -56,7 +56,8 @@ jobs:
           protected="$(printf '%s\n' "$changed" | grep -E '^(src/|workers/|channels/|foundation/|release/|r2/|qdrant/|production/|pilot/m24/|pilot/m25/)' || true)"
           unexpected="$(printf '%s\n' "$protected" | grep -vFx \
             -e 'src/knowledge_engine/m26_real_corpus_binding.py' \
-            -e 'src/knowledge_engine/m26_verified_answer_citation_gate.py' || true)"
+            -e 'src/knowledge_engine/m26_verified_answer_citation_gate.py' \
+            -e 'src/knowledge_engine/m26_pa5_controlled_internal_pilot.py' || true)"
           test -z "$unexpected"
           python - <<'PY'
           import pathlib

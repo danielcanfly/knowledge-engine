@@ -100,26 +100,36 @@ jobs:
           cat > /tmp/allowed.txt <<'FILES'
           .github/workflows/m26-1-architecture-authority.yml
           .github/workflows/m26-pa-4-verified-answer-citation-gate.yml
+          .github/workflows/m26-pa-5-controlled-internal-pilot.yml
           docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md
+          docs/architecture/m26/m26-pa-5-controlled-internal-pilot.md
           pilot/m26/m26-pa-4-benchmark-population.json
           pilot/m26/m26-pa-4-contract-registry.json
           pilot/m26/m26-pa-4-owner-decision.json
           pilot/m26/m26-pa-4-verified-answer-policy.json
+          pilot/m26/m26-pa-5-entry-gate.json
           schemas/m26-pa-4-benchmark-population-v1.schema.json
           schemas/m26-pa-4-owner-decision-v1.schema.json
           schemas/m26-pa-4-verified-answer-policy-v1.schema.json
           schemas/m26-pa-4-verified-answer-receipt-v1.schema.json
           schemas/m26-pa-4-verified-answer-receipt-v2.schema.json
           schemas/m26-pa-4-failure-receipt-v2.schema.json
+          schemas/m26-pa-5-entry-gate-v1.schema.json
+          schemas/m26-pa-5-owner-decision-v1.schema.json
+          schemas/m26-pa-5-pilot-receipt-v1.schema.json
+          src/knowledge_engine/m26_pa5_controlled_internal_pilot.py
           src/knowledge_engine/m26_verified_answer_citation_gate.py
+          tests/test_m26_pa_5_controlled_internal_pilot.py
           tests/test_m26_pa_4_verified_answer_citation_gate.py
           FILES
           sort /tmp/allowed.txt -o /tmp/allowed.txt
           comm -23 /tmp/changed.txt /tmp/allowed.txt > /tmp/disallowed.txt
           test ! -s /tmp/disallowed.txt
-          grep -Fx '.github/workflows/m26-pa-4-verified-answer-citation-gate.yml' /tmp/changed.txt
-          grep -Fx 'src/knowledge_engine/m26_verified_answer_citation_gate.py' /tmp/changed.txt
-          grep -Fx 'tests/test_m26_pa_4_verified_answer_citation_gate.py' /tmp/changed.txt
+          if grep -Eq '^(docs/architecture/m26/m26-pa-4-|pilot/m26/m26-pa-4-|schemas/m26-pa-4-|src/knowledge_engine/m26_verified_answer_citation_gate.py|tests/test_m26_pa_4_verified_answer_citation_gate.py)' /tmp/changed.txt; then
+            grep -Fx '.github/workflows/m26-pa-4-verified-answer-citation-gate.yml' /tmp/changed.txt
+            grep -Fx 'src/knowledge_engine/m26_verified_answer_citation_gate.py' /tmp/changed.txt
+            grep -Fx 'tests/test_m26_pa_4_verified_answer_citation_gate.py' /tmp/changed.txt
+          fi
           ! grep -E \
             '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)' \
             /tmp/changed.txt
