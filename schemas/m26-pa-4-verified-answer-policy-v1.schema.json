@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "accepted_predecessor_status": {
+      "const": "m26_pa_3_live_provider_execution_accepted"
+    },
+    "benchmark": {
+      "additionalProperties": false,
+      "properties": {
+        "population_count": {"const": 12},
+        "population_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "qdrant_collection": {"type": "string", "minLength": 1},
+        "release_id": {"type": "string", "minLength": 1},
+        "semantic_inputs_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "required": [
+        "population_count",
+        "population_sha256",
+        "qdrant_collection",
+        "release_id",
+        "semantic_inputs_sha256"
+      ],
+      "type": "object"
+    },
+    "budget": {
+      "additionalProperties": false,
+      "properties": {
+        "max_output_tokens_per_call": {"type": "integer", "minimum": 128, "maximum": 1024},
+        "max_passage_bytes_per_item": {"type": "integer", "maximum": 4096},
+        "max_prompt_bytes_per_item": {"type": "integer", "maximum": 12000},
+        "max_provider_calls_per_item_including_repair": {"const": 2},
+        "max_repair_attempts": {"const": 1},
+        "max_spend_usd": {"maximum": 1.0, "type": "number"}
+      },
+      "required": [
+        "max_output_tokens_per_call",
+        "max_passage_bytes_per_item",
+        "max_prompt_bytes_per_item",
+        "max_provider_calls_per_item_including_repair",
+        "max_repair_attempts",
+        "max_spend_usd"
+      ],
+      "type": "object"
+    },
+    "material_claim_definition": {"type": "string", "minLength": 1},
+    "owner_decision_self_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "privacy_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_writes": {"const": false},
+        "production_answer_serving": {"const": false},
+        "production_pointer_mutation": {"const": false},
+        "public_traffic": {"const": false},
+        "raw_corpus_text_persisted": {"const": false},
+        "raw_corpus_text_sent_to_provider": {"const": true},
+        "secret_values_persisted": {"const": false},
+        "vectors_persisted": {"const": false}
+      },
+      "required": [
+        "canonical_writes",
+        "production_answer_serving",
+        "production_pointer_mutation",
+        "public_traffic",
+        "raw_corpus_text_persisted",
+        "raw_corpus_text_sent_to_provider",
+        "secret_values_persisted",
+        "vectors_persisted"
+      ],
+      "type": "object"
+    },
+    "provider": {
+      "additionalProperties": false,
+      "properties": {
+        "api_style": {"const": "anthropic_compatible_messages"},
+        "endpoint": {"const": "https://api.minimax.io/anthropic/v1/messages"},
+        "model_id": {"const": "MiniMax-M3"},
+        "provider_id": {"const": "minimax"},
+        "secret_name": {"const": "MINIMAX_API_KEY"},
+        "stream": {"const": false}
+      },
+      "required": ["api_style", "endpoint", "model_id", "provider_id", "secret_name", "stream"],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-4-verified-answer-policy/v1"
+    },
+    "self_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "stage_id": {"const": "M26.PA.4"},
+    "verification": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_unsupported_material_claims": {"const": false},
+        "max_claims_per_item": {"type": "integer", "minimum": 1, "maximum": 2},
+        "minimum_abstention_items": {"type": "integer", "minimum": 1},
+        "minimum_ready_candidate_items": {"type": "integer", "minimum": 1},
+        "support_threshold": {"const": 1.0}
+      },
+      "required": [
+        "allow_unsupported_material_claims",
+        "max_claims_per_item",
+        "minimum_abstention_items",
+        "minimum_ready_candidate_items",
+        "support_threshold"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "accepted_predecessor_status",
+    "benchmark",
+    "budget",
+    "material_claim_definition",
+    "owner_decision_self_sha256",
+    "privacy_boundary",
+    "provider",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "verification"
+  ],
+  "title": "M26.PA.4 verified answer policy",
+  "type": "object"
+}

@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "benchmark_population_count": {"const": 12},
+    "cases": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "case_id": {"type": "string", "minLength": 1},
+          "category": {
+            "enum": ["direct_material_claim", "security_adversarial"]
+          },
+          "expected_terminal_policy": {
+            "enum": ["candidate_or_abstention", "abstention_required"]
+          },
+          "material_claim_type": {
+            "enum": [
+              "entity",
+              "date",
+              "number",
+              "relationship",
+              "status",
+              "causal_or_temporal"
+            ]
+          },
+          "passage_locator": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact_key": {"type": "string", "minLength": 1},
+              "artifact_kind": {"const": "semantic_inputs"},
+              "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "document_index": {"type": "integer", "minimum": 0},
+              "locator_id": {"type": "string", "minLength": 1},
+              "release_id": {"type": "string", "minLength": 1},
+              "section_id": {"type": "string", "minLength": 1},
+              "source_commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+              "source_id": {"type": "string", "minLength": 1},
+              "text_char_count": {"type": "integer", "minimum": 1},
+              "text_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            },
+            "required": [
+              "artifact_key",
+              "artifact_kind",
+              "artifact_sha256",
+              "document_index",
+              "locator_id",
+              "release_id",
+              "section_id",
+              "source_commit_sha",
+              "source_id",
+              "text_char_count",
+              "text_sha256"
+            ],
+            "type": "object"
+          },
+          "qdrant_locator": {
+            "additionalProperties": false,
+            "properties": {
+              "collection": {"type": "string", "minLength": 1},
+              "payload_identity_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "point_id_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "with_vector": {"const": false}
+            },
+            "required": [
+              "collection",
+              "payload_identity_sha256",
+              "point_id_sha256",
+              "with_vector"
+            ],
+            "type": "object"
+          },
+          "question": {
+            "additionalProperties": false,
+            "properties": {
+              "raw_corpus_text_in_question": {"const": false},
+              "template_id": {"type": "string", "minLength": 1},
+              "text": {"type": "string", "minLength": 1},
+              "text_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            },
+            "required": ["raw_corpus_text_in_question", "template_id", "text", "text_sha256"],
+            "type": "object"
+          }
+        },
+        "required": [
+          "case_id",
+          "category",
+          "expected_terminal_policy",
+          "material_claim_type",
+          "passage_locator",
+          "qdrant_locator",
+          "question"
+        ],
+        "type": "object"
+      },
+      "maxItems": 12,
+      "minItems": 12,
+      "type": "array"
+    },
+    "frozen_at": {"type": "string", "pattern": "^2026-07-28T"},
+    "population_id": {"type": "string", "minLength": 1},
+    "population_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "release": {
+      "additionalProperties": false,
+      "properties": {
+        "admission_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "manifest_key": {"type": "string", "minLength": 1},
+        "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "pointer_key": {"type": "string", "minLength": 1},
+        "pointer_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "qdrant_collection": {"type": "string", "minLength": 1},
+        "release_id": {"type": "string", "minLength": 1},
+        "semantic_inputs_key": {"type": "string", "minLength": 1},
+        "semantic_inputs_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source_commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      },
+      "required": [
+        "admission_sha256",
+        "manifest_key",
+        "manifest_sha256",
+        "pointer_key",
+        "pointer_sha256",
+        "qdrant_collection",
+        "release_id",
+        "semantic_inputs_key",
+        "semantic_inputs_sha256",
+        "source_commit_sha",
+        "source_sha"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-4-benchmark-population/v1"
+    },
+    "selection": {"additionalProperties": true, "type": "object"},
+    "self_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "stage_id": {"const": "M26.PA.4"}
+  },
+  "required": [
+    "benchmark_population_count",
+    "cases",
+    "frozen_at",
+    "population_id",
+    "population_sha256",
+    "release",
+    "schema_version",
+    "selection",
+    "self_sha256",
+    "stage_id"
+  ],
+  "title": "M26.PA.4 real benchmark population",
+  "type": "object"
+}

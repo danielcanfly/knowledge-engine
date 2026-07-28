@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "decision_id": {"type": "string", "minLength": 1},
+    "denied_authority": {
+      "additionalProperties": {"const": false},
+      "type": "object"
+    },
+    "exact_instruction_text": {"type": "string", "minLength": 1},
+    "owner": {"const": "Daniel Huang"},
+    "parsed_parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "benchmark_population_count": {"const": 12},
+        "citation_precision_support_threshold": {"const": 1.0},
+        "credential_name": {"const": "MINIMAX_API_KEY"},
+        "environment": {"const": "m23-r3-diagnostic"},
+        "max_provider_calls_per_item_including_repair": {"const": 2},
+        "max_repair_attempts": {"const": 1},
+        "max_spend_usd": {"const": 1.0},
+        "model_id": {"const": "MiniMax-M3"},
+        "population_digest_state": {"const": "to_be_frozen_before_run"},
+        "provider_id": {"const": "minimax"},
+        "provider_label": {"const": "MiniMax"}
+      },
+      "required": [
+        "benchmark_population_count",
+        "citation_precision_support_threshold",
+        "credential_name",
+        "environment",
+        "max_provider_calls_per_item_including_repair",
+        "max_repair_attempts",
+        "max_spend_usd",
+        "model_id",
+        "population_digest_state",
+        "provider_id",
+        "provider_label"
+      ],
+      "type": "object"
+    },
+    "recorded_at": {"type": "string", "pattern": "^2026-07-28T"},
+    "schema_version": {"const": "knowledge-engine-m26-pa-4-owner-decision/v1"},
+    "self_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "stage_id": {"const": "M26.PA.4"}
+  },
+  "required": [
+    "decision_id",
+    "denied_authority",
+    "exact_instruction_text",
+    "owner",
+    "parsed_parameters",
+    "recorded_at",
+    "schema_version",
+    "self_sha256",
+    "stage_id"
+  ],
+  "title": "M26.PA.4 owner decision",
+  "type": "object"
+}
