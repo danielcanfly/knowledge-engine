@@ -1,0 +1,424 @@
+{
+  "$id": "knowledge-engine/m26-pa-4-acceptance-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "aggregate_diagnostics": {
+      "const": {
+        "reason_code_counts": {
+          "CASE_POLICY_REQUIRES_ABSTENTION": 2,
+          "EXACT_SPAN_MATCH": 8,
+          "INSUFFICIENT_SUPPORT": 3,
+          "INSUFFICIENT_TEMPORAL_FRESHNESS": 1,
+          "TEMPORAL_FRESHNESS_UNVERIFIED": 1
+        },
+        "result_class_counts": {
+          "abstention": 4,
+          "ready_candidate": 8
+        },
+        "terminal_status_counts": {
+          "abstention_required": 4,
+          "verified_answer_ready_candidate": 8
+        }
+      }
+    },
+    "attempt_1_failed_closed_evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "abstention_count": {"const": 12},
+        "failure_code": {"const": "M26-PA4-068"},
+        "immutable_failed_evidence": {"const": true},
+        "ready_candidate_count": {"const": 0},
+        "receipt_file_sha256": {
+          "const": "71b2056961a50063f21a30ac4dabe8317650e564d895d027565f9734a67e57f7"
+        },
+        "rerun_forbidden": {"const": true},
+        "run_attempt": {"const": 1},
+        "run_id": {"const": 30373895685},
+        "workflow_head_sha": {
+          "const": "7a3399d0b1033dbe982a966fa1c4d693f27cda37"
+        }
+      },
+      "required": [
+        "abstention_count",
+        "failure_code",
+        "immutable_failed_evidence",
+        "ready_candidate_count",
+        "receipt_file_sha256",
+        "rerun_forbidden",
+        "run_attempt",
+        "run_id",
+        "workflow_head_sha"
+      ],
+      "type": "object"
+    },
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_text_persisted": {"const": false},
+        "complete_prompt_persisted": {"const": false},
+        "live_provider_calls_after_reconciliation": {"const": false},
+        "m26_closed": {"const": false},
+        "pa5_execution": {"const": false},
+        "pa6_canary_traffic": {"const": false},
+        "pa7_final_authority": {"const": false},
+        "production_answer_serving": {"const": false},
+        "production_pointer_mutation": {"const": false},
+        "public_shadow_canary_traffic": {"const": false},
+        "qdrant_writes": {"const": false},
+        "r2_writes": {"const": false},
+        "raw_corpus_text_persisted": {"const": false},
+        "raw_provider_response_text_persisted": {"const": false},
+        "secret_persistence": {"const": false},
+        "source_foundation_mutation": {"const": false},
+        "user_query_persisted": {"const": false},
+        "vectors_requested_or_returned_or_persisted": {"const": false}
+      },
+      "required": [
+        "answer_text_persisted",
+        "complete_prompt_persisted",
+        "live_provider_calls_after_reconciliation",
+        "m26_closed",
+        "pa5_execution",
+        "pa6_canary_traffic",
+        "pa7_final_authority",
+        "production_answer_serving",
+        "production_pointer_mutation",
+        "public_shadow_canary_traffic",
+        "qdrant_writes",
+        "r2_writes",
+        "raw_corpus_text_persisted",
+        "raw_provider_response_text_persisted",
+        "secret_persistence",
+        "source_foundation_mutation",
+        "user_query_persisted",
+        "vectors_requested_or_returned_or_persisted"
+      ],
+      "type": "object"
+    },
+    "effective_only_on_reconciliation_merge": {"const": true},
+    "implementation": {
+      "additionalProperties": false,
+      "properties": {
+        "base_sha": {"const": "7a3399d0b1033dbe982a966fa1c4d693f27cda37"},
+        "expected_head_merge": {"const": true},
+        "head_sha": {"const": "0ee8c75e87434a33c64b37bd5a2837c2dad10ef8"},
+        "issue_number": {"const": 1208},
+        "merge_sha": {"const": "96a5497f65aee27f8b13a017484be67824ea4160"},
+        "pull_request": {"const": 1209},
+        "trigger_marker": {"const": "[m26.pa4-real-verified-answer-authorized-attempt-2]"}
+      },
+      "required": [
+        "base_sha",
+        "expected_head_merge",
+        "head_sha",
+        "issue_number",
+        "merge_sha",
+        "pull_request",
+        "trigger_marker"
+      ],
+      "type": "object"
+    },
+    "issue": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {"const": 1210},
+        "repository": {"const": "danielcanfly/knowledge-engine"},
+        "state_before_reconciliation_pr": {"const": "open"},
+        "title": {"const": "M26.PA.4 attempt-2 independent reconciliation"}
+      },
+      "required": ["number", "repository", "state_before_reconciliation_pr", "title"],
+      "type": "object"
+    },
+    "live_evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_archive_digest": {
+          "const": "sha256:aafafd31c617b705e002591717b1dfbbb7a70a3a96e20d52cbcd52bae9766df9"
+        },
+        "artifact_entry_names": {
+          "const": [
+            "m26-pa-4-benchmark-population.json",
+            "m26-pa-4-contract-registry.json",
+            "m26-pa-4-live-verified-answer-receipt.json",
+            "m26-pa-4-live-verified-answer-receipt.sha256",
+            "m26-pa-4-owner-decision.json",
+            "m26-pa-4-verified-answer-policy.json",
+            "status.txt"
+          ]
+        },
+        "artifact_expires_at": {"const": "2026-08-27T18:11:21Z"},
+        "artifact_id": {"const": 8699066827},
+        "artifact_name": {
+          "const": "m26-pa-4-live-verified-answer-evidence-attempt-2"
+        },
+        "artifact_size_in_bytes": {"const": 224359},
+        "live_job_conclusion": {"const": "success"},
+        "live_job_id": {"const": 90366074535},
+        "receipt_file_sha256": {
+          "const": "e48fb52fc048f5fc875ca3d265acd4af05f4c5ec2f16f61f586c4c53c2c15565"
+        },
+        "receipt_schema_version": {
+          "const": "knowledge-engine-m26-pa-4-verified-answer-receipt/v2"
+        },
+        "receipt_self_sha256": {
+          "const": "7eec05e7d18b1c3c521379c6bb341f0827ef54dbc2df49337d0a24fe3678fd6a"
+        },
+        "receipt_sha256_file_value": {
+          "const": "e48fb52fc048f5fc875ca3d265acd4af05f4c5ec2f16f61f586c4c53c2c15565"
+        },
+        "receipt_status": {"const": "real_verified_answer_citation_gate_verified"},
+        "run_attempt": {"const": 1},
+        "run_event": {"const": "push"},
+        "run_id": {"const": 30386218699},
+        "status_file_value": {"const": "success"},
+        "workflow_head_sha": {
+          "const": "96a5497f65aee27f8b13a017484be67824ea4160"
+        },
+        "workflow_name": {
+          "const": "M26.PA.4 Real Verified Answer and Citation Gate"
+        }
+      },
+      "required": [
+        "artifact_archive_digest",
+        "artifact_entry_names",
+        "artifact_expires_at",
+        "artifact_id",
+        "artifact_name",
+        "artifact_size_in_bytes",
+        "live_job_conclusion",
+        "live_job_id",
+        "receipt_file_sha256",
+        "receipt_schema_version",
+        "receipt_self_sha256",
+        "receipt_sha256_file_value",
+        "receipt_status",
+        "run_attempt",
+        "run_event",
+        "run_id",
+        "status_file_value",
+        "workflow_head_sha",
+        "workflow_name"
+      ],
+      "type": "object"
+    },
+    "next_stage": {
+      "additionalProperties": false,
+      "properties": {
+        "authorized_after_reconciliation_merge": {"const": true},
+        "daniel_pa5_gate_required": {"const": true},
+        "m26_closed": {"const": false},
+        "name": {"const": "Real Controlled Internal Shadow Pilot"},
+        "predecessor_status_required": {
+          "const": "m26_pa_4_verified_answer_citation_gate_accepted"
+        },
+        "production_answer_serving_permitted": {"const": false},
+        "public_shadow_canary_traffic_permitted": {"const": false},
+        "stage_id": {"const": "M26.PA.5"}
+      },
+      "required": [
+        "authorized_after_reconciliation_merge",
+        "daniel_pa5_gate_required",
+        "m26_closed",
+        "name",
+        "predecessor_status_required",
+        "production_answer_serving_permitted",
+        "public_shadow_canary_traffic_permitted",
+        "stage_id"
+      ],
+      "type": "object"
+    },
+    "operation_counts": {
+      "const": {
+        "canonical_writes": 0,
+        "production_pointer_mutations": 0,
+        "provider_calls": 12,
+        "public_shadow_canary_traffic_operations": 0,
+        "qdrant_count_operations": 1,
+        "qdrant_scroll_operations": 17,
+        "qdrant_write_operations": 0,
+        "r2_read_operations": 3,
+        "r2_write_operations": 0,
+        "source_foundation_release_mutations": 0
+      }
+    },
+    "owner_authorization": {
+      "additionalProperties": false,
+      "properties": {
+        "credential_name": {"const": "MINIMAX_API_KEY"},
+        "environment": {"const": "m23-r3-diagnostic"},
+        "exact_head_sha": {"const": "0ee8c75e87434a33c64b37bd5a2837c2dad10ef8"},
+        "exact_pr": {"const": 1209},
+        "frozen_benchmark_population_digest": {
+          "const": "f0a2bc69ea76fba5387050d0a2a25309ec4db86d94203d6f6eb21da9e305fe5b"
+        },
+        "logical_attempt": {"const": 2},
+        "maximum_provider_calls_per_item_including_repair": {"const": 2},
+        "maximum_repair_attempts": {"const": 1},
+        "maximum_total_spend_usd": {"const": 1.0},
+        "model_id": {"const": "MiniMax-M3"},
+        "policy_digest": {
+          "const": "56d7743ded108309fefbbeede2ed2eb6e5ae295540c41f458ab5ec5a2fad6069"
+        },
+        "provider_id": {"const": "minimax"},
+        "unique_artifact_name": {
+          "const": "m26-pa-4-live-verified-answer-evidence-attempt-2"
+        }
+      },
+      "required": [
+        "credential_name",
+        "environment",
+        "exact_head_sha",
+        "exact_pr",
+        "frozen_benchmark_population_digest",
+        "logical_attempt",
+        "maximum_provider_calls_per_item_including_repair",
+        "maximum_repair_attempts",
+        "maximum_total_spend_usd",
+        "model_id",
+        "policy_digest",
+        "provider_id",
+        "unique_artifact_name"
+      ],
+      "type": "object"
+    },
+    "predecessor": {
+      "additionalProperties": false,
+      "properties": {
+        "pa3_acceptance_self_sha256": {
+          "const": "a895104a04724fe64a85380d8a83f7382d332fde707eb06e335cd1c2c8067e83"
+        },
+        "pa3_reconciliation_merge_sha": {
+          "const": "ae130666813ec30f082020c89c02a75384d5068e"
+        },
+        "pa3_reconciliation_pull_request": {"const": 1204},
+        "pa3_status": {"const": "m26_pa_3_live_provider_execution_accepted"}
+      },
+      "required": [
+        "pa3_acceptance_self_sha256",
+        "pa3_reconciliation_merge_sha",
+        "pa3_reconciliation_pull_request",
+        "pa3_status"
+      ],
+      "type": "object"
+    },
+    "receipt_summary": {
+      "const": {
+        "abstention_count": 4,
+        "all_non_abstained_material_claims_supported": true,
+        "benchmark_population_count": 12,
+        "citation_precision": 1.0,
+        "material_claim_count": 8,
+        "ready_candidate_count": 8,
+        "supported_material_claim_count": 8,
+        "unsupported_material_claim_count": 0
+      }
+    },
+    "reconciliation": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_archive_digest_verified": {"const": true},
+        "dedicated_issue_number": {"const": 1210},
+        "no_new_provider_call": {"const": true},
+        "no_runtime_or_workflow_changes": {"const": true},
+        "receipt_file_digest_verified": {"const": true},
+        "receipt_schema_verified": {"const": true},
+        "receipt_self_digest_verified": {"const": true},
+        "remote_run_and_artifact_verified": {"const": true},
+        "separate_reconciliation_pr_required": {"const": true},
+        "thresholds_verified": {"const": true}
+      },
+      "required": [
+        "artifact_archive_digest_verified",
+        "dedicated_issue_number",
+        "no_new_provider_call",
+        "no_runtime_or_workflow_changes",
+        "receipt_file_digest_verified",
+        "receipt_schema_verified",
+        "receipt_self_digest_verified",
+        "remote_run_and_artifact_verified",
+        "separate_reconciliation_pr_required",
+        "thresholds_verified"
+      ],
+      "type": "object"
+    },
+    "schema_version": {"const": "knowledge-engine-m26-pa-4-acceptance/v1"},
+    "self_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "stage_id": {"const": "M26.PA.4"},
+    "status": {"const": "m26_pa_4_verified_answer_citation_gate_accepted"},
+    "superseded_pr": {
+      "additionalProperties": false,
+      "properties": {
+        "head_sha": {"const": "74aaa938e973dd76e1215cb026e51d5882678a27"},
+        "minimum_ready_candidate_items_zero_adopted": {"const": false},
+        "pull_request": {"const": 1207},
+        "reason": {"const": "superseded_zero_ready_threshold_patch_not_merged"},
+        "state": {"const": "closed"}
+      },
+      "required": [
+        "head_sha",
+        "minimum_ready_candidate_items_zero_adopted",
+        "pull_request",
+        "reason",
+        "state"
+      ],
+      "type": "object"
+    },
+    "thresholds": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_eligible_count": {"const": 10},
+        "mandatory_abstention_count": {"const": 2},
+        "maximum_unsupported_accepted_material_claims": {"const": 0},
+        "minimum_abstention_items": {"const": 2},
+        "minimum_ready_candidate_items": {"const": 8},
+        "population_count": {"const": 12},
+        "support_threshold": {"const": 1.0}
+      },
+      "required": [
+        "candidate_eligible_count",
+        "mandatory_abstention_count",
+        "maximum_unsupported_accepted_material_claims",
+        "minimum_abstention_items",
+        "minimum_ready_candidate_items",
+        "population_count",
+        "support_threshold"
+      ],
+      "type": "object"
+    },
+    "usage": {
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": {"const": 8258},
+        "output_tokens": {"const": 785},
+        "total_tokens": {"const": 9043}
+      },
+      "required": ["input_tokens", "output_tokens", "total_tokens"],
+      "type": "object"
+    }
+  },
+  "required": [
+    "aggregate_diagnostics",
+    "attempt_1_failed_closed_evidence",
+    "authority_boundary",
+    "effective_only_on_reconciliation_merge",
+    "implementation",
+    "issue",
+    "live_evidence",
+    "next_stage",
+    "operation_counts",
+    "owner_authorization",
+    "predecessor",
+    "receipt_summary",
+    "reconciliation",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "superseded_pr",
+    "thresholds",
+    "usage"
+  ],
+  "title": "M26.PA.4 acceptance",
+  "type": "object"
+}
