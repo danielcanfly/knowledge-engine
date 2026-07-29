@@ -58,6 +58,7 @@ jobs:
             -e 'src/knowledge_engine/m26_real_corpus_binding.py' \
             -e 'src/knowledge_engine/m26_verified_answer_citation_gate.py' \
             -e 'src/knowledge_engine/m26_pa5_controlled_internal_pilot.py' \
+            -e 'src/knowledge_engine/m26_pa5_live_execution.py' \
             -e 'src/knowledge_engine/m26_pa5_population_freeze.py' || true)"
           test -z "$unexpected"
           python - <<'PY'

@@ -3,60 +3,183 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "authority_boundary": {
-      "additionalProperties": false,
-      "properties": {
-        "canary_traffic": {"const": false},
-        "m26_closed": {"const": false},
-        "pa6_execution": {"const": false},
-        "pa7_final_authority": {"const": false},
-        "production_answer_serving": {"const": false},
-        "production_pointer_mutation": {"const": false},
-        "public_answers": {"const": false}
-      },
-      "required": [
-        "canary_traffic",
-        "m26_closed",
-        "pa6_execution",
-        "pa7_final_authority",
-        "production_answer_serving",
-        "production_pointer_mutation",
-        "public_answers"
-      ],
-      "type": "object"
-    },
-    "decision_id": {"type": "string", "minLength": 1},
-    "exact_instruction_text": {"type": "string", "minLength": 1},
-    "owner": {"const": "Daniel Huang"},
+    "decision_id": { "const": "m26-pa5-owner-gate-values-live-wiring-v1" },
+    "exact_instruction_text_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "owner": { "const": "Daniel Huang" },
     "parsed_parameters": {
       "additionalProperties": false,
       "properties": {
-        "adjudicator": {"type": "string", "minLength": 1},
-        "credential_environment": {"type": "string", "minLength": 1},
-        "credential_name": {"type": "string", "minLength": 1},
-        "execution_window": {"type": "string", "minLength": 1},
-        "frozen_population_count": {"type": "integer", "minimum": 200, "maximum": 500},
-        "frozen_population_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
-        "implementation_head_sha": {"pattern": "^[a-f0-9]{40}$", "type": "string"},
-        "implementation_pr": {"type": "integer", "minimum": 1},
+        "adjudicator": {
+          "additionalProperties": false,
+          "properties": {
+            "adjudicator_id": { "const": "daniel-huang" },
+            "blocking_disputes_require_adjudication": { "const": true },
+            "principal": { "const": "Daniel Huang" }
+          },
+          "required": ["principal", "adjudicator_id", "blocking_disputes_require_adjudication"],
+          "type": "object"
+        },
+        "authority_boundary": {
+          "additionalProperties": false,
+          "properties": {
+            "authenticated_internal_shadow_execution_only": { "const": true },
+            "full_prompt_or_user_query_persistence": { "const": false },
+            "full_provider_response_persistence": { "const": false },
+            "m26_closed": { "const": false },
+            "pa6_canary_traffic": { "const": false },
+            "pa7_final_authority": { "const": false },
+            "production_answer_serving": { "const": false },
+            "production_pointer_mutation": { "const": false },
+            "production_promotion": { "const": false },
+            "public_answers": { "const": false },
+            "public_traffic": { "const": false },
+            "qdrant_writes": { "const": false },
+            "r2_writes": { "const": false },
+            "raw_text_persistence": { "const": false },
+            "secret_persistence": { "const": false },
+            "source_foundation_release_mutation": { "const": false },
+            "vector_persistence": { "const": false }
+          },
+          "required": [
+            "authenticated_internal_shadow_execution_only",
+            "public_answers",
+            "public_traffic",
+            "production_answer_serving",
+            "pa6_canary_traffic",
+            "production_pointer_mutation",
+            "source_foundation_release_mutation",
+            "r2_writes",
+            "qdrant_writes",
+            "secret_persistence",
+            "raw_text_persistence",
+            "full_provider_response_persistence",
+            "full_prompt_or_user_query_persistence",
+            "vector_persistence",
+            "pa7_final_authority",
+            "production_promotion",
+            "m26_closed"
+          ],
+          "type": "object"
+        },
+        "budgets": {
+          "additionalProperties": false,
+          "properties": {
+            "answer_generation_call_cap": { "const": 200 },
+            "bounded_repair_call_cap": { "const": 200 },
+            "formula_generated_cost_evidence_forbidden": { "const": true },
+            "independent_model_review_call_cap": { "const": 200 },
+            "maximum_provider_calls": { "const": 600 },
+            "maximum_total_observed_spend_usd": { "const": 15.0 },
+            "stop_before_call_that_could_exceed_spend_cap": { "const": true }
+          },
+          "required": [
+            "maximum_provider_calls",
+            "maximum_total_observed_spend_usd",
+            "answer_generation_call_cap",
+            "independent_model_review_call_cap",
+            "bounded_repair_call_cap",
+            "stop_before_call_that_could_exceed_spend_cap",
+            "formula_generated_cost_evidence_forbidden"
+          ],
+          "type": "object"
+        },
+        "execution_window": {
+          "additionalProperties": false,
+          "properties": {
+            "authorization_expires_hours_after_exact_head_approval": { "const": 24 },
+            "begin_within_minutes_after_authorization_merge": { "const": 60 },
+            "live_execution_requires_separate_exact_head_authorization": { "const": true },
+            "maximum_wall_clock_hours": { "const": 8 },
+            "one_bounded_logical_attempt": { "const": true },
+            "rerun_same_identity_authorized": { "const": false }
+          },
+          "required": [
+            "one_bounded_logical_attempt",
+            "live_execution_requires_separate_exact_head_authorization",
+            "begin_within_minutes_after_authorization_merge",
+            "authorization_expires_hours_after_exact_head_approval",
+            "maximum_wall_clock_hours",
+            "rerun_same_identity_authorized"
+          ],
+          "type": "object"
+        },
+        "frozen_population_count": { "const": 200 },
+        "frozen_population_sha256": {
+          "const": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
+        },
+        "future_trigger_marker": {
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-1]"
+        },
         "incident_stop_conditions": {
-          "items": {"type": "string", "minLength": 1},
-          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 25,
           "type": "array",
           "uniqueItems": true
         },
-        "max_provider_calls": {"type": "integer", "minimum": 1},
-        "max_spend_usd": {"type": "number", "exclusiveMinimum": 0},
-        "model_id": {"type": "string", "minLength": 1},
+        "latest_accepted_pa4_main_sha": {
+          "const": "3fcc4e5520db6d3cac7ce18004753c2549592afa"
+        },
+        "live_wiring_issue": { "const": 1214 },
+        "logical_attempt": { "const": 1 },
         "pa4_acceptance_self_sha256": {
           "const": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7"
         },
-        "provider_id": {"type": "string", "minLength": 1},
+        "pa4_status": { "const": "m26_pa_4_verified_answer_citation_gate_accepted" },
+        "pa5_gate_population_merge_sha": {
+          "const": "e2bff8fbf14278c70623d7c82c36012a3a9cf831"
+        },
+        "population_strata": {
+          "additionalProperties": false,
+          "properties": {
+            "abstention_no_answer": { "const": 15 },
+            "conflict_and_temporal_freshness": { "const": 15 },
+            "cross_document_comparison": { "const": 20 },
+            "direct_grounded_factual": { "const": 90 },
+            "graph_navigation": { "const": 20 },
+            "prompt_injection_privacy_adversarial": { "const": 10 },
+            "provenance_and_source_trace": { "const": 30 }
+          },
+          "required": [
+            "direct_grounded_factual",
+            "provenance_and_source_trace",
+            "cross_document_comparison",
+            "graph_navigation",
+            "conflict_and_temporal_freshness",
+            "abstention_no_answer",
+            "prompt_injection_privacy_adversarial"
+          ],
+          "type": "object"
+        },
+        "provider": {
+          "additionalProperties": false,
+          "properties": {
+            "credential_environment": { "const": "m23-r3-diagnostic" },
+            "credential_name": { "const": "MINIMAX_API_KEY" },
+            "maximum_bounded_repair_attempts_per_question": { "const": 1 },
+            "model": { "const": "MiniMax-M3" },
+            "provider": { "const": "MiniMax" },
+            "provider_id": { "const": "minimax" },
+            "streaming": { "const": false },
+            "unbounded_retry_forbidden": { "const": true }
+          },
+          "required": [
+            "provider",
+            "provider_id",
+            "model",
+            "credential_name",
+            "credential_environment",
+            "streaming",
+            "unbounded_retry_forbidden",
+            "maximum_bounded_repair_attempts_per_question"
+          ],
+          "type": "object"
+        },
+        "review_rules": { "type": "object" },
         "reviewer_principals": {
           "items": {
             "additionalProperties": false,
             "properties": {
-              "principal_id": {"type": "string", "minLength": 1},
+              "principal_id": { "type": "string", "minLength": 1 },
               "reviewer_type": {
                 "enum": ["human", "independent_model", "deterministic_verifier"]
               }
@@ -64,65 +187,61 @@
             "required": ["principal_id", "reviewer_type"],
             "type": "object"
           },
+          "maxItems": 3,
           "minItems": 3,
           "type": "array"
         },
         "thresholds": {
           "additionalProperties": false,
           "properties": {
-            "abstention": {"type": "object"},
-            "citation": {"type": "object"},
-            "cost": {"type": "object"},
-            "disagreement": {"type": "object"},
-            "latency": {"type": "object"},
-            "quality": {"type": "object"}
+            "abstention": { "type": "object" },
+            "citation": { "type": "object" },
+            "cost": { "type": "object" },
+            "disagreement": { "type": "object" },
+            "latency": { "type": "object" },
+            "quality": { "type": "object" }
           },
-          "required": [
-            "abstention",
-            "citation",
-            "cost",
-            "disagreement",
-            "latency",
-            "quality"
-          ],
+          "required": ["quality", "citation", "abstention", "latency", "cost", "disagreement"],
           "type": "object"
         }
       },
       "required": [
-        "adjudicator",
-        "credential_environment",
-        "credential_name",
-        "execution_window",
+        "live_wiring_issue",
+        "latest_accepted_pa4_main_sha",
+        "pa4_status",
+        "pa4_acceptance_self_sha256",
+        "pa5_gate_population_merge_sha",
         "frozen_population_count",
         "frozen_population_sha256",
-        "implementation_head_sha",
-        "implementation_pr",
-        "incident_stop_conditions",
-        "max_provider_calls",
-        "max_spend_usd",
-        "model_id",
-        "pa4_acceptance_self_sha256",
-        "provider_id",
+        "population_strata",
+        "logical_attempt",
+        "future_trigger_marker",
         "reviewer_principals",
-        "thresholds"
+        "review_rules",
+        "adjudicator",
+        "execution_window",
+        "provider",
+        "budgets",
+        "thresholds",
+        "incident_stop_conditions",
+        "authority_boundary"
       ],
       "type": "object"
     },
-    "recorded_at": {"pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$", "type": "string"},
-    "schema_version": {"const": "knowledge-engine-m26-pa-5-owner-decision/v1"},
-    "self_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
-    "stage_id": {"const": "M26.PA.5"}
+    "recorded_at": { "const": "2026-07-29T02:15:00Z" },
+    "schema_version": { "const": "knowledge-engine-m26-pa-5-owner-decision/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.5" }
   },
   "required": [
-    "authority_boundary",
-    "decision_id",
-    "exact_instruction_text",
-    "owner",
-    "parsed_parameters",
-    "recorded_at",
     "schema_version",
-    "self_sha256",
-    "stage_id"
+    "stage_id",
+    "decision_id",
+    "owner",
+    "recorded_at",
+    "exact_instruction_text_sha256",
+    "parsed_parameters",
+    "self_sha256"
   ],
   "title": "M26.PA.5 owner decision",
   "type": "object"

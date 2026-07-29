@@ -1,0 +1,121 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-success-receipt-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority": { "type": "object" },
+    "generated_at": { "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$", "type": "string" },
+    "human_review_packet": {
+      "additionalProperties": false,
+      "properties": {
+        "disagreement_question_ids": { "items": { "type": "string" }, "type": "array" },
+        "human_review_records_supplied": { "const": false },
+        "required_question_ids": { "items": { "type": "string" }, "minItems": 20, "type": "array" },
+        "stratified_sample_question_ids": { "items": { "type": "string" }, "minItems": 20, "type": "array" }
+      },
+      "required": [
+        "required_question_ids",
+        "stratified_sample_question_ids",
+        "disagreement_question_ids",
+        "human_review_records_supplied"
+      ],
+      "type": "object"
+    },
+    "owner_decision": {
+      "additionalProperties": false,
+      "properties": {
+        "logical_attempt": { "const": 1 },
+        "owner_decision_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "trigger_marker": {
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-1]"
+        }
+      },
+      "required": ["owner_decision_self_sha256", "logical_attempt", "trigger_marker"],
+      "type": "object"
+    },
+    "per_question_evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "adjudication_status": { "type": "string" },
+          "answer_digest": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+          "answer_status": { "type": "string" },
+          "cost_usd": { "minimum": 0, "type": "number" },
+          "evidence_identity_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+          "human_review_required": { "type": "boolean" },
+          "latency_ms": { "minimum": 0, "type": "integer" },
+          "provider_request_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+          "question_id": { "type": "string" },
+          "reason_codes": { "items": { "type": "string" }, "type": "array" },
+          "repair_attempts_used": { "maximum": 1, "minimum": 0, "type": "integer" },
+          "review_request_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+          "reviewer_decisions": { "items": { "type": "object" }, "minItems": 2, "type": "array" },
+          "safe_terminal": { "type": "boolean" },
+          "stratum": { "type": "string" },
+          "usage": { "type": "object" }
+        },
+        "required": [
+          "question_id",
+          "stratum",
+          "answer_status",
+          "safe_terminal",
+          "answer_digest",
+          "provider_request_sha256",
+          "review_request_sha256",
+          "evidence_identity_sha256",
+          "latency_ms",
+          "cost_usd",
+          "usage",
+          "reason_codes",
+          "repair_attempts_used",
+          "reviewer_decisions",
+          "human_review_required",
+          "adjudication_status"
+        ],
+        "type": "object"
+      },
+      "maxItems": 200,
+      "minItems": 200,
+      "type": "array"
+    },
+    "population": {
+      "additionalProperties": false,
+      "properties": {
+        "complete_denominator": { "const": true },
+        "frozen_population_count": { "const": 200 },
+        "frozen_population_sha256": {
+          "const": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
+        },
+        "stratum_counts": { "type": "object" }
+      },
+      "required": [
+        "complete_denominator",
+        "frozen_population_count",
+        "frozen_population_sha256",
+        "stratum_counts"
+      ],
+      "type": "object"
+    },
+    "schema_version": { "const": "knowledge-engine-m26-pa-5-success-receipt/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.5" },
+    "status": { "const": "controlled_internal_shadow_pilot_automated_execution_complete" },
+    "summary": { "type": "object" },
+    "workflow": { "type": "object" }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "status",
+    "generated_at",
+    "workflow",
+    "owner_decision",
+    "population",
+    "summary",
+    "human_review_packet",
+    "per_question_evidence",
+    "authority",
+    "self_sha256"
+  ],
+  "type": "object"
+}

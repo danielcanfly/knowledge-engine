@@ -1,0 +1,61 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-failure-receipt-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority": { "type": "object" },
+    "error": {
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "retryable": { "const": false }
+      },
+      "required": ["code", "message", "retryable"],
+      "type": "object"
+    },
+    "generated_at": { "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$", "type": "string" },
+    "owner_decision": {
+      "additionalProperties": false,
+      "properties": {
+        "owner_decision_self_sha256": {
+          "anyOf": [
+            { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+            { "const": "" }
+          ]
+        }
+      },
+      "required": ["owner_decision_self_sha256"],
+      "type": "object"
+    },
+    "population": {
+      "additionalProperties": false,
+      "properties": {
+        "frozen_population_count": { "const": 200 },
+        "frozen_population_sha256": {
+          "const": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
+        }
+      },
+      "required": ["frozen_population_count", "frozen_population_sha256"],
+      "type": "object"
+    },
+    "schema_version": { "const": "knowledge-engine-m26-pa-5-failure-receipt/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.5" },
+    "status": { "const": "controlled_internal_shadow_pilot_failed_closed" },
+    "workflow": { "type": "object" }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "status",
+    "generated_at",
+    "workflow",
+    "owner_decision",
+    "population",
+    "error",
+    "authority",
+    "self_sha256"
+  ],
+  "type": "object"
+}
