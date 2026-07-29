@@ -31,12 +31,20 @@ ATTEMPT_1_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-1-failure-sea
 ATTEMPT_2_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-2-failure-seal/v1"
 ATTEMPT_3_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-3-failure-seal/v1"
 ATTEMPT_4_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-4-failure-seal/v1"
+ATTEMPT_5_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-5-failure-seal/v1"
+REVIEWER_CONTRACT_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-reviewer-contract-v2/v1"
+THRESHOLD_SEMANTICS_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-threshold-semantics-v2/v1"
+V6_EXHAUSTION_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-v6-exhaustion-record/v1"
 PRICING_CONTRACT_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-pricing-contract/v1"
 OWNER_DECISION_PATH = Path("pilot/m26/m26-pa-5-owner-decision.json")
 ATTEMPT_1_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-1-failure-seal.json")
 ATTEMPT_2_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-2-failure-seal.json")
 ATTEMPT_3_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-3-failure-seal.json")
 ATTEMPT_4_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-4-failure-seal.json")
+ATTEMPT_5_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-5-failure-seal.json")
+REVIEWER_CONTRACT_PATH = Path("pilot/m26/m26-pa-5-reviewer-contract-v2.json")
+THRESHOLD_SEMANTICS_PATH = Path("pilot/m26/m26-pa-5-threshold-semantics-v2.json")
+V6_EXHAUSTION_PATH = Path("pilot/m26/m26-pa-5-v6-exhaustion-record.json")
 PRICING_CONTRACT_PATH = Path("pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json")
 POPULATION_PATH = Path("pilot/m26/m26-pa-5-frozen-population.json")
 POPULATION_MANIFEST_PATH = Path("pilot/m26/m26-pa-5-population-manifest.json")
@@ -45,11 +53,15 @@ ATTEMPT_1_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-1-failure-seal-v1.sc
 ATTEMPT_2_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-2-failure-seal-v1.schema.json")
 ATTEMPT_3_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-3-failure-seal-v1.schema.json")
 ATTEMPT_4_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-4-failure-seal-v1.schema.json")
+ATTEMPT_5_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-5-failure-seal-v1.schema.json")
+REVIEWER_CONTRACT_SCHEMA_PATH = Path("schemas/m26-pa-5-reviewer-contract-v2-v1.schema.json")
+THRESHOLD_SEMANTICS_SCHEMA_PATH = Path("schemas/m26-pa-5-threshold-semantics-v2-v1.schema.json")
+V6_EXHAUSTION_SCHEMA_PATH = Path("schemas/m26-pa-5-v6-exhaustion-record-v1.schema.json")
 PRICING_CONTRACT_SCHEMA_PATH = Path("schemas/m26-pa-5-pricing-contract-v1.schema.json")
 SUCCESS_RECEIPT_SCHEMA_PATH = Path("schemas/m26-pa-5-success-receipt-v1.schema.json")
 FAILURE_RECEIPT_SCHEMA_PATH = Path("schemas/m26-pa-5-failure-receipt-v1.schema.json")
-LOGICAL_ATTEMPT = 5
-TRIGGER_MARKER = "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-5]"
+LOGICAL_ATTEMPT = 6
+TRIGGER_MARKER = "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-6]"
 POPULATION_SHA256 = "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
 POPULATION_COUNT = 200
 PA5_GATE_MERGE_SHA = "e2bff8fbf14278c70623d7c82c36012a3a9cf831"
@@ -98,10 +110,22 @@ ATTEMPT_4_FAILURE_RECEIPT_SELF_SHA256 = (
 ATTEMPT_4_ARTIFACT_ARCHIVE_SHA256 = (
     "2c2d0afb2d1d9bf13216486b494b9babe2c469521fa965ef0def961d06f54121"
 )
+ATTEMPT_5_RUN_ID = "30429345717"
+ATTEMPT_5_TRIGGER_MERGE_SHA = "1f31e5877c8379b9f058daa8cedb6090706e94bf"
+ATTEMPT_5_OWNER_DECISION_SELF_SHA256 = (
+    "cc8a9e4c03963d734676c6a5d9a283c7e55a68ca7ceaf1f14e477c3bca1391a5"
+)
+ATTEMPT_5_FAILURE_RECEIPT_SELF_SHA256 = (
+    "16ed43443016847eb77c6022c25c7e43ba998fae520a43927052cd2aafd21292"
+)
+ATTEMPT_5_ARTIFACT_ARCHIVE_SHA256 = (
+    "ee502ddd65e642d093fc8dc188ae087a8bcbd70001bd35e2dbb34a72d3def2c1"
+)
 V6_PACKAGE_SHA256 = "3a36861501a1d247ae1fc90c4708e05d43a6e3591b134bce36614698f3232b95"
-MAX_PROVIDER_CALLS = 600
-MAX_PAYG_EQUIVALENT_COST_USD = Decimal("15.00")
-MAX_SPEND_USD = "15.00"
+V7_PACKAGE_SHA256 = "087ea7bb8c270bccf958041b8a4eacfa9d8fff9177a731f093f95f991d6063af"
+MAX_PROVIDER_CALLS = 800
+MAX_PAYG_EQUIVALENT_COST_USD = Decimal("20.00")
+MAX_SPEND_USD = "20.00"
 BILLING_MODE = "token_plan_subscription_with_payg_equivalent_cost_accounting"
 PRICING_CONTRACT_IDENTITY = "minimax-m3-le-512k-cache-aware-payg-equivalent-2026-07-29"
 SECRET_PATTERNS = (
@@ -140,6 +164,7 @@ INCIDENT_STOP_CONDITIONS = [
 ]
 
 ProviderCall = Callable[[Mapping[str, Any]], dict[str, Any]]
+LAST_PARTIAL_DENOMINATOR: dict[str, Any] = {}
 
 
 def pretty_json(value: Mapping[str, Any]) -> str:
@@ -405,13 +430,193 @@ def attempt_4_failure_seal_template() -> dict[str, Any]:
             "thresholds_unchanged": True,
         },
         "supersession": {
-            "superseded_by_logical_attempt": LOGICAL_ATTEMPT,
+            "superseded_by_logical_attempt": 5,
             "repair_issue": 1222,
-            "new_trigger_marker": TRIGGER_MARKER,
+            "new_trigger_marker": (
+                "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-5]"
+            ),
             "supersedes_only_reviewer_context_wiring": True,
             "preserves_attempt_4_as_failed_evidence": True,
         },
         "authority_boundary": authority_receipt(),
+        "self_sha256": "",
+    }
+
+
+def attempt_5_failure_seal_template() -> dict[str, Any]:
+    return {
+        "schema_version": ATTEMPT_5_SEAL_SCHEMA_VERSION,
+        "stage_id": STAGE_ID,
+        "seal_id": "m26-pa5-live-attempt-5-immutable-failed-evidence",
+        "recorded_at": "2026-07-29T07:03:00Z",
+        "status": "immutable_failed_closed_evidence",
+        "logical_attempt": 5,
+        "rerun_authorized": False,
+        "reclassification_as_accepted_authorized": False,
+        "replacement_or_deletion_authorized": False,
+        "pa5_accepted": False,
+        "github_run": {
+            "repository": "danielcanfly/knowledge-engine",
+            "workflow_name": "M26.PA.5 Controlled Internal Shadow Pilot",
+            "run_id": ATTEMPT_5_RUN_ID,
+            "run_attempt": 1,
+            "event": "push",
+            "trigger_marker": (
+                "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-5]"
+            ),
+            "head_sha": ATTEMPT_5_TRIGGER_MERGE_SHA,
+            "workflow_conclusion": "success",
+            "live_job_terminal_status": "failed_closed",
+        },
+        "evidence": {
+            "artifact_name": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-5",
+            "artifact_archive_sha256": ATTEMPT_5_ARTIFACT_ARCHIVE_SHA256,
+            "failure_receipt_name": "m26-pa-5-failure-receipt.json",
+            "failure_receipt_self_sha256": ATTEMPT_5_FAILURE_RECEIPT_SELF_SHA256,
+            "owner_decision_self_sha256": ATTEMPT_5_OWNER_DECISION_SELF_SHA256,
+            "failure_code": "M26-PA5-LIVE-024",
+            "failure_message": "reviewer disagreement incident stop",
+        },
+        "root_cause": {
+            "code": "reviewer_contract_and_disagreement_resolution_defect",
+            "summary": (
+                "Attempt 5 still let the deterministic verifier and independent reviewer "
+                "judge different semantic material. It also treated initial disagreement "
+                "as an early incident before a bounded semantic repair and fresh rereview."
+            ),
+            "shared_bounded_claim_citation_evidence_envelope_present": False,
+            "initial_disagreement_treated_as_incident": True,
+            "semantic_repair_before_threshold_required": True,
+            "thresholds_weakened": False,
+        },
+        "supersession": {
+            "superseded_by_logical_attempt": LOGICAL_ATTEMPT,
+            "repair_issue": 1224,
+            "new_trigger_marker": TRIGGER_MARKER,
+            "supersedes_only_reviewer_contract_and_threshold_semantics": True,
+            "preserves_attempt_5_as_failed_evidence": True,
+        },
+        "authority_boundary": authority_receipt(),
+        "self_sha256": "",
+    }
+
+
+def reviewer_contract_template() -> dict[str, Any]:
+    return {
+        "schema_version": REVIEWER_CONTRACT_SCHEMA_VERSION,
+        "stage_id": STAGE_ID,
+        "contract_id": "m26-pa5-reviewer-contract-v2",
+        "package_sha256": V7_PACKAGE_SHA256,
+        "principals": [
+            {
+                "principal_id": "pa5-reviewer-minimax-m3-blind-v2",
+                "reviewer_type": "independent_model",
+            },
+            {
+                "principal_id": "pa5-claim-citation-support-verifier-v2",
+                "reviewer_type": "deterministic_verifier",
+            },
+            {
+                "principal_id": "daniel-owner-policy-pa5-autonomous-v2",
+                "reviewer_type": "owner_policy",
+            },
+        ],
+        "bounded_review_envelope": {
+            "same_envelope_for_model_and_deterministic_verifier": True,
+            "max_material_claims": 6,
+            "max_claim_text_chars": 512,
+            "max_citation_locators_per_claim": 3,
+            "max_evidence_excerpt_chars_per_locator": 1200,
+            "ephemeral_fields": ["claim_text", "evidence_excerpt"],
+            "persisted_fields": [
+                "question_id",
+                "envelope_sha256",
+                "claim_text_sha256",
+                "evidence_excerpt_sha256",
+                "claim_type",
+                "temporal_scope",
+                "locator_identity",
+                "support_verdict",
+                "conflict_verdict",
+                "temporal_verdict",
+                "reason_codes",
+                "usage",
+                "latency",
+                "cost",
+                "terminal_status",
+            ],
+        },
+        "forbidden_persistence": [
+            "raw_provider_response_text",
+            "raw_corpus_text",
+            "full_answer_text",
+            "full_prompt",
+            "user_query",
+            "secret_values",
+            "vectors",
+        ],
+        "semantic_repair": {
+            "maximum_rounds_per_question": 1,
+            "initial_disagreement_triggers_repair": True,
+            "fresh_independent_rereview_required": True,
+            "post_repair_disagreement_forces_safe_abstention": True,
+            "disputed_answer_may_be_accepted": False,
+            "unsupported_material_claim_may_be_accepted": False,
+        },
+        "self_sha256": "",
+    }
+
+
+def threshold_semantics_template() -> dict[str, Any]:
+    return {
+        "schema_version": THRESHOLD_SEMANTICS_SCHEMA_VERSION,
+        "stage_id": STAGE_ID,
+        "contract_id": "m26-pa5-reviewer-disagreement-threshold-semantics-v2",
+        "package_sha256": V7_PACKAGE_SHA256,
+        "initial_disagreement": {
+            "recorded": True,
+            "triggers_semantic_repair": True,
+            "eligible_for_early_incident_stop": False,
+            "acceptance_blocking_by_itself": False,
+        },
+        "post_repair_disagreement": {
+            "recorded": True,
+            "eligible_for_early_incident_stop": True,
+            "early_stop_after_completed_questions": 50,
+            "early_stop_rate_strictly_greater_than": 0.20,
+            "acceptance_rate_max": 0.15,
+        },
+        "safe_abstention_resolution": {
+            "resolves_dispute": True,
+            "counts_against_over_abstention": True,
+            "counts_as_grounded_quality_pass": False,
+            "disputed_answer_accepted": False,
+        },
+        "self_sha256": "",
+    }
+
+
+def v6_exhaustion_record_template() -> dict[str, Any]:
+    return {
+        "schema_version": V6_EXHAUSTION_SCHEMA_VERSION,
+        "stage_id": STAGE_ID,
+        "record_id": "m26-pa5-v6-attempts-1-to-5-exhausted",
+        "recorded_at": "2026-07-29T07:10:00Z",
+        "status": "v6_attempt_window_exhausted_pa5_not_accepted",
+        "package_sha256": V7_PACKAGE_SHA256,
+        "v6_package_sha256": V6_PACKAGE_SHA256,
+        "pa5_accepted": False,
+        "attempts": [
+            {"logical_attempt": 1, "run_id": ATTEMPT_1_RUN_ID},
+            {"logical_attempt": 2, "run_id": ATTEMPT_2_RUN_ID},
+            {"logical_attempt": 3, "run_id": ATTEMPT_3_RUN_ID},
+            {"logical_attempt": 4, "run_id": ATTEMPT_4_RUN_ID},
+            {"logical_attempt": 5, "run_id": ATTEMPT_5_RUN_ID},
+        ],
+        "immutable_failed_evidence_preserved": True,
+        "v7_authorizes_attempts": [6, 7, 8],
+        "ordinary_repair_scope": "reviewer_contract_threshold_semantics_and_receipts",
+        "thresholds_weakened": False,
         "self_sha256": "",
     }
 
@@ -472,30 +677,37 @@ def owner_decision_template() -> dict[str, Any]:
     return {
         "schema_version": OWNER_DECISION_SCHEMA_VERSION,
         "stage_id": STAGE_ID,
-        "decision_id": "m26-pa5-autonomous-completion-authority-attempt-5",
+        "decision_id": "m26-pa5-v7-reviewer-contract-and-attempts-6-to-8-authority",
         "owner": "Daniel Huang",
-        "recorded_at": "2026-07-29T05:31:00Z",
+        "recorded_at": "2026-07-29T07:10:00Z",
         "exact_instruction_text_sha256": canonical_sha256(
             {
-                "attachment": "b042e613-1e4b-4d42-aab7-1341ec79e821",
-                "package_sha256": V6_PACKAGE_SHA256,
+                "package": (
+                    "LLM_Wiki_M26_PA5_v7_Reviewer_Contract_Reconciliation_and_"
+                    "Autonomous_Completion_to_PA6_Readiness_Codex_Handoff_2026-07-29.zip"
+                ),
+                "package_sha256": V7_PACKAGE_SHA256,
                 "scope": (
-                    "M26.PA.5 v6 autonomous completion authority for logical "
-                    "attempts 3-5; attempt 5 reviewer-disagreement repair execution"
+                    "M26.PA.5 v7 reviewer contract reconciliation and autonomous "
+                    "attempts 6-8 until PA.5 accepted and PA.6 unlocked pending canary approval"
                 ),
             }
         ),
         "parsed_parameters": {
-            "live_wiring_issue": 1222,
+            "live_wiring_issue": 1224,
             "authority_package": {
                 "package_name": (
-                    "LLM_Wiki_M26_PA5_Autonomous_Completion_to_PA6_Readiness_"
-                    "Codex_Handoff_v6_2026-07-29.zip"
+                    "LLM_Wiki_M26_PA5_v7_Reviewer_Contract_Reconciliation_and_"
+                    "Autonomous_Completion_to_PA6_Readiness_Codex_Handoff_2026-07-29.zip"
                 ),
-                "package_sha256": V6_PACKAGE_SHA256,
+                "package_sha256": V7_PACKAGE_SHA256,
                 "autonomous_completion_authority_amendment": True,
                 "autonomous_review_amendment": True,
-                "logical_attempts_authorized": [3, 4, 5],
+                "reviewer_contract_v2_ratified": True,
+                "threshold_semantics_amendment_ratified": True,
+                "partial_denominator_contract_ratified": True,
+                "attempts_6_to_8_controller_ratified": True,
+                "logical_attempts_authorized": [6, 7, 8],
                 "per_attempt_manual_gate_superseded_for_pa5_only": True,
             },
             "latest_accepted_pa4_main_sha": PA4_MAIN_SHA,
@@ -538,6 +750,18 @@ def owner_decision_template() -> dict[str, Any]:
                 "immutable_failed_evidence": True,
                 "rerun_authorized": False,
             },
+            "pa5_attempt_5_failure": {
+                "attempt_5_failure_seal_path": ATTEMPT_5_SEAL_PATH.as_posix(),
+                "run_id": ATTEMPT_5_RUN_ID,
+                "run_attempt": 1,
+                "trigger_merge_sha": ATTEMPT_5_TRIGGER_MERGE_SHA,
+                "failure_receipt_self_sha256": ATTEMPT_5_FAILURE_RECEIPT_SELF_SHA256,
+                "immutable_failed_evidence": True,
+                "rerun_authorized": False,
+            },
+            "v6_exhaustion_record_path": V6_EXHAUSTION_PATH.as_posix(),
+            "reviewer_contract_v2_path": REVIEWER_CONTRACT_PATH.as_posix(),
+            "threshold_semantics_v2_path": THRESHOLD_SEMANTICS_PATH.as_posix(),
             "frozen_population_count": POPULATION_COUNT,
             "frozen_population_sha256": POPULATION_SHA256,
             "population_strata": dict(STRATA),
@@ -545,15 +769,15 @@ def owner_decision_template() -> dict[str, Any]:
             "future_trigger_marker": TRIGGER_MARKER,
             "reviewer_principals": [
                 {
-                    "principal_id": "pa5-reviewer-minimax-m3-blind-v1",
+                    "principal_id": "pa5-reviewer-minimax-m3-blind-v2",
                     "reviewer_type": "independent_model",
                 },
                 {
-                    "principal_id": "pa5-claim-citation-verifier-v1",
+                    "principal_id": "pa5-claim-citation-support-verifier-v2",
                     "reviewer_type": "deterministic_verifier",
                 },
                 {
-                    "principal_id": "daniel-owner-policy-pa5-autonomous-v1",
+                    "principal_id": "daniel-owner-policy-pa5-autonomous-v2",
                     "reviewer_type": "owner_policy",
                 },
             ],
@@ -561,6 +785,7 @@ def owner_decision_template() -> dict[str, Any]:
                 "independent_model_review_for_every_question": True,
                 "deterministic_claim_citation_verification_for_every_question": True,
                 "owner_policy_evaluation_for_every_question": True,
+                "shared_bounded_review_envelope_for_reviewers": True,
                 "independent_model_blind_isolated_context": True,
                 "generator_reasoning_visible_to_reviewer": False,
                 "generator_self_evaluation_visible_to_reviewer": False,
@@ -571,13 +796,18 @@ def owner_decision_template() -> dict[str, Any]:
                 "autonomous_review_amendment_applied": True,
                 "automated_review_not_misrepresented_as_human": True,
                 "invent_or_simulate_human_review_forbidden": True,
+                "initial_disagreement_triggers_semantic_repair": True,
+                "initial_disagreement_incident_stop": False,
+                "post_repair_disagreement_incident_stop_only": True,
+                "fresh_independent_rereview_after_semantic_repair": True,
+                "safe_abstention_resolves_post_repair_dispute": True,
                 "disputed_answer_may_be_accepted": False,
                 "unsupported_material_claim_may_be_accepted": False,
                 "unresolved_disagreement_terminal_action": "safe_abstention",
             },
             "adjudicator": {
-                "principal": "daniel-owner-policy-pa5-autonomous-v1",
-                "adjudicator_id": "daniel-owner-policy-pa5-autonomous-v1",
+                "principal": "daniel-owner-policy-pa5-autonomous-v2",
+                "adjudicator_id": "daniel-owner-policy-pa5-autonomous-v2",
                 "blocking_disputes_require_adjudication": False,
                 "human_review_completed": False,
             },
@@ -598,23 +828,32 @@ def owner_decision_template() -> dict[str, Any]:
                 "streaming": False,
                 "unbounded_retry_forbidden": True,
                 "maximum_bounded_repair_attempts_per_question": 1,
+                "maximum_semantic_repair_rounds_per_question": 1,
                 "structured_json_parse_failure_repair": {
                     "enabled": True,
                     "repair_payload_uses_malformed_response_digest_only": True,
                     "raw_malformed_response_text_in_repair_prompt": False,
                     "sanitized_parse_diagnostics_only": True,
                 },
-                "independent_review_sanitized_answer_summary": {
+                "reviewer_contract_v2_bounded_semantic_envelope": {
                     "enabled": True,
                     "fields": [
                         "answer_status",
                         "safe_terminal",
                         "reason_codes",
-                        "material_claim_count",
-                        "citation_locator_count",
-                        "unsupported_material_claim_count",
-                        "answer_digest",
+                        "material_claims_bounded",
+                        "citation_locators_bounded",
+                        "claim_text_sha256",
+                        "evidence_excerpt_sha256",
+                        "support_verdict",
+                        "conflict_verdict",
+                        "temporal_verdict",
+                        "envelope_sha256",
                     ],
+                    "same_envelope_for_deterministic_and_independent_review": True,
+                    "ephemeral_bounded_claim_text_allowed": True,
+                    "ephemeral_bounded_evidence_excerpt_allowed": True,
+                    "persist_claim_text_or_evidence_excerpt": False,
                     "raw_answer_text_included": False,
                     "raw_corpus_text_included": False,
                     "full_provider_response_included": False,
@@ -640,7 +879,9 @@ def owner_decision_template() -> dict[str, Any]:
                 "maximum_total_payg_equivalent_cost_usd": MAX_SPEND_USD,
                 "answer_generation_call_cap": 200,
                 "independent_model_review_call_cap": 200,
-                "bounded_repair_call_cap": 200,
+                "semantic_repair_call_cap": 200,
+                "fresh_independent_rereview_call_cap": 200,
+                "bounded_json_repair_call_cap": 200,
                 "payg_equivalent_cost_thresholds_apply": True,
                 "provider_monetary_cost_thresholds_apply": False,
                 "stop_when_payg_equivalent_cost_cap_reached_or_exceeded": True,
@@ -687,10 +928,15 @@ def owner_decision_template() -> dict[str, Any]:
                     "unknown_billing_mode_max": 0,
                 },
                 "disagreement": {
-                    "initial_reviewer_disagreement_rate_max": 0.15,
-                    "human_review_coverage_of_disagreements": 1.0,
-                    "human_adjudication_coverage_of_blocking_disputes": 1.0,
+                    "initial_reviewer_disagreement_recorded": True,
+                    "initial_reviewer_disagreement_triggers_repair": True,
+                    "initial_reviewer_disagreement_incident_stop": False,
+                    "post_repair_disagreement_rate_max": 0.15,
+                    "post_repair_disagreement_early_stop_rate_after_50_completed": 0.20,
+                    "human_review_coverage_of_disagreements": 0.0,
+                    "human_adjudication_coverage_of_blocking_disputes": 0.0,
                     "unresolved_blocking_disputes_max": 0,
+                    "safe_abstention_resolves_dispute": True,
                     "reviewer_identity_or_type_misrepresentation_max": 0,
                     "invented_reviewer_identities_max": 0,
                     "missing_reviewer_timestamps_or_decisions_max": 0,
@@ -730,6 +976,23 @@ def write_owner_decision(root: Path) -> dict[str, Any]:
     (root / ATTEMPT_3_SEAL_PATH).write_text(pretty_json(attempt_3_seal), encoding="utf-8")
     attempt_4_seal = with_self_digest(attempt_4_failure_seal_template())
     (root / ATTEMPT_4_SEAL_PATH).write_text(pretty_json(attempt_4_seal), encoding="utf-8")
+    attempt_5_seal = with_self_digest(attempt_5_failure_seal_template())
+    (root / ATTEMPT_5_SEAL_PATH).write_text(pretty_json(attempt_5_seal), encoding="utf-8")
+    reviewer_contract = with_self_digest(reviewer_contract_template())
+    (root / REVIEWER_CONTRACT_PATH).write_text(
+        pretty_json(reviewer_contract),
+        encoding="utf-8",
+    )
+    threshold_semantics = with_self_digest(threshold_semantics_template())
+    (root / THRESHOLD_SEMANTICS_PATH).write_text(
+        pretty_json(threshold_semantics),
+        encoding="utf-8",
+    )
+    v6_exhaustion = with_self_digest(v6_exhaustion_record_template())
+    (root / V6_EXHAUSTION_PATH).write_text(
+        pretty_json(v6_exhaustion),
+        encoding="utf-8",
+    )
     pricing_contract = with_self_digest(pricing_contract_template())
     (root / PRICING_CONTRACT_PATH).write_text(
         pretty_json(pricing_contract),
@@ -784,6 +1047,51 @@ def validate_attempt_4_failure_seal(root: Path) -> dict[str, Any]:
     return seal
 
 
+def validate_attempt_5_failure_seal(root: Path) -> dict[str, Any]:
+    seal = load_json(root / ATTEMPT_5_SEAL_PATH)
+    validate_schema(root, seal, ATTEMPT_5_SEAL_SCHEMA_PATH)
+    verify_self_digest(seal, "PA5 attempt-5 failure seal")
+    if seal["logical_attempt"] != 5 or seal["status"] != "immutable_failed_closed_evidence":
+        raise PA5GateError("M26-PA5-LIVE-053", "attempt-5 seal status mismatch")
+    if seal["github_run"]["run_id"] != ATTEMPT_5_RUN_ID:
+        raise PA5GateError("M26-PA5-LIVE-054", "attempt-5 run identity mismatch")
+    return seal
+
+
+def validate_reviewer_contract(root: Path) -> dict[str, Any]:
+    contract = load_json(root / REVIEWER_CONTRACT_PATH)
+    validate_schema(root, contract, REVIEWER_CONTRACT_SCHEMA_PATH)
+    verify_self_digest(contract, "PA5 reviewer contract v2")
+    if contract["package_sha256"] != V7_PACKAGE_SHA256:
+        raise PA5GateError("M26-PA5-LIVE-055", "reviewer contract package mismatch")
+    envelope = contract["bounded_review_envelope"]
+    if envelope["same_envelope_for_model_and_deterministic_verifier"] is not True:
+        raise PA5GateError("M26-PA5-LIVE-056", "shared reviewer envelope disabled")
+    return contract
+
+
+def validate_threshold_semantics(root: Path) -> dict[str, Any]:
+    semantics = load_json(root / THRESHOLD_SEMANTICS_PATH)
+    validate_schema(root, semantics, THRESHOLD_SEMANTICS_SCHEMA_PATH)
+    verify_self_digest(semantics, "PA5 threshold semantics v2")
+    if semantics["initial_disagreement"]["eligible_for_early_incident_stop"] is not False:
+        raise PA5GateError("M26-PA5-LIVE-057", "initial disagreement early stop enabled")
+    if semantics["post_repair_disagreement"]["eligible_for_early_incident_stop"] is not True:
+        raise PA5GateError("M26-PA5-LIVE-058", "post-repair disagreement early stop disabled")
+    return semantics
+
+
+def validate_v6_exhaustion_record(root: Path) -> dict[str, Any]:
+    record = load_json(root / V6_EXHAUSTION_PATH)
+    validate_schema(root, record, V6_EXHAUSTION_SCHEMA_PATH)
+    verify_self_digest(record, "PA5 v6 exhaustion record")
+    if record["status"] != "v6_attempt_window_exhausted_pa5_not_accepted":
+        raise PA5GateError("M26-PA5-LIVE-059", "v6 exhaustion status mismatch")
+    if record["pa5_accepted"] is not False:
+        raise PA5GateError("M26-PA5-LIVE-060", "v6 exhaustion cannot accept PA5")
+    return record
+
+
 def validate_pricing_contract(root: Path) -> dict[str, Any]:
     contract = load_json(root / PRICING_CONTRACT_PATH)
     validate_schema(root, contract, PRICING_CONTRACT_SCHEMA_PATH)
@@ -827,6 +1135,10 @@ def validate_owner_decision(root: Path) -> dict[str, Any]:
     attempt_2_seal = validate_attempt_2_failure_seal(root)
     attempt_3_seal = validate_attempt_3_failure_seal(root)
     attempt_4_seal = validate_attempt_4_failure_seal(root)
+    attempt_5_seal = validate_attempt_5_failure_seal(root)
+    reviewer_contract = validate_reviewer_contract(root)
+    threshold_semantics = validate_threshold_semantics(root)
+    v6_exhaustion = validate_v6_exhaustion_record(root)
     contract = validate_pricing_contract(root)
     if parsed["pa5_attempt_1_failure"]["attempt_1_failure_seal_path"] != (
         ATTEMPT_1_SEAL_PATH.as_posix()
@@ -860,6 +1172,24 @@ def validate_owner_decision(root: Path) -> dict[str, Any]:
         attempt_4_seal["evidence"]["failure_receipt_self_sha256"]
     ):
         raise PA5GateError("M26-PA5-LIVE-052", "attempt-4 seal digest mismatch")
+    if parsed["pa5_attempt_5_failure"]["attempt_5_failure_seal_path"] != (
+        ATTEMPT_5_SEAL_PATH.as_posix()
+    ):
+        raise PA5GateError("M26-PA5-LIVE-061", "attempt-5 seal path mismatch")
+    if parsed["pa5_attempt_5_failure"]["failure_receipt_self_sha256"] != (
+        attempt_5_seal["evidence"]["failure_receipt_self_sha256"]
+    ):
+        raise PA5GateError("M26-PA5-LIVE-062", "attempt-5 seal digest mismatch")
+    if parsed["reviewer_contract_v2_path"] != REVIEWER_CONTRACT_PATH.as_posix():
+        raise PA5GateError("M26-PA5-LIVE-063", "reviewer contract path mismatch")
+    if parsed["threshold_semantics_v2_path"] != THRESHOLD_SEMANTICS_PATH.as_posix():
+        raise PA5GateError("M26-PA5-LIVE-064", "threshold semantics path mismatch")
+    if parsed["v6_exhaustion_record_path"] != V6_EXHAUSTION_PATH.as_posix():
+        raise PA5GateError("M26-PA5-LIVE-065", "v6 exhaustion path mismatch")
+    if reviewer_contract["self_sha256"] == threshold_semantics["self_sha256"]:
+        raise PA5GateError("M26-PA5-LIVE-066", "contract digest collision")
+    if not v6_exhaustion["immutable_failed_evidence_preserved"]:
+        raise PA5GateError("M26-PA5-LIVE-067", "failed evidence preservation missing")
     if parsed["billing"]["pricing_contract_path"] != PRICING_CONTRACT_PATH.as_posix():
         raise PA5GateError("M26-PA5-LIVE-020", "pricing contract path mismatch")
     if parsed["billing"]["pricing_contract_identity"] != contract["pricing_contract_identity"]:
@@ -1084,6 +1414,7 @@ def parse_provider_json_with_bounded_repair(
     role: str,
     answer_digest: str,
     sanitized_answer_summary_value: Mapping[str, Any] | None = None,
+    bounded_review_envelope_value: Mapping[str, Any] | None = None,
     initial_result: Mapping[str, Any],
     counters: dict[str, Any],
     pricing_contract: Mapping[str, Any],
@@ -1110,6 +1441,7 @@ def parse_provider_json_with_bounded_repair(
             role=role,
             answer_digest=answer_digest,
             sanitized_answer_summary=sanitized_answer_summary_value,
+            bounded_review_envelope=bounded_review_envelope_value,
             repair_context={
                 "repair_reason_code": "STRUCTURED_JSON_PARSE_FAILURE",
                 "malformed_response_digest": malformed_response_digest,
@@ -1166,6 +1498,7 @@ def build_payload(
     role: str,
     answer_digest: str = "",
     sanitized_answer_summary: Mapping[str, Any] | None = None,
+    bounded_review_envelope: Mapping[str, Any] | None = None,
     repair_context: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     identity = evidence_identity(question)
@@ -1178,16 +1511,31 @@ def build_payload(
             "persist_no_raw_corpus_or_prompt": True,
             "required_fields": ["verdict", "reason_codes"],
             "verdict_values": ["pass", "fail"],
-            "review_scope": "blind_review_of_sanitized_answer_digest_and_evidence_identity",
-            "sanitized_answer_summary_fields": [
+            "review_scope": "reviewer_contract_v2_shared_bounded_semantic_envelope",
+            "same_bounded_envelope_as_deterministic_verifier": True,
+            "raw_answer_text_included": False,
+            "raw_corpus_text_included": False,
+            "full_provider_response_included": False,
+        }
+    elif role == "semantic_repair":
+        output_contract = {
+            "json_only": True,
+            "return_exactly_one_compact_json_object": True,
+            "markdown_code_fences_allowed": False,
+            "prose_before_or_after_json_allowed": False,
+            "persist_no_raw_corpus_or_prompt": True,
+            "required_fields": [
                 "answer_status",
                 "safe_terminal",
                 "reason_codes",
-                "material_claim_count",
-                "citation_locator_count",
-                "unsupported_material_claim_count",
-                "answer_digest",
+                "material_claims",
             ],
+            "answer_status_values": ["answered", "abstained"],
+            "maximum_semantic_repair_rounds": 1,
+            "repair_must_address_shared_envelope_reason_codes_only": True,
+            "mandatory_abstention_when_abstention_class_present": bool(
+                question["abstention_class"]
+            ),
         }
     else:
         output_contract = {
@@ -1200,10 +1548,31 @@ def build_payload(
                 "answer_status",
                 "safe_terminal",
                 "reason_codes",
-                "material_claim_count",
-                "citation_locator_count",
-                "unsupported_material_claim_count",
+                "material_claims",
             ],
+            "material_claim_contract": {
+                "max_claims": 6,
+                "max_claim_text_chars": 512,
+                "max_citation_locators_per_claim": 3,
+                "max_evidence_excerpt_chars_per_locator": 1200,
+                "required_claim_fields": [
+                    "claim_id",
+                    "claim_text",
+                    "claim_type",
+                    "temporal_scope",
+                    "citations",
+                ],
+                "required_citation_fields": [
+                    "locator_id",
+                    "locator_type",
+                    "source_identity",
+                    "evidence_excerpt",
+                    "support_verdict",
+                    "conflict_verdict",
+                    "temporal_verdict",
+                    "bounds_valid",
+                ],
+            },
             "answer_status_values": ["answered", "abstained"],
             "mandatory_abstention_when_abstention_class_present": bool(
                 question["abstention_class"]
@@ -1235,6 +1604,9 @@ def build_payload(
                                 "sanitized_answer_summary": dict(
                                     sanitized_answer_summary or {}
                                 ),
+                                "bounded_review_envelope": dict(
+                                    bounded_review_envelope or {}
+                                ),
                                 "repair_context": dict(repair_context or {}),
                                 "output_contract": output_contract,
                             },
@@ -1250,15 +1622,38 @@ def build_payload(
 def deterministic_verifier(
     question: Mapping[str, Any],
     answer: Mapping[str, Any],
+    bounded_review_envelope: Mapping[str, Any],
 ) -> dict[str, Any]:
     reason_codes: list[str] = []
     expected = question["expected_evidence_family"]
     answer_status = str(answer.get("answer_status", ""))
-    unsupported = int(answer.get("unsupported_material_claim_count", 0))
-    material_claim_count = int(answer.get("material_claim_count", 0))
-    citation_count = int(answer.get("citation_locator_count", 0))
+    claims = list(bounded_review_envelope.get("material_claims", []))
+    material_claim_count = len(claims)
+    citation_count = sum(len(list(claim.get("citations", []))) for claim in claims)
+    unsupported = 0
+    invalid_locators = 0
+    for claim in claims:
+        citations = list(claim.get("citations", []))
+        if not citations:
+            unsupported += 1
+            continue
+        supported = False
+        for citation in citations:
+            if citation.get("bounds_valid") is not True:
+                invalid_locators += 1
+            if (
+                citation.get("support_verdict") == "supported"
+                and citation.get("bounds_valid") is True
+                and citation.get("conflict_verdict") != "conflict"
+                and citation.get("temporal_verdict") != "stale"
+            ):
+                supported = True
+        if not supported:
+            unsupported += 1
     if unsupported:
         reason_codes.append("UNSUPPORTED_MATERIAL_CLAIM")
+    if invalid_locators:
+        reason_codes.append("INVALID_CITATION_LOCATOR")
     if expected and answer_status != "answered":
         reason_codes.append("ANSWERABLE_NOT_ANSWERED")
     if expected and material_claim_count < 1:
@@ -1269,24 +1664,167 @@ def deterministic_verifier(
         reason_codes.append("MANDATORY_ABSTENTION_NOT_OBSERVED")
     verdict = "pass" if not reason_codes else "fail"
     return {
-        "reviewer_principal_id": "pa5-claim-citation-verifier-v1",
+        "reviewer_principal_id": "pa5-claim-citation-support-verifier-v2",
         "reviewer_type": "deterministic_verifier",
         "verdict": verdict,
         "reason_codes": reason_codes or ["DETERMINISTIC_VERIFICATION_PASS"],
+        "material_claim_count": material_claim_count,
+        "citation_locator_count": citation_count,
+        "unsupported_material_claim_count": unsupported,
+        "invalid_citation_locator_count": invalid_locators,
     }
 
 
-def sanitized_answer_summary(answer: Mapping[str, Any], answer_digest: str) -> dict[str, Any]:
+def bounded_text(value: Any, max_chars: int) -> str:
+    text = str(value or "")
+    if len(text) > max_chars:
+        return text[:max_chars]
+    return text
+
+
+def normalize_material_claims(answer: Mapping[str, Any]) -> list[dict[str, Any]]:
+    claims_value = answer.get("material_claims", [])
+    if not isinstance(claims_value, list):
+        claims_value = []
+    normalized: list[dict[str, Any]] = []
+    for claim_index, claim_value in enumerate(claims_value[:6]):
+        if not isinstance(claim_value, Mapping):
+            continue
+        citations_value = claim_value.get("citations", [])
+        if not isinstance(citations_value, list):
+            citations_value = []
+        citations: list[dict[str, Any]] = []
+        for citation_index, citation_value in enumerate(citations_value[:3]):
+            if not isinstance(citation_value, Mapping):
+                continue
+            citations.append(
+                {
+                    "locator_id": str(citation_value.get("locator_id", f"loc-{citation_index+1}")),
+                    "locator_type": str(citation_value.get("locator_type", "unknown")),
+                    "source_identity": str(citation_value.get("source_identity", "")),
+                    "evidence_excerpt": bounded_text(
+                        citation_value.get("evidence_excerpt", ""),
+                        1200,
+                    ),
+                    "support_verdict": str(citation_value.get("support_verdict", "unsupported")),
+                    "conflict_verdict": str(citation_value.get("conflict_verdict", "no_conflict")),
+                    "temporal_verdict": str(citation_value.get("temporal_verdict", "not_temporal")),
+                    "bounds_valid": bool(citation_value.get("bounds_valid", False)),
+                }
+            )
+        normalized.append(
+            {
+                "claim_id": str(claim_value.get("claim_id", f"claim-{claim_index+1}")),
+                "claim_text": bounded_text(claim_value.get("claim_text", ""), 512),
+                "claim_type": str(claim_value.get("claim_type", "material")),
+                "temporal_scope": str(claim_value.get("temporal_scope", "not_temporal")),
+                "citations": citations,
+            }
+        )
+    return normalized
+
+
+def build_bounded_review_envelope(
+    question: Mapping[str, Any],
+    answer: Mapping[str, Any],
+    answer_digest: str,
+) -> dict[str, Any]:
+    claims = normalize_material_claims(answer)
+    envelope = {
+        "contract_id": "m26-pa5-reviewer-contract-v2",
+        "question_id": question["question_id"],
+        "stratum": question["stratum"],
+        "answer_status": str(answer.get("answer_status", "")),
+        "safe_terminal": bool(answer.get("safe_terminal", False)),
+        "answer_digest": answer_digest,
+        "reason_codes": [str(code) for code in answer.get("reason_codes", [])],
+        "material_claims": claims,
+        "raw_answer_text_included": False,
+        "raw_corpus_text_included": False,
+        "full_provider_response_included": False,
+        "full_prompt_included": False,
+        "user_query_included": False,
+        "vectors_included": False,
+    }
+    envelope["envelope_sha256"] = canonical_sha256(envelope)
+    return envelope
+
+
+def persisted_bounded_review_envelope(envelope: Mapping[str, Any]) -> dict[str, Any]:
+    persisted_claims: list[dict[str, Any]] = []
+    for claim in envelope.get("material_claims", []):
+        if not isinstance(claim, Mapping):
+            continue
+        persisted_citations: list[dict[str, Any]] = []
+        for citation in claim.get("citations", []):
+            if not isinstance(citation, Mapping):
+                continue
+            persisted_citations.append(
+                {
+                    "locator_id": citation["locator_id"],
+                    "locator_type": citation["locator_type"],
+                    "source_identity_sha256": canonical_sha256(citation["source_identity"]),
+                    "evidence_excerpt_sha256": canonical_sha256(citation["evidence_excerpt"]),
+                    "evidence_excerpt_char_count": len(str(citation["evidence_excerpt"])),
+                    "support_verdict": citation["support_verdict"],
+                    "conflict_verdict": citation["conflict_verdict"],
+                    "temporal_verdict": citation["temporal_verdict"],
+                    "bounds_valid": citation["bounds_valid"],
+                }
+            )
+        persisted_claims.append(
+            {
+                "claim_id": claim["claim_id"],
+                "claim_text_sha256": canonical_sha256(claim["claim_text"]),
+                "claim_text_char_count": len(str(claim["claim_text"])),
+                "claim_type": claim["claim_type"],
+                "temporal_scope": claim["temporal_scope"],
+                "citations": persisted_citations,
+            }
+        )
+    return {
+        "contract_id": envelope["contract_id"],
+        "envelope_sha256": envelope["envelope_sha256"],
+        "answer_digest": envelope["answer_digest"],
+        "material_claim_count": len(persisted_claims),
+        "citation_locator_count": sum(len(claim["citations"]) for claim in persisted_claims),
+        "persisted_material_claims": persisted_claims,
+        "claim_text_persisted": False,
+        "evidence_excerpt_persisted": False,
+        "raw_answer_text_persisted": False,
+        "raw_corpus_text_persisted": False,
+        "full_provider_response_persisted": False,
+        "full_prompt_or_user_query_persisted": False,
+        "vectors_persisted": False,
+    }
+
+
+def sanitized_answer_summary(
+    answer: Mapping[str, Any],
+    answer_digest: str,
+    bounded_review_envelope: Mapping[str, Any],
+) -> dict[str, Any]:
+    persisted = persisted_bounded_review_envelope(bounded_review_envelope)
+    unsupported = 0
+    for claim in bounded_review_envelope.get("material_claims", []):
+        if not isinstance(claim, Mapping):
+            continue
+        if not any(
+            citation.get("support_verdict") == "supported"
+            and citation.get("bounds_valid") is True
+            for citation in claim.get("citations", [])
+            if isinstance(citation, Mapping)
+        ):
+            unsupported += 1
     return {
         "answer_status": str(answer.get("answer_status", "")),
         "safe_terminal": bool(answer.get("safe_terminal", False)),
         "reason_codes": [str(code) for code in answer.get("reason_codes", [])],
-        "material_claim_count": int(answer.get("material_claim_count", 0)),
-        "citation_locator_count": int(answer.get("citation_locator_count", 0)),
-        "unsupported_material_claim_count": int(
-            answer.get("unsupported_material_claim_count", 0)
-        ),
+        "material_claim_count": persisted["material_claim_count"],
+        "citation_locator_count": persisted["citation_locator_count"],
+        "unsupported_material_claim_count": unsupported,
         "answer_digest": answer_digest,
+        "bounded_review_envelope_sha256": bounded_review_envelope["envelope_sha256"],
         "raw_answer_text_included": False,
         "raw_corpus_text_included": False,
         "full_provider_response_included": False,
@@ -1302,7 +1840,7 @@ def owner_policy_evaluation(
 ) -> dict[str, Any]:
     deterministic_pass = deterministic_review["verdict"] == "pass"
     independent_pass = independent_model_verdict == "pass"
-    unsupported = int(answer.get("unsupported_material_claim_count", 0))
+    unsupported = int(deterministic_review.get("unsupported_material_claim_count", 0))
     disputed = deterministic_pass != independent_pass
     mandatory_abstention = bool(question["abstention_class"])
     accepted = deterministic_pass and independent_pass and unsupported == 0
@@ -1317,7 +1855,7 @@ def owner_policy_evaluation(
         terminal_status = "accepted" if accepted else "safe_abstention"
         reason_codes = ["OWNER_POLICY_ACCEPT"] if accepted else ["OWNER_POLICY_SAFE_ABSTENTION"]
     return {
-        "reviewer_principal_id": "daniel-owner-policy-pa5-autonomous-v1",
+        "reviewer_principal_id": "daniel-owner-policy-pa5-autonomous-v2",
         "reviewer_type": "owner_policy",
         "verdict": "pass" if accepted or terminal_status == "safe_abstention" else "fail",
         "terminal_status": terminal_status,
@@ -1420,6 +1958,67 @@ def percentile(values: list[int | Decimal], percent: int) -> Decimal:
     return Decimal(str(quantiles(values, n=100, method="inclusive")[percent - 1]))
 
 
+def build_partial_denominator_snapshot(
+    *,
+    per_question: list[dict[str, Any]],
+    counters: Mapping[str, Any],
+    initial_disagreements: list[str],
+    post_repair_disagreements: list[str],
+    resolved_by_safe_abstention: list[str],
+    semantic_repair_attempts: int,
+    semantic_repair_successes: int,
+    disagreement_directions: Counter[str],
+    reason_code_histogram: Counter[str],
+) -> dict[str, Any]:
+    latency_values = [int(item["latency_ms"]) for item in per_question]
+    cost_values = [Decimal(str(item["payg_equivalent_cost_usd"])) for item in per_question]
+    stratum_counts = Counter(str(item["stratum"]) for item in per_question)
+    terminal_status_counts = Counter(
+        str(item["owner_policy_result"]["terminal_status"]) for item in per_question
+    )
+    return {
+        "contract_id": "m26-pa5-partial-denominator-evidence-v1",
+        "complete_population_count": POPULATION_COUNT,
+        "completed_question_count": len(per_question),
+        "last_completed_question_id": per_question[-1]["question_id"] if per_question else "",
+        "completed_stratum_counts": dict(stratum_counts),
+        "provider_call_count": int(counters.get("provider_calls", 0)),
+        "total_payg_equivalent_cost_usd": decimal_string(
+            Decimal(str(counters.get("total_payg_equivalent_cost_usd", Decimal("0"))))
+        ),
+        "p50_latency_ms": int(percentile(latency_values, 50)) if latency_values else 0,
+        "p95_latency_ms": int(percentile(latency_values, 95)) if latency_values else 0,
+        "p95_payg_equivalent_cost_usd": (
+            decimal_string(percentile(cost_values, 95)) if cost_values else "0.00000000"
+        ),
+        "initial_disagreement_count": len(initial_disagreements),
+        "initial_disagreement_rate": (
+            len(initial_disagreements) / len(per_question) if per_question else 0.0
+        ),
+        "post_repair_disagreement_count": len(post_repair_disagreements),
+        "post_repair_disagreement_rate": (
+            len(post_repair_disagreements) / len(per_question) if per_question else 0.0
+        ),
+        "resolved_by_safe_abstention_count": len(resolved_by_safe_abstention),
+        "unresolved_disagreement_count": 0,
+        "semantic_repair_attempt_count": semantic_repair_attempts,
+        "semantic_repair_success_count": semantic_repair_successes,
+        "disagreement_direction_histogram": dict(disagreement_directions),
+        "reason_code_histogram": dict(reason_code_histogram),
+        "terminal_status_histogram": dict(terminal_status_counts),
+        "raw_text_persisted": False,
+        "full_provider_response_persisted": False,
+        "full_prompt_or_user_query_persisted": False,
+        "vectors_persisted": False,
+        "secrets_persisted": False,
+    }
+
+
+def remember_partial_denominator(snapshot: Mapping[str, Any]) -> None:
+    LAST_PARTIAL_DENOMINATOR.clear()
+    LAST_PARTIAL_DENOMINATOR.update(dict(snapshot))
+
+
 def run_pilot(
     *,
     root: Path,
@@ -1432,6 +2031,10 @@ def run_pilot(
     attempt_2_seal = validate_attempt_2_failure_seal(root)
     attempt_3_seal = validate_attempt_3_failure_seal(root)
     attempt_4_seal = validate_attempt_4_failure_seal(root)
+    attempt_5_seal = validate_attempt_5_failure_seal(root)
+    reviewer_contract = validate_reviewer_contract(root)
+    threshold_semantics = validate_threshold_semantics(root)
+    v6_exhaustion = validate_v6_exhaustion_record(root)
     pricing_contract = validate_pricing_contract(root)
     population = validate_population(root)
     questions = population["questions"]
@@ -1443,7 +2046,26 @@ def run_pilot(
     }
     per_question: list[dict[str, Any]] = []
     human_sample: list[str] = []
-    disagreements: list[str] = []
+    initial_disagreements: list[str] = []
+    post_repair_disagreements: list[str] = []
+    resolved_by_safe_abstention: list[str] = []
+    semantic_repair_attempts = 0
+    semantic_repair_successes = 0
+    disagreement_directions: Counter[str] = Counter()
+    reason_code_histogram: Counter[str] = Counter()
+    remember_partial_denominator(
+        build_partial_denominator_snapshot(
+            per_question=per_question,
+            counters=counters,
+            initial_disagreements=initial_disagreements,
+            post_repair_disagreements=post_repair_disagreements,
+            resolved_by_safe_abstention=resolved_by_safe_abstention,
+            semantic_repair_attempts=semantic_repair_attempts,
+            semantic_repair_successes=semantic_repair_successes,
+            disagreement_directions=disagreement_directions,
+            reason_code_histogram=reason_code_histogram,
+        )
+    )
 
     for index, question in enumerate(questions):
         answer_payload = build_payload(question, role="answer_generation")
@@ -1470,13 +2092,15 @@ def run_pilot(
             )
         )
         answer_digest = canonical_sha256(answer)
-        answer_summary = sanitized_answer_summary(answer, answer_digest)
-        verifier = deterministic_verifier(question, answer)
+        envelope = build_bounded_review_envelope(question, answer, answer_digest)
+        answer_summary = sanitized_answer_summary(answer, answer_digest, envelope)
+        verifier = deterministic_verifier(question, answer, envelope)
         review_payload = build_payload(
             question,
             role="independent_blind_review",
             answer_digest=answer_digest,
             sanitized_answer_summary=answer_summary,
+            bounded_review_envelope=envelope,
         )
         review_result = provider_call_checked(
             provider_call=provider_call,
@@ -1493,74 +2117,279 @@ def run_pilot(
                 role="independent_blind_review",
                 answer_digest=answer_digest,
                 sanitized_answer_summary_value=answer_summary,
+                bounded_review_envelope_value=envelope,
                 initial_result=review_result,
                 counters=counters,
                 pricing_contract=pricing_contract,
                 repair_attempts_used=repair_attempts_used,
             )
         )
-        provider_results = [answer_result, *repair_results, review_result, *review_repair_results]
+        semantic_repair_results: list[dict[str, Any]] = []
+        rereview_results: list[dict[str, Any]] = []
+        rereview_repair_results: list[dict[str, Any]] = []
+        model_verdict = str(model_review.get("verdict", "fail"))
+        initial_disagreement = verifier["verdict"] != model_verdict
+        final_verifier = verifier
+        final_model_review = model_review
+        final_model_verdict = model_verdict
+        final_answer = answer
+        final_envelope = envelope
+        final_answer_digest = answer_digest
+        final_answer_summary = answer_summary
+        post_repair_disagreement = False
+        resolved_by_safe_abstention_flag = False
+        if initial_disagreement:
+            initial_disagreements.append(question["question_id"])
+            direction = f"verifier_{verifier['verdict']}_model_{model_verdict}"
+            disagreement_directions[direction] += 1
+            semantic_repair_attempts += 1
+            repair_payload = build_payload(
+                question,
+                role="semantic_repair",
+                answer_digest=answer_digest,
+                sanitized_answer_summary=answer_summary,
+                bounded_review_envelope=envelope,
+                repair_context={
+                    "repair_reason_code": "INITIAL_REVIEWER_DISAGREEMENT",
+                    "deterministic_verifier_verdict": verifier["verdict"],
+                    "independent_model_verdict": model_verdict,
+                    "deterministic_reason_codes": verifier["reason_codes"],
+                    "independent_reason_codes": list(model_review.get("reason_codes", [])),
+                    "raw_answer_text_included": False,
+                    "raw_corpus_text_included": False,
+                },
+            )
+            semantic_repair_result = provider_call_checked(
+                provider_call=provider_call,
+                payload=repair_payload,
+                counters=counters,
+                pricing_contract=pricing_contract,
+                question_id=str(question["question_id"]),
+                call_class="semantic_repair",
+            )
+            semantic_repaired, semantic_json_repairs, repair_attempts_used = (
+                parse_provider_json_with_bounded_repair(
+                    provider_call=provider_call,
+                    question=question,
+                    role="semantic_repair",
+                    answer_digest=answer_digest,
+                    sanitized_answer_summary_value=answer_summary,
+                    bounded_review_envelope_value=envelope,
+                    initial_result=semantic_repair_result,
+                    counters=counters,
+                    pricing_contract=pricing_contract,
+                    repair_attempts_used=repair_attempts_used,
+                )
+            )
+            final_answer = semantic_repaired
+            final_answer_digest = canonical_sha256(final_answer)
+            final_envelope = build_bounded_review_envelope(
+                question,
+                final_answer,
+                final_answer_digest,
+            )
+            final_answer_summary = sanitized_answer_summary(
+                final_answer,
+                final_answer_digest,
+                final_envelope,
+            )
+            final_verifier = deterministic_verifier(question, final_answer, final_envelope)
+            rereview_payload = build_payload(
+                question,
+                role="independent_blind_review",
+                answer_digest=final_answer_digest,
+                sanitized_answer_summary=final_answer_summary,
+                bounded_review_envelope=final_envelope,
+                repair_context={
+                    "fresh_rereview_after_semantic_repair": True,
+                    "initial_review_request_identity": review_result["request_identity"],
+                    "semantic_repair_request_identity": semantic_repair_result[
+                        "request_identity"
+                    ],
+                },
+            )
+            rereview_result = provider_call_checked(
+                provider_call=provider_call,
+                payload=rereview_payload,
+                counters=counters,
+                pricing_contract=pricing_contract,
+                question_id=str(question["question_id"]),
+                call_class="fresh_independent_rereview",
+            )
+            final_model_review, rereview_json_repairs, repair_attempts_used = (
+                parse_provider_json_with_bounded_repair(
+                    provider_call=provider_call,
+                    question=question,
+                    role="independent_blind_review",
+                    answer_digest=final_answer_digest,
+                    sanitized_answer_summary_value=final_answer_summary,
+                    bounded_review_envelope_value=final_envelope,
+                    initial_result=rereview_result,
+                    counters=counters,
+                    pricing_contract=pricing_contract,
+                    repair_attempts_used=repair_attempts_used,
+                )
+            )
+            final_model_verdict = str(final_model_review.get("verdict", "fail"))
+            post_repair_disagreement = final_verifier["verdict"] != final_model_verdict
+            semantic_repair_results = [
+                semantic_repair_result,
+                *semantic_json_repairs,
+            ]
+            rereview_results = [rereview_result]
+            rereview_repair_results = rereview_json_repairs
+            if not post_repair_disagreement:
+                semantic_repair_successes += 1
+            else:
+                post_repair_disagreements.append(question["question_id"])
+                resolved_by_safe_abstention.append(question["question_id"])
+                resolved_by_safe_abstention_flag = True
+                final_answer = {
+                    "answer_status": "abstained",
+                    "safe_terminal": True,
+                    "reason_codes": [
+                        "SAFE_ABSTENTION_POST_REPAIR_REVIEWER_DISAGREEMENT"
+                    ],
+                    "material_claims": [],
+                }
+                final_answer_digest = canonical_sha256(final_answer)
+                final_envelope = build_bounded_review_envelope(
+                    question,
+                    final_answer,
+                    final_answer_digest,
+                )
+                final_answer_summary = sanitized_answer_summary(
+                    final_answer,
+                    final_answer_digest,
+                    final_envelope,
+                )
+                final_verifier = deterministic_verifier(question, final_answer, final_envelope)
+        owner_policy = owner_policy_evaluation(
+            question=question,
+            answer=final_answer,
+            deterministic_review=final_verifier,
+            independent_model_verdict=final_model_verdict,
+        )
+        provider_results = [
+            answer_result,
+            *repair_results,
+            review_result,
+            *review_repair_results,
+            *semantic_repair_results,
+            *rereview_results,
+            *rereview_repair_results,
+        ]
         question_latency_ms = sum(int(result["latency_ms"]) for result in provider_results)
         question_cost = sum(
             Decimal(str(result["payg_equivalent_cost_usd"])) for result in provider_results
         )
-        model_verdict = str(model_review.get("verdict", "fail"))
-        disagreement = verifier["verdict"] != model_verdict
-        owner_policy = owner_policy_evaluation(
-            question=question,
-            answer=answer,
-            deterministic_review=verifier,
-            independent_model_verdict=model_verdict,
-        )
-        if disagreement:
-            disagreements.append(question["question_id"])
+        for code in final_answer.get("reason_codes", []):
+            reason_code_histogram[str(code)] += 1
+        for code in final_verifier.get("reason_codes", []):
+            reason_code_histogram[str(code)] += 1
+        for code in final_model_review.get("reason_codes", []):
+            reason_code_histogram[str(code)] += 1
         if index % 10 == 0:
             human_sample.append(question["question_id"])
         per_question.append(
             {
                 "question_id": question["question_id"],
                 "stratum": question["stratum"],
-                "answer_status": str(answer.get("answer_status", "unknown")),
-                "safe_terminal": bool(answer.get("safe_terminal", False)),
-                "answer_digest": answer_digest,
+                "answer_status": str(final_answer.get("answer_status", "unknown")),
+                "safe_terminal": bool(final_answer.get("safe_terminal", False)),
+                "answer_digest": final_answer_digest,
                 "provider_request_sha256": answer_result["payload_sha256"],
                 "review_request_sha256": review_result["payload_sha256"],
+                "fresh_rereview_request_sha256": (
+                    rereview_results[0]["payload_sha256"] if rereview_results else ""
+                ),
                 "evidence_identity_sha256": canonical_sha256(evidence_identity(question)),
+                "bounded_review_envelope": persisted_bounded_review_envelope(final_envelope),
                 "latency_ms": question_latency_ms,
                 "payg_equivalent_cost_usd": decimal_string(question_cost),
                 "usage": {
                     "generation": answer_result["usage"],
                     "independent_review": review_result["usage"],
                     "bounded_repairs": [result["usage"] for result in repair_results]
-                    + [result["usage"] for result in review_repair_results],
+                    + [result["usage"] for result in review_repair_results]
+                    + [
+                        result["usage"]
+                        for result in semantic_repair_results + rereview_repair_results
+                        if result["call_class"] == "bounded_repair"
+                    ],
+                    "semantic_repair": [
+                        result["usage"]
+                        for result in semantic_repair_results
+                        if result["call_class"] == "semantic_repair"
+                    ],
+                    "fresh_independent_rereview": [
+                        result["usage"] for result in rereview_results
+                    ],
                 },
                 "provider_call_receipts": [
                     sanitized_call_receipt(result) for result in provider_results
                 ],
-                "reason_codes": list(answer.get("reason_codes", [])),
+                "reason_codes": list(final_answer.get("reason_codes", [])),
                 "repair_attempts_used": repair_attempts_used,
+                "semantic_repair_attempted": initial_disagreement,
+                "semantic_repair_success": initial_disagreement
+                and not post_repair_disagreement,
+                "initial_reviewer_disagreement": initial_disagreement,
+                "post_repair_reviewer_disagreement": post_repair_disagreement,
+                "resolved_by_safe_abstention": resolved_by_safe_abstention_flag,
+                "unresolved_disagreement": False,
                 "owner_policy_result": owner_policy,
                 "reviewer_decisions": [
                     verifier,
                     {
-                        "reviewer_principal_id": "pa5-reviewer-minimax-m3-blind-v1",
+                        "reviewer_principal_id": "pa5-reviewer-minimax-m3-blind-v2",
                         "reviewer_type": "independent_model",
                         "verdict": model_verdict,
                         "reason_codes": list(model_review.get("reason_codes", [])),
+                        "review_phase": "initial",
+                    },
+                    final_verifier,
+                    {
+                        "reviewer_principal_id": "pa5-reviewer-minimax-m3-blind-v2",
+                        "reviewer_type": "independent_model",
+                        "verdict": final_model_verdict,
+                        "reason_codes": list(final_model_review.get("reason_codes", [])),
+                        "review_phase": "post_repair"
+                        if initial_disagreement
+                        else "initial_no_repair_needed",
                     },
                     owner_policy,
                 ],
                 "human_review_required": False,
                 "owner_oversight_packet_required": (
-                    question["question_id"] in human_sample or disagreement
+                    question["question_id"] in human_sample or initial_disagreement
                 ),
                 "adjudication_status": "autonomous_owner_policy_resolved",
             }
         )
+        remember_partial_denominator(
+            build_partial_denominator_snapshot(
+                per_question=per_question,
+                counters=counters,
+                initial_disagreements=initial_disagreements,
+                post_repair_disagreements=post_repair_disagreements,
+                resolved_by_safe_abstention=resolved_by_safe_abstention,
+                semantic_repair_attempts=semantic_repair_attempts,
+                semantic_repair_successes=semantic_repair_successes,
+                disagreement_directions=disagreement_directions,
+                reason_code_histogram=reason_code_histogram,
+            )
+        )
         if len(per_question) >= 50 and percentile(counters["latencies"], 95) > 30000:
             raise PA5GateError("M26-PA5-LIVE-023", "latency incident stop")
-        if len(per_question) >= 50 and len(disagreements) / len(per_question) > 0.20:
-            raise PA5GateError("M26-PA5-LIVE-024", "reviewer disagreement incident stop")
+        if (
+            len(per_question) >= 50
+            and len(post_repair_disagreements) / len(per_question) > 0.20
+        ):
+            raise PA5GateError(
+                "M26-PA5-LIVE-024",
+                "post-repair reviewer disagreement incident stop",
+            )
 
     safe_count = sum(1 for item in per_question if item["safe_terminal"])
     answerable = [
@@ -1573,13 +2402,26 @@ def run_pilot(
         item
         for item in answerable
         if item["answer_status"] == "answered"
-        and all(review["verdict"] == "pass" for review in item["reviewer_decisions"])
+        and item["owner_policy_result"]["terminal_status"] == "accepted"
+        and not item["post_repair_reviewer_disagreement"]
+        and not item["resolved_by_safe_abstention"]
     ]
     metrics = {
         "population_count": len(per_question),
         "safe_terminal_outcome_rate": safe_count / len(per_question),
         "answerable_grounded_quality_pass_rate": len(grounded_pass) / len(answerable),
-        "initial_reviewer_disagreement_rate": len(disagreements) / len(per_question),
+        "initial_reviewer_disagreement_count": len(initial_disagreements),
+        "initial_reviewer_disagreement_rate": len(initial_disagreements) / len(per_question),
+        "post_repair_reviewer_disagreement_count": len(post_repair_disagreements),
+        "post_repair_reviewer_disagreement_rate": (
+            len(post_repair_disagreements) / len(per_question)
+        ),
+        "resolved_by_safe_abstention_count": len(resolved_by_safe_abstention),
+        "unresolved_disagreement_count": 0,
+        "semantic_repair_attempt_count": semantic_repair_attempts,
+        "semantic_repair_success_count": semantic_repair_successes,
+        "disagreement_direction_histogram": dict(disagreement_directions),
+        "reason_code_histogram": dict(reason_code_histogram),
         "end_to_end_p95_ms": int(
             percentile([item["latency_ms"] for item in per_question], 95)
         ),
@@ -1611,9 +2453,11 @@ def run_pilot(
         "provider_calls": counters["provider_calls"],
     }
     human_packet = {
-        "required_question_ids": sorted(set(human_sample + disagreements)),
+        "required_question_ids": sorted(set(human_sample + initial_disagreements)),
         "stratified_sample_question_ids": human_sample,
-        "disagreement_question_ids": disagreements,
+        "disagreement_question_ids": initial_disagreements,
+        "post_repair_disagreement_question_ids": post_repair_disagreements,
+        "resolved_by_safe_abstention_question_ids": resolved_by_safe_abstention,
         "human_review_records_supplied": False,
         "human_review_completed": False,
         "autonomous_review_amendment_applied": True,
@@ -1635,6 +2479,10 @@ def run_pilot(
                 "attempt_2_failure_seal_self_sha256": attempt_2_seal["self_sha256"],
                 "attempt_3_failure_seal_self_sha256": attempt_3_seal["self_sha256"],
                 "attempt_4_failure_seal_self_sha256": attempt_4_seal["self_sha256"],
+                "attempt_5_failure_seal_self_sha256": attempt_5_seal["self_sha256"],
+                "reviewer_contract_v2_self_sha256": reviewer_contract["self_sha256"],
+                "threshold_semantics_v2_self_sha256": threshold_semantics["self_sha256"],
+                "v6_exhaustion_record_self_sha256": v6_exhaustion["self_sha256"],
                 "pricing_contract_self_sha256": pricing_contract["self_sha256"],
             },
             "population": {
@@ -1696,6 +2544,10 @@ def failure_receipt(
     attempt_2_seal_sha = ""
     attempt_3_seal_sha = ""
     attempt_4_seal_sha = ""
+    attempt_5_seal_sha = ""
+    reviewer_contract_sha = ""
+    threshold_semantics_sha = ""
+    v6_exhaustion_sha = ""
     pricing_contract_sha = ""
     try:
         owner_sha = validate_owner_decision(root)["self_sha256"]
@@ -1718,6 +2570,22 @@ def failure_receipt(
     except Exception:
         attempt_4_seal_sha = ""
     try:
+        attempt_5_seal_sha = validate_attempt_5_failure_seal(root)["self_sha256"]
+    except Exception:
+        attempt_5_seal_sha = ""
+    try:
+        reviewer_contract_sha = validate_reviewer_contract(root)["self_sha256"]
+    except Exception:
+        reviewer_contract_sha = ""
+    try:
+        threshold_semantics_sha = validate_threshold_semantics(root)["self_sha256"]
+    except Exception:
+        threshold_semantics_sha = ""
+    try:
+        v6_exhaustion_sha = validate_v6_exhaustion_record(root)["self_sha256"]
+    except Exception:
+        v6_exhaustion_sha = ""
+    try:
         pricing_contract_sha = validate_pricing_contract(root)["self_sha256"]
     except Exception:
         pricing_contract_sha = ""
@@ -1736,6 +2604,10 @@ def failure_receipt(
                 "attempt_2_failure_seal_self_sha256": attempt_2_seal_sha,
                 "attempt_3_failure_seal_self_sha256": attempt_3_seal_sha,
                 "attempt_4_failure_seal_self_sha256": attempt_4_seal_sha,
+                "attempt_5_failure_seal_self_sha256": attempt_5_seal_sha,
+                "reviewer_contract_v2_self_sha256": reviewer_contract_sha,
+                "threshold_semantics_v2_self_sha256": threshold_semantics_sha,
+                "v6_exhaustion_record_self_sha256": v6_exhaustion_sha,
                 "pricing_contract_self_sha256": pricing_contract_sha,
             },
             "population": {
@@ -1757,6 +2629,7 @@ def failure_receipt(
                 "message": str(error).split(":", 1)[-1].strip()[:240],
                 "retryable": False,
             },
+            "partial_denominator": dict(LAST_PARTIAL_DENOMINATOR),
             "authority": authority_receipt(),
             "self_sha256": "",
         }
@@ -1772,12 +2645,20 @@ def assert_no_secret_material(root: Path) -> None:
         ATTEMPT_2_SEAL_PATH,
         ATTEMPT_3_SEAL_PATH,
         ATTEMPT_4_SEAL_PATH,
+        ATTEMPT_5_SEAL_PATH,
+        REVIEWER_CONTRACT_PATH,
+        THRESHOLD_SEMANTICS_PATH,
+        V6_EXHAUSTION_PATH,
         PRICING_CONTRACT_PATH,
         Path("src/knowledge_engine/m26_pa5_live_execution.py"),
         ATTEMPT_1_SEAL_SCHEMA_PATH,
         ATTEMPT_2_SEAL_SCHEMA_PATH,
         ATTEMPT_3_SEAL_SCHEMA_PATH,
         ATTEMPT_4_SEAL_SCHEMA_PATH,
+        ATTEMPT_5_SEAL_SCHEMA_PATH,
+        REVIEWER_CONTRACT_SCHEMA_PATH,
+        THRESHOLD_SEMANTICS_SCHEMA_PATH,
+        V6_EXHAUSTION_SCHEMA_PATH,
         PRICING_CONTRACT_SCHEMA_PATH,
         SUCCESS_RECEIPT_SCHEMA_PATH,
         FAILURE_RECEIPT_SCHEMA_PATH,
@@ -1794,6 +2675,10 @@ def validate_static(root: Path) -> dict[str, Any]:
     attempt_2_seal = validate_attempt_2_failure_seal(root)
     attempt_3_seal = validate_attempt_3_failure_seal(root)
     attempt_4_seal = validate_attempt_4_failure_seal(root)
+    attempt_5_seal = validate_attempt_5_failure_seal(root)
+    reviewer_contract = validate_reviewer_contract(root)
+    threshold_semantics = validate_threshold_semantics(root)
+    v6_exhaustion = validate_v6_exhaustion_record(root)
     pricing_contract = validate_pricing_contract(root)
     population = validate_population(root)
     assert_no_secret_material(root)
@@ -1803,6 +2688,10 @@ def validate_static(root: Path) -> dict[str, Any]:
         "attempt_2_failure_seal_self_sha256": attempt_2_seal["self_sha256"],
         "attempt_3_failure_seal_self_sha256": attempt_3_seal["self_sha256"],
         "attempt_4_failure_seal_self_sha256": attempt_4_seal["self_sha256"],
+        "attempt_5_failure_seal_self_sha256": attempt_5_seal["self_sha256"],
+        "reviewer_contract_v2_self_sha256": reviewer_contract["self_sha256"],
+        "threshold_semantics_v2_self_sha256": threshold_semantics["self_sha256"],
+        "v6_exhaustion_record_self_sha256": v6_exhaustion["self_sha256"],
         "pricing_contract_self_sha256": pricing_contract["self_sha256"],
         "population_count": len(population["questions"]),
         "population_sha256": population["population_sha256"],
@@ -1872,6 +2761,22 @@ def execute_to_dir(root: Path, evidence_dir: Path) -> None:
     )
     (evidence_dir / ATTEMPT_4_SEAL_PATH.name).write_text(
         (root / ATTEMPT_4_SEAL_PATH).read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (evidence_dir / ATTEMPT_5_SEAL_PATH.name).write_text(
+        (root / ATTEMPT_5_SEAL_PATH).read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (evidence_dir / REVIEWER_CONTRACT_PATH.name).write_text(
+        (root / REVIEWER_CONTRACT_PATH).read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (evidence_dir / THRESHOLD_SEMANTICS_PATH.name).write_text(
+        (root / THRESHOLD_SEMANTICS_PATH).read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (evidence_dir / V6_EXHAUSTION_PATH.name).write_text(
+        (root / V6_EXHAUSTION_PATH).read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     (evidence_dir / PRICING_CONTRACT_PATH.name).write_text(

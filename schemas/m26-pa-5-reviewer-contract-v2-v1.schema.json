@@ -1,0 +1,39 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-reviewer-contract-v2-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bounded_review_envelope": {
+      "additionalProperties": true,
+      "properties": {
+        "same_envelope_for_model_and_deterministic_verifier": { "const": true }
+      },
+      "required": ["same_envelope_for_model_and_deterministic_verifier"],
+      "type": "object"
+    },
+    "contract_id": { "const": "m26-pa5-reviewer-contract-v2" },
+    "forbidden_persistence": { "items": { "type": "string" }, "type": "array" },
+    "package_sha256": {
+      "const": "087ea7bb8c270bccf958041b8a4eacfa9d8fff9177a731f093f95f991d6063af"
+    },
+    "principals": { "items": { "type": "object" }, "minItems": 3, "type": "array" },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-5-reviewer-contract-v2/v1"
+    },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "semantic_repair": { "type": "object" },
+    "stage_id": { "const": "M26.PA.5" }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "contract_id",
+    "package_sha256",
+    "principals",
+    "bounded_review_envelope",
+    "forbidden_persistence",
+    "semantic_repair",
+    "self_sha256"
+  ],
+  "type": "object"
+}

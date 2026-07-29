@@ -1,0 +1,47 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-threshold-semantics-v2-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "contract_id": {
+      "const": "m26-pa5-reviewer-disagreement-threshold-semantics-v2"
+    },
+    "initial_disagreement": {
+      "additionalProperties": true,
+      "properties": {
+        "eligible_for_early_incident_stop": { "const": false },
+        "triggers_semantic_repair": { "const": true }
+      },
+      "required": ["eligible_for_early_incident_stop", "triggers_semantic_repair"],
+      "type": "object"
+    },
+    "package_sha256": {
+      "const": "087ea7bb8c270bccf958041b8a4eacfa9d8fff9177a731f093f95f991d6063af"
+    },
+    "post_repair_disagreement": {
+      "additionalProperties": true,
+      "properties": {
+        "eligible_for_early_incident_stop": { "const": true }
+      },
+      "required": ["eligible_for_early_incident_stop"],
+      "type": "object"
+    },
+    "safe_abstention_resolution": { "type": "object" },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-5-threshold-semantics-v2/v1"
+    },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.5" }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "contract_id",
+    "package_sha256",
+    "initial_disagreement",
+    "post_repair_disagreement",
+    "safe_abstention_resolution",
+    "self_sha256"
+  ],
+  "type": "object"
+}

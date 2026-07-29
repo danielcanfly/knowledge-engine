@@ -1,0 +1,26 @@
+{
+  "contract_id": "m26-pa5-reviewer-disagreement-threshold-semantics-v2",
+  "initial_disagreement": {
+    "acceptance_blocking_by_itself": false,
+    "eligible_for_early_incident_stop": false,
+    "recorded": true,
+    "triggers_semantic_repair": true
+  },
+  "package_sha256": "087ea7bb8c270bccf958041b8a4eacfa9d8fff9177a731f093f95f991d6063af",
+  "post_repair_disagreement": {
+    "acceptance_rate_max": 0.15,
+    "early_stop_after_completed_questions": 50,
+    "early_stop_rate_strictly_greater_than": 0.2,
+    "eligible_for_early_incident_stop": true,
+    "recorded": true
+  },
+  "safe_abstention_resolution": {
+    "counts_against_over_abstention": true,
+    "counts_as_grounded_quality_pass": false,
+    "disputed_answer_accepted": false,
+    "resolves_dispute": true
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-threshold-semantics-v2/v1",
+  "self_sha256": "cb9e05eeb61e8215237d4f99ab2ad97bcdb2b695db5022fe8ac70d7c147623e1",
+  "stage_id": "M26.PA.5"
+}

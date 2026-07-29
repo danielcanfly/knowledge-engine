@@ -12,14 +12,19 @@ on:
       - 'pilot/m26/m26-pa-5-attempt-2-failure-seal.json'
       - 'pilot/m26/m26-pa-5-attempt-3-failure-seal.json'
       - 'pilot/m26/m26-pa-5-attempt-4-failure-seal.json'
+      - 'pilot/m26/m26-pa-5-attempt-5-failure-seal.json'
       - 'pilot/m26/m26-pa-5-frozen-population.json'
       - 'pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json'
       - 'pilot/m26/m26-pa-5-owner-decision.json'
       - 'pilot/m26/m26-pa-5-population-manifest.json'
+      - 'pilot/m26/m26-pa-5-reviewer-contract-v2.json'
+      - 'pilot/m26/m26-pa-5-threshold-semantics-v2.json'
+      - 'pilot/m26/m26-pa-5-v6-exhaustion-record.json'
       - 'schemas/m26-pa-5-attempt-1-failure-seal-v1.schema.json'
       - 'schemas/m26-pa-5-attempt-2-failure-seal-v1.schema.json'
       - 'schemas/m26-pa-5-attempt-3-failure-seal-v1.schema.json'
       - 'schemas/m26-pa-5-attempt-4-failure-seal-v1.schema.json'
+      - 'schemas/m26-pa-5-attempt-5-failure-seal-v1.schema.json'
       - 'schemas/m26-pa-5-entry-gate-v1.schema.json'
       - 'schemas/m26-pa-5-failure-receipt-v1.schema.json'
       - 'schemas/m26-pa-5-frozen-population-v1.schema.json'
@@ -27,7 +32,10 @@ on:
       - 'schemas/m26-pa-5-population-manifest-v1.schema.json'
       - 'schemas/m26-pa-5-pricing-contract-v1.schema.json'
       - 'schemas/m26-pa-5-pilot-receipt-v1.schema.json'
+      - 'schemas/m26-pa-5-reviewer-contract-v2-v1.schema.json'
       - 'schemas/m26-pa-5-success-receipt-v1.schema.json'
+      - 'schemas/m26-pa-5-threshold-semantics-v2-v1.schema.json'
+      - 'schemas/m26-pa-5-v6-exhaustion-record-v1.schema.json'
       - 'src/knowledge_engine/m26_pa5_controlled_internal_pilot.py'
       - 'src/knowledge_engine/m26_pa5_live_execution.py'
       - 'src/knowledge_engine/m26_pa5_population_freeze.py'
@@ -43,16 +51,24 @@ on:
       - 'pilot/m26/m26-pa-5-attempt-2-failure-seal.json'
       - 'pilot/m26/m26-pa-5-attempt-3-failure-seal.json'
       - 'pilot/m26/m26-pa-5-attempt-4-failure-seal.json'
+      - 'pilot/m26/m26-pa-5-attempt-5-failure-seal.json'
       - 'pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json'
       - 'pilot/m26/m26-pa-5-owner-decision.json'
+      - 'pilot/m26/m26-pa-5-reviewer-contract-v2.json'
+      - 'pilot/m26/m26-pa-5-threshold-semantics-v2.json'
+      - 'pilot/m26/m26-pa-5-v6-exhaustion-record.json'
       - 'schemas/m26-pa-5-attempt-1-failure-seal-v1.schema.json'
       - 'schemas/m26-pa-5-attempt-2-failure-seal-v1.schema.json'
       - 'schemas/m26-pa-5-attempt-3-failure-seal-v1.schema.json'
       - 'schemas/m26-pa-5-attempt-4-failure-seal-v1.schema.json'
+      - 'schemas/m26-pa-5-attempt-5-failure-seal-v1.schema.json'
       - 'schemas/m26-pa-5-failure-receipt-v1.schema.json'
       - 'schemas/m26-pa-5-owner-decision-v1.schema.json'
       - 'schemas/m26-pa-5-pricing-contract-v1.schema.json'
+      - 'schemas/m26-pa-5-reviewer-contract-v2-v1.schema.json'
       - 'schemas/m26-pa-5-success-receipt-v1.schema.json'
+      - 'schemas/m26-pa-5-threshold-semantics-v2-v1.schema.json'
+      - 'schemas/m26-pa-5-v6-exhaustion-record-v1.schema.json'
       - 'src/knowledge_engine/m26_pa5_live_execution.py'
       - 'tests/test_m26_pa_5_live_execution.py'
 
@@ -127,12 +143,18 @@ jobs:
           cat > /tmp/expected.txt <<'FILES'
           .github/workflows/m26-pa-4-verified-answer-citation-gate.yml
           .github/workflows/m26-pa-5-controlled-internal-pilot.yml
-          pilot/m26/m26-pa-5-attempt-4-failure-seal.json
+          pilot/m26/m26-pa-5-attempt-5-failure-seal.json
           pilot/m26/m26-pa-5-owner-decision.json
-          schemas/m26-pa-5-attempt-4-failure-seal-v1.schema.json
+          pilot/m26/m26-pa-5-reviewer-contract-v2.json
+          pilot/m26/m26-pa-5-threshold-semantics-v2.json
+          pilot/m26/m26-pa-5-v6-exhaustion-record.json
+          schemas/m26-pa-5-attempt-5-failure-seal-v1.schema.json
           schemas/m26-pa-5-failure-receipt-v1.schema.json
           schemas/m26-pa-5-owner-decision-v1.schema.json
+          schemas/m26-pa-5-reviewer-contract-v2-v1.schema.json
           schemas/m26-pa-5-success-receipt-v1.schema.json
+          schemas/m26-pa-5-threshold-semantics-v2-v1.schema.json
+          schemas/m26-pa-5-v6-exhaustion-record-v1.schema.json
           src/knowledge_engine/m26_pa5_live_execution.py
           tests/test_m26_pa_5_live_execution.py
           FILES
@@ -147,7 +169,7 @@ jobs:
   live-controlled-internal-pilot:
     if: >-
       github.event_name == 'push' &&
-      contains(github.event.head_commit.message, '[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-5]')
+      contains(github.event.head_commit.message, '[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-6]')
     runs-on: ubuntu-24.04
     environment: m23-r3-diagnostic
     env:
@@ -187,7 +209,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-5
+          name: m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-6
           path: /tmp/m26-pa-5-live-evidence
           if-no-files-found: error
           retention-days: 30
