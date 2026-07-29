@@ -1,0 +1,99 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-attempt-7-failure-seal-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": { "type": "object" },
+    "evidence": {
+      "additionalProperties": true,
+      "properties": {
+        "artifact_archive_sha256": {
+          "const": "f115530e88558dff7857b3edde2df9c6b18fd32c6513a927f2823c922e8ab68d"
+        },
+        "artifact_id": { "const": "8718241945" },
+        "artifact_name": {
+          "const": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-7"
+        },
+        "failure_code": { "const": "M26-PA5-LIVE-024" },
+        "failure_message": { "const": "post-repair reviewer disagreement incident stop" },
+        "failure_receipt_file_sha256": {
+          "const": "0a961d97eecd65f549a205d1e36b4c253ba514e668f68c17f1237af1093280e4"
+        },
+        "failure_receipt_self_sha256": {
+          "const": "0d11adbdf4d1516c01a8686308c261dc3122a388b36bd3a9ecbdb98e27e236dc"
+        }
+      },
+      "required": [
+        "artifact_name",
+        "artifact_id",
+        "artifact_archive_sha256",
+        "failure_receipt_name",
+        "failure_receipt_file_sha256",
+        "failure_receipt_self_sha256",
+        "owner_decision_self_sha256",
+        "failure_code",
+        "failure_message"
+      ],
+      "type": "object"
+    },
+    "github_run": {
+      "additionalProperties": true,
+      "properties": {
+        "head_sha": { "const": "95de5bbc482575cc2a946f3be0ffbe23369c1941" },
+        "run_attempt": { "const": 1 },
+        "run_id": { "const": "30437549704" },
+        "trigger_marker": {
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-7]"
+        }
+      },
+      "required": [
+        "repository",
+        "workflow_name",
+        "run_id",
+        "run_attempt",
+        "event",
+        "trigger_marker",
+        "head_sha",
+        "workflow_conclusion",
+        "live_job_terminal_status"
+      ],
+      "type": "object"
+    },
+    "logical_attempt": { "const": 7 },
+    "pa5_accepted": { "const": false },
+    "partial_denominator": { "type": "object" },
+    "recorded_at": { "const": "2026-07-29T09:05:00Z" },
+    "reclassification_as_accepted_authorized": { "const": false },
+    "replacement_or_deletion_authorized": { "const": false },
+    "rerun_authorized": { "const": false },
+    "root_cause": { "type": "object" },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-5-attempt-7-failure-seal/v1"
+    },
+    "seal_id": { "const": "m26-pa5-live-attempt-7-immutable-failed-evidence" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.5" },
+    "status": { "const": "immutable_failed_closed_evidence" },
+    "supersession": { "type": "object" }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "seal_id",
+    "recorded_at",
+    "status",
+    "logical_attempt",
+    "rerun_authorized",
+    "reclassification_as_accepted_authorized",
+    "replacement_or_deletion_authorized",
+    "pa5_accepted",
+    "github_run",
+    "evidence",
+    "partial_denominator",
+    "root_cause",
+    "supersession",
+    "authority_boundary",
+    "self_sha256"
+  ],
+  "type": "object"
+}

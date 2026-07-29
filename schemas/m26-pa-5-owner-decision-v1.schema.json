@@ -3,7 +3,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "decision_id": { "const": "m26-pa5-v7-attempt-7-timeout-repair-authority" },
+    "decision_id": { "const": "m26-pa5-v7-attempt-8-final-bounded-evidence-repair-authority" },
     "exact_instruction_text_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
     "owner": { "const": "Daniel Huang" },
     "parsed_parameters": {
@@ -94,16 +94,17 @@
           "const": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
         },
         "future_trigger_marker": {
-          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-7]"
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-8]"
         },
-        "live_wiring_issue": { "const": 1228 },
-        "logical_attempt": { "const": 7 },
+        "live_wiring_issue": { "const": 1230 },
+        "logical_attempt": { "const": 8 },
         "pa4_acceptance_self_sha256": {
           "const": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7"
         },
         "pa4_status": { "const": "m26_pa_4_verified_answer_citation_gate_accepted" },
         "pa5_attempt_5_failure": { "type": "object" },
         "pa5_attempt_6_failure": { "type": "object" },
+        "pa5_attempt_7_failure": { "type": "object" },
         "reviewer_contract_v2_path": {
           "const": "pilot/m26/m26-pa-5-reviewer-contract-v2.json"
         },
@@ -119,6 +120,7 @@
         "authority_package",
         "pa5_attempt_5_failure",
         "pa5_attempt_6_failure",
+        "pa5_attempt_7_failure",
         "v6_exhaustion_record_path",
         "reviewer_contract_v2_path",
         "threshold_semantics_v2_path",
