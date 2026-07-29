@@ -30,11 +30,13 @@ FAILURE_RECEIPT_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-failure-receipt/v1"
 ATTEMPT_1_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-1-failure-seal/v1"
 ATTEMPT_2_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-2-failure-seal/v1"
 ATTEMPT_3_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-3-failure-seal/v1"
+ATTEMPT_4_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-4-failure-seal/v1"
 PRICING_CONTRACT_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-pricing-contract/v1"
 OWNER_DECISION_PATH = Path("pilot/m26/m26-pa-5-owner-decision.json")
 ATTEMPT_1_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-1-failure-seal.json")
 ATTEMPT_2_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-2-failure-seal.json")
 ATTEMPT_3_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-3-failure-seal.json")
+ATTEMPT_4_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-4-failure-seal.json")
 PRICING_CONTRACT_PATH = Path("pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json")
 POPULATION_PATH = Path("pilot/m26/m26-pa-5-frozen-population.json")
 POPULATION_MANIFEST_PATH = Path("pilot/m26/m26-pa-5-population-manifest.json")
@@ -42,11 +44,12 @@ OWNER_DECISION_SCHEMA_PATH = Path("schemas/m26-pa-5-owner-decision-v1.schema.jso
 ATTEMPT_1_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-1-failure-seal-v1.schema.json")
 ATTEMPT_2_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-2-failure-seal-v1.schema.json")
 ATTEMPT_3_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-3-failure-seal-v1.schema.json")
+ATTEMPT_4_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-4-failure-seal-v1.schema.json")
 PRICING_CONTRACT_SCHEMA_PATH = Path("schemas/m26-pa-5-pricing-contract-v1.schema.json")
 SUCCESS_RECEIPT_SCHEMA_PATH = Path("schemas/m26-pa-5-success-receipt-v1.schema.json")
 FAILURE_RECEIPT_SCHEMA_PATH = Path("schemas/m26-pa-5-failure-receipt-v1.schema.json")
-LOGICAL_ATTEMPT = 4
-TRIGGER_MARKER = "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-4]"
+LOGICAL_ATTEMPT = 5
+TRIGGER_MARKER = "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-5]"
 POPULATION_SHA256 = "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
 POPULATION_COUNT = 200
 PA5_GATE_MERGE_SHA = "e2bff8fbf14278c70623d7c82c36012a3a9cf831"
@@ -83,6 +86,17 @@ ATTEMPT_3_FAILURE_RECEIPT_SELF_SHA256 = (
 )
 ATTEMPT_3_ARTIFACT_ARCHIVE_SHA256 = (
     "1c9a22aab44cb7a4e690c80bde02152cbc9508b60aeedd7a74086e5799fe0b8d"
+)
+ATTEMPT_4_RUN_ID = "30428500874"
+ATTEMPT_4_TRIGGER_MERGE_SHA = "845362f0e9ad7f888ba391cb9a29ac1cac742b62"
+ATTEMPT_4_OWNER_DECISION_SELF_SHA256 = (
+    "e65fb7818c4ac5461262661875d6861297b3ecc1306b7641eee44a5a846d6fc2"
+)
+ATTEMPT_4_FAILURE_RECEIPT_SELF_SHA256 = (
+    "58057e5c264c87adcdfb416ae2972c273eeb56213a2f4e055e1e8344ef009af7"
+)
+ATTEMPT_4_ARTIFACT_ARCHIVE_SHA256 = (
+    "2c2d0afb2d1d9bf13216486b494b9babe2c469521fa965ef0def961d06f54121"
 )
 V6_PACKAGE_SHA256 = "3a36861501a1d247ae1fc90c4708e05d43a6e3591b134bce36614698f3232b95"
 MAX_PROVIDER_CALLS = 600
@@ -330,11 +344,72 @@ def attempt_3_failure_seal_template() -> dict[str, Any]:
             "bounded_repair_required": True,
         },
         "supersession": {
-            "superseded_by_logical_attempt": LOGICAL_ATTEMPT,
+            "superseded_by_logical_attempt": 4,
             "repair_issue": 1220,
-            "new_trigger_marker": TRIGGER_MARKER,
+            "new_trigger_marker": (
+                "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-4]"
+            ),
             "supersedes_only_structured_output_handling": True,
             "preserves_attempt_3_as_failed_evidence": True,
+        },
+        "authority_boundary": authority_receipt(),
+        "self_sha256": "",
+    }
+
+
+def attempt_4_failure_seal_template() -> dict[str, Any]:
+    return {
+        "schema_version": ATTEMPT_4_SEAL_SCHEMA_VERSION,
+        "stage_id": STAGE_ID,
+        "seal_id": "m26-pa5-live-attempt-4-immutable-failed-evidence",
+        "recorded_at": "2026-07-29T06:38:00Z",
+        "status": "immutable_failed_closed_evidence",
+        "logical_attempt": 4,
+        "rerun_authorized": False,
+        "reclassification_as_accepted_authorized": False,
+        "replacement_or_deletion_authorized": False,
+        "pa5_accepted": False,
+        "github_run": {
+            "repository": "danielcanfly/knowledge-engine",
+            "workflow_name": "M26.PA.5 Controlled Internal Shadow Pilot",
+            "run_id": ATTEMPT_4_RUN_ID,
+            "run_attempt": 1,
+            "event": "push",
+            "trigger_marker": (
+                "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-4]"
+            ),
+            "head_sha": ATTEMPT_4_TRIGGER_MERGE_SHA,
+            "workflow_conclusion": "success",
+            "live_job_terminal_status": "failed_closed",
+        },
+        "evidence": {
+            "artifact_name": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-4",
+            "artifact_archive_sha256": ATTEMPT_4_ARTIFACT_ARCHIVE_SHA256,
+            "failure_receipt_name": "m26-pa-5-failure-receipt.json",
+            "failure_receipt_self_sha256": ATTEMPT_4_FAILURE_RECEIPT_SELF_SHA256,
+            "owner_decision_self_sha256": ATTEMPT_4_OWNER_DECISION_SELF_SHA256,
+            "failure_code": "M26-PA5-LIVE-024",
+            "failure_message": "reviewer disagreement incident stop",
+        },
+        "root_cause": {
+            "code": "independent_blind_review_lacked_sanitized_answer_summary",
+            "summary": (
+                "Attempt 4 fixed provider JSON extraction but asked the independent "
+                "blind reviewer to evaluate only an answer digest and evidence identity. "
+                "That caused excessive model/deterministic disagreement. Attempt 5 "
+                "adds sanitized answer status, counts, reason codes, and digest while "
+                "continuing to exclude raw answer text, raw corpus text, prompts, and vectors."
+            ),
+            "raw_answer_text_persisted": False,
+            "sanitized_answer_summary_required": True,
+            "thresholds_unchanged": True,
+        },
+        "supersession": {
+            "superseded_by_logical_attempt": LOGICAL_ATTEMPT,
+            "repair_issue": 1222,
+            "new_trigger_marker": TRIGGER_MARKER,
+            "supersedes_only_reviewer_context_wiring": True,
+            "preserves_attempt_4_as_failed_evidence": True,
         },
         "authority_boundary": authority_receipt(),
         "self_sha256": "",
@@ -397,7 +472,7 @@ def owner_decision_template() -> dict[str, Any]:
     return {
         "schema_version": OWNER_DECISION_SCHEMA_VERSION,
         "stage_id": STAGE_ID,
-        "decision_id": "m26-pa5-autonomous-completion-authority-attempt-4",
+        "decision_id": "m26-pa5-autonomous-completion-authority-attempt-5",
         "owner": "Daniel Huang",
         "recorded_at": "2026-07-29T05:31:00Z",
         "exact_instruction_text_sha256": canonical_sha256(
@@ -406,12 +481,12 @@ def owner_decision_template() -> dict[str, Any]:
                 "package_sha256": V6_PACKAGE_SHA256,
                 "scope": (
                     "M26.PA.5 v6 autonomous completion authority for logical "
-                    "attempts 3-5; attempt 4 structured-output repair execution"
+                    "attempts 3-5; attempt 5 reviewer-disagreement repair execution"
                 ),
             }
         ),
         "parsed_parameters": {
-            "live_wiring_issue": 1220,
+            "live_wiring_issue": 1222,
             "authority_package": {
                 "package_name": (
                     "LLM_Wiki_M26_PA5_Autonomous_Completion_to_PA6_Readiness_"
@@ -451,6 +526,15 @@ def owner_decision_template() -> dict[str, Any]:
                 "run_attempt": 1,
                 "trigger_merge_sha": ATTEMPT_3_TRIGGER_MERGE_SHA,
                 "failure_receipt_self_sha256": ATTEMPT_3_FAILURE_RECEIPT_SELF_SHA256,
+                "immutable_failed_evidence": True,
+                "rerun_authorized": False,
+            },
+            "pa5_attempt_4_failure": {
+                "attempt_4_failure_seal_path": ATTEMPT_4_SEAL_PATH.as_posix(),
+                "run_id": ATTEMPT_4_RUN_ID,
+                "run_attempt": 1,
+                "trigger_merge_sha": ATTEMPT_4_TRIGGER_MERGE_SHA,
+                "failure_receipt_self_sha256": ATTEMPT_4_FAILURE_RECEIPT_SELF_SHA256,
                 "immutable_failed_evidence": True,
                 "rerun_authorized": False,
             },
@@ -519,6 +603,21 @@ def owner_decision_template() -> dict[str, Any]:
                     "repair_payload_uses_malformed_response_digest_only": True,
                     "raw_malformed_response_text_in_repair_prompt": False,
                     "sanitized_parse_diagnostics_only": True,
+                },
+                "independent_review_sanitized_answer_summary": {
+                    "enabled": True,
+                    "fields": [
+                        "answer_status",
+                        "safe_terminal",
+                        "reason_codes",
+                        "material_claim_count",
+                        "citation_locator_count",
+                        "unsupported_material_claim_count",
+                        "answer_digest",
+                    ],
+                    "raw_answer_text_included": False,
+                    "raw_corpus_text_included": False,
+                    "full_provider_response_included": False,
                 },
             },
             "billing": {
@@ -629,6 +728,8 @@ def write_owner_decision(root: Path) -> dict[str, Any]:
     (root / ATTEMPT_2_SEAL_PATH).write_text(pretty_json(attempt_2_seal), encoding="utf-8")
     attempt_3_seal = with_self_digest(attempt_3_failure_seal_template())
     (root / ATTEMPT_3_SEAL_PATH).write_text(pretty_json(attempt_3_seal), encoding="utf-8")
+    attempt_4_seal = with_self_digest(attempt_4_failure_seal_template())
+    (root / ATTEMPT_4_SEAL_PATH).write_text(pretty_json(attempt_4_seal), encoding="utf-8")
     pricing_contract = with_self_digest(pricing_contract_template())
     (root / PRICING_CONTRACT_PATH).write_text(
         pretty_json(pricing_contract),
@@ -669,6 +770,17 @@ def validate_attempt_3_failure_seal(root: Path) -> dict[str, Any]:
         raise PA5GateError("M26-PA5-LIVE-043", "attempt-3 seal status mismatch")
     if seal["github_run"]["run_id"] != ATTEMPT_3_RUN_ID:
         raise PA5GateError("M26-PA5-LIVE-044", "attempt-3 run identity mismatch")
+    return seal
+
+
+def validate_attempt_4_failure_seal(root: Path) -> dict[str, Any]:
+    seal = load_json(root / ATTEMPT_4_SEAL_PATH)
+    validate_schema(root, seal, ATTEMPT_4_SEAL_SCHEMA_PATH)
+    verify_self_digest(seal, "PA5 attempt-4 failure seal")
+    if seal["logical_attempt"] != 4 or seal["status"] != "immutable_failed_closed_evidence":
+        raise PA5GateError("M26-PA5-LIVE-049", "attempt-4 seal status mismatch")
+    if seal["github_run"]["run_id"] != ATTEMPT_4_RUN_ID:
+        raise PA5GateError("M26-PA5-LIVE-050", "attempt-4 run identity mismatch")
     return seal
 
 
@@ -714,6 +826,7 @@ def validate_owner_decision(root: Path) -> dict[str, Any]:
     seal = validate_attempt_1_failure_seal(root)
     attempt_2_seal = validate_attempt_2_failure_seal(root)
     attempt_3_seal = validate_attempt_3_failure_seal(root)
+    attempt_4_seal = validate_attempt_4_failure_seal(root)
     contract = validate_pricing_contract(root)
     if parsed["pa5_attempt_1_failure"]["attempt_1_failure_seal_path"] != (
         ATTEMPT_1_SEAL_PATH.as_posix()
@@ -739,6 +852,14 @@ def validate_owner_decision(root: Path) -> dict[str, Any]:
         attempt_3_seal["evidence"]["failure_receipt_self_sha256"]
     ):
         raise PA5GateError("M26-PA5-LIVE-046", "attempt-3 seal digest mismatch")
+    if parsed["pa5_attempt_4_failure"]["attempt_4_failure_seal_path"] != (
+        ATTEMPT_4_SEAL_PATH.as_posix()
+    ):
+        raise PA5GateError("M26-PA5-LIVE-051", "attempt-4 seal path mismatch")
+    if parsed["pa5_attempt_4_failure"]["failure_receipt_self_sha256"] != (
+        attempt_4_seal["evidence"]["failure_receipt_self_sha256"]
+    ):
+        raise PA5GateError("M26-PA5-LIVE-052", "attempt-4 seal digest mismatch")
     if parsed["billing"]["pricing_contract_path"] != PRICING_CONTRACT_PATH.as_posix():
         raise PA5GateError("M26-PA5-LIVE-020", "pricing contract path mismatch")
     if parsed["billing"]["pricing_contract_identity"] != contract["pricing_contract_identity"]:
@@ -962,6 +1083,7 @@ def parse_provider_json_with_bounded_repair(
     question: Mapping[str, Any],
     role: str,
     answer_digest: str,
+    sanitized_answer_summary_value: Mapping[str, Any] | None = None,
     initial_result: Mapping[str, Any],
     counters: dict[str, Any],
     pricing_contract: Mapping[str, Any],
@@ -987,6 +1109,7 @@ def parse_provider_json_with_bounded_repair(
             question,
             role=role,
             answer_digest=answer_digest,
+            sanitized_answer_summary=sanitized_answer_summary_value,
             repair_context={
                 "repair_reason_code": "STRUCTURED_JSON_PARSE_FAILURE",
                 "malformed_response_digest": malformed_response_digest,
@@ -1042,6 +1165,7 @@ def build_payload(
     *,
     role: str,
     answer_digest: str = "",
+    sanitized_answer_summary: Mapping[str, Any] | None = None,
     repair_context: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     identity = evidence_identity(question)
@@ -1055,6 +1179,15 @@ def build_payload(
             "required_fields": ["verdict", "reason_codes"],
             "verdict_values": ["pass", "fail"],
             "review_scope": "blind_review_of_sanitized_answer_digest_and_evidence_identity",
+            "sanitized_answer_summary_fields": [
+                "answer_status",
+                "safe_terminal",
+                "reason_codes",
+                "material_claim_count",
+                "citation_locator_count",
+                "unsupported_material_claim_count",
+                "answer_digest",
+            ],
         }
     else:
         output_contract = {
@@ -1099,6 +1232,9 @@ def build_payload(
                                 "abstention_class": question["abstention_class"],
                                 "evidence_identity": identity,
                                 "answer_digest": answer_digest,
+                                "sanitized_answer_summary": dict(
+                                    sanitized_answer_summary or {}
+                                ),
                                 "repair_context": dict(repair_context or {}),
                                 "output_contract": output_contract,
                             },
@@ -1137,6 +1273,23 @@ def deterministic_verifier(
         "reviewer_type": "deterministic_verifier",
         "verdict": verdict,
         "reason_codes": reason_codes or ["DETERMINISTIC_VERIFICATION_PASS"],
+    }
+
+
+def sanitized_answer_summary(answer: Mapping[str, Any], answer_digest: str) -> dict[str, Any]:
+    return {
+        "answer_status": str(answer.get("answer_status", "")),
+        "safe_terminal": bool(answer.get("safe_terminal", False)),
+        "reason_codes": [str(code) for code in answer.get("reason_codes", [])],
+        "material_claim_count": int(answer.get("material_claim_count", 0)),
+        "citation_locator_count": int(answer.get("citation_locator_count", 0)),
+        "unsupported_material_claim_count": int(
+            answer.get("unsupported_material_claim_count", 0)
+        ),
+        "answer_digest": answer_digest,
+        "raw_answer_text_included": False,
+        "raw_corpus_text_included": False,
+        "full_provider_response_included": False,
     }
 
 
@@ -1278,6 +1431,7 @@ def run_pilot(
     attempt_1_seal = validate_attempt_1_failure_seal(root)
     attempt_2_seal = validate_attempt_2_failure_seal(root)
     attempt_3_seal = validate_attempt_3_failure_seal(root)
+    attempt_4_seal = validate_attempt_4_failure_seal(root)
     pricing_contract = validate_pricing_contract(root)
     population = validate_population(root)
     questions = population["questions"]
@@ -1308,6 +1462,7 @@ def run_pilot(
                 question=question,
                 role="answer_generation",
                 answer_digest="",
+                sanitized_answer_summary_value=None,
                 initial_result=answer_result,
                 counters=counters,
                 pricing_contract=pricing_contract,
@@ -1315,11 +1470,13 @@ def run_pilot(
             )
         )
         answer_digest = canonical_sha256(answer)
+        answer_summary = sanitized_answer_summary(answer, answer_digest)
         verifier = deterministic_verifier(question, answer)
         review_payload = build_payload(
             question,
             role="independent_blind_review",
             answer_digest=answer_digest,
+            sanitized_answer_summary=answer_summary,
         )
         review_result = provider_call_checked(
             provider_call=provider_call,
@@ -1335,6 +1492,7 @@ def run_pilot(
                 question=question,
                 role="independent_blind_review",
                 answer_digest=answer_digest,
+                sanitized_answer_summary_value=answer_summary,
                 initial_result=review_result,
                 counters=counters,
                 pricing_contract=pricing_contract,
@@ -1476,6 +1634,7 @@ def run_pilot(
                 "attempt_1_failure_seal_self_sha256": attempt_1_seal["self_sha256"],
                 "attempt_2_failure_seal_self_sha256": attempt_2_seal["self_sha256"],
                 "attempt_3_failure_seal_self_sha256": attempt_3_seal["self_sha256"],
+                "attempt_4_failure_seal_self_sha256": attempt_4_seal["self_sha256"],
                 "pricing_contract_self_sha256": pricing_contract["self_sha256"],
             },
             "population": {
@@ -1536,6 +1695,7 @@ def failure_receipt(
     attempt_1_seal_sha = ""
     attempt_2_seal_sha = ""
     attempt_3_seal_sha = ""
+    attempt_4_seal_sha = ""
     pricing_contract_sha = ""
     try:
         owner_sha = validate_owner_decision(root)["self_sha256"]
@@ -1554,6 +1714,10 @@ def failure_receipt(
     except Exception:
         attempt_3_seal_sha = ""
     try:
+        attempt_4_seal_sha = validate_attempt_4_failure_seal(root)["self_sha256"]
+    except Exception:
+        attempt_4_seal_sha = ""
+    try:
         pricing_contract_sha = validate_pricing_contract(root)["self_sha256"]
     except Exception:
         pricing_contract_sha = ""
@@ -1571,6 +1735,7 @@ def failure_receipt(
                 "attempt_1_failure_seal_self_sha256": attempt_1_seal_sha,
                 "attempt_2_failure_seal_self_sha256": attempt_2_seal_sha,
                 "attempt_3_failure_seal_self_sha256": attempt_3_seal_sha,
+                "attempt_4_failure_seal_self_sha256": attempt_4_seal_sha,
                 "pricing_contract_self_sha256": pricing_contract_sha,
             },
             "population": {
@@ -1606,11 +1771,13 @@ def assert_no_secret_material(root: Path) -> None:
         ATTEMPT_1_SEAL_PATH,
         ATTEMPT_2_SEAL_PATH,
         ATTEMPT_3_SEAL_PATH,
+        ATTEMPT_4_SEAL_PATH,
         PRICING_CONTRACT_PATH,
         Path("src/knowledge_engine/m26_pa5_live_execution.py"),
         ATTEMPT_1_SEAL_SCHEMA_PATH,
         ATTEMPT_2_SEAL_SCHEMA_PATH,
         ATTEMPT_3_SEAL_SCHEMA_PATH,
+        ATTEMPT_4_SEAL_SCHEMA_PATH,
         PRICING_CONTRACT_SCHEMA_PATH,
         SUCCESS_RECEIPT_SCHEMA_PATH,
         FAILURE_RECEIPT_SCHEMA_PATH,
@@ -1626,6 +1793,7 @@ def validate_static(root: Path) -> dict[str, Any]:
     attempt_1_seal = validate_attempt_1_failure_seal(root)
     attempt_2_seal = validate_attempt_2_failure_seal(root)
     attempt_3_seal = validate_attempt_3_failure_seal(root)
+    attempt_4_seal = validate_attempt_4_failure_seal(root)
     pricing_contract = validate_pricing_contract(root)
     population = validate_population(root)
     assert_no_secret_material(root)
@@ -1634,6 +1802,7 @@ def validate_static(root: Path) -> dict[str, Any]:
         "attempt_1_failure_seal_self_sha256": attempt_1_seal["self_sha256"],
         "attempt_2_failure_seal_self_sha256": attempt_2_seal["self_sha256"],
         "attempt_3_failure_seal_self_sha256": attempt_3_seal["self_sha256"],
+        "attempt_4_failure_seal_self_sha256": attempt_4_seal["self_sha256"],
         "pricing_contract_self_sha256": pricing_contract["self_sha256"],
         "population_count": len(population["questions"]),
         "population_sha256": population["population_sha256"],
@@ -1699,6 +1868,10 @@ def execute_to_dir(root: Path, evidence_dir: Path) -> None:
     )
     (evidence_dir / ATTEMPT_3_SEAL_PATH.name).write_text(
         (root / ATTEMPT_3_SEAL_PATH).read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (evidence_dir / ATTEMPT_4_SEAL_PATH.name).write_text(
+        (root / ATTEMPT_4_SEAL_PATH).read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     (evidence_dir / PRICING_CONTRACT_PATH.name).write_text(

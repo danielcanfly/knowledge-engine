@@ -3,7 +3,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "decision_id": { "const": "m26-pa5-autonomous-completion-authority-attempt-4" },
+    "decision_id": { "const": "m26-pa5-autonomous-completion-authority-attempt-5" },
     "exact_instruction_text_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
     "owner": { "const": "Daniel Huang" },
     "parsed_parameters": {
@@ -151,7 +151,7 @@
           "const": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
         },
         "future_trigger_marker": {
-          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-4]"
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-5]"
         },
         "incident_stop_conditions": {
           "items": { "type": "string", "minLength": 1 },
@@ -162,8 +162,8 @@
         "latest_accepted_pa4_main_sha": {
           "const": "3fcc4e5520db6d3cac7ce18004753c2549592afa"
         },
-        "live_wiring_issue": { "const": 1220 },
-        "logical_attempt": { "const": 4 },
+        "live_wiring_issue": { "const": 1222 },
+        "logical_attempt": { "const": 5 },
         "pa4_acceptance_self_sha256": {
           "const": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7"
         },
@@ -171,6 +171,7 @@
         "pa5_attempt_1_failure": { "type": "object" },
         "pa5_attempt_2_failure": { "type": "object" },
         "pa5_attempt_3_failure": { "type": "object" },
+        "pa5_attempt_4_failure": { "type": "object" },
         "pa5_gate_population_merge_sha": {
           "const": "e2bff8fbf14278c70623d7c82c36012a3a9cf831"
         },
@@ -226,6 +227,7 @@
         "pa5_attempt_1_failure",
         "pa5_attempt_2_failure",
         "pa5_attempt_3_failure",
+        "pa5_attempt_4_failure",
         "frozen_population_count",
         "frozen_population_sha256",
         "population_strata",

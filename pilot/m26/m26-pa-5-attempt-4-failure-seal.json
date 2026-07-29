@@ -1,0 +1,63 @@
+{
+  "authority_boundary": {
+    "authenticated_internal_shadow_execution_only": true,
+    "canonical_writes": 0,
+    "full_prompt_or_user_query_persisted": false,
+    "full_provider_response_persisted": false,
+    "production_answer_serving": false,
+    "production_pointer_mutations": 0,
+    "public_answers": false,
+    "public_traffic_operations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0,
+    "raw_text_persisted": false,
+    "secret_values_persisted": false,
+    "source_foundation_release_mutations": 0,
+    "vectors_persisted": false
+  },
+  "evidence": {
+    "artifact_archive_sha256": "2c2d0afb2d1d9bf13216486b494b9babe2c469521fa965ef0def961d06f54121",
+    "artifact_name": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-4",
+    "failure_code": "M26-PA5-LIVE-024",
+    "failure_message": "reviewer disagreement incident stop",
+    "failure_receipt_name": "m26-pa-5-failure-receipt.json",
+    "failure_receipt_self_sha256": "58057e5c264c87adcdfb416ae2972c273eeb56213a2f4e055e1e8344ef009af7",
+    "owner_decision_self_sha256": "e65fb7818c4ac5461262661875d6861297b3ecc1306b7641eee44a5a846d6fc2"
+  },
+  "github_run": {
+    "event": "push",
+    "head_sha": "845362f0e9ad7f888ba391cb9a29ac1cac742b62",
+    "live_job_terminal_status": "failed_closed",
+    "repository": "danielcanfly/knowledge-engine",
+    "run_attempt": 1,
+    "run_id": "30428500874",
+    "trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-4]",
+    "workflow_conclusion": "success",
+    "workflow_name": "M26.PA.5 Controlled Internal Shadow Pilot"
+  },
+  "logical_attempt": 4,
+  "pa5_accepted": false,
+  "reclassification_as_accepted_authorized": false,
+  "recorded_at": "2026-07-29T06:38:00Z",
+  "replacement_or_deletion_authorized": false,
+  "rerun_authorized": false,
+  "root_cause": {
+    "code": "independent_blind_review_lacked_sanitized_answer_summary",
+    "raw_answer_text_persisted": false,
+    "sanitized_answer_summary_required": true,
+    "summary": "Attempt 4 fixed provider JSON extraction but asked the independent blind reviewer to evaluate only an answer digest and evidence identity. That caused excessive model/deterministic disagreement. Attempt 5 adds sanitized answer status, counts, reason codes, and digest while continuing to exclude raw answer text, raw corpus text, prompts, and vectors.",
+    "thresholds_unchanged": true
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-attempt-4-failure-seal/v1",
+  "seal_id": "m26-pa5-live-attempt-4-immutable-failed-evidence",
+  "self_sha256": "6afd4a1c60da5ad912485e4cba06e27e41fe9ce071bb7589422108da49db9bef",
+  "stage_id": "M26.PA.5",
+  "status": "immutable_failed_closed_evidence",
+  "supersession": {
+    "new_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-5]",
+    "preserves_attempt_4_as_failed_evidence": true,
+    "repair_issue": 1222,
+    "superseded_by_logical_attempt": 5,
+    "supersedes_only_reviewer_context_wiring": true
+  }
+}

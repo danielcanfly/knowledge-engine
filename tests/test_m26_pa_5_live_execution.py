@@ -16,6 +16,8 @@ from knowledge_engine.m26_pa5_live_execution import (
     ATTEMPT_2_SEAL_SCHEMA_PATH,
     ATTEMPT_3_SEAL_PATH,
     ATTEMPT_3_SEAL_SCHEMA_PATH,
+    ATTEMPT_4_SEAL_PATH,
+    ATTEMPT_4_SEAL_SCHEMA_PATH,
     FAILURE_RECEIPT_SCHEMA_PATH,
     MAX_PROVIDER_CALLS,
     MAX_SPEND_USD,
@@ -67,6 +69,8 @@ def assert_self_digest(value: dict[str, Any]) -> None:
 def fake_provider(payload: dict[str, Any]) -> dict[str, Any]:
     message = json.loads(payload["messages"][0]["content"][0]["text"])
     if message["role"] == "independent_blind_review":
+        assert message["sanitized_answer_summary"]["raw_answer_text_included"] is False
+        assert message["sanitized_answer_summary"]["answer_digest"]
         body = {"verdict": "pass", "reason_codes": ["BLIND_REVIEW_PASS"]}
     elif message["abstention_class"]:
         body = {
@@ -131,11 +135,14 @@ def test_pa5_owner_decision_static_contract() -> None:
     attempt3_seal = load(ROOT / ATTEMPT_3_SEAL_PATH)
     assert_schema(attempt3_seal, ATTEMPT_3_SEAL_SCHEMA_PATH)
     assert_self_digest(attempt3_seal)
+    attempt4_seal = load(ROOT / ATTEMPT_4_SEAL_PATH)
+    assert_schema(attempt4_seal, ATTEMPT_4_SEAL_SCHEMA_PATH)
+    assert_self_digest(attempt4_seal)
     pricing = load(ROOT / PRICING_CONTRACT_PATH)
     assert_schema(pricing, PRICING_CONTRACT_SCHEMA_PATH)
     assert_self_digest(pricing)
     parsed = decision["parsed_parameters"]
-    assert parsed["live_wiring_issue"] == 1220
+    assert parsed["live_wiring_issue"] == 1222
     assert parsed["authority_package"]["package_sha256"] == (
         "3a36861501a1d247ae1fc90c4708e05d43a6e3591b134bce36614698f3232b95"
     )
@@ -162,8 +169,9 @@ def test_pa5_owner_decision_static_contract() -> None:
         "attempt_1_failure_seal_self_sha256": seal["self_sha256"],
         "attempt_2_failure_seal_self_sha256": attempt2_seal["self_sha256"],
         "attempt_3_failure_seal_self_sha256": attempt3_seal["self_sha256"],
+        "attempt_4_failure_seal_self_sha256": attempt4_seal["self_sha256"],
         "billing_mode": "token_plan_subscription_with_payg_equivalent_cost_accounting",
-        "logical_attempt": 4,
+        "logical_attempt": 5,
         "max_provider_calls": 600,
         "max_payg_equivalent_cost_usd": "15.00",
         "owner_decision_self_sha256": decision["self_sha256"],
@@ -399,7 +407,7 @@ def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
     assert "MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}" in workflow
     assert "python -m knowledge_engine.m26_pa5_live_execution --execute" in workflow
     assert "actions/upload-artifact@v4" in workflow
-    assert "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-4" in workflow
+    assert "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-5" in workflow
 
     arch = ARCH_WORKFLOW.read_text(encoding="utf-8")
     assert "src/knowledge_engine/m26_pa5_live_execution.py" in arch
@@ -408,6 +416,7 @@ def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
     assert "pilot/m26/m26-pa-5-attempt-1-failure-seal.json" in pa4
     assert "pilot/m26/m26-pa-5-attempt-2-failure-seal.json" in pa4
     assert "pilot/m26/m26-pa-5-attempt-3-failure-seal.json" in pa4
+    assert "pilot/m26/m26-pa-5-attempt-4-failure-seal.json" in pa4
     assert "pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json" in pa4
     assert "schemas/m26-pa-5-success-receipt-v1.schema.json" in pa4
     assert "tests/test_m26_pa_5_live_execution.py" in pa4
