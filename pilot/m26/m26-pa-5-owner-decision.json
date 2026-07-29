@@ -1,5 +1,5 @@
 {
-  "decision_id": "m26-pa5-v7-reviewer-contract-and-attempts-6-to-8-authority",
+  "decision_id": "m26-pa5-v7-attempt-7-timeout-repair-authority",
   "exact_instruction_text_sha256": "1e13d472ff05b0888ce97b24e4483c9297ef82d6c02c19bd6905d55524486cd2",
   "owner": "Daniel Huang",
   "parsed_parameters": {
@@ -81,7 +81,7 @@
     },
     "frozen_population_count": 200,
     "frozen_population_sha256": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580",
-    "future_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-6]",
+    "future_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-7]",
     "incident_stop_conditions": [
       "secret_or_credential_leakage",
       "raw_corpus_text_persistence",
@@ -110,8 +110,8 @@
       "repository_branch_or_executable_head_drift_after_authorization"
     ],
     "latest_accepted_pa4_main_sha": "3fcc4e5520db6d3cac7ce18004753c2549592afa",
-    "live_wiring_issue": 1224,
-    "logical_attempt": 6,
+    "live_wiring_issue": 1228,
+    "logical_attempt": 7,
     "pa4_acceptance_self_sha256": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7",
     "pa4_status": "m26_pa_4_verified_answer_citation_gate_accepted",
     "pa5_attempt_1_failure": {
@@ -158,6 +158,16 @@
       "run_attempt": 1,
       "run_id": "30429345717",
       "trigger_merge_sha": "1f31e5877c8379b9f058daa8cedb6090706e94bf"
+    },
+    "pa5_attempt_6_failure": {
+      "attempt_6_failure_seal_path": "pilot/m26/m26-pa-5-attempt-6-failure-seal.json",
+      "failure_receipt_file_sha256": "fd0553ff700212ffb1c1d3f60f40ec588eab32bccc8deec1aa0d20cc1fcf9539",
+      "failure_receipt_self_sha256": "b5e99011e5d2f4f10899ef703cfdbc659e4531acc94f119d22c04da8b5b767aa",
+      "immutable_failed_evidence": true,
+      "rerun_authorized": false,
+      "run_attempt": 1,
+      "run_id": "30434938985",
+      "trigger_merge_sha": "b06e05e6aad48961a117af08a9d887a688cee9bd"
     },
     "pa5_gate_population_merge_sha": "e2bff8fbf14278c70623d7c82c36012a3a9cf831",
     "population_strata": {
@@ -309,6 +319,6 @@
   },
   "recorded_at": "2026-07-29T07:10:00Z",
   "schema_version": "knowledge-engine-m26-pa-5-owner-decision/v1",
-  "self_sha256": "e27e0851279ebe4040a0eafc6a707eef4b3e9839473118de9f65d3d46e482015",
+  "self_sha256": "c55aafae611d94777c349823ae499ae6f57a75a19ee461b3dd7064711d73cf93",
   "stage_id": "M26.PA.5"
 }

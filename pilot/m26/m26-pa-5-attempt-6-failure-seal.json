@@ -1,0 +1,80 @@
+{
+  "authority_boundary": {
+    "authenticated_internal_shadow_execution_only": true,
+    "canonical_writes": 0,
+    "full_prompt_or_user_query_persisted": false,
+    "full_provider_response_persisted": false,
+    "production_answer_serving": false,
+    "production_pointer_mutations": 0,
+    "public_answers": false,
+    "public_traffic_operations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0,
+    "raw_text_persisted": false,
+    "secret_values_persisted": false,
+    "source_foundation_release_mutations": 0,
+    "vectors_persisted": false
+  },
+  "evidence": {
+    "artifact_archive_sha256": "7f937f190ff375debe6df0db7b3fe897e3bcd9e50fe163e8bed11ccac0cef60e",
+    "artifact_id": "8717057985",
+    "artifact_name": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-6",
+    "failure_code": "M26-PA5-LIVE-UNEXPECTED",
+    "failure_message": "The read operation timed out",
+    "failure_receipt_file_sha256": "fd0553ff700212ffb1c1d3f60f40ec588eab32bccc8deec1aa0d20cc1fcf9539",
+    "failure_receipt_name": "m26-pa-5-failure-receipt.json",
+    "failure_receipt_self_sha256": "b5e99011e5d2f4f10899ef703cfdbc659e4531acc94f119d22c04da8b5b767aa",
+    "owner_decision_self_sha256": "e27e0851279ebe4040a0eafc6a707eef4b3e9839473118de9f65d3d46e482015"
+  },
+  "github_run": {
+    "event": "push",
+    "head_sha": "b06e05e6aad48961a117af08a9d887a688cee9bd",
+    "live_job_terminal_status": "failed_closed",
+    "repository": "danielcanfly/knowledge-engine",
+    "run_attempt": 1,
+    "run_id": "30434938985",
+    "trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-6]",
+    "workflow_conclusion": "success",
+    "workflow_name": "M26.PA.5 Controlled Internal Shadow Pilot"
+  },
+  "logical_attempt": 6,
+  "pa5_accepted": false,
+  "partial_denominator": {
+    "complete_population_count": 200,
+    "completed_question_count": 3,
+    "full_prompt_or_user_query_persisted": false,
+    "full_provider_response_persisted": false,
+    "initial_disagreement_count": 0,
+    "post_repair_disagreement_count": 0,
+    "provider_call_count": 6,
+    "raw_text_persisted": false,
+    "secrets_persisted": false,
+    "semantic_repair_attempt_count": 0,
+    "terminal_status_histogram": {
+      "safe_abstention": 3
+    },
+    "total_payg_equivalent_cost_usd": "0.00197958",
+    "vectors_persisted": false
+  },
+  "reclassification_as_accepted_authorized": false,
+  "recorded_at": "2026-07-29T08:21:00Z",
+  "replacement_or_deletion_authorized": false,
+  "rerun_authorized": false,
+  "root_cause": {
+    "code": "provider_read_timeout_before_complete_population",
+    "ordinary_api_timeout_repair_required": true,
+    "summary": "Attempt 6 failed closed after a provider read timeout with 3/200 questions completed. Evidence receipt preserved sanitized partial denominators and no raw provider response, corpus text, prompts, queries, secrets, or vectors.",
+    "thresholds_weakened": false
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-attempt-6-failure-seal/v1",
+  "seal_id": "m26-pa5-live-attempt-6-immutable-failed-evidence",
+  "self_sha256": "a2ca66a79e1cc72988a07570bdcd63b65cd20c205eb4a524f6178ce2637ce0fc",
+  "stage_id": "M26.PA.5",
+  "status": "immutable_failed_closed_evidence",
+  "supersession": {
+    "new_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-7]",
+    "preserves_attempt_6_as_failed_evidence": true,
+    "repair_issue": 1228,
+    "superseded_by_logical_attempt": 7
+  }
+}

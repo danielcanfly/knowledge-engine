@@ -20,6 +20,8 @@ from knowledge_engine.m26_pa5_live_execution import (
     ATTEMPT_4_SEAL_SCHEMA_PATH,
     ATTEMPT_5_SEAL_PATH,
     ATTEMPT_5_SEAL_SCHEMA_PATH,
+    ATTEMPT_6_SEAL_PATH,
+    ATTEMPT_6_SEAL_SCHEMA_PATH,
     FAILURE_RECEIPT_SCHEMA_PATH,
     MAX_PROVIDER_CALLS,
     MAX_SPEND_USD,
@@ -48,9 +50,9 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "m26-pa-5-controlled-internal-pilot.yml"
 ARCH_WORKFLOW = ROOT / ".github" / "workflows" / "m26-1-architecture-authority.yml"
 PA4_WORKFLOW = ROOT / ".github" / "workflows" / "m26-pa-4-verified-answer-citation-gate.yml"
-ATTEMPT_6_TRIGGER_PATH = ROOT / "pilot" / "m26" / "m26-pa-5-attempt-6-live-trigger.json"
-ATTEMPT_6_TRIGGER_SCHEMA_PATH = (
-    ROOT / "schemas" / "m26-pa-5-live-trigger-v1.schema.json"
+ATTEMPT_7_TRIGGER_PATH = ROOT / "pilot" / "m26" / "m26-pa-5-attempt-7-live-trigger.json"
+ATTEMPT_7_TRIGGER_SCHEMA_PATH = (
+    ROOT / "schemas" / "m26-pa-5-attempt-7-live-trigger-v1.schema.json"
 )
 
 
@@ -169,6 +171,9 @@ def test_pa5_owner_decision_static_contract() -> None:
     attempt5_seal = load(ROOT / ATTEMPT_5_SEAL_PATH)
     assert_schema(attempt5_seal, ATTEMPT_5_SEAL_SCHEMA_PATH)
     assert_self_digest(attempt5_seal)
+    attempt6_seal = load(ROOT / ATTEMPT_6_SEAL_PATH)
+    assert_schema(attempt6_seal, ATTEMPT_6_SEAL_SCHEMA_PATH)
+    assert_self_digest(attempt6_seal)
     reviewer_contract = load(ROOT / REVIEWER_CONTRACT_PATH)
     assert_schema(reviewer_contract, REVIEWER_CONTRACT_SCHEMA_PATH)
     assert_self_digest(reviewer_contract)
@@ -178,18 +183,18 @@ def test_pa5_owner_decision_static_contract() -> None:
     v6_exhaustion = load(ROOT / V6_EXHAUSTION_PATH)
     assert_schema(v6_exhaustion, V6_EXHAUSTION_SCHEMA_PATH)
     assert_self_digest(v6_exhaustion)
-    attempt6_trigger = load(ATTEMPT_6_TRIGGER_PATH)
-    assert_schema(attempt6_trigger, ATTEMPT_6_TRIGGER_SCHEMA_PATH.relative_to(ROOT))
-    assert_self_digest(attempt6_trigger)
-    assert attempt6_trigger["trigger_marker"] == TRIGGER_MARKER
-    assert attempt6_trigger["predecessor_non_live_reconciliation_pr"] == 1225
-    assert attempt6_trigger["main_push_live_run_authorized"] is True
-    assert attempt6_trigger["pa6_canary_authorized"] is False
+    attempt7_trigger = load(ATTEMPT_7_TRIGGER_PATH)
+    assert_schema(attempt7_trigger, ATTEMPT_7_TRIGGER_SCHEMA_PATH.relative_to(ROOT))
+    assert_self_digest(attempt7_trigger)
+    assert attempt7_trigger["trigger_marker"] == TRIGGER_MARKER
+    assert attempt7_trigger["predecessor_attempt_6_run_id"] == "30434938985"
+    assert attempt7_trigger["main_push_live_run_authorized"] is True
+    assert attempt7_trigger["pa6_canary_authorized"] is False
     pricing = load(ROOT / PRICING_CONTRACT_PATH)
     assert_schema(pricing, PRICING_CONTRACT_SCHEMA_PATH)
     assert_self_digest(pricing)
     parsed = decision["parsed_parameters"]
-    assert parsed["live_wiring_issue"] == 1224
+    assert parsed["live_wiring_issue"] == 1228
     assert parsed["authority_package"]["package_sha256"] == (
         "087ea7bb8c270bccf958041b8a4eacfa9d8fff9177a731f093f95f991d6063af"
     )
@@ -228,8 +233,9 @@ def test_pa5_owner_decision_static_contract() -> None:
         "attempt_3_failure_seal_self_sha256": attempt3_seal["self_sha256"],
         "attempt_4_failure_seal_self_sha256": attempt4_seal["self_sha256"],
         "attempt_5_failure_seal_self_sha256": attempt5_seal["self_sha256"],
+        "attempt_6_failure_seal_self_sha256": attempt6_seal["self_sha256"],
         "billing_mode": "token_plan_subscription_with_payg_equivalent_cost_accounting",
-        "logical_attempt": 6,
+        "logical_attempt": 7,
         "max_provider_calls": 800,
         "max_payg_equivalent_cost_usd": "20.00",
         "owner_decision_self_sha256": decision["self_sha256"],
@@ -477,9 +483,9 @@ def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
     assert "MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}" in workflow
     assert "python -m knowledge_engine.m26_pa5_live_execution --execute" in workflow
     assert "actions/upload-artifact@v4" in workflow
-    assert "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-6" in workflow
-    assert "pilot/m26/m26-pa-5-attempt-6-live-trigger.json" in workflow
-    assert "schemas/m26-pa-5-live-trigger-v1.schema.json" in workflow
+    assert "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-7" in workflow
+    assert "pilot/m26/m26-pa-5-attempt-7-live-trigger.json" in workflow
+    assert "schemas/m26-pa-5-attempt-7-live-trigger-v1.schema.json" in workflow
 
     arch = ARCH_WORKFLOW.read_text(encoding="utf-8")
     assert "src/knowledge_engine/m26_pa5_live_execution.py" in arch
@@ -490,7 +496,8 @@ def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
     assert "pilot/m26/m26-pa-5-attempt-3-failure-seal.json" in pa4
     assert "pilot/m26/m26-pa-5-attempt-4-failure-seal.json" in pa4
     assert "pilot/m26/m26-pa-5-attempt-5-failure-seal.json" in pa4
-    assert "pilot/m26/m26-pa-5-attempt-6-live-trigger.json" in pa4
+    assert "pilot/m26/m26-pa-5-attempt-6-failure-seal.json" in pa4
+    assert "pilot/m26/m26-pa-5-attempt-7-live-trigger.json" in pa4
     assert "pilot/m26/m26-pa-5-reviewer-contract-v2.json" in pa4
     assert "pilot/m26/m26-pa-5-threshold-semantics-v2.json" in pa4
     assert "pilot/m26/m26-pa-5-v6-exhaustion-record.json" in pa4
