@@ -1,0 +1,41 @@
+{
+  "attempts": [
+    {
+      "logical_attempt": 1,
+      "run_id": "30418193049"
+    },
+    {
+      "logical_attempt": 2,
+      "run_id": "30422363498"
+    },
+    {
+      "logical_attempt": 3,
+      "run_id": "30426365447"
+    },
+    {
+      "logical_attempt": 4,
+      "run_id": "30428500874"
+    },
+    {
+      "logical_attempt": 5,
+      "run_id": "30429345717"
+    }
+  ],
+  "immutable_failed_evidence_preserved": true,
+  "ordinary_repair_scope": "reviewer_contract_threshold_semantics_and_receipts",
+  "pa5_accepted": false,
+  "package_sha256": "087ea7bb8c270bccf958041b8a4eacfa9d8fff9177a731f093f95f991d6063af",
+  "record_id": "m26-pa5-v6-attempts-1-to-5-exhausted",
+  "recorded_at": "2026-07-29T07:10:00Z",
+  "schema_version": "knowledge-engine-m26-pa-5-v6-exhaustion-record/v1",
+  "self_sha256": "5c0dd72608e2d34dc2290725813ca88786d955aec52ca79253f02fd92d9c6d18",
+  "stage_id": "M26.PA.5",
+  "status": "v6_attempt_window_exhausted_pa5_not_accepted",
+  "thresholds_weakened": false,
+  "v6_package_sha256": "3a36861501a1d247ae1fc90c4708e05d43a6e3591b134bce36614698f3232b95",
+  "v7_authorizes_attempts": [
+    6,
+    7,
+    8
+  ]
+}

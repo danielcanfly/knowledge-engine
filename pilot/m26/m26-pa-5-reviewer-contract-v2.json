@@ -1,0 +1,66 @@
+{
+  "bounded_review_envelope": {
+    "ephemeral_fields": [
+      "claim_text",
+      "evidence_excerpt"
+    ],
+    "max_citation_locators_per_claim": 3,
+    "max_claim_text_chars": 512,
+    "max_evidence_excerpt_chars_per_locator": 1200,
+    "max_material_claims": 6,
+    "persisted_fields": [
+      "question_id",
+      "envelope_sha256",
+      "claim_text_sha256",
+      "evidence_excerpt_sha256",
+      "claim_type",
+      "temporal_scope",
+      "locator_identity",
+      "support_verdict",
+      "conflict_verdict",
+      "temporal_verdict",
+      "reason_codes",
+      "usage",
+      "latency",
+      "cost",
+      "terminal_status"
+    ],
+    "same_envelope_for_model_and_deterministic_verifier": true
+  },
+  "contract_id": "m26-pa5-reviewer-contract-v2",
+  "forbidden_persistence": [
+    "raw_provider_response_text",
+    "raw_corpus_text",
+    "full_answer_text",
+    "full_prompt",
+    "user_query",
+    "secret_values",
+    "vectors"
+  ],
+  "package_sha256": "087ea7bb8c270bccf958041b8a4eacfa9d8fff9177a731f093f95f991d6063af",
+  "principals": [
+    {
+      "principal_id": "pa5-reviewer-minimax-m3-blind-v2",
+      "reviewer_type": "independent_model"
+    },
+    {
+      "principal_id": "pa5-claim-citation-support-verifier-v2",
+      "reviewer_type": "deterministic_verifier"
+    },
+    {
+      "principal_id": "daniel-owner-policy-pa5-autonomous-v2",
+      "reviewer_type": "owner_policy"
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-pa-5-reviewer-contract-v2/v1",
+  "self_sha256": "a7dd060ae3f9bfd12945fc866ebc93f6cccaab3a2ed735ee50106ac565902beb",
+  "semantic_repair": {
+    "disputed_answer_may_be_accepted": false,
+    "fresh_independent_rereview_required": true,
+    "initial_disagreement_triggers_repair": true,
+    "maximum_rounds_per_question": 1,
+    "post_repair_disagreement_forces_safe_abstention": true,
+    "unsupported_material_claim_may_be_accepted": false
+  },
+  "stage_id": "M26.PA.5"
+}

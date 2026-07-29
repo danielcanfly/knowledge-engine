@@ -4,39 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "authority": { "type": "object" },
-    "billing": {
-      "additionalProperties": false,
-      "properties": {
-        "billing_mode": {
-          "const": "token_plan_subscription_with_payg_equivalent_cost_accounting"
-        },
-        "missing_provider_monetary_cost_field_is_error": { "const": false },
-        "payg_equivalent_cost_accounting_required": { "const": true },
-        "pricing_contract_identity": {
-          "const": "minimax-m3-le-512k-cache-aware-payg-equivalent-2026-07-29"
-        },
-        "pricing_contract_self_sha256": {
-          "anyOf": [
-            { "pattern": "^[0-9a-f]{64}$", "type": "string" },
-            { "const": "" }
-          ]
-        },
-        "provider_reported_monetary_cost_available": { "const": false },
-        "provider_reported_monetary_cost_usd": { "type": "null" },
-        "provider_reported_usage_required": { "const": true }
-      },
-      "required": [
-        "billing_mode",
-        "provider_reported_usage_required",
-        "provider_reported_monetary_cost_available",
-        "provider_reported_monetary_cost_usd",
-        "payg_equivalent_cost_accounting_required",
-        "pricing_contract_identity",
-        "pricing_contract_self_sha256",
-        "missing_provider_monetary_cost_field_is_error"
-      ],
-      "type": "object"
-    },
+    "billing": { "type": "object" },
     "error": {
       "additionalProperties": false,
       "properties": {
@@ -49,47 +17,17 @@
     },
     "generated_at": { "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$", "type": "string" },
     "owner_decision": {
-      "additionalProperties": false,
+      "additionalProperties": true,
       "properties": {
-        "attempt_1_failure_seal_self_sha256": {
+        "attempt_5_failure_seal_self_sha256": {
           "anyOf": [
             { "pattern": "^[0-9a-f]{64}$", "type": "string" },
             { "const": "" }
           ]
         },
-        "attempt_2_failure_seal_self_sha256": {
-          "anyOf": [
-            { "pattern": "^[0-9a-f]{64}$", "type": "string" },
-            { "const": "" }
-          ]
-        },
-        "attempt_3_failure_seal_self_sha256": {
-          "anyOf": [
-            { "pattern": "^[0-9a-f]{64}$", "type": "string" },
-            { "const": "" }
-          ]
-        },
-        "attempt_4_failure_seal_self_sha256": {
-          "anyOf": [
-            { "pattern": "^[0-9a-f]{64}$", "type": "string" },
-            { "const": "" }
-          ]
-        },
-        "logical_attempt": { "const": 5 },
-        "owner_decision_self_sha256": {
-          "anyOf": [
-            { "pattern": "^[0-9a-f]{64}$", "type": "string" },
-            { "const": "" }
-          ]
-        },
-        "pricing_contract_self_sha256": {
-          "anyOf": [
-            { "pattern": "^[0-9a-f]{64}$", "type": "string" },
-            { "const": "" }
-          ]
-        },
+        "logical_attempt": { "const": 6 },
         "trigger_marker": {
-          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-5]"
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-6]"
         }
       },
       "required": [
@@ -100,7 +38,42 @@
         "attempt_2_failure_seal_self_sha256",
         "attempt_3_failure_seal_self_sha256",
         "attempt_4_failure_seal_self_sha256",
+        "attempt_5_failure_seal_self_sha256",
+        "reviewer_contract_v2_self_sha256",
+        "threshold_semantics_v2_self_sha256",
+        "v6_exhaustion_record_self_sha256",
         "pricing_contract_self_sha256"
+      ],
+      "type": "object"
+    },
+    "partial_denominator": {
+      "additionalProperties": true,
+      "properties": {
+        "completed_question_count": { "minimum": 0, "type": "integer" },
+        "complete_population_count": { "const": 200 },
+        "raw_text_persisted": { "const": false },
+        "full_provider_response_persisted": { "const": false },
+        "full_prompt_or_user_query_persisted": { "const": false },
+        "vectors_persisted": { "const": false },
+        "secrets_persisted": { "const": false }
+      },
+      "required": [
+        "contract_id",
+        "complete_population_count",
+        "completed_question_count",
+        "completed_stratum_counts",
+        "provider_call_count",
+        "total_payg_equivalent_cost_usd",
+        "initial_disagreement_count",
+        "post_repair_disagreement_count",
+        "semantic_repair_attempt_count",
+        "reason_code_histogram",
+        "terminal_status_histogram",
+        "raw_text_persisted",
+        "full_provider_response_persisted",
+        "full_prompt_or_user_query_persisted",
+        "vectors_persisted",
+        "secrets_persisted"
       ],
       "type": "object"
     },
@@ -131,6 +104,7 @@
     "population",
     "billing",
     "error",
+    "partial_denominator",
     "authority",
     "self_sha256"
   ],

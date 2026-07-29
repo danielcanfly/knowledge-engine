@@ -1,0 +1,44 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-v6-exhaustion-record-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attempts": { "items": { "type": "object" }, "minItems": 5, "type": "array" },
+    "immutable_failed_evidence_preserved": { "const": true },
+    "ordinary_repair_scope": { "type": "string" },
+    "pa5_accepted": { "const": false },
+    "package_sha256": {
+      "const": "087ea7bb8c270bccf958041b8a4eacfa9d8fff9177a731f093f95f991d6063af"
+    },
+    "record_id": { "const": "m26-pa5-v6-attempts-1-to-5-exhausted" },
+    "recorded_at": { "const": "2026-07-29T07:10:00Z" },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-5-v6-exhaustion-record/v1"
+    },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.5" },
+    "status": { "const": "v6_attempt_window_exhausted_pa5_not_accepted" },
+    "thresholds_weakened": { "const": false },
+    "v6_package_sha256": {
+      "const": "3a36861501a1d247ae1fc90c4708e05d43a6e3591b134bce36614698f3232b95"
+    },
+    "v7_authorizes_attempts": { "const": [6, 7, 8] }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "record_id",
+    "recorded_at",
+    "status",
+    "package_sha256",
+    "v6_package_sha256",
+    "pa5_accepted",
+    "attempts",
+    "immutable_failed_evidence_preserved",
+    "v7_authorizes_attempts",
+    "ordinary_repair_scope",
+    "thresholds_weakened",
+    "self_sha256"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,64 @@
+{
+  "authority_boundary": {
+    "authenticated_internal_shadow_execution_only": true,
+    "canonical_writes": 0,
+    "full_prompt_or_user_query_persisted": false,
+    "full_provider_response_persisted": false,
+    "production_answer_serving": false,
+    "production_pointer_mutations": 0,
+    "public_answers": false,
+    "public_traffic_operations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0,
+    "raw_text_persisted": false,
+    "secret_values_persisted": false,
+    "source_foundation_release_mutations": 0,
+    "vectors_persisted": false
+  },
+  "evidence": {
+    "artifact_archive_sha256": "ee502ddd65e642d093fc8dc188ae087a8bcbd70001bd35e2dbb34a72d3def2c1",
+    "artifact_name": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-5",
+    "failure_code": "M26-PA5-LIVE-024",
+    "failure_message": "reviewer disagreement incident stop",
+    "failure_receipt_name": "m26-pa-5-failure-receipt.json",
+    "failure_receipt_self_sha256": "16ed43443016847eb77c6022c25c7e43ba998fae520a43927052cd2aafd21292",
+    "owner_decision_self_sha256": "cc8a9e4c03963d734676c6a5d9a283c7e55a68ca7ceaf1f14e477c3bca1391a5"
+  },
+  "github_run": {
+    "event": "push",
+    "head_sha": "1f31e5877c8379b9f058daa8cedb6090706e94bf",
+    "live_job_terminal_status": "failed_closed",
+    "repository": "danielcanfly/knowledge-engine",
+    "run_attempt": 1,
+    "run_id": "30429345717",
+    "trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-5]",
+    "workflow_conclusion": "success",
+    "workflow_name": "M26.PA.5 Controlled Internal Shadow Pilot"
+  },
+  "logical_attempt": 5,
+  "pa5_accepted": false,
+  "reclassification_as_accepted_authorized": false,
+  "recorded_at": "2026-07-29T07:03:00Z",
+  "replacement_or_deletion_authorized": false,
+  "rerun_authorized": false,
+  "root_cause": {
+    "code": "reviewer_contract_and_disagreement_resolution_defect",
+    "initial_disagreement_treated_as_incident": true,
+    "semantic_repair_before_threshold_required": true,
+    "shared_bounded_claim_citation_evidence_envelope_present": false,
+    "summary": "Attempt 5 still let the deterministic verifier and independent reviewer judge different semantic material. It also treated initial disagreement as an early incident before a bounded semantic repair and fresh rereview.",
+    "thresholds_weakened": false
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-attempt-5-failure-seal/v1",
+  "seal_id": "m26-pa5-live-attempt-5-immutable-failed-evidence",
+  "self_sha256": "017009419fb878178ef2eaef6596c14df542cd931060aeeac390cdff0d004d26",
+  "stage_id": "M26.PA.5",
+  "status": "immutable_failed_closed_evidence",
+  "supersession": {
+    "new_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-6]",
+    "preserves_attempt_5_as_failed_evidence": true,
+    "repair_issue": 1224,
+    "superseded_by_logical_attempt": 6,
+    "supersedes_only_reviewer_contract_and_threshold_semantics": true
+  }
+}

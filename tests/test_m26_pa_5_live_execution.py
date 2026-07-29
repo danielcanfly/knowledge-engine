@@ -18,6 +18,8 @@ from knowledge_engine.m26_pa5_live_execution import (
     ATTEMPT_3_SEAL_SCHEMA_PATH,
     ATTEMPT_4_SEAL_PATH,
     ATTEMPT_4_SEAL_SCHEMA_PATH,
+    ATTEMPT_5_SEAL_PATH,
+    ATTEMPT_5_SEAL_SCHEMA_PATH,
     FAILURE_RECEIPT_SCHEMA_PATH,
     MAX_PROVIDER_CALLS,
     MAX_SPEND_USD,
@@ -27,8 +29,14 @@ from knowledge_engine.m26_pa5_live_execution import (
     POPULATION_SHA256,
     PRICING_CONTRACT_PATH,
     PRICING_CONTRACT_SCHEMA_PATH,
+    REVIEWER_CONTRACT_PATH,
+    REVIEWER_CONTRACT_SCHEMA_PATH,
     SUCCESS_RECEIPT_SCHEMA_PATH,
+    THRESHOLD_SEMANTICS_PATH,
+    THRESHOLD_SEMANTICS_SCHEMA_PATH,
     TRIGGER_MARKER,
+    V6_EXHAUSTION_PATH,
+    V6_EXHAUSTION_SCHEMA_PATH,
     MiniMaxM3Client,
     failure_receipt,
     provider_call_checked,
@@ -69,26 +77,42 @@ def assert_self_digest(value: dict[str, Any]) -> None:
 def fake_provider(payload: dict[str, Any]) -> dict[str, Any]:
     message = json.loads(payload["messages"][0]["content"][0]["text"])
     if message["role"] == "independent_blind_review":
-        assert message["sanitized_answer_summary"]["raw_answer_text_included"] is False
-        assert message["sanitized_answer_summary"]["answer_digest"]
+        assert message["bounded_review_envelope"]["raw_answer_text_included"] is False
+        assert message["bounded_review_envelope"]["full_provider_response_included"] is False
+        assert message["bounded_review_envelope"]["envelope_sha256"]
         body = {"verdict": "pass", "reason_codes": ["BLIND_REVIEW_PASS"]}
     elif message["abstention_class"]:
         body = {
             "answer_status": "abstained",
             "safe_terminal": True,
             "reason_codes": ["SAFE_ABSTENTION"],
-            "material_claim_count": 0,
-            "citation_locator_count": 0,
-            "unsupported_material_claim_count": 0,
+            "material_claims": [],
         }
     else:
         body = {
             "answer_status": "answered",
             "safe_terminal": True,
             "reason_codes": ["ANSWER_SUPPORTED_BY_ACCEPTED_IDENTITY"],
-            "material_claim_count": 1,
-            "citation_locator_count": 1,
-            "unsupported_material_claim_count": 0,
+            "material_claims": [
+                {
+                    "claim_id": "claim-1",
+                    "claim_text": "bounded supported claim text",
+                    "claim_type": "direct_fact",
+                    "temporal_scope": "not_temporal",
+                    "citations": [
+                        {
+                            "locator_id": "loc-1",
+                            "locator_type": "accepted_corpus_locator",
+                            "source_identity": "accepted source identity",
+                            "evidence_excerpt": "bounded evidence excerpt",
+                            "support_verdict": "supported",
+                            "conflict_verdict": "no_conflict",
+                            "temporal_verdict": "not_temporal",
+                            "bounds_valid": True,
+                        }
+                    ],
+                }
+            ],
         }
     return {
         "text": json.dumps(body, sort_keys=True),
@@ -138,14 +162,27 @@ def test_pa5_owner_decision_static_contract() -> None:
     attempt4_seal = load(ROOT / ATTEMPT_4_SEAL_PATH)
     assert_schema(attempt4_seal, ATTEMPT_4_SEAL_SCHEMA_PATH)
     assert_self_digest(attempt4_seal)
+    attempt5_seal = load(ROOT / ATTEMPT_5_SEAL_PATH)
+    assert_schema(attempt5_seal, ATTEMPT_5_SEAL_SCHEMA_PATH)
+    assert_self_digest(attempt5_seal)
+    reviewer_contract = load(ROOT / REVIEWER_CONTRACT_PATH)
+    assert_schema(reviewer_contract, REVIEWER_CONTRACT_SCHEMA_PATH)
+    assert_self_digest(reviewer_contract)
+    threshold_semantics = load(ROOT / THRESHOLD_SEMANTICS_PATH)
+    assert_schema(threshold_semantics, THRESHOLD_SEMANTICS_SCHEMA_PATH)
+    assert_self_digest(threshold_semantics)
+    v6_exhaustion = load(ROOT / V6_EXHAUSTION_PATH)
+    assert_schema(v6_exhaustion, V6_EXHAUSTION_SCHEMA_PATH)
+    assert_self_digest(v6_exhaustion)
     pricing = load(ROOT / PRICING_CONTRACT_PATH)
     assert_schema(pricing, PRICING_CONTRACT_SCHEMA_PATH)
     assert_self_digest(pricing)
     parsed = decision["parsed_parameters"]
-    assert parsed["live_wiring_issue"] == 1222
+    assert parsed["live_wiring_issue"] == 1224
     assert parsed["authority_package"]["package_sha256"] == (
-        "3a36861501a1d247ae1fc90c4708e05d43a6e3591b134bce36614698f3232b95"
+        "087ea7bb8c270bccf958041b8a4eacfa9d8fff9177a731f093f95f991d6063af"
     )
+    assert parsed["authority_package"]["logical_attempts_authorized"] == [6, 7, 8]
     assert parsed["frozen_population_count"] == POPULATION_COUNT
     assert parsed["frozen_population_sha256"] == POPULATION_SHA256
     assert parsed["future_trigger_marker"] == TRIGGER_MARKER
@@ -159,6 +196,15 @@ def test_pa5_owner_decision_static_contract() -> None:
     assert parsed["billing"]["automatic_prompt_cache_usage_allowed"] is True
     assert parsed["review_rules"]["human_review_completed"] is False
     assert parsed["review_rules"]["autonomous_review_amendment_applied"] is True
+    assert parsed["review_rules"]["initial_disagreement_incident_stop"] is False
+    assert parsed["review_rules"]["post_repair_disagreement_incident_stop_only"] is True
+    assert reviewer_contract["bounded_review_envelope"][
+        "same_envelope_for_model_and_deterministic_verifier"
+    ] is True
+    assert threshold_semantics["initial_disagreement"][
+        "eligible_for_early_incident_stop"
+    ] is False
+    assert v6_exhaustion["status"] == "v6_attempt_window_exhausted_pa5_not_accepted"
     assert pricing["rates_per_1m_tokens"] == {
         "cache_creation_input_tokens": "0.375",
         "cache_read_input_tokens": "0.06",
@@ -170,15 +216,19 @@ def test_pa5_owner_decision_static_contract() -> None:
         "attempt_2_failure_seal_self_sha256": attempt2_seal["self_sha256"],
         "attempt_3_failure_seal_self_sha256": attempt3_seal["self_sha256"],
         "attempt_4_failure_seal_self_sha256": attempt4_seal["self_sha256"],
+        "attempt_5_failure_seal_self_sha256": attempt5_seal["self_sha256"],
         "billing_mode": "token_plan_subscription_with_payg_equivalent_cost_accounting",
-        "logical_attempt": 5,
-        "max_provider_calls": 600,
-        "max_payg_equivalent_cost_usd": "15.00",
+        "logical_attempt": 6,
+        "max_provider_calls": 800,
+        "max_payg_equivalent_cost_usd": "20.00",
         "owner_decision_self_sha256": decision["self_sha256"],
         "population_count": 200,
         "population_sha256": POPULATION_SHA256,
         "pricing_contract_self_sha256": pricing["self_sha256"],
+        "reviewer_contract_v2_self_sha256": reviewer_contract["self_sha256"],
+        "threshold_semantics_v2_self_sha256": threshold_semantics["self_sha256"],
         "trigger_marker": TRIGGER_MARKER,
+        "v6_exhaustion_record_self_sha256": v6_exhaustion["self_sha256"],
     }
 
 
@@ -221,7 +271,14 @@ def test_pa5_live_runner_emits_sanitized_success_receipt_with_fake_provider() ->
     assert receipt["per_question_evidence"][0]["owner_policy_result"][
         "autonomous_review_amendment_applied"
     ] is True
+    assert receipt["summary"]["metrics"]["initial_reviewer_disagreement_count"] == 0
+    assert receipt["summary"]["metrics"]["post_repair_reviewer_disagreement_count"] == 0
+    assert receipt["per_question_evidence"][0]["bounded_review_envelope"][
+        "claim_text_persisted"
+    ] is False
     serialized = json.dumps(receipt, sort_keys=True)
+    assert "bounded supported claim text" not in serialized
+    assert "bounded evidence excerpt" not in serialized
     assert "raw corpus" not in serialized.lower()
     assert "provider response" not in serialized.lower()
     assert "MINIMAX_API_KEY" not in serialized
@@ -395,6 +452,8 @@ def test_pa5_failure_receipt_is_schema_valid_and_sanitized() -> None:
     assert receipt["status"] == "controlled_internal_shadow_pilot_failed_closed"
     assert "full provider body" in receipt["error"]["message"]
     assert receipt["billing"]["missing_provider_monetary_cost_field_is_error"] is False
+    assert receipt["partial_denominator"]["complete_population_count"] == 200
+    assert receipt["partial_denominator"]["raw_text_persisted"] is False
 
 
 def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
@@ -407,7 +466,7 @@ def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
     assert "MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}" in workflow
     assert "python -m knowledge_engine.m26_pa5_live_execution --execute" in workflow
     assert "actions/upload-artifact@v4" in workflow
-    assert "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-5" in workflow
+    assert "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-6" in workflow
 
     arch = ARCH_WORKFLOW.read_text(encoding="utf-8")
     assert "src/knowledge_engine/m26_pa5_live_execution.py" in arch
@@ -417,6 +476,10 @@ def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
     assert "pilot/m26/m26-pa-5-attempt-2-failure-seal.json" in pa4
     assert "pilot/m26/m26-pa-5-attempt-3-failure-seal.json" in pa4
     assert "pilot/m26/m26-pa-5-attempt-4-failure-seal.json" in pa4
+    assert "pilot/m26/m26-pa-5-attempt-5-failure-seal.json" in pa4
+    assert "pilot/m26/m26-pa-5-reviewer-contract-v2.json" in pa4
+    assert "pilot/m26/m26-pa-5-threshold-semantics-v2.json" in pa4
+    assert "pilot/m26/m26-pa-5-v6-exhaustion-record.json" in pa4
     assert "pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json" in pa4
     assert "schemas/m26-pa-5-success-receipt-v1.schema.json" in pa4
     assert "tests/test_m26_pa_5_live_execution.py" in pa4
