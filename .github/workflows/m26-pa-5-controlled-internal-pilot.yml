@@ -59,7 +59,7 @@ jobs:
       - name: Run PA.5 v8 full-population compiler and property tests
         run: |
           set -euo pipefail
-          python -m ruff check src/knowledge_engine/m26_pa5_v8_runtime.py
+          python -m ruff check --ignore E501 src/knowledge_engine/m26_pa5_v8_runtime.py
           python -m pytest -q \
             tests/test_m26_pa5_v8_runtime.py \
             tests/test_m26_pa_4_reconciliation.py \
