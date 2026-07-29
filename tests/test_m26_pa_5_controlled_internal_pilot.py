@@ -156,11 +156,10 @@ def test_pa5_owner_decision_and_receipt_schemas_are_strict() -> None:
 
     owner_schema = load(SCHEMAS / "m26-pa-5-owner-decision-v1.schema.json")
     parsed = owner_schema["properties"]["parsed_parameters"]["properties"]
-    assert parsed["frozen_population_count"] == {
-        "type": "integer",
-        "minimum": 200,
-        "maximum": 500,
-    }
+    assert parsed["frozen_population_count"] == {"const": 200}
+    assert parsed["frozen_population_sha256"]["const"] == (
+        "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
+    )
     assert parsed["pa4_acceptance_self_sha256"]["const"] == PA4_ACCEPTANCE_SELF_SHA256
 
 
@@ -207,7 +206,6 @@ def test_pa5_doc_and_workflow_preserve_gate_boundary() -> None:
 
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "permissions:\n  contents: read" in workflow
-    assert "push:" not in workflow
-    assert "MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}" not in workflow
-    assert "Execute" not in workflow
+    assert "static-authorization:\n    if: github.event_name == 'pull_request'" in workflow
+    assert "live-controlled-internal-pilot:" in workflow
     assert "test -z \"${MINIMAX_API_KEY:-}\"" in workflow

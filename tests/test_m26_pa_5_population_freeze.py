@@ -135,8 +135,7 @@ def test_pa5_population_freeze_doc_and_workflows_are_read_only() -> None:
 
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "permissions:\n  contents: read" in workflow
-    assert "push:" not in workflow
-    assert "MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}" not in workflow
+    assert "static-authorization:\n    if: github.event_name == 'pull_request'" in workflow
     assert "m26_pa5_population_freeze" in workflow
     assert "m26-pa-5-frozen-population.json" in workflow
 
