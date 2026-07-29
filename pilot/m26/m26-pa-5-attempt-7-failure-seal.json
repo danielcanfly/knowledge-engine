@@ -1,0 +1,92 @@
+{
+  "authority_boundary": {
+    "authenticated_internal_shadow_execution_only": true,
+    "canonical_writes": 0,
+    "full_prompt_or_user_query_persisted": false,
+    "full_provider_response_persisted": false,
+    "production_answer_serving": false,
+    "production_pointer_mutations": 0,
+    "public_answers": false,
+    "public_traffic_operations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0,
+    "raw_text_persisted": false,
+    "secret_values_persisted": false,
+    "source_foundation_release_mutations": 0,
+    "vectors_persisted": false
+  },
+  "evidence": {
+    "artifact_archive_sha256": "f115530e88558dff7857b3edde2df9c6b18fd32c6513a927f2823c922e8ab68d",
+    "artifact_id": "8718241945",
+    "artifact_name": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-7",
+    "failure_code": "M26-PA5-LIVE-024",
+    "failure_message": "post-repair reviewer disagreement incident stop",
+    "failure_receipt_file_sha256": "0a961d97eecd65f549a205d1e36b4c253ba514e668f68c17f1237af1093280e4",
+    "failure_receipt_name": "m26-pa-5-failure-receipt.json",
+    "failure_receipt_self_sha256": "0d11adbdf4d1516c01a8686308c261dc3122a388b36bd3a9ecbdb98e27e236dc",
+    "owner_decision_self_sha256": "c55aafae611d94777c349823ae499ae6f57a75a19ee461b3dd7064711d73cf93"
+  },
+  "github_run": {
+    "event": "push",
+    "head_sha": "95de5bbc482575cc2a946f3be0ffbe23369c1941",
+    "live_job_terminal_status": "failed_closed",
+    "repository": "danielcanfly/knowledge-engine",
+    "run_attempt": 1,
+    "run_id": "30437549704",
+    "trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-7]",
+    "workflow_conclusion": "success",
+    "workflow_name": "M26.PA.5 Controlled Internal Shadow Pilot"
+  },
+  "logical_attempt": 7,
+  "pa5_accepted": false,
+  "partial_denominator": {
+    "complete_population_count": 200,
+    "completed_question_count": 50,
+    "completed_stratum_counts": {
+      "direct_grounded_factual": 50
+    },
+    "disagreement_direction_histogram": {
+      "verifier_fail_model_pass": 21
+    },
+    "full_prompt_or_user_query_persisted": false,
+    "full_provider_response_persisted": false,
+    "initial_disagreement_count": 21,
+    "initial_disagreement_rate": 0.42,
+    "post_repair_disagreement_count": 11,
+    "post_repair_disagreement_rate": 0.22,
+    "provider_call_count": 144,
+    "raw_text_persisted": false,
+    "resolved_by_safe_abstention_count": 11,
+    "secrets_persisted": false,
+    "semantic_repair_attempt_count": 21,
+    "semantic_repair_success_count": 10,
+    "terminal_status_histogram": {
+      "accepted": 1,
+      "safe_abstention": 49
+    },
+    "total_payg_equivalent_cost_usd": "0.06442704",
+    "unresolved_disagreement_count": 0,
+    "vectors_persisted": false
+  },
+  "reclassification_as_accepted_authorized": false,
+  "recorded_at": "2026-07-29T09:05:00Z",
+  "replacement_or_deletion_authorized": false,
+  "rerun_authorized": false,
+  "root_cause": {
+    "code": "bounded_evidence_surface_absent_from_answer_generation",
+    "ordinary_prompt_and_evidence_surface_repair_required": true,
+    "summary": "Attempt 7 failed closed at the package-defined post-repair reviewer-disagreement incident stop after 50/200 completed questions. The diagnostic histogram showed answerable direct section questions commonly lacked material claims or support because provider prompts carried evidence identities but no ephemeral bounded evidence excerpts.",
+    "thresholds_weakened": false
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-attempt-7-failure-seal/v1",
+  "seal_id": "m26-pa5-live-attempt-7-immutable-failed-evidence",
+  "self_sha256": "69135c1c231f858290d403b06a96cd93ff6fd3327ee6f5e0a4619f9c422edcea",
+  "stage_id": "M26.PA.5",
+  "status": "immutable_failed_closed_evidence",
+  "supersession": {
+    "new_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-8]",
+    "preserves_attempt_7_as_failed_evidence": true,
+    "repair_issue": 1230,
+    "superseded_by_logical_attempt": 8
+  }
+}

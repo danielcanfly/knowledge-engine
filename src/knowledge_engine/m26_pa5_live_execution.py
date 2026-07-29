@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -33,6 +34,7 @@ ATTEMPT_3_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-3-failure-sea
 ATTEMPT_4_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-4-failure-seal/v1"
 ATTEMPT_5_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-5-failure-seal/v1"
 ATTEMPT_6_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-6-failure-seal/v1"
+ATTEMPT_7_SEAL_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-attempt-7-failure-seal/v1"
 REVIEWER_CONTRACT_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-reviewer-contract-v2/v1"
 THRESHOLD_SEMANTICS_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-threshold-semantics-v2/v1"
 V6_EXHAUSTION_SCHEMA_VERSION = "knowledge-engine-m26-pa-5-v6-exhaustion-record/v1"
@@ -44,6 +46,7 @@ ATTEMPT_3_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-3-failure-seal.json")
 ATTEMPT_4_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-4-failure-seal.json")
 ATTEMPT_5_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-5-failure-seal.json")
 ATTEMPT_6_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-6-failure-seal.json")
+ATTEMPT_7_SEAL_PATH = Path("pilot/m26/m26-pa-5-attempt-7-failure-seal.json")
 REVIEWER_CONTRACT_PATH = Path("pilot/m26/m26-pa-5-reviewer-contract-v2.json")
 THRESHOLD_SEMANTICS_PATH = Path("pilot/m26/m26-pa-5-threshold-semantics-v2.json")
 V6_EXHAUSTION_PATH = Path("pilot/m26/m26-pa-5-v6-exhaustion-record.json")
@@ -57,14 +60,15 @@ ATTEMPT_3_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-3-failure-seal-v1.sc
 ATTEMPT_4_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-4-failure-seal-v1.schema.json")
 ATTEMPT_5_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-5-failure-seal-v1.schema.json")
 ATTEMPT_6_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-6-failure-seal-v1.schema.json")
+ATTEMPT_7_SEAL_SCHEMA_PATH = Path("schemas/m26-pa-5-attempt-7-failure-seal-v1.schema.json")
 REVIEWER_CONTRACT_SCHEMA_PATH = Path("schemas/m26-pa-5-reviewer-contract-v2-v1.schema.json")
 THRESHOLD_SEMANTICS_SCHEMA_PATH = Path("schemas/m26-pa-5-threshold-semantics-v2-v1.schema.json")
 V6_EXHAUSTION_SCHEMA_PATH = Path("schemas/m26-pa-5-v6-exhaustion-record-v1.schema.json")
 PRICING_CONTRACT_SCHEMA_PATH = Path("schemas/m26-pa-5-pricing-contract-v1.schema.json")
 SUCCESS_RECEIPT_SCHEMA_PATH = Path("schemas/m26-pa-5-success-receipt-v1.schema.json")
 FAILURE_RECEIPT_SCHEMA_PATH = Path("schemas/m26-pa-5-failure-receipt-v1.schema.json")
-LOGICAL_ATTEMPT = 7
-TRIGGER_MARKER = "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-7]"
+LOGICAL_ATTEMPT = 8
+TRIGGER_MARKER = "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-8]"
 POPULATION_SHA256 = "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
 POPULATION_COUNT = 200
 PA5_GATE_MERGE_SHA = "e2bff8fbf14278c70623d7c82c36012a3a9cf831"
@@ -137,6 +141,20 @@ ATTEMPT_6_FAILURE_RECEIPT_FILE_SHA256 = (
 )
 ATTEMPT_6_ARTIFACT_ARCHIVE_SHA256 = (
     "7f937f190ff375debe6df0db7b3fe897e3bcd9e50fe163e8bed11ccac0cef60e"
+)
+ATTEMPT_7_RUN_ID = "30437549704"
+ATTEMPT_7_TRIGGER_MERGE_SHA = "95de5bbc482575cc2a946f3be0ffbe23369c1941"
+ATTEMPT_7_OWNER_DECISION_SELF_SHA256 = (
+    "c55aafae611d94777c349823ae499ae6f57a75a19ee461b3dd7064711d73cf93"
+)
+ATTEMPT_7_FAILURE_RECEIPT_SELF_SHA256 = (
+    "0d11adbdf4d1516c01a8686308c261dc3122a388b36bd3a9ecbdb98e27e236dc"
+)
+ATTEMPT_7_FAILURE_RECEIPT_FILE_SHA256 = (
+    "0a961d97eecd65f549a205d1e36b4c253ba514e668f68c17f1237af1093280e4"
+)
+ATTEMPT_7_ARTIFACT_ARCHIVE_SHA256 = (
+    "f115530e88558dff7857b3edde2df9c6b18fd32c6513a927f2823c922e8ab68d"
 )
 V6_PACKAGE_SHA256 = "3a36861501a1d247ae1fc90c4708e05d43a6e3591b134bce36614698f3232b95"
 V7_PACKAGE_SHA256 = "087ea7bb8c270bccf958041b8a4eacfa9d8fff9177a731f093f95f991d6063af"
@@ -583,10 +601,94 @@ def attempt_6_failure_seal_template() -> dict[str, Any]:
             "thresholds_weakened": False,
         },
         "supersession": {
-            "superseded_by_logical_attempt": LOGICAL_ATTEMPT,
+            "superseded_by_logical_attempt": 7,
             "repair_issue": 1228,
-            "new_trigger_marker": TRIGGER_MARKER,
+            "new_trigger_marker": (
+                "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-7]"
+            ),
             "preserves_attempt_6_as_failed_evidence": True,
+        },
+        "authority_boundary": authority_receipt(),
+        "self_sha256": "",
+    }
+
+
+def attempt_7_failure_seal_template() -> dict[str, Any]:
+    return {
+        "schema_version": ATTEMPT_7_SEAL_SCHEMA_VERSION,
+        "stage_id": STAGE_ID,
+        "seal_id": "m26-pa5-live-attempt-7-immutable-failed-evidence",
+        "recorded_at": "2026-07-29T09:05:00Z",
+        "status": "immutable_failed_closed_evidence",
+        "logical_attempt": 7,
+        "rerun_authorized": False,
+        "reclassification_as_accepted_authorized": False,
+        "replacement_or_deletion_authorized": False,
+        "pa5_accepted": False,
+        "github_run": {
+            "repository": "danielcanfly/knowledge-engine",
+            "workflow_name": "M26.PA.5 Controlled Internal Shadow Pilot",
+            "run_id": ATTEMPT_7_RUN_ID,
+            "run_attempt": 1,
+            "event": "push",
+            "trigger_marker": (
+                "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-7]"
+            ),
+            "head_sha": ATTEMPT_7_TRIGGER_MERGE_SHA,
+            "workflow_conclusion": "success",
+            "live_job_terminal_status": "failed_closed",
+        },
+        "evidence": {
+            "artifact_name": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-7",
+            "artifact_id": "8718241945",
+            "artifact_archive_sha256": ATTEMPT_7_ARTIFACT_ARCHIVE_SHA256,
+            "failure_receipt_name": "m26-pa-5-failure-receipt.json",
+            "failure_receipt_file_sha256": ATTEMPT_7_FAILURE_RECEIPT_FILE_SHA256,
+            "failure_receipt_self_sha256": ATTEMPT_7_FAILURE_RECEIPT_SELF_SHA256,
+            "owner_decision_self_sha256": ATTEMPT_7_OWNER_DECISION_SELF_SHA256,
+            "failure_code": "M26-PA5-LIVE-024",
+            "failure_message": "post-repair reviewer disagreement incident stop",
+        },
+        "partial_denominator": {
+            "completed_question_count": 50,
+            "complete_population_count": 200,
+            "completed_stratum_counts": {"direct_grounded_factual": 50},
+            "provider_call_count": 144,
+            "total_payg_equivalent_cost_usd": "0.06442704",
+            "initial_disagreement_count": 21,
+            "initial_disagreement_rate": 0.42,
+            "post_repair_disagreement_count": 11,
+            "post_repair_disagreement_rate": 0.22,
+            "resolved_by_safe_abstention_count": 11,
+            "unresolved_disagreement_count": 0,
+            "semantic_repair_attempt_count": 21,
+            "semantic_repair_success_count": 10,
+            "terminal_status_histogram": {"accepted": 1, "safe_abstention": 49},
+            "disagreement_direction_histogram": {"verifier_fail_model_pass": 21},
+            "raw_text_persisted": False,
+            "full_provider_response_persisted": False,
+            "full_prompt_or_user_query_persisted": False,
+            "vectors_persisted": False,
+            "secrets_persisted": False,
+        },
+        "root_cause": {
+            "code": "bounded_evidence_surface_absent_from_answer_generation",
+            "summary": (
+                "Attempt 7 failed closed at the package-defined post-repair "
+                "reviewer-disagreement incident stop after 50/200 completed "
+                "questions. The diagnostic histogram showed answerable direct "
+                "section questions commonly lacked material claims or support "
+                "because provider prompts carried evidence identities but no "
+                "ephemeral bounded evidence excerpts."
+            ),
+            "ordinary_prompt_and_evidence_surface_repair_required": True,
+            "thresholds_weakened": False,
+        },
+        "supersession": {
+            "superseded_by_logical_attempt": LOGICAL_ATTEMPT,
+            "repair_issue": 1230,
+            "new_trigger_marker": TRIGGER_MARKER,
+            "preserves_attempt_7_as_failed_evidence": True,
         },
         "authority_boundary": authority_receipt(),
         "self_sha256": "",
@@ -769,7 +871,7 @@ def owner_decision_template() -> dict[str, Any]:
     return {
         "schema_version": OWNER_DECISION_SCHEMA_VERSION,
         "stage_id": STAGE_ID,
-        "decision_id": "m26-pa5-v7-attempt-7-timeout-repair-authority",
+        "decision_id": "m26-pa5-v7-attempt-8-final-bounded-evidence-repair-authority",
         "owner": "Daniel Huang",
         "recorded_at": "2026-07-29T07:10:00Z",
         "exact_instruction_text_sha256": canonical_sha256(
@@ -786,7 +888,7 @@ def owner_decision_template() -> dict[str, Any]:
             }
         ),
         "parsed_parameters": {
-            "live_wiring_issue": 1228,
+            "live_wiring_issue": 1230,
             "authority_package": {
                 "package_name": (
                     "LLM_Wiki_M26_PA5_v7_Reviewer_Contract_Reconciliation_and_"
@@ -858,6 +960,16 @@ def owner_decision_template() -> dict[str, Any]:
                 "trigger_merge_sha": ATTEMPT_6_TRIGGER_MERGE_SHA,
                 "failure_receipt_self_sha256": ATTEMPT_6_FAILURE_RECEIPT_SELF_SHA256,
                 "failure_receipt_file_sha256": ATTEMPT_6_FAILURE_RECEIPT_FILE_SHA256,
+                "immutable_failed_evidence": True,
+                "rerun_authorized": False,
+            },
+            "pa5_attempt_7_failure": {
+                "attempt_7_failure_seal_path": ATTEMPT_7_SEAL_PATH.as_posix(),
+                "run_id": ATTEMPT_7_RUN_ID,
+                "run_attempt": 1,
+                "trigger_merge_sha": ATTEMPT_7_TRIGGER_MERGE_SHA,
+                "failure_receipt_self_sha256": ATTEMPT_7_FAILURE_RECEIPT_SELF_SHA256,
+                "failure_receipt_file_sha256": ATTEMPT_7_FAILURE_RECEIPT_FILE_SHA256,
                 "immutable_failed_evidence": True,
                 "rerun_authorized": False,
             },
@@ -1082,6 +1194,8 @@ def write_owner_decision(root: Path) -> dict[str, Any]:
     (root / ATTEMPT_5_SEAL_PATH).write_text(pretty_json(attempt_5_seal), encoding="utf-8")
     attempt_6_seal = with_self_digest(attempt_6_failure_seal_template())
     (root / ATTEMPT_6_SEAL_PATH).write_text(pretty_json(attempt_6_seal), encoding="utf-8")
+    attempt_7_seal = with_self_digest(attempt_7_failure_seal_template())
+    (root / ATTEMPT_7_SEAL_PATH).write_text(pretty_json(attempt_7_seal), encoding="utf-8")
     reviewer_contract = with_self_digest(reviewer_contract_template())
     (root / REVIEWER_CONTRACT_PATH).write_text(
         pretty_json(reviewer_contract),
@@ -1173,6 +1287,17 @@ def validate_attempt_6_failure_seal(root: Path) -> dict[str, Any]:
     return seal
 
 
+def validate_attempt_7_failure_seal(root: Path) -> dict[str, Any]:
+    seal = load_json(root / ATTEMPT_7_SEAL_PATH)
+    validate_schema(root, seal, ATTEMPT_7_SEAL_SCHEMA_PATH)
+    verify_self_digest(seal, "PA5 attempt-7 failure seal")
+    if seal["logical_attempt"] != 7 or seal["status"] != "immutable_failed_closed_evidence":
+        raise PA5GateError("M26-PA5-LIVE-072", "attempt-7 seal status mismatch")
+    if seal["github_run"]["run_id"] != ATTEMPT_7_RUN_ID:
+        raise PA5GateError("M26-PA5-LIVE-073", "attempt-7 run identity mismatch")
+    return seal
+
+
 def validate_reviewer_contract(root: Path) -> dict[str, Any]:
     contract = load_json(root / REVIEWER_CONTRACT_PATH)
     validate_schema(root, contract, REVIEWER_CONTRACT_SCHEMA_PATH)
@@ -1252,6 +1377,7 @@ def validate_owner_decision(root: Path) -> dict[str, Any]:
     attempt_4_seal = validate_attempt_4_failure_seal(root)
     attempt_5_seal = validate_attempt_5_failure_seal(root)
     attempt_6_seal = validate_attempt_6_failure_seal(root)
+    attempt_7_seal = validate_attempt_7_failure_seal(root)
     reviewer_contract = validate_reviewer_contract(root)
     threshold_semantics = validate_threshold_semantics(root)
     v6_exhaustion = validate_v6_exhaustion_record(root)
@@ -1304,6 +1430,14 @@ def validate_owner_decision(root: Path) -> dict[str, Any]:
         attempt_6_seal["evidence"]["failure_receipt_self_sha256"]
     ):
         raise PA5GateError("M26-PA5-LIVE-071", "attempt-6 seal digest mismatch")
+    if parsed["pa5_attempt_7_failure"]["attempt_7_failure_seal_path"] != (
+        ATTEMPT_7_SEAL_PATH.as_posix()
+    ):
+        raise PA5GateError("M26-PA5-LIVE-074", "attempt-7 seal path mismatch")
+    if parsed["pa5_attempt_7_failure"]["failure_receipt_self_sha256"] != (
+        attempt_7_seal["evidence"]["failure_receipt_self_sha256"]
+    ):
+        raise PA5GateError("M26-PA5-LIVE-075", "attempt-7 seal digest mismatch")
     if parsed["reviewer_contract_v2_path"] != REVIEWER_CONTRACT_PATH.as_posix():
         raise PA5GateError("M26-PA5-LIVE-063", "reviewer contract path mismatch")
     if parsed["threshold_semantics_v2_path"] != THRESHOLD_SEMANTICS_PATH.as_posix():
@@ -1539,6 +1673,7 @@ def parse_provider_json_with_bounded_repair(
     answer_digest: str,
     sanitized_answer_summary_value: Mapping[str, Any] | None = None,
     bounded_review_envelope_value: Mapping[str, Any] | None = None,
+    evidence_surface_value: Mapping[str, Any] | None = None,
     initial_result: Mapping[str, Any],
     counters: dict[str, Any],
     pricing_contract: Mapping[str, Any],
@@ -1566,6 +1701,7 @@ def parse_provider_json_with_bounded_repair(
             answer_digest=answer_digest,
             sanitized_answer_summary=sanitized_answer_summary_value,
             bounded_review_envelope=bounded_review_envelope_value,
+            evidence_surface=evidence_surface_value,
             repair_context={
                 "repair_reason_code": "STRUCTURED_JSON_PARSE_FAILURE",
                 "malformed_response_digest": malformed_response_digest,
@@ -1616,6 +1752,113 @@ def evidence_identity(question: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def iter_objects(value: Any) -> list[Mapping[str, Any]]:
+    found: list[Mapping[str, Any]] = []
+    if isinstance(value, Mapping):
+        found.append(value)
+        for item in value.values():
+            found.extend(iter_objects(item))
+    elif isinstance(value, list):
+        for item in value:
+            found.extend(iter_objects(item))
+    return found
+
+
+def source_locator_values(source: Mapping[str, Any]) -> list[str]:
+    locators: list[str] = []
+    for key in (
+        "section_id",
+        "comparison_section_id",
+        "provenance_id",
+        "source_id",
+        "edge_id",
+        "resolution_id",
+        "review_decision_id",
+        "synthesis_id",
+        "concept_id",
+    ):
+        value = source.get(key)
+        if isinstance(value, str) and value:
+            locators.append(value)
+    return locators
+
+
+def object_matches_source(candidate: Mapping[str, Any], source: Mapping[str, Any]) -> bool:
+    for key in (
+        "section_id",
+        "provenance_id",
+        "source_id",
+        "edge_id",
+        "resolution_id",
+        "review_decision_id",
+        "synthesis_id",
+    ):
+        source_value = source.get(key)
+        if isinstance(source_value, str) and source_value and candidate.get(key) == source_value:
+            return True
+    return False
+
+
+def object_text(candidate: Mapping[str, Any]) -> str:
+    parts: list[str] = []
+    for key in (
+        "section_title",
+        "title",
+        "description",
+        "excerpt",
+        "body",
+        "relation_type",
+        "source",
+        "target",
+        "uri",
+        "origin_path",
+        "review_status",
+        "synthesis_id",
+        "resolution_id",
+        "review_decision_id",
+        "claims",
+        "sources",
+        "subject",
+    ):
+        value = candidate.get(key)
+        if (isinstance(value, str) and value) or isinstance(value, (int, float, bool)):
+            parts.append(f"{key}: {value}")
+        elif isinstance(value, (Mapping, list)):
+            parts.append(f"{key}: {json.dumps(value, sort_keys=True)}")
+    return "\n".join(parts)
+
+
+def load_bounded_evidence_surface(root: Path, question: Mapping[str, Any]) -> dict[str, Any]:
+    source = dict(question["construction_source_identity"])
+    artifact_path = Path(str(source["artifact_path"]))
+    artifact = root / artifact_path
+    artifact_sha256 = source["artifact_sha256"]
+    if hashlib.sha256(artifact.read_bytes()).hexdigest() != artifact_sha256:
+        raise PA5GateError("M26-PA5-LIVE-076", "accepted evidence artifact digest drift")
+    artifact_value = load_json(artifact)
+    match = next(
+        (
+            candidate
+            for candidate in iter_objects(artifact_value)
+            if object_matches_source(candidate, source)
+        ),
+        {},
+    )
+    excerpt = bounded_text(object_text(match), 1200) if match else ""
+    return {
+        "contract_id": "m26-pa5-ephemeral-bounded-evidence-surface-v1",
+        "artifact_path": artifact_path.as_posix(),
+        "artifact_sha256": artifact_sha256,
+        "locator_values": source_locator_values(source),
+        "locator_found": bool(match),
+        "evidence_excerpt": excerpt,
+        "evidence_excerpt_sha256": canonical_sha256(excerpt),
+        "evidence_excerpt_char_count": len(excerpt),
+        "raw_corpus_text_persisted": False,
+        "full_artifact_persisted": False,
+    }
+
+
 def build_payload(
     question: Mapping[str, Any],
     *,
@@ -1623,6 +1866,7 @@ def build_payload(
     answer_digest: str = "",
     sanitized_answer_summary: Mapping[str, Any] | None = None,
     bounded_review_envelope: Mapping[str, Any] | None = None,
+    evidence_surface: Mapping[str, Any] | None = None,
     repair_context: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     identity = evidence_identity(question)
@@ -1637,6 +1881,7 @@ def build_payload(
             "verdict_values": ["pass", "fail"],
             "review_scope": "reviewer_contract_v2_shared_bounded_semantic_envelope",
             "same_bounded_envelope_as_deterministic_verifier": True,
+            "evaluate_against_ephemeral_bounded_evidence_surface": True,
             "raw_answer_text_included": False,
             "raw_corpus_text_included": False,
             "full_provider_response_included": False,
@@ -1657,6 +1902,8 @@ def build_payload(
             "answer_status_values": ["answered", "abstained"],
             "maximum_semantic_repair_rounds": 1,
             "repair_must_address_shared_envelope_reason_codes_only": True,
+            "use_only_ephemeral_bounded_evidence_surface": True,
+            "copy_citation_evidence_excerpt_from_surface": True,
             "mandatory_abstention_when_abstention_class_present": bool(
                 question["abstention_class"]
             ),
@@ -1698,6 +1945,8 @@ def build_payload(
                 ],
             },
             "answer_status_values": ["answered", "abstained"],
+            "use_only_ephemeral_bounded_evidence_surface": True,
+            "copy_citation_evidence_excerpt_from_surface": True,
             "mandatory_abstention_when_abstention_class_present": bool(
                 question["abstention_class"]
             ),
@@ -1724,6 +1973,7 @@ def build_payload(
                                 ],
                                 "abstention_class": question["abstention_class"],
                                 "evidence_identity": identity,
+                                "evidence_surface": dict(evidence_surface or {}),
                                 "answer_digest": answer_digest,
                                 "sanitized_answer_summary": dict(
                                     sanitized_answer_summary or {}
@@ -1747,6 +1997,7 @@ def deterministic_verifier(
     question: Mapping[str, Any],
     answer: Mapping[str, Any],
     bounded_review_envelope: Mapping[str, Any],
+    evidence_surface: Mapping[str, Any],
 ) -> dict[str, Any]:
     reason_codes: list[str] = []
     expected = question["expected_evidence_family"]
@@ -1756,6 +2007,8 @@ def deterministic_verifier(
     citation_count = sum(len(list(claim.get("citations", []))) for claim in claims)
     unsupported = 0
     invalid_locators = 0
+    locator_values = set(str(value) for value in evidence_surface.get("locator_values", []))
+    evidence_excerpt = str(evidence_surface.get("evidence_excerpt", ""))
     for claim in claims:
         citations = list(claim.get("citations", []))
         if not citations:
@@ -1763,11 +2016,19 @@ def deterministic_verifier(
             continue
         supported = False
         for citation in citations:
-            if citation.get("bounds_valid") is not True:
+            locator_match = (
+                str(citation.get("locator_id", "")) in locator_values
+                or str(citation.get("source_identity", "")) in locator_values
+            )
+            cited_excerpt = str(citation.get("evidence_excerpt", ""))
+            excerpt_match = bool(cited_excerpt) and cited_excerpt in evidence_excerpt
+            if citation.get("bounds_valid") is not True or not locator_match:
                 invalid_locators += 1
             if (
                 citation.get("support_verdict") == "supported"
                 and citation.get("bounds_valid") is True
+                and locator_match
+                and excerpt_match
                 and citation.get("conflict_verdict") != "conflict"
                 and citation.get("temporal_verdict") != "stale"
             ):
@@ -2157,6 +2418,7 @@ def run_pilot(
     attempt_4_seal = validate_attempt_4_failure_seal(root)
     attempt_5_seal = validate_attempt_5_failure_seal(root)
     attempt_6_seal = validate_attempt_6_failure_seal(root)
+    attempt_7_seal = validate_attempt_7_failure_seal(root)
     reviewer_contract = validate_reviewer_contract(root)
     threshold_semantics = validate_threshold_semantics(root)
     v6_exhaustion = validate_v6_exhaustion_record(root)
@@ -2193,7 +2455,12 @@ def run_pilot(
     )
 
     for index, question in enumerate(questions):
-        answer_payload = build_payload(question, role="answer_generation")
+        evidence_surface = load_bounded_evidence_surface(root, question)
+        answer_payload = build_payload(
+            question,
+            role="answer_generation",
+            evidence_surface=evidence_surface,
+        )
         answer_result = provider_call_checked(
             provider_call=provider_call,
             payload=answer_payload,
@@ -2210,6 +2477,7 @@ def run_pilot(
                 role="answer_generation",
                 answer_digest="",
                 sanitized_answer_summary_value=None,
+                evidence_surface_value=evidence_surface,
                 initial_result=answer_result,
                 counters=counters,
                 pricing_contract=pricing_contract,
@@ -2219,13 +2487,14 @@ def run_pilot(
         answer_digest = canonical_sha256(answer)
         envelope = build_bounded_review_envelope(question, answer, answer_digest)
         answer_summary = sanitized_answer_summary(answer, answer_digest, envelope)
-        verifier = deterministic_verifier(question, answer, envelope)
+        verifier = deterministic_verifier(question, answer, envelope, evidence_surface)
         review_payload = build_payload(
             question,
             role="independent_blind_review",
             answer_digest=answer_digest,
             sanitized_answer_summary=answer_summary,
             bounded_review_envelope=envelope,
+            evidence_surface=evidence_surface,
         )
         review_result = provider_call_checked(
             provider_call=provider_call,
@@ -2243,6 +2512,7 @@ def run_pilot(
                 answer_digest=answer_digest,
                 sanitized_answer_summary_value=answer_summary,
                 bounded_review_envelope_value=envelope,
+                evidence_surface_value=evidence_surface,
                 initial_result=review_result,
                 counters=counters,
                 pricing_contract=pricing_contract,
@@ -2274,6 +2544,7 @@ def run_pilot(
                 answer_digest=answer_digest,
                 sanitized_answer_summary=answer_summary,
                 bounded_review_envelope=envelope,
+                evidence_surface=evidence_surface,
                 repair_context={
                     "repair_reason_code": "INITIAL_REVIEWER_DISAGREEMENT",
                     "deterministic_verifier_verdict": verifier["verdict"],
@@ -2300,6 +2571,7 @@ def run_pilot(
                     answer_digest=answer_digest,
                     sanitized_answer_summary_value=answer_summary,
                     bounded_review_envelope_value=envelope,
+                    evidence_surface_value=evidence_surface,
                     initial_result=semantic_repair_result,
                     counters=counters,
                     pricing_contract=pricing_contract,
@@ -2318,13 +2590,19 @@ def run_pilot(
                 final_answer_digest,
                 final_envelope,
             )
-            final_verifier = deterministic_verifier(question, final_answer, final_envelope)
+            final_verifier = deterministic_verifier(
+                question,
+                final_answer,
+                final_envelope,
+                evidence_surface,
+            )
             rereview_payload = build_payload(
                 question,
                 role="independent_blind_review",
                 answer_digest=final_answer_digest,
                 sanitized_answer_summary=final_answer_summary,
                 bounded_review_envelope=final_envelope,
+                evidence_surface=evidence_surface,
                 repair_context={
                     "fresh_rereview_after_semantic_repair": True,
                     "initial_review_request_identity": review_result["request_identity"],
@@ -2349,6 +2627,7 @@ def run_pilot(
                     answer_digest=final_answer_digest,
                     sanitized_answer_summary_value=final_answer_summary,
                     bounded_review_envelope_value=final_envelope,
+                    evidence_surface_value=evidence_surface,
                     initial_result=rereview_result,
                     counters=counters,
                     pricing_contract=pricing_contract,
@@ -2388,7 +2667,12 @@ def run_pilot(
                     final_answer_digest,
                     final_envelope,
                 )
-                final_verifier = deterministic_verifier(question, final_answer, final_envelope)
+                final_verifier = deterministic_verifier(
+                    question,
+                    final_answer,
+                    final_envelope,
+                    evidence_surface,
+                )
         owner_policy = owner_policy_evaluation(
             question=question,
             answer=final_answer,
@@ -2429,6 +2713,10 @@ def run_pilot(
                     rereview_results[0]["payload_sha256"] if rereview_results else ""
                 ),
                 "evidence_identity_sha256": canonical_sha256(evidence_identity(question)),
+                "evidence_surface_sha256": evidence_surface["evidence_excerpt_sha256"],
+                "evidence_surface_char_count": evidence_surface[
+                    "evidence_excerpt_char_count"
+                ],
                 "bounded_review_envelope": persisted_bounded_review_envelope(final_envelope),
                 "latency_ms": question_latency_ms,
                 "payg_equivalent_cost_usd": decimal_string(question_cost),
@@ -2606,6 +2894,7 @@ def run_pilot(
                 "attempt_4_failure_seal_self_sha256": attempt_4_seal["self_sha256"],
                 "attempt_5_failure_seal_self_sha256": attempt_5_seal["self_sha256"],
                 "attempt_6_failure_seal_self_sha256": attempt_6_seal["self_sha256"],
+                "attempt_7_failure_seal_self_sha256": attempt_7_seal["self_sha256"],
                 "reviewer_contract_v2_self_sha256": reviewer_contract["self_sha256"],
                 "threshold_semantics_v2_self_sha256": threshold_semantics["self_sha256"],
                 "v6_exhaustion_record_self_sha256": v6_exhaustion["self_sha256"],
@@ -2672,6 +2961,7 @@ def failure_receipt(
     attempt_4_seal_sha = ""
     attempt_5_seal_sha = ""
     attempt_6_seal_sha = ""
+    attempt_7_seal_sha = ""
     reviewer_contract_sha = ""
     threshold_semantics_sha = ""
     v6_exhaustion_sha = ""
@@ -2705,6 +2995,10 @@ def failure_receipt(
     except Exception:
         attempt_6_seal_sha = ""
     try:
+        attempt_7_seal_sha = validate_attempt_7_failure_seal(root)["self_sha256"]
+    except Exception:
+        attempt_7_seal_sha = ""
+    try:
         reviewer_contract_sha = validate_reviewer_contract(root)["self_sha256"]
     except Exception:
         reviewer_contract_sha = ""
@@ -2737,6 +3031,7 @@ def failure_receipt(
                 "attempt_4_failure_seal_self_sha256": attempt_4_seal_sha,
                 "attempt_5_failure_seal_self_sha256": attempt_5_seal_sha,
                 "attempt_6_failure_seal_self_sha256": attempt_6_seal_sha,
+                "attempt_7_failure_seal_self_sha256": attempt_7_seal_sha,
                 "reviewer_contract_v2_self_sha256": reviewer_contract_sha,
                 "threshold_semantics_v2_self_sha256": threshold_semantics_sha,
                 "v6_exhaustion_record_self_sha256": v6_exhaustion_sha,
@@ -2779,6 +3074,7 @@ def assert_no_secret_material(root: Path) -> None:
         ATTEMPT_4_SEAL_PATH,
         ATTEMPT_5_SEAL_PATH,
         ATTEMPT_6_SEAL_PATH,
+        ATTEMPT_7_SEAL_PATH,
         REVIEWER_CONTRACT_PATH,
         THRESHOLD_SEMANTICS_PATH,
         V6_EXHAUSTION_PATH,
@@ -2790,6 +3086,7 @@ def assert_no_secret_material(root: Path) -> None:
         ATTEMPT_4_SEAL_SCHEMA_PATH,
         ATTEMPT_5_SEAL_SCHEMA_PATH,
         ATTEMPT_6_SEAL_SCHEMA_PATH,
+        ATTEMPT_7_SEAL_SCHEMA_PATH,
         REVIEWER_CONTRACT_SCHEMA_PATH,
         THRESHOLD_SEMANTICS_SCHEMA_PATH,
         V6_EXHAUSTION_SCHEMA_PATH,
@@ -2811,6 +3108,7 @@ def validate_static(root: Path) -> dict[str, Any]:
     attempt_4_seal = validate_attempt_4_failure_seal(root)
     attempt_5_seal = validate_attempt_5_failure_seal(root)
     attempt_6_seal = validate_attempt_6_failure_seal(root)
+    attempt_7_seal = validate_attempt_7_failure_seal(root)
     reviewer_contract = validate_reviewer_contract(root)
     threshold_semantics = validate_threshold_semantics(root)
     v6_exhaustion = validate_v6_exhaustion_record(root)
@@ -2825,6 +3123,7 @@ def validate_static(root: Path) -> dict[str, Any]:
         "attempt_4_failure_seal_self_sha256": attempt_4_seal["self_sha256"],
         "attempt_5_failure_seal_self_sha256": attempt_5_seal["self_sha256"],
         "attempt_6_failure_seal_self_sha256": attempt_6_seal["self_sha256"],
+        "attempt_7_failure_seal_self_sha256": attempt_7_seal["self_sha256"],
         "reviewer_contract_v2_self_sha256": reviewer_contract["self_sha256"],
         "threshold_semantics_v2_self_sha256": threshold_semantics["self_sha256"],
         "v6_exhaustion_record_self_sha256": v6_exhaustion["self_sha256"],
@@ -2905,6 +3204,10 @@ def execute_to_dir(root: Path, evidence_dir: Path) -> None:
     )
     (evidence_dir / ATTEMPT_6_SEAL_PATH.name).write_text(
         (root / ATTEMPT_6_SEAL_PATH).read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (evidence_dir / ATTEMPT_7_SEAL_PATH.name).write_text(
+        (root / ATTEMPT_7_SEAL_PATH).read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     (evidence_dir / REVIEWER_CONTRACT_PATH.name).write_text(

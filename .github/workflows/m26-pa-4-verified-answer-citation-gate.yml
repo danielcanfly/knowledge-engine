@@ -115,6 +115,8 @@ jobs:
           pilot/m26/m26-pa-5-attempt-6-live-trigger.json
           pilot/m26/m26-pa-5-attempt-6-failure-seal.json
           pilot/m26/m26-pa-5-attempt-7-live-trigger.json
+          pilot/m26/m26-pa-5-attempt-7-failure-seal.json
+          pilot/m26/m26-pa-5-attempt-8-live-trigger.json
           pilot/m26/m26-pa-5-entry-gate.json
           pilot/m26/m26-pa-5-frozen-population.json
           pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json
@@ -136,6 +138,8 @@ jobs:
           schemas/m26-pa-5-attempt-5-failure-seal-v1.schema.json
           schemas/m26-pa-5-attempt-6-failure-seal-v1.schema.json
           schemas/m26-pa-5-attempt-7-live-trigger-v1.schema.json
+          schemas/m26-pa-5-attempt-7-failure-seal-v1.schema.json
+          schemas/m26-pa-5-attempt-8-live-trigger-v1.schema.json
           schemas/m26-pa-5-live-trigger-v1.schema.json
           schemas/m26-pa-5-entry-gate-v1.schema.json
           schemas/m26-pa-5-failure-receipt-v1.schema.json
