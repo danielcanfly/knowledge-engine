@@ -1,0 +1,129 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-owner-decision-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "canary_traffic": {"const": false},
+        "m26_closed": {"const": false},
+        "pa6_execution": {"const": false},
+        "pa7_final_authority": {"const": false},
+        "production_answer_serving": {"const": false},
+        "production_pointer_mutation": {"const": false},
+        "public_answers": {"const": false}
+      },
+      "required": [
+        "canary_traffic",
+        "m26_closed",
+        "pa6_execution",
+        "pa7_final_authority",
+        "production_answer_serving",
+        "production_pointer_mutation",
+        "public_answers"
+      ],
+      "type": "object"
+    },
+    "decision_id": {"type": "string", "minLength": 1},
+    "exact_instruction_text": {"type": "string", "minLength": 1},
+    "owner": {"const": "Daniel Huang"},
+    "parsed_parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "adjudicator": {"type": "string", "minLength": 1},
+        "credential_environment": {"type": "string", "minLength": 1},
+        "credential_name": {"type": "string", "minLength": 1},
+        "execution_window": {"type": "string", "minLength": 1},
+        "frozen_population_count": {"type": "integer", "minimum": 200, "maximum": 500},
+        "frozen_population_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+        "implementation_head_sha": {"pattern": "^[a-f0-9]{40}$", "type": "string"},
+        "implementation_pr": {"type": "integer", "minimum": 1},
+        "incident_stop_conditions": {
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "max_provider_calls": {"type": "integer", "minimum": 1},
+        "max_spend_usd": {"type": "number", "exclusiveMinimum": 0},
+        "model_id": {"type": "string", "minLength": 1},
+        "pa4_acceptance_self_sha256": {
+          "const": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7"
+        },
+        "provider_id": {"type": "string", "minLength": 1},
+        "reviewer_principals": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "principal_id": {"type": "string", "minLength": 1},
+              "reviewer_type": {
+                "enum": ["human", "independent_model", "deterministic_verifier"]
+              }
+            },
+            "required": ["principal_id", "reviewer_type"],
+            "type": "object"
+          },
+          "minItems": 3,
+          "type": "array"
+        },
+        "thresholds": {
+          "additionalProperties": false,
+          "properties": {
+            "abstention": {"type": "object"},
+            "citation": {"type": "object"},
+            "cost": {"type": "object"},
+            "disagreement": {"type": "object"},
+            "latency": {"type": "object"},
+            "quality": {"type": "object"}
+          },
+          "required": [
+            "abstention",
+            "citation",
+            "cost",
+            "disagreement",
+            "latency",
+            "quality"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "adjudicator",
+        "credential_environment",
+        "credential_name",
+        "execution_window",
+        "frozen_population_count",
+        "frozen_population_sha256",
+        "implementation_head_sha",
+        "implementation_pr",
+        "incident_stop_conditions",
+        "max_provider_calls",
+        "max_spend_usd",
+        "model_id",
+        "pa4_acceptance_self_sha256",
+        "provider_id",
+        "reviewer_principals",
+        "thresholds"
+      ],
+      "type": "object"
+    },
+    "recorded_at": {"pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$", "type": "string"},
+    "schema_version": {"const": "knowledge-engine-m26-pa-5-owner-decision/v1"},
+    "self_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "stage_id": {"const": "M26.PA.5"}
+  },
+  "required": [
+    "authority_boundary",
+    "decision_id",
+    "exact_instruction_text",
+    "owner",
+    "parsed_parameters",
+    "recorded_at",
+    "schema_version",
+    "self_sha256",
+    "stage_id"
+  ],
+  "title": "M26.PA.5 owner decision",
+  "type": "object"
+}

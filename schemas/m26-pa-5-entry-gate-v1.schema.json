@@ -1,0 +1,252 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-entry-gate-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "canary_traffic": {"const": false},
+        "canonical_writes": {"const": false},
+        "live_pilot_execution_before_owner_approval": {"const": false},
+        "m26_closed": {"const": false},
+        "pa6_execution": {"const": false},
+        "pa7_final_authority": {"const": false},
+        "production_answer_serving": {"const": false},
+        "production_pointer_mutation": {"const": false},
+        "public_answers": {"const": false},
+        "public_traffic": {"const": false},
+        "qdrant_writes": {"const": false},
+        "r2_writes": {"const": false},
+        "raw_text_persistence": {"const": false},
+        "secret_persistence": {"const": false},
+        "source_foundation_release_mutation": {"const": false},
+        "synthetic_evidence_as_live": {"const": false},
+        "vector_persistence": {"const": false}
+      },
+      "required": [
+        "canary_traffic",
+        "canonical_writes",
+        "live_pilot_execution_before_owner_approval",
+        "m26_closed",
+        "pa6_execution",
+        "pa7_final_authority",
+        "production_answer_serving",
+        "production_pointer_mutation",
+        "public_answers",
+        "public_traffic",
+        "qdrant_writes",
+        "r2_writes",
+        "raw_text_persistence",
+        "secret_persistence",
+        "source_foundation_release_mutation",
+        "synthetic_evidence_as_live",
+        "vector_persistence"
+      ],
+      "type": "object"
+    },
+    "evidence_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "complete_population_accounting_required": {"const": true},
+        "forbid_formula_generated_scores_latency_cost_or_agreement": {"const": true},
+        "forbid_invented_reviewer_ids": {"const": true},
+        "forbid_placeholder_questions": {"const": true},
+        "forbid_synthetic_provider_receipts_presented_as_live": {"const": true},
+        "no_public_answers": {"const": true},
+        "per_question_evidence_required": {
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 9,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "raw_secret_or_unbounded_log_persistence_forbidden": {"const": true},
+        "real_execution_for_entire_approved_population_required": {"const": true}
+      },
+      "required": [
+        "complete_population_accounting_required",
+        "forbid_formula_generated_scores_latency_cost_or_agreement",
+        "forbid_invented_reviewer_ids",
+        "forbid_placeholder_questions",
+        "forbid_synthetic_provider_receipts_presented_as_live",
+        "no_public_answers",
+        "per_question_evidence_required",
+        "raw_secret_or_unbounded_log_persistence_forbidden",
+        "real_execution_for_entire_approved_population_required"
+      ],
+      "type": "object"
+    },
+    "issue": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {"const": 1212},
+        "repository": {"const": "danielcanfly/knowledge-engine"},
+        "state_before_implementation_pr": {"const": "open"},
+        "title": {"const": "M26.PA.5 controlled internal shadow pilot implementation gate"}
+      },
+      "required": ["number", "repository", "state_before_implementation_pr", "title"],
+      "type": "object"
+    },
+    "next_step": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_block_required": {"const": true},
+        "execute_pilot_after_implementation_merge_only_if_approved": {"const": true},
+        "independent_reconciliation_required_after_execution": {"const": true},
+        "stop_at_owner_gate": {"const": true}
+      },
+      "required": [
+        "approval_block_required",
+        "execute_pilot_after_implementation_merge_only_if_approved",
+        "independent_reconciliation_required_after_execution",
+        "stop_at_owner_gate"
+      ],
+      "type": "object"
+    },
+    "owner_gate": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_received": {"const": false},
+        "approval_values_may_not_be_inferred": {"const": true},
+        "required": {"const": true},
+        "required_fields": {
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 11,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "approval_received",
+        "approval_values_may_not_be_inferred",
+        "required",
+        "required_fields"
+      ],
+      "type": "object"
+    },
+    "predecessor": {
+      "additionalProperties": false,
+      "properties": {
+        "pa4_acceptance_self_sha256": {
+          "const": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7"
+        },
+        "pa4_reconciliation_merge_sha": {
+          "const": "3fcc4e5520db6d3cac7ce18004753c2549592afa"
+        },
+        "pa4_reconciliation_pull_request": {"const": 1211},
+        "pa4_status": {"const": "m26_pa_4_verified_answer_citation_gate_accepted"}
+      },
+      "required": [
+        "pa4_acceptance_self_sha256",
+        "pa4_reconciliation_merge_sha",
+        "pa4_reconciliation_pull_request",
+        "pa4_status"
+      ],
+      "type": "object"
+    },
+    "recommended_population_plan": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_population_count": {"const": 500},
+        "minimum_population_count": {"const": 200},
+        "recommended_population_count": {"const": 200},
+        "review_policy": {
+          "additionalProperties": false,
+          "properties": {
+            "blocking_disputes_require_named_adjudicator": {"const": true},
+            "human_review_for_all_disagreements": {"const": true},
+            "human_review_sample_minimum_fraction": {"const": 0.1},
+            "independent_reviews_per_question": {"const": 2},
+            "reviewer_type_must_never_be_disguised": {"const": true}
+          },
+          "required": [
+            "blocking_disputes_require_named_adjudicator",
+            "human_review_for_all_disagreements",
+            "human_review_sample_minimum_fraction",
+            "independent_reviews_per_question",
+            "reviewer_type_must_never_be_disguised"
+          ],
+          "type": "object"
+        },
+        "strata": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "count": {"type": "integer", "minimum": 1},
+              "name": {"type": "string", "minLength": 1}
+            },
+            "required": ["count", "name"],
+            "type": "object"
+          },
+          "minItems": 7,
+          "type": "array"
+        }
+      },
+      "required": [
+        "maximum_population_count",
+        "minimum_population_count",
+        "recommended_population_count",
+        "review_policy",
+        "strata"
+      ],
+      "type": "object"
+    },
+    "schema_version": {"const": "knowledge-engine-m26-pa-5-entry-gate/v1"},
+    "self_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "stage_contract": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_status": {"const": "m26_pa_5_controlled_internal_shadow_pilot_accepted"},
+        "goal": {"const": "Execute and reconcile the real 200-500-question controlled internal pilot."},
+        "human_gate": {"const": "Daniel population, reviewer, budget, and threshold approval"},
+        "required_predecessor_status": {
+          "const": "m26_pa_4_verified_answer_citation_gate_accepted"
+        },
+        "requires_exact_head_ci": {"const": true},
+        "requires_expected_head_merge": {"const": true},
+        "requires_fresh_branch": {"const": true},
+        "requires_implementation_pr": {"const": true},
+        "requires_independent_reconciliation": {"const": true},
+        "requires_issue": {"const": true}
+      },
+      "required": [
+        "accepted_status",
+        "goal",
+        "human_gate",
+        "required_predecessor_status",
+        "requires_exact_head_ci",
+        "requires_expected_head_merge",
+        "requires_fresh_branch",
+        "requires_implementation_pr",
+        "requires_independent_reconciliation",
+        "requires_issue"
+      ],
+      "type": "object"
+    },
+    "stage_id": {"const": "M26.PA.5"},
+    "status": {"const": "m26_pa_5_blocked_pending_owner_approval"},
+    "stop_conditions": {
+      "items": {"type": "string", "minLength": 1},
+      "minItems": 9,
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "authority_boundary",
+    "evidence_policy",
+    "issue",
+    "next_step",
+    "owner_gate",
+    "predecessor",
+    "recommended_population_plan",
+    "schema_version",
+    "self_sha256",
+    "stage_contract",
+    "stage_id",
+    "status",
+    "stop_conditions"
+  ],
+  "title": "M26.PA.5 entry gate",
+  "type": "object"
+}

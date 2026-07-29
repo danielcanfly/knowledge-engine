@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_generation": { "const": false },
+        "foundation_mutation": { "const": false },
+        "non_live_read_only_preparation": { "const": true },
+        "production_pointer_mutation": { "const": false },
+        "provider_calls": { "const": 0 },
+        "public_traffic": { "const": false },
+        "qdrant_write": { "const": false },
+        "r2_write": { "const": false },
+        "release_mutation": { "const": false },
+        "review_execution": { "const": false },
+        "source_mutation": { "const": false }
+      },
+      "required": [
+        "non_live_read_only_preparation",
+        "provider_calls",
+        "answer_generation",
+        "review_execution",
+        "public_traffic",
+        "r2_write",
+        "qdrant_write",
+        "source_mutation",
+        "foundation_mutation",
+        "release_mutation",
+        "production_pointer_mutation"
+      ],
+      "type": "object"
+    },
+    "duplicate_count": { "const": 0 },
+    "population_count": { "const": 200 },
+    "population_path": { "const": "pilot/m26/m26-pa-5-frozen-population.json" },
+    "population_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "schema_version": { "const": "knowledge-engine-m26-pa-5-population-manifest/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "source_corpus_identity": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_local_foundation_commit_sha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "accepted_local_release_content_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "accepted_local_release_id": { "minLength": 1, "type": "string" },
+        "accepted_local_release_ready": { "const": true },
+        "accepted_local_source_commit_sha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "accepted_local_source_snapshot_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "construction_artifacts": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "path": { "minLength": 1, "type": "string" },
+              "sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" }
+            },
+            "required": ["path", "sha256"],
+            "type": "object"
+          },
+          "minItems": 4,
+          "type": "array"
+        },
+        "m26_production_identity_reference": {
+          "additionalProperties": false,
+          "properties": {
+            "admission_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+            "candidate_manifest_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+            "engine_sha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+            "foundation_sha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+            "manifest_key": { "minLength": 1, "type": "string" },
+            "manifest_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+            "pointer_key": { "minLength": 1, "type": "string" },
+            "pointer_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+            "qdrant_collection": { "minLength": 1, "type": "string" },
+            "release_id": { "minLength": 1, "type": "string" },
+            "source_sha": { "pattern": "^[0-9a-f]{40}$", "type": "string" }
+          },
+          "required": [
+            "admission_sha256",
+            "candidate_manifest_sha256",
+            "engine_sha",
+            "foundation_sha",
+            "manifest_key",
+            "manifest_sha256",
+            "pointer_key",
+            "pointer_sha256",
+            "qdrant_collection",
+            "release_id",
+            "source_sha"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "accepted_local_release_id",
+        "accepted_local_release_ready",
+        "accepted_local_release_content_sha256",
+        "accepted_local_source_snapshot_sha256",
+        "accepted_local_source_commit_sha",
+        "accepted_local_foundation_commit_sha",
+        "construction_artifacts",
+        "m26_production_identity_reference"
+      ],
+      "type": "object"
+    },
+    "stage_id": { "const": "M26.PA.5" },
+    "status": { "const": "m26_pa_5_population_frozen_non_live_preparation" },
+    "stratum_counts": {
+      "additionalProperties": false,
+      "properties": {
+        "abstention_no_answer": { "const": 15 },
+        "conflict_and_temporal_freshness": { "const": 15 },
+        "cross_document_comparison": { "const": 20 },
+        "direct_grounded_factual": { "const": 90 },
+        "graph_navigation": { "const": 20 },
+        "prompt_injection_privacy_adversarial": { "const": 10 },
+        "provenance_and_source_trace": { "const": 30 }
+      },
+      "required": [
+        "direct_grounded_factual",
+        "provenance_and_source_trace",
+        "cross_document_comparison",
+        "graph_navigation",
+        "conflict_and_temporal_freshness",
+        "abstention_no_answer",
+        "prompt_injection_privacy_adversarial"
+      ],
+      "type": "object"
+    },
+    "validation": {
+      "additionalProperties": false,
+      "properties": {
+        "count": { "const": 200 },
+        "duplicate_count": { "const": 0 },
+        "no_raw_secrets": { "const": true },
+        "no_synthetic_provider_receipt": { "const": true },
+        "per_question_digests_valid": { "const": true },
+        "population_digest_reproducible": { "const": true },
+        "question_ids_unique": { "const": true },
+        "question_text_non_placeholder": { "const": true },
+        "stratum_counts": {
+          "additionalProperties": false,
+          "properties": {
+            "abstention_no_answer": { "const": 15 },
+            "conflict_and_temporal_freshness": { "const": 15 },
+            "cross_document_comparison": { "const": 20 },
+            "direct_grounded_factual": { "const": 90 },
+            "graph_navigation": { "const": 20 },
+            "prompt_injection_privacy_adversarial": { "const": 10 },
+            "provenance_and_source_trace": { "const": 30 }
+          },
+          "required": [
+            "direct_grounded_factual",
+            "provenance_and_source_trace",
+            "cross_document_comparison",
+            "graph_navigation",
+            "conflict_and_temporal_freshness",
+            "abstention_no_answer",
+            "prompt_injection_privacy_adversarial"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "count",
+        "stratum_counts",
+        "duplicate_count",
+        "question_ids_unique",
+        "question_text_non_placeholder",
+        "per_question_digests_valid",
+        "population_digest_reproducible",
+        "no_raw_secrets",
+        "no_synthetic_provider_receipt"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "status",
+    "population_path",
+    "population_count",
+    "population_sha256",
+    "stratum_counts",
+    "duplicate_count",
+    "validation",
+    "authority_boundary",
+    "source_corpus_identity",
+    "self_sha256"
+  ],
+  "type": "object"
+}

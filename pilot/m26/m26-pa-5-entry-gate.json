@@ -1,0 +1,147 @@
+{
+  "authority_boundary": {
+    "canary_traffic": false,
+    "canonical_writes": false,
+    "live_pilot_execution_before_owner_approval": false,
+    "m26_closed": false,
+    "pa6_execution": false,
+    "pa7_final_authority": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "public_answers": false,
+    "public_traffic": false,
+    "qdrant_writes": false,
+    "r2_writes": false,
+    "raw_text_persistence": false,
+    "secret_persistence": false,
+    "source_foundation_release_mutation": false,
+    "synthetic_evidence_as_live": false,
+    "vector_persistence": false
+  },
+  "evidence_policy": {
+    "complete_population_accounting_required": true,
+    "forbid_formula_generated_scores_latency_cost_or_agreement": true,
+    "forbid_invented_reviewer_ids": true,
+    "forbid_placeholder_questions": true,
+    "forbid_synthetic_provider_receipts_presented_as_live": true,
+    "no_public_answers": true,
+    "per_question_evidence_required": [
+      "authenticated_execution_identity",
+      "question_and_population_identity",
+      "retrieval_trace_and_evidence_bundle_identities",
+      "provider_request_and_usage_metadata",
+      "answer_claim_citation_repair_warning_or_abstention_status",
+      "actual_latency_and_cost",
+      "reviewer_assignments_and_timestamps",
+      "reviewer_decisions_and_reason_codes",
+      "disagreement_and_adjudication_status"
+    ],
+    "raw_secret_or_unbounded_log_persistence_forbidden": true,
+    "real_execution_for_entire_approved_population_required": true
+  },
+  "issue": {
+    "number": 1212,
+    "repository": "danielcanfly/knowledge-engine",
+    "state_before_implementation_pr": "open",
+    "title": "M26.PA.5 controlled internal shadow pilot implementation gate"
+  },
+  "next_step": {
+    "approval_block_required": true,
+    "execute_pilot_after_implementation_merge_only_if_approved": true,
+    "independent_reconciliation_required_after_execution": true,
+    "stop_at_owner_gate": true
+  },
+  "owner_gate": {
+    "approval_received": false,
+    "approval_values_may_not_be_inferred": true,
+    "required": true,
+    "required_fields": [
+      "exact_implementation_pr_and_head",
+      "exact_predecessor_acceptance",
+      "frozen_population_count_and_digest",
+      "reviewer_principals_and_types",
+      "adjudicator",
+      "execution_duration_window",
+      "provider_model_and_credential_environment",
+      "maximum_calls_and_total_spend",
+      "quality_citation_abstention_latency_cost_disagreement_thresholds",
+      "incident_stop_conditions",
+      "authenticated_internal_shadow_only_no_public_answers_or_production_serving"
+    ]
+  },
+  "predecessor": {
+    "pa4_acceptance_self_sha256": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7",
+    "pa4_reconciliation_merge_sha": "3fcc4e5520db6d3cac7ce18004753c2549592afa",
+    "pa4_reconciliation_pull_request": 1211,
+    "pa4_status": "m26_pa_4_verified_answer_citation_gate_accepted"
+  },
+  "recommended_population_plan": {
+    "maximum_population_count": 500,
+    "minimum_population_count": 200,
+    "recommended_population_count": 200,
+    "review_policy": {
+      "blocking_disputes_require_named_adjudicator": true,
+      "human_review_for_all_disagreements": true,
+      "human_review_sample_minimum_fraction": 0.1,
+      "independent_reviews_per_question": 2,
+      "reviewer_type_must_never_be_disguised": true
+    },
+    "strata": [
+      {
+        "count": 90,
+        "name": "direct_grounded_factual"
+      },
+      {
+        "count": 30,
+        "name": "provenance_and_source_trace"
+      },
+      {
+        "count": 20,
+        "name": "cross_document_comparison"
+      },
+      {
+        "count": 20,
+        "name": "graph_navigation"
+      },
+      {
+        "count": 15,
+        "name": "conflict_and_temporal_freshness"
+      },
+      {
+        "count": 15,
+        "name": "abstention_no_answer"
+      },
+      {
+        "count": 10,
+        "name": "prompt_injection_privacy_adversarial"
+      }
+    ]
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-entry-gate/v1",
+  "self_sha256": "cf62739f8895f060ca08d6f9452661a057e619434414c9986545f435ae2cc208",
+  "stage_contract": {
+    "accepted_status": "m26_pa_5_controlled_internal_shadow_pilot_accepted",
+    "goal": "Execute and reconcile the real 200-500-question controlled internal pilot.",
+    "human_gate": "Daniel population, reviewer, budget, and threshold approval",
+    "required_predecessor_status": "m26_pa_4_verified_answer_citation_gate_accepted",
+    "requires_exact_head_ci": true,
+    "requires_expected_head_merge": true,
+    "requires_fresh_branch": true,
+    "requires_implementation_pr": true,
+    "requires_independent_reconciliation": true,
+    "requires_issue": true
+  },
+  "stage_id": "M26.PA.5",
+  "status": "m26_pa_5_blocked_pending_owner_approval",
+  "stop_conditions": [
+    "predecessor_not_accepted_at_exact_identity",
+    "missing_daniel_gate",
+    "secret_or_raw_text_leakage",
+    "protected_mutation_outside_approval",
+    "unresolved_review_threads",
+    "failed_exact_head_checks",
+    "synthetic_evidence_presented_as_live",
+    "attempt_or_run_identity_reused",
+    "implementation_and_reconciliation_combined"
+  ]
+}

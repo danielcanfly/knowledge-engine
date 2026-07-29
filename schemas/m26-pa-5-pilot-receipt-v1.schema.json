@@ -1,0 +1,174 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-pilot-receipt-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority": {
+      "additionalProperties": false,
+      "properties": {
+        "authenticated_internal_or_shadow_only": {"const": true},
+        "canonical_writes": {"const": 0},
+        "production_answer_serving": {"const": false},
+        "production_pointer_mutations": {"const": 0},
+        "public_answers": {"const": false},
+        "public_traffic_operations": {"const": 0},
+        "qdrant_write_operations": {"const": 0},
+        "r2_write_operations": {"const": 0},
+        "raw_text_persisted": {"const": false},
+        "secret_values_persisted": {"const": false},
+        "source_foundation_release_mutations": {"const": 0},
+        "vectors_persisted": {"const": false}
+      },
+      "required": [
+        "authenticated_internal_or_shadow_only",
+        "canonical_writes",
+        "production_answer_serving",
+        "production_pointer_mutations",
+        "public_answers",
+        "public_traffic_operations",
+        "qdrant_write_operations",
+        "r2_write_operations",
+        "raw_text_persisted",
+        "secret_values_persisted",
+        "source_foundation_release_mutations",
+        "vectors_persisted"
+      ],
+      "type": "object"
+    },
+    "owner_decision": {
+      "additionalProperties": false,
+      "properties": {
+        "owner_decision_self_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"}
+      },
+      "required": ["owner_decision_self_sha256"],
+      "type": "object"
+    },
+    "per_question_evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "adjudication_status": {"type": "string", "minLength": 1},
+          "answer_status": {"type": "string", "minLength": 1},
+          "authenticated_execution_identity_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "cost_usd": {"type": "number", "minimum": 0},
+          "evidence_bundle_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+          "latency_ms": {"type": "integer", "minimum": 0},
+          "provider_request_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+          "question_id": {"type": "string", "minLength": 1},
+          "retrieval_trace_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+          "reviewer_decisions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "reason_codes": {
+                  "items": {"type": "string", "minLength": 1},
+                  "type": "array"
+                },
+                "reviewer_principal_id": {"type": "string", "minLength": 1},
+                "reviewer_type": {
+                  "enum": ["human", "independent_model", "deterministic_verifier"]
+                },
+                "timestamp": {
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+                  "type": "string"
+                },
+                "verdict": {"type": "string", "minLength": 1}
+              },
+              "required": [
+                "reason_codes",
+                "reviewer_principal_id",
+                "reviewer_type",
+                "timestamp",
+                "verdict"
+              ],
+              "type": "object"
+            },
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "adjudication_status",
+          "answer_status",
+          "authenticated_execution_identity_sha256",
+          "cost_usd",
+          "evidence_bundle_sha256",
+          "latency_ms",
+          "provider_request_sha256",
+          "question_id",
+          "retrieval_trace_sha256",
+          "reviewer_decisions"
+        ],
+        "type": "object"
+      },
+      "maxItems": 500,
+      "minItems": 200,
+      "type": "array"
+    },
+    "population": {
+      "additionalProperties": false,
+      "properties": {
+        "complete_denominator": {"const": true},
+        "frozen_population_count": {"type": "integer", "minimum": 200, "maximum": 500},
+        "frozen_population_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"}
+      },
+      "required": [
+        "complete_denominator",
+        "frozen_population_count",
+        "frozen_population_sha256"
+      ],
+      "type": "object"
+    },
+    "schema_version": {"const": "knowledge-engine-m26-pa-5-pilot-receipt/v1"},
+    "self_sha256": {"pattern": "^[a-f0-9]{64}$", "type": "string"},
+    "stage_id": {"const": "M26.PA.5"},
+    "status": {"enum": ["controlled_internal_shadow_pilot_verified", "controlled_internal_shadow_pilot_failed_closed"]},
+    "summary": {
+      "additionalProperties": false,
+      "properties": {
+        "blocking_disputes": {"type": "integer", "minimum": 0},
+        "population_count": {"type": "integer", "minimum": 200, "maximum": 500},
+        "public_answers": {"const": 0},
+        "reviewed_question_count": {"type": "integer", "minimum": 200, "maximum": 500},
+        "unresolved_blocking_disputes": {"const": 0}
+      },
+      "required": [
+        "blocking_disputes",
+        "population_count",
+        "public_answers",
+        "reviewed_question_count",
+        "unresolved_blocking_disputes"
+      ],
+      "type": "object"
+    },
+    "workflow": {
+      "additionalProperties": false,
+      "properties": {
+        "head_sha": {"pattern": "^[a-f0-9]{40}$", "type": "string"},
+        "repository": {"const": "danielcanfly/knowledge-engine"},
+        "run_attempt": {"const": "1"},
+        "run_id": {"type": "string", "minLength": 1},
+        "workflow_name": {"const": "M26.PA.5 Controlled Internal Shadow Pilot"}
+      },
+      "required": ["head_sha", "repository", "run_attempt", "run_id", "workflow_name"],
+      "type": "object"
+    }
+  },
+  "required": [
+    "authority",
+    "owner_decision",
+    "per_question_evidence",
+    "population",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "summary",
+    "workflow"
+  ],
+  "title": "M26.PA.5 pilot receipt",
+  "type": "object"
+}
