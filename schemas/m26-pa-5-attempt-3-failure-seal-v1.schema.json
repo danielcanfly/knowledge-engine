@@ -1,0 +1,101 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-attempt-3-failure-seal-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": { "type": "object" },
+    "evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_archive_sha256": {
+          "const": "1c9a22aab44cb7a4e690c80bde02152cbc9508b60aeedd7a74086e5799fe0b8d"
+        },
+        "artifact_name": {
+          "const": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-3"
+        },
+        "failure_code": { "const": "M26-PA5-LIVE-UNEXPECTED" },
+        "failure_message": { "const": "line 9 column 1 (char 156)" },
+        "failure_receipt_name": { "const": "m26-pa-5-failure-receipt.json" },
+        "failure_receipt_self_sha256": {
+          "const": "dc10d8332929a4fe229594c477d6b5cd003c8ee733fae19c74749d11372f4a0d"
+        },
+        "owner_decision_self_sha256": {
+          "const": "a2762fc9724f62b027d45cf93f6212ab662099ea5687ae127d0109d86793cf19"
+        }
+      },
+      "required": [
+        "artifact_name",
+        "artifact_archive_sha256",
+        "failure_receipt_name",
+        "failure_receipt_self_sha256",
+        "owner_decision_self_sha256",
+        "failure_code",
+        "failure_message"
+      ],
+      "type": "object"
+    },
+    "github_run": {
+      "additionalProperties": false,
+      "properties": {
+        "event": { "const": "push" },
+        "head_sha": { "const": "0ec390425e5eb1de1e43936b92bd9d4dcc442234" },
+        "live_job_terminal_status": { "const": "failed_closed" },
+        "repository": { "const": "danielcanfly/knowledge-engine" },
+        "run_attempt": { "const": 1 },
+        "run_id": { "const": "30426365447" },
+        "trigger_marker": {
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-3]"
+        },
+        "workflow_conclusion": { "const": "success" },
+        "workflow_name": { "const": "M26.PA.5 Controlled Internal Shadow Pilot" }
+      },
+      "required": [
+        "repository",
+        "workflow_name",
+        "run_id",
+        "run_attempt",
+        "event",
+        "trigger_marker",
+        "head_sha",
+        "workflow_conclusion",
+        "live_job_terminal_status"
+      ],
+      "type": "object"
+    },
+    "logical_attempt": { "const": 3 },
+    "pa5_accepted": { "const": false },
+    "recorded_at": { "const": "2026-07-29T05:56:00Z" },
+    "reclassification_as_accepted_authorized": { "const": false },
+    "replacement_or_deletion_authorized": { "const": false },
+    "rerun_authorized": { "const": false },
+    "root_cause": { "type": "object" },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-5-attempt-3-failure-seal/v1"
+    },
+    "seal_id": { "const": "m26-pa5-live-attempt-3-immutable-failed-evidence" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.5" },
+    "status": { "const": "immutable_failed_closed_evidence" },
+    "supersession": { "type": "object" }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "seal_id",
+    "recorded_at",
+    "status",
+    "logical_attempt",
+    "rerun_authorized",
+    "reclassification_as_accepted_authorized",
+    "replacement_or_deletion_authorized",
+    "pa5_accepted",
+    "github_run",
+    "evidence",
+    "root_cause",
+    "supersession",
+    "authority_boundary",
+    "self_sha256"
+  ],
+  "title": "M26.PA.5 attempt-3 failure seal",
+  "type": "object"
+}

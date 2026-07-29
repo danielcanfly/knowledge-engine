@@ -1,6 +1,6 @@
 {
-  "decision_id": "m26-pa5-autonomous-completion-authority-attempt-3",
-  "exact_instruction_text_sha256": "5c551e6a351dd48cef12ba9d9431bb21b1d71350edfcbf32f82ff6ab3bf7573b",
+  "decision_id": "m26-pa5-autonomous-completion-authority-attempt-4",
+  "exact_instruction_text_sha256": "9882b833109d92548a248cd2a41ab1c2f9eb76b32ed3c158986cb826bda69601",
   "owner": "Daniel Huang",
   "parsed_parameters": {
     "adjudicator": {
@@ -75,7 +75,7 @@
     },
     "frozen_population_count": 200,
     "frozen_population_sha256": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580",
-    "future_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-3]",
+    "future_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-4]",
     "incident_stop_conditions": [
       "secret_or_credential_leakage",
       "raw_corpus_text_persistence",
@@ -104,8 +104,8 @@
       "repository_branch_or_executable_head_drift_after_authorization"
     ],
     "latest_accepted_pa4_main_sha": "3fcc4e5520db6d3cac7ce18004753c2549592afa",
-    "live_wiring_issue": 1218,
-    "logical_attempt": 3,
+    "live_wiring_issue": 1220,
+    "logical_attempt": 4,
     "pa4_acceptance_self_sha256": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7",
     "pa4_status": "m26_pa_4_verified_answer_citation_gate_accepted",
     "pa5_attempt_1_failure": {
@@ -126,6 +126,15 @@
       "run_id": "30422363498",
       "trigger_merge_sha": "66272a07281db65687c87f397d94fc15a211929f"
     },
+    "pa5_attempt_3_failure": {
+      "attempt_3_failure_seal_path": "pilot/m26/m26-pa-5-attempt-3-failure-seal.json",
+      "failure_receipt_self_sha256": "dc10d8332929a4fe229594c477d6b5cd003c8ee733fae19c74749d11372f4a0d",
+      "immutable_failed_evidence": true,
+      "rerun_authorized": false,
+      "run_attempt": 1,
+      "run_id": "30426365447",
+      "trigger_merge_sha": "0ec390425e5eb1de1e43936b92bd9d4dcc442234"
+    },
     "pa5_gate_population_merge_sha": "e2bff8fbf14278c70623d7c82c36012a3a9cf831",
     "population_strata": {
       "abstention_no_answer": 15,
@@ -144,6 +153,12 @@
       "provider": "MiniMax",
       "provider_id": "minimax",
       "streaming": false,
+      "structured_json_parse_failure_repair": {
+        "enabled": true,
+        "raw_malformed_response_text_in_repair_prompt": false,
+        "repair_payload_uses_malformed_response_digest_only": true,
+        "sanitized_parse_diagnostics_only": true
+      },
       "unbounded_retry_forbidden": true
     },
     "review_rules": {
@@ -232,6 +247,6 @@
   },
   "recorded_at": "2026-07-29T05:31:00Z",
   "schema_version": "knowledge-engine-m26-pa-5-owner-decision/v1",
-  "self_sha256": "a2762fc9724f62b027d45cf93f6212ab662099ea5687ae127d0109d86793cf19",
+  "self_sha256": "e65fb7818c4ac5461262661875d6861297b3ecc1306b7641eee44a5a846d6fc2",
   "stage_id": "M26.PA.5"
 }

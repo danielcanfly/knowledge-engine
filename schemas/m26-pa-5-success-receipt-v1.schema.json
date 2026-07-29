@@ -34,11 +34,12 @@
       "properties": {
         "attempt_1_failure_seal_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
         "attempt_2_failure_seal_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
-        "logical_attempt": { "const": 3 },
+        "attempt_3_failure_seal_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "logical_attempt": { "const": 4 },
         "owner_decision_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
         "pricing_contract_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
         "trigger_marker": {
-          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-3]"
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-4]"
         }
       },
       "required": [
@@ -47,6 +48,7 @@
         "trigger_marker",
         "attempt_1_failure_seal_self_sha256",
         "attempt_2_failure_seal_self_sha256",
+        "attempt_3_failure_seal_self_sha256",
         "pricing_contract_self_sha256"
       ],
       "type": "object"
@@ -75,14 +77,14 @@
                   "const": "token_plan_subscription_with_payg_equivalent_cost_accounting"
                 },
                 "call_class": {
-                  "enum": ["answer_generation", "independent_blind_review"]
+                  "enum": ["answer_generation", "independent_blind_review", "bounded_repair"]
                 },
                 "ended_at": {
                   "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
                   "type": "string"
                 },
                 "latency_ms": { "minimum": 0, "type": "integer" },
-                "logical_attempt": { "const": 3 },
+                "logical_attempt": { "const": 4 },
                 "payg_equivalent_cost_usd": {
                   "pattern": "^\\d+\\.\\d{8}$",
                   "type": "string"
@@ -142,7 +144,7 @@
               ],
               "type": "object"
             },
-            "maxItems": 2,
+            "maxItems": 3,
             "minItems": 2,
             "type": "array"
           },
