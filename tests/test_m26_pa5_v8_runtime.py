@@ -17,7 +17,6 @@ from knowledge_engine.m26_pa5_v8_runtime import (
     render_and_verify_selection,
 )
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -67,7 +66,7 @@ def test_calibration_sample_is_fixed_stratified_and_deterministic() -> None:
     by_id = {plan["question_id"]: plan for plan in plans}
     counts = {stratum: 0 for stratum in STRATA}
     for question_id in first["question_ids"]:
-        counts[by_id[question_id]["stratum"]] += 1
+        counts[by_id[question_id]]["stratum"] += 1
     assert set(counts.values()) == {5}
 
 
@@ -146,28 +145,30 @@ def test_model_authored_locator_fails_closed() -> None:
         )
 
 
-def test_mutated_locator_fails_in_pa4_kernel() -> None:
+def test_mutated_locator_fails_closed_before_pa4_kernel() -> None:
     plan = next(p for p in _plans() if not p["abstention_policy"])
     mutated = copy.deepcopy(plan)
     mutated["candidate_evidence"][0]["locator"]["locator_id"] = "loc_mutated"
-    selection = {
-        "status": "select",
-        "selected_span_ids": [mutated["candidate_evidence"][0]["span_id"]],
-        "selected_evidence_ids": [mutated["candidate_evidence"][0]["evidence_id"]],
-        "relation": None,
-        "abstention_reason": None,
-    }
-    result = render_and_verify_selection(mutated, selection)
-    assert result["pa4_verified_items"][0]["material_claims"][0][
-        "citation_locator_id"
-    ] == "loc_mutated"
+    with pytest.raises(PA5V8Error, match="locator ID mismatch"):
+        render_and_verify_selection(
+            mutated,
+            {
+                "status": "select",
+                "selected_span_ids": [mutated["candidate_evidence"][0]["span_id"]],
+                "selected_evidence_ids": [
+                    mutated["candidate_evidence"][0]["evidence_id"]
+                ],
+                "relation": None,
+                "abstention_reason": None,
+            },
+        )
 
 
 def test_missing_evidence_fails_before_live_execution() -> None:
     plan = next(p for p in _plans() if not p["abstention_policy"])
     broken = copy.deepcopy(plan)
     broken["candidate_evidence"] = []
-    with pytest.raises(PA5V8Error, match="did not select evidence"):
+    with pytest.raises(PA5V8Error, match="has no evidence"):
         render_and_verify_selection(
             broken,
             {
