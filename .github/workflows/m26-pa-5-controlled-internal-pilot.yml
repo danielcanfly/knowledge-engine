@@ -83,11 +83,11 @@ jobs:
             tests/test_m26_pa5_v8_runtime.py \
             tests/test_m26_pa5_v8_live.py
 
-  # Immutable attempt-8 tombstone. This job can never execute. It preserves
-  # historical workflow identities required by legacy governance checks while
-  # ensuring attempt 8 remains sealed and cannot be rerun.
+  # Immutable attempt-8 tombstone. This job can never execute because this
+  # workflow does not declare workflow_dispatch. Historical identities remain
+  # available for legacy governance checks without authorizing a rerun.
   live-controlled-internal-pilot:
-    if: ${{ false }}
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     environment: m23-r3-diagnostic
     env:
@@ -105,7 +105,7 @@ jobs:
           echo 'attempt 8 sealed; rerun_authorized=false'
           exit 1
       - uses: actions/upload-artifact@v4
-        if: ${{ false }}
+        if: github.event_name == 'workflow_dispatch'
         with:
           name: m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-8
           path: /tmp/never-created
