@@ -1,0 +1,29 @@
+{
+  "architecture_repair": "PA.5 orchestrates the accepted PA.4 exact-span verified-answer kernel; runtime owns canonical citation binding and the model may select only bounded runtime identifiers and enums.",
+  "authority_boundary": {
+    "formal_attempt_10_or_later": false,
+    "pa6_canary": false,
+    "production_mutation": false,
+    "rerun_attempts_1_to_8": false
+  },
+  "authorized_package_sha256": "f637b90fd1249217005ff0eb646ee06a5b3b00cbc91609274718aced007bb0f1",
+  "immutable_failed_attempts": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "root_cause": {
+    "code": "parallel_pa5_answer_citation_authority",
+    "summary": "PA.5 duplicated PA.4 answer and citation verification and permitted model-authored authoritative citation objects, producing systematic deterministic-verifier/model-reviewer disagreement."
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-v8-root-cause-reconciliation/v1",
+  "self_sha256": "6d8d7d27e4feaeae4e2e5b13581cd1add1d7fd703b6294c49051f015687eae78",
+  "stage_id": "M26.PA.5",
+  "starting_main_sha": "9cfa3cf5c6e99d020de815b2fb8802ea9a987a9c",
+  "status": "m26_pa_5_v8_root_cause_reconciled"
+}
