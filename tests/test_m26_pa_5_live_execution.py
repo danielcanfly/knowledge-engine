@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import pytest
 from jsonschema import Draft202012Validator
 
 from knowledge_engine.m26_pa5_controlled_internal_pilot import canonical_sha256
 from knowledge_engine.m26_pa5_live_execution import (
+    ATTEMPT_1_SEAL_PATH,
+    ATTEMPT_1_SEAL_SCHEMA_PATH,
     FAILURE_RECEIPT_SCHEMA_PATH,
     MAX_PROVIDER_CALLS,
     MAX_SPEND_USD,
@@ -15,9 +19,13 @@ from knowledge_engine.m26_pa5_live_execution import (
     OWNER_DECISION_SCHEMA_PATH,
     POPULATION_COUNT,
     POPULATION_SHA256,
+    PRICING_CONTRACT_PATH,
+    PRICING_CONTRACT_SCHEMA_PATH,
     SUCCESS_RECEIPT_SCHEMA_PATH,
     TRIGGER_MARKER,
+    MiniMaxM3Client,
     failure_receipt,
+    provider_call_checked,
     run_pilot,
     validate_static,
 )
@@ -76,8 +84,13 @@ def fake_provider(payload: dict[str, Any]) -> dict[str, Any]:
         }
     return {
         "text": json.dumps(body, sort_keys=True),
-        "usage": {"input_tokens": 10, "output_tokens": 10, "total_tokens": 20},
-        "cost_usd": 0.001,
+        "usage": {
+            "input_tokens": 10,
+            "output_tokens": 10,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "total_accounted_tokens": 20,
+        },
         "response_id": "fake",
         "model": "MiniMax-M3",
     }
@@ -87,20 +100,39 @@ def test_pa5_owner_decision_static_contract() -> None:
     decision = load(ROOT / OWNER_DECISION_PATH)
     assert_schema(decision, OWNER_DECISION_SCHEMA_PATH)
     assert_self_digest(decision)
+    seal = load(ROOT / ATTEMPT_1_SEAL_PATH)
+    assert_schema(seal, ATTEMPT_1_SEAL_SCHEMA_PATH)
+    assert_self_digest(seal)
+    pricing = load(ROOT / PRICING_CONTRACT_PATH)
+    assert_schema(pricing, PRICING_CONTRACT_SCHEMA_PATH)
+    assert_self_digest(pricing)
     parsed = decision["parsed_parameters"]
-    assert parsed["live_wiring_issue"] == 1214
+    assert parsed["live_wiring_issue"] == 1216
     assert parsed["frozen_population_count"] == POPULATION_COUNT
     assert parsed["frozen_population_sha256"] == POPULATION_SHA256
     assert parsed["future_trigger_marker"] == TRIGGER_MARKER
     assert parsed["budgets"]["maximum_provider_calls"] == MAX_PROVIDER_CALLS
-    assert parsed["budgets"]["maximum_total_observed_spend_usd"] == MAX_SPEND_USD
+    assert parsed["budgets"]["maximum_total_payg_equivalent_cost_usd"] == MAX_SPEND_USD
+    assert parsed["billing"]["billing_mode"] == (
+        "token_plan_subscription_with_payg_equivalent_cost_accounting"
+    )
+    assert parsed["billing"]["provider_reported_monetary_cost_available"] is False
+    assert parsed["billing"]["provider_reported_monetary_cost_usd"] is None
+    assert pricing["rates_per_1m_tokens"] == {
+        "input_tokens": "0.30",
+        "output_tokens": "1.20",
+        "prompt_cache_read_tokens": "0.06",
+    }
     assert validate_static(ROOT) == {
-        "logical_attempt": 1,
+        "attempt_1_failure_seal_self_sha256": seal["self_sha256"],
+        "billing_mode": "token_plan_subscription_with_payg_equivalent_cost_accounting",
+        "logical_attempt": 2,
         "max_provider_calls": 600,
-        "max_spend_usd": 15.0,
+        "max_payg_equivalent_cost_usd": "15.00",
         "owner_decision_self_sha256": decision["self_sha256"],
         "population_count": 200,
         "population_sha256": POPULATION_SHA256,
+        "pricing_contract_self_sha256": pricing["self_sha256"],
         "trigger_marker": TRIGGER_MARKER,
     }
 
@@ -124,13 +156,126 @@ def test_pa5_live_runner_emits_sanitized_success_receipt_with_fake_provider() ->
     assert receipt["population"]["complete_denominator"] is True
     assert receipt["summary"]["population_count"] == 200
     assert receipt["summary"]["metrics"]["provider_calls"] == 400
-    assert receipt["summary"]["metrics"]["total_observed_spend_usd"] == 0.4
+    assert receipt["summary"]["metrics"]["total_payg_equivalent_cost_usd"] == "0.00600000"
+    assert receipt["summary"]["metrics"]["mean_payg_equivalent_cost_usd"] == "0.00003000"
+    assert receipt["summary"]["metrics"]["provider_reported_monetary_cost_available"] is False
+    assert receipt["summary"]["metrics"]["provider_reported_monetary_cost_usd"] is None
     assert len(receipt["per_question_evidence"]) == 200
     assert len(receipt["human_review_packet"]["stratified_sample_question_ids"]) == 20
+    first_receipts = receipt["per_question_evidence"][0]["provider_call_receipts"]
+    assert first_receipts[0]["provider_reported_usage"]["input_tokens"] == 10
+    assert first_receipts[0]["payg_equivalent_cost_usd"] == "0.00001500"
+    assert first_receipts[0]["provider_reported_monetary_cost_available"] is False
+    assert first_receipts[0]["provider_reported_monetary_cost_usd"] is None
     serialized = json.dumps(receipt, sort_keys=True)
     assert "raw corpus" not in serialized.lower()
     assert "provider response" not in serialized.lower()
     assert "MINIMAX_API_KEY" not in serialized
+
+
+def test_pa5_cost_accounting_uses_usage_not_provider_cost_field() -> None:
+    pricing = load(ROOT / PRICING_CONTRACT_PATH)
+    counters = {
+        "provider_calls": 0,
+        "total_payg_equivalent_cost_usd": Decimal("0"),
+        "latencies": [],
+        "costs": [],
+    }
+
+    def fake_cost_provider(_payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "text": "{}",
+            "usage": {
+                "input_tokens": 1_000_000,
+                "output_tokens": 1_000_000,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+            },
+            "cost_usd": 999.0,
+            "billing": {"cost_usd": 999.0},
+            "response_id": "fake-cost-field",
+            "model": "MiniMax-M3",
+        }
+
+    result = provider_call_checked(
+        provider_call=fake_cost_provider,
+        payload={"model": "MiniMax-M3", "messages": [], "max_tokens": 1, "temperature": 0},
+        counters=counters,
+        pricing_contract=pricing,
+        question_id="pa5-test",
+        call_class="answer_generation",
+    )
+    assert result["payg_equivalent_cost_usd"] == "1.50000000"
+    assert result["provider_reported_monetary_cost_available"] is False
+    assert result["provider_reported_monetary_cost_usd"] is None
+
+
+def test_pa5_minimax_client_requires_usage_but_not_cost_field(monkeypatch: Any) -> None:
+    class FakeHTTPResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "id": "realish-response-id",
+                "model": "MiniMax-M3",
+                "text": "{}",
+                "usage": {"input_tokens": 10, "output_tokens": 20},
+            }
+
+    monkeypatch.setattr(
+        "knowledge_engine.m26_pa5_live_execution.httpx.post",
+        lambda *args, **kwargs: FakeHTTPResponse(),
+    )
+    client = MiniMaxM3Client(api_key="x", endpoint="https://example.invalid")
+    result = client({"model": "MiniMax-M3"})
+    assert result["usage"] == {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "input_tokens": 10,
+        "output_tokens": 20,
+        "total_accounted_tokens": 30,
+    }
+
+
+def test_pa5_minimax_client_fails_closed_on_missing_usage(monkeypatch: Any) -> None:
+    class FakeHTTPResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, Any]:
+            return {"id": "missing-usage", "model": "MiniMax-M3", "text": "{}"}
+
+    monkeypatch.setattr(
+        "knowledge_engine.m26_pa5_live_execution.httpx.post",
+        lambda *args, **kwargs: FakeHTTPResponse(),
+    )
+    client = MiniMaxM3Client(api_key="x", endpoint="https://example.invalid")
+    with pytest.raises(Exception, match="provider usage missing"):
+        client({"model": "MiniMax-M3"})
+
+
+def test_pa5_minimax_client_fails_closed_on_nonzero_cache_usage(monkeypatch: Any) -> None:
+    class FakeHTTPResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "id": "cache-drift",
+                "model": "MiniMax-M3",
+                "text": "{}",
+                "usage": {
+                    "input_tokens": 10,
+                    "output_tokens": 20,
+                    "cache_read_input_tokens": 1,
+                },
+            }
+
+    monkeypatch.setattr(
+        "knowledge_engine.m26_pa5_live_execution.httpx.post",
+        lambda *args, **kwargs: FakeHTTPResponse(),
+    )
+    client = MiniMaxM3Client(api_key="x", endpoint="https://example.invalid")
+    with pytest.raises(Exception, match="nonzero prompt-cache usage"):
+        client({"model": "MiniMax-M3"})
 
 
 def test_pa5_failure_receipt_is_schema_valid_and_sanitized() -> None:
@@ -144,6 +289,7 @@ def test_pa5_failure_receipt_is_schema_valid_and_sanitized() -> None:
     assert_self_digest(receipt)
     assert receipt["status"] == "controlled_internal_shadow_pilot_failed_closed"
     assert "full provider body" in receipt["error"]["message"]
+    assert receipt["billing"]["missing_provider_monetary_cost_field_is_error"] is False
 
 
 def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
@@ -156,10 +302,13 @@ def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
     assert "MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}" in workflow
     assert "python -m knowledge_engine.m26_pa5_live_execution --execute" in workflow
     assert "actions/upload-artifact@v4" in workflow
+    assert "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-2" in workflow
 
     arch = ARCH_WORKFLOW.read_text(encoding="utf-8")
     assert "src/knowledge_engine/m26_pa5_live_execution.py" in arch
 
     pa4 = PA4_WORKFLOW.read_text(encoding="utf-8")
+    assert "pilot/m26/m26-pa-5-attempt-1-failure-seal.json" in pa4
+    assert "pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json" in pa4
     assert "schemas/m26-pa-5-success-receipt-v1.schema.json" in pa4
     assert "tests/test_m26_pa_5_live_execution.py" in pa4

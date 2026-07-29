@@ -1,0 +1,137 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-attempt-1-failure-seal-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": { "type": "object" },
+    "evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_archive_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "artifact_name": {
+          "const": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-1"
+        },
+        "failure_code": { "const": "M26-PA5-LIVE-017" },
+        "failure_message": { "const": "provider cost receipt missing" },
+        "failure_receipt_name": { "const": "m26-pa-5-failure-receipt.json" },
+        "failure_receipt_self_sha256": {
+          "const": "feb7129f54a9f3ba56b674daf10ad3e3ed8c53ef6622d0b865eeef07b42ea608"
+        },
+        "owner_decision_self_sha256": {
+          "const": "b57fc96cf841033807061ce222dd7f6de14bb9b6b9d4a1a1eb8519798d914f65"
+        }
+      },
+      "required": [
+        "artifact_name",
+        "artifact_archive_sha256",
+        "failure_receipt_name",
+        "failure_receipt_self_sha256",
+        "owner_decision_self_sha256",
+        "failure_code",
+        "failure_message"
+      ],
+      "type": "object"
+    },
+    "github_run": {
+      "additionalProperties": false,
+      "properties": {
+        "event": { "const": "push" },
+        "head_sha": { "const": "d617ca7b0e4130a655ea46dec6c7e8d7718a7843" },
+        "live_job_terminal_status": { "const": "failed_closed" },
+        "repository": { "const": "danielcanfly/knowledge-engine" },
+        "run_attempt": { "const": 1 },
+        "run_id": { "const": "30418193049" },
+        "trigger_marker": {
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-1]"
+        },
+        "workflow_conclusion": { "const": "success" },
+        "workflow_name": { "const": "M26.PA.5 Controlled Internal Shadow Pilot" }
+      },
+      "required": [
+        "repository",
+        "workflow_name",
+        "run_id",
+        "run_attempt",
+        "event",
+        "trigger_marker",
+        "head_sha",
+        "workflow_conclusion",
+        "live_job_terminal_status"
+      ],
+      "type": "object"
+    },
+    "logical_attempt": { "const": 1 },
+    "pa5_accepted": { "const": false },
+    "recorded_at": { "const": "2026-07-29T06:30:00Z" },
+    "reclassification_as_accepted_authorized": { "const": false },
+    "replacement_or_deletion_authorized": { "const": false },
+    "rerun_authorized": { "const": false },
+    "root_cause": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "const": "provider_monetary_cost_field_not_part_of_supported_response_contract"
+        },
+        "fabricate_or_mock_cost_usd_authorized": { "const": false },
+        "provider_monetary_cost_contract_guaranteed": { "const": false },
+        "provider_usage_contract_valid": { "const": true },
+        "summary": { "type": "string", "minLength": 1 }
+      },
+      "required": [
+        "code",
+        "summary",
+        "provider_usage_contract_valid",
+        "provider_monetary_cost_contract_guaranteed",
+        "fabricate_or_mock_cost_usd_authorized"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-5-attempt-1-failure-seal/v1"
+    },
+    "seal_id": { "const": "m26-pa5-live-attempt-1-immutable-failed-evidence" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.5" },
+    "status": { "const": "immutable_failed_closed_evidence" },
+    "supersession": {
+      "additionalProperties": false,
+      "properties": {
+        "new_trigger_marker": {
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-2]"
+        },
+        "preserves_attempt_1_as_failed_evidence": { "const": true },
+        "repair_issue": { "const": 1216 },
+        "superseded_by_logical_attempt": { "const": 2 },
+        "supersedes_only_execution_wiring": { "const": true }
+      },
+      "required": [
+        "superseded_by_logical_attempt",
+        "repair_issue",
+        "new_trigger_marker",
+        "supersedes_only_execution_wiring",
+        "preserves_attempt_1_as_failed_evidence"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "seal_id",
+    "recorded_at",
+    "status",
+    "logical_attempt",
+    "rerun_authorized",
+    "reclassification_as_accepted_authorized",
+    "replacement_or_deletion_authorized",
+    "pa5_accepted",
+    "github_run",
+    "evidence",
+    "root_cause",
+    "supersession",
+    "authority_boundary",
+    "self_sha256"
+  ],
+  "title": "M26.PA.5 attempt-1 failure seal",
+  "type": "object"
+}

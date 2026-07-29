@@ -1,0 +1,38 @@
+{
+  "billing_mode": "token_plan_subscription_with_payg_equivalent_cost_accounting",
+  "context_window_class": "le_512k",
+  "currency": "USD",
+  "drift_policy": {
+    "context_greater_than_512k_fail_closed": true,
+    "missing_provider_monetary_cost_field_fail_closed": false,
+    "missing_provider_usage_fail_closed": true,
+    "model_identity_drift_fail_closed": true,
+    "pricing_contract_drift_fail_closed": true
+  },
+  "effective_date": "2026-07-29",
+  "formula": {
+    "decimal_arithmetic_required": true,
+    "float_arithmetic_allowed": false,
+    "operands_from_provider_usage_required": true,
+    "payg_equivalent_cost_usd": "input_tokens * 0.30 / 1000000 + output_tokens * 1.20 / 1000000"
+  },
+  "model": "MiniMax-M3",
+  "pricing_contract_identity": "minimax-m3-le-512k-payg-equivalent-2026-07-29",
+  "pricing_source_identity": "daniel-owner-decision-pa5-attempt-2-fixed-pricing-contract",
+  "prompt_caching": {
+    "cache_creation_input_tokens_required": 0,
+    "cache_read_input_tokens_required": 0,
+    "enabled": false,
+    "nonzero_cache_usage_fail_closed": true
+  },
+  "provider": "MiniMax",
+  "rates_per_1m_tokens": {
+    "input_tokens": "0.30",
+    "output_tokens": "1.20",
+    "prompt_cache_read_tokens": "0.06"
+  },
+  "retrieved_at": "2026-07-29T06:30:00Z",
+  "schema_version": "knowledge-engine-m26-pa-5-pricing-contract/v1",
+  "self_sha256": "506176c9594a44ef9a15995529f07d9fd7ff259262f5a3e1875943e11fee0b1f",
+  "stage_id": "M26.PA.5"
+}

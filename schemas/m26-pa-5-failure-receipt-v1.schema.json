@@ -4,6 +4,39 @@
   "additionalProperties": false,
   "properties": {
     "authority": { "type": "object" },
+    "billing": {
+      "additionalProperties": false,
+      "properties": {
+        "billing_mode": {
+          "const": "token_plan_subscription_with_payg_equivalent_cost_accounting"
+        },
+        "missing_provider_monetary_cost_field_is_error": { "const": false },
+        "payg_equivalent_cost_accounting_required": { "const": true },
+        "pricing_contract_identity": {
+          "const": "minimax-m3-le-512k-payg-equivalent-2026-07-29"
+        },
+        "pricing_contract_self_sha256": {
+          "anyOf": [
+            { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+            { "const": "" }
+          ]
+        },
+        "provider_reported_monetary_cost_available": { "const": false },
+        "provider_reported_monetary_cost_usd": { "type": "null" },
+        "provider_reported_usage_required": { "const": true }
+      },
+      "required": [
+        "billing_mode",
+        "provider_reported_usage_required",
+        "provider_reported_monetary_cost_available",
+        "provider_reported_monetary_cost_usd",
+        "payg_equivalent_cost_accounting_required",
+        "pricing_contract_identity",
+        "pricing_contract_self_sha256",
+        "missing_provider_monetary_cost_field_is_error"
+      ],
+      "type": "object"
+    },
     "error": {
       "additionalProperties": false,
       "properties": {
@@ -18,14 +51,36 @@
     "owner_decision": {
       "additionalProperties": false,
       "properties": {
+        "attempt_1_failure_seal_self_sha256": {
+          "anyOf": [
+            { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+            { "const": "" }
+          ]
+        },
+        "logical_attempt": { "const": 2 },
         "owner_decision_self_sha256": {
           "anyOf": [
             { "pattern": "^[0-9a-f]{64}$", "type": "string" },
             { "const": "" }
           ]
+        },
+        "pricing_contract_self_sha256": {
+          "anyOf": [
+            { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+            { "const": "" }
+          ]
+        },
+        "trigger_marker": {
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-2]"
         }
       },
-      "required": ["owner_decision_self_sha256"],
+      "required": [
+        "owner_decision_self_sha256",
+        "logical_attempt",
+        "trigger_marker",
+        "attempt_1_failure_seal_self_sha256",
+        "pricing_contract_self_sha256"
+      ],
       "type": "object"
     },
     "population": {
@@ -53,6 +108,7 @@
     "workflow",
     "owner_decision",
     "population",
+    "billing",
     "error",
     "authority",
     "self_sha256"
