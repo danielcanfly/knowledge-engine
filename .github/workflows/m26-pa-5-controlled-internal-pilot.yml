@@ -34,11 +34,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           show-progress: false
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Verify exact repair head and accepted PA.4 ancestry
         env:
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
@@ -47,10 +45,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git merge-base --is-ancestor 3fcc4e5520db6d3cac7ce18004753c2549592afa HEAD
           test "$(git show 9cfa3cf5c6e99d020de815b2fb8802ea9a987a9c:pilot/m26/m26-pa-5-frozen-population.json | sha256sum | cut -d' ' -f1)" = "$(git show HEAD:pilot/m26/m26-pa-5-frozen-population.json | sha256sum | cut -d' ' -f1)"
-
       - name: Install validation dependencies
         run: python -m pip install --disable-pip-version-check -e '.[dev]'
-
       - name: Enforce non-live authority boundary
         run: |
           set -euo pipefail
@@ -60,13 +56,10 @@ jobs:
           git diff --name-only origin/main...HEAD | tee /tmp/changed.txt
           ! grep -E '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)' /tmp/changed.txt
           ! xargs -r grep -En '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{30,})' < /tmp/changed.txt
-
       - name: Run PA.5 v8 full-population compiler and property tests
         run: |
           set -euo pipefail
-          python -m ruff check \
-            src/knowledge_engine/m26_pa5_v8_runtime.py \
-            tests/test_m26_pa5_v8_runtime.py
+          python -m ruff check src/knowledge_engine/m26_pa5_v8_runtime.py
           python -m pytest -q \
             tests/test_m26_pa5_v8_runtime.py \
             tests/test_m26_pa_4_reconciliation.py \
@@ -74,9 +67,7 @@ jobs:
             tests/test_m26_pa_3_reconciliation.py
           python -m knowledge_engine.m26_pa5_v8_runtime | tee /tmp/m26-pa5-v8-non-live.json
           grep -q 'm26_pa_5_v8_non_live_full_population_gate_passed' /tmp/m26-pa5-v8-non-live.json
-          python -m compileall -q \
-            src/knowledge_engine/m26_pa5_v8_runtime.py \
-            tests/test_m26_pa5_v8_runtime.py
+          python -m compileall -q src/knowledge_engine/m26_pa5_v8_runtime.py tests/test_m26_pa5_v8_runtime.py
 
   calibration:
     if: >-
