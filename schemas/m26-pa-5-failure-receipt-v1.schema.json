@@ -69,7 +69,13 @@
             { "const": "" }
           ]
         },
-        "logical_attempt": { "const": 4 },
+        "attempt_4_failure_seal_self_sha256": {
+          "anyOf": [
+            { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+            { "const": "" }
+          ]
+        },
+        "logical_attempt": { "const": 5 },
         "owner_decision_self_sha256": {
           "anyOf": [
             { "pattern": "^[0-9a-f]{64}$", "type": "string" },
@@ -83,7 +89,7 @@
           ]
         },
         "trigger_marker": {
-          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-4]"
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-5]"
         }
       },
       "required": [
@@ -93,6 +99,7 @@
         "attempt_1_failure_seal_self_sha256",
         "attempt_2_failure_seal_self_sha256",
         "attempt_3_failure_seal_self_sha256",
+        "attempt_4_failure_seal_self_sha256",
         "pricing_contract_self_sha256"
       ],
       "type": "object"

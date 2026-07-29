@@ -1,6 +1,6 @@
 {
-  "decision_id": "m26-pa5-autonomous-completion-authority-attempt-4",
-  "exact_instruction_text_sha256": "9882b833109d92548a248cd2a41ab1c2f9eb76b32ed3c158986cb826bda69601",
+  "decision_id": "m26-pa5-autonomous-completion-authority-attempt-5",
+  "exact_instruction_text_sha256": "5cc5efa45fa7965ffca180e66e13693d4074129972343db2053eb59340d2757d",
   "owner": "Daniel Huang",
   "parsed_parameters": {
     "adjudicator": {
@@ -75,7 +75,7 @@
     },
     "frozen_population_count": 200,
     "frozen_population_sha256": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580",
-    "future_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-4]",
+    "future_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-5]",
     "incident_stop_conditions": [
       "secret_or_credential_leakage",
       "raw_corpus_text_persistence",
@@ -104,8 +104,8 @@
       "repository_branch_or_executable_head_drift_after_authorization"
     ],
     "latest_accepted_pa4_main_sha": "3fcc4e5520db6d3cac7ce18004753c2549592afa",
-    "live_wiring_issue": 1220,
-    "logical_attempt": 4,
+    "live_wiring_issue": 1222,
+    "logical_attempt": 5,
     "pa4_acceptance_self_sha256": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7",
     "pa4_status": "m26_pa_4_verified_answer_citation_gate_accepted",
     "pa5_attempt_1_failure": {
@@ -135,6 +135,15 @@
       "run_id": "30426365447",
       "trigger_merge_sha": "0ec390425e5eb1de1e43936b92bd9d4dcc442234"
     },
+    "pa5_attempt_4_failure": {
+      "attempt_4_failure_seal_path": "pilot/m26/m26-pa-5-attempt-4-failure-seal.json",
+      "failure_receipt_self_sha256": "58057e5c264c87adcdfb416ae2972c273eeb56213a2f4e055e1e8344ef009af7",
+      "immutable_failed_evidence": true,
+      "rerun_authorized": false,
+      "run_attempt": 1,
+      "run_id": "30428500874",
+      "trigger_merge_sha": "845362f0e9ad7f888ba391cb9a29ac1cac742b62"
+    },
     "pa5_gate_population_merge_sha": "e2bff8fbf14278c70623d7c82c36012a3a9cf831",
     "population_strata": {
       "abstention_no_answer": 15,
@@ -148,6 +157,21 @@
     "provider": {
       "credential_environment": "m23-r3-diagnostic",
       "credential_name": "MINIMAX_API_KEY",
+      "independent_review_sanitized_answer_summary": {
+        "enabled": true,
+        "fields": [
+          "answer_status",
+          "safe_terminal",
+          "reason_codes",
+          "material_claim_count",
+          "citation_locator_count",
+          "unsupported_material_claim_count",
+          "answer_digest"
+        ],
+        "full_provider_response_included": false,
+        "raw_answer_text_included": false,
+        "raw_corpus_text_included": false
+      },
       "maximum_bounded_repair_attempts_per_question": 1,
       "model": "MiniMax-M3",
       "provider": "MiniMax",
@@ -247,6 +271,6 @@
   },
   "recorded_at": "2026-07-29T05:31:00Z",
   "schema_version": "knowledge-engine-m26-pa-5-owner-decision/v1",
-  "self_sha256": "e65fb7818c4ac5461262661875d6861297b3ecc1306b7641eee44a5a846d6fc2",
+  "self_sha256": "cc8a9e4c03963d734676c6a5d9a283c7e55a68ca7ceaf1f14e477c3bca1391a5",
   "stage_id": "M26.PA.5"
 }
