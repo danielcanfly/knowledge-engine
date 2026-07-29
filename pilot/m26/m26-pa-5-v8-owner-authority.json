@@ -1,0 +1,47 @@
+{
+  "authorized_package_sha256": "f637b90fd1249217005ff0eb646ee06a5b3b00cbc91609274718aced007bb0f1",
+  "calibration": {
+    "max_cost_usd_cumulative": "20.00",
+    "max_cost_usd_per_round": "5.00",
+    "max_provider_calls_cumulative": 640,
+    "max_provider_calls_per_round": 160,
+    "max_repair_cycles": 4,
+    "per_stratum": 5,
+    "required_consecutive_passes": 2,
+    "sample_count": 35
+  },
+  "denied": {
+    "attempt_10_plus": true,
+    "attempts_1_to_8_rerun": true,
+    "m26_closure": true,
+    "pa6_canary": true,
+    "pa7": true,
+    "production_pointer_mutation": true,
+    "production_serving": true,
+    "public_traffic": true,
+    "r2_qdrant_source_foundation_release_mutation": true
+  },
+  "formal": {
+    "logical_attempt": 9,
+    "max_cost_usd": "20.00",
+    "max_provider_calls": 800,
+    "max_wall_clock_hours": 8,
+    "trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-9]"
+  },
+  "owner": "Daniel Huang",
+  "population": {
+    "count": 200,
+    "sha256": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
+  },
+  "provider": {
+    "credential_name": "MINIMAX_API_KEY",
+    "environment": "m23-r3-diagnostic",
+    "model": "MiniMax-M3",
+    "provider": "MiniMax"
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-v8-owner-authority/v1",
+  "self_sha256": "2d22784971502b1e17dae553cbd559e6efa9cee2303c945c8603000e0278d88c",
+  "stage_id": "M26.PA.5",
+  "starting_main_sha": "9cfa3cf5c6e99d020de815b2fb8802ea9a987a9c",
+  "status": "ratified"
+}
