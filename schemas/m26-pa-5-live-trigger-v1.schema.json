@@ -1,0 +1,72 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-live-trigger-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonical_r2_qdrant_source_foundation_release_writes_authorized": { "const": false },
+    "credential_environment": { "const": "m23-r3-diagnostic" },
+    "credential_name": { "const": "MINIMAX_API_KEY" },
+    "frozen_population_count": { "const": 200 },
+    "frozen_population_sha256": {
+      "const": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
+    },
+    "github_run_attempt_must_equal": { "const": 1 },
+    "issue_number": { "const": 1226 },
+    "logical_attempt": { "const": 6 },
+    "m26_closure_authorized": { "const": false },
+    "main_push_live_run_authorized": { "const": true },
+    "maximum_payg_equivalent_cost_usd": { "const": "20.00" },
+    "maximum_provider_calls": { "const": 800 },
+    "maximum_semantic_repair_rounds_per_question": { "const": 1 },
+    "model": { "const": "MiniMax-M3" },
+    "pa6_canary_authorized": { "const": false },
+    "pa7_authority_authorized": { "const": false },
+    "predecessor_non_live_reconciliation_merge_sha": {
+      "const": "c75e593d2a45a9dc4507c1512ff201b0a73d66a9"
+    },
+    "predecessor_non_live_reconciliation_pr": { "const": 1225 },
+    "production_pointer_mutation_authorized": { "const": false },
+    "production_serving_authorized": { "const": false },
+    "provider": { "const": "MiniMax" },
+    "public_traffic_authorized": { "const": false },
+    "rerun_authorized": { "const": false },
+    "schema_version": { "const": "knowledge-engine-m26-pa-5-live-trigger/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.5" },
+    "trigger_id": { "const": "m26-pa5-live-attempt-6-trigger" },
+    "trigger_marker": {
+      "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-6]"
+    }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "trigger_id",
+    "logical_attempt",
+    "issue_number",
+    "predecessor_non_live_reconciliation_pr",
+    "predecessor_non_live_reconciliation_merge_sha",
+    "trigger_marker",
+    "frozen_population_count",
+    "frozen_population_sha256",
+    "provider",
+    "model",
+    "credential_name",
+    "credential_environment",
+    "maximum_provider_calls",
+    "maximum_payg_equivalent_cost_usd",
+    "maximum_semantic_repair_rounds_per_question",
+    "main_push_live_run_authorized",
+    "github_run_attempt_must_equal",
+    "rerun_authorized",
+    "public_traffic_authorized",
+    "production_serving_authorized",
+    "production_pointer_mutation_authorized",
+    "canonical_r2_qdrant_source_foundation_release_writes_authorized",
+    "pa6_canary_authorized",
+    "pa7_authority_authorized",
+    "m26_closure_authorized",
+    "self_sha256"
+  ],
+  "type": "object"
+}

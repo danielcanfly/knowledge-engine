@@ -48,6 +48,10 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "m26-pa-5-controlled-internal-pilot.yml"
 ARCH_WORKFLOW = ROOT / ".github" / "workflows" / "m26-1-architecture-authority.yml"
 PA4_WORKFLOW = ROOT / ".github" / "workflows" / "m26-pa-4-verified-answer-citation-gate.yml"
+ATTEMPT_6_TRIGGER_PATH = ROOT / "pilot" / "m26" / "m26-pa-5-attempt-6-live-trigger.json"
+ATTEMPT_6_TRIGGER_SCHEMA_PATH = (
+    ROOT / "schemas" / "m26-pa-5-live-trigger-v1.schema.json"
+)
 
 
 def load(path: Path) -> dict[str, Any]:
@@ -174,6 +178,13 @@ def test_pa5_owner_decision_static_contract() -> None:
     v6_exhaustion = load(ROOT / V6_EXHAUSTION_PATH)
     assert_schema(v6_exhaustion, V6_EXHAUSTION_SCHEMA_PATH)
     assert_self_digest(v6_exhaustion)
+    attempt6_trigger = load(ATTEMPT_6_TRIGGER_PATH)
+    assert_schema(attempt6_trigger, ATTEMPT_6_TRIGGER_SCHEMA_PATH.relative_to(ROOT))
+    assert_self_digest(attempt6_trigger)
+    assert attempt6_trigger["trigger_marker"] == TRIGGER_MARKER
+    assert attempt6_trigger["predecessor_non_live_reconciliation_pr"] == 1225
+    assert attempt6_trigger["main_push_live_run_authorized"] is True
+    assert attempt6_trigger["pa6_canary_authorized"] is False
     pricing = load(ROOT / PRICING_CONTRACT_PATH)
     assert_schema(pricing, PRICING_CONTRACT_SCHEMA_PATH)
     assert_self_digest(pricing)
@@ -467,6 +478,8 @@ def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
     assert "python -m knowledge_engine.m26_pa5_live_execution --execute" in workflow
     assert "actions/upload-artifact@v4" in workflow
     assert "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-6" in workflow
+    assert "pilot/m26/m26-pa-5-attempt-6-live-trigger.json" in workflow
+    assert "schemas/m26-pa-5-live-trigger-v1.schema.json" in workflow
 
     arch = ARCH_WORKFLOW.read_text(encoding="utf-8")
     assert "src/knowledge_engine/m26_pa5_live_execution.py" in arch
@@ -477,6 +490,7 @@ def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
     assert "pilot/m26/m26-pa-5-attempt-3-failure-seal.json" in pa4
     assert "pilot/m26/m26-pa-5-attempt-4-failure-seal.json" in pa4
     assert "pilot/m26/m26-pa-5-attempt-5-failure-seal.json" in pa4
+    assert "pilot/m26/m26-pa-5-attempt-6-live-trigger.json" in pa4
     assert "pilot/m26/m26-pa-5-reviewer-contract-v2.json" in pa4
     assert "pilot/m26/m26-pa-5-threshold-semantics-v2.json" in pa4
     assert "pilot/m26/m26-pa-5-v6-exhaustion-record.json" in pa4

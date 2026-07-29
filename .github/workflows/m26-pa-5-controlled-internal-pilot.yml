@@ -13,6 +13,7 @@ on:
       - 'pilot/m26/m26-pa-5-attempt-3-failure-seal.json'
       - 'pilot/m26/m26-pa-5-attempt-4-failure-seal.json'
       - 'pilot/m26/m26-pa-5-attempt-5-failure-seal.json'
+      - 'pilot/m26/m26-pa-5-attempt-6-live-trigger.json'
       - 'pilot/m26/m26-pa-5-frozen-population.json'
       - 'pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json'
       - 'pilot/m26/m26-pa-5-owner-decision.json'
@@ -25,6 +26,7 @@ on:
       - 'schemas/m26-pa-5-attempt-3-failure-seal-v1.schema.json'
       - 'schemas/m26-pa-5-attempt-4-failure-seal-v1.schema.json'
       - 'schemas/m26-pa-5-attempt-5-failure-seal-v1.schema.json'
+      - 'schemas/m26-pa-5-live-trigger-v1.schema.json'
       - 'schemas/m26-pa-5-entry-gate-v1.schema.json'
       - 'schemas/m26-pa-5-failure-receipt-v1.schema.json'
       - 'schemas/m26-pa-5-frozen-population-v1.schema.json'
@@ -52,6 +54,7 @@ on:
       - 'pilot/m26/m26-pa-5-attempt-3-failure-seal.json'
       - 'pilot/m26/m26-pa-5-attempt-4-failure-seal.json'
       - 'pilot/m26/m26-pa-5-attempt-5-failure-seal.json'
+      - 'pilot/m26/m26-pa-5-attempt-6-live-trigger.json'
       - 'pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json'
       - 'pilot/m26/m26-pa-5-owner-decision.json'
       - 'pilot/m26/m26-pa-5-reviewer-contract-v2.json'
@@ -63,6 +66,7 @@ on:
       - 'schemas/m26-pa-5-attempt-4-failure-seal-v1.schema.json'
       - 'schemas/m26-pa-5-attempt-5-failure-seal-v1.schema.json'
       - 'schemas/m26-pa-5-failure-receipt-v1.schema.json'
+      - 'schemas/m26-pa-5-live-trigger-v1.schema.json'
       - 'schemas/m26-pa-5-owner-decision-v1.schema.json'
       - 'schemas/m26-pa-5-pricing-contract-v1.schema.json'
       - 'schemas/m26-pa-5-reviewer-contract-v2-v1.schema.json'
@@ -143,19 +147,8 @@ jobs:
           cat > /tmp/expected.txt <<'FILES'
           .github/workflows/m26-pa-4-verified-answer-citation-gate.yml
           .github/workflows/m26-pa-5-controlled-internal-pilot.yml
-          pilot/m26/m26-pa-5-attempt-5-failure-seal.json
-          pilot/m26/m26-pa-5-owner-decision.json
-          pilot/m26/m26-pa-5-reviewer-contract-v2.json
-          pilot/m26/m26-pa-5-threshold-semantics-v2.json
-          pilot/m26/m26-pa-5-v6-exhaustion-record.json
-          schemas/m26-pa-5-attempt-5-failure-seal-v1.schema.json
-          schemas/m26-pa-5-failure-receipt-v1.schema.json
-          schemas/m26-pa-5-owner-decision-v1.schema.json
-          schemas/m26-pa-5-reviewer-contract-v2-v1.schema.json
-          schemas/m26-pa-5-success-receipt-v1.schema.json
-          schemas/m26-pa-5-threshold-semantics-v2-v1.schema.json
-          schemas/m26-pa-5-v6-exhaustion-record-v1.schema.json
-          src/knowledge_engine/m26_pa5_live_execution.py
+          pilot/m26/m26-pa-5-attempt-6-live-trigger.json
+          schemas/m26-pa-5-live-trigger-v1.schema.json
           tests/test_m26_pa_5_live_execution.py
           FILES
           cmp /tmp/expected.txt /tmp/changed.txt
