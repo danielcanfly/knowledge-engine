@@ -25,9 +25,15 @@
             { "const": "" }
           ]
         },
-        "logical_attempt": { "const": 6 },
+        "attempt_6_failure_seal_self_sha256": {
+          "anyOf": [
+            { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+            { "const": "" }
+          ]
+        },
+        "logical_attempt": { "const": 7 },
         "trigger_marker": {
-          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-6]"
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-7]"
         }
       },
       "required": [
@@ -39,6 +45,7 @@
         "attempt_3_failure_seal_self_sha256",
         "attempt_4_failure_seal_self_sha256",
         "attempt_5_failure_seal_self_sha256",
+        "attempt_6_failure_seal_self_sha256",
         "reviewer_contract_v2_self_sha256",
         "threshold_semantics_v2_self_sha256",
         "v6_exhaustion_record_self_sha256",

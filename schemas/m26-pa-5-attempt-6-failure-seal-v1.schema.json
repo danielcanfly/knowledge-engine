@@ -1,0 +1,99 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-attempt-6-failure-seal-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": { "type": "object" },
+    "evidence": {
+      "additionalProperties": true,
+      "properties": {
+        "artifact_archive_sha256": {
+          "const": "7f937f190ff375debe6df0db7b3fe897e3bcd9e50fe163e8bed11ccac0cef60e"
+        },
+        "artifact_id": { "const": "8717057985" },
+        "artifact_name": {
+          "const": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-6"
+        },
+        "failure_code": { "const": "M26-PA5-LIVE-UNEXPECTED" },
+        "failure_message": { "const": "The read operation timed out" },
+        "failure_receipt_file_sha256": {
+          "const": "fd0553ff700212ffb1c1d3f60f40ec588eab32bccc8deec1aa0d20cc1fcf9539"
+        },
+        "failure_receipt_self_sha256": {
+          "const": "b5e99011e5d2f4f10899ef703cfdbc659e4531acc94f119d22c04da8b5b767aa"
+        }
+      },
+      "required": [
+        "artifact_name",
+        "artifact_id",
+        "artifact_archive_sha256",
+        "failure_receipt_name",
+        "failure_receipt_file_sha256",
+        "failure_receipt_self_sha256",
+        "owner_decision_self_sha256",
+        "failure_code",
+        "failure_message"
+      ],
+      "type": "object"
+    },
+    "github_run": {
+      "additionalProperties": true,
+      "properties": {
+        "head_sha": { "const": "b06e05e6aad48961a117af08a9d887a688cee9bd" },
+        "run_attempt": { "const": 1 },
+        "run_id": { "const": "30434938985" },
+        "trigger_marker": {
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-6]"
+        }
+      },
+      "required": [
+        "repository",
+        "workflow_name",
+        "run_id",
+        "run_attempt",
+        "event",
+        "trigger_marker",
+        "head_sha",
+        "workflow_conclusion",
+        "live_job_terminal_status"
+      ],
+      "type": "object"
+    },
+    "logical_attempt": { "const": 6 },
+    "pa5_accepted": { "const": false },
+    "partial_denominator": { "type": "object" },
+    "recorded_at": { "const": "2026-07-29T08:21:00Z" },
+    "reclassification_as_accepted_authorized": { "const": false },
+    "replacement_or_deletion_authorized": { "const": false },
+    "rerun_authorized": { "const": false },
+    "root_cause": { "type": "object" },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-5-attempt-6-failure-seal/v1"
+    },
+    "seal_id": { "const": "m26-pa5-live-attempt-6-immutable-failed-evidence" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.5" },
+    "status": { "const": "immutable_failed_closed_evidence" },
+    "supersession": { "type": "object" }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "seal_id",
+    "recorded_at",
+    "status",
+    "logical_attempt",
+    "rerun_authorized",
+    "reclassification_as_accepted_authorized",
+    "replacement_or_deletion_authorized",
+    "pa5_accepted",
+    "github_run",
+    "evidence",
+    "partial_denominator",
+    "root_cause",
+    "supersession",
+    "authority_boundary",
+    "self_sha256"
+  ],
+  "type": "object"
+}
