@@ -36,7 +36,10 @@ ABSTENTION_CODES = (
     "STALE_TEMPORAL_EVIDENCE",
     "INSUFFICIENT_SUPPORT",
 )
-PA4_POLICY = {"verification": {"max_claims_per_item": 2}}
+PA4_POLICY = {
+    "verification": {"max_claims_per_item": 2},
+    "budget": {"max_repair_attempts": 1},
+}
 
 
 class PA5V8Error(ValueError):
