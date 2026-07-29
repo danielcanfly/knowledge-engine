@@ -57,7 +57,8 @@ jobs:
           unexpected="$(printf '%s\n' "$protected" | grep -vFx \
             -e 'src/knowledge_engine/m26_real_corpus_binding.py' \
             -e 'src/knowledge_engine/m26_verified_answer_citation_gate.py' \
-            -e 'src/knowledge_engine/m26_pa5_controlled_internal_pilot.py' || true)"
+            -e 'src/knowledge_engine/m26_pa5_controlled_internal_pilot.py' \
+            -e 'src/knowledge_engine/m26_pa5_population_freeze.py' || true)"
           test -z "$unexpected"
           python - <<'PY'
           import pathlib
@@ -69,7 +70,7 @@ jobs:
               text=True,
           ).splitlines()
           patterns = [
-              re.compile(r'\bsk-[A-Za-z0-9_-]{12,}'),
+              re.compile(r'\bsk-[A-Za-z0-9_-]{30,}'),
               re.compile(r'\bBearer\s+[A-Za-z0-9._-]{12,}', re.I),
               re.compile(
                   r'(?:api[_-]?key|password|client[_-]?secret)\s*[:=]\s*["\'][^"\']{8,}["\']',

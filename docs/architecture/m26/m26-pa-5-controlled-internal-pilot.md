@@ -45,6 +45,19 @@ intent, difficulty, expected evidence family or abstention class, construction s
 question digest. Placeholder questions, formula-generated scores, invented reviewer IDs,
 and synthetic provider receipts presented as live evidence are forbidden.
 
+## Population Freeze Preparation
+
+The non-live preparation artifact is `pilot/m26/m26-pa-5-frozen-population.json`,
+with manifest `pilot/m26/m26-pa-5-population-manifest.json`. The frozen population is
+constructed deterministically from accepted local corpus, provenance, graph, and release
+identities, and it records only question text, stable IDs, source identities, strata, and
+digests.
+
+This preparation does not execute PA.5 provider calls, generate answers, run review,
+use public traffic, or mutate R2, Qdrant, Source, Foundation, release, production
+pointers, or canonical serving state. Daniel must still approve the exact population
+digest and the remaining PA.5 live pilot envelope before any pilot execution.
+
 ## Review Plan
 
 Each question requires at least two independent reviews. Reviewer principals must identify
