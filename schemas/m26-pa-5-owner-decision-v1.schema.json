@@ -3,7 +3,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "decision_id": { "const": "m26-pa5-owner-gate-values-live-execution-attempt-2" },
+    "decision_id": { "const": "m26-pa5-autonomous-completion-authority-attempt-3" },
     "exact_instruction_text_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
     "owner": { "const": "Daniel Huang" },
     "parsed_parameters": {
@@ -52,19 +52,50 @@
           ],
           "type": "object"
         },
+        "authority_package": {
+          "additionalProperties": false,
+          "properties": {
+            "autonomous_completion_authority_amendment": { "const": true },
+            "autonomous_review_amendment": { "const": true },
+            "logical_attempts_authorized": {
+              "items": { "type": "integer" },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "package_name": {
+              "const": "LLM_Wiki_M26_PA5_Autonomous_Completion_to_PA6_Readiness_Codex_Handoff_v6_2026-07-29.zip"
+            },
+            "package_sha256": {
+              "const": "3a36861501a1d247ae1fc90c4708e05d43a6e3591b134bce36614698f3232b95"
+            },
+            "per_attempt_manual_gate_superseded_for_pa5_only": { "const": true }
+          },
+          "required": [
+            "package_name",
+            "package_sha256",
+            "autonomous_completion_authority_amendment",
+            "autonomous_review_amendment",
+            "logical_attempts_authorized",
+            "per_attempt_manual_gate_superseded_for_pa5_only"
+          ],
+          "type": "object"
+        },
         "billing": {
           "additionalProperties": false,
           "properties": {
+            "automatic_prompt_cache_usage_allowed": { "const": true },
             "billing_mode": {
               "const": "token_plan_subscription_with_payg_equivalent_cost_accounting"
             },
-            "cache_creation_tokens_required": { "const": 0 },
-            "cache_read_tokens_required": { "const": 0 },
+            "cache_usage_must_be_costed": { "const": true },
+            "explicit_cache_control_allowed": { "const": false },
             "fabricated_or_mocked_provider_cost_usd_forbidden": { "const": true },
+            "missing_optional_zero_cache_fields_may_normalize_to_zero": { "const": true },
             "missing_provider_monetary_cost_field_is_error": { "const": false },
             "payg_equivalent_cost_accounting_required": { "const": true },
             "pricing_contract_identity": {
-              "const": "minimax-m3-le-512k-payg-equivalent-2026-07-29"
+              "const": "minimax-m3-le-512k-cache-aware-payg-equivalent-2026-07-29"
             },
             "pricing_contract_path": {
               "const": "pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json"
@@ -83,8 +114,10 @@
             "pricing_contract_identity",
             "missing_provider_monetary_cost_field_is_error",
             "fabricated_or_mocked_provider_cost_usd_forbidden",
-            "cache_creation_tokens_required",
-            "cache_read_tokens_required"
+            "automatic_prompt_cache_usage_allowed",
+            "explicit_cache_control_allowed",
+            "cache_usage_must_be_costed",
+            "missing_optional_zero_cache_fields_may_normalize_to_zero"
           ],
           "type": "object"
         },
@@ -118,7 +151,7 @@
           "const": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
         },
         "future_trigger_marker": {
-          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-2]"
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-3]"
         },
         "incident_stop_conditions": {
           "items": { "type": "string", "minLength": 1 },
@@ -129,40 +162,14 @@
         "latest_accepted_pa4_main_sha": {
           "const": "3fcc4e5520db6d3cac7ce18004753c2549592afa"
         },
-        "live_wiring_issue": { "const": 1216 },
-        "logical_attempt": { "const": 2 },
+        "live_wiring_issue": { "const": 1218 },
+        "logical_attempt": { "const": 3 },
         "pa4_acceptance_self_sha256": {
           "const": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7"
         },
         "pa4_status": { "const": "m26_pa_4_verified_answer_citation_gate_accepted" },
-        "pa5_attempt_1_failure": {
-          "additionalProperties": false,
-          "properties": {
-            "attempt_1_failure_seal_path": {
-              "const": "pilot/m26/m26-pa-5-attempt-1-failure-seal.json"
-            },
-            "failure_receipt_self_sha256": {
-              "const": "feb7129f54a9f3ba56b674daf10ad3e3ed8c53ef6622d0b865eeef07b42ea608"
-            },
-            "immutable_failed_evidence": { "const": true },
-            "rerun_authorized": { "const": false },
-            "run_attempt": { "const": 1 },
-            "run_id": { "const": "30418193049" },
-            "trigger_merge_sha": {
-              "const": "d617ca7b0e4130a655ea46dec6c7e8d7718a7843"
-            }
-          },
-          "required": [
-            "attempt_1_failure_seal_path",
-            "run_id",
-            "run_attempt",
-            "trigger_merge_sha",
-            "failure_receipt_self_sha256",
-            "immutable_failed_evidence",
-            "rerun_authorized"
-          ],
-          "type": "object"
-        },
+        "pa5_attempt_1_failure": { "type": "object" },
+        "pa5_attempt_2_failure": { "type": "object" },
         "pa5_gate_population_merge_sha": {
           "const": "e2bff8fbf14278c70623d7c82c36012a3a9cf831"
         },
@@ -196,7 +203,7 @@
             "properties": {
               "principal_id": { "type": "string", "minLength": 1 },
               "reviewer_type": {
-                "enum": ["human", "independent_model", "deterministic_verifier"]
+                "enum": ["independent_model", "deterministic_verifier", "owner_policy"]
               }
             },
             "required": ["principal_id", "reviewer_type"],
@@ -210,11 +217,13 @@
       },
       "required": [
         "live_wiring_issue",
+        "authority_package",
         "latest_accepted_pa4_main_sha",
         "pa4_status",
         "pa4_acceptance_self_sha256",
         "pa5_gate_population_merge_sha",
         "pa5_attempt_1_failure",
+        "pa5_attempt_2_failure",
         "frozen_population_count",
         "frozen_population_sha256",
         "population_strata",
@@ -233,7 +242,7 @@
       ],
       "type": "object"
     },
-    "recorded_at": { "const": "2026-07-29T06:30:00Z" },
+    "recorded_at": { "const": "2026-07-29T05:31:00Z" },
     "schema_version": { "const": "knowledge-engine-m26-pa-5-owner-decision/v1" },
     "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
     "stage_id": { "const": "M26.PA.5" }

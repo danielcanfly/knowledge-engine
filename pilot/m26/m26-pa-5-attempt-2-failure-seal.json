@@ -1,0 +1,63 @@
+{
+  "authority_boundary": {
+    "authenticated_internal_shadow_execution_only": true,
+    "canonical_writes": 0,
+    "full_prompt_or_user_query_persisted": false,
+    "full_provider_response_persisted": false,
+    "production_answer_serving": false,
+    "production_pointer_mutations": 0,
+    "public_answers": false,
+    "public_traffic_operations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0,
+    "raw_text_persisted": false,
+    "secret_values_persisted": false,
+    "source_foundation_release_mutations": 0,
+    "vectors_persisted": false
+  },
+  "evidence": {
+    "artifact_archive_sha256": "1c18f0008f50efbf6e566521c25af781248c74de4f74068c54be43617d4d26e0",
+    "artifact_name": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-2",
+    "failure_code": "M26-PA5-LIVE-030",
+    "failure_message": "nonzero prompt-cache usage",
+    "failure_receipt_name": "m26-pa-5-failure-receipt.json",
+    "failure_receipt_self_sha256": "98209f081f1e832b0b892963a4b1e38faae042a7be3a7502fb22c1643bd3906e",
+    "owner_decision_self_sha256": "9f13dcd8472eca7f848ef20ad3db703b5770f0c21b84679f16b6d1c5f8e88b64"
+  },
+  "github_run": {
+    "event": "push",
+    "head_sha": "66272a07281db65687c87f397d94fc15a211929f",
+    "live_job_terminal_status": "failed_closed",
+    "repository": "danielcanfly/knowledge-engine",
+    "run_attempt": 1,
+    "run_id": "30422363498",
+    "trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-2]",
+    "workflow_conclusion": "success",
+    "workflow_name": "M26.PA.5 Controlled Internal Shadow Pilot"
+  },
+  "logical_attempt": 2,
+  "pa5_accepted": false,
+  "reclassification_as_accepted_authorized": false,
+  "recorded_at": "2026-07-29T05:31:00Z",
+  "replacement_or_deletion_authorized": false,
+  "rerun_authorized": false,
+  "root_cause": {
+    "automatic_prompt_cache_usage_allowed": true,
+    "cache_usage_must_be_costed": true,
+    "code": "automatic_prompt_cache_usage_treated_as_hard_failure",
+    "explicit_cache_control_allowed": false,
+    "summary": "Attempt 2 incorrectly treated nonzero MiniMax automatic prompt-cache usage as an incident. The ratified v6 contract permits passive cache creation/read usage and requires Decimal PAYG-equivalent costing."
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-attempt-2-failure-seal/v1",
+  "seal_id": "m26-pa5-live-attempt-2-immutable-failed-evidence",
+  "self_sha256": "45c72fe06c379be91e3b9f48ed902ec5f266b082cebd372d1e617fae7b16018d",
+  "stage_id": "M26.PA.5",
+  "status": "immutable_failed_closed_evidence",
+  "supersession": {
+    "new_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-3]",
+    "preserves_attempt_2_as_failed_evidence": true,
+    "repair_issue": 1218,
+    "superseded_by_logical_attempt": 3,
+    "supersedes_only_execution_wiring": true
+  }
+}

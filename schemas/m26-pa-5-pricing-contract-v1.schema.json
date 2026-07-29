@@ -15,14 +15,18 @@
         "missing_provider_monetary_cost_field_fail_closed": { "const": false },
         "missing_provider_usage_fail_closed": { "const": true },
         "model_identity_drift_fail_closed": { "const": true },
-        "pricing_contract_drift_fail_closed": { "const": true }
+        "negative_or_inconsistent_token_counts_fail_closed": { "const": true },
+        "pricing_contract_drift_fail_closed": { "const": true },
+        "unexpected_explicit_cache_control_fail_closed": { "const": true }
       },
       "required": [
         "context_greater_than_512k_fail_closed",
         "model_identity_drift_fail_closed",
         "pricing_contract_drift_fail_closed",
         "missing_provider_usage_fail_closed",
-        "missing_provider_monetary_cost_field_fail_closed"
+        "missing_provider_monetary_cost_field_fail_closed",
+        "unexpected_explicit_cache_control_fail_closed",
+        "negative_or_inconsistent_token_counts_fail_closed"
       ],
       "type": "object"
     },
@@ -34,7 +38,7 @@
         "float_arithmetic_allowed": { "const": false },
         "operands_from_provider_usage_required": { "const": true },
         "payg_equivalent_cost_usd": {
-          "const": "input_tokens * 0.30 / 1000000 + output_tokens * 1.20 / 1000000"
+          "const": "input_tokens * 0.30 / 1000000 + cache_creation_input_tokens * 0.375 / 1000000 + cache_read_input_tokens * 0.06 / 1000000 + output_tokens * 1.20 / 1000000"
         }
       },
       "required": [
@@ -46,25 +50,30 @@
       "type": "object"
     },
     "model": { "const": "MiniMax-M3" },
+    "package_sha256": {
+      "const": "3a36861501a1d247ae1fc90c4708e05d43a6e3591b134bce36614698f3232b95"
+    },
     "pricing_contract_identity": {
-      "const": "minimax-m3-le-512k-payg-equivalent-2026-07-29"
+      "const": "minimax-m3-le-512k-cache-aware-payg-equivalent-2026-07-29"
     },
     "pricing_source_identity": {
-      "const": "daniel-owner-decision-pa5-attempt-2-fixed-pricing-contract"
+      "const": "LLM_Wiki_M26_PA5_Autonomous_Completion_to_PA6_Readiness_Codex_Handoff_v6"
     },
     "prompt_caching": {
       "additionalProperties": false,
       "properties": {
-        "cache_creation_input_tokens_required": { "const": 0 },
-        "cache_read_input_tokens_required": { "const": 0 },
-        "enabled": { "const": false },
-        "nonzero_cache_usage_fail_closed": { "const": true }
+        "automatic_passive_cache_usage_allowed": { "const": true },
+        "cache_usage_must_be_costed": { "const": true },
+        "explicit_cache_control_allowed": { "const": false },
+        "missing_optional_zero_cache_fields_may_normalize_to_zero": { "const": true },
+        "nonzero_cache_usage_fail_closed": { "const": false }
       },
       "required": [
-        "enabled",
-        "cache_creation_input_tokens_required",
-        "cache_read_input_tokens_required",
-        "nonzero_cache_usage_fail_closed"
+        "automatic_passive_cache_usage_allowed",
+        "explicit_cache_control_allowed",
+        "missing_optional_zero_cache_fields_may_normalize_to_zero",
+        "nonzero_cache_usage_fail_closed",
+        "cache_usage_must_be_costed"
       ],
       "type": "object"
     },
@@ -72,14 +81,20 @@
     "rates_per_1m_tokens": {
       "additionalProperties": false,
       "properties": {
+        "cache_creation_input_tokens": { "const": "0.375" },
+        "cache_read_input_tokens": { "const": "0.06" },
         "input_tokens": { "const": "0.30" },
-        "output_tokens": { "const": "1.20" },
-        "prompt_cache_read_tokens": { "const": "0.06" }
+        "output_tokens": { "const": "1.20" }
       },
-      "required": ["input_tokens", "output_tokens", "prompt_cache_read_tokens"],
+      "required": [
+        "input_tokens",
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+        "output_tokens"
+      ],
       "type": "object"
     },
-    "retrieved_at": { "const": "2026-07-29T06:30:00Z" },
+    "retrieved_at": { "const": "2026-07-29T05:31:00Z" },
     "schema_version": { "const": "knowledge-engine-m26-pa-5-pricing-contract/v1" },
     "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
     "stage_id": { "const": "M26.PA.5" }
@@ -100,8 +115,9 @@
     "prompt_caching",
     "formula",
     "drift_policy",
+    "package_sha256",
     "self_sha256"
   ],
-  "title": "M26.PA.5 MiniMax-M3 pricing contract",
+  "title": "M26.PA.5 MiniMax-M3 cache-aware pricing contract",
   "type": "object"
 }

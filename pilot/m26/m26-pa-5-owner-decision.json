@@ -1,12 +1,13 @@
 {
-  "decision_id": "m26-pa5-owner-gate-values-live-execution-attempt-2",
-  "exact_instruction_text_sha256": "3810e7d9130a0de210a9b52d67758d1e433a21b71e19f5f9e7e05be0312ff7b8",
+  "decision_id": "m26-pa5-autonomous-completion-authority-attempt-3",
+  "exact_instruction_text_sha256": "5c551e6a351dd48cef12ba9d9431bb21b1d71350edfcbf32f82ff6ab3bf7573b",
   "owner": "Daniel Huang",
   "parsed_parameters": {
     "adjudicator": {
-      "adjudicator_id": "daniel-huang",
-      "blocking_disputes_require_adjudication": true,
-      "principal": "Daniel Huang"
+      "adjudicator_id": "daniel-owner-policy-pa5-autonomous-v1",
+      "blocking_disputes_require_adjudication": false,
+      "human_review_completed": false,
+      "principal": "daniel-owner-policy-pa5-autonomous-v1"
     },
     "authority_boundary": {
       "authenticated_internal_shadow_execution_only": true,
@@ -27,14 +28,28 @@
       "source_foundation_release_mutation": false,
       "vector_persistence": false
     },
+    "authority_package": {
+      "autonomous_completion_authority_amendment": true,
+      "autonomous_review_amendment": true,
+      "logical_attempts_authorized": [
+        3,
+        4,
+        5
+      ],
+      "package_name": "LLM_Wiki_M26_PA5_Autonomous_Completion_to_PA6_Readiness_Codex_Handoff_v6_2026-07-29.zip",
+      "package_sha256": "3a36861501a1d247ae1fc90c4708e05d43a6e3591b134bce36614698f3232b95",
+      "per_attempt_manual_gate_superseded_for_pa5_only": true
+    },
     "billing": {
+      "automatic_prompt_cache_usage_allowed": true,
       "billing_mode": "token_plan_subscription_with_payg_equivalent_cost_accounting",
-      "cache_creation_tokens_required": 0,
-      "cache_read_tokens_required": 0,
+      "cache_usage_must_be_costed": true,
+      "explicit_cache_control_allowed": false,
       "fabricated_or_mocked_provider_cost_usd_forbidden": true,
+      "missing_optional_zero_cache_fields_may_normalize_to_zero": true,
       "missing_provider_monetary_cost_field_is_error": false,
       "payg_equivalent_cost_accounting_required": true,
-      "pricing_contract_identity": "minimax-m3-le-512k-payg-equivalent-2026-07-29",
+      "pricing_contract_identity": "minimax-m3-le-512k-cache-aware-payg-equivalent-2026-07-29",
       "pricing_contract_path": "pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json",
       "provider_reported_monetary_cost_available": false,
       "provider_reported_monetary_cost_usd": null,
@@ -51,16 +66,16 @@
       "stop_when_payg_equivalent_cost_cap_reached_or_exceeded": true
     },
     "execution_window": {
-      "authorization_expires_hours_after_exact_head_approval": 24,
+      "authorization_expires_hours_after_package_ratification": 24,
       "begin_within_minutes_after_authorization_merge": 60,
-      "live_execution_requires_separate_exact_head_authorization": true,
+      "live_execution_requires_separate_exact_head_authorization": false,
       "maximum_wall_clock_hours": 8,
       "one_bounded_logical_attempt": true,
       "rerun_same_identity_authorized": false
     },
     "frozen_population_count": 200,
     "frozen_population_sha256": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580",
-    "future_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-2]",
+    "future_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-3]",
     "incident_stop_conditions": [
       "secret_or_credential_leakage",
       "raw_corpus_text_persistence",
@@ -89,8 +104,8 @@
       "repository_branch_or_executable_head_drift_after_authorization"
     ],
     "latest_accepted_pa4_main_sha": "3fcc4e5520db6d3cac7ce18004753c2549592afa",
-    "live_wiring_issue": 1216,
-    "logical_attempt": 2,
+    "live_wiring_issue": 1218,
+    "logical_attempt": 3,
     "pa4_acceptance_self_sha256": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7",
     "pa4_status": "m26_pa_4_verified_answer_citation_gate_accepted",
     "pa5_attempt_1_failure": {
@@ -101,6 +116,15 @@
       "run_attempt": 1,
       "run_id": "30418193049",
       "trigger_merge_sha": "d617ca7b0e4130a655ea46dec6c7e8d7718a7843"
+    },
+    "pa5_attempt_2_failure": {
+      "attempt_2_failure_seal_path": "pilot/m26/m26-pa-5-attempt-2-failure-seal.json",
+      "failure_receipt_self_sha256": "98209f081f1e832b0b892963a4b1e38faae042a7be3a7502fb22c1643bd3906e",
+      "immutable_failed_evidence": true,
+      "rerun_authorized": false,
+      "run_attempt": 1,
+      "run_id": "30422363498",
+      "trigger_merge_sha": "66272a07281db65687c87f397d94fc15a211929f"
     },
     "pa5_gate_population_merge_sha": "e2bff8fbf14278c70623d7c82c36012a3a9cf831",
     "population_strata": {
@@ -123,23 +147,24 @@
       "unbounded_retry_forbidden": true
     },
     "review_rules": {
-      "acceptance_requires_real_human_review_records": true,
+      "automated_review_not_misrepresented_as_human": true,
+      "autonomous_review_amendment_applied": true,
       "deterministic_claim_citation_verification_for_every_question": true,
+      "disputed_answer_may_be_accepted": false,
       "generator_reasoning_visible_to_reviewer": false,
       "generator_self_evaluation_visible_to_reviewer": false,
-      "human_review_all_blocking_disputes": true,
-      "human_review_all_disagreements": true,
-      "human_review_stratified_minimum_count": 20,
-      "human_review_stratified_minimum_fraction": 0.1,
+      "human_review_completed": false,
       "independent_model_blind_isolated_context": true,
       "independent_model_review_for_every_question": true,
-      "invent_or_simulate_human_review_forbidden": true
+      "invent_or_simulate_human_review_forbidden": true,
+      "owner_oversight_packet_all_disagreements": true,
+      "owner_oversight_packet_nonblocking_audit_artifact": true,
+      "owner_oversight_packet_stratified_count": 20,
+      "owner_policy_evaluation_for_every_question": true,
+      "unresolved_disagreement_terminal_action": "safe_abstention",
+      "unsupported_material_claim_may_be_accepted": false
     },
     "reviewer_principals": [
-      {
-        "principal_id": "daniel-huang",
-        "reviewer_type": "human"
-      },
       {
         "principal_id": "pa5-reviewer-minimax-m3-blind-v1",
         "reviewer_type": "independent_model"
@@ -147,6 +172,10 @@
       {
         "principal_id": "pa5-claim-citation-verifier-v1",
         "reviewer_type": "deterministic_verifier"
+      },
+      {
+        "principal_id": "daniel-owner-policy-pa5-autonomous-v1",
+        "reviewer_type": "owner_policy"
       }
     ],
     "thresholds": {
@@ -201,8 +230,8 @@
       }
     }
   },
-  "recorded_at": "2026-07-29T06:30:00Z",
+  "recorded_at": "2026-07-29T05:31:00Z",
   "schema_version": "knowledge-engine-m26-pa-5-owner-decision/v1",
-  "self_sha256": "9f13dcd8472eca7f848ef20ad3db703b5770f0c21b84679f16b6d1c5f8e88b64",
+  "self_sha256": "a2762fc9724f62b027d45cf93f6212ab662099ea5687ae127d0109d86793cf19",
   "stage_id": "M26.PA.5"
 }
