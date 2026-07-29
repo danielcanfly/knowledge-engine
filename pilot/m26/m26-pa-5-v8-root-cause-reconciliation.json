@@ -22,7 +22,7 @@
     "summary": "PA.5 duplicated PA.4 answer and citation verification and permitted model-authored authoritative citation objects, producing systematic deterministic-verifier/model-reviewer disagreement."
   },
   "schema_version": "knowledge-engine-m26-pa-5-v8-root-cause-reconciliation/v1",
-  "self_sha256": "6d8d7d27e4feaeae4e2e5b13581cd1add1d7fd703b6294c49051f015687eae78",
+  "self_sha256": "3359cc08b48b98a4a3d00dfbedf64ed91509c300e5447bf3e5c16e12c974f32c",
   "stage_id": "M26.PA.5",
   "starting_main_sha": "9cfa3cf5c6e99d020de815b2fb8802ea9a987a9c",
   "status": "m26_pa_5_v8_root_cause_reconciled"
