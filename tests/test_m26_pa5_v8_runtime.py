@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -34,6 +36,18 @@ def _selection(plan):
     }
 
 
+def _all_mapping_keys(value: Any) -> set[str]:
+    keys: set[str] = set()
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            keys.add(str(key))
+            keys.update(_all_mapping_keys(nested))
+    elif isinstance(value, list):
+        for nested in value:
+            keys.update(_all_mapping_keys(nested))
+    return keys
+
+
 def test_full_population_compiles_and_reuses_pa4_kernel() -> None:
     result = non_live_full_population_gate(ROOT)
     assert result["status"] == "m26_pa_5_v8_non_live_full_population_gate_passed"
@@ -63,7 +77,11 @@ def test_manifest_persists_no_raw_evidence() -> None:
     value = manifest(_plans())
     assert value["population_count"] == 200
     assert value["raw_evidence_persisted"] is False
-    assert "span_text" not in str(value)
+    persisted_keys = _all_mapping_keys(value)
+    assert "span_text" not in persisted_keys
+    assert "evidence_text" not in persisted_keys
+    assert "raw_text" not in persisted_keys
+    assert "span_text_sha256" in persisted_keys
 
 
 def test_calibration_sample_is_fixed_stratified_and_deterministic() -> None:
