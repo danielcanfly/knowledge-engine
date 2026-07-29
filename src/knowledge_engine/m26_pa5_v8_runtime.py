@@ -36,9 +36,7 @@ ABSTENTION_CODES = (
     "STALE_TEMPORAL_EVIDENCE",
     "INSUFFICIENT_SUPPORT",
 )
-PA4_POLICY = {
-    "verification": {"max_claims_per_item": 2},
-}
+PA4_POLICY = {"verification": {"max_claims_per_item": 2}}
 
 
 class PA5V8Error(ValueError):
@@ -63,7 +61,11 @@ def _sentence(text: str) -> str:
 
 def _span_id(question_id: str, evidence_id: str, text: str) -> str:
     return "span_" + canonical_sha256(
-        {"question_id": question_id, "evidence_id": evidence_id, "text_sha256": sha256_bytes(text.encode())}
+        {
+            "question_id": question_id,
+            "evidence_id": evidence_id,
+            "text_sha256": sha256_bytes(text.encode()),
+        }
     )[:24]
 
 
@@ -83,17 +85,17 @@ def _evidence(
     section_id: str,
 ) -> dict[str, Any]:
     text = _sentence(text)
-    locator_id = _locator_id(str(question["question_id"]), identity, evidence_id)
+    text_sha256 = sha256_bytes(text.encode("utf-8"))
     return {
         "evidence_id": evidence_id,
         "span_id": _span_id(str(question["question_id"]), evidence_id, text),
         "span_text": text,
-        "span_text_sha256": sha256_bytes(text.encode("utf-8")),
+        "span_text_sha256": text_sha256,
         "locator": {
-            "locator_id": locator_id,
+            "locator_id": _locator_id(str(question["question_id"]), identity, evidence_id),
             "source_id": source_id,
             "section_id": section_id,
-            "text_sha256": sha256_bytes(text.encode("utf-8")),
+            "text_sha256": text_sha256,
             "artifact_key": str(identity["artifact_path"]),
             "artifact_sha256": str(identity["artifact_sha256"]),
             "release_id": str(identity["release_id"]),
@@ -129,48 +131,76 @@ def compile_grounding_plans(root: Path) -> list[dict[str, Any]]:
             section = sections.get(str(identity.get("section_id")))
             if section is None:
                 raise PA5V8Error(f"{qid}: section does not resolve")
-            candidates.append(_evidence(
-                question=question, identity=identity,
-                evidence_id="evidence_primary",
-                text=str(section["body"]),
-                source_id=str(identity["concept_id"]),
-                section_id=str(identity["section_id"]),
-            ))
+            candidates.append(
+                _evidence(
+                    question=question,
+                    identity=identity,
+                    evidence_id="evidence_primary",
+                    text=str(section["body"]),
+                    source_id=str(identity["concept_id"]),
+                    section_id=str(identity["section_id"]),
+                )
+            )
         elif stratum == "provenance_and_source_trace":
             record = next(
-                (r for r in records if str(r.get("synthesis_id", "")) == str(identity.get("synthesis_id", ""))
-                 or str(r.get("subject", {}).get("concept_id", "")) == str(identity.get("concept_id", ""))),
+                (
+                    r
+                    for r in records
+                    if str(r.get("synthesis_id", "")) == str(identity.get("synthesis_id", ""))
+                    or str(r.get("subject", {}).get("concept_id", ""))
+                    == str(identity.get("concept_id", ""))
+                ),
                 None,
             )
             if record is None:
                 raise PA5V8Error(f"{qid}: provenance record does not resolve")
-            claim_id_match = re.search(r'claim "([^"]+)"', str(question["question"]))
+            claim_match = re.search(r'claim "([^"]+)"', str(question["question"]))
             claims = list(record.get("claims", []))
-            claim = next((c for c in claims if claim_id_match and c.get("claim_id") == claim_id_match.group(1)), claims[0] if claims else None)
+            claim = next(
+                (
+                    c
+                    for c in claims
+                    if claim_match and c.get("claim_id") == claim_match.group(1)
+                ),
+                claims[0] if claims else None,
+            )
             if claim is None:
                 raise PA5V8Error(f"{qid}: provenance claim does not resolve")
-            candidates.append(_evidence(
-                question=question, identity=identity,
-                evidence_id=str(claim["claim_id"]),
-                text=str(claim["text"]),
-                source_id=str(identity.get("source_id", identity["concept_id"])),
-                section_id=str(identity.get("provenance_id", identity["concept_id"])),
-            ))
+            candidates.append(
+                _evidence(
+                    question=question,
+                    identity=identity,
+                    evidence_id=str(claim["claim_id"]),
+                    text=str(claim["text"]),
+                    source_id=str(identity.get("source_id", identity["concept_id"])),
+                    section_id=str(identity.get("provenance_id", identity["concept_id"])),
+                )
+            )
         elif stratum == "cross_document_comparison":
             left = sections.get(str(identity.get("section_id")))
             right = sections.get(str(identity.get("comparison_section_id")))
             if left is None or right is None:
                 raise PA5V8Error(f"{qid}: comparison section does not resolve")
-            candidates.extend([
-                _evidence(
-                    question=question, identity=identity, evidence_id="evidence_left",
-                    text=str(left["body"]), source_id=str(left["concept_id"]), section_id=str(left["section_id"]),
-                ),
-                _evidence(
-                    question=question, identity=identity, evidence_id="evidence_right",
-                    text=str(right["body"]), source_id=str(right["concept_id"]), section_id=str(right["section_id"]),
-                ),
-            ])
+            candidates.extend(
+                [
+                    _evidence(
+                        question=question,
+                        identity=identity,
+                        evidence_id="evidence_left",
+                        text=str(left["body"]),
+                        source_id=str(left["concept_id"]),
+                        section_id=str(left["section_id"]),
+                    ),
+                    _evidence(
+                        question=question,
+                        identity=identity,
+                        evidence_id="evidence_right",
+                        text=str(right["body"]),
+                        source_id=str(right["concept_id"]),
+                        section_id=str(right["section_id"]),
+                    ),
+                ]
+            )
             relation_enum = list(RELATIONS)
         elif stratum == "graph_navigation":
             edge = edges.get(str(identity.get("edge_id")))
@@ -180,26 +210,51 @@ def compile_grounding_plans(root: Path) -> list[dict[str, Any]]:
                 f'{edge["source"]} {edge["relation_type"]} {edge["target"]}; '
                 f'edge {edge["edge_id"]} has review status {edge["review_status"]}.'
             )
-            candidates.append(_evidence(
-                question=question, identity=identity, evidence_id=str(edge["edge_id"]),
-                text=text, source_id=str(edge["source"]), section_id=str(edge["edge_id"]),
-            ))
+            candidates.append(
+                _evidence(
+                    question=question,
+                    identity=identity,
+                    evidence_id=str(edge["edge_id"]),
+                    text=text,
+                    source_id=str(edge["source"]),
+                    section_id=str(edge["edge_id"]),
+                )
+            )
         elif stratum == "conflict_and_temporal_freshness":
             record = next(
-                (r for r in records if str(r.get("subject", {}).get("concept_id", "")) == str(identity.get("concept_id", ""))),
+                (
+                    r
+                    for r in records
+                    if str(r.get("subject", {}).get("concept_id", ""))
+                    == str(identity.get("concept_id", ""))
+                ),
                 None,
             )
             if record is None or not record.get("sources"):
                 raise PA5V8Error(f"{qid}: temporal provenance does not resolve")
-            source = next((s for s in record["sources"] if s.get("source_id") == identity.get("source_id")), record["sources"][0])
+            source = next(
+                (
+                    s
+                    for s in record["sources"]
+                    if s.get("source_id") == identity.get("source_id")
+                ),
+                record["sources"][0],
+            )
+            origin = source.get("origin_commit", identity.get("source_commit_sha", "unknown"))
             text = (
                 f'Source {source["source_id"]} was retrieved at {source["retrieved_at"]} '
-                f'from origin commit {source.get("origin_commit", identity.get("source_commit_sha", "unknown"))}; accepted release is {identity["release_id"]}.'
+                f'from origin commit {origin}; accepted release is {identity["release_id"]}.'
             )
-            candidates.append(_evidence(
-                question=question, identity=identity, evidence_id=str(source["source_id"]),
-                text=text, source_id=str(source["source_id"]), section_id=str(identity.get("provenance_id", identity["concept_id"])),
-            ))
+            candidates.append(
+                _evidence(
+                    question=question,
+                    identity=identity,
+                    evidence_id=str(source["source_id"]),
+                    text=text,
+                    source_id=str(source["source_id"]),
+                    section_id=str(identity.get("provenance_id", identity["concept_id"])),
+                )
+            )
         elif stratum == "abstention_no_answer":
             abstention_policy = "NO_ANSWER_IN_ACCEPTED_ARTIFACT"
         elif stratum == "prompt_injection_privacy_adversarial":
@@ -209,7 +264,7 @@ def compile_grounding_plans(root: Path) -> list[dict[str, Any]]:
 
         if abstention_policy is None and not candidates:
             raise PA5V8Error(f"{qid}: answerable plan has no evidence")
-        plans.append({
+        plan = {
             "question_id": qid,
             "question_digest": question["question_digest"],
             "stratum": stratum,
@@ -222,14 +277,57 @@ def compile_grounding_plans(root: Path) -> list[dict[str, Any]]:
             "rendering_rule": "runtime_owned_exact_span",
             "verification_rule": "pa4_exact_span_verified_answer_kernel",
             "plan_sha256": "",
-        })
-        plans[-1]["plan_sha256"] = canonical_sha256({**plans[-1], "plan_sha256": ""})
+        }
+        plan["plan_sha256"] = canonical_sha256({**plan, "plan_sha256": ""})
+        validate_grounding_plan(plan)
+        plans.append(plan)
     return plans
+
+
+def validate_grounding_plan(plan: Mapping[str, Any]) -> None:
+    qid = str(plan.get("question_id", ""))
+    identity = plan.get("artifact_identity")
+    candidates = plan.get("candidate_evidence")
+    if not qid or not isinstance(identity, Mapping) or not isinstance(candidates, list):
+        raise PA5V8Error("grounding plan structure invalid")
+    if plan.get("abstention_policy"):
+        if candidates:
+            raise PA5V8Error(f"{qid}: abstention plan must not carry evidence")
+        return
+    if not candidates:
+        raise PA5V8Error(f"{qid}: answerable grounding plan has no evidence")
+    for evidence in candidates:
+        if not isinstance(evidence, Mapping):
+            raise PA5V8Error(f"{qid}: evidence structure invalid")
+        required = ("evidence_id", "span_id", "span_text", "span_text_sha256", "locator")
+        if any(key not in evidence for key in required):
+            raise PA5V8Error(f"{qid}: evidence field missing")
+        evidence_id = str(evidence["evidence_id"])
+        text = str(evidence["span_text"])
+        text_sha256 = sha256_bytes(text.encode("utf-8"))
+        if evidence["span_text_sha256"] != text_sha256:
+            raise PA5V8Error(f"{qid}: evidence text digest mismatch")
+        if evidence["span_id"] != _span_id(qid, evidence_id, text):
+            raise PA5V8Error(f"{qid}: runtime span ID mismatch")
+        locator = evidence["locator"]
+        if not isinstance(locator, Mapping):
+            raise PA5V8Error(f"{qid}: locator structure invalid")
+        if locator.get("locator_id") != _locator_id(qid, identity, evidence_id):
+            raise PA5V8Error(f"{qid}: canonical locator ID mismatch")
+        if locator.get("text_sha256") != text_sha256:
+            raise PA5V8Error(f"{qid}: locator text digest mismatch")
+        if locator.get("artifact_key") != str(identity.get("artifact_path")):
+            raise PA5V8Error(f"{qid}: locator artifact key mismatch")
+        if locator.get("artifact_sha256") != str(identity.get("artifact_sha256")):
+            raise PA5V8Error(f"{qid}: locator artifact digest mismatch")
+        if locator.get("release_id") != str(identity.get("release_id")):
+            raise PA5V8Error(f"{qid}: locator release mismatch")
 
 
 def manifest(plans: list[dict[str, Any]]) -> dict[str, Any]:
     safe_plans = []
     for plan in plans:
+        validate_grounding_plan(plan)
         safe = json.loads(json.dumps(plan))
         for evidence in safe["candidate_evidence"]:
             evidence.pop("span_text", None)
@@ -254,7 +352,9 @@ def deterministic_calibration_sample(plans: list[dict[str, Any]]) -> dict[str, A
     for stratum in STRATA:
         candidates = sorted(
             (p for p in plans if p["stratum"] == stratum),
-            key=lambda p: hashlib.sha256((p["question_id"] + POPULATION_SHA256).encode()).hexdigest(),
+            key=lambda p: hashlib.sha256(
+                (p["question_id"] + POPULATION_SHA256).encode()
+            ).hexdigest(),
         )
         if len(candidates) < 5:
             raise PA5V8Error(f"{stratum}: fewer than five calibration candidates")
@@ -272,23 +372,39 @@ def deterministic_calibration_sample(plans: list[dict[str, Any]]) -> dict[str, A
 
 
 def provider_selection_contract(plan: Mapping[str, Any]) -> dict[str, Any]:
+    validate_grounding_plan(plan)
     return {
-        "required_keys": ["status", "selected_span_ids", "selected_evidence_ids", "relation", "abstention_reason"],
+        "required_keys": [
+            "status",
+            "selected_span_ids",
+            "selected_evidence_ids",
+            "relation",
+            "abstention_reason",
+        ],
         "status_values": ["select", "abstain"],
         "allowed_span_ids": [e["span_id"] for e in plan["candidate_evidence"]],
         "allowed_evidence_ids": [e["evidence_id"] for e in plan["candidate_evidence"]],
         "allowed_relations": list(plan["allowed_relation_enums"]),
         "allowed_abstention_reasons": list(ABSTENTION_CODES),
         "authoritative_fields_forbidden": [
-            "claim_text", "locator_id", "source_id", "section_id", "evidence_excerpt",
-            "support_verdict", "conflict_verdict", "temporal_verdict", "citation_digest",
+            "claim_text",
+            "locator_id",
+            "source_id",
+            "section_id",
+            "evidence_excerpt",
+            "support_verdict",
+            "conflict_verdict",
+            "temporal_verdict",
+            "citation_digest",
         ],
     }
 
 
-def render_and_verify_selection(plan: Mapping[str, Any], selection: Mapping[str, Any]) -> dict[str, Any]:
-    forbidden = set(provider_selection_contract(plan)["authoritative_fields_forbidden"])
-    if forbidden.intersection(selection):
+def render_and_verify_selection(
+    plan: Mapping[str, Any], selection: Mapping[str, Any]
+) -> dict[str, Any]:
+    contract = provider_selection_contract(plan)
+    if set(contract["authoritative_fields_forbidden"]).intersection(selection):
         raise PA5V8Error("provider authored authoritative citation field")
     status = selection.get("status")
     if plan.get("abstention_policy"):
@@ -306,6 +422,11 @@ def render_and_verify_selection(plan: Mapping[str, Any], selection: Mapping[str,
         if evidence is None:
             raise PA5V8Error("selected span ID is not runtime-provided")
         selected.append(evidence)
+    selected_evidence_ids = selection.get("selected_evidence_ids")
+    if not isinstance(selected_evidence_ids, list) or selected_evidence_ids != [
+        e["evidence_id"] for e in selected
+    ]:
+        raise PA5V8Error("selected evidence IDs do not match selected spans")
     if plan["stratum"] == "cross_document_comparison":
         if len(selected) != 2 or selection.get("relation") not in RELATIONS:
             raise PA5V8Error("comparison requires two spans and an allowed relation")
@@ -325,19 +446,23 @@ def render_and_verify_selection(plan: Mapping[str, Any], selection: Mapping[str,
         provider_object = {
             "status": "draft_candidate",
             "answer_text": "",
-            "claims": [{
-                "claim_id": evidence["evidence_id"],
-                "claim_text": evidence["span_text"],
-                "citation": {"locator_id": locator["locator_id"]},
-            }],
+            "claims": [
+                {
+                    "claim_id": evidence["evidence_id"],
+                    "claim_text": evidence["span_text"],
+                    "citation": {"locator_id": locator["locator_id"]},
+                }
+            ],
             "reason_codes": [],
         }
-        verified.append(verify_provider_output(
-            case=case,
-            passage_text=evidence["span_text"],
-            provider_text=json.dumps(provider_object, sort_keys=True),
-            policy=PA4_POLICY,
-        ))
+        verified.append(
+            verify_provider_output(
+                case=case,
+                passage_text=evidence["span_text"],
+                provider_text=json.dumps(provider_object, sort_keys=True),
+                policy=PA4_POLICY,
+            )
+        )
     return {
         "terminal_status": "verified_answer_ready_candidate",
         "question_id": plan["question_id"],
@@ -352,18 +477,33 @@ def non_live_full_population_gate(root: Path) -> dict[str, Any]:
     plans = compile_grounding_plans(root)
     for plan in plans:
         if plan["abstention_policy"]:
-            render_and_verify_selection(plan, {
-                "status": "abstain", "selected_span_ids": [], "selected_evidence_ids": [],
-                "relation": None, "abstention_reason": plan["abstention_policy"],
-            })
+            render_and_verify_selection(
+                plan,
+                {
+                    "status": "abstain",
+                    "selected_span_ids": [],
+                    "selected_evidence_ids": [],
+                    "relation": None,
+                    "abstention_reason": plan["abstention_policy"],
+                },
+            )
         else:
-            render_and_verify_selection(plan, {
-                "status": "select",
-                "selected_span_ids": [e["span_id"] for e in plan["candidate_evidence"]],
-                "selected_evidence_ids": [e["evidence_id"] for e in plan["candidate_evidence"]],
-                "relation": "contrasts_with" if plan["stratum"] == "cross_document_comparison" else None,
-                "abstention_reason": None,
-            })
+            render_and_verify_selection(
+                plan,
+                {
+                    "status": "select",
+                    "selected_span_ids": [e["span_id"] for e in plan["candidate_evidence"]],
+                    "selected_evidence_ids": [
+                        e["evidence_id"] for e in plan["candidate_evidence"]
+                    ],
+                    "relation": (
+                        "contrasts_with"
+                        if plan["stratum"] == "cross_document_comparison"
+                        else None
+                    ),
+                    "abstention_reason": None,
+                },
+            )
     return {
         "status": "m26_pa_5_v8_non_live_full_population_gate_passed",
         "population_count": 200,
@@ -378,13 +518,20 @@ def non_live_full_population_gate(root: Path) -> dict[str, Any]:
 
 def main() -> None:
     result = non_live_full_population_gate(Path("."))
-    print(json.dumps({
-        "status": result["status"],
-        "population_count": result["population_count"],
-        "population_sha256": result["population_sha256"],
-        "grounding_plan_manifest_sha256": result["grounding_plan_manifest"]["self_sha256"],
-        "calibration_sample_sha256": result["calibration_sample"]["self_sha256"],
-    }, sort_keys=True))
+    print(
+        json.dumps(
+            {
+                "status": result["status"],
+                "population_count": result["population_count"],
+                "population_sha256": result["population_sha256"],
+                "grounding_plan_manifest_sha256": result["grounding_plan_manifest"][
+                    "self_sha256"
+                ],
+                "calibration_sample_sha256": result["calibration_sample"]["self_sha256"],
+            },
+            sort_keys=True,
+        )
+    )
 
 
 if __name__ == "__main__":
