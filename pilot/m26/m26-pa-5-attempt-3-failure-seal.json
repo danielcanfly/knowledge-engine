@@ -1,0 +1,63 @@
+{
+  "authority_boundary": {
+    "authenticated_internal_shadow_execution_only": true,
+    "canonical_writes": 0,
+    "full_prompt_or_user_query_persisted": false,
+    "full_provider_response_persisted": false,
+    "production_answer_serving": false,
+    "production_pointer_mutations": 0,
+    "public_answers": false,
+    "public_traffic_operations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0,
+    "raw_text_persisted": false,
+    "secret_values_persisted": false,
+    "source_foundation_release_mutations": 0,
+    "vectors_persisted": false
+  },
+  "evidence": {
+    "artifact_archive_sha256": "1c9a22aab44cb7a4e690c80bde02152cbc9508b60aeedd7a74086e5799fe0b8d",
+    "artifact_name": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-3",
+    "failure_code": "M26-PA5-LIVE-UNEXPECTED",
+    "failure_message": "line 9 column 1 (char 156)",
+    "failure_receipt_name": "m26-pa-5-failure-receipt.json",
+    "failure_receipt_self_sha256": "dc10d8332929a4fe229594c477d6b5cd003c8ee733fae19c74749d11372f4a0d",
+    "owner_decision_self_sha256": "a2762fc9724f62b027d45cf93f6212ab662099ea5687ae127d0109d86793cf19"
+  },
+  "github_run": {
+    "event": "push",
+    "head_sha": "0ec390425e5eb1de1e43936b92bd9d4dcc442234",
+    "live_job_terminal_status": "failed_closed",
+    "repository": "danielcanfly/knowledge-engine",
+    "run_attempt": 1,
+    "run_id": "30426365447",
+    "trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-3]",
+    "workflow_conclusion": "success",
+    "workflow_name": "M26.PA.5 Controlled Internal Shadow Pilot"
+  },
+  "logical_attempt": 3,
+  "pa5_accepted": false,
+  "reclassification_as_accepted_authorized": false,
+  "recorded_at": "2026-07-29T05:56:00Z",
+  "replacement_or_deletion_authorized": false,
+  "rerun_authorized": false,
+  "root_cause": {
+    "bounded_repair_required": true,
+    "code": "provider_structured_output_json_parse_failure",
+    "raw_provider_response_persisted": false,
+    "sanitized_json_diagnostics_required": true,
+    "summary": "Attempt 3 reached the provider structured-output boundary and failed closed on an unwrapped JSON parsing error. No raw provider response text is retained; only line, column, character position, and digestable artifact identities are preserved."
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-attempt-3-failure-seal/v1",
+  "seal_id": "m26-pa5-live-attempt-3-immutable-failed-evidence",
+  "self_sha256": "34bdfc279519523f6aee9b10bb2698469728385cb4b46c27e5216439f03889c8",
+  "stage_id": "M26.PA.5",
+  "status": "immutable_failed_closed_evidence",
+  "supersession": {
+    "new_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-4]",
+    "preserves_attempt_3_as_failed_evidence": true,
+    "repair_issue": 1220,
+    "superseded_by_logical_attempt": 4,
+    "supersedes_only_structured_output_handling": true
+  }
+}

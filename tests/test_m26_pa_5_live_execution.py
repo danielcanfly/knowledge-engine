@@ -14,6 +14,8 @@ from knowledge_engine.m26_pa5_live_execution import (
     ATTEMPT_1_SEAL_SCHEMA_PATH,
     ATTEMPT_2_SEAL_PATH,
     ATTEMPT_2_SEAL_SCHEMA_PATH,
+    ATTEMPT_3_SEAL_PATH,
+    ATTEMPT_3_SEAL_SCHEMA_PATH,
     FAILURE_RECEIPT_SCHEMA_PATH,
     MAX_PROVIDER_CALLS,
     MAX_SPEND_USD,
@@ -98,6 +100,24 @@ def fake_provider(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def fake_provider_with_one_malformed_answer(payload: dict[str, Any]) -> dict[str, Any]:
+    if not hasattr(fake_provider_with_one_malformed_answer, "calls"):
+        fake_provider_with_one_malformed_answer.calls = 0  # type: ignore[attr-defined]
+    fake_provider_with_one_malformed_answer.calls += 1  # type: ignore[attr-defined]
+    result = fake_provider(payload)
+    message = json.loads(payload["messages"][0]["content"][0]["text"])
+    if (
+        fake_provider_with_one_malformed_answer.calls == 1  # type: ignore[attr-defined]
+        and message["role"] == "answer_generation"
+        and not message["repair_context"]
+    ):
+        result["text"] = '{"answer_status": "answered"\n"safe_terminal": true}'
+        result["response_id"] = "fake-malformed"
+    elif message["repair_context"]:
+        result["response_id"] = "fake-bounded-repair"
+    return result
+
+
 def test_pa5_owner_decision_static_contract() -> None:
     decision = load(ROOT / OWNER_DECISION_PATH)
     assert_schema(decision, OWNER_DECISION_SCHEMA_PATH)
@@ -108,11 +128,14 @@ def test_pa5_owner_decision_static_contract() -> None:
     attempt2_seal = load(ROOT / ATTEMPT_2_SEAL_PATH)
     assert_schema(attempt2_seal, ATTEMPT_2_SEAL_SCHEMA_PATH)
     assert_self_digest(attempt2_seal)
+    attempt3_seal = load(ROOT / ATTEMPT_3_SEAL_PATH)
+    assert_schema(attempt3_seal, ATTEMPT_3_SEAL_SCHEMA_PATH)
+    assert_self_digest(attempt3_seal)
     pricing = load(ROOT / PRICING_CONTRACT_PATH)
     assert_schema(pricing, PRICING_CONTRACT_SCHEMA_PATH)
     assert_self_digest(pricing)
     parsed = decision["parsed_parameters"]
-    assert parsed["live_wiring_issue"] == 1218
+    assert parsed["live_wiring_issue"] == 1220
     assert parsed["authority_package"]["package_sha256"] == (
         "3a36861501a1d247ae1fc90c4708e05d43a6e3591b134bce36614698f3232b95"
     )
@@ -138,8 +161,9 @@ def test_pa5_owner_decision_static_contract() -> None:
     assert validate_static(ROOT) == {
         "attempt_1_failure_seal_self_sha256": seal["self_sha256"],
         "attempt_2_failure_seal_self_sha256": attempt2_seal["self_sha256"],
+        "attempt_3_failure_seal_self_sha256": attempt3_seal["self_sha256"],
         "billing_mode": "token_plan_subscription_with_payg_equivalent_cost_accounting",
-        "logical_attempt": 3,
+        "logical_attempt": 4,
         "max_provider_calls": 600,
         "max_payg_equivalent_cost_usd": "15.00",
         "owner_decision_self_sha256": decision["self_sha256"],
@@ -193,6 +217,34 @@ def test_pa5_live_runner_emits_sanitized_success_receipt_with_fake_provider() ->
     assert "raw corpus" not in serialized.lower()
     assert "provider response" not in serialized.lower()
     assert "MINIMAX_API_KEY" not in serialized
+
+
+def test_pa5_live_runner_uses_one_sanitized_bounded_repair_for_json_parse() -> None:
+    if hasattr(fake_provider_with_one_malformed_answer, "calls"):
+        delattr(fake_provider_with_one_malformed_answer, "calls")
+    receipt = run_pilot(
+        root=ROOT,
+        provider_call=fake_provider_with_one_malformed_answer,
+        generated_at="2026-07-29T02:30:00Z",
+        workflow={
+            "repository": "danielcanfly/knowledge-engine",
+            "workflow_name": "M26.PA.5 Controlled Internal Shadow Pilot",
+            "run_id": "test",
+            "run_attempt": "1",
+            "head_sha": "a" * 40,
+            "trigger_marker": TRIGGER_MARKER,
+        },
+    )
+    first = receipt["per_question_evidence"][0]
+    assert first["repair_attempts_used"] == 1
+    assert [item["call_class"] for item in first["provider_call_receipts"]] == [
+        "answer_generation",
+        "bounded_repair",
+        "independent_blind_review",
+    ]
+    serialized = json.dumps(receipt, sort_keys=True)
+    assert '{"answer_status": "answered"\n"safe_terminal": true}' not in serialized
+    assert "malformed_response_digest" not in serialized
 
 
 def test_pa5_cost_accounting_uses_usage_not_provider_cost_field() -> None:
@@ -347,7 +399,7 @@ def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
     assert "MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}" in workflow
     assert "python -m knowledge_engine.m26_pa5_live_execution --execute" in workflow
     assert "actions/upload-artifact@v4" in workflow
-    assert "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-3" in workflow
+    assert "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-4" in workflow
 
     arch = ARCH_WORKFLOW.read_text(encoding="utf-8")
     assert "src/knowledge_engine/m26_pa5_live_execution.py" in arch
@@ -355,6 +407,7 @@ def test_pa5_workflow_separates_pr_static_ci_from_future_live_trigger() -> None:
     pa4 = PA4_WORKFLOW.read_text(encoding="utf-8")
     assert "pilot/m26/m26-pa-5-attempt-1-failure-seal.json" in pa4
     assert "pilot/m26/m26-pa-5-attempt-2-failure-seal.json" in pa4
+    assert "pilot/m26/m26-pa-5-attempt-3-failure-seal.json" in pa4
     assert "pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json" in pa4
     assert "schemas/m26-pa-5-success-receipt-v1.schema.json" in pa4
     assert "tests/test_m26_pa_5_live_execution.py" in pa4
