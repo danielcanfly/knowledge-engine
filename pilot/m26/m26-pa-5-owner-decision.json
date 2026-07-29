@@ -1,6 +1,6 @@
 {
-  "decision_id": "m26-pa5-owner-gate-values-live-wiring-v1",
-  "exact_instruction_text_sha256": "26155f1e8159e486e24cc887afbf1215bb09b3d9405c62d7aff90abbe3d80d57",
+  "decision_id": "m26-pa5-owner-gate-values-live-execution-attempt-2",
+  "exact_instruction_text_sha256": "3810e7d9130a0de210a9b52d67758d1e433a21b71e19f5f9e7e05be0312ff7b8",
   "owner": "Daniel Huang",
   "parsed_parameters": {
     "adjudicator": {
@@ -27,14 +27,28 @@
       "source_foundation_release_mutation": false,
       "vector_persistence": false
     },
+    "billing": {
+      "billing_mode": "token_plan_subscription_with_payg_equivalent_cost_accounting",
+      "cache_creation_tokens_required": 0,
+      "cache_read_tokens_required": 0,
+      "fabricated_or_mocked_provider_cost_usd_forbidden": true,
+      "missing_provider_monetary_cost_field_is_error": false,
+      "payg_equivalent_cost_accounting_required": true,
+      "pricing_contract_identity": "minimax-m3-le-512k-payg-equivalent-2026-07-29",
+      "pricing_contract_path": "pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json",
+      "provider_reported_monetary_cost_available": false,
+      "provider_reported_monetary_cost_usd": null,
+      "provider_reported_usage_required": true
+    },
     "budgets": {
       "answer_generation_call_cap": 200,
       "bounded_repair_call_cap": 200,
-      "formula_generated_cost_evidence_forbidden": true,
       "independent_model_review_call_cap": 200,
       "maximum_provider_calls": 600,
-      "maximum_total_observed_spend_usd": 15.0,
-      "stop_before_call_that_could_exceed_spend_cap": true
+      "maximum_total_payg_equivalent_cost_usd": "15.00",
+      "payg_equivalent_cost_thresholds_apply": true,
+      "provider_monetary_cost_thresholds_apply": false,
+      "stop_when_payg_equivalent_cost_cap_reached_or_exceeded": true
     },
     "execution_window": {
       "authorization_expires_hours_after_exact_head_approval": 24,
@@ -46,7 +60,7 @@
     },
     "frozen_population_count": 200,
     "frozen_population_sha256": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580",
-    "future_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-1]",
+    "future_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-2]",
     "incident_stop_conditions": [
       "secret_or_credential_leakage",
       "raw_corpus_text_persistence",
@@ -75,10 +89,19 @@
       "repository_branch_or_executable_head_drift_after_authorization"
     ],
     "latest_accepted_pa4_main_sha": "3fcc4e5520db6d3cac7ce18004753c2549592afa",
-    "live_wiring_issue": 1214,
-    "logical_attempt": 1,
+    "live_wiring_issue": 1216,
+    "logical_attempt": 2,
     "pa4_acceptance_self_sha256": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7",
     "pa4_status": "m26_pa_4_verified_answer_citation_gate_accepted",
+    "pa5_attempt_1_failure": {
+      "attempt_1_failure_seal_path": "pilot/m26/m26-pa-5-attempt-1-failure-seal.json",
+      "failure_receipt_self_sha256": "feb7129f54a9f3ba56b674daf10ad3e3ed8c53ef6622d0b865eeef07b42ea608",
+      "immutable_failed_evidence": true,
+      "rerun_authorized": false,
+      "run_attempt": 1,
+      "run_id": "30418193049",
+      "trigger_merge_sha": "d617ca7b0e4130a655ea46dec6c7e8d7718a7843"
+    },
     "pa5_gate_population_merge_sha": "e2bff8fbf14278c70623d7c82c36012a3a9cf831",
     "population_strata": {
       "abstention_no_answer": 15,
@@ -142,11 +165,14 @@
         "unsupported_accepted_claim_count_max": 0
       },
       "cost": {
-        "formula_generated_or_fabricated_cost_evidence_max": 0,
-        "mean_end_to_end_cost_usd_per_question_max": 0.05,
-        "missing_cost_or_provider_usage_records_max": 0,
-        "p95_end_to_end_cost_usd_per_question_max": 0.1,
-        "total_observed_pilot_spend_usd_max": 15.0
+        "fabricated_provider_monetary_cost_fields_max": 0,
+        "invalid_or_negative_token_count_max": 0,
+        "mean_end_to_end_payg_equivalent_cost_usd_per_question_max": "0.05",
+        "missing_pricing_contract_identity_max": 0,
+        "missing_provider_usage_records_max": 0,
+        "p95_end_to_end_payg_equivalent_cost_usd_per_question_max": "0.10",
+        "total_payg_equivalent_cost_usd_max": "15.00",
+        "unknown_billing_mode_max": 0
       },
       "disagreement": {
         "human_adjudication_coverage_of_blocking_disputes": 1.0,
@@ -175,8 +201,8 @@
       }
     }
   },
-  "recorded_at": "2026-07-29T02:15:00Z",
+  "recorded_at": "2026-07-29T06:30:00Z",
   "schema_version": "knowledge-engine-m26-pa-5-owner-decision/v1",
-  "self_sha256": "b57fc96cf841033807061ce222dd7f6de14bb9b6b9d4a1a1eb8519798d914f65",
+  "self_sha256": "9f13dcd8472eca7f848ef20ad3db703b5770f0c21b84679f16b6d1c5f8e88b64",
   "stage_id": "M26.PA.5"
 }

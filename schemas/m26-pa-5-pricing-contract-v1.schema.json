@@ -1,0 +1,107 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-pricing-contract-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "billing_mode": {
+      "const": "token_plan_subscription_with_payg_equivalent_cost_accounting"
+    },
+    "context_window_class": { "const": "le_512k" },
+    "currency": { "const": "USD" },
+    "drift_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "context_greater_than_512k_fail_closed": { "const": true },
+        "missing_provider_monetary_cost_field_fail_closed": { "const": false },
+        "missing_provider_usage_fail_closed": { "const": true },
+        "model_identity_drift_fail_closed": { "const": true },
+        "pricing_contract_drift_fail_closed": { "const": true }
+      },
+      "required": [
+        "context_greater_than_512k_fail_closed",
+        "model_identity_drift_fail_closed",
+        "pricing_contract_drift_fail_closed",
+        "missing_provider_usage_fail_closed",
+        "missing_provider_monetary_cost_field_fail_closed"
+      ],
+      "type": "object"
+    },
+    "effective_date": { "const": "2026-07-29" },
+    "formula": {
+      "additionalProperties": false,
+      "properties": {
+        "decimal_arithmetic_required": { "const": true },
+        "float_arithmetic_allowed": { "const": false },
+        "operands_from_provider_usage_required": { "const": true },
+        "payg_equivalent_cost_usd": {
+          "const": "input_tokens * 0.30 / 1000000 + output_tokens * 1.20 / 1000000"
+        }
+      },
+      "required": [
+        "payg_equivalent_cost_usd",
+        "operands_from_provider_usage_required",
+        "decimal_arithmetic_required",
+        "float_arithmetic_allowed"
+      ],
+      "type": "object"
+    },
+    "model": { "const": "MiniMax-M3" },
+    "pricing_contract_identity": {
+      "const": "minimax-m3-le-512k-payg-equivalent-2026-07-29"
+    },
+    "pricing_source_identity": {
+      "const": "daniel-owner-decision-pa5-attempt-2-fixed-pricing-contract"
+    },
+    "prompt_caching": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_creation_input_tokens_required": { "const": 0 },
+        "cache_read_input_tokens_required": { "const": 0 },
+        "enabled": { "const": false },
+        "nonzero_cache_usage_fail_closed": { "const": true }
+      },
+      "required": [
+        "enabled",
+        "cache_creation_input_tokens_required",
+        "cache_read_input_tokens_required",
+        "nonzero_cache_usage_fail_closed"
+      ],
+      "type": "object"
+    },
+    "provider": { "const": "MiniMax" },
+    "rates_per_1m_tokens": {
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": { "const": "0.30" },
+        "output_tokens": { "const": "1.20" },
+        "prompt_cache_read_tokens": { "const": "0.06" }
+      },
+      "required": ["input_tokens", "output_tokens", "prompt_cache_read_tokens"],
+      "type": "object"
+    },
+    "retrieved_at": { "const": "2026-07-29T06:30:00Z" },
+    "schema_version": { "const": "knowledge-engine-m26-pa-5-pricing-contract/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.5" }
+  },
+  "required": [
+    "schema_version",
+    "stage_id",
+    "pricing_contract_identity",
+    "provider",
+    "model",
+    "context_window_class",
+    "retrieved_at",
+    "effective_date",
+    "pricing_source_identity",
+    "billing_mode",
+    "currency",
+    "rates_per_1m_tokens",
+    "prompt_caching",
+    "formula",
+    "drift_policy",
+    "self_sha256"
+  ],
+  "title": "M26.PA.5 MiniMax-M3 pricing contract",
+  "type": "object"
+}

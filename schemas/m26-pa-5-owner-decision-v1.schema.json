@@ -3,22 +3,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "decision_id": { "const": "m26-pa5-owner-gate-values-live-wiring-v1" },
+    "decision_id": { "const": "m26-pa5-owner-gate-values-live-execution-attempt-2" },
     "exact_instruction_text_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
     "owner": { "const": "Daniel Huang" },
     "parsed_parameters": {
       "additionalProperties": false,
       "properties": {
-        "adjudicator": {
-          "additionalProperties": false,
-          "properties": {
-            "adjudicator_id": { "const": "daniel-huang" },
-            "blocking_disputes_require_adjudication": { "const": true },
-            "principal": { "const": "Daniel Huang" }
-          },
-          "required": ["principal", "adjudicator_id", "blocking_disputes_require_adjudication"],
-          "type": "object"
-        },
+        "adjudicator": { "type": "object" },
         "authority_boundary": {
           "additionalProperties": false,
           "properties": {
@@ -61,54 +52,73 @@
           ],
           "type": "object"
         },
+        "billing": {
+          "additionalProperties": false,
+          "properties": {
+            "billing_mode": {
+              "const": "token_plan_subscription_with_payg_equivalent_cost_accounting"
+            },
+            "cache_creation_tokens_required": { "const": 0 },
+            "cache_read_tokens_required": { "const": 0 },
+            "fabricated_or_mocked_provider_cost_usd_forbidden": { "const": true },
+            "missing_provider_monetary_cost_field_is_error": { "const": false },
+            "payg_equivalent_cost_accounting_required": { "const": true },
+            "pricing_contract_identity": {
+              "const": "minimax-m3-le-512k-payg-equivalent-2026-07-29"
+            },
+            "pricing_contract_path": {
+              "const": "pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json"
+            },
+            "provider_reported_monetary_cost_available": { "const": false },
+            "provider_reported_monetary_cost_usd": { "type": "null" },
+            "provider_reported_usage_required": { "const": true }
+          },
+          "required": [
+            "billing_mode",
+            "provider_reported_usage_required",
+            "provider_reported_monetary_cost_available",
+            "provider_reported_monetary_cost_usd",
+            "payg_equivalent_cost_accounting_required",
+            "pricing_contract_path",
+            "pricing_contract_identity",
+            "missing_provider_monetary_cost_field_is_error",
+            "fabricated_or_mocked_provider_cost_usd_forbidden",
+            "cache_creation_tokens_required",
+            "cache_read_tokens_required"
+          ],
+          "type": "object"
+        },
         "budgets": {
           "additionalProperties": false,
           "properties": {
             "answer_generation_call_cap": { "const": 200 },
             "bounded_repair_call_cap": { "const": 200 },
-            "formula_generated_cost_evidence_forbidden": { "const": true },
             "independent_model_review_call_cap": { "const": 200 },
             "maximum_provider_calls": { "const": 600 },
-            "maximum_total_observed_spend_usd": { "const": 15.0 },
-            "stop_before_call_that_could_exceed_spend_cap": { "const": true }
+            "maximum_total_payg_equivalent_cost_usd": { "const": "15.00" },
+            "payg_equivalent_cost_thresholds_apply": { "const": true },
+            "provider_monetary_cost_thresholds_apply": { "const": false },
+            "stop_when_payg_equivalent_cost_cap_reached_or_exceeded": { "const": true }
           },
           "required": [
             "maximum_provider_calls",
-            "maximum_total_observed_spend_usd",
+            "maximum_total_payg_equivalent_cost_usd",
             "answer_generation_call_cap",
             "independent_model_review_call_cap",
             "bounded_repair_call_cap",
-            "stop_before_call_that_could_exceed_spend_cap",
-            "formula_generated_cost_evidence_forbidden"
+            "payg_equivalent_cost_thresholds_apply",
+            "provider_monetary_cost_thresholds_apply",
+            "stop_when_payg_equivalent_cost_cap_reached_or_exceeded"
           ],
           "type": "object"
         },
-        "execution_window": {
-          "additionalProperties": false,
-          "properties": {
-            "authorization_expires_hours_after_exact_head_approval": { "const": 24 },
-            "begin_within_minutes_after_authorization_merge": { "const": 60 },
-            "live_execution_requires_separate_exact_head_authorization": { "const": true },
-            "maximum_wall_clock_hours": { "const": 8 },
-            "one_bounded_logical_attempt": { "const": true },
-            "rerun_same_identity_authorized": { "const": false }
-          },
-          "required": [
-            "one_bounded_logical_attempt",
-            "live_execution_requires_separate_exact_head_authorization",
-            "begin_within_minutes_after_authorization_merge",
-            "authorization_expires_hours_after_exact_head_approval",
-            "maximum_wall_clock_hours",
-            "rerun_same_identity_authorized"
-          ],
-          "type": "object"
-        },
+        "execution_window": { "type": "object" },
         "frozen_population_count": { "const": 200 },
         "frozen_population_sha256": {
           "const": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580"
         },
         "future_trigger_marker": {
-          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-1]"
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-2]"
         },
         "incident_stop_conditions": {
           "items": { "type": "string", "minLength": 1 },
@@ -119,12 +129,40 @@
         "latest_accepted_pa4_main_sha": {
           "const": "3fcc4e5520db6d3cac7ce18004753c2549592afa"
         },
-        "live_wiring_issue": { "const": 1214 },
-        "logical_attempt": { "const": 1 },
+        "live_wiring_issue": { "const": 1216 },
+        "logical_attempt": { "const": 2 },
         "pa4_acceptance_self_sha256": {
           "const": "0581fc85a34b106c3dce5ec9c27adc3c215a87008f30384da7f574bfcbf13ac7"
         },
         "pa4_status": { "const": "m26_pa_4_verified_answer_citation_gate_accepted" },
+        "pa5_attempt_1_failure": {
+          "additionalProperties": false,
+          "properties": {
+            "attempt_1_failure_seal_path": {
+              "const": "pilot/m26/m26-pa-5-attempt-1-failure-seal.json"
+            },
+            "failure_receipt_self_sha256": {
+              "const": "feb7129f54a9f3ba56b674daf10ad3e3ed8c53ef6622d0b865eeef07b42ea608"
+            },
+            "immutable_failed_evidence": { "const": true },
+            "rerun_authorized": { "const": false },
+            "run_attempt": { "const": 1 },
+            "run_id": { "const": "30418193049" },
+            "trigger_merge_sha": {
+              "const": "d617ca7b0e4130a655ea46dec6c7e8d7718a7843"
+            }
+          },
+          "required": [
+            "attempt_1_failure_seal_path",
+            "run_id",
+            "run_attempt",
+            "trigger_merge_sha",
+            "failure_receipt_self_sha256",
+            "immutable_failed_evidence",
+            "rerun_authorized"
+          ],
+          "type": "object"
+        },
         "pa5_gate_population_merge_sha": {
           "const": "e2bff8fbf14278c70623d7c82c36012a3a9cf831"
         },
@@ -150,30 +188,7 @@
           ],
           "type": "object"
         },
-        "provider": {
-          "additionalProperties": false,
-          "properties": {
-            "credential_environment": { "const": "m23-r3-diagnostic" },
-            "credential_name": { "const": "MINIMAX_API_KEY" },
-            "maximum_bounded_repair_attempts_per_question": { "const": 1 },
-            "model": { "const": "MiniMax-M3" },
-            "provider": { "const": "MiniMax" },
-            "provider_id": { "const": "minimax" },
-            "streaming": { "const": false },
-            "unbounded_retry_forbidden": { "const": true }
-          },
-          "required": [
-            "provider",
-            "provider_id",
-            "model",
-            "credential_name",
-            "credential_environment",
-            "streaming",
-            "unbounded_retry_forbidden",
-            "maximum_bounded_repair_attempts_per_question"
-          ],
-          "type": "object"
-        },
+        "provider": { "type": "object" },
         "review_rules": { "type": "object" },
         "reviewer_principals": {
           "items": {
@@ -191,19 +206,7 @@
           "minItems": 3,
           "type": "array"
         },
-        "thresholds": {
-          "additionalProperties": false,
-          "properties": {
-            "abstention": { "type": "object" },
-            "citation": { "type": "object" },
-            "cost": { "type": "object" },
-            "disagreement": { "type": "object" },
-            "latency": { "type": "object" },
-            "quality": { "type": "object" }
-          },
-          "required": ["quality", "citation", "abstention", "latency", "cost", "disagreement"],
-          "type": "object"
-        }
+        "thresholds": { "type": "object" }
       },
       "required": [
         "live_wiring_issue",
@@ -211,6 +214,7 @@
         "pa4_status",
         "pa4_acceptance_self_sha256",
         "pa5_gate_population_merge_sha",
+        "pa5_attempt_1_failure",
         "frozen_population_count",
         "frozen_population_sha256",
         "population_strata",
@@ -221,6 +225,7 @@
         "adjudicator",
         "execution_window",
         "provider",
+        "billing",
         "budgets",
         "thresholds",
         "incident_stop_conditions",
@@ -228,7 +233,7 @@
       ],
       "type": "object"
     },
-    "recorded_at": { "const": "2026-07-29T02:15:00Z" },
+    "recorded_at": { "const": "2026-07-29T06:30:00Z" },
     "schema_version": { "const": "knowledge-engine-m26-pa-5-owner-decision/v1" },
     "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
     "stage_id": { "const": "M26.PA.5" }

@@ -1,0 +1,63 @@
+{
+  "authority_boundary": {
+    "authenticated_internal_shadow_execution_only": true,
+    "canonical_writes": 0,
+    "full_prompt_or_user_query_persisted": false,
+    "full_provider_response_persisted": false,
+    "production_answer_serving": false,
+    "production_pointer_mutations": 0,
+    "public_answers": false,
+    "public_traffic_operations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0,
+    "raw_text_persisted": false,
+    "secret_values_persisted": false,
+    "source_foundation_release_mutations": 0,
+    "vectors_persisted": false
+  },
+  "evidence": {
+    "artifact_archive_sha256": "27609532a3e706e25cc8ece8562696ad2d042edd94077d69c4d628f11febc499",
+    "artifact_name": "m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-1",
+    "failure_code": "M26-PA5-LIVE-017",
+    "failure_message": "provider cost receipt missing",
+    "failure_receipt_name": "m26-pa-5-failure-receipt.json",
+    "failure_receipt_self_sha256": "feb7129f54a9f3ba56b674daf10ad3e3ed8c53ef6622d0b865eeef07b42ea608",
+    "owner_decision_self_sha256": "b57fc96cf841033807061ce222dd7f6de14bb9b6b9d4a1a1eb8519798d914f65"
+  },
+  "github_run": {
+    "event": "push",
+    "head_sha": "d617ca7b0e4130a655ea46dec6c7e8d7718a7843",
+    "live_job_terminal_status": "failed_closed",
+    "repository": "danielcanfly/knowledge-engine",
+    "run_attempt": 1,
+    "run_id": "30418193049",
+    "trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-1]",
+    "workflow_conclusion": "success",
+    "workflow_name": "M26.PA.5 Controlled Internal Shadow Pilot"
+  },
+  "logical_attempt": 1,
+  "pa5_accepted": false,
+  "reclassification_as_accepted_authorized": false,
+  "recorded_at": "2026-07-29T06:30:00Z",
+  "replacement_or_deletion_authorized": false,
+  "rerun_authorized": false,
+  "root_cause": {
+    "code": "provider_monetary_cost_field_not_part_of_supported_response_contract",
+    "fabricate_or_mock_cost_usd_authorized": false,
+    "provider_monetary_cost_contract_guaranteed": false,
+    "provider_usage_contract_valid": true,
+    "summary": "Attempt 1 incorrectly required top-level cost_usd or billing.cost_usd from MiniMax responses. MiniMax-M3 provides usage metadata for this execution contract but does not guarantee per-call monetary cost fields."
+  },
+  "schema_version": "knowledge-engine-m26-pa-5-attempt-1-failure-seal/v1",
+  "seal_id": "m26-pa5-live-attempt-1-immutable-failed-evidence",
+  "self_sha256": "855c42a2f32a0b7b2ab38a9ab7277e97710e882ebb1c4c79e9d979f58711af50",
+  "stage_id": "M26.PA.5",
+  "status": "immutable_failed_closed_evidence",
+  "supersession": {
+    "new_trigger_marker": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-2]",
+    "preserves_attempt_1_as_failed_evidence": true,
+    "repair_issue": 1216,
+    "superseded_by_logical_attempt": 2,
+    "supersedes_only_execution_wiring": true
+  }
+}
