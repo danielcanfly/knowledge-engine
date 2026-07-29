@@ -7,32 +7,37 @@
     "missing_provider_monetary_cost_field_fail_closed": false,
     "missing_provider_usage_fail_closed": true,
     "model_identity_drift_fail_closed": true,
-    "pricing_contract_drift_fail_closed": true
+    "negative_or_inconsistent_token_counts_fail_closed": true,
+    "pricing_contract_drift_fail_closed": true,
+    "unexpected_explicit_cache_control_fail_closed": true
   },
   "effective_date": "2026-07-29",
   "formula": {
     "decimal_arithmetic_required": true,
     "float_arithmetic_allowed": false,
     "operands_from_provider_usage_required": true,
-    "payg_equivalent_cost_usd": "input_tokens * 0.30 / 1000000 + output_tokens * 1.20 / 1000000"
+    "payg_equivalent_cost_usd": "input_tokens * 0.30 / 1000000 + cache_creation_input_tokens * 0.375 / 1000000 + cache_read_input_tokens * 0.06 / 1000000 + output_tokens * 1.20 / 1000000"
   },
   "model": "MiniMax-M3",
-  "pricing_contract_identity": "minimax-m3-le-512k-payg-equivalent-2026-07-29",
-  "pricing_source_identity": "daniel-owner-decision-pa5-attempt-2-fixed-pricing-contract",
+  "package_sha256": "3a36861501a1d247ae1fc90c4708e05d43a6e3591b134bce36614698f3232b95",
+  "pricing_contract_identity": "minimax-m3-le-512k-cache-aware-payg-equivalent-2026-07-29",
+  "pricing_source_identity": "LLM_Wiki_M26_PA5_Autonomous_Completion_to_PA6_Readiness_Codex_Handoff_v6",
   "prompt_caching": {
-    "cache_creation_input_tokens_required": 0,
-    "cache_read_input_tokens_required": 0,
-    "enabled": false,
-    "nonzero_cache_usage_fail_closed": true
+    "automatic_passive_cache_usage_allowed": true,
+    "cache_usage_must_be_costed": true,
+    "explicit_cache_control_allowed": false,
+    "missing_optional_zero_cache_fields_may_normalize_to_zero": true,
+    "nonzero_cache_usage_fail_closed": false
   },
   "provider": "MiniMax",
   "rates_per_1m_tokens": {
+    "cache_creation_input_tokens": "0.375",
+    "cache_read_input_tokens": "0.06",
     "input_tokens": "0.30",
-    "output_tokens": "1.20",
-    "prompt_cache_read_tokens": "0.06"
+    "output_tokens": "1.20"
   },
-  "retrieved_at": "2026-07-29T06:30:00Z",
+  "retrieved_at": "2026-07-29T05:31:00Z",
   "schema_version": "knowledge-engine-m26-pa-5-pricing-contract/v1",
-  "self_sha256": "506176c9594a44ef9a15995529f07d9fd7ff259262f5a3e1875943e11fee0b1f",
+  "self_sha256": "f23d20c6752c51ebaf5a3a91166a8cf9ab34c37130982887df0d75c52e789571",
   "stage_id": "M26.PA.5"
 }

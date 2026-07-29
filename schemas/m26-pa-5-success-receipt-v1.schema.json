@@ -8,8 +8,12 @@
     "human_review_packet": {
       "additionalProperties": false,
       "properties": {
+        "automated_review_not_misrepresented_as_human": { "const": true },
+        "autonomous_review_amendment_applied": { "const": true },
         "disagreement_question_ids": { "items": { "type": "string" }, "type": "array" },
+        "human_review_completed": { "const": false },
         "human_review_records_supplied": { "const": false },
+        "packet_type": { "const": "owner_oversight_nonblocking_audit" },
         "required_question_ids": { "items": { "type": "string" }, "minItems": 20, "type": "array" },
         "stratified_sample_question_ids": { "items": { "type": "string" }, "minItems": 20, "type": "array" }
       },
@@ -17,7 +21,11 @@
         "required_question_ids",
         "stratified_sample_question_ids",
         "disagreement_question_ids",
-        "human_review_records_supplied"
+        "human_review_records_supplied",
+        "human_review_completed",
+        "autonomous_review_amendment_applied",
+        "automated_review_not_misrepresented_as_human",
+        "packet_type"
       ],
       "type": "object"
     },
@@ -25,11 +33,12 @@
       "additionalProperties": false,
       "properties": {
         "attempt_1_failure_seal_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
-        "logical_attempt": { "const": 2 },
+        "attempt_2_failure_seal_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "logical_attempt": { "const": 3 },
         "owner_decision_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
         "pricing_contract_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
         "trigger_marker": {
-          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-2]"
+          "const": "[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-3]"
         }
       },
       "required": [
@@ -37,6 +46,7 @@
         "logical_attempt",
         "trigger_marker",
         "attempt_1_failure_seal_self_sha256",
+        "attempt_2_failure_seal_self_sha256",
         "pricing_contract_self_sha256"
       ],
       "type": "object"
@@ -45,12 +55,14 @@
       "items": {
         "additionalProperties": false,
         "properties": {
-          "adjudication_status": { "type": "string" },
+          "adjudication_status": { "const": "autonomous_owner_policy_resolved" },
           "answer_digest": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
           "answer_status": { "type": "string" },
           "evidence_identity_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
-          "human_review_required": { "type": "boolean" },
+          "human_review_required": { "const": false },
           "latency_ms": { "minimum": 0, "type": "integer" },
+          "owner_oversight_packet_required": { "type": "boolean" },
+          "owner_policy_result": { "type": "object" },
           "payg_equivalent_cost_usd": {
             "pattern": "^\\d+\\.\\d{8}$",
             "type": "string"
@@ -70,13 +82,13 @@
                   "type": "string"
                 },
                 "latency_ms": { "minimum": 0, "type": "integer" },
-                "logical_attempt": { "const": 2 },
+                "logical_attempt": { "const": 3 },
                 "payg_equivalent_cost_usd": {
                   "pattern": "^\\d+\\.\\d{8}$",
                   "type": "string"
                 },
                 "pricing_contract_identity": {
-                  "const": "minimax-m3-le-512k-payg-equivalent-2026-07-29"
+                  "const": "minimax-m3-le-512k-cache-aware-payg-equivalent-2026-07-29"
                 },
                 "pricing_contract_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
                 "provider_reported_monetary_cost_available": { "const": false },
@@ -84,8 +96,8 @@
                 "provider_reported_usage": {
                   "additionalProperties": false,
                   "properties": {
-                    "cache_creation_input_tokens": { "const": 0 },
-                    "cache_read_input_tokens": { "const": 0 },
+                    "cache_creation_input_tokens": { "minimum": 0, "type": "integer" },
+                    "cache_read_input_tokens": { "minimum": 0, "type": "integer" },
                     "input_tokens": { "minimum": 0, "type": "integer" },
                     "output_tokens": { "minimum": 0, "type": "integer" },
                     "total_accounted_tokens": { "minimum": 0, "type": "integer" }
@@ -139,7 +151,7 @@
           "reason_codes": { "items": { "type": "string" }, "type": "array" },
           "repair_attempts_used": { "maximum": 1, "minimum": 0, "type": "integer" },
           "review_request_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
-          "reviewer_decisions": { "items": { "type": "object" }, "minItems": 2, "type": "array" },
+          "reviewer_decisions": { "items": { "type": "object" }, "minItems": 3, "type": "array" },
           "safe_terminal": { "type": "boolean" },
           "stratum": { "type": "string" },
           "usage": { "type": "object" }
@@ -159,8 +171,10 @@
           "provider_call_receipts",
           "reason_codes",
           "repair_attempts_used",
+          "owner_policy_result",
           "reviewer_decisions",
           "human_review_required",
+          "owner_oversight_packet_required",
           "adjudication_status"
         ],
         "type": "object"
