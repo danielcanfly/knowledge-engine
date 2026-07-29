@@ -1,102 +1,31 @@
-name: M26.PA.5 Controlled Internal Shadow Pilot
+name: M26.PA.5 v8 PA.4-Kernel Orchestrated Pilot
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/m26-1-architecture-authority.yml'
-      - '.github/workflows/m26-pa-4-verified-answer-citation-gate.yml'
       - '.github/workflows/m26-pa-5-controlled-internal-pilot.yml'
-      - 'docs/architecture/m26/m26-pa-5-controlled-internal-pilot.md'
-      - 'pilot/m26/m26-pa-5-entry-gate.json'
-      - 'pilot/m26/m26-pa-5-attempt-1-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-2-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-3-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-4-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-5-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-6-live-trigger.json'
-      - 'pilot/m26/m26-pa-5-attempt-6-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-7-live-trigger.json'
-      - 'pilot/m26/m26-pa-5-attempt-7-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-8-live-trigger.json'
-      - 'pilot/m26/m26-pa-5-frozen-population.json'
-      - 'pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json'
-      - 'pilot/m26/m26-pa-5-owner-decision.json'
-      - 'pilot/m26/m26-pa-5-population-manifest.json'
-      - 'pilot/m26/m26-pa-5-reviewer-contract-v2.json'
-      - 'pilot/m26/m26-pa-5-threshold-semantics-v2.json'
-      - 'pilot/m26/m26-pa-5-v6-exhaustion-record.json'
-      - 'schemas/m26-pa-5-attempt-1-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-2-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-3-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-4-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-5-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-6-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-7-live-trigger-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-7-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-8-live-trigger-v1.schema.json'
-      - 'schemas/m26-pa-5-live-trigger-v1.schema.json'
-      - 'schemas/m26-pa-5-entry-gate-v1.schema.json'
-      - 'schemas/m26-pa-5-failure-receipt-v1.schema.json'
-      - 'schemas/m26-pa-5-frozen-population-v1.schema.json'
-      - 'schemas/m26-pa-5-owner-decision-v1.schema.json'
-      - 'schemas/m26-pa-5-population-manifest-v1.schema.json'
-      - 'schemas/m26-pa-5-pricing-contract-v1.schema.json'
-      - 'schemas/m26-pa-5-pilot-receipt-v1.schema.json'
-      - 'schemas/m26-pa-5-reviewer-contract-v2-v1.schema.json'
-      - 'schemas/m26-pa-5-success-receipt-v1.schema.json'
-      - 'schemas/m26-pa-5-threshold-semantics-v2-v1.schema.json'
-      - 'schemas/m26-pa-5-v6-exhaustion-record-v1.schema.json'
-      - 'src/knowledge_engine/m26_pa5_controlled_internal_pilot.py'
-      - 'src/knowledge_engine/m26_pa5_live_execution.py'
-      - 'src/knowledge_engine/m26_pa5_population_freeze.py'
-      - 'tests/test_m26_pa_5_controlled_internal_pilot.py'
-      - 'tests/test_m26_pa_5_live_execution.py'
-      - 'tests/test_m26_pa_5_population_freeze.py'
+      - 'pilot/m26/m26-pa-5-v8-*.json'
+      - 'src/knowledge_engine/m26_pa5_v8_*.py'
+      - 'src/knowledge_engine/m26_verified_answer_citation_gate.py'
+      - 'tests/test_m26_pa5_v8_*.py'
+      - 'tests/test_m26_pa_4_*.py'
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - '.github/workflows/m26-pa-5-controlled-internal-pilot.yml'
-      - 'pilot/m26/m26-pa-5-attempt-1-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-2-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-3-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-4-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-5-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-6-live-trigger.json'
-      - 'pilot/m26/m26-pa-5-attempt-6-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-7-live-trigger.json'
-      - 'pilot/m26/m26-pa-5-attempt-7-failure-seal.json'
-      - 'pilot/m26/m26-pa-5-attempt-8-live-trigger.json'
-      - 'pilot/m26/m26-pa-5-minimax-m3-pricing-contract.json'
-      - 'pilot/m26/m26-pa-5-owner-decision.json'
-      - 'pilot/m26/m26-pa-5-reviewer-contract-v2.json'
-      - 'pilot/m26/m26-pa-5-threshold-semantics-v2.json'
-      - 'pilot/m26/m26-pa-5-v6-exhaustion-record.json'
-      - 'schemas/m26-pa-5-attempt-1-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-2-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-3-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-4-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-5-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-6-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-7-live-trigger-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-7-failure-seal-v1.schema.json'
-      - 'schemas/m26-pa-5-attempt-8-live-trigger-v1.schema.json'
-      - 'schemas/m26-pa-5-failure-receipt-v1.schema.json'
-      - 'schemas/m26-pa-5-live-trigger-v1.schema.json'
-      - 'schemas/m26-pa-5-owner-decision-v1.schema.json'
-      - 'schemas/m26-pa-5-pricing-contract-v1.schema.json'
-      - 'schemas/m26-pa-5-reviewer-contract-v2-v1.schema.json'
-      - 'schemas/m26-pa-5-success-receipt-v1.schema.json'
-      - 'schemas/m26-pa-5-threshold-semantics-v2-v1.schema.json'
-      - 'schemas/m26-pa-5-v6-exhaustion-record-v1.schema.json'
-      - 'src/knowledge_engine/m26_pa5_live_execution.py'
-      - 'tests/test_m26_pa_5_live_execution.py'
+      - 'pilot/m26/m26-pa-5-v8-*.json'
+      - 'src/knowledge_engine/m26_pa5_v8_*.py'
+      - 'tests/test_m26_pa5_v8_*.py'
 
 permissions:
   contents: read
 
+env:
+  PA5_V8_PACKAGE_SHA256: f637b90fd1249217005ff0eb646ee06a5b3b00cbc91609274718aced007bb0f1
+  PA5_POPULATION_SHA256: 101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580
+
 jobs:
-  static-authorization:
+  full-population-non-live-gate:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
@@ -110,122 +39,120 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Verify exact head and PA.4 acceptance ancestry
+      - name: Verify exact repair head and accepted PA.4 ancestry
         env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git merge-base --is-ancestor 3fcc4e5520db6d3cac7ce18004753c2549592afa HEAD
+          test "$(git show 9cfa3cf5c6e99d020de815b2fb8802ea9a987a9c:pilot/m26/m26-pa-5-frozen-population.json | sha256sum | cut -d' ' -f1)" = "$(git show HEAD:pilot/m26/m26-pa-5-frozen-population.json | sha256sum | cut -d' ' -f1)"
 
       - name: Install validation dependencies
         run: python -m pip install --disable-pip-version-check -e '.[dev]'
 
-      - name: Validate PA.5 gate without live credentials or pilot execution
+      - name: Enforce non-live authority boundary
+        run: |
+          set -euo pipefail
+          test -z "${MINIMAX_API_KEY:-}"
+          test -z "${R2_ENDPOINT_URL:-}"
+          test -z "${QDRANT_URL:-}"
+          git diff --name-only origin/main...HEAD | tee /tmp/changed.txt
+          ! grep -E '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)' /tmp/changed.txt
+          ! xargs -r grep -En '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{30,})' < /tmp/changed.txt
+
+      - name: Run PA.5 v8 full-population compiler and property tests
         run: |
           set -euo pipefail
           python -m ruff check \
-            src/knowledge_engine/m26_pa5_controlled_internal_pilot.py \
-            src/knowledge_engine/m26_pa5_live_execution.py \
-            src/knowledge_engine/m26_pa5_population_freeze.py \
-            tests/test_m26_pa_5_controlled_internal_pilot.py \
-            tests/test_m26_pa_5_live_execution.py \
-            tests/test_m26_pa_5_population_freeze.py
+            src/knowledge_engine/m26_pa5_v8_runtime.py \
+            tests/test_m26_pa5_v8_runtime.py
           python -m pytest -q \
-            tests/test_m26_pa_5_controlled_internal_pilot.py \
-            tests/test_m26_pa_5_live_execution.py \
-            tests/test_m26_pa_5_population_freeze.py \
+            tests/test_m26_pa5_v8_runtime.py \
             tests/test_m26_pa_4_reconciliation.py \
             tests/test_m26_pa_4_verified_answer_citation_gate.py \
             tests/test_m26_pa_3_reconciliation.py
-          python -m knowledge_engine.m26_pa5_population_freeze
-          python -m knowledge_engine.m26_pa5_live_execution
+          python -m knowledge_engine.m26_pa5_v8_runtime | tee /tmp/m26-pa5-v8-non-live.json
+          grep -q 'm26_pa_5_v8_non_live_full_population_gate_passed' /tmp/m26-pa5-v8-non-live.json
           python -m compileall -q \
-            src/knowledge_engine/m26_pa5_controlled_internal_pilot.py \
-            src/knowledge_engine/m26_pa5_live_execution.py \
-            src/knowledge_engine/m26_pa5_population_freeze.py \
-            tests/test_m26_pa_5_controlled_internal_pilot.py \
-            tests/test_m26_pa_5_live_execution.py \
-            tests/test_m26_pa_5_population_freeze.py
-          test -z "${MINIMAX_API_KEY:-}"
-          test -z "${R2_ENDPOINT_URL:-}"
-          test -z "${R2_BUCKET:-}"
-          test -z "${R2_ACCESS_KEY_ID_READ:-}"
-          test -z "${R2_SECRET_ACCESS_KEY_READ:-}"
-          test -z "${QDRANT_URL:-}"
-          test -z "${QDRANT_API_KEY_READ:-}"
+            src/knowledge_engine/m26_pa5_v8_runtime.py \
+            tests/test_m26_pa5_v8_runtime.py
 
-      - name: Enforce exact PA.5 gate surface
-        run: |
-          set -euo pipefail
-          git fetch origin main --depth=1
-          git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
-          cat > /tmp/expected.txt <<'FILES'
-          .github/workflows/m26-pa-4-verified-answer-citation-gate.yml
-          .github/workflows/m26-pa-5-controlled-internal-pilot.yml
-          pilot/m26/m26-pa-5-attempt-7-failure-seal.json
-          pilot/m26/m26-pa-5-attempt-8-live-trigger.json
-          pilot/m26/m26-pa-5-owner-decision.json
-          schemas/m26-pa-5-attempt-7-failure-seal-v1.schema.json
-          schemas/m26-pa-5-attempt-8-live-trigger-v1.schema.json
-          schemas/m26-pa-5-failure-receipt-v1.schema.json
-          schemas/m26-pa-5-owner-decision-v1.schema.json
-          schemas/m26-pa-5-success-receipt-v1.schema.json
-          src/knowledge_engine/m26_pa5_live_execution.py
-          tests/test_m26_pa_5_live_execution.py
-          FILES
-          cmp /tmp/expected.txt /tmp/changed.txt
-          ! grep -E \
-            '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)' \
-            /tmp/changed.txt
-          ! xargs -r grep -En \
-            '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{30,})' \
-            </tmp/changed.txt
-
-  live-controlled-internal-pilot:
+  calibration:
     if: >-
       github.event_name == 'push' &&
-      contains(github.event.head_commit.message, '[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-8]')
+      contains(github.event.head_commit.message, '[m26.pa5-v8-calibration-authorized]')
     runs-on: ubuntu-24.04
     environment: m23-r3-diagnostic
     env:
-      EVIDENCE_DIR: /tmp/m26-pa-5-live-evidence
       MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      EVIDENCE_DIR: /tmp/m26-pa5-v8-calibration
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           show-progress: false
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Verify exact live trigger boundary
+      - name: Verify calibration boundary
         run: |
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = '1'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git merge-base --is-ancestor e2bff8fbf14278c70623d7c82c36012a3a9cf831 HEAD
           test -n "$MINIMAX_API_KEY"
           mkdir -p "$EVIDENCE_DIR"
-
-      - name: Install runtime dependencies and validate static contracts
+      - name: Install and execute governed calibration
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check -e '.[dev]'
-          python -m knowledge_engine.m26_pa5_population_freeze
-          python -m knowledge_engine.m26_pa5_live_execution
-
-      - name: Execute bounded PA.5 controlled internal shadow pilot
-        run: |
-          python -m knowledge_engine.m26_pa5_live_execution --execute --evidence-dir "$EVIDENCE_DIR"
-
+          python -m knowledge_engine.m26_pa5_v8_runtime
+          python -m knowledge_engine.m26_pa5_v8_calibration --evidence-dir "$EVIDENCE_DIR"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-8
-          path: /tmp/m26-pa-5-live-evidence
+          name: m26-pa5-v8-calibration-${{ github.run_id }}
+          path: /tmp/m26-pa5-v8-calibration
+          if-no-files-found: error
+          retention-days: 30
+
+  formal-attempt-9:
+    if: >-
+      github.event_name == 'push' &&
+      contains(github.event.head_commit.message, '[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-9]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 480
+    environment: m23-r3-diagnostic
+    env:
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      EVIDENCE_DIR: /tmp/m26-pa5-attempt-9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact formal boundary
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -n "$MINIMAX_API_KEY"
+          test -f pilot/m26/m26-pa-5-attempt-9-live-trigger.json
+          mkdir -p "$EVIDENCE_DIR"
+      - name: Execute exactly one formal attempt 9
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check -e '.[dev]'
+          python -m knowledge_engine.m26_pa5_v8_formal --evidence-dir "$EVIDENCE_DIR"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-9
+          path: /tmp/m26-pa5-attempt-9
           if-no-files-found: error
           retention-days: 30
