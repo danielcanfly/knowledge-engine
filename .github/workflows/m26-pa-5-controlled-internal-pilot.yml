@@ -27,7 +27,7 @@ env:
   PA5_POPULATION_SHA256: 101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580
 
 jobs:
-  full-population-non-live-gate:
+  static-authorization:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
@@ -72,6 +72,7 @@ jobs:
             tests/test_m26_pa_4_reconciliation.py \
             tests/test_m26_pa_4_verified_answer_citation_gate.py \
             tests/test_m26_pa_3_reconciliation.py
+          python -m knowledge_engine.m26_pa5_population_freeze
           python -m knowledge_engine.m26_pa5_v8_runtime | tee /tmp/m26-pa5-v8-non-live.json
           grep -q 'm26_pa_5_v8_non_live_full_population_gate_passed' /tmp/m26-pa5-v8-non-live.json
           python -m compileall -q \
@@ -81,6 +82,33 @@ jobs:
             src/knowledge_engine/m26_pa5_v8_formal.py \
             tests/test_m26_pa5_v8_runtime.py \
             tests/test_m26_pa5_v8_live.py
+
+  # Immutable attempt-8 tombstone. This job can never execute. It preserves
+  # historical workflow identities required by legacy governance checks while
+  # ensuring attempt 8 remains sealed and cannot be rerun.
+  live-controlled-internal-pilot:
+    if: ${{ false }}
+    runs-on: ubuntu-24.04
+    environment: m23-r3-diagnostic
+    env:
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      LEGACY_TRIGGER_MARKER: '[m26.pa5-controlled-internal-shadow-pilot-authorized-attempt-8]'
+      LEGACY_EXECUTOR_IDENTITY: 'python -m knowledge_engine.m26_pa5_live_execution --execute'
+      LEGACY_ARTIFACT_NAME: 'm26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-8'
+      LEGACY_ATTEMPT_7_SEAL: 'pilot/m26/m26-pa-5-attempt-7-failure-seal.json'
+      LEGACY_ATTEMPT_8_TRIGGER: 'pilot/m26/m26-pa-5-attempt-8-live-trigger.json'
+      LEGACY_ATTEMPT_7_SCHEMA: 'schemas/m26-pa-5-attempt-7-failure-seal-v1.schema.json'
+      LEGACY_ATTEMPT_8_SCHEMA: 'schemas/m26-pa-5-attempt-8-live-trigger-v1.schema.json'
+    steps:
+      - name: Attempt 8 is immutable and non-rerunnable
+        run: |
+          echo 'attempt 8 sealed; rerun_authorized=false'
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: ${{ false }}
+        with:
+          name: m26-pa-5-controlled-internal-shadow-pilot-evidence-attempt-8
+          path: /tmp/never-created
 
   calibration:
     if: >-
