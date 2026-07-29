@@ -8,9 +8,9 @@ from typing import Any
 import pytest
 
 from knowledge_engine.m26_pa5_v8_runtime import (
-    PA5V8Error,
     POPULATION_SHA256,
     STRATA,
+    PA5V8Error,
     compile_grounding_plans,
     deterministic_calibration_sample,
     manifest,
