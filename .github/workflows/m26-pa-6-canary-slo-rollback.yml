@@ -70,7 +70,7 @@ jobs:
           set -euo pipefail
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat /tmp/changed.txt
-          ! grep -Ev '^(\.github/workflows/m26-1-architecture-authority\.yml|\.github/workflows/m26-pa-4-verified-answer-citation-gate\.yml|\.github/workflows/m26-pa-6-canary-slo-rollback\.yml|pilot/m26/m26-pa-6-canary-policy\.json|pilot/m26/m26-pa-6-owner-gate-template\.json|schemas/m26-pa-6-canary-policy-v1\.schema\.json|schemas/m26-pa-6-owner-gate-v1\.schema\.json|schemas/m26-pa-6-canary-receipt-v1\.schema\.json|schemas/m26-pa-6-incident-packet-v1\.schema\.json|src/knowledge_engine/m26_canary_slo_rollback\.py|tests/test_m26_pa_6_canary_slo_rollback\.py)$' /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/m26-1-architecture-authority\.yml|\.github/workflows/m26-pa-4-verified-answer-citation-gate\.yml|\.github/workflows/m26-pa-6-canary-slo-rollback\.yml|\.github/workflows/m26-pa-6-reconciliation\.yml|pilot/m26/m26-pa-6-canary-policy\.json|pilot/m26/m26-pa-6-owner-gate-template\.json|pilot/m26/m26-pa-6-owner-gate-authorized\.json|pilot/m26/m26-pa-6-unlock-pending-owner-canary-approval\.json|pilot/m26/m26-pa-6-acceptance\.json|pilot/m26/m26-pa-7-unlock-pending-owner-promotion\.json|schemas/m26-pa-6-canary-policy-v1\.schema\.json|schemas/m26-pa-6-owner-gate-v1\.schema\.json|schemas/m26-pa-6-canary-receipt-v1\.schema\.json|schemas/m26-pa-6-incident-packet-v1\.schema\.json|schemas/m26-pa-6-acceptance-v1\.schema\.json|schemas/m26-pa-7-unlock-pending-owner-promotion-v1\.schema\.json|src/knowledge_engine/m26_canary_slo_rollback\.py|tests/test_m26_pa_6_canary_slo_rollback\.py|tests/test_m26_pa_6_reconciliation\.py)$' /tmp/changed.txt
           ! grep -E '^(production/|release/production|r2/|qdrant/|foundation/|credentials/|secrets/)' /tmp/changed.txt
 
   live_canary:
@@ -93,7 +93,10 @@ jobs:
         id: owner_gate
         run: |
           set -euo pipefail
-          if [ -f pilot/m26/m26-pa-6-owner-gate-authorized.json ]; then
+          if [ -f pilot/m26/m26-pa-6-acceptance.json ]; then
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+            echo "PA.6 acceptance already reconciled; no further live canary action authorized."
+          elif [ -f pilot/m26/m26-pa-6-owner-gate-authorized.json ]; then
             echo "authorized=true" >> "$GITHUB_OUTPUT"
           else
             echo "authorized=false" >> "$GITHUB_OUTPUT"

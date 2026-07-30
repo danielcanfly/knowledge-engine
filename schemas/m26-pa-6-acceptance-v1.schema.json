@@ -1,0 +1,230 @@
+{
+  "$id": "knowledge-engine/m26-pa-6-acceptance-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "accepted": {
+      "const": true
+    },
+    "authority_boundary": {
+      "const": {
+        "additional_live_canary_attempts": false,
+        "automatic_expansion": false,
+        "canary_traffic_after_reconciliation": false,
+        "m26_closed": false,
+        "pa7_promotion_authorized": false,
+        "production_answer_serving": false,
+        "production_pointer_mutation": false,
+        "public_or_unbounded_traffic": false,
+        "r2_qdrant_source_foundation_release_mutations": 0
+      }
+    },
+    "bounded_scope": {
+      "const": {
+        "duration_minutes_max": 30,
+        "logical_attempt": 1,
+        "public_traffic_percent": 0,
+        "query_set_sha256": "78d9cbaba17b33171f47498c8791a7792e409187d8dfd3fc1682e6bfdc58da99",
+        "request_cap": 20,
+        "request_count": 20
+      }
+    },
+    "effective_only_on_reconciliation_merge": {
+      "const": true
+    },
+    "generated_at": {
+      "const": "2026-07-30T13:44:30Z"
+    },
+    "issue": {
+      "const": {
+        "number": 1249,
+        "repository": "danielcanfly/knowledge-engine",
+        "state_before_reconciliation_pr": "open",
+        "title": "M26.PA.6 live canary acceptance reconciliation"
+      }
+    },
+    "live_evidence": {
+      "const": {
+        "artifact_archive_digest": "sha256:79cf3eab86d539a9f69a4b458a4c2a49bc4cfb114a4eb14023a7329286379035",
+        "artifact_entry_names": [
+          "m26-pa-6-canary-receipt.json",
+          "m26-pa-6-canary-receipt.json.sha256"
+        ],
+        "artifact_expires_at": "2026-10-28T13:41:31Z",
+        "artifact_id": 8761645931,
+        "artifact_name": "m26-pa-6-canary-slo-rollback-evidence",
+        "artifact_size_in_bytes": 3011,
+        "created_at": "2026-07-30T13:43:52Z",
+        "live_canary_job_conclusion": "success",
+        "live_canary_job_id": 90889482913,
+        "metrics": {
+          "citation_locator_validity": 1.0,
+          "complete_accounting": 20,
+          "kill_switch_propagation_ms": 250,
+          "material_claim_support_precision": 1.0,
+          "mean_payg_equivalent_cost_usd": "0.00036045",
+          "p95_latency_ms": 7565,
+          "p95_payg_equivalent_cost_usd": "0.00049416",
+          "p99_latency_ms": 7565,
+          "post_kill_provider_calls": 0,
+          "provider_calls": 40,
+          "provider_error_count": 0,
+          "safe_terminal_outcome_rate": 1.0,
+          "terminal_status_histogram": {
+            "accepted": 20
+          },
+          "total_payg_equivalent_cost_usd": "0.00720900",
+          "unsupported_accepted_claims": 0
+        },
+        "privacy": {
+          "full_provider_response_persisted": false,
+          "raw_evidence_persisted": false,
+          "raw_query_persisted": false,
+          "secret_values_persisted": false,
+          "vectors_persisted": false
+        },
+        "receipt_file_sha256": "4a936253af6f1e1693c3a5f20bf3749a979250a47c87c3fb8f6e8ab6f7e1aac3",
+        "receipt_generated_at": "2026-07-30T13:43:51Z",
+        "receipt_schema_version": "knowledge-engine-m26-pa-6-canary-receipt/v1",
+        "receipt_self_sha256": "b80af1930bf24bb1e285d01c309619d0273a922eddd63ac3218ea1d7282205f6",
+        "receipt_sha256_file_value": "b80af1930bf24bb1e285d01c309619d0273a922eddd63ac3218ea1d7282205f6",
+        "receipt_status": "live_canary_receipt_pending_reconciliation",
+        "request_count": 20,
+        "run_attempt": 1,
+        "run_event": "push",
+        "run_id": 30548085276,
+        "slo_pass": true,
+        "workflow_head_sha": "71dea82857b63508321e509b3f4cf6770dc139fa",
+        "workflow_name": "M26.PA.6 Canary SLO Rollback"
+      }
+    },
+    "next_stage": {
+      "const": {
+        "authorized_after_reconciliation_merge": true,
+        "daniel_pa7_gate_required": true,
+        "m26_closed": false,
+        "name": "Production Promotion, Answer Authority, and Closure",
+        "pa7_unlock_status_after_reconciliation_merge": "m26_pa_7_unlocked_pending_owner_promotion",
+        "predecessor_status_required": "m26_pa_6_canary_slo_rollback_accepted",
+        "production_answer_serving_permitted": false,
+        "production_pointer_mutation_permitted": false,
+        "public_traffic_permitted": false,
+        "stage_id": "M26.PA.7"
+      }
+    },
+    "operation_counts": {
+      "const": {
+        "post_kill_provider_calls": 0,
+        "production_pointer_mutations": 0,
+        "production_serving_operations": 0,
+        "provider_calls": 40,
+        "public_traffic_operations": 0,
+        "r2_qdrant_source_foundation_release_mutations": 0
+      }
+    },
+    "owner_gate_authorization": {
+      "const": {
+        "approved_candidate_self_sha256": "e59ee979dfe48cc7b3336c0ed4ce98e492538ba9040474cfa2e59ed18e234672",
+        "authorization_base_sha": "581837460451f600af83132cd89509674bdd1964",
+        "authorization_head_sha": "e0a36ed1e04f2955677de0956883daa7b2905e4c",
+        "authorization_issue": 1247,
+        "authorization_merge_sha": "71dea82857b63508321e509b3f4cf6770dc139fa",
+        "authorization_pull_request": 1248,
+        "expected_head_merge": true,
+        "ratified_owner_gate_self_sha256": "86efa5e73c26592e4bf27ee34035b683be6c0e488b2ca85beb601b3c3b7683e2",
+        "workflow_name": "M26.PA.6 Canary SLO Rollback"
+      }
+    },
+    "owner_gate_control_plane": {
+      "const": {
+        "before_state_digest": "e00024ad5d19d661bfeefe4e53df614634def870a657b6f0ed1238f5053ac11b",
+        "denied_control_probe_count": 2,
+        "kill_switch_propagation_ms": 250,
+        "killed_state_digest": "d068689a4d7489d1ac338576cf9a5c821905668073bc9c8c34176040d25f3343",
+        "post_kill_provider_calls": 0,
+        "production_pointer_mutations": 0,
+        "production_serving_operations": 0,
+        "public_traffic_operations": 0,
+        "r2_qdrant_source_foundation_release_mutations": 0,
+        "restored_state_digest": "e00024ad5d19d661bfeefe4e53df614634def870a657b6f0ed1238f5053ac11b",
+        "rollback_target_state_digest": "e00024ad5d19d661bfeefe4e53df614634def870a657b6f0ed1238f5053ac11b"
+      }
+    },
+    "predecessor": {
+      "const": {
+        "pa5_acceptance_self_sha256": "f2943641f2ccc22ca4d39e34a1e47e46798a1dc95ee6d5cb98aa0c3eaf1506eb",
+        "pa5_status": "m26_pa_5_controlled_internal_shadow_pilot_accepted",
+        "pa6_unlock_self_sha256": "385c1de7e046be0f317eb162f61ff35a809a6c3ac3a1282cf0fab6366ca669a2",
+        "pa6_unlock_status": "m26_pa_6_unlocked_pending_owner_canary_approval"
+      }
+    },
+    "reconciliation": {
+      "const": {
+        "artifact_archive_digest_verified": true,
+        "dedicated_issue_number": 1249,
+        "no_new_provider_call": true,
+        "no_second_canary_attempt": true,
+        "pa7_promotion_remains_unapproved": true,
+        "receipt_file_digest_verified": true,
+        "receipt_schema_verified": true,
+        "receipt_self_digest_verified": true,
+        "remote_run_and_artifact_verified": true,
+        "separate_reconciliation_pr_required": true,
+        "thresholds_verified": true
+      }
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-6-acceptance/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "slo_thresholds": {
+      "const": {
+        "answerable_grounded_quality_pass_rate_minimum": 0.85,
+        "appropriate_abstention_recall_minimum": 0.95,
+        "citation_locator_validity_required": 1.0,
+        "complete_accounting_required": 20,
+        "material_claim_support_precision_required": 1.0,
+        "mean_payg_equivalent_cost_usd_maximum": "0.05",
+        "p95_latency_ms_maximum": 30000,
+        "p95_payg_equivalent_cost_usd_maximum": "0.10",
+        "p99_latency_ms_maximum": 60000,
+        "provider_calls_maximum": 80,
+        "provider_error_count_maximum": 0,
+        "safe_terminal_outcome_rate_minimum": 1.0,
+        "total_payg_equivalent_cost_usd_maximum": "1.00",
+        "unresolved_disagreements_maximum": 0,
+        "unsupported_accepted_claims_maximum": 0
+      }
+    },
+    "stage_id": {
+      "const": "M26.PA.6"
+    },
+    "status": {
+      "const": "m26_pa_6_canary_slo_rollback_accepted"
+    }
+  },
+  "required": [
+    "accepted",
+    "authority_boundary",
+    "bounded_scope",
+    "effective_only_on_reconciliation_merge",
+    "generated_at",
+    "issue",
+    "live_evidence",
+    "next_stage",
+    "operation_counts",
+    "owner_gate_authorization",
+    "owner_gate_control_plane",
+    "predecessor",
+    "reconciliation",
+    "schema_version",
+    "self_sha256",
+    "slo_thresholds",
+    "stage_id",
+    "status"
+  ],
+  "type": "object"
+}
