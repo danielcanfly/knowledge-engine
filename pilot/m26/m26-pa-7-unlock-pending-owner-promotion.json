@@ -1,0 +1,30 @@
+{
+  "authority_boundary": {
+    "additional_live_canary_attempts": false,
+    "m26_closed": false,
+    "pa7_promotion_authorized": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "public_traffic": false,
+    "r2_qdrant_source_foundation_release_mutations": 0
+  },
+  "effective_only_after_pa6_reconciliation_merge": true,
+  "next_required_gate": {
+    "daniel_owner_promotion_approval_required": true,
+    "must_bind_final_answer_authority": true,
+    "must_bind_m26_closure_decision": true,
+    "must_bind_production_pointer_target": true,
+    "must_bind_production_promotion_scope": true,
+    "must_bind_public_traffic_policy": true,
+    "must_preserve_rollback_or_fail_closed_plan": true
+  },
+  "predecessor": {
+    "pa6_acceptance_path": "pilot/m26/m26-pa-6-acceptance.json",
+    "pa6_acceptance_self_sha256": "758f2c8012d37875f7438c1d518f9d9db55e3ce0344640f0e16c9ed8f3fa7144",
+    "pa6_status": "m26_pa_6_canary_slo_rollback_accepted"
+  },
+  "schema_version": "knowledge-engine-m26-pa-7-unlock-pending-owner-promotion/v1",
+  "self_sha256": "c1984a9d69518958cc6830d34762444263f990b118a8c6a914e480a15c491538",
+  "stage_id": "M26.PA.7",
+  "status": "m26_pa_7_unlocked_pending_owner_promotion"
+}

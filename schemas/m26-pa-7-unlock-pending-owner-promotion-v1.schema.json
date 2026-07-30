@@ -1,0 +1,63 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-unlock-pending-owner-promotion-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": {
+      "const": {
+        "additional_live_canary_attempts": false,
+        "m26_closed": false,
+        "pa7_promotion_authorized": false,
+        "production_answer_serving": false,
+        "production_pointer_mutation": false,
+        "public_traffic": false,
+        "r2_qdrant_source_foundation_release_mutations": 0
+      }
+    },
+    "effective_only_after_pa6_reconciliation_merge": {
+      "const": true
+    },
+    "next_required_gate": {
+      "const": {
+        "daniel_owner_promotion_approval_required": true,
+        "must_bind_final_answer_authority": true,
+        "must_bind_m26_closure_decision": true,
+        "must_bind_production_pointer_target": true,
+        "must_bind_production_promotion_scope": true,
+        "must_bind_public_traffic_policy": true,
+        "must_preserve_rollback_or_fail_closed_plan": true
+      }
+    },
+    "predecessor": {
+      "const": {
+        "pa6_acceptance_path": "pilot/m26/m26-pa-6-acceptance.json",
+        "pa6_acceptance_self_sha256": "758f2c8012d37875f7438c1d518f9d9db55e3ce0344640f0e16c9ed8f3fa7144",
+        "pa6_status": "m26_pa_6_canary_slo_rollback_accepted"
+      }
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-7-unlock-pending-owner-promotion/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "stage_id": {
+      "const": "M26.PA.7"
+    },
+    "status": {
+      "const": "m26_pa_7_unlocked_pending_owner_promotion"
+    }
+  },
+  "required": [
+    "authority_boundary",
+    "effective_only_after_pa6_reconciliation_merge",
+    "next_required_gate",
+    "predecessor",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status"
+  ],
+  "type": "object"
+}
