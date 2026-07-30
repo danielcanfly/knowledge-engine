@@ -1,0 +1,49 @@
+{
+  "$id": "knowledge-engine/m26-pa-6-unlock-pending-owner-canary-approval-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "canary_traffic_authorized": {"const": false},
+        "m26_closed": {"const": false},
+        "pa7_authorized": {"const": false},
+        "production_answer_serving": {"const": false},
+        "production_pointer_mutation": {"const": false},
+        "public_traffic": {"const": false},
+        "r2_qdrant_source_foundation_release_mutations": {"const": 0}
+      },
+      "required": [
+        "canary_traffic_authorized",
+        "m26_closed",
+        "pa7_authorized",
+        "production_answer_serving",
+        "production_pointer_mutation",
+        "public_traffic",
+        "r2_qdrant_source_foundation_release_mutations"
+      ],
+      "type": "object"
+    },
+    "effective_only_after_pa5_reconciliation_merge": {"const": true},
+    "next_required_gate": {"type": "object"},
+    "predecessor": {"type": "object"},
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-6-unlock-pending-owner-canary-approval/v1"
+    },
+    "self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "stage_id": {"const": "M26.PA.6"},
+    "status": {"const": "m26_pa_6_unlocked_pending_owner_canary_approval"}
+  },
+  "required": [
+    "authority_boundary",
+    "effective_only_after_pa5_reconciliation_merge",
+    "next_required_gate",
+    "predecessor",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status"
+  ],
+  "type": "object"
+}

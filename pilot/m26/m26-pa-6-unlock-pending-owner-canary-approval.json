@@ -1,0 +1,29 @@
+{
+  "authority_boundary": {
+    "canary_traffic_authorized": false,
+    "m26_closed": false,
+    "pa7_authorized": false,
+    "production_answer_serving": false,
+    "production_pointer_mutation": false,
+    "public_traffic": false,
+    "r2_qdrant_source_foundation_release_mutations": 0
+  },
+  "effective_only_after_pa5_reconciliation_merge": true,
+  "next_required_gate": {
+    "daniel_owner_canary_approval_required": true,
+    "must_bind_canary_audience": true,
+    "must_bind_kill_switch": true,
+    "must_bind_rollback_restoration_drill": true,
+    "must_bind_slo_thresholds": true,
+    "must_bind_traffic_fraction": true
+  },
+  "predecessor": {
+    "pa5_acceptance_path": "pilot/m26/m26-pa-5-v8-acceptance.json",
+    "pa5_acceptance_self_sha256": "35ed2c2304061005f534739bbebc592b2685f245ac5067a1d0fbdc41d6535ebb",
+    "pa5_status": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
+  },
+  "schema_version": "knowledge-engine-m26-pa-6-unlock-pending-owner-canary-approval/v1",
+  "self_sha256": "5b7ca07527e5684bd54033d5ef391ae0082c507ad041ae8f1c6bf1ab3a853f4f",
+  "stage_id": "M26.PA.6",
+  "status": "m26_pa_6_unlocked_pending_owner_canary_approval"
+}
