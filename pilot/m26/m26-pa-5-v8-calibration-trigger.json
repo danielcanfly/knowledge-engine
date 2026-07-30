@@ -1,0 +1,15 @@
+{
+  "calibration_sample_sha256": "68e7515b20755f40e949beaed6b8603cc5541c52c91cac470b63f0b88ad32f3d",
+  "created_at": "2026-07-30T00:53:55Z",
+  "executable_head_sha": "31288b0dc966af2df55923f504d63cea9f02ac58",
+  "owner_authority_self_sha256": "2d22784971502b1e17dae553cbd559e6efa9cee2303c945c8603000e0278d88c",
+  "package_sha256": "f637b90fd1249217005ff0eb646ee06a5b3b00cbc91609274718aced007bb0f1",
+  "population_sha256": "101fb166147195013ede721c68ac2dc2cef9445865436c8cf130a0dd2addd580",
+  "previous_pass": null,
+  "schema_version": "knowledge-engine-m26-pa-5-v8-calibration-trigger/v1",
+  "self_sha256": "d125a8b2d9231636c7ca95eef846486cf489567c592ae8bfa78f495d96650347",
+  "sequence": 1,
+  "stage_id": "M26.PA.5",
+  "status": "authorized",
+  "trigger_marker": "[m26.pa5-v8-calibration-authorized]"
+}
