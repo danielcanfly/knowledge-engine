@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m26-pa-6-incident-packet-v1.schema.json",
+  "title": "M26 PA6 incident packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "stage_id",
+    "status",
+    "test_fixture_only",
+    "owner_gate_self_sha256",
+    "receipt_self_sha256",
+    "stop_reason_code",
+    "terminal_action",
+    "provider_calls_after_stop",
+    "control_plane",
+    "privacy",
+    "self_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "knowledge-engine-m26-pa-6-incident-packet/v1" },
+    "stage_id": { "const": "M26.PA.6" },
+    "status": { "const": "failed_closed_test_fixture_only" },
+    "test_fixture_only": { "const": true },
+    "owner_gate_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "receipt_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stop_reason_code": { "minLength": 1, "type": "string" },
+    "terminal_action": { "const": "kill_switch_then_rollback_required_for_live" },
+    "provider_calls_after_stop": { "const": 0 },
+    "control_plane": { "type": "object" },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_provider_response_persisted",
+        "raw_evidence_persisted",
+        "raw_query_persisted",
+        "secret_values_persisted",
+        "vectors_persisted"
+      ],
+      "properties": {
+        "full_provider_response_persisted": { "const": false },
+        "raw_evidence_persisted": { "const": false },
+        "raw_query_persisted": { "const": false },
+        "secret_values_persisted": { "const": false },
+        "vectors_persisted": { "const": false }
+      }
+    },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" }
+  }
+}

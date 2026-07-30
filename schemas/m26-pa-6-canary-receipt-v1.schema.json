@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m26-pa-6-canary-receipt-v1.schema.json",
+  "title": "M26 PA6 canary receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "stage_id",
+    "status",
+    "test_fixture_only",
+    "generated_at",
+    "owner_gate_self_sha256",
+    "request_count",
+    "metrics",
+    "slo_pass",
+    "privacy",
+    "control_plane",
+    "request_rows",
+    "self_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "knowledge-engine-m26-pa-6-canary-receipt/v1" },
+    "stage_id": { "const": "M26.PA.6" },
+    "status": {
+      "enum": [
+        "test_fixture_only_non_live_receipt",
+        "live_canary_receipt_pending_reconciliation",
+        "live_canary_failed_closed_receipt"
+      ]
+    },
+    "test_fixture_only": { "type": "boolean" },
+    "generated_at": { "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$", "type": "string" },
+    "owner_gate_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "request_count": { "const": 20 },
+    "metrics": { "type": "object" },
+    "slo_pass": { "type": "boolean" },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_provider_response_persisted",
+        "raw_evidence_persisted",
+        "raw_query_persisted",
+        "secret_values_persisted",
+        "vectors_persisted"
+      ],
+      "properties": {
+        "full_provider_response_persisted": { "const": false },
+        "raw_evidence_persisted": { "const": false },
+        "raw_query_persisted": { "const": false },
+        "secret_values_persisted": { "const": false },
+        "vectors_persisted": { "const": false }
+      }
+    },
+    "control_plane": { "type": "object" },
+    "request_rows": { "type": "array", "minItems": 20, "maxItems": 20, "items": { "type": "object" } },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" }
+  }
+}

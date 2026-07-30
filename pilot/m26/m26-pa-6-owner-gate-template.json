@@ -1,0 +1,58 @@
+{
+  "predecessor": {
+    "main_sha": "d1b06bf68ff562f77bf5c7882d7d6b607854199d",
+    "pa5_acceptance_self_sha256": "f2943641f2ccc22ca4d39e34a1e47e46798a1dc95ee6d5cb98aa0c3eaf1506eb",
+    "pa5_status": "m26_pa_5_controlled_internal_shadow_pilot_accepted",
+    "pa6_unlock_self_sha256": "385c1de7e046be0f317eb162f61ff35a809a6c3ac3a1282cf0fab6366ca669a2",
+    "pa6_unlock_status": "m26_pa_6_unlocked_pending_owner_canary_approval"
+  },
+  "recommended_bounded_scope": {
+    "automatic_expansion": false,
+    "duration_minutes_max": 30,
+    "logical_attempt": 1,
+    "public_traffic_percent": 0,
+    "query_set_ids": [
+      "m26-pa5-direct-grounded-factual-de61de87393d6250",
+      "m26-pa5-direct-grounded-factual-6e24dbb22d5eb3c9",
+      "m26-pa5-direct-grounded-factual-1f3fcaf72961a029",
+      "m26-pa5-direct-grounded-factual-be6b2e78db8bcce4",
+      "m26-pa5-direct-grounded-factual-af5fb07b7412260f",
+      "m26-pa5-provenance-and-source-trace-f45c5a4f5a120104",
+      "m26-pa5-provenance-and-source-trace-d5ed5b81a044e286",
+      "m26-pa5-provenance-and-source-trace-9dbd324e8fec30ec",
+      "m26-pa5-cross-document-comparison-3e1b516aa8ba80e9",
+      "m26-pa5-cross-document-comparison-538fa7189588fcfa",
+      "m26-pa5-cross-document-comparison-9b406eeaf1bcf936",
+      "m26-pa5-graph-navigation-333cf9eb3f4a7e1b",
+      "m26-pa5-graph-navigation-76fa09006e36b599",
+      "m26-pa5-graph-navigation-2a069f05fa17d819",
+      "m26-pa5-conflict-and-temporal-freshness-261aca7243f8347f",
+      "m26-pa5-conflict-and-temporal-freshness-78900ee8a216935c",
+      "m26-pa5-abstention-no-answer-9aea9afee3131c64",
+      "m26-pa5-abstention-no-answer-bae61c9a173e6f27",
+      "m26-pa5-prompt-injection-privacy-adversarial-57a34ec2b80122cf",
+      "m26-pa5-prompt-injection-privacy-adversarial-fcc24c54e894af33"
+    ],
+    "query_set_sha256": "78d9cbaba17b33171f47498c8791a7792e409187d8dfd3fc1682e6bfdc58da99",
+    "query_set_source": "PA.5 sanitized owner oversight packet question IDs only",
+    "request_cap": 20,
+    "request_count": 20
+  },
+  "requires_daniel_exact_ratification": true,
+  "schema_version": "knowledge-engine-m26-pa-6-owner-gate-template/v1",
+  "self_sha256": "98fd93cbe9407b26f5a678168d11c25f5fbdbffc6500659ec61821fbbe9e5837",
+  "stage_id": "M26.PA.6",
+  "status": "template_not_approved_not_live_evidence",
+  "status_boundary": {
+    "acceptance_authorized": false,
+    "deployment_or_route_mutation_authorized": false,
+    "live_canary_authorized": false,
+    "provider_calls_authorized": false
+  },
+  "unresolved_execution_identities": {
+    "allowlisted_owner_subject_hash": "TO_BE_RESOLVED_NO_RAW_EMAIL_IN_ARTIFACT",
+    "deployment_identity": "TO_BE_RESOLVED_AFTER_IMPLEMENTATION_MERGE",
+    "internal_route": "TO_BE_RESOLVED_AFTER_IMPLEMENTATION_MERGE",
+    "pre_canary_rollback_target_identity": "TO_BE_RESOLVED_AFTER_IMPLEMENTATION_MERGE"
+  }
+}

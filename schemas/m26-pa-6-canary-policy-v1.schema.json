@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m26-pa-6-canary-policy-v1.schema.json",
+  "title": "M26 PA6 canary policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "stage_id",
+    "status",
+    "predecessor",
+    "authority_boundary",
+    "required_controls",
+    "privacy_boundary",
+    "package_drift_correction",
+    "self_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "knowledge-engine-m26-pa-6-canary-policy/v1" },
+    "stage_id": { "const": "M26.PA.6" },
+    "status": { "const": "m26_pa_6_phase_a_implementation_ready_pending_owner_gate" },
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "main_sha",
+        "pa5_status",
+        "pa5_acceptance_self_sha256",
+        "pa6_unlock_status",
+        "pa6_unlock_self_sha256"
+      ],
+      "properties": {
+        "main_sha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "pa5_status": { "const": "m26_pa_5_controlled_internal_shadow_pilot_accepted" },
+        "pa5_acceptance_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "pa6_unlock_status": { "const": "m26_pa_6_unlocked_pending_owner_canary_approval" },
+        "pa6_unlock_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" }
+      }
+    },
+    "authority_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "live_provider_calls",
+        "public_traffic",
+        "production_serving",
+        "production_pointer_mutation",
+        "r2_qdrant_source_foundation_release_mutations",
+        "pa7_authorized",
+        "m26_closed"
+      ],
+      "properties": {
+        "live_provider_calls": { "const": false },
+        "public_traffic": { "const": false },
+        "production_serving": { "const": false },
+        "production_pointer_mutation": { "const": false },
+        "r2_qdrant_source_foundation_release_mutations": { "const": 0 },
+        "pa7_authorized": { "const": false },
+        "m26_closed": { "const": false }
+      }
+    },
+    "required_controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exact_owner_gate_digest",
+        "allowlisted_subject_hash",
+        "internal_route",
+        "deployment_identity",
+        "request_cap",
+        "slo_thresholds",
+        "kill_switch_readback",
+        "rollback_state_digest",
+        "zero_post_kill_provider_calls"
+      ],
+      "properties": {
+        "exact_owner_gate_digest": { "const": true },
+        "allowlisted_subject_hash": { "const": true },
+        "internal_route": { "const": true },
+        "deployment_identity": { "const": true },
+        "request_cap": { "const": true },
+        "slo_thresholds": { "const": true },
+        "kill_switch_readback": { "const": true },
+        "rollback_state_digest": { "const": true },
+        "zero_post_kill_provider_calls": { "const": true }
+      }
+    },
+    "privacy_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_provider_response_persistence",
+        "raw_query_persistence",
+        "raw_corpus_text_persistence",
+        "full_prompt_persistence",
+        "secret_value_persistence",
+        "vector_persistence"
+      ],
+      "properties": {
+        "raw_provider_response_persistence": { "const": false },
+        "raw_query_persistence": { "const": false },
+        "raw_corpus_text_persistence": { "const": false },
+        "full_prompt_persistence": { "const": false },
+        "secret_value_persistence": { "const": false },
+        "vector_persistence": { "const": false }
+      }
+    },
+    "package_drift_correction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stale_package_pa6_unlock_self_sha256", "current_main_pa6_unlock_self_sha256"],
+      "properties": {
+        "stale_package_pa6_unlock_self_sha256": { "const": "6a14dd3f648779832f12484e14eb6a006515701568d91fae6c09eaf8e2327434" },
+        "current_main_pa6_unlock_self_sha256": { "const": "385c1de7e046be0f317eb162f61ff35a809a6c3ac3a1282cf0fab6366ca669a2" }
+      }
+    },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" }
+  }
+}

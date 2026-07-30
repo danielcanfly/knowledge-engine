@@ -1,0 +1,131 @@
+name: M26.PA.6 Canary SLO Rollback
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-pa-6-canary-slo-rollback.yml"
+      - "pilot/m26/m26-pa-6-canary-policy.json"
+      - "pilot/m26/m26-pa-6-owner-gate-template.json"
+      - "pilot/m26/m26-pa-6-owner-gate-authorized.json"
+      - "schemas/m26-pa-6-*.schema.json"
+      - "src/knowledge_engine/m26_canary_slo_rollback.py"
+      - "tests/test_m26_pa5_v8_acceptance.py"
+      - "tests/test_m26_pa_4_verified_answer_citation_gate.py"
+      - "tests/test_m26_pa_6_canary_slo_rollback.py"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/m26-pa-6-canary-slo-rollback.yml"
+      - "pilot/m26/m26-pa-6-canary-policy.json"
+      - "pilot/m26/m26-pa-6-owner-gate-template.json"
+      - "pilot/m26/m26-pa-6-owner-gate-authorized.json"
+      - "schemas/m26-pa-6-*.schema.json"
+      - "src/knowledge_engine/m26_canary_slo_rollback.py"
+      - "tests/test_m26_pa5_v8_acceptance.py"
+      - "tests/test_m26_pa_4_verified_answer_citation_gate.py"
+      - "tests/test_m26_pa_6_canary_slo_rollback.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-pa-6-canary-slo-rollback-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  static_validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+
+      - name: Validate PA.6 Phase A static contract
+        run: |
+          set -euo pipefail
+          python -m ruff check \
+            src/knowledge_engine/m26_canary_slo_rollback.py \
+            tests/test_m26_pa_6_canary_slo_rollback.py
+          python -m compileall -q \
+            src/knowledge_engine/m26_canary_slo_rollback.py \
+            tests/test_m26_pa_6_canary_slo_rollback.py
+          python -m pytest -q \
+            tests/test_m26_pa_4_verified_answer_citation_gate.py \
+            tests/test_m26_pa5_v8_acceptance.py \
+            tests/test_m26_pa_6_canary_slo_rollback.py
+
+      - name: Enforce PA.6 Phase A changed-file boundary
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
+          cat /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/m26-1-architecture-authority\.yml|\.github/workflows/m26-pa-4-verified-answer-citation-gate\.yml|\.github/workflows/m26-pa-6-canary-slo-rollback\.yml|pilot/m26/m26-pa-6-canary-policy\.json|pilot/m26/m26-pa-6-owner-gate-template\.json|schemas/m26-pa-6-canary-policy-v1\.schema\.json|schemas/m26-pa-6-owner-gate-v1\.schema\.json|schemas/m26-pa-6-canary-receipt-v1\.schema\.json|schemas/m26-pa-6-incident-packet-v1\.schema\.json|src/knowledge_engine/m26_canary_slo_rollback\.py|tests/test_m26_pa_6_canary_slo_rollback\.py)$' /tmp/changed.txt
+          ! grep -E '^(production/|release/production|r2/|qdrant/|foundation/|credentials/|secrets/)' /tmp/changed.txt
+
+  live_canary:
+    needs: static_validate
+    runs-on: ubuntu-24.04
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      hashFiles('pilot/m26/m26-pa-6-owner-gate-authorized.json') != ''
+    environment: m23-r3-diagnostic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+
+      - name: Verify exact ratified owner gate before any provider-capable action
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from knowledge_engine.m26_canary_slo_rollback import (
+              run_live_canary_from_gate,
+              validate_owner_gate,
+          )
+
+          gate_path = Path("pilot/m26/m26-pa-6-owner-gate-authorized.json")
+          gate = json.loads(gate_path.read_text(encoding="utf-8"))
+          validate_owner_gate(gate)
+          if gate["status"] != "ratified_owner_canary_gate":
+              raise SystemExit("owner gate is not ratified")
+          receipt = run_live_canary_from_gate(
+              root=Path("."),
+              gate=gate,
+              evidence_dir=Path("/tmp/m26-pa6-live-evidence"),
+          )
+          if not receipt["slo_pass"]:
+              raise SystemExit("PA.6 live canary failed closed")
+          print("m26_pa6_live_canary_receipt=" + receipt["self_sha256"])
+          PY
+
+      - name: Upload PA.6 live evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-pa-6-canary-slo-rollback-evidence
+          path: /tmp/m26-pa6-live-evidence
+          if-no-files-found: error

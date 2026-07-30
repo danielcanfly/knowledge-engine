@@ -1,0 +1,45 @@
+{
+  "authority_boundary": {
+    "live_provider_calls": false,
+    "m26_closed": false,
+    "pa7_authorized": false,
+    "production_pointer_mutation": false,
+    "production_serving": false,
+    "public_traffic": false,
+    "r2_qdrant_source_foundation_release_mutations": 0
+  },
+  "package_drift_correction": {
+    "current_main_pa6_unlock_self_sha256": "385c1de7e046be0f317eb162f61ff35a809a6c3ac3a1282cf0fab6366ca669a2",
+    "stale_package_pa6_unlock_self_sha256": "6a14dd3f648779832f12484e14eb6a006515701568d91fae6c09eaf8e2327434"
+  },
+  "predecessor": {
+    "main_sha": "d1b06bf68ff562f77bf5c7882d7d6b607854199d",
+    "pa5_acceptance_self_sha256": "f2943641f2ccc22ca4d39e34a1e47e46798a1dc95ee6d5cb98aa0c3eaf1506eb",
+    "pa5_status": "m26_pa_5_controlled_internal_shadow_pilot_accepted",
+    "pa6_unlock_self_sha256": "385c1de7e046be0f317eb162f61ff35a809a6c3ac3a1282cf0fab6366ca669a2",
+    "pa6_unlock_status": "m26_pa_6_unlocked_pending_owner_canary_approval"
+  },
+  "privacy_boundary": {
+    "full_prompt_persistence": false,
+    "raw_corpus_text_persistence": false,
+    "raw_provider_response_persistence": false,
+    "raw_query_persistence": false,
+    "secret_value_persistence": false,
+    "vector_persistence": false
+  },
+  "required_controls": {
+    "allowlisted_subject_hash": true,
+    "deployment_identity": true,
+    "exact_owner_gate_digest": true,
+    "internal_route": true,
+    "kill_switch_readback": true,
+    "request_cap": true,
+    "rollback_state_digest": true,
+    "slo_thresholds": true,
+    "zero_post_kill_provider_calls": true
+  },
+  "schema_version": "knowledge-engine-m26-pa-6-canary-policy/v1",
+  "self_sha256": "bbf4ac5bf29748b40e3b5347d5d1a501c0ed73682e47b4faf7edb0df1b88ffb3",
+  "stage_id": "M26.PA.6",
+  "status": "m26_pa_6_phase_a_implementation_ready_pending_owner_gate"
+}
