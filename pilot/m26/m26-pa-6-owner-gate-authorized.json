@@ -1,0 +1,108 @@
+{
+  "bounded_scope": {
+    "automatic_expansion": false,
+    "duration_minutes_max": 30,
+    "logical_attempt": 1,
+    "public_traffic_percent": 0,
+    "query_set_ids": [
+      "m26-pa5-direct-grounded-factual-de61de87393d6250",
+      "m26-pa5-direct-grounded-factual-6e24dbb22d5eb3c9",
+      "m26-pa5-direct-grounded-factual-1f3fcaf72961a029",
+      "m26-pa5-direct-grounded-factual-be6b2e78db8bcce4",
+      "m26-pa5-direct-grounded-factual-af5fb07b7412260f",
+      "m26-pa5-provenance-and-source-trace-f45c5a4f5a120104",
+      "m26-pa5-provenance-and-source-trace-d5ed5b81a044e286",
+      "m26-pa5-provenance-and-source-trace-9dbd324e8fec30ec",
+      "m26-pa5-cross-document-comparison-3e1b516aa8ba80e9",
+      "m26-pa5-cross-document-comparison-538fa7189588fcfa",
+      "m26-pa5-cross-document-comparison-9b406eeaf1bcf936",
+      "m26-pa5-graph-navigation-333cf9eb3f4a7e1b",
+      "m26-pa5-graph-navigation-76fa09006e36b599",
+      "m26-pa5-graph-navigation-2a069f05fa17d819",
+      "m26-pa5-conflict-and-temporal-freshness-261aca7243f8347f",
+      "m26-pa5-conflict-and-temporal-freshness-78900ee8a216935c",
+      "m26-pa5-abstention-no-answer-9aea9afee3131c64",
+      "m26-pa5-abstention-no-answer-bae61c9a173e6f27",
+      "m26-pa5-prompt-injection-privacy-adversarial-57a34ec2b80122cf",
+      "m26-pa5-prompt-injection-privacy-adversarial-fcc24c54e894af33"
+    ],
+    "query_set_sha256": "78d9cbaba17b33171f47498c8791a7792e409187d8dfd3fc1682e6bfdc58da99",
+    "query_set_source": "PA.5 sanitized owner oversight packet question IDs only",
+    "request_cap": 20,
+    "request_count": 20
+  },
+  "denied": {
+    "m26_closure": true,
+    "pa7": true,
+    "production_pointer_mutation": true,
+    "production_serving": true,
+    "public_traffic": true,
+    "r2_qdrant_source_foundation_release_mutation": true
+  },
+  "execution_identities": {
+    "allowlisted_owner_subject_hash": "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b",
+    "deployment_identity": "github-actions-workflow:danielcanfly/knowledge-engine/.github/workflows/m26-pa-6-canary-slo-rollback.yml@581837460451f600af83132cd89509674bdd1964:sha256:ee9fe9f75bd2e07c67c1f8a0fd307b9bfd15fe551ae772799bf2214a88f737ab",
+    "internal_route": "github-actions-main-push://danielcanfly/knowledge-engine/actions/workflows/m26-pa-6-canary-slo-rollback.yml",
+    "pre_canary_rollback_target_identity": "state-digest:5c8229bdc26cf3dd47e12289d675df7ebc85a4544ad74d2b2976135640ce90c0"
+  },
+  "implementation": {
+    "head_sha": "408e752495c432bb7a2457ccd9f1642c140d5d8d",
+    "issue": 1245,
+    "merge_sha": "581837460451f600af83132cd89509674bdd1964",
+    "pull_request": 1246
+  },
+  "kill_switch": {
+    "control_probe_count": 2,
+    "mechanism": "runtime_admission_flag_with_control_probe_readback",
+    "requires_zero_post_kill_provider_calls": true
+  },
+  "predecessor": {
+    "pa5_acceptance_self_sha256": "f2943641f2ccc22ca4d39e34a1e47e46798a1dc95ee6d5cb98aa0c3eaf1506eb",
+    "pa5_status": "m26_pa_5_controlled_internal_shadow_pilot_accepted",
+    "pa6_unlock_self_sha256": "385c1de7e046be0f317eb162f61ff35a809a6c3ac3a1282cf0fab6366ca669a2",
+    "pa6_unlock_status": "m26_pa_6_unlocked_pending_owner_canary_approval"
+  },
+  "requires_daniel_exact_ratification": true,
+  "rollback": {
+    "idempotent": true,
+    "mechanism": "restore_pre_canary_admission_config_digest",
+    "post_restore_smoke_required": true,
+    "target_state_digest": "5c8229bdc26cf3dd47e12289d675df7ebc85a4544ad74d2b2976135640ce90c0"
+  },
+  "schema_version": "knowledge-engine-m26-pa-6-owner-gate/v1",
+  "self_sha256": "86efa5e73c26592e4bf27ee34035b683be6c0e488b2ca85beb601b3c3b7683e2",
+  "slo_thresholds": {
+    "answerable_grounded_quality_pass_rate_minimum": 0.85,
+    "appropriate_abstention_recall_minimum": 0.95,
+    "citation_locator_validity_required": 1.0,
+    "complete_accounting_required": 20,
+    "material_claim_support_precision_required": 1.0,
+    "mean_payg_equivalent_cost_usd_maximum": "0.05",
+    "p95_latency_ms_maximum": 30000,
+    "p95_payg_equivalent_cost_usd_maximum": "0.10",
+    "p99_latency_ms_maximum": 60000,
+    "provider_calls_maximum": 80,
+    "provider_error_count_maximum": 0,
+    "safe_terminal_outcome_rate_minimum": 1.0,
+    "total_payg_equivalent_cost_usd_maximum": "1.00",
+    "unresolved_disagreements_maximum": 0,
+    "unsupported_accepted_claims_maximum": 0
+  },
+  "stage_id": "M26.PA.6",
+  "status": "ratified_owner_canary_gate",
+  "stop_conditions": [
+    "non_allowlisted_identity_or_route_admitted",
+    "public_request_reaches_canary",
+    "deployment_route_gate_sample_or_rollback_identity_drift",
+    "unsupported_accepted_claim_or_invalid_citation_locator",
+    "unresolved_reviewer_disagreement",
+    "acl_privacy_injection_secret_or_raw_persistence_incident",
+    "provider_error_in_canary",
+    "request_latency_above_60000_ms",
+    "p95_latency_above_30000_ms_after_10_terminal_rows",
+    "provider_call_or_cost_budget_projected_exceeded",
+    "telemetry_denominator_or_receipt_validation_gap",
+    "kill_switch_fails_to_stop_admission_or_provider_calls",
+    "rollback_cannot_restore_exact_pre_canary_identity"
+  ]
+}
