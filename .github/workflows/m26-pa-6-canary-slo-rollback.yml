@@ -76,10 +76,7 @@ jobs:
   live_canary:
     needs: static_validate
     runs-on: ubuntu-24.04
-    if: >
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      hashFiles('pilot/m26/m26-pa-6-owner-gate-authorized.json') != ''
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: m23-r3-diagnostic
     steps:
       - uses: actions/checkout@v4
@@ -92,10 +89,23 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Detect ratified PA.6 owner gate
+        id: owner_gate
+        run: |
+          set -euo pipefail
+          if [ -f pilot/m26/m26-pa-6-owner-gate-authorized.json ]; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+            echo "No ratified PA.6 owner gate artifact; no live action authorized."
+          fi
+
       - name: Install validation dependencies
+        if: steps.owner_gate.outputs.authorized == 'true'
         run: python -m pip install --disable-pip-version-check -e '.[dev]'
 
       - name: Verify exact ratified owner gate before any provider-capable action
+        if: steps.owner_gate.outputs.authorized == 'true'
         env:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
         run: |
@@ -124,6 +134,7 @@ jobs:
           PY
 
       - name: Upload PA.6 live evidence
+        if: steps.owner_gate.outputs.authorized == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: m26-pa-6-canary-slo-rollback-evidence
