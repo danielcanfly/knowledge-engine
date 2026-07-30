@@ -1,0 +1,102 @@
+{
+  "$id": "knowledge-engine/m26-pa-5-v8-acceptance-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "accepted": {"const": true},
+    "authority": {"type": "object"},
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "m26_closed": {"const": false},
+        "pa6_canary_authorized": {"const": false},
+        "pa6_canary_traffic": {"const": false},
+        "pa7_authorized": {"const": false},
+        "production_pointer_mutation": {"const": false},
+        "production_serving": {"const": false},
+        "public_traffic": {"const": false},
+        "r2_qdrant_source_foundation_release_mutations": {"const": 0}
+      },
+      "required": [
+        "m26_closed",
+        "pa6_canary_authorized",
+        "pa6_canary_traffic",
+        "pa7_authorized",
+        "production_pointer_mutation",
+        "production_serving",
+        "public_traffic",
+        "r2_qdrant_source_foundation_release_mutations"
+      ],
+      "type": "object"
+    },
+    "calibration_governance": {"type": "object"},
+    "calibrations": {"items": {"type": "object"}, "minItems": 2, "maxItems": 2, "type": "array"},
+    "effective_only_on_reconciliation_merge": {"const": true},
+    "formal_attempt_9": {"type": "object"},
+    "generated_at": {"type": "string"},
+    "implementation": {"type": "object"},
+    "issue": {"type": "object"},
+    "next_stage": {
+      "additionalProperties": false,
+      "properties": {
+        "canary_traffic_permitted": {"const": false},
+        "daniel_owner_canary_gate_required": {"const": true},
+        "m26_closed": {"const": false},
+        "name": {"const": "Canary, SLO, and Rollback"},
+        "pa6_unlock_status_after_reconciliation_merge": {
+          "const": "m26_pa_6_unlocked_pending_owner_canary_approval"
+        },
+        "predecessor_status_required": {
+          "const": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
+        },
+        "production_answer_serving_permitted": {"const": false},
+        "production_pointer_mutation_permitted": {"const": false},
+        "stage_id": {"const": "M26.PA.6"}
+      },
+      "required": [
+        "canary_traffic_permitted",
+        "daniel_owner_canary_gate_required",
+        "m26_closed",
+        "name",
+        "pa6_unlock_status_after_reconciliation_merge",
+        "predecessor_status_required",
+        "production_answer_serving_permitted",
+        "production_pointer_mutation_permitted",
+        "stage_id"
+      ],
+      "type": "object"
+    },
+    "operation_counts": {"type": "object"},
+    "owner_oversight_packet": {"type": "object"},
+    "predecessor": {"type": "object"},
+    "reconciliation": {"type": "object"},
+    "schema_version": {"const": "knowledge-engine-m26-pa-5-v8-acceptance/v1"},
+    "self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "stage_id": {"const": "M26.PA.5"},
+    "status": {"const": "m26_pa_5_controlled_internal_shadow_pilot_accepted"},
+    "thresholds": {"type": "object"}
+  },
+  "required": [
+    "accepted",
+    "authority",
+    "authority_boundary",
+    "calibration_governance",
+    "calibrations",
+    "effective_only_on_reconciliation_merge",
+    "formal_attempt_9",
+    "generated_at",
+    "implementation",
+    "issue",
+    "next_stage",
+    "operation_counts",
+    "owner_oversight_packet",
+    "predecessor",
+    "reconciliation",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "thresholds"
+  ],
+  "type": "object"
+}
