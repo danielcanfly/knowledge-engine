@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge-engine.local/schemas/m26-pa-6-owner-gate-v1.schema.json",
+  "title": "M26 PA6 owner gate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "stage_id",
+    "status",
+    "requires_daniel_exact_ratification",
+    "predecessor",
+    "implementation",
+    "execution_identities",
+    "bounded_scope",
+    "slo_thresholds",
+    "stop_conditions",
+    "kill_switch",
+    "rollback",
+    "denied",
+    "self_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "knowledge-engine-m26-pa-6-owner-gate/v1" },
+    "stage_id": { "const": "M26.PA.6" },
+    "status": {
+      "enum": [
+        "candidate_waiting_for_daniel_owner_canary_approval",
+        "ratified_owner_canary_gate"
+      ]
+    },
+    "requires_daniel_exact_ratification": { "const": true },
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pa5_status",
+        "pa5_acceptance_self_sha256",
+        "pa6_unlock_status",
+        "pa6_unlock_self_sha256"
+      ],
+      "properties": {
+        "pa5_status": { "const": "m26_pa_5_controlled_internal_shadow_pilot_accepted" },
+        "pa5_acceptance_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "pa6_unlock_status": { "const": "m26_pa_6_unlocked_pending_owner_canary_approval" },
+        "pa6_unlock_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" }
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue", "pull_request", "head_sha", "merge_sha"],
+      "properties": {
+        "issue": { "minimum": 1, "type": "integer" },
+        "pull_request": { "minimum": 1, "type": "integer" },
+        "head_sha": { "pattern": "^[0-9a-f]{40}$", "type": "string" },
+        "merge_sha": { "pattern": "^[0-9a-f]{40}$", "type": "string" }
+      }
+    },
+    "execution_identities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deployment_identity",
+        "internal_route",
+        "allowlisted_owner_subject_hash",
+        "pre_canary_rollback_target_identity"
+      ],
+      "properties": {
+        "deployment_identity": { "minLength": 1, "not": { "pattern": "^TO_BE_RESOLVED" }, "type": "string" },
+        "internal_route": { "minLength": 1, "not": { "pattern": "^TO_BE_RESOLVED" }, "type": "string" },
+        "allowlisted_owner_subject_hash": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "pre_canary_rollback_target_identity": { "minLength": 1, "not": { "pattern": "^TO_BE_RESOLVED" }, "type": "string" }
+      }
+    },
+    "bounded_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logical_attempt",
+        "request_count",
+        "request_cap",
+        "duration_minutes_max",
+        "public_traffic_percent",
+        "automatic_expansion",
+        "query_set_source",
+        "query_set_sha256",
+        "query_set_ids"
+      ],
+      "properties": {
+        "logical_attempt": { "const": 1 },
+        "request_count": { "const": 20 },
+        "request_cap": { "const": 20 },
+        "duration_minutes_max": { "const": 30 },
+        "public_traffic_percent": { "const": 0 },
+        "automatic_expansion": { "const": false },
+        "query_set_source": { "minLength": 1, "type": "string" },
+        "query_set_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "query_set_ids": {
+          "type": "array",
+          "minItems": 20,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": { "pattern": "^m26-pa5-", "type": "string" }
+        }
+      }
+    },
+    "slo_thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "complete_accounting_required",
+        "safe_terminal_outcome_rate_minimum",
+        "answerable_grounded_quality_pass_rate_minimum",
+        "appropriate_abstention_recall_minimum",
+        "material_claim_support_precision_required",
+        "citation_locator_validity_required",
+        "unsupported_accepted_claims_maximum",
+        "provider_error_count_maximum",
+        "provider_calls_maximum",
+        "p95_latency_ms_maximum",
+        "p99_latency_ms_maximum",
+        "mean_payg_equivalent_cost_usd_maximum",
+        "p95_payg_equivalent_cost_usd_maximum",
+        "total_payg_equivalent_cost_usd_maximum",
+        "unresolved_disagreements_maximum"
+      ],
+      "properties": {
+        "complete_accounting_required": { "const": 20 },
+        "safe_terminal_outcome_rate_minimum": { "const": 1.0 },
+        "answerable_grounded_quality_pass_rate_minimum": { "const": 0.85 },
+        "appropriate_abstention_recall_minimum": { "const": 0.95 },
+        "material_claim_support_precision_required": { "const": 1.0 },
+        "citation_locator_validity_required": { "const": 1.0 },
+        "unsupported_accepted_claims_maximum": { "const": 0 },
+        "provider_error_count_maximum": { "const": 0 },
+        "provider_calls_maximum": { "const": 80 },
+        "p95_latency_ms_maximum": { "const": 30000 },
+        "p99_latency_ms_maximum": { "const": 60000 },
+        "mean_payg_equivalent_cost_usd_maximum": { "const": "0.05" },
+        "p95_payg_equivalent_cost_usd_maximum": { "const": "0.10" },
+        "total_payg_equivalent_cost_usd_maximum": { "const": "1.00" },
+        "unresolved_disagreements_maximum": { "const": 0 }
+      }
+    },
+    "stop_conditions": { "type": "array", "minItems": 12, "items": { "type": "string" } },
+    "kill_switch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mechanism", "control_probe_count", "requires_zero_post_kill_provider_calls"],
+      "properties": {
+        "mechanism": { "const": "runtime_admission_flag_with_control_probe_readback" },
+        "control_probe_count": { "minimum": 2, "type": "integer" },
+        "requires_zero_post_kill_provider_calls": { "const": true }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mechanism", "target_state_digest", "idempotent", "post_restore_smoke_required"],
+      "properties": {
+        "mechanism": { "const": "restore_pre_canary_admission_config_digest" },
+        "target_state_digest": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "idempotent": { "const": true },
+        "post_restore_smoke_required": { "const": true }
+      }
+    },
+    "denied": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "public_traffic",
+        "production_serving",
+        "production_pointer_mutation",
+        "r2_qdrant_source_foundation_release_mutation",
+        "pa7",
+        "m26_closure"
+      ],
+      "properties": {
+        "public_traffic": { "const": true },
+        "production_serving": { "const": true },
+        "production_pointer_mutation": { "const": true },
+        "r2_qdrant_source_foundation_release_mutation": { "const": true },
+        "pa7": { "const": true },
+        "m26_closure": { "const": true }
+      }
+    },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" }
+  }
+}

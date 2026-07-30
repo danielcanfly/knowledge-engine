@@ -101,6 +101,7 @@ jobs:
           .github/workflows/m26-1-architecture-authority.yml
           .github/workflows/m26-pa-4-verified-answer-citation-gate.yml
           .github/workflows/m26-pa-5-controlled-internal-pilot.yml
+          .github/workflows/m26-pa-6-canary-slo-rollback.yml
           docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md
           docs/architecture/m26/m26-pa-5-controlled-internal-pilot.md
           pilot/m26/m26-pa-4-benchmark-population.json
@@ -125,6 +126,8 @@ jobs:
           pilot/m26/m26-pa-5-reviewer-contract-v2.json
           pilot/m26/m26-pa-5-threshold-semantics-v2.json
           pilot/m26/m26-pa-5-v6-exhaustion-record.json
+          pilot/m26/m26-pa-6-canary-policy.json
+          pilot/m26/m26-pa-6-owner-gate-template.json
           schemas/m26-pa-4-benchmark-population-v1.schema.json
           schemas/m26-pa-4-owner-decision-v1.schema.json
           schemas/m26-pa-4-verified-answer-policy-v1.schema.json
@@ -152,10 +155,16 @@ jobs:
           schemas/m26-pa-5-success-receipt-v1.schema.json
           schemas/m26-pa-5-threshold-semantics-v2-v1.schema.json
           schemas/m26-pa-5-v6-exhaustion-record-v1.schema.json
+          schemas/m26-pa-6-canary-policy-v1.schema.json
+          schemas/m26-pa-6-canary-receipt-v1.schema.json
+          schemas/m26-pa-6-incident-packet-v1.schema.json
+          schemas/m26-pa-6-owner-gate-v1.schema.json
+          src/knowledge_engine/m26_canary_slo_rollback.py
           src/knowledge_engine/m26_pa5_controlled_internal_pilot.py
           src/knowledge_engine/m26_pa5_live_execution.py
           src/knowledge_engine/m26_pa5_population_freeze.py
           src/knowledge_engine/m26_verified_answer_citation_gate.py
+          tests/test_m26_pa_6_canary_slo_rollback.py
           tests/test_m26_pa_5_controlled_internal_pilot.py
           tests/test_m26_pa_5_live_execution.py
           tests/test_m26_pa_5_population_freeze.py
