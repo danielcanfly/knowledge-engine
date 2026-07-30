@@ -19,11 +19,11 @@
   },
   "predecessor": {
     "pa5_acceptance_path": "pilot/m26/m26-pa-5-v8-acceptance.json",
-    "pa5_acceptance_self_sha256": "35ed2c2304061005f534739bbebc592b2685f245ac5067a1d0fbdc41d6535ebb",
+    "pa5_acceptance_self_sha256": "f2943641f2ccc22ca4d39e34a1e47e46798a1dc95ee6d5cb98aa0c3eaf1506eb",
     "pa5_status": "m26_pa_5_controlled_internal_shadow_pilot_accepted"
   },
   "schema_version": "knowledge-engine-m26-pa-6-unlock-pending-owner-canary-approval/v1",
-  "self_sha256": "5b7ca07527e5684bd54033d5ef391ae0082c507ad041ae8f1c6bf1ab3a853f4f",
+  "self_sha256": "385c1de7e046be0f317eb162f61ff35a809a6c3ac3a1282cf0fab6366ca669a2",
   "stage_id": "M26.PA.6",
   "status": "m26_pa_6_unlocked_pending_owner_canary_approval"
 }
