@@ -29,9 +29,253 @@
       ],
       "type": "object"
     },
-    "calibration_governance": {"type": "object"},
-    "calibrations": {"items": {"type": "object"}, "minItems": 2, "maxItems": 2, "type": "array"},
+    "calibration_governance": {
+      "additionalProperties": false,
+      "properties": {
+        "cumulative_calibration_cost_usd": {"const": "0.04014534"},
+        "cumulative_calibration_provider_calls": {"const": 248},
+        "failed_round_count": {"const": 1},
+        "maximum_calibration_cost_usd": {"const": "20.00"},
+        "maximum_calibration_provider_calls": {"const": 640},
+        "passing_round_count": {"const": 2},
+        "passing_sequence_cost_usd": {"const": "0.02610858"},
+        "passing_sequence_provider_calls": {"const": 146},
+        "total_rounds_consumed": {"const": 3},
+        "two_unique_consecutive_passes_on_same_head_and_sample": {"const": true}
+      },
+      "required": [
+        "cumulative_calibration_cost_usd",
+        "cumulative_calibration_provider_calls",
+        "failed_round_count",
+        "maximum_calibration_cost_usd",
+        "maximum_calibration_provider_calls",
+        "passing_round_count",
+        "passing_sequence_cost_usd",
+        "passing_sequence_provider_calls",
+        "total_rounds_consumed",
+        "two_unique_consecutive_passes_on_same_head_and_sample"
+      ],
+      "type": "object"
+    },
+    "calibrations": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "metrics": {
+            "additionalProperties": true,
+            "properties": {
+              "payg_equivalent_cost_usd": {"pattern": "^0\\.0[0-9]+$", "type": "string"},
+              "provider_calls": {"minimum": 0, "type": "integer"}
+            },
+            "required": ["payg_equivalent_cost_usd", "provider_calls"],
+            "type": "object"
+          },
+          "receipt_self_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+          "run_attempt": {"const": 1},
+          "sample_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+          "status": {"const": "passed"}
+        },
+        "required": [
+          "metrics",
+          "receipt_self_sha256",
+          "run_attempt",
+          "sample_sha256",
+          "status"
+        ],
+        "type": "object"
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "type": "array"
+    },
+    "corrective_reconciliation": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {"const": "codex/m26-pa5-corrective-calibration-accounting"},
+        "handoff_package_sha256": {
+          "const": "65e1cc63817ac900e4976ebea596cecb0312f520d485da9880545e992e80f36e"
+        },
+        "issue_number": {"const": 1241},
+        "live_provider_calls": {"const": 0},
+        "reason": {"type": "string"},
+        "reran_calibration_or_formal_attempt": {"const": false}
+      },
+      "required": [
+        "branch",
+        "handoff_package_sha256",
+        "issue_number",
+        "live_provider_calls",
+        "reason",
+        "reran_calibration_or_formal_attempt"
+      ],
+      "type": "object"
+    },
     "effective_only_on_reconciliation_merge": {"const": true},
+    "failed_calibrations": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_archive_digest": {
+            "const": "sha256:e5d78a81c061d9c846baafffe1e468d1d3996240b917b7316a68eae9b2c99090"
+          },
+          "artifact_id": {"const": 8745102985},
+          "artifact_name": {"const": "m26-pa5-v8-calibration-30505254726"},
+          "executable_head_sha": {
+            "const": "31288b0dc966af2df55923f504d63cea9f02ac58"
+          },
+          "job_id": {"const": 90753497730},
+          "metrics": {
+            "additionalProperties": false,
+            "properties": {
+              "answerable_grounded_quality_pass_rate": {"const": 0.68},
+              "appropriate_abstention_recall": {"const": 1.0},
+              "citation_locator_validity": {"const": 0.84},
+              "complete_accounting": {"const": 35},
+              "mandatory_abstention_correctness": {"const": 1.0},
+              "material_claim_support_precision": {"const": 1.0},
+              "mean_payg_equivalent_cost_usd": {
+                "const": "0.0004010502857142857142857142857"
+              },
+              "over_abstention_on_answerable": {"const": 0.32},
+              "p95_latency_ms": {"const": 9453},
+              "p95_payg_equivalent_cost_usd": {"const": "0.00058743"},
+              "p99_latency_ms": {"const": 11707},
+              "payg_equivalent_cost_usd": {"const": "0.01403676"},
+              "post_repair_disagreement_rate": {"const": 0.17142857142857143},
+              "provider_calls": {"const": 102},
+              "provider_error_rate": {"const": 0.0},
+              "resolved_by_safe_abstention": {"const": 0},
+              "safe_terminal_outcome_rate": {"const": 1.0},
+              "unresolved_disagreements": {"const": 6},
+              "unsupported_accepted_claims": {"const": 0}
+            },
+            "required": [
+              "answerable_grounded_quality_pass_rate",
+              "appropriate_abstention_recall",
+              "citation_locator_validity",
+              "complete_accounting",
+              "mandatory_abstention_correctness",
+              "material_claim_support_precision",
+              "mean_payg_equivalent_cost_usd",
+              "over_abstention_on_answerable",
+              "p95_latency_ms",
+              "p95_payg_equivalent_cost_usd",
+              "p99_latency_ms",
+              "payg_equivalent_cost_usd",
+              "post_repair_disagreement_rate",
+              "provider_calls",
+              "provider_error_rate",
+              "resolved_by_safe_abstention",
+              "safe_terminal_outcome_rate",
+              "unresolved_disagreements",
+              "unsupported_accepted_claims"
+            ],
+            "type": "object"
+          },
+          "privacy": {
+            "additionalProperties": false,
+            "properties": {
+              "full_provider_response_persisted": {"const": false},
+              "raw_evidence_persisted": {"const": false},
+              "raw_query_persisted": {"const": false},
+              "secret_values_persisted": {"const": false},
+              "vectors_persisted": {"const": false}
+            },
+            "required": [
+              "full_provider_response_persisted",
+              "raw_evidence_persisted",
+              "raw_query_persisted",
+              "secret_values_persisted",
+              "vectors_persisted"
+            ],
+            "type": "object"
+          },
+          "receipt_file_sha256": {
+            "const": "3cb26d0ae9185a5d4c7a6abba7f75b90d865b039fcab4e2718a19397d326412e"
+          },
+          "receipt_self_sha256": {
+            "const": "df37c60ba240c92ed8d22f90a34c80cf3756cce7689973dbfc2810ac7d572392"
+          },
+          "repair": {
+            "additionalProperties": false,
+            "properties": {
+              "head_sha": {"const": "ab0427e97faba970dd3e2b88ebc3da507a3625c5"},
+              "merge_sha": {"const": "1f09dd3f6266d6632036347c26d8ad4fa66024da"},
+              "provider_calls_in_pr_ci": {"const": 0},
+              "pull_request": {"const": 1235},
+              "repair_type": {
+                "const": "semantic_envelope_repair_after_failed_closed_calibration"
+              }
+            },
+            "required": [
+              "head_sha",
+              "merge_sha",
+              "provider_calls_in_pr_ci",
+              "pull_request",
+              "repair_type"
+            ],
+            "type": "object"
+          },
+          "round_number": {"const": 1},
+          "run_attempt": {"const": 1},
+          "run_event": {"const": "push"},
+          "run_id": {"const": 30505254726},
+          "sample_sha256": {
+            "const": "68e7515b20755f40e949beaed6b8603cc5541c52c91cac470b63f0b88ad32f3d"
+          },
+          "status": {"const": "failed_closed"},
+          "stratum_counts": {
+            "additionalProperties": false,
+            "properties": {
+              "abstention_no_answer": {"const": 5},
+              "conflict_and_temporal_freshness": {"const": 5},
+              "cross_document_comparison": {"const": 5},
+              "direct_grounded_factual": {"const": 5},
+              "graph_navigation": {"const": 5},
+              "prompt_injection_privacy_adversarial": {"const": 5},
+              "provenance_and_source_trace": {"const": 5}
+            },
+            "required": [
+              "abstention_no_answer",
+              "conflict_and_temporal_freshness",
+              "cross_document_comparison",
+              "direct_grounded_factual",
+              "graph_navigation",
+              "prompt_injection_privacy_adversarial",
+              "provenance_and_source_trace"
+            ],
+            "type": "object"
+          },
+          "trigger_merge_sha": {"const": "1bda61c2ec34fde55e6ca7ffa836f49755d657f5"},
+          "trigger_pull_request": {"const": 1234}
+        },
+        "required": [
+          "artifact_archive_digest",
+          "artifact_id",
+          "artifact_name",
+          "executable_head_sha",
+          "job_id",
+          "metrics",
+          "privacy",
+          "receipt_file_sha256",
+          "receipt_self_sha256",
+          "repair",
+          "round_number",
+          "run_attempt",
+          "run_event",
+          "run_id",
+          "sample_sha256",
+          "status",
+          "stratum_counts",
+          "trigger_merge_sha",
+          "trigger_pull_request"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "maxItems": 1,
+      "type": "array"
+    },
     "formal_attempt_9": {"type": "object"},
     "generated_at": {"type": "string"},
     "implementation": {"type": "object"},
@@ -82,7 +326,9 @@
     "authority_boundary",
     "calibration_governance",
     "calibrations",
+    "corrective_reconciliation",
     "effective_only_on_reconciliation_merge",
+    "failed_calibrations",
     "formal_attempt_9",
     "generated_at",
     "implementation",

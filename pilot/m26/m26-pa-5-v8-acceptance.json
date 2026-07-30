@@ -19,10 +19,14 @@
     "r2_qdrant_source_foundation_release_mutations": 0
   },
   "calibration_governance": {
-    "cumulative_calibration_cost_usd": "0.02610858",
-    "cumulative_calibration_provider_calls": 146,
+    "cumulative_calibration_cost_usd": "0.04014534",
+    "cumulative_calibration_provider_calls": 248,
+    "failed_round_count": 1,
     "maximum_calibration_cost_usd": "20.00",
     "maximum_calibration_provider_calls": 640,
+    "passing_round_count": 2,
+    "passing_sequence_cost_usd": "0.02610858",
+    "passing_sequence_provider_calls": 146,
     "total_rounds_consumed": 3,
     "two_unique_consecutive_passes_on_same_head_and_sample": true
   },
@@ -138,7 +142,78 @@
       "trigger_pull_request": 1237
     }
   ],
+  "corrective_reconciliation": {
+    "branch": "codex/m26-pa5-corrective-calibration-accounting",
+    "handoff_package_sha256": "65e1cc63817ac900e4976ebea596cecb0312f520d485da9880545e992e80f36e",
+    "issue_number": 1241,
+    "live_provider_calls": 0,
+    "reason": "correct cumulative calibration accounting and portable closure packaging without rerun",
+    "reran_calibration_or_formal_attempt": false
+  },
   "effective_only_on_reconciliation_merge": true,
+  "failed_calibrations": [
+    {
+      "artifact_archive_digest": "sha256:e5d78a81c061d9c846baafffe1e468d1d3996240b917b7316a68eae9b2c99090",
+      "artifact_id": 8745102985,
+      "artifact_name": "m26-pa5-v8-calibration-30505254726",
+      "executable_head_sha": "31288b0dc966af2df55923f504d63cea9f02ac58",
+      "job_id": 90753497730,
+      "metrics": {
+        "answerable_grounded_quality_pass_rate": 0.68,
+        "appropriate_abstention_recall": 1.0,
+        "citation_locator_validity": 0.84,
+        "complete_accounting": 35,
+        "mandatory_abstention_correctness": 1.0,
+        "material_claim_support_precision": 1.0,
+        "mean_payg_equivalent_cost_usd": "0.0004010502857142857142857142857",
+        "over_abstention_on_answerable": 0.32,
+        "p95_latency_ms": 9453,
+        "p95_payg_equivalent_cost_usd": "0.00058743",
+        "p99_latency_ms": 11707,
+        "payg_equivalent_cost_usd": "0.01403676",
+        "post_repair_disagreement_rate": 0.17142857142857143,
+        "provider_calls": 102,
+        "provider_error_rate": 0.0,
+        "resolved_by_safe_abstention": 0,
+        "safe_terminal_outcome_rate": 1.0,
+        "unresolved_disagreements": 6,
+        "unsupported_accepted_claims": 0
+      },
+      "privacy": {
+        "full_provider_response_persisted": false,
+        "raw_evidence_persisted": false,
+        "raw_query_persisted": false,
+        "secret_values_persisted": false,
+        "vectors_persisted": false
+      },
+      "receipt_file_sha256": "3cb26d0ae9185a5d4c7a6abba7f75b90d865b039fcab4e2718a19397d326412e",
+      "receipt_self_sha256": "df37c60ba240c92ed8d22f90a34c80cf3756cce7689973dbfc2810ac7d572392",
+      "repair": {
+        "head_sha": "ab0427e97faba970dd3e2b88ebc3da507a3625c5",
+        "merge_sha": "1f09dd3f6266d6632036347c26d8ad4fa66024da",
+        "provider_calls_in_pr_ci": 0,
+        "pull_request": 1235,
+        "repair_type": "semantic_envelope_repair_after_failed_closed_calibration"
+      },
+      "round_number": 1,
+      "run_attempt": 1,
+      "run_event": "push",
+      "run_id": 30505254726,
+      "sample_sha256": "68e7515b20755f40e949beaed6b8603cc5541c52c91cac470b63f0b88ad32f3d",
+      "status": "failed_closed",
+      "stratum_counts": {
+        "abstention_no_answer": 5,
+        "conflict_and_temporal_freshness": 5,
+        "cross_document_comparison": 5,
+        "direct_grounded_factual": 5,
+        "graph_navigation": 5,
+        "prompt_injection_privacy_adversarial": 5,
+        "provenance_and_source_trace": 5
+      },
+      "trigger_merge_sha": "1bda61c2ec34fde55e6ca7ffa836f49755d657f5",
+      "trigger_pull_request": 1234
+    }
+  ],
   "formal_attempt_9": {
     "artifact_archive_digest": "sha256:3b8b8575561b382a23eb486f6fd060308df9621973ce2e29c75bb648958d3493",
     "artifact_id": 8746169278,
@@ -252,7 +327,7 @@
     "remote_pr_metadata_required_for_exact_head": true
   },
   "schema_version": "knowledge-engine-m26-pa-5-v8-acceptance/v1",
-  "self_sha256": "35ed2c2304061005f534739bbebc592b2685f245ac5067a1d0fbdc41d6535ebb",
+  "self_sha256": "f2943641f2ccc22ca4d39e34a1e47e46798a1dc95ee6d5cb98aa0c3eaf1506eb",
   "stage_id": "M26.PA.5",
   "status": "m26_pa_5_controlled_internal_shadow_pilot_accepted",
   "thresholds": {
