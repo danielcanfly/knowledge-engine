@@ -60,6 +60,17 @@ class FakeProviderClient:
         }
 
 
+class DisagreeingReviewerClient(FakeProviderClient):
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        result = super().call(payload, call_class)
+        if call_class == "independent_review":
+            result["text"] = json.dumps(
+                {"verdict": "fail", "reason_codes": ["semantic_disagreement"]},
+                sort_keys=True,
+            )
+        return result
+
+
 def test_calibration_controller_passes_complete_sample_with_runtime_owned_evidence() -> None:
     question_ids, sample_sha256 = calibration_ids(ROOT)
     client = FakeProviderClient()
@@ -112,3 +123,30 @@ def test_live_receipt_persists_only_bounded_identifiers_and_metrics() -> None:
     assert receipt["raw_query_persisted"] is False
     assert receipt["raw_evidence_persisted"] is False
     assert receipt["full_provider_response_persisted"] is False
+
+
+def test_safe_abstention_resolves_post_repair_disagreement_without_accepting_answer() -> None:
+    question_ids, _ = calibration_ids(ROOT)
+    receipt = run_population(
+        root=ROOT,
+        question_ids=question_ids[:1],
+        max_calls=10,
+        max_cost=Decimal("1.00"),
+        thresholds={
+            "count": 1,
+            "safe_min": 1.0,
+            "grounded_min": 1.0,
+            "over_abstention_max": 0.0,
+            "disagreement_max": 0.0,
+        },
+        mode="calibration-test",
+        client=DisagreeingReviewerClient(),
+    )
+    row = receipt["rows"][0]
+    assert receipt["status"] == "failed_closed"
+    assert row["post_repair_disagreement"] is True
+    assert row["safe_abstention"] is True
+    assert row["accepted"] is False
+    assert receipt["metrics"]["resolved_by_safe_abstention"] == 1
+    assert receipt["metrics"]["unresolved_disagreements"] == 0
+    assert receipt["metrics"]["over_abstention_on_answerable"] == 1.0
