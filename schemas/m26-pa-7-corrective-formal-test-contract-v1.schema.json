@@ -1,0 +1,40 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-corrective-formal-test-contract-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "classes": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "type": "object"
+    },
+    "count": {
+      "const": 8
+    },
+    "novelty": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa7-corrective-formal-test-contract/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "thresholds": {
+      "additionalProperties": true,
+      "type": "object"
+    }
+  },
+  "required": [
+    "classes",
+    "count",
+    "novelty",
+    "schema_version",
+    "self_sha256",
+    "thresholds"
+  ],
+  "type": "object"
+}

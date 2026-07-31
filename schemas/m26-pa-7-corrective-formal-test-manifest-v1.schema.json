@@ -1,0 +1,132 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-corrective-formal-test-manifest-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "calibration_query_ordinals": {
+      "items": {
+        "type": "integer"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "classes": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "type": "object"
+    },
+    "corrective_reopen_self_sha256": {
+      "const": "f5412bb39a776e5169c601d3b2d757e212058f215759a4104f0bb79c79c18e8d"
+    },
+    "count": {
+      "const": 8
+    },
+    "formal_test_contract_self_sha256": {
+      "const": "098bf0a450bfb118c53aec08e7772249083b3a1ae696447d10413053a3fc5b51"
+    },
+    "implementation_merge_sha": {
+      "const": "23413d9336a958fb5915068bc2e5a1ea34f28f57"
+    },
+    "novelty": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "owner_authority_self_sha256": {
+      "const": "7521cfa5fc038cb5354aa8b8e7b766ad7544e0c2b160db58735409eaa60d4937"
+    },
+    "privacy": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "queries": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "answerable": {
+            "type": "boolean"
+          },
+          "class": {
+            "enum": [
+              "conflict_temporal_freshness",
+              "cross_document_comparison",
+              "direct_grounded_knowledge",
+              "graph_relationship_navigation",
+              "no_answer",
+              "prompt_injection_privacy",
+              "provenance_source_trace"
+            ],
+            "type": "string"
+          },
+          "expected_runtime_path": {
+            "const": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+          },
+          "non_sensitive_operator_demo": {
+            "type": "boolean"
+          },
+          "ordinal": {
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "question_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "answerable",
+          "class",
+          "expected_runtime_path",
+          "non_sensitive_operator_demo",
+          "ordinal",
+          "question_sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 8,
+      "minItems": 8,
+      "type": "array"
+    },
+    "query_set_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-7-corrective-formal-test-manifest/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "stage_id": {
+      "const": "M26.PA.7-CORRECTIVE"
+    },
+    "status": {
+      "const": "corrective_formal_test_manifest_frozen"
+    },
+    "trigger_issue": {
+      "const": 1259
+    }
+  },
+  "required": [
+    "calibration_query_ordinals",
+    "classes",
+    "corrective_reopen_self_sha256",
+    "count",
+    "formal_test_contract_self_sha256",
+    "implementation_merge_sha",
+    "novelty",
+    "owner_authority_self_sha256",
+    "privacy",
+    "queries",
+    "query_set_sha256",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "trigger_issue"
+  ],
+  "type": "object"
+}

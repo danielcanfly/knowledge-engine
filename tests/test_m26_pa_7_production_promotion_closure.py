@@ -390,9 +390,11 @@ def test_pa7_workflow_is_non_live_on_pull_requests_and_gate_triggered_on_main() 
     assert "permissions:\n  contents: read" in workflow
     assert "pull_request:" in workflow
     assert "if: github.event_name == 'push' && github.ref == 'refs/heads/main'" in workflow
-    assert "pilot/m26/m26-pa-7-promotion-trigger.json" in workflow
-    assert "pilot/m26/m26-pa-7-resolved-production-gate.json" in workflow
+    assert "pilot/m26/m26-pa-7-corrected-promotion-trigger.json" in workflow
+    assert "pilot/m26/m26-pa-7-corrected-resolved-production-gate.json" in workflow
+    assert "pilot/m26/m26-pa-7-corrective-formal-test-manifest.json" in workflow
     assert "pilot/m26/m26-pa-7-owner-final-decision.json" in workflow
+    assert "run_corrective_formal_product_readiness(" in workflow
     assert "validate_promotion_trigger(trigger, gate, decision)" in workflow
-    assert "PA.7 acceptance already reconciled" in workflow
+    assert "m26_pa_7_arbitrary_owner_query_product_readiness_accepted" in workflow
     assert "MINIMAX_API_KEY" in workflow
