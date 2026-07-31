@@ -136,6 +136,7 @@ def build_p1_product_app_shell_report(
         SITE_ROOT / "index.html",
         SITE_ROOT / "_headers",
         SITE_ROOT / "styles.css",
+        SITE_ROOT / "m26-ask.js",
         SITE_ROOT / "app.js",
         SITE_ROOT / "graph-explorer.js",
         SITE_ROOT / "favicon.png",

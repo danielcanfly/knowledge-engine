@@ -269,6 +269,7 @@ def _index_html() -> str:
   <script src="vendor/graphology.umd.min.js"></script>
   <script src="vendor/sigma.min.js"></script>
   <script src="graph-explorer.js"></script>
+  <script src="m26-ask.js"></script>
   <script type="module" src="app.js"></script>
 </head>
 <body>
@@ -286,6 +287,7 @@ def _index_html() -> str:
       </div>
       <nav class="primary-nav" aria-label="M24 surfaces">
         <a href="#/overview" data-route-link="overview">Overview</a>
+        <a href="/ask" data-route-link="ask">Ask Knowledge Engine</a>
         <a href="#/wiki?concept=concepts/harness" data-route-link="wiki">Concept Wiki</a>
         <a href="#/search" data-route-link="search">Lexical Search</a>
         <a href="#/graph" data-route-link="graph">Graph Explorer</a>
@@ -296,7 +298,7 @@ def _index_html() -> str:
       </nav>
       <section class="boundary-panel" aria-label="Authority boundary">
         <h2>Boundary</h2>
-        <p>Read-only internal product. Production retrieval remains lexical.</p>
+        <p>M24 artifacts are read-only. M26 Ask is owner-only through the trusted API.</p>
       </section>
     </aside>
     <main id="app-main" class="workspace" tabindex="-1">
@@ -537,6 +539,58 @@ a {
   font: inherit;
   min-height: 36px;
   padding: 7px 10px;
+  text-decoration: none;
+}
+
+.ask-form {
+  background: #ffffff;
+  border: 1px solid #d6dae1;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.ask-form label {
+  font-weight: 700;
+}
+
+.ask-form textarea {
+  border: 1px solid #cbd5e1;
+  font: inherit;
+  line-height: 1.45;
+  min-height: 128px;
+  padding: 10px;
+  resize: vertical;
+  width: 100%;
+}
+
+.ask-form button {
+  background: #14532d;
+  border: 1px solid #14532d;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
+.ask-form button:disabled,
+.ask-form textarea:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.ask-evidence-split {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+}
+
+.citation-chip {
+  background: #e0f2fe;
+  border: 1px solid #7dd3fc;
+  color: #0c4a6e;
+  display: inline-block;
+  line-height: 1.2;
+  padding: 1px 4px;
   text-decoration: none;
 }
 
@@ -1364,6 +1418,7 @@ const ARTIFACTS = {{
 
 const ROUTES = {{
   overview: "Overview",
+  ask: "Ask Knowledge Engine",
   wiki: "Concept Wiki",
   search: "Lexical Search",
   graph: "Graph Explorer",
@@ -1383,6 +1438,10 @@ const state = {{
   sourceDetailFocusRequested: false,
   searchQuery: "harness",
   sourceQuery: "",
+  askQuestion: "Compare routers and adaptive planning for permission-first controls.",
+  askResponse: null,
+  askError: "",
+  askLoading: false,
 }};
 
 const app = document.querySelector("#app");
@@ -1460,10 +1519,16 @@ async function loadArtifacts() {{
 }}
 
 function routeFromHash() {{
+  if ((location.pathname === "/ask" || location.pathname === "/ask/") && !location.hash) {{
+    return "ask";
+  }}
   return (location.hash.replace(/^#\\/?/, "") || "overview").split("?")[0];
 }}
 
 function routeSearchParams() {{
+  if ((location.pathname === "/ask" || location.pathname === "/ask/") && !location.hash) {{
+    return new URLSearchParams(location.search);
+  }}
   return new URLSearchParams(location.hash.split("?")[1] || "");
 }}
 
@@ -2358,6 +2423,22 @@ function renderAcceptance(artifacts) {{
   `;
 }}
 
+function renderAsk() {{
+  if (!window.M26AskSurface || typeof window.M26AskSurface.render !== "function") {{
+    return `
+      <section class="state-panel" data-state="ask-unavailable">
+        <h3>Ask unavailable</h3>
+        <p>The M26 Ask surface module is unavailable in this deployment.</p>
+      </section>
+    `;
+  }}
+  return window.M26AskSurface.render({{
+    state,
+    escapeHtml,
+    metric,
+  }});
+}}
+
 function renderAclDenied() {{
   return `
     <section class="state-panel" data-state="acl-denied">
@@ -2403,6 +2484,7 @@ function render() {{
   }}
   const renderers = {{
     overview: renderOverview,
+    ask: renderAsk,
     wiki: renderWiki,
     search: renderSearch,
     graph: renderGraph,
@@ -2416,6 +2498,19 @@ function render() {{
   if (route === "graph") {{
     initializeGraphExplorer(state.artifacts);
   }}
+  if (
+    route === "ask" &&
+    window.M26AskSurface &&
+    typeof window.M26AskSurface.wire === "function"
+  ) {{
+    window.M26AskSurface.wire({{
+      app,
+      state,
+      setStatus,
+      render,
+      escapeHtml,
+    }});
+  }}
 }}
 
 function hashForRoute(route, params = {{}}) {{
@@ -2428,6 +2523,24 @@ function hashForRoute(route, params = {{}}) {{
 }}
 
 function navigateTo(route, params = {{}}) {{
+  if (route === "ask") {{
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {{
+      if (value) query.set(key, value);
+    }}
+    const nextPath = `/ask${{query.toString() ? `?${{query.toString()}}` : ""}}`;
+    if (location.pathname + location.search === nextPath) {{
+      state.route = route;
+      applyRouteStateFromHash(route);
+      render();
+      return;
+    }}
+    history.pushState(null, "", nextPath);
+    state.route = route;
+    applyRouteStateFromHash(route);
+    render();
+    return;
+  }}
   const nextHash = hashForRoute(route, params);
   if (location.hash === nextHash) {{
     state.route = route;
@@ -2519,7 +2632,22 @@ function wireInteractions() {{
   focusSourceDetailIfRequested();
 }}
 
+const askRouteLink = document.querySelector('[data-route-link="ask"]');
+if (askRouteLink) {{
+  askRouteLink.addEventListener("click", (event) => {{
+    event.preventDefault();
+    navigateTo("ask");
+  }});
+}}
+
 window.addEventListener("hashchange", () => {{
+  state.route = routeFromHash();
+  applyRouteStateFromHash(state.route);
+  render();
+}});
+
+window.addEventListener("popstate", () => {{
+  if (location.hash) return;
   state.route = routeFromHash();
   applyRouteStateFromHash(state.route);
   render();
@@ -2550,6 +2678,21 @@ def _headers() -> str:
     return f"""/*
   Content-Security-Policy: {CSP}
 """
+
+
+def _committed_site_text(name: str) -> str:
+    path = SITE_ROOT / name
+    if not path.exists():
+        raise FileNotFoundError(f"committed site helper is missing: {path}")
+    return path.read_text(encoding="utf-8")
+
+
+def _m26_ask_js() -> str:
+    return _committed_site_text("m26-ask.js")
+
+
+def _worker_js() -> str:
+    return _committed_site_text("_worker.js")
 
 
 def _release_viewer() -> dict[str, Any]:
@@ -2731,8 +2874,10 @@ def build_p6_internal_product_deployment(
     artifacts = [
         _write_text(site_root / "index.html", _index_html()),
         _write_text(site_root / "_headers", _headers()),
+        _write_text(site_root / "_worker.js", _worker_js()),
         _write_text(site_root / "styles.css", _styles()),
         _write_text(site_root / "graph-explorer.js", _graph_explorer_js()),
+        _write_text(site_root / "m26-ask.js", _m26_ask_js()),
         _write_text(site_root / "app.js", _app_js()),
         _write_bytes(site_root / "favicon.png", FAVICON_PNG_BYTES),
     ]
