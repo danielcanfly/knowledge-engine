@@ -1,0 +1,116 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-production-receipt-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "answer_authority": { "additionalProperties": true, "type": "object" },
+    "generated_at": { "type": "string" },
+    "metrics": {
+      "additionalProperties": true,
+      "properties": {
+        "citation_locator_validity": { "const": 1.0 },
+        "complete_accounting": { "const": 20 },
+        "material_claim_support_precision": { "const": 1.0 },
+        "post_kill_provider_calls": { "const": 0 },
+        "provider_error_count": { "const": 0 },
+        "unsupported_accepted_claims": { "const": 0 }
+      },
+      "required": [
+        "citation_locator_validity",
+        "complete_accounting",
+        "material_claim_support_precision",
+        "post_kill_provider_calls",
+        "provider_error_count",
+        "unsupported_accepted_claims"
+      ],
+      "type": "object"
+    },
+    "mutations": {
+      "additionalProperties": false,
+      "properties": {
+        "corpus_index_content_mutations": { "const": 0 },
+        "production_pointer_or_route_mutations": { "type": "integer" }
+      },
+      "required": ["corpus_index_content_mutations", "production_pointer_or_route_mutations"],
+      "type": "object"
+    },
+    "owner_decision_self_sha256": { "const": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa" },
+    "owner_query_response": { "additionalProperties": true, "type": "object" },
+    "privacy": {
+      "const": {
+        "full_provider_response_persisted": false,
+        "raw_evidence_persisted": false,
+        "raw_query_persisted": false,
+        "secret_values_persisted": false,
+        "vectors_persisted": false
+      }
+    },
+    "request_rows": { "items": { "type": "object" }, "minItems": 20, "maxItems": 20, "type": "array" },
+    "resolved_gate_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "schema_version": { "const": "knowledge-engine-m26-pa-7-production-receipt/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "slo_pass": { "type": "boolean" },
+    "stage_id": { "const": "M26.PA.7" },
+    "state": {
+      "additionalProperties": true,
+      "properties": {
+        "final_target_readback_verified": { "const": true },
+        "post_kill_provider_calls": { "const": 0 },
+        "public_traffic_operations": { "const": 0 },
+        "rollback_equals_before": { "const": true }
+      },
+      "required": [
+        "before_digest",
+        "final_restored_promoted_digest",
+        "final_target_readback_verified",
+        "killed_digest",
+        "post_kill_provider_calls",
+        "promoted_digest",
+        "public_traffic_operations",
+        "rollback_equals_before",
+        "rolled_back_digest"
+      ],
+      "type": "object"
+    },
+    "status": {
+      "enum": [
+        "test_fixture_only_non_live_production_receipt",
+        "live_production_receipt_pending_reconciliation",
+        "live_production_failed_closed_receipt"
+      ]
+    },
+    "test_fixture_only": { "type": "boolean" },
+    "traffic": {
+      "additionalProperties": false,
+      "properties": {
+        "non_owner_denied_probes": { "minimum": 2, "type": "integer" },
+        "owner_requests": { "const": 20 },
+        "public_traffic_operations": { "const": 0 }
+      },
+      "required": ["non_owner_denied_probes", "owner_requests", "public_traffic_operations"],
+      "type": "object"
+    },
+    "workflow": { "additionalProperties": true, "type": "object" }
+  },
+  "required": [
+    "answer_authority",
+    "generated_at",
+    "metrics",
+    "mutations",
+    "owner_decision_self_sha256",
+    "owner_query_response",
+    "privacy",
+    "request_rows",
+    "resolved_gate_self_sha256",
+    "schema_version",
+    "self_sha256",
+    "slo_pass",
+    "stage_id",
+    "state",
+    "status",
+    "test_fixture_only",
+    "traffic",
+    "workflow"
+  ],
+  "type": "object"
+}

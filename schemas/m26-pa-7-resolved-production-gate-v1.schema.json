@@ -1,0 +1,107 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-resolved-production-gate-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bounded_scope": {
+      "additionalProperties": true,
+      "properties": {
+        "automatic_expansion": { "const": false },
+        "production_smoke_request_count": { "const": 20 },
+        "production_smoke_request_cap": { "const": 20 },
+        "public_traffic_percent": { "const": 0 },
+        "query_set_ids": { "items": { "type": "string" }, "minItems": 20, "maxItems": 20, "type": "array" },
+        "query_set_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" }
+      },
+      "required": [
+        "automatic_expansion",
+        "production_smoke_request_count",
+        "production_smoke_request_cap",
+        "public_traffic_percent",
+        "query_set_ids",
+        "query_set_sha256"
+      ],
+      "type": "object"
+    },
+    "budgets": { "additionalProperties": true, "type": "object" },
+    "denied": { "additionalProperties": { "const": true }, "type": "object" },
+    "implementation": { "additionalProperties": true, "type": "object" },
+    "kill_switch": { "additionalProperties": true, "type": "object" },
+    "owner_decision": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_status": { "const": "approved_with_conditions" },
+        "path": { "const": "pilot/m26/m26-pa-7-owner-final-decision.json" },
+        "self_sha256": { "const": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa" }
+      },
+      "required": ["decision_status", "path", "self_sha256"],
+      "type": "object"
+    },
+    "predecessor": {
+      "additionalProperties": true,
+      "properties": {
+        "pa6_acceptance_self_sha256": { "const": "758f2c8012d37875f7438c1d518f9d9db55e3ce0344640f0e16c9ed8f3fa7144" },
+        "pa6_status": { "const": "m26_pa_6_canary_slo_rollback_accepted" },
+        "pa7_unlock_self_sha256": { "const": "c1984a9d69518958cc6830d34762444263f990b118a8c6a914e480a15c491538" },
+        "pa7_unlock_status": { "const": "m26_pa_7_unlocked_pending_owner_promotion" }
+      },
+      "required": [
+        "pa6_acceptance_self_sha256",
+        "pa6_status",
+        "pa7_unlock_self_sha256",
+        "pa7_unlock_status"
+      ],
+      "type": "object"
+    },
+    "production_identities": {
+      "additionalProperties": true,
+      "properties": {
+        "allowlisted_owner_subject_hash": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "automatic_expansion": { "const": false },
+        "public_traffic_percent": { "const": 0 }
+      },
+      "required": [
+        "access_policy_digest",
+        "allowlisted_owner_subject_hash",
+        "automatic_expansion",
+        "deployment_identity",
+        "final_production_pointer_target",
+        "immutable_rollback_target_identity",
+        "model_identity",
+        "owner_only_route",
+        "pre_production_pointer_identity",
+        "provider_identity",
+        "public_traffic_percent",
+        "runtime_build_sha"
+      ],
+      "type": "object"
+    },
+    "rollback": { "additionalProperties": true, "type": "object" },
+    "schema_version": { "const": "knowledge-engine-m26-pa-7-resolved-production-gate/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "slo_thresholds": { "additionalProperties": true, "type": "object" },
+    "stage_id": { "const": "M26.PA.7" },
+    "status": { "const": "resolved_owner_authorized_production_gate" },
+    "stop_conditions": { "items": { "type": "string" }, "minItems": 1, "type": "array" },
+    "workflow": { "additionalProperties": true, "type": "object" }
+  },
+  "required": [
+    "bounded_scope",
+    "budgets",
+    "denied",
+    "implementation",
+    "kill_switch",
+    "owner_decision",
+    "predecessor",
+    "production_identities",
+    "rollback",
+    "schema_version",
+    "self_sha256",
+    "slo_thresholds",
+    "stage_id",
+    "status",
+    "stop_conditions",
+    "workflow"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,40 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-incident-packet-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "owner_decision_self_sha256": { "const": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa" },
+    "privacy": {
+      "const": {
+        "full_provider_response_persisted": false,
+        "raw_evidence_persisted": false,
+        "raw_query_persisted": false,
+        "secret_values_persisted": false,
+        "vectors_persisted": false
+      }
+    },
+    "provider_calls_after_stop": { "const": 0 },
+    "receipt_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "resolved_gate_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "schema_version": { "const": "knowledge-engine-m26-pa-7-incident-packet/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.7" },
+    "status": { "const": "pa7_failed_closed" },
+    "stop_reason_code": { "type": "string" },
+    "terminal_action": { "const": "leave_or_restore_known_safe_pre_state" }
+  },
+  "required": [
+    "owner_decision_self_sha256",
+    "privacy",
+    "provider_calls_after_stop",
+    "receipt_self_sha256",
+    "resolved_gate_self_sha256",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "stop_reason_code",
+    "terminal_action"
+  ],
+  "type": "object"
+}
