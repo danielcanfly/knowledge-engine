@@ -20,9 +20,11 @@ from knowledge_engine.m26_production_promotion_closure import (
     promotion_state_evidence,
     validate_current_predecessors,
     validate_owner_final_decision,
+    validate_promotion_trigger,
     validate_resolved_gate,
     verify_self_digest,
 )
+from knowledge_engine.m26_retrieval_envelope import with_self_digest
 
 ROOT = Path(__file__).resolve().parents[1]
 PILOT = ROOT / "pilot" / "m26"
@@ -168,6 +170,55 @@ def workflow_identity() -> dict[str, Any]:
     }
 
 
+def promotion_trigger(gate: dict[str, Any]) -> dict[str, Any]:
+    return with_self_digest(
+        {
+            "activation": {
+                "branch": "main",
+                "environment": "m23-r3-diagnostic",
+                "event": "push",
+                "required_artifacts": [
+                    "pilot/m26/m26-pa-7-owner-final-decision.json",
+                    "pilot/m26/m26-pa-7-resolved-production-gate.json",
+                    "pilot/m26/m26-pa-7-promotion-trigger.json",
+                ],
+                "workflow_path": ".github/workflows/m26-pa-7-production-promotion-closure.yml",
+            },
+            "authority_boundary": {
+                "automatic_expansion": False,
+                "corpus_index_content_mutation": False,
+                "new_user_admission": False,
+                "owner_only_answer_serving": True,
+                "pa7_acceptance_or_m26_closure": False,
+                "public_or_unbounded_traffic": False,
+                "secret_persistence": False,
+            },
+            "issue_number": 1253,
+            "owner_decision_self_sha256": OWNER_DECISION_SELF_SHA256,
+            "promotion_attempt": {
+                "duration_minutes_cap": 90,
+                "logical_attempt_ordinal": 1,
+                "maximum_logical_attempts_total": 2,
+                "payg_equivalent_cost_usd_cap": "1.00",
+                "provider_call_cap": 80,
+                "request_cap": 20,
+            },
+            "resolved_gate_self_sha256": gate["self_sha256"],
+            "schema_version": "knowledge-engine-m26-pa-7-promotion-trigger/v1",
+            "stage_id": "M26.PA.7",
+            "status": "owner_authorized_single_logical_live_attempt_trigger",
+            "stop_conditions": [
+                "trigger_gate_or_owner_decision_digest_mismatch",
+                "public_or_unbounded_traffic_observed",
+                "non_owner_request_reaches_provider_execution",
+                "secret_or_raw_prohibited_content_persisted",
+                "answer_to_canonical_or_content_index_mutation_observed",
+                "budget_or_duration_exhausted",
+            ],
+        }
+    )
+
+
 def resolved_gate() -> dict[str, Any]:
     return build_resolved_gate(
         owner_decision=owner_decision(),
@@ -186,8 +237,6 @@ def test_owner_decision_schema_and_canonical_digest() -> None:
     weakened = copy.deepcopy(decision)
     weakened["production_authority"]["public_or_unbounded_traffic"] = True
     weakened.pop("self_sha256")
-    from knowledge_engine.m26_retrieval_envelope import with_self_digest
-
     weakened = with_self_digest(weakened)
     with pytest.raises(ProductionPromotionClosureError, match="PA7_OWNER_DECISION_MISMATCH"):
         validate_owner_final_decision(weakened)
@@ -229,6 +278,24 @@ def test_resolved_gate_schema_self_digest_and_admission() -> None:
     )
     assert denied["admitted"] is False
     assert denied["provider_invoked"] is False
+
+
+def test_promotion_trigger_schema_digest_and_authority() -> None:
+    decision = owner_decision()
+    gate = resolved_gate()
+    trigger = promotion_trigger(gate)
+    assert schema_errors("m26-pa-7-promotion-trigger-v1.schema.json", trigger) == []
+    verify_self_digest(trigger, "trigger")
+    assert validate_promotion_trigger(trigger, gate, decision)["self_sha256"] == trigger[
+        "self_sha256"
+    ]
+
+    escalated = copy.deepcopy(trigger)
+    escalated["authority_boundary"]["public_or_unbounded_traffic"] = True
+    escalated.pop("self_sha256")
+    escalated = with_self_digest(escalated)
+    with pytest.raises(ProductionPromotionClosureError, match="PA7_AUTHORITY_ESCALATION"):
+        validate_promotion_trigger(escalated, gate, decision)
 
 
 def test_owner_query_surface_returns_cited_answer_or_denial() -> None:
@@ -291,6 +358,33 @@ def test_production_receipt_fixture_schema_slo_and_incident_packet() -> None:
     assert incident["provider_calls_after_stop"] == 0
 
 
+def test_committed_prb_artifacts_match_gate_trigger_contract() -> None:
+    decision = load(PILOT / "m26-pa-7-owner-final-decision.json")
+    gate = load(PILOT / "m26-pa-7-resolved-production-gate.json")
+    trigger = load(PILOT / "m26-pa-7-promotion-trigger.json")
+
+    assert schema_errors("m26-pa-7-owner-final-decision-v1.schema.json", decision) == []
+    assert schema_errors("m26-pa-7-resolved-production-gate-v1.schema.json", gate) == []
+    assert schema_errors("m26-pa-7-promotion-trigger-v1.schema.json", trigger) == []
+    assert validate_owner_final_decision(decision)["self_sha256"] == OWNER_DECISION_SELF_SHA256
+    assert validate_resolved_gate(gate, decision)["self_sha256"] == gate["self_sha256"]
+    assert validate_promotion_trigger(trigger, gate, decision)["self_sha256"] == trigger[
+        "self_sha256"
+    ]
+    assert gate["implementation"] == {
+        "base_sha": "cdef87f304150225fc47fab0df003500386d2534",
+        "expected_head_merge": True,
+        "head_sha": "2f3011cc112b9a8b4de587bc937e8ca5dae8540b",
+        "implementation_issue": 1251,
+        "implementation_pull_request": 1252,
+        "merge_sha": "d1fbb9492a789b44b894c64654b7495b2b992f75",
+    }
+    assert gate["production_identities"]["allowlisted_owner_subject_hash"] == OWNER_SUBJECT_HASH
+    assert gate["bounded_scope"]["query_set_ids"] == query_ids()
+    assert trigger["issue_number"] == 1253
+    assert trigger["promotion_attempt"]["request_cap"] == 20
+
+
 def test_pa7_workflow_is_non_live_on_pull_requests_and_gate_triggered_on_main() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "permissions:\n  contents: read" in workflow
@@ -299,5 +393,6 @@ def test_pa7_workflow_is_non_live_on_pull_requests_and_gate_triggered_on_main() 
     assert "pilot/m26/m26-pa-7-promotion-trigger.json" in workflow
     assert "pilot/m26/m26-pa-7-resolved-production-gate.json" in workflow
     assert "pilot/m26/m26-pa-7-owner-final-decision.json" in workflow
+    assert "validate_promotion_trigger(trigger, gate, decision)" in workflow
     assert "PA.7 acceptance already reconciled" in workflow
     assert "MINIMAX_API_KEY" in workflow

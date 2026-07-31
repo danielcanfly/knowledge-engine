@@ -1,0 +1,51 @@
+{
+  "conditions": [
+    "Production traffic remains restricted to Daniel owner allowlist.",
+    "Public and unbounded traffic remain zero.",
+    "The target must be the PA.6 accepted runtime or a direct descendant containing only PA.7 control-plane and closure changes.",
+    "Capture immutable pre-state, promotion state, rollback state, restored final state, and canonical digests.",
+    "No answer-to-canonical writes or corpus/index/content mutations.",
+    "No secret values in Git, logs, prompts, artifacts, or handoffs.",
+    "Acceptance and M26 closure become effective only after an independent reconciliation PR merges and current main verifies.",
+    "Security, privacy, integrity, identity, or evidence ambiguity must fail closed rather than be repaired through weakened gates."
+  ],
+  "decision_maker": "Daniel Huang",
+  "decision_status": "approved_with_conditions",
+  "decision_timestamp_local": "2026-07-31T04:11:00+08:00",
+  "delegated_exact_identity_resolution": true,
+  "exact_instruction_text": "\u7d66\u6211\u7d66codex\u7684\u4ea4\u63a5\u5305 \u6211\u8981\u53bb\u7761\u89ba\u4e86 \u6211\u5e0c\u671b\u4e00\u89ba\u9192\u4f86\u770b\u5230pa7 / m26\u90fd\u597d\u4e86\n\u8981\u4ec0\u9ebc\u6b0a\u9650\u548cauthority\u6211\u4e00\u6b21\u7d66 gh\u6307\u4ee4\u4e5f\u5168\u6388\u6b0a \u4e0d\u8981\u4e2d\u9593\u505c\u4e0b\u4f86\u8ddf\u6211\u8981\u6b0a\u9650\u6216\u662f\u540c\u610f",
+  "github_authority": {
+    "actions_execution_and_inspection": true,
+    "expected_head_merges": true,
+    "git_and_gh_commands": true,
+    "issues_branches_commits_prs": true,
+    "ordinary_ci_repairs_without_reapproval": true
+  },
+  "live_budgets": {
+    "maximum_cumulative_payg_equivalent_cost_usd": "2.00",
+    "maximum_cumulative_provider_calls": 160,
+    "maximum_cumulative_window_minutes": 90,
+    "maximum_logical_promotion_attempts": 2,
+    "maximum_production_smoke_requests_per_attempt": 20
+  },
+  "mission": "Complete PA.7 and M26 closure autonomously without intermediate owner approval.",
+  "predecessor": {
+    "main_ancestry_anchor": "cdef87f304150225fc47fab0df003500386d2534",
+    "pa6_acceptance_self_sha256": "758f2c8012d37875f7438c1d518f9d9db55e3ce0344640f0e16c9ed8f3fa7144",
+    "pa6_status": "m26_pa_6_canary_slo_rollback_accepted",
+    "pa7_unlock_self_sha256": "c1984a9d69518958cc6830d34762444263f990b118a8c6a914e480a15c491538",
+    "pa7_unlock_status": "m26_pa_7_unlocked_pending_owner_promotion"
+  },
+  "production_authority": {
+    "automatic_expansion": false,
+    "bounded_production_promotion": true,
+    "final_m26_closure_after_reconciliation": true,
+    "owner_only_answer_serving": true,
+    "production_pointer_or_route_mutation": true,
+    "public_or_unbounded_traffic": false,
+    "rollback_and_restoration": true
+  },
+  "schema_version": "knowledge-engine-m26-pa-7-owner-final-decision/v1",
+  "self_sha256": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa",
+  "stage_id": "M26.PA.7"
+}

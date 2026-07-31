@@ -1,0 +1,45 @@
+{
+  "activation": {
+    "branch": "main",
+    "environment": "m23-r3-diagnostic",
+    "event": "push",
+    "required_artifacts": [
+      "pilot/m26/m26-pa-7-owner-final-decision.json",
+      "pilot/m26/m26-pa-7-resolved-production-gate.json",
+      "pilot/m26/m26-pa-7-promotion-trigger.json"
+    ],
+    "workflow_path": ".github/workflows/m26-pa-7-production-promotion-closure.yml"
+  },
+  "authority_boundary": {
+    "automatic_expansion": false,
+    "corpus_index_content_mutation": false,
+    "new_user_admission": false,
+    "owner_only_answer_serving": true,
+    "pa7_acceptance_or_m26_closure": false,
+    "public_or_unbounded_traffic": false,
+    "secret_persistence": false
+  },
+  "issue_number": 1253,
+  "owner_decision_self_sha256": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa",
+  "promotion_attempt": {
+    "duration_minutes_cap": 90,
+    "logical_attempt_ordinal": 1,
+    "maximum_logical_attempts_total": 2,
+    "payg_equivalent_cost_usd_cap": "1.00",
+    "provider_call_cap": 80,
+    "request_cap": 20
+  },
+  "resolved_gate_self_sha256": "6adf0f4fa53d0b061f9e587b72e99ce38de2805f8b35b23841d5a63e44d9af5b",
+  "schema_version": "knowledge-engine-m26-pa-7-promotion-trigger/v1",
+  "self_sha256": "6ae1c5f86783634e10ad319c36e5aef8cbb4dc0ee5ff6fc1c780f53063f84902",
+  "stage_id": "M26.PA.7",
+  "status": "owner_authorized_single_logical_live_attempt_trigger",
+  "stop_conditions": [
+    "trigger_gate_or_owner_decision_digest_mismatch",
+    "public_or_unbounded_traffic_observed",
+    "non_owner_request_reaches_provider_execution",
+    "secret_or_raw_prohibited_content_persisted",
+    "answer_to_canonical_or_content_index_mutation_observed",
+    "budget_or_duration_exhausted"
+  ]
+}

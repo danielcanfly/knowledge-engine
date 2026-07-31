@@ -1,0 +1,104 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-promotion-trigger-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": { "const": "main" },
+        "environment": { "const": "m23-r3-diagnostic" },
+        "event": { "const": "push" },
+        "required_artifacts": {
+          "items": {
+            "enum": [
+              "pilot/m26/m26-pa-7-owner-final-decision.json",
+              "pilot/m26/m26-pa-7-resolved-production-gate.json",
+              "pilot/m26/m26-pa-7-promotion-trigger.json"
+            ],
+            "type": "string"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "workflow_path": {
+          "const": ".github/workflows/m26-pa-7-production-promotion-closure.yml"
+        }
+      },
+      "required": ["branch", "environment", "event", "required_artifacts", "workflow_path"],
+      "type": "object"
+    },
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "automatic_expansion": { "const": false },
+        "corpus_index_content_mutation": { "const": false },
+        "new_user_admission": { "const": false },
+        "owner_only_answer_serving": { "const": true },
+        "pa7_acceptance_or_m26_closure": { "const": false },
+        "public_or_unbounded_traffic": { "const": false },
+        "secret_persistence": { "const": false }
+      },
+      "required": [
+        "automatic_expansion",
+        "corpus_index_content_mutation",
+        "new_user_admission",
+        "owner_only_answer_serving",
+        "pa7_acceptance_or_m26_closure",
+        "public_or_unbounded_traffic",
+        "secret_persistence"
+      ],
+      "type": "object"
+    },
+    "issue_number": { "const": 1253 },
+    "owner_decision_self_sha256": {
+      "const": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa"
+    },
+    "promotion_attempt": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_minutes_cap": { "const": 90 },
+        "logical_attempt_ordinal": { "const": 1 },
+        "maximum_logical_attempts_total": { "const": 2 },
+        "payg_equivalent_cost_usd_cap": { "const": "1.00" },
+        "provider_call_cap": { "const": 80 },
+        "request_cap": { "const": 20 }
+      },
+      "required": [
+        "duration_minutes_cap",
+        "logical_attempt_ordinal",
+        "maximum_logical_attempts_total",
+        "payg_equivalent_cost_usd_cap",
+        "provider_call_cap",
+        "request_cap"
+      ],
+      "type": "object"
+    },
+    "resolved_gate_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "schema_version": { "const": "knowledge-engine-m26-pa-7-promotion-trigger/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.7" },
+    "status": { "const": "owner_authorized_single_logical_live_attempt_trigger" },
+    "stop_conditions": {
+      "items": { "type": "string" },
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "activation",
+    "authority_boundary",
+    "issue_number",
+    "owner_decision_self_sha256",
+    "promotion_attempt",
+    "resolved_gate_self_sha256",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "stop_conditions"
+  ],
+  "type": "object"
+}

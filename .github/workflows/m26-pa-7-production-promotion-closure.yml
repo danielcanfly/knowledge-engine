@@ -132,18 +132,22 @@ jobs:
               load_json,
               run_owner_only_production_promotion,
               validate_owner_final_decision,
+              validate_promotion_trigger,
               validate_resolved_gate,
           )
 
           root = Path(".")
           decision = load_json(root / "pilot/m26/m26-pa-7-owner-final-decision.json")
           gate = load_json(root / "pilot/m26/m26-pa-7-resolved-production-gate.json")
+          trigger = load_json(root / "pilot/m26/m26-pa-7-promotion-trigger.json")
           validate_owner_final_decision(decision)
           validate_resolved_gate(gate, decision)
+          validate_promotion_trigger(trigger, gate, decision)
           receipt = run_owner_only_production_promotion(
               root=root,
               gate=gate,
               owner_decision=decision,
+              promotion_trigger=trigger,
               evidence_dir=Path("/tmp/m26-pa7-production-evidence"),
           )
           print("m26_pa7_production_receipt=" + receipt["self_sha256"])
