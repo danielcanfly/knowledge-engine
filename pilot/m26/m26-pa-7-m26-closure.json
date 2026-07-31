@@ -1,0 +1,51 @@
+{
+  "acceptance_path": "pilot/m26/m26-pa-7-acceptance.json",
+  "acceptance_self_sha256": "c3936e3a4d9f93b398053e3d92294eeb520f2adbaac4b1481896a2c6a1a6afc1",
+  "accepted_status": "m26_pa_7_production_answer_authority_and_closure_accepted",
+  "closure_conditions": [
+    "PA.6 acceptance and PA.7 unlock predecessor digests remained pinned.",
+    "Owner final decision digest matched the approved PA.7 authority package.",
+    "Resolved gate and single logical live promotion trigger self digests matched.",
+    "Live run 30602658208 completed successfully on main at promotion merge 168a403ea5ff69c362009d58382743ad6986850c.",
+    "Remote artifact 8782491199 and live receipt digests were reconciled without a second provider call.",
+    "SLO, budget, privacy, kill switch, and rollback thresholds passed.",
+    "Public or unbounded traffic, new user admission, answer-to-canonical writes, and corpus/index/content mutation remain unauthorized."
+  ],
+  "effective_only_on_reconciliation_merge": true,
+  "evidence_bindings": {
+    "artifact_id": 8782491199,
+    "artifact_sha256": "sha256:d24468d77a9603a41a2cfed3e18d4f454625bd444afc284ec736f59cce54c7cb",
+    "implementation_merge_sha": "d1fbb9492a789b44b894c64654b7495b2b992f75",
+    "promotion_head_sha": "eff049ca8e3061091291efd2194774c91c84121c",
+    "promotion_merge_sha": "168a403ea5ff69c362009d58382743ad6986850c",
+    "receipt_file_sha256": "1e950799e7a67b3a403b9dd64ba97d9e8d5c59f7a7fe22a9c35d53f15bb67f17",
+    "receipt_self_sha256": "4cdbd4fd73f467d33dd54258b185af9b59512b1960e19e86f5e3aa56d3fc38be",
+    "run_id": 30602658208
+  },
+  "final_denied_boundaries": {
+    "answer_to_canonical_writes": false,
+    "automatic_expansion": false,
+    "corpus_index_content_mutation": false,
+    "new_user_admission": false,
+    "public_or_unbounded_traffic": false,
+    "secret_persistence": false
+  },
+  "final_state": {
+    "M26.PA.7": "m26_pa_7_production_answer_authority_and_closure_accepted",
+    "M26_CLOSED": true,
+    "PRODUCTION_ANSWER_SERVING": true,
+    "PRODUCTION_AUDIENCE": "Daniel owner allowlist only",
+    "PUBLIC_OR_UNBOUNDED_TRAFFIC": false
+  },
+  "generated_at": "2026-07-31T04:09:05Z",
+  "live_receipt_self_sha256": "4cdbd4fd73f467d33dd54258b185af9b59512b1960e19e86f5e3aa56d3fc38be",
+  "live_run_id": 30602658208,
+  "m26_closed": true,
+  "owner_decision_self_sha256": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa",
+  "promotion_trigger_self_sha256": "6ae1c5f86783634e10ad319c36e5aef8cbb4dc0ee5ff6fc1c780f53063f84902",
+  "resolved_gate_self_sha256": "6adf0f4fa53d0b061f9e587b72e99ce38de2805f8b35b23841d5a63e44d9af5b",
+  "schema_version": "knowledge-engine-m26-pa-7-m26-closure/v1",
+  "self_sha256": "c68d4fe433856cebfebf7a952b4915d460ddbc71c980baf88d462a39530c690c",
+  "stage_id": "M26.PA.7",
+  "status": "m26_closed"
+}
