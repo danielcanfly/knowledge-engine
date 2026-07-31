@@ -1,0 +1,373 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-acceptance-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "accepted": { "const": true },
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "additional_live_promotion_attempts": { "const": false },
+        "answer_to_canonical_writes": { "const": false },
+        "automatic_expansion": { "const": false },
+        "corpus_index_content_mutation": { "const": false },
+        "m26_closed": { "const": true },
+        "new_user_admission": { "const": false },
+        "owner_only_answer_serving": { "const": true },
+        "production_answer_serving": { "const": true },
+        "production_audience": { "const": "Daniel owner allowlist only" },
+        "public_or_unbounded_traffic": { "const": false },
+        "r2_qdrant_source_foundation_release_mutations": { "const": 0 },
+        "secret_persistence": { "const": false }
+      },
+      "required": [
+        "additional_live_promotion_attempts",
+        "answer_to_canonical_writes",
+        "automatic_expansion",
+        "corpus_index_content_mutation",
+        "m26_closed",
+        "new_user_admission",
+        "owner_only_answer_serving",
+        "production_answer_serving",
+        "production_audience",
+        "public_or_unbounded_traffic",
+        "r2_qdrant_source_foundation_release_mutations",
+        "secret_persistence"
+      ],
+      "type": "object"
+    },
+    "bounded_scope": {
+      "additionalProperties": false,
+      "properties": {
+        "automatic_expansion": { "const": false },
+        "duration_minutes_max": { "const": 90 },
+        "logical_attempt": { "const": 1 },
+        "owner_only": { "const": true },
+        "public_traffic_percent": { "const": 0 },
+        "query_set_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+        "request_cap": { "const": 20 },
+        "request_count": { "const": 20 }
+      },
+      "required": [
+        "automatic_expansion",
+        "duration_minutes_max",
+        "logical_attempt",
+        "owner_only",
+        "public_traffic_percent",
+        "query_set_sha256",
+        "request_cap",
+        "request_count"
+      ],
+      "type": "object"
+    },
+    "effective_only_on_reconciliation_merge": { "const": true },
+    "generated_at": { "type": "string" },
+    "implementation": {
+      "additionalProperties": false,
+      "properties": {
+        "pr_a": { "additionalProperties": true, "type": "object" },
+        "pr_b": { "additionalProperties": true, "type": "object" }
+      },
+      "required": ["pr_a", "pr_b"],
+      "type": "object"
+    },
+    "issue": {
+      "additionalProperties": false,
+      "properties": {
+        "number": { "const": 1255 },
+        "repository": { "const": "danielcanfly/knowledge-engine" },
+        "state_before_reconciliation_pr": { "const": "open" },
+        "title": { "const": "M26.PA.7 live receipt reconciliation and M26 closure" }
+      },
+      "required": ["number", "repository", "state_before_reconciliation_pr", "title"],
+      "type": "object"
+    },
+    "live_evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_archive_digest": {
+          "const": "sha256:d24468d77a9603a41a2cfed3e18d4f454625bd444afc284ec736f59cce54c7cb"
+        },
+        "artifact_entry_names": {
+          "items": {
+            "enum": [
+              "m26-pa-7-production-receipt.json",
+              "m26-pa-7-production-receipt.json.sha256"
+            ],
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "artifact_expires_at": { "const": "2026-10-29T03:52:10Z" },
+        "artifact_id": { "const": 8782491199 },
+        "artifact_name": { "const": "m26-pa-7-production-promotion-closure-evidence" },
+        "artifact_size_in_bytes": { "const": 3589 },
+        "created_at": { "type": "string" },
+        "metrics": {
+          "additionalProperties": true,
+          "properties": {
+            "complete_accounting": { "const": 20 },
+            "post_kill_provider_calls": { "const": 0 },
+            "provider_calls": { "maximum": 80, "type": "integer" },
+            "provider_error_count": { "const": 0 },
+            "unsupported_accepted_claims": { "const": 0 }
+          },
+          "required": [
+            "complete_accounting",
+            "post_kill_provider_calls",
+            "provider_calls",
+            "provider_error_count",
+            "unsupported_accepted_claims"
+          ],
+          "type": "object"
+        },
+        "mutations": {
+          "const": {
+            "corpus_index_content_mutations": 0,
+            "production_pointer_or_route_mutations": 3
+          }
+        },
+        "owner_query_response_status": { "const": "owner_only_cited_answer" },
+        "privacy": {
+          "const": {
+            "full_provider_response_persisted": false,
+            "raw_evidence_persisted": false,
+            "raw_query_persisted": false,
+            "secret_values_persisted": false,
+            "vectors_persisted": false
+          }
+        },
+        "production_promotion_job_conclusion": { "const": "success" },
+        "production_promotion_job_id": { "const": 91068521832 },
+        "receipt_file_sha256": {
+          "const": "1e950799e7a67b3a403b9dd64ba97d9e8d5c59f7a7fe22a9c35d53f15bb67f17"
+        },
+        "receipt_generated_at": { "const": "2026-07-31T03:54:10Z" },
+        "receipt_schema_version": { "const": "knowledge-engine-m26-pa-7-production-receipt/v1" },
+        "receipt_self_sha256": {
+          "const": "4cdbd4fd73f467d33dd54258b185af9b59512b1960e19e86f5e3aa56d3fc38be"
+        },
+        "receipt_sha256_file_value": {
+          "const": "4cdbd4fd73f467d33dd54258b185af9b59512b1960e19e86f5e3aa56d3fc38be"
+        },
+        "receipt_status": { "const": "live_production_receipt_pending_reconciliation" },
+        "run_attempt": { "const": 1 },
+        "run_event": { "const": "push" },
+        "run_id": { "const": 30602658208 },
+        "slo_pass": { "const": true },
+        "static_validate_job_id": { "const": 91068464907 },
+        "traffic": {
+          "const": {
+            "non_owner_denied_probes": 2,
+            "owner_requests": 20,
+            "public_traffic_operations": 0
+          }
+        },
+        "workflow_head_sha": {
+          "const": "168a403ea5ff69c362009d58382743ad6986850c"
+        },
+        "workflow_name": { "const": "M26.PA.7 Production Promotion and Closure" }
+      },
+      "required": [
+        "artifact_archive_digest",
+        "artifact_entry_names",
+        "artifact_expires_at",
+        "artifact_id",
+        "artifact_name",
+        "artifact_size_in_bytes",
+        "created_at",
+        "metrics",
+        "mutations",
+        "owner_query_response_status",
+        "privacy",
+        "production_promotion_job_conclusion",
+        "production_promotion_job_id",
+        "receipt_file_sha256",
+        "receipt_generated_at",
+        "receipt_schema_version",
+        "receipt_self_sha256",
+        "receipt_sha256_file_value",
+        "receipt_status",
+        "run_attempt",
+        "run_event",
+        "run_id",
+        "slo_pass",
+        "static_validate_job_id",
+        "traffic",
+        "workflow_head_sha",
+        "workflow_name"
+      ],
+      "type": "object"
+    },
+    "m26_closure": {
+      "additionalProperties": false,
+      "properties": {
+        "closure_artifact_path": { "const": "pilot/m26/m26-pa-7-m26-closure.json" },
+        "effective_only_on_reconciliation_merge": { "const": true },
+        "m26_closed": { "const": true }
+      },
+      "required": [
+        "closure_artifact_path",
+        "effective_only_on_reconciliation_merge",
+        "m26_closed"
+      ],
+      "type": "object"
+    },
+    "operation_counts": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_to_canonical_writes": { "const": 0 },
+        "corpus_index_content_mutations": { "const": 0 },
+        "non_owner_denied_probes": { "minimum": 2, "type": "integer" },
+        "owner_requests": { "const": 20 },
+        "post_kill_provider_calls": { "const": 0 },
+        "production_pointer_or_route_mutations": { "const": 3 },
+        "provider_calls": { "maximum": 80, "type": "integer" },
+        "public_traffic_operations": { "const": 0 }
+      },
+      "required": [
+        "answer_to_canonical_writes",
+        "corpus_index_content_mutations",
+        "non_owner_denied_probes",
+        "owner_requests",
+        "post_kill_provider_calls",
+        "production_pointer_or_route_mutations",
+        "provider_calls",
+        "public_traffic_operations"
+      ],
+      "type": "object"
+    },
+    "owner_decision": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_status": { "const": "approved_with_conditions" },
+        "path": { "const": "pilot/m26/m26-pa-7-owner-final-decision.json" },
+        "self_sha256": {
+          "const": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa"
+        }
+      },
+      "required": ["decision_status", "path", "self_sha256"],
+      "type": "object"
+    },
+    "predecessor": {
+      "const": {
+        "pa6_acceptance_path": "pilot/m26/m26-pa-6-acceptance.json",
+        "pa6_acceptance_self_sha256": "758f2c8012d37875f7438c1d518f9d9db55e3ce0344640f0e16c9ed8f3fa7144",
+        "pa6_status": "m26_pa_6_canary_slo_rollback_accepted",
+        "pa7_unlock_path": "pilot/m26/m26-pa-7-unlock-pending-owner-promotion.json",
+        "pa7_unlock_self_sha256": "c1984a9d69518958cc6830d34762444263f990b118a8c6a914e480a15c491538",
+        "pa7_unlock_status": "m26_pa_7_unlocked_pending_owner_promotion"
+      }
+    },
+    "production_answer_authority": {
+      "additionalProperties": false,
+      "properties": {
+        "automatic_expansion": { "const": false },
+        "audience": { "const": "Daniel owner allowlist only" },
+        "owner_only_route": { "const": "command://knowledge-m26-pa7-query" },
+        "owner_query_response_status": { "const": "owner_only_cited_answer" },
+        "public_or_unbounded_traffic": { "const": false },
+        "resolved_gate_self_sha256": {
+          "const": "6adf0f4fa53d0b061f9e587b72e99ce38de2805f8b35b23841d5a63e44d9af5b"
+        },
+        "serving_enabled": { "const": true }
+      },
+      "required": [
+        "automatic_expansion",
+        "audience",
+        "owner_only_route",
+        "owner_query_response_status",
+        "public_or_unbounded_traffic",
+        "resolved_gate_self_sha256",
+        "serving_enabled"
+      ],
+      "type": "object"
+    },
+    "promotion_trigger": {
+      "additionalProperties": false,
+      "properties": {
+        "path": { "const": "pilot/m26/m26-pa-7-promotion-trigger.json" },
+        "self_sha256": {
+          "const": "6ae1c5f86783634e10ad319c36e5aef8cbb4dc0ee5ff6fc1c780f53063f84902"
+        },
+        "status": { "const": "owner_authorized_single_logical_live_attempt_trigger" }
+      },
+      "required": ["path", "self_sha256", "status"],
+      "type": "object"
+    },
+    "reconciliation": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_archive_digest_verified": { "const": true },
+        "current_main_before_reconciliation_pr": {
+          "const": "168a403ea5ff69c362009d58382743ad6986850c"
+        },
+        "dedicated_issue_number": { "const": 1255 },
+        "m26_closure_authorized": { "const": true },
+        "no_new_provider_call": { "const": true },
+        "no_second_promotion_attempt": { "const": true },
+        "receipt_file_digest_verified": { "const": true },
+        "receipt_schema_verified": { "const": true },
+        "receipt_self_digest_verified": { "const": true },
+        "remote_run_and_artifact_verified": { "const": true },
+        "thresholds_verified": { "const": true }
+      },
+      "required": [
+        "artifact_archive_digest_verified",
+        "current_main_before_reconciliation_pr",
+        "dedicated_issue_number",
+        "m26_closure_authorized",
+        "no_new_provider_call",
+        "no_second_promotion_attempt",
+        "receipt_file_digest_verified",
+        "receipt_schema_verified",
+        "receipt_self_digest_verified",
+        "remote_run_and_artifact_verified",
+        "thresholds_verified"
+      ],
+      "type": "object"
+    },
+    "resolved_gate": {
+      "additionalProperties": false,
+      "properties": {
+        "path": { "const": "pilot/m26/m26-pa-7-resolved-production-gate.json" },
+        "self_sha256": {
+          "const": "6adf0f4fa53d0b061f9e587b72e99ce38de2805f8b35b23841d5a63e44d9af5b"
+        },
+        "status": { "const": "resolved_owner_authorized_production_gate" }
+      },
+      "required": ["path", "self_sha256", "status"],
+      "type": "object"
+    },
+    "schema_version": { "const": "knowledge-engine-m26-pa-7-acceptance/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.7" },
+    "status": { "const": "m26_pa_7_production_answer_authority_and_closure_accepted" }
+  },
+  "required": [
+    "accepted",
+    "authority_boundary",
+    "bounded_scope",
+    "effective_only_on_reconciliation_merge",
+    "generated_at",
+    "implementation",
+    "issue",
+    "live_evidence",
+    "m26_closure",
+    "operation_counts",
+    "owner_decision",
+    "predecessor",
+    "production_answer_authority",
+    "promotion_trigger",
+    "reconciliation",
+    "resolved_gate",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status"
+  ],
+  "type": "object"
+}

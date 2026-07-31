@@ -1,0 +1,114 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-m26-closure-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "acceptance_path": { "const": "pilot/m26/m26-pa-7-acceptance.json" },
+    "acceptance_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "accepted_status": {
+      "const": "m26_pa_7_production_answer_authority_and_closure_accepted"
+    },
+    "closure_conditions": {
+      "items": { "type": "string" },
+      "minItems": 1,
+      "type": "array"
+    },
+    "effective_only_on_reconciliation_merge": { "const": true },
+    "evidence_bindings": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": { "const": 8782491199 },
+        "artifact_sha256": {
+          "const": "sha256:d24468d77a9603a41a2cfed3e18d4f454625bd444afc284ec736f59cce54c7cb"
+        },
+        "implementation_merge_sha": {
+          "const": "d1fbb9492a789b44b894c64654b7495b2b992f75"
+        },
+        "promotion_head_sha": {
+          "const": "eff049ca8e3061091291efd2194774c91c84121c"
+        },
+        "promotion_merge_sha": {
+          "const": "168a403ea5ff69c362009d58382743ad6986850c"
+        },
+        "receipt_file_sha256": {
+          "const": "1e950799e7a67b3a403b9dd64ba97d9e8d5c59f7a7fe22a9c35d53f15bb67f17"
+        },
+        "receipt_self_sha256": {
+          "const": "4cdbd4fd73f467d33dd54258b185af9b59512b1960e19e86f5e3aa56d3fc38be"
+        },
+        "run_id": { "const": 30602658208 }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_sha256",
+        "implementation_merge_sha",
+        "promotion_head_sha",
+        "promotion_merge_sha",
+        "receipt_file_sha256",
+        "receipt_self_sha256",
+        "run_id"
+      ],
+      "type": "object"
+    },
+    "final_denied_boundaries": {
+      "const": {
+        "answer_to_canonical_writes": false,
+        "automatic_expansion": false,
+        "corpus_index_content_mutation": false,
+        "new_user_admission": false,
+        "public_or_unbounded_traffic": false,
+        "secret_persistence": false
+      }
+    },
+    "final_state": {
+      "const": {
+        "M26.PA.7": "m26_pa_7_production_answer_authority_and_closure_accepted",
+        "M26_CLOSED": true,
+        "PRODUCTION_ANSWER_SERVING": true,
+        "PRODUCTION_AUDIENCE": "Daniel owner allowlist only",
+        "PUBLIC_OR_UNBOUNDED_TRAFFIC": false
+      }
+    },
+    "generated_at": { "type": "string" },
+    "live_receipt_self_sha256": {
+      "const": "4cdbd4fd73f467d33dd54258b185af9b59512b1960e19e86f5e3aa56d3fc38be"
+    },
+    "live_run_id": { "const": 30602658208 },
+    "m26_closed": { "const": true },
+    "owner_decision_self_sha256": {
+      "const": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa"
+    },
+    "promotion_trigger_self_sha256": {
+      "const": "6ae1c5f86783634e10ad319c36e5aef8cbb4dc0ee5ff6fc1c780f53063f84902"
+    },
+    "resolved_gate_self_sha256": {
+      "const": "6adf0f4fa53d0b061f9e587b72e99ce38de2805f8b35b23841d5a63e44d9af5b"
+    },
+    "schema_version": { "const": "knowledge-engine-m26-pa-7-m26-closure/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.7" },
+    "status": { "const": "m26_closed" }
+  },
+  "required": [
+    "acceptance_path",
+    "acceptance_self_sha256",
+    "accepted_status",
+    "closure_conditions",
+    "effective_only_on_reconciliation_merge",
+    "evidence_bindings",
+    "final_denied_boundaries",
+    "final_state",
+    "generated_at",
+    "live_receipt_self_sha256",
+    "live_run_id",
+    "m26_closed",
+    "owner_decision_self_sha256",
+    "promotion_trigger_self_sha256",
+    "resolved_gate_self_sha256",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status"
+  ],
+  "type": "object"
+}

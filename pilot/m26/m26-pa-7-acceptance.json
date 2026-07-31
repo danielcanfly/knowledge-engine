@@ -1,0 +1,178 @@
+{
+  "accepted": true,
+  "authority_boundary": {
+    "additional_live_promotion_attempts": false,
+    "answer_to_canonical_writes": false,
+    "automatic_expansion": false,
+    "corpus_index_content_mutation": false,
+    "m26_closed": true,
+    "new_user_admission": false,
+    "owner_only_answer_serving": true,
+    "production_answer_serving": true,
+    "production_audience": "Daniel owner allowlist only",
+    "public_or_unbounded_traffic": false,
+    "r2_qdrant_source_foundation_release_mutations": 0,
+    "secret_persistence": false
+  },
+  "bounded_scope": {
+    "automatic_expansion": false,
+    "duration_minutes_max": 90,
+    "logical_attempt": 1,
+    "owner_only": true,
+    "public_traffic_percent": 0,
+    "query_set_sha256": "78d9cbaba17b33171f47498c8791a7792e409187d8dfd3fc1682e6bfdc58da99",
+    "request_cap": 20,
+    "request_count": 20
+  },
+  "effective_only_on_reconciliation_merge": true,
+  "generated_at": "2026-07-31T04:09:05Z",
+  "implementation": {
+    "pr_a": {
+      "base_sha": "cdef87f304150225fc47fab0df003500386d2534",
+      "head_sha": "2f3011cc112b9a8b4de587bc937e8ca5dae8540b",
+      "issue": 1251,
+      "merge_sha": "d1fbb9492a789b44b894c64654b7495b2b992f75",
+      "pull_request": 1252
+    },
+    "pr_b": {
+      "base_sha": "d1fbb9492a789b44b894c64654b7495b2b992f75",
+      "head_sha": "eff049ca8e3061091291efd2194774c91c84121c",
+      "issue": 1253,
+      "merge_sha": "168a403ea5ff69c362009d58382743ad6986850c",
+      "pull_request": 1254
+    }
+  },
+  "issue": {
+    "number": 1255,
+    "repository": "danielcanfly/knowledge-engine",
+    "state_before_reconciliation_pr": "open",
+    "title": "M26.PA.7 live receipt reconciliation and M26 closure"
+  },
+  "live_evidence": {
+    "artifact_archive_digest": "sha256:d24468d77a9603a41a2cfed3e18d4f454625bd444afc284ec736f59cce54c7cb",
+    "artifact_entry_names": [
+      "m26-pa-7-production-receipt.json",
+      "m26-pa-7-production-receipt.json.sha256"
+    ],
+    "artifact_expires_at": "2026-10-29T03:52:10Z",
+    "artifact_id": 8782491199,
+    "artifact_name": "m26-pa-7-production-promotion-closure-evidence",
+    "artifact_size_in_bytes": 3589,
+    "created_at": "2026-07-31T03:54:11Z",
+    "metrics": {
+      "citation_locator_validity": 1.0,
+      "complete_accounting": 20,
+      "kill_switch_propagation_ms": 250,
+      "material_claim_support_precision": 1.0,
+      "mean_payg_equivalent_cost_usd": "0.000364026",
+      "p95_latency_ms": 9441,
+      "p95_payg_equivalent_cost_usd": "0.00050736",
+      "p99_latency_ms": 9441,
+      "post_kill_provider_calls": 0,
+      "provider_calls": 40,
+      "provider_error_count": 0,
+      "safe_terminal_outcome_rate": 1.0,
+      "terminal_status_histogram": {
+        "accepted": 20
+      },
+      "total_payg_equivalent_cost_usd": "0.00728052",
+      "unsupported_accepted_claims": 0
+    },
+    "mutations": {
+      "corpus_index_content_mutations": 0,
+      "production_pointer_or_route_mutations": 3
+    },
+    "owner_query_response_status": "owner_only_cited_answer",
+    "privacy": {
+      "full_provider_response_persisted": false,
+      "raw_evidence_persisted": false,
+      "raw_query_persisted": false,
+      "secret_values_persisted": false,
+      "vectors_persisted": false
+    },
+    "production_promotion_job_conclusion": "success",
+    "production_promotion_job_id": 91068521832,
+    "receipt_file_sha256": "1e950799e7a67b3a403b9dd64ba97d9e8d5c59f7a7fe22a9c35d53f15bb67f17",
+    "receipt_generated_at": "2026-07-31T03:54:10Z",
+    "receipt_schema_version": "knowledge-engine-m26-pa-7-production-receipt/v1",
+    "receipt_self_sha256": "4cdbd4fd73f467d33dd54258b185af9b59512b1960e19e86f5e3aa56d3fc38be",
+    "receipt_sha256_file_value": "4cdbd4fd73f467d33dd54258b185af9b59512b1960e19e86f5e3aa56d3fc38be",
+    "receipt_status": "live_production_receipt_pending_reconciliation",
+    "run_attempt": 1,
+    "run_event": "push",
+    "run_id": 30602658208,
+    "slo_pass": true,
+    "static_validate_job_id": 91068464907,
+    "traffic": {
+      "non_owner_denied_probes": 2,
+      "owner_requests": 20,
+      "public_traffic_operations": 0
+    },
+    "workflow_head_sha": "168a403ea5ff69c362009d58382743ad6986850c",
+    "workflow_name": "M26.PA.7 Production Promotion and Closure"
+  },
+  "m26_closure": {
+    "closure_artifact_path": "pilot/m26/m26-pa-7-m26-closure.json",
+    "effective_only_on_reconciliation_merge": true,
+    "m26_closed": true
+  },
+  "operation_counts": {
+    "answer_to_canonical_writes": 0,
+    "corpus_index_content_mutations": 0,
+    "non_owner_denied_probes": 2,
+    "owner_requests": 20,
+    "post_kill_provider_calls": 0,
+    "production_pointer_or_route_mutations": 3,
+    "provider_calls": 40,
+    "public_traffic_operations": 0
+  },
+  "owner_decision": {
+    "decision_status": "approved_with_conditions",
+    "path": "pilot/m26/m26-pa-7-owner-final-decision.json",
+    "self_sha256": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa"
+  },
+  "predecessor": {
+    "pa6_acceptance_path": "pilot/m26/m26-pa-6-acceptance.json",
+    "pa6_acceptance_self_sha256": "758f2c8012d37875f7438c1d518f9d9db55e3ce0344640f0e16c9ed8f3fa7144",
+    "pa6_status": "m26_pa_6_canary_slo_rollback_accepted",
+    "pa7_unlock_path": "pilot/m26/m26-pa-7-unlock-pending-owner-promotion.json",
+    "pa7_unlock_self_sha256": "c1984a9d69518958cc6830d34762444263f990b118a8c6a914e480a15c491538",
+    "pa7_unlock_status": "m26_pa_7_unlocked_pending_owner_promotion"
+  },
+  "production_answer_authority": {
+    "audience": "Daniel owner allowlist only",
+    "automatic_expansion": false,
+    "owner_only_route": "command://knowledge-m26-pa7-query",
+    "owner_query_response_status": "owner_only_cited_answer",
+    "public_or_unbounded_traffic": false,
+    "resolved_gate_self_sha256": "6adf0f4fa53d0b061f9e587b72e99ce38de2805f8b35b23841d5a63e44d9af5b",
+    "serving_enabled": true
+  },
+  "promotion_trigger": {
+    "path": "pilot/m26/m26-pa-7-promotion-trigger.json",
+    "self_sha256": "6ae1c5f86783634e10ad319c36e5aef8cbb4dc0ee5ff6fc1c780f53063f84902",
+    "status": "owner_authorized_single_logical_live_attempt_trigger"
+  },
+  "reconciliation": {
+    "artifact_archive_digest_verified": true,
+    "current_main_before_reconciliation_pr": "168a403ea5ff69c362009d58382743ad6986850c",
+    "dedicated_issue_number": 1255,
+    "m26_closure_authorized": true,
+    "no_new_provider_call": true,
+    "no_second_promotion_attempt": true,
+    "receipt_file_digest_verified": true,
+    "receipt_schema_verified": true,
+    "receipt_self_digest_verified": true,
+    "remote_run_and_artifact_verified": true,
+    "thresholds_verified": true
+  },
+  "resolved_gate": {
+    "path": "pilot/m26/m26-pa-7-resolved-production-gate.json",
+    "self_sha256": "6adf0f4fa53d0b061f9e587b72e99ce38de2805f8b35b23841d5a63e44d9af5b",
+    "status": "resolved_owner_authorized_production_gate"
+  },
+  "schema_version": "knowledge-engine-m26-pa-7-acceptance/v1",
+  "self_sha256": "c3936e3a4d9f93b398053e3d92294eeb520f2adbaac4b1481896a2c6a1a6afc1",
+  "stage_id": "M26.PA.7",
+  "status": "m26_pa_7_production_answer_authority_and_closure_accepted"
+}

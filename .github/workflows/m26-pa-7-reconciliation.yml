@@ -1,0 +1,280 @@
+name: M26.PA.7 Reconciliation and Closure
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-pa-7-reconciliation.yml"
+      - ".github/workflows/m26-pa-7-production-promotion-closure.yml"
+      - "pilot/m26/m26-pa-7-acceptance.json"
+      - "pilot/m26/m26-pa-7-m26-closure.json"
+      - "pilot/m26/m26-pa-7-owner-final-decision.json"
+      - "pilot/m26/m26-pa-7-resolved-production-gate.json"
+      - "pilot/m26/m26-pa-7-promotion-trigger.json"
+      - "schemas/m26-pa-7-acceptance-v1.schema.json"
+      - "schemas/m26-pa-7-m26-closure-v1.schema.json"
+      - "schemas/m26-pa-7-production-receipt-v1.schema.json"
+      - "tests/test_m26_pa_7_reconciliation.py"
+      - "tests/test_m26_pa_7_production_promotion_closure.py"
+
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: m26-pa-7-reconciliation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  reconciliation:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      IMPLEMENTATION_MERGE_SHA: d1fbb9492a789b44b894c64654b7495b2b992f75
+      PROMOTION_HEAD_SHA: eff049ca8e3061091291efd2194774c91c84121c
+      PROMOTION_MERGE_SHA: 168a403ea5ff69c362009d58382743ad6986850c
+      LIVE_RUN_ID: "30602658208"
+      LIVE_ARTIFACT_ID: "8782491199"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify exact reconciliation head and promotion ancestry
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git merge-base --is-ancestor "$IMPLEMENTATION_MERGE_SHA" HEAD
+          git merge-base --is-ancestor "$PROMOTION_MERGE_SHA" HEAD
+          git merge-base --is-ancestor "$PROMOTION_HEAD_SHA" HEAD
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+
+      - name: Validate PA.7 reconciliation artifacts
+        run: |
+          set -euo pipefail
+          python -m ruff check tests/test_m26_pa_7_reconciliation.py
+          python -m compileall -q tests/test_m26_pa_7_reconciliation.py
+          python -m pytest -q \
+            tests/test_m26_pa_7_reconciliation.py \
+            tests/test_m26_pa_7_production_promotion_closure.py \
+            tests/test_m26_pa_6_reconciliation.py
+
+      - name: Verify remote PA.7 live production evidence
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import io
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          import zipfile
+          from pathlib import Path
+          from typing import Any
+
+          from jsonschema import Draft202012Validator
+
+          REPO = "danielcanfly/knowledge-engine"
+          API_ROOT = "https://api.github.com"
+          TOKEN = os.environ["GH_TOKEN"]
+
+          def canonical_sha256(value: Any) -> str:
+              payload = json.dumps(
+                  value,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  ensure_ascii=False,
+                  allow_nan=False,
+              ).encode("utf-8")
+              return hashlib.sha256(payload).hexdigest()
+
+          def load_json(path: str) -> dict[str, Any]:
+              value = json.loads(Path(path).read_text(encoding="utf-8"))
+              if not isinstance(value, dict):
+                  raise AssertionError(f"{path} did not contain a JSON object")
+              return value
+
+          def assert_self_digest(value: dict[str, Any], label: str) -> None:
+              expected = value["self_sha256"]
+              candidate = dict(value)
+              candidate.pop("self_sha256", None)
+              actual = canonical_sha256(candidate)
+              if actual != expected:
+                  raise AssertionError(f"{label} self digest mismatch: {actual} != {expected}")
+
+          def request(path_or_url: str, *, accept: str = "application/vnd.github+json") -> bytes:
+              url = path_or_url
+              if url.startswith("/"):
+                  url = f"{API_ROOT}{url}"
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      "Accept": accept,
+                      "Authorization": f"Bearer {TOKEN}",
+                      "User-Agent": "m26-pa7-reconciliation-ci",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as response:
+                      return response.read()
+              except urllib.error.HTTPError as exc:
+                  detail = exc.read().decode("utf-8", errors="replace")
+                  raise AssertionError(f"GET {url} failed: {exc.code} {detail}") from exc
+
+          def get_json(path: str) -> dict[str, Any]:
+              value = json.loads(request(path).decode("utf-8"))
+              if not isinstance(value, dict):
+                  raise AssertionError(f"{path} did not return a JSON object")
+              return value
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          def download_artifact_zip(artifact_id: int) -> bytes:
+              url = f"{API_ROOT}/repos/{REPO}/actions/artifacts/{artifact_id}/zip"
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {TOKEN}",
+                      "User-Agent": "m26-pa7-reconciliation-ci",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              opener = urllib.request.build_opener(NoRedirect)
+              try:
+                  opener.open(req, timeout=60)
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in {301, 302, 303, 307, 308}:
+                      detail = exc.read().decode("utf-8", errors="replace")
+                      raise AssertionError(f"GET {url} failed: {exc.code} {detail}") from exc
+                  location = exc.headers.get("Location")
+                  if not location:
+                      raise AssertionError("artifact download redirect lacked Location") from exc
+              else:
+                  raise AssertionError("artifact download did not redirect")
+
+              redirected = urllib.parse.urlparse(location)
+              if redirected.scheme != "https":
+                  raise AssertionError(f"artifact redirect was not https: {location}")
+              download_req = urllib.request.Request(
+                  location,
+                  headers={"User-Agent": "m26-pa7-reconciliation-ci"},
+              )
+              with urllib.request.urlopen(download_req, timeout=60) as response:
+                  return response.read()
+
+          def assert_equal(label: str, actual: Any, expected: Any) -> None:
+              if actual != expected:
+                  raise AssertionError(f"{label}: {actual!r} != {expected!r}")
+
+          acceptance = load_json("pilot/m26/m26-pa-7-acceptance.json")
+          closure = load_json("pilot/m26/m26-pa-7-m26-closure.json")
+          for artifact, schema_path, label in [
+              (acceptance, "schemas/m26-pa-7-acceptance-v1.schema.json", "acceptance"),
+              (closure, "schemas/m26-pa-7-m26-closure-v1.schema.json", "closure"),
+          ]:
+              schema = load_json(schema_path)
+              Draft202012Validator.check_schema(schema)
+              errors = sorted(
+                  Draft202012Validator(schema).iter_errors(artifact),
+                  key=lambda item: list(item.absolute_path),
+              )
+              if errors:
+                  raise AssertionError("; ".join(error.message for error in errors))
+              assert_self_digest(artifact, label)
+
+          evidence = acceptance["live_evidence"]
+          assert_equal("live run id pin", evidence["run_id"], int(os.environ["LIVE_RUN_ID"]))
+          assert_equal(
+              "live artifact id pin",
+              evidence["artifact_id"],
+              int(os.environ["LIVE_ARTIFACT_ID"]),
+          )
+          pr_a = get_json(f"/repos/{REPO}/pulls/{acceptance['implementation']['pr_a']['pull_request']}")
+          assert_equal("PR A merged", pr_a["merged"], True)
+          assert_equal("PR A head", pr_a["head"]["sha"], acceptance["implementation"]["pr_a"]["head_sha"])
+          assert_equal("PR A merge", pr_a["merge_commit_sha"], acceptance["implementation"]["pr_a"]["merge_sha"])
+          pr_b = get_json(f"/repos/{REPO}/pulls/{acceptance['implementation']['pr_b']['pull_request']}")
+          assert_equal("PR B merged", pr_b["merged"], True)
+          assert_equal("PR B head", pr_b["head"]["sha"], acceptance["implementation"]["pr_b"]["head_sha"])
+          assert_equal("PR B merge", pr_b["merge_commit_sha"], acceptance["implementation"]["pr_b"]["merge_sha"])
+
+          issue = get_json(f"/repos/{REPO}/issues/{acceptance['issue']['number']}")
+          assert_equal("reconciliation issue title", issue["title"], acceptance["issue"]["title"])
+          assert_equal("reconciliation issue state", issue["state"], acceptance["issue"]["state_before_reconciliation_pr"])
+
+          run = get_json(f"/repos/{REPO}/actions/runs/{evidence['run_id']}")
+          assert_equal("run event", run["event"], evidence["run_event"])
+          assert_equal("run status", run["status"], "completed")
+          assert_equal("run conclusion", run["conclusion"], "success")
+          assert_equal("run head sha", run["head_sha"], evidence["workflow_head_sha"])
+          assert_equal("run attempt", run["run_attempt"], evidence["run_attempt"])
+          assert_equal("run workflow name", run["name"], evidence["workflow_name"])
+
+          jobs = get_json(f"/repos/{REPO}/actions/runs/{evidence['run_id']}/jobs?per_page=100")
+          jobs_by_id = {job["id"]: job for job in jobs["jobs"]}
+          promotion_job = jobs_by_id[evidence["production_promotion_job_id"]]
+          assert_equal("promotion job name", promotion_job["name"], "production_promotion")
+          assert_equal("promotion job conclusion", promotion_job["conclusion"], "success")
+
+          artifact = get_json(f"/repos/{REPO}/actions/artifacts/{evidence['artifact_id']}")
+          assert_equal("artifact name", artifact["name"], evidence["artifact_name"])
+          assert_equal("artifact digest", artifact["digest"], evidence["artifact_archive_digest"])
+          assert_equal("artifact size", artifact["size_in_bytes"], evidence["artifact_size_in_bytes"])
+          assert_equal("artifact expired", artifact["expired"], False)
+          assert_equal("artifact expires_at", artifact["expires_at"], evidence["artifact_expires_at"])
+          assert_equal("artifact workflow run id", artifact["workflow_run"]["id"], evidence["run_id"])
+          assert_equal("artifact workflow head sha", artifact["workflow_run"]["head_sha"], evidence["workflow_head_sha"])
+
+          archive = download_artifact_zip(evidence["artifact_id"])
+          with zipfile.ZipFile(io.BytesIO(archive)) as zf:
+              assert_equal("artifact entries", sorted(zf.namelist()), evidence["artifact_entry_names"])
+              receipt_bytes = zf.read("m26-pa-7-production-receipt.json")
+              sidecar_text = zf.read("m26-pa-7-production-receipt.json.sha256").decode("utf-8")
+
+          receipt_file_sha256 = hashlib.sha256(receipt_bytes).hexdigest()
+          assert_equal("receipt file sha256", receipt_file_sha256, evidence["receipt_file_sha256"])
+          assert_equal("receipt sha sidecar", sidecar_text.split()[0], evidence["receipt_sha256_file_value"])
+
+          receipt = json.loads(receipt_bytes.decode("utf-8"))
+          if not isinstance(receipt, dict):
+              raise AssertionError("receipt did not contain a JSON object")
+          receipt_schema = load_json("schemas/m26-pa-7-production-receipt-v1.schema.json")
+          Draft202012Validator.check_schema(receipt_schema)
+          receipt_errors = sorted(
+              Draft202012Validator(receipt_schema).iter_errors(receipt),
+              key=lambda item: list(item.absolute_path),
+          )
+          if receipt_errors:
+              raise AssertionError("; ".join(error.message for error in receipt_errors))
+          assert_self_digest(receipt, "receipt")
+          assert_equal("receipt self sha256", receipt["self_sha256"], evidence["receipt_self_sha256"])
+          assert_equal("receipt status", receipt["status"], evidence["receipt_status"])
+          assert_equal("receipt slo pass", receipt["slo_pass"], True)
+          assert_equal("receipt metrics", receipt["metrics"], evidence["metrics"])
+          assert_equal("receipt traffic", receipt["traffic"], evidence["traffic"])
+          assert_equal("receipt mutations", receipt["mutations"], evidence["mutations"])
+          assert_equal("receipt privacy", receipt["privacy"], evidence["privacy"])
+          assert_equal("receipt owner query", receipt["owner_query_response"]["status"], "owner_only_cited_answer")
+          assert_equal("closure acceptance binding", closure["acceptance_self_sha256"], acceptance["self_sha256"])
+
+          sys.stdout.write("m26_pa7_reconciliation_verified=" + acceptance["self_sha256"] + "\n")
+          PY
