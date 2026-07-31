@@ -242,7 +242,7 @@ jobs:
         if: steps.guard.outputs.authorized == 'true'
         run: |
           set -euo pipefail
-          scripts/configure_oracle_ssh.sh
+          bash scripts/configure_oracle_ssh.sh
           ssh oracle-knowledge "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
           previous_sha="$(ssh oracle-knowledge "cd '$ORACLE_VM_DEPLOY_PATH' && git rev-parse HEAD 2>/dev/null || true")"
           printf 'ORACLE_PREVIOUS_SHA=%s\n' "$previous_sha" >> "$GITHUB_ENV"
