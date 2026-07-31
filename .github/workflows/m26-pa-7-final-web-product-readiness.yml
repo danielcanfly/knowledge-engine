@@ -292,6 +292,84 @@ jobs:
             -H 'x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH' \
             http://127.0.0.1:8080/api/m26/health" \
             > "$WORK_DIR/evidence/backend-health-local.json"
+          if test -z "${M26_QUERY_BACKEND_URL:-}"; then
+            ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+          set -euo pipefail
+          tunnel_dir="$DEPLOY_PATH/.m26-pa7-final-web-tunnel"
+          mkdir -p "$tunnel_dir"
+          if test -f "$tunnel_dir/pid"; then
+            old_pid="$(cat "$tunnel_dir/pid" 2>/dev/null || true)"
+            if test -n "$old_pid" && kill -0 "$old_pid" 2>/dev/null; then
+              kill "$old_pid" || true
+              sleep 2
+            fi
+          fi
+          cloudflared="$tunnel_dir/cloudflared"
+          if ! test -x "$cloudflared"; then
+            arch="$(uname -m)"
+            case "$arch" in
+              x86_64|amd64)
+                url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+                ;;
+              aarch64|arm64)
+                url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64"
+                ;;
+              *)
+                echo "unsupported cloudflared architecture: $arch" >&2
+                exit 3
+                ;;
+            esac
+            curl -fsSL "$url" -o "$cloudflared"
+            chmod 700 "$cloudflared"
+          fi
+          : > "$tunnel_dir/cloudflared.log"
+          nohup "$cloudflared" tunnel --no-autoupdate --url http://127.0.0.1:8080 \
+            > "$tunnel_dir/cloudflared.log" 2>&1 &
+          printf '%s\n' "$!" > "$tunnel_dir/pid"
+          REMOTE
+            echo "M26_BACKEND_TUNNEL_DEPLOYED=true" >> "$GITHUB_ENV"
+
+            tunnel_url=""
+            for _attempt in $(seq 1 30); do
+              tunnel_url="$(
+                ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+          set -euo pipefail
+          tunnel_dir="$DEPLOY_PATH/.m26-pa7-final-web-tunnel"
+          grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' \
+            "$tunnel_dir/cloudflared.log" | tail -1 || true
+          REMOTE
+              )"
+              if test -n "$tunnel_url"; then
+                break
+              fi
+              sleep 2
+            done
+            test -n "$tunnel_url"
+            echo "::add-mask::$tunnel_url"
+            printf 'M26_QUERY_BACKEND_URL=%s\n' "$tunnel_url" >> "$GITHUB_ENV"
+            TUNNEL_URL="$tunnel_url" python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          tunnel_url = os.environ["TUNNEL_URL"]
+          evidence = {
+              "schema_version": "knowledge-engine-m26-pa7-backend-quick-tunnel-readback/v1",
+              "backend_origin_sha256": hashlib.sha256(tunnel_url.encode()).hexdigest(),
+              "browser_secret_delivery": False,
+              "local_target": "http://127.0.0.1:8080",
+              "raw_backend_origin_recorded": False,
+              "raw_tunnel_url_recorded": False,
+              "rollback_method": "kill_cloudflared_pid_and_redeploy_oracle_previous_sha",
+              "service_identity": "cloudflare_quick_tunnel_to_oracle_localhost_8080",
+              "server_side_pages_secret_only": True,
+              "status": "backend_tunnel_started",
+          }
+          Path(os.environ["WORK_DIR"], "evidence/backend-tunnel-readback.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+          fi
 
       - name: Verify external backend origin
         if: steps.guard.outputs.authorized == 'true'
@@ -569,6 +647,24 @@ jobs:
           if test "${BACKEND_DEPLOYED:-false}" = "true" && test -n "${ORACLE_PREVIOUS_SHA:-}"; then
             ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$ORACLE_PREVIOUS_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" \
               > "$WORK_DIR/evidence/oracle-rollback.log" 2>&1
+          fi
+          if test "${M26_BACKEND_TUNNEL_DEPLOYED:-false}" = "true"; then
+            ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" \
+              > "$WORK_DIR/evidence/backend-tunnel-rollback.log" 2>&1 <<'REMOTE'
+          set +e
+          tunnel_dir="$DEPLOY_PATH/.m26-pa7-final-web-tunnel"
+          if test -f "$tunnel_dir/pid"; then
+            pid="$(cat "$tunnel_dir/pid" 2>/dev/null)"
+            if test -n "$pid" && kill -0 "$pid" 2>/dev/null; then
+              kill "$pid"
+              echo "BACKEND_TUNNEL_KILLED"
+            else
+              echo "BACKEND_TUNNEL_NOT_RUNNING"
+            fi
+          else
+            echo "BACKEND_TUNNEL_PID_MISSING"
+          fi
+          REMOTE
           fi
           set -e
 

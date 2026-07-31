@@ -351,6 +351,11 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "live_final_runtime_rows_passed_awaiting_owner_browser_e2e" in workflow
     assert "duplicate_live_guard_status" in workflow
     assert "public-api-denial" in workflow
+    assert "cloudflared" in workflow
+    assert "trycloudflare" in workflow
+    assert "backend-tunnel-readback.json" in workflow
+    assert "backend-tunnel-rollback.log" in workflow
+    assert "raw_tunnel_url_recorded" in workflow
     assert "origin_ca_rsa_root.pem" in workflow
     assert "origin_ca_ecc_root.pem" in workflow
     assert "91a8a5567efa6bf941162aa806b3ba476aaddf7867640e53053b35fb225a5dae" in workflow
