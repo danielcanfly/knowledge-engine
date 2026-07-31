@@ -1,0 +1,92 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-final-web-formal-test-manifest-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "classes": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "type": "object"
+    },
+    "count": {
+      "const": 10
+    },
+    "final_owner_authority_self_sha256": {
+      "const": "19a1a5d41f8c935a235631975a225a622e4767e95b80ce23da2ff867c31ba2ce"
+    },
+    "queries": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "answerable": {
+            "type": "boolean"
+          },
+          "browser_suite": {
+            "type": "boolean"
+          },
+          "class": {
+            "type": "string"
+          },
+          "expected_runtime_path": {
+            "const": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+          },
+          "ordinal": {
+            "minimum": 1,
+            "maximum": 10,
+            "type": "integer"
+          },
+          "question_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "answerable",
+          "browser_suite",
+          "class",
+          "expected_runtime_path",
+          "ordinal",
+          "question_sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 10,
+      "minItems": 10,
+      "type": "array"
+    },
+    "query_set_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-7-final-web-formal-test-manifest/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "single_evidence_impossibility_required": {
+      "const": true
+    },
+    "stage_id": {
+      "const": "M26.PA.7-FINAL-WEB"
+    },
+    "status": {
+      "const": "final_web_formal_test_manifest_frozen"
+    }
+  },
+  "required": [
+    "classes",
+    "count",
+    "final_owner_authority_self_sha256",
+    "queries",
+    "query_set_sha256",
+    "schema_version",
+    "self_sha256",
+    "single_evidence_impossibility_required",
+    "stage_id",
+    "status"
+  ],
+  "type": "object"
+}

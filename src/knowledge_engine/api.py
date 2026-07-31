@@ -58,6 +58,7 @@ from .m19_graph_api import (
     GraphApiUnavailableError,
     ReadOnlyGraphService,
 )
+from .m26_ask_api import register_m26_ask_routes
 from .runtime import Runtime
 from .storage import create_object_store
 
@@ -217,6 +218,7 @@ def _execute_with_public_controls(
 
 app = FastAPI(title="Knowledge Engine", version="0.7.0")
 app.add_middleware(PublicEdgeSecurityMiddleware, settings_provider=get_settings)
+register_m26_ask_routes(app)
 
 
 @app.get("/v1/health")

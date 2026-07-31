@@ -105,8 +105,10 @@ jobs:
           .github/workflows/m26-pa-4-verified-answer-citation-gate.yml
           .github/workflows/m26-pa-5-controlled-internal-pilot.yml
           .github/workflows/m26-pa-6-canary-slo-rollback.yml
+          .github/workflows/m26-pa-7-final-web-product-readiness.yml
           .github/workflows/m26-pa-7-production-promotion-closure.yml
           .github/workflows/m26-pa-7-reconciliation.yml
+          Dockerfile
           pyproject.toml
           docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md
           docs/architecture/m26/m26-pa-5-controlled-internal-pilot.md
@@ -136,6 +138,7 @@ jobs:
           pilot/m26/m26-pa-6-canary-policy.json
           pilot/m26/m26-pa-6-owner-gate-template.json
           pilot/m26/m26-pa-7-corrective-reopen.json
+          pilot/m26/m26-pa-7-final-web-formal-test-manifest.json
           schemas/m26-pa-4-benchmark-population-v1.schema.json
           schemas/m26-pa-4-owner-decision-v1.schema.json
           schemas/m26-pa-4-verified-answer-policy-v1.schema.json
@@ -173,7 +176,12 @@ jobs:
           schemas/m26-pa-7-owner-final-decision-v1.schema.json
           schemas/m26-pa-7-production-receipt-v1.schema.json
           schemas/m26-pa-7-resolved-production-gate-v1.schema.json
+          schemas/m26-pa-7-final-web-formal-test-manifest-v1.schema.json
+          schemas/m26-pa-7-final-web-product-readiness-receipt-v1.schema.json
+          src/knowledge_engine/api.py
+          src/knowledge_engine/m26_ask_api.py
           src/knowledge_engine/m26_canary_slo_rollback.py
+          src/knowledge_engine/m26_pa7_final_web_readiness.py
           src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
           src/knowledge_engine/m26_pa7_query_cli.py
           src/knowledge_engine/m26_pa5_controlled_internal_pilot.py
@@ -188,6 +196,8 @@ jobs:
           tests/test_m26_pa_5_live_execution.py
           tests/test_m26_pa_5_population_freeze.py
           tests/test_m26_pa_4_verified_answer_citation_gate.py
+          tests/test_m26_pa7_ask_api.py
+          tests/test_m26_pa7_final_web_readiness.py
           FILES
           sort /tmp/allowed.txt -o /tmp/allowed.txt
           comm -23 /tmp/changed.txt /tmp/allowed.txt > /tmp/disallowed.txt
