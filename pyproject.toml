@@ -51,6 +51,7 @@ knowledge-m25-review-surface = "knowledge_engine.m25_review_surface_cli:main"
 knowledge-m25-source-pr = "knowledge_engine.m25_source_pr_executor_cli:main"
 knowledge-m25-adoption = "knowledge_engine.m25_adoption_release_cli:main"
 knowledge-m26-pa7-query = "knowledge_engine.m26_pa7_query_cli:main"
+knowledge-m26-ask-api = "knowledge_engine.m26_ask_api:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/knowledge_engine"]

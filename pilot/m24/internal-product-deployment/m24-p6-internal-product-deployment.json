@@ -1,9 +1,9 @@
 {
   "artifacts": [
     {
-      "bytes": 3267,
+      "bytes": 3384,
       "path": "pilot/m24/internal-product-deployment/site/index.html",
-      "sha256": "e2055b929ffb4d0d26fb0855952b93455473f05c03229ad08804b756aa95d6e2"
+      "sha256": "81d1ea1a14bd3aafee25d66fae7e1d8b469dc21b5f23baaf2c3a66b55d35ebca"
     },
     {
       "bytes": 200,
@@ -11,9 +11,14 @@
       "sha256": "92d72771c6c582b7026a50fcad02026008b7070fb8a2cc33ed4afe1a420457d0"
     },
     {
-      "bytes": 9155,
+      "bytes": 5225,
+      "path": "pilot/m24/internal-product-deployment/site/_worker.js",
+      "sha256": "045e765763e4d0204225a6e36930dd1ab205d5d04d1e3e88876ac9ea12e9d875"
+    },
+    {
+      "bytes": 10003,
       "path": "pilot/m24/internal-product-deployment/site/styles.css",
-      "sha256": "736cbf93b6d76a6ad72cf50b4145b4eed83cb4f3e816b0b565151d0288d994ab"
+      "sha256": "0cd3b347e2cd62b69d1c9909518b55f6d3df6452468724891ddc8a602977822c"
     },
     {
       "bytes": 14493,
@@ -21,9 +26,14 @@
       "sha256": "0ad87fb441a3abe73c9863a83d8f5c5d7d192f6a6384e3131320634ece9ed6f9"
     },
     {
-      "bytes": 43558,
+      "bytes": 8851,
+      "path": "pilot/m24/internal-product-deployment/site/m26-ask.js",
+      "sha256": "2d606abed0f1b5bb8c52e599a5b37a844412d82f8fdd0a2ca43c3b5b3d4748e3"
+    },
+    {
+      "bytes": 45565,
       "path": "pilot/m24/internal-product-deployment/site/app.js",
-      "sha256": "947d6b43918fd42aa7f8fd0b8bf1899007d5e505fb7a4b5273834bf9800cefa9"
+      "sha256": "6e839b337ffa6ca7d5ef1e82ed380ea871d881eba17fcb580d52a15d18a0a523"
     },
     {
       "bytes": 74,
@@ -194,7 +204,7 @@
     "secret_scan_passed": true,
     "secret_scan_patterns": 3
   },
-  "self_sha256": "341011c1c5fea16c2242611380b3d46ff47df6dc34e88d452ab3a9e93d894a3f",
+  "self_sha256": "c0810eb8f71108c8c73a14a6294f2764012f407fcaf5b8ac785268fb3214b228",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "internal_product_deployment_package_complete",
   "surfaces": [

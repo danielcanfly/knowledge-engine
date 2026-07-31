@@ -199,6 +199,58 @@ a {
   text-decoration: none;
 }
 
+.ask-form {
+  background: #ffffff;
+  border: 1px solid #d6dae1;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.ask-form label {
+  font-weight: 700;
+}
+
+.ask-form textarea {
+  border: 1px solid #cbd5e1;
+  font: inherit;
+  line-height: 1.45;
+  min-height: 128px;
+  padding: 10px;
+  resize: vertical;
+  width: 100%;
+}
+
+.ask-form button {
+  background: #14532d;
+  border: 1px solid #14532d;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
+.ask-form button:disabled,
+.ask-form textarea:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.ask-evidence-split {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+}
+
+.citation-chip {
+  background: #e0f2fe;
+  border: 1px solid #7dd3fc;
+  color: #0c4a6e;
+  display: inline-block;
+  line-height: 1.2;
+  padding: 1px 4px;
+  text-decoration: none;
+}
+
 .metric-grid,
 .item-grid {
   display: grid;

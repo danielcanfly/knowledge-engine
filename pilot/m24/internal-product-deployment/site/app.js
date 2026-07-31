@@ -17,6 +17,7 @@ const ARTIFACTS = {
 
 const ROUTES = {
   overview: "Overview",
+  ask: "Ask Knowledge Engine",
   wiki: "Concept Wiki",
   search: "Lexical Search",
   graph: "Graph Explorer",
@@ -36,6 +37,10 @@ const state = {
   sourceDetailFocusRequested: false,
   searchQuery: "harness",
   sourceQuery: "",
+  askQuestion: "Compare routers and adaptive planning for permission-first controls.",
+  askResponse: null,
+  askError: "",
+  askLoading: false,
 };
 
 const app = document.querySelector("#app");
@@ -113,10 +118,16 @@ async function loadArtifacts() {
 }
 
 function routeFromHash() {
+  if ((location.pathname === "/ask" || location.pathname === "/ask/") && !location.hash) {
+    return "ask";
+  }
   return (location.hash.replace(/^#\/?/, "") || "overview").split("?")[0];
 }
 
 function routeSearchParams() {
+  if ((location.pathname === "/ask" || location.pathname === "/ask/") && !location.hash) {
+    return new URLSearchParams(location.search);
+  }
   return new URLSearchParams(location.hash.split("?")[1] || "");
 }
 
@@ -1011,6 +1022,22 @@ function renderAcceptance(artifacts) {
   `;
 }
 
+function renderAsk() {
+  if (!window.M26AskSurface || typeof window.M26AskSurface.render !== "function") {
+    return `
+      <section class="state-panel" data-state="ask-unavailable">
+        <h3>Ask unavailable</h3>
+        <p>The M26 Ask surface module is unavailable in this deployment.</p>
+      </section>
+    `;
+  }
+  return window.M26AskSurface.render({
+    state,
+    escapeHtml,
+    metric,
+  });
+}
+
 function renderAclDenied() {
   return `
     <section class="state-panel" data-state="acl-denied">
@@ -1056,6 +1083,7 @@ function render() {
   }
   const renderers = {
     overview: renderOverview,
+    ask: renderAsk,
     wiki: renderWiki,
     search: renderSearch,
     graph: renderGraph,
@@ -1069,6 +1097,19 @@ function render() {
   if (route === "graph") {
     initializeGraphExplorer(state.artifacts);
   }
+  if (
+    route === "ask" &&
+    window.M26AskSurface &&
+    typeof window.M26AskSurface.wire === "function"
+  ) {
+    window.M26AskSurface.wire({
+      app,
+      state,
+      setStatus,
+      render,
+      escapeHtml,
+    });
+  }
 }
 
 function hashForRoute(route, params = {}) {
@@ -1081,6 +1122,24 @@ function hashForRoute(route, params = {}) {
 }
 
 function navigateTo(route, params = {}) {
+  if (route === "ask") {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value) query.set(key, value);
+    }
+    const nextPath = `/ask${query.toString() ? `?${query.toString()}` : ""}`;
+    if (location.pathname + location.search === nextPath) {
+      state.route = route;
+      applyRouteStateFromHash(route);
+      render();
+      return;
+    }
+    history.pushState(null, "", nextPath);
+    state.route = route;
+    applyRouteStateFromHash(route);
+    render();
+    return;
+  }
   const nextHash = hashForRoute(route, params);
   if (location.hash === nextHash) {
     state.route = route;
@@ -1172,7 +1231,22 @@ function wireInteractions() {
   focusSourceDetailIfRequested();
 }
 
+const askRouteLink = document.querySelector('[data-route-link="ask"]');
+if (askRouteLink) {
+  askRouteLink.addEventListener("click", (event) => {
+    event.preventDefault();
+    navigateTo("ask");
+  });
+}
+
 window.addEventListener("hashchange", () => {
+  state.route = routeFromHash();
+  applyRouteStateFromHash(state.route);
+  render();
+});
+
+window.addEventListener("popstate", () => {
+  if (location.hash) return;
   state.route = routeFromHash();
   applyRouteStateFromHash(state.route);
   render();
