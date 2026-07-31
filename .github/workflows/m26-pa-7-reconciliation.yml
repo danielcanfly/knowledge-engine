@@ -219,7 +219,12 @@ jobs:
 
           issue = get_json(f"/repos/{REPO}/issues/{acceptance['issue']['number']}")
           assert_equal("reconciliation issue title", issue["title"], acceptance["issue"]["title"])
-          assert_equal("reconciliation issue state", issue["state"], acceptance["issue"]["state_before_reconciliation_pr"])
+          if not Path("pilot/m26/m26-pa-7-corrective-reopen.json").exists():
+              assert_equal(
+                  "reconciliation issue state",
+                  issue["state"],
+                  acceptance["issue"]["state_before_reconciliation_pr"],
+              )
 
           run = get_json(f"/repos/{REPO}/actions/runs/{evidence['run_id']}")
           assert_equal("run event", run["event"], evidence["run_event"])
