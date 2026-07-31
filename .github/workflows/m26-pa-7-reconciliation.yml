@@ -8,11 +8,12 @@ on:
       - "pilot/m26/m26-pa-7-acceptance.json"
       - "pilot/m26/m26-pa-7-m26-closure.json"
       - "pilot/m26/m26-pa-7-owner-final-decision.json"
-      - "pilot/m26/m26-pa-7-resolved-production-gate.json"
-      - "pilot/m26/m26-pa-7-promotion-trigger.json"
-      - "schemas/m26-pa-7-acceptance-v1.schema.json"
-      - "schemas/m26-pa-7-m26-closure-v1.schema.json"
-      - "schemas/m26-pa-7-production-receipt-v1.schema.json"
+      - "pilot/m26/m26-pa-7-corrected-resolved-production-gate.json"
+      - "pilot/m26/m26-pa-7-corrected-promotion-trigger.json"
+      - "pilot/m26/m26-pa-7-corrective-formal-test-manifest.json"
+      - "schemas/m26-pa-7-corrected-acceptance-v2.schema.json"
+      - "schemas/m26-pa-7-corrected-m26-closure-v2.schema.json"
+      - "schemas/m26-pa-7-corrective-formal-receipt-v1.schema.json"
       - "tests/test_m26_pa_7_reconciliation.py"
       - "tests/test_m26_pa_7_production_promotion_closure.py"
 
@@ -32,11 +33,12 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      IMPLEMENTATION_MERGE_SHA: d1fbb9492a789b44b894c64654b7495b2b992f75
-      PROMOTION_HEAD_SHA: eff049ca8e3061091291efd2194774c91c84121c
-      PROMOTION_MERGE_SHA: 168a403ea5ff69c362009d58382743ad6986850c
-      LIVE_RUN_ID: "30602658208"
-      LIVE_ARTIFACT_ID: "8782491199"
+      PR_A_MERGE_SHA: 23413d9336a958fb5915068bc2e5a1ea34f28f57
+      PR_B_MERGE_SHA: 7eb1629dad9228da967989c975cb6a6a900a42c1
+      PR_B_REPAIR_HEAD_SHA: bbf40ffe5451b099574f0551cdee3f7d347a560a
+      PR_B_REPAIR_MERGE_SHA: 4a6222bf7be410f1def23a6b15f68091aa2c20bc
+      LIVE_RUN_ID: "30619558449"
+      LIVE_ARTIFACT_ID: "8788807930"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,18 +50,19 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Verify exact reconciliation head and promotion ancestry
+      - name: Verify exact reconciliation head and corrected ancestry
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
-          git merge-base --is-ancestor "$IMPLEMENTATION_MERGE_SHA" HEAD
-          git merge-base --is-ancestor "$PROMOTION_MERGE_SHA" HEAD
-          git merge-base --is-ancestor "$PROMOTION_HEAD_SHA" HEAD
+          git merge-base --is-ancestor "$PR_A_MERGE_SHA" HEAD
+          git merge-base --is-ancestor "$PR_B_MERGE_SHA" HEAD
+          git merge-base --is-ancestor "$PR_B_REPAIR_HEAD_SHA" HEAD
+          git merge-base --is-ancestor "$PR_B_REPAIR_MERGE_SHA" HEAD
 
       - name: Install validation dependencies
         run: python -m pip install --disable-pip-version-check -e '.[dev]'
 
-      - name: Validate PA.7 reconciliation artifacts
+      - name: Validate PA.7 corrected reconciliation artifacts
         run: |
           set -euo pipefail
           python -m ruff check tests/test_m26_pa_7_reconciliation.py
@@ -69,7 +72,7 @@ jobs:
             tests/test_m26_pa_7_production_promotion_closure.py \
             tests/test_m26_pa_6_reconciliation.py
 
-      - name: Verify remote PA.7 live production evidence
+      - name: Verify remote PA.7 corrected formal product-readiness evidence
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -126,7 +129,7 @@ jobs:
                   headers={
                       "Accept": accept,
                       "Authorization": f"Bearer {TOKEN}",
-                      "User-Agent": "m26-pa7-reconciliation-ci",
+                      "User-Agent": "m26-pa7-corrected-reconciliation-ci",
                       "X-GitHub-Api-Version": "2022-11-28",
                   },
               )
@@ -154,7 +157,7 @@ jobs:
                   headers={
                       "Accept": "application/vnd.github+json",
                       "Authorization": f"Bearer {TOKEN}",
-                      "User-Agent": "m26-pa7-reconciliation-ci",
+                      "User-Agent": "m26-pa7-corrected-reconciliation-ci",
                       "X-GitHub-Api-Version": "2022-11-28",
                   },
               )
@@ -176,7 +179,7 @@ jobs:
                   raise AssertionError(f"artifact redirect was not https: {location}")
               download_req = urllib.request.Request(
                   location,
-                  headers={"User-Agent": "m26-pa7-reconciliation-ci"},
+                  headers={"User-Agent": "m26-pa7-corrected-reconciliation-ci"},
               )
               with urllib.request.urlopen(download_req, timeout=60) as response:
                   return response.read()
@@ -187,44 +190,42 @@ jobs:
 
           acceptance = load_json("pilot/m26/m26-pa-7-acceptance.json")
           closure = load_json("pilot/m26/m26-pa-7-m26-closure.json")
-          for artifact, schema_path, label in [
-              (acceptance, "schemas/m26-pa-7-acceptance-v1.schema.json", "acceptance"),
-              (closure, "schemas/m26-pa-7-m26-closure-v1.schema.json", "closure"),
+          for artifact_obj, schema_path, label in [
+              (
+                  acceptance,
+                  "schemas/m26-pa-7-corrected-acceptance-v2.schema.json",
+                  "corrected acceptance",
+              ),
+              (
+                  closure,
+                  "schemas/m26-pa-7-corrected-m26-closure-v2.schema.json",
+                  "corrected closure",
+              ),
           ]:
               schema = load_json(schema_path)
               Draft202012Validator.check_schema(schema)
               errors = sorted(
-                  Draft202012Validator(schema).iter_errors(artifact),
+                  Draft202012Validator(schema).iter_errors(artifact_obj),
                   key=lambda item: list(item.absolute_path),
               )
               if errors:
                   raise AssertionError("; ".join(error.message for error in errors))
-              assert_self_digest(artifact, label)
+              assert_self_digest(artifact_obj, label)
 
           evidence = acceptance["live_evidence"]
           assert_equal("live run id pin", evidence["run_id"], int(os.environ["LIVE_RUN_ID"]))
-          assert_equal(
-              "live artifact id pin",
-              evidence["artifact_id"],
-              int(os.environ["LIVE_ARTIFACT_ID"]),
-          )
-          pr_a = get_json(f"/repos/{REPO}/pulls/{acceptance['implementation']['pr_a']['pull_request']}")
-          assert_equal("PR A merged", pr_a["merged"], True)
-          assert_equal("PR A head", pr_a["head"]["sha"], acceptance["implementation"]["pr_a"]["head_sha"])
-          assert_equal("PR A merge", pr_a["merge_commit_sha"], acceptance["implementation"]["pr_a"]["merge_sha"])
-          pr_b = get_json(f"/repos/{REPO}/pulls/{acceptance['implementation']['pr_b']['pull_request']}")
-          assert_equal("PR B merged", pr_b["merged"], True)
-          assert_equal("PR B head", pr_b["head"]["sha"], acceptance["implementation"]["pr_b"]["head_sha"])
-          assert_equal("PR B merge", pr_b["merge_commit_sha"], acceptance["implementation"]["pr_b"]["merge_sha"])
+          assert_equal("artifact id pin", evidence["artifact_id"], int(os.environ["LIVE_ARTIFACT_ID"]))
+
+          for key in ("pr_a", "pr_b", "pr_b_calibration_repair"):
+              pr_identity = acceptance["implementation"][key]
+              pr = get_json(f"/repos/{REPO}/pulls/{pr_identity['pull_request']}")
+              assert_equal(f"{key} merged", pr["merged"], True)
+              assert_equal(f"{key} head", pr["head"]["sha"], pr_identity["head_sha"])
+              assert_equal(f"{key} merge", pr["merge_commit_sha"], pr_identity["merge_sha"])
 
           issue = get_json(f"/repos/{REPO}/issues/{acceptance['issue']['number']}")
           assert_equal("reconciliation issue title", issue["title"], acceptance["issue"]["title"])
-          if not Path("pilot/m26/m26-pa-7-corrective-reopen.json").exists():
-              assert_equal(
-                  "reconciliation issue state",
-                  issue["state"],
-                  acceptance["issue"]["state_before_reconciliation_pr"],
-              )
+          assert_equal("reconciliation issue state", issue["state"], "open")
 
           run = get_json(f"/repos/{REPO}/actions/runs/{evidence['run_id']}")
           assert_equal("run event", run["event"], evidence["run_event"])
@@ -237,8 +238,11 @@ jobs:
           jobs = get_json(f"/repos/{REPO}/actions/runs/{evidence['run_id']}/jobs?per_page=100")
           jobs_by_id = {job["id"]: job for job in jobs["jobs"]}
           promotion_job = jobs_by_id[evidence["production_promotion_job_id"]]
+          static_job = jobs_by_id[evidence["static_validate_job_id"]]
           assert_equal("promotion job name", promotion_job["name"], "production_promotion")
           assert_equal("promotion job conclusion", promotion_job["conclusion"], "success")
+          assert_equal("static job name", static_job["name"], "static_validate")
+          assert_equal("static job conclusion", static_job["conclusion"], "success")
 
           artifact = get_json(f"/repos/{REPO}/actions/artifacts/{evidence['artifact_id']}")
           assert_equal("artifact name", artifact["name"], evidence["artifact_name"])
@@ -247,22 +251,33 @@ jobs:
           assert_equal("artifact expired", artifact["expired"], False)
           assert_equal("artifact expires_at", artifact["expires_at"], evidence["artifact_expires_at"])
           assert_equal("artifact workflow run id", artifact["workflow_run"]["id"], evidence["run_id"])
-          assert_equal("artifact workflow head sha", artifact["workflow_run"]["head_sha"], evidence["workflow_head_sha"])
+          assert_equal(
+              "artifact workflow head sha",
+              artifact["workflow_run"]["head_sha"],
+              evidence["workflow_head_sha"],
+          )
 
           archive = download_artifact_zip(evidence["artifact_id"])
+          archive_sha256 = "sha256:" + hashlib.sha256(archive).hexdigest()
+          assert_equal("artifact archive byte digest", archive_sha256, evidence["artifact_archive_digest"])
           with zipfile.ZipFile(io.BytesIO(archive)) as zf:
               assert_equal("artifact entries", sorted(zf.namelist()), evidence["artifact_entry_names"])
-              receipt_bytes = zf.read("m26-pa-7-production-receipt.json")
-              sidecar_text = zf.read("m26-pa-7-production-receipt.json.sha256").decode("utf-8")
+              receipt_bytes = zf.read("m26-pa-7-corrective-formal-receipt.json")
+              sidecar_text = zf.read(
+                  "m26-pa-7-corrective-formal-receipt.json.sha256"
+              ).decode("utf-8")
 
-          receipt_file_sha256 = hashlib.sha256(receipt_bytes).hexdigest()
-          assert_equal("receipt file sha256", receipt_file_sha256, evidence["receipt_file_sha256"])
-          assert_equal("receipt sha sidecar", sidecar_text.split()[0], evidence["receipt_sha256_file_value"])
+          assert_equal(
+              "receipt file sha256",
+              hashlib.sha256(receipt_bytes).hexdigest(),
+              evidence["receipt_file_sha256"],
+          )
+          assert_equal("receipt sha sidecar", sidecar_text.split()[0], evidence["receipt_self_sha256"])
 
           receipt = json.loads(receipt_bytes.decode("utf-8"))
           if not isinstance(receipt, dict):
               raise AssertionError("receipt did not contain a JSON object")
-          receipt_schema = load_json("schemas/m26-pa-7-production-receipt-v1.schema.json")
+          receipt_schema = load_json("schemas/m26-pa-7-corrective-formal-receipt-v1.schema.json")
           Draft202012Validator.check_schema(receipt_schema)
           receipt_errors = sorted(
               Draft202012Validator(receipt_schema).iter_errors(receipt),
@@ -270,7 +285,7 @@ jobs:
           )
           if receipt_errors:
               raise AssertionError("; ".join(error.message for error in receipt_errors))
-          assert_self_digest(receipt, "receipt")
+          assert_self_digest(receipt, "corrective formal receipt")
           assert_equal("receipt self sha256", receipt["self_sha256"], evidence["receipt_self_sha256"])
           assert_equal("receipt status", receipt["status"], evidence["receipt_status"])
           assert_equal("receipt slo pass", receipt["slo_pass"], True)
@@ -278,8 +293,22 @@ jobs:
           assert_equal("receipt traffic", receipt["traffic"], evidence["traffic"])
           assert_equal("receipt mutations", receipt["mutations"], evidence["mutations"])
           assert_equal("receipt privacy", receipt["privacy"], evidence["privacy"])
-          assert_equal("receipt owner query", receipt["owner_query_response"]["status"], "owner_only_cited_answer")
+          assert_equal("formal query count", receipt["formal"]["query_count"], 8)
+          rows = receipt["formal"]["rows"]
+          assert_equal("formal row denominator", len(rows), 8)
+          if any(
+              row["runtime_path"]
+              != "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+              for row in rows
+          ):
+              raise AssertionError("formal row bypassed public runtime path")
+          if rows[7]["reason_codes"] != ["PROMPT_INJECTION_OR_PRIVACY_RISK"]:
+              raise AssertionError("prompt-injection row did not fail closed safely")
+          if rows[6]["provider_invoked"] is not False:
+              raise AssertionError("no-answer row invoked provider")
+          if rows[5]["status"] != "owner_only_safe_abstention":
+              raise AssertionError("temporal/conflict row did not safely abstain as permitted")
           assert_equal("closure acceptance binding", closure["acceptance_self_sha256"], acceptance["self_sha256"])
 
-          sys.stdout.write("m26_pa7_reconciliation_verified=" + acceptance["self_sha256"] + "\n")
+          sys.stdout.write("m26_pa7_corrected_reconciliation_verified=" + acceptance["self_sha256"] + "\n")
           PY
