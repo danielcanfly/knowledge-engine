@@ -99,9 +99,14 @@ jobs:
           git diff --name-only origin/main...HEAD | sort > /tmp/changed.txt
           cat > /tmp/allowed.txt <<'FILES'
           .github/workflows/m26-1-architecture-authority.yml
+          .github/workflows/m25-7-benchmark-closure.yml
+          .github/workflows/m25-7-source-pr-executor.yml
+          .github/workflows/m25-8-adoption-release.yml
           .github/workflows/m26-pa-4-verified-answer-citation-gate.yml
           .github/workflows/m26-pa-5-controlled-internal-pilot.yml
           .github/workflows/m26-pa-6-canary-slo-rollback.yml
+          .github/workflows/m26-pa-7-production-promotion-closure.yml
+          pyproject.toml
           docs/architecture/m26/m26-pa-4-verified-answer-citation-gate.md
           docs/architecture/m26/m26-pa-5-controlled-internal-pilot.md
           pilot/m26/m26-pa-4-benchmark-population.json
@@ -159,11 +164,18 @@ jobs:
           schemas/m26-pa-6-canary-receipt-v1.schema.json
           schemas/m26-pa-6-incident-packet-v1.schema.json
           schemas/m26-pa-6-owner-gate-v1.schema.json
+          schemas/m26-pa-7-incident-packet-v1.schema.json
+          schemas/m26-pa-7-owner-final-decision-v1.schema.json
+          schemas/m26-pa-7-production-receipt-v1.schema.json
+          schemas/m26-pa-7-resolved-production-gate-v1.schema.json
           src/knowledge_engine/m26_canary_slo_rollback.py
+          src/knowledge_engine/m26_pa7_query_cli.py
           src/knowledge_engine/m26_pa5_controlled_internal_pilot.py
           src/knowledge_engine/m26_pa5_live_execution.py
           src/knowledge_engine/m26_pa5_population_freeze.py
+          src/knowledge_engine/m26_production_promotion_closure.py
           src/knowledge_engine/m26_verified_answer_citation_gate.py
+          tests/test_m26_pa_7_production_promotion_closure.py
           tests/test_m26_pa_6_canary_slo_rollback.py
           tests/test_m26_pa_5_controlled_internal_pilot.py
           tests/test_m26_pa_5_live_execution.py

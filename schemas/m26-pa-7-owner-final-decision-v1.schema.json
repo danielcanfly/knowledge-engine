@@ -1,0 +1,80 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-owner-final-decision-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "conditions": {
+      "items": { "type": "string" },
+      "minItems": 1,
+      "type": "array"
+    },
+    "decision_maker": { "const": "Daniel Huang" },
+    "decision_status": { "const": "approved_with_conditions" },
+    "decision_timestamp_local": { "type": "string" },
+    "delegated_exact_identity_resolution": { "const": true },
+    "exact_instruction_text": { "type": "string" },
+    "github_authority": {
+      "additionalProperties": { "const": true },
+      "type": "object"
+    },
+    "live_budgets": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_cumulative_payg_equivalent_cost_usd": { "const": "2.00" },
+        "maximum_cumulative_provider_calls": { "const": 160 },
+        "maximum_cumulative_window_minutes": { "const": 90 },
+        "maximum_logical_promotion_attempts": { "const": 2 },
+        "maximum_production_smoke_requests_per_attempt": { "const": 20 }
+      },
+      "required": [
+        "maximum_cumulative_payg_equivalent_cost_usd",
+        "maximum_cumulative_provider_calls",
+        "maximum_cumulative_window_minutes",
+        "maximum_logical_promotion_attempts",
+        "maximum_production_smoke_requests_per_attempt"
+      ],
+      "type": "object"
+    },
+    "mission": { "type": "string" },
+    "predecessor": {
+      "const": {
+        "main_ancestry_anchor": "cdef87f304150225fc47fab0df003500386d2534",
+        "pa6_acceptance_self_sha256": "758f2c8012d37875f7438c1d518f9d9db55e3ce0344640f0e16c9ed8f3fa7144",
+        "pa6_status": "m26_pa_6_canary_slo_rollback_accepted",
+        "pa7_unlock_self_sha256": "c1984a9d69518958cc6830d34762444263f990b118a8c6a914e480a15c491538",
+        "pa7_unlock_status": "m26_pa_7_unlocked_pending_owner_promotion"
+      }
+    },
+    "production_authority": {
+      "const": {
+        "automatic_expansion": false,
+        "bounded_production_promotion": true,
+        "final_m26_closure_after_reconciliation": true,
+        "owner_only_answer_serving": true,
+        "production_pointer_or_route_mutation": true,
+        "public_or_unbounded_traffic": false,
+        "rollback_and_restoration": true
+      }
+    },
+    "schema_version": { "const": "knowledge-engine-m26-pa-7-owner-final-decision/v1" },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.7" }
+  },
+  "required": [
+    "conditions",
+    "decision_maker",
+    "decision_status",
+    "decision_timestamp_local",
+    "delegated_exact_identity_resolution",
+    "exact_instruction_text",
+    "github_authority",
+    "live_budgets",
+    "mission",
+    "predecessor",
+    "production_authority",
+    "schema_version",
+    "self_sha256",
+    "stage_id"
+  ],
+  "type": "object"
+}

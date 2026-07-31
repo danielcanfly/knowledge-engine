@@ -1,0 +1,160 @@
+name: M26.PA.7 Production Promotion and Closure
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-pa-7-production-promotion-closure.yml"
+      - "pilot/m26/m26-pa-7-*.json"
+      - "schemas/m26-pa-7-*.schema.json"
+      - "src/knowledge_engine/m26_production_promotion_closure.py"
+      - "src/knowledge_engine/m26_pa7_query_cli.py"
+      - "tests/test_m26_pa_7_production_promotion_closure.py"
+      - "tests/test_m26_pa_6_canary_slo_rollback.py"
+      - "tests/test_m26_pa_6_reconciliation.py"
+      - "pyproject.toml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/m26-pa-7-production-promotion-closure.yml"
+      - "pilot/m26/m26-pa-7-*.json"
+      - "schemas/m26-pa-7-*.schema.json"
+      - "src/knowledge_engine/m26_production_promotion_closure.py"
+      - "src/knowledge_engine/m26_pa7_query_cli.py"
+      - "tests/test_m26_pa_7_production_promotion_closure.py"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-pa-7-production-promotion-closure-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  static_validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify PA.7 predecessor anchor
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor cdef87f304150225fc47fab0df003500386d2534 HEAD
+          test "$(jq -r '.self_sha256' pilot/m26/m26-pa-6-acceptance.json)" = \
+            "758f2c8012d37875f7438c1d518f9d9db55e3ce0344640f0e16c9ed8f3fa7144"
+          test "$(jq -r '.self_sha256' pilot/m26/m26-pa-7-unlock-pending-owner-promotion.json)" = \
+            "c1984a9d69518958cc6830d34762444263f990b118a8c6a914e480a15c491538"
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+
+      - name: Validate PA.7 production promotion implementation
+        run: |
+          set -euo pipefail
+          python -m ruff check \
+            src/knowledge_engine/m26_production_promotion_closure.py \
+            src/knowledge_engine/m26_pa7_query_cli.py \
+            tests/test_m26_pa_7_production_promotion_closure.py
+          python -m compileall -q \
+            src/knowledge_engine/m26_production_promotion_closure.py \
+            src/knowledge_engine/m26_pa7_query_cli.py \
+            tests/test_m26_pa_7_production_promotion_closure.py
+          python -m pytest -q \
+            tests/test_m26_pa_7_production_promotion_closure.py \
+            tests/test_m26_pa_6_canary_slo_rollback.py \
+            tests/test_m26_pa_6_reconciliation.py
+
+      - name: Enforce PA.7 changed-file boundary
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
+          cat /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/(m25-7-benchmark-closure|m25-7-source-pr-executor|m25-8-adoption-release|m26-1-architecture-authority|m26-pa-4-verified-answer-citation-gate|m26-pa-7-production-promotion-closure)\.yml|pilot/m26/m26-pa-7-[a-z0-9-]+\.json|schemas/m26-pa-7-[a-z0-9-]+-v1\.schema\.json|src/knowledge_engine/m26_production_promotion_closure\.py|src/knowledge_engine/m26_pa7_query_cli\.py|tests/test_m26_pa_7_production_promotion_closure\.py|pyproject\.toml)$' /tmp/changed.txt
+          ! grep -E '^(production/|release/production|r2/|qdrant/|foundation/|credentials/|secrets/)' /tmp/changed.txt
+
+  production_promotion:
+    needs: static_validate
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: m23-r3-diagnostic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Detect PA.7 resolved gate and trigger
+        id: pa7_gate
+        run: |
+          set -euo pipefail
+          if [ -f pilot/m26/m26-pa-7-acceptance.json ]; then
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+            echo "PA.7 acceptance already reconciled; no further promotion action authorized."
+          elif [ -f pilot/m26/m26-pa-7-resolved-production-gate.json ] && \
+             [ -f pilot/m26/m26-pa-7-promotion-trigger.json ] && \
+             [ -f pilot/m26/m26-pa-7-owner-final-decision.json ]; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+            echo "No complete PA.7 resolved gate/trigger tuple; no production action authorized."
+          fi
+
+      - name: Install promotion dependencies
+        if: steps.pa7_gate.outputs.authorized == 'true'
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+
+      - name: Execute owner-only bounded PA.7 promotion
+        if: steps.pa7_gate.outputs.authorized == 'true'
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          from knowledge_engine.m26_production_promotion_closure import (
+              load_json,
+              run_owner_only_production_promotion,
+              validate_owner_final_decision,
+              validate_resolved_gate,
+          )
+
+          root = Path(".")
+          decision = load_json(root / "pilot/m26/m26-pa-7-owner-final-decision.json")
+          gate = load_json(root / "pilot/m26/m26-pa-7-resolved-production-gate.json")
+          validate_owner_final_decision(decision)
+          validate_resolved_gate(gate, decision)
+          receipt = run_owner_only_production_promotion(
+              root=root,
+              gate=gate,
+              owner_decision=decision,
+              evidence_dir=Path("/tmp/m26-pa7-production-evidence"),
+          )
+          print("m26_pa7_production_receipt=" + receipt["self_sha256"])
+          if not receipt["slo_pass"]:
+              raise SystemExit("PA.7 promotion failed closed")
+          PY
+
+      - name: Upload PA.7 production evidence
+        if: steps.pa7_gate.outputs.authorized == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-pa-7-production-promotion-closure-evidence
+          path: /tmp/m26-pa7-production-evidence
+          if-no-files-found: error

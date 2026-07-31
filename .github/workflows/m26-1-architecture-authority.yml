@@ -60,7 +60,9 @@ jobs:
             -e 'src/knowledge_engine/m26_pa5_controlled_internal_pilot.py' \
             -e 'src/knowledge_engine/m26_pa5_live_execution.py' \
             -e 'src/knowledge_engine/m26_pa5_population_freeze.py' \
-            -e 'src/knowledge_engine/m26_canary_slo_rollback.py' || true)"
+            -e 'src/knowledge_engine/m26_canary_slo_rollback.py' \
+            -e 'src/knowledge_engine/m26_production_promotion_closure.py' \
+            -e 'src/knowledge_engine/m26_pa7_query_cli.py' || true)"
           test -z "$unexpected"
           python - <<'PY'
           import pathlib

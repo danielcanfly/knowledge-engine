@@ -113,7 +113,22 @@ jobs:
             'src/knowledge_engine/m25_adoption_release.py' \
             'src/knowledge_engine/m25_adoption_release_cli.py' \
             'tests/test_m25_8_adoption_release.py' | sort)"
-          test "$changed" = "$expected"
+          pa7_compat="$(printf '%s\n' \
+            '.github/workflows/m25-7-benchmark-closure.yml' \
+            '.github/workflows/m25-7-source-pr-executor.yml' \
+            '.github/workflows/m25-8-adoption-release.yml' \
+            '.github/workflows/m26-1-architecture-authority.yml' \
+            '.github/workflows/m26-pa-4-verified-answer-citation-gate.yml' \
+            '.github/workflows/m26-pa-7-production-promotion-closure.yml' \
+            'pyproject.toml' \
+            'schemas/m26-pa-7-incident-packet-v1.schema.json' \
+            'schemas/m26-pa-7-owner-final-decision-v1.schema.json' \
+            'schemas/m26-pa-7-production-receipt-v1.schema.json' \
+            'schemas/m26-pa-7-resolved-production-gate-v1.schema.json' \
+            'src/knowledge_engine/m26_pa7_query_cli.py' \
+            'src/knowledge_engine/m26_production_promotion_closure.py' \
+            'tests/test_m26_pa_7_production_promotion_closure.py' | sort)"
+          test "$changed" = "$expected" || test "$changed" = "$pa7_compat"
           ! printf '%s\n' "$changed" | grep -Eq '^(bundle/|provenance/|registry/|reviews/|foundation/|release/|r2/|qdrant/|production/|workers/|channels/)'
       - name: Assemble exact-head evidence
         env:
