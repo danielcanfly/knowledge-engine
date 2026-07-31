@@ -300,13 +300,99 @@ jobs:
           backend_origin="${M26_QUERY_BACKEND_URL:-https://$ORACLE_VM_HOST}"
           echo "::add-mask::$backend_origin"
           printf 'M26_QUERY_BACKEND_ORIGIN=%s\n' "$backend_origin" >> "$GITHUB_ENV"
+
+          tls_trust_profile="system_ca"
+          retry_used="false"
+          curl_exit_code="0"
+          curl_error_class="none"
+          tmp_error="$WORK_DIR/backend-health-external.curl.err.tmp"
+          set +e
           status="$(curl -sS \
             -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
             -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
             -o "$WORK_DIR/evidence/backend-health-external.json" \
             -w '%{http_code}' \
-            "$backend_origin/api/m26/health" || true)"
+            "$backend_origin/api/m26/health" \
+            2>"$tmp_error")"
+          curl_exit_code="$?"
+          set -e
+          if test "$curl_exit_code" != "0"; then
+            curl_error_class="curl_exit_${curl_exit_code}"
+          fi
+          if grep -Eqi 'SSL certificate problem|unable to get local issuer certificate|self-signed certificate' "$tmp_error"; then
+            curl_error_class="tls_certificate_validation_failed"
+          fi
+          rm -f "$tmp_error"
+
+          if test "$status" != "200" && \
+             test -z "${M26_QUERY_BACKEND_URL:-}" && \
+             [[ "$backend_origin" == https://* ]] && \
+             test "$curl_error_class" = "tls_certificate_validation_failed"; then
+            ca_dir="$WORK_DIR/cloudflare-origin-ca"
+            mkdir -p "$ca_dir"
+            curl -fsS https://developers.cloudflare.com/ssl/static/origin_ca_rsa_root.pem \
+              -o "$ca_dir/origin_ca_rsa_root.pem"
+            curl -fsS https://developers.cloudflare.com/ssl/static/origin_ca_ecc_root.pem \
+              -o "$ca_dir/origin_ca_ecc_root.pem"
+            printf '%s  %s\n' \
+              91a8a5567efa6bf941162aa806b3ba476aaddf7867640e53053b35fb225a5dae \
+              "$ca_dir/origin_ca_rsa_root.pem" | sha256sum -c -
+            printf '%s  %s\n' \
+              ca56c5b29918faf79046b1c1726c35d7715951a35445b2e63f56ea5a70b7af9c \
+              "$ca_dir/origin_ca_ecc_root.pem" | sha256sum -c -
+            cat "$ca_dir/origin_ca_rsa_root.pem" \
+              "$ca_dir/origin_ca_ecc_root.pem" \
+              > "$ca_dir/origin_ca_bundle.pem"
+            retry_used="true"
+            tls_trust_profile="cloudflare_origin_ca"
+            tmp_error="$WORK_DIR/backend-health-external.cloudflare-origin-ca.curl.err.tmp"
+            set +e
+            status="$(curl -sS \
+              --cacert "$ca_dir/origin_ca_bundle.pem" \
+              -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
+              -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
+              -o "$WORK_DIR/evidence/backend-health-external.json" \
+              -w '%{http_code}' \
+              "$backend_origin/api/m26/health" \
+              2>"$tmp_error")"
+            curl_exit_code="$?"
+            set -e
+            if test "$curl_exit_code" = "0"; then
+              curl_error_class="none"
+            else
+              curl_error_class="curl_exit_${curl_exit_code}"
+              if grep -Eqi 'SSL certificate problem|unable to get local issuer certificate|self-signed certificate' "$tmp_error"; then
+                curl_error_class="tls_certificate_validation_failed"
+              fi
+            fi
+            rm -f "$tmp_error"
+          fi
+
           printf '%s\n' "$status" > "$WORK_DIR/evidence/backend-health-external.status"
+          export M26_QUERY_BACKEND_TLS_TRUST_PROFILE="$tls_trust_profile"
+          printf 'M26_QUERY_BACKEND_TLS_TRUST_PROFILE=%s\n' "$tls_trust_profile" >> "$GITHUB_ENV"
+          BACKEND_HEALTH_STATUS="$status" \
+          BACKEND_HEALTH_CURL_EXIT_CODE="$curl_exit_code" \
+          BACKEND_HEALTH_CURL_ERROR_CLASS="$curl_error_class" \
+          BACKEND_HEALTH_RETRY_USED="$retry_used" \
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          diagnostic = {
+              "schema_version": "knowledge-engine-m26-pa7-backend-origin-health-diagnostic/v1",
+              "curl_error_class": os.environ["BACKEND_HEALTH_CURL_ERROR_CLASS"],
+              "curl_exit_code": int(os.environ["BACKEND_HEALTH_CURL_EXIT_CODE"]),
+              "external_health_status": os.environ["BACKEND_HEALTH_STATUS"],
+              "raw_backend_origin_recorded": False,
+              "raw_curl_stderr_recorded": False,
+              "retry_used": os.environ["BACKEND_HEALTH_RETRY_USED"] == "true",
+              "tls_trust_profile": os.environ["M26_QUERY_BACKEND_TLS_TRUST_PROFILE"],
+          }
+          Path(os.environ["WORK_DIR"], "evidence/backend-health-external-diagnostic.json").write_text(
+              json.dumps(diagnostic, indent=2, sort_keys=True) + "\n"
+          )
+          PY
           test "$status" = "200"
           python - <<'PY'
           import hashlib
@@ -319,6 +405,7 @@ jobs:
               "backend_origin_sha256": hashlib.sha256(origin.encode()).hexdigest(),
               "external_health_status": 200,
               "raw_backend_origin_recorded": False,
+              "tls_trust_profile": os.environ["M26_QUERY_BACKEND_TLS_TRUST_PROFILE"],
           }
           Path(os.environ["WORK_DIR"], "evidence/backend-origin-readback.json").write_text(
               json.dumps(out, indent=2, sort_keys=True) + "\n"
