@@ -1,0 +1,42 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-corrective-reopen-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "m26_closed": { "const": false },
+    "owner_authority_self_sha256": {
+      "const": "7521cfa5fc038cb5354aa8b8e7b766ad7544e0c2b160db58735409eaa60d4937"
+    },
+    "reason_code": { "const": "PA7_FALSE_POSITIVE_OPERATOR_QUERY_SURFACE" },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa7-product-readiness-corrective-reopen/v1"
+    },
+    "self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "stage_id": { "const": "M26.PA.7-CORRECTIVE" },
+    "status": { "const": "m26_pa_7_product_readiness_repair_required" },
+    "supersedes": {
+      "additionalProperties": false,
+      "properties": {
+        "m26_closure_self_sha256": {
+          "const": "c68d4fe433856cebfebf7a952b4915d460ddbc71c980baf88d462a39530c690c"
+        },
+        "pa7_acceptance_self_sha256": {
+          "const": "c3936e3a4d9f93b398053e3d92294eeb520f2adbaac4b1481896a2c6a1a6afc1"
+        }
+      },
+      "required": ["m26_closure_self_sha256", "pa7_acceptance_self_sha256"],
+      "type": "object"
+    }
+  },
+  "required": [
+    "m26_closed",
+    "owner_authority_self_sha256",
+    "reason_code",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "supersedes"
+  ],
+  "type": "object"
+}
