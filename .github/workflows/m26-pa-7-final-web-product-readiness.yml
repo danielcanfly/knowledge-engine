@@ -345,6 +345,14 @@ jobs:
               sleep 2
             done
             test -n "$tunnel_url"
+            tunnel_host="${tunnel_url#https://}"
+            tunnel_host="${tunnel_host%%/*}"
+            for _attempt in $(seq 1 30); do
+              if getent hosts "$tunnel_host" >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
             echo "::add-mask::$tunnel_url"
             printf 'M26_QUERY_BACKEND_URL=%s\n' "$tunnel_url" >> "$GITHUB_ENV"
             TUNNEL_URL="$tunnel_url" python - <<'PY'
@@ -383,6 +391,7 @@ jobs:
           retry_used="false"
           curl_exit_code="0"
           curl_error_class="none"
+          health_attempts="1"
           tmp_error="$WORK_DIR/backend-health-external.curl.err.tmp"
           set +e
           status="$(curl -sS \
@@ -446,12 +455,47 @@ jobs:
             rm -f "$tmp_error"
           fi
 
+          if test "$status" != "200" && \
+             { test "$curl_exit_code" = "6" || test "$status" = "000" || [[ "$status" == 5* ]]; }; then
+            for _attempt in $(seq 2 30); do
+              sleep 2
+              health_attempts="$_attempt"
+              tmp_error="$WORK_DIR/backend-health-external.retry.curl.err.tmp"
+              set +e
+              status="$(curl -sS \
+                -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
+                -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
+                -o "$WORK_DIR/evidence/backend-health-external.json" \
+                -w '%{http_code}' \
+                "$backend_origin/api/m26/health" \
+                2>"$tmp_error")"
+              curl_exit_code="$?"
+              set -e
+              if test "$curl_exit_code" = "0"; then
+                curl_error_class="none"
+              else
+                curl_error_class="curl_exit_${curl_exit_code}"
+                if grep -Eqi 'SSL certificate problem|unable to get local issuer certificate|self-signed certificate' "$tmp_error"; then
+                  curl_error_class="tls_certificate_validation_failed"
+                fi
+              fi
+              rm -f "$tmp_error"
+              if test "$status" = "200"; then
+                break
+              fi
+              if test "$curl_exit_code" != "6" && test "$status" != "000" && [[ "$status" != 5* ]]; then
+                break
+              fi
+            done
+          fi
+
           printf '%s\n' "$status" > "$WORK_DIR/evidence/backend-health-external.status"
           export M26_QUERY_BACKEND_TLS_TRUST_PROFILE="$tls_trust_profile"
           printf 'M26_QUERY_BACKEND_TLS_TRUST_PROFILE=%s\n' "$tls_trust_profile" >> "$GITHUB_ENV"
           BACKEND_HEALTH_STATUS="$status" \
           BACKEND_HEALTH_CURL_EXIT_CODE="$curl_exit_code" \
           BACKEND_HEALTH_CURL_ERROR_CLASS="$curl_error_class" \
+          BACKEND_HEALTH_ATTEMPTS="$health_attempts" \
           BACKEND_HEALTH_RETRY_USED="$retry_used" \
           python - <<'PY'
           import json
@@ -462,6 +506,7 @@ jobs:
               "curl_error_class": os.environ["BACKEND_HEALTH_CURL_ERROR_CLASS"],
               "curl_exit_code": int(os.environ["BACKEND_HEALTH_CURL_EXIT_CODE"]),
               "external_health_status": os.environ["BACKEND_HEALTH_STATUS"],
+              "health_attempts": int(os.environ["BACKEND_HEALTH_ATTEMPTS"]),
               "raw_backend_origin_recorded": False,
               "raw_curl_stderr_recorded": False,
               "retry_used": os.environ["BACKEND_HEALTH_RETRY_USED"] == "true",
