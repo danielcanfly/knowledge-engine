@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -9,21 +11,14 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from .m26_production_promotion_closure import (
-    CORRECTIVE_OWNER_AUTHORITY_SELF_SHA256,
-    CORRECTIVE_REOPEN_SELF_SHA256,
-    ProductionPromotionClosureError,
-    load_json,
-    reject_secret_or_raw_persistence,
-    validate_promotion_trigger,
-    validate_resolved_gate,
-    verify_self_digest,
-)
-from .m26_retrieval_envelope import normalize_question, with_self_digest
-from .m26_verified_answer_citation_gate import canonical_sha256
-
 FINAL_OWNER_AUTHORITY_SELF_SHA256 = (
     "19a1a5d41f8c935a235631975a225a622e4767e95b80ce23da2ff867c31ba2ce"
+)
+CORRECTIVE_OWNER_AUTHORITY_SELF_SHA256 = (
+    "7521cfa5fc038cb5354aa8b8e7b766ad7544e0c2b160db58735409eaa60d4937"
+)
+CORRECTIVE_REOPEN_SELF_SHA256 = (
+    "f5412bb39a776e5169c601d3b2d757e212058f215759a4104f0bb79c79c18e8d"
 )
 FINAL_WEB_FORMAL_MANIFEST_SCHEMA = (
     "knowledge-engine-m26-pa-7-final-web-formal-test-manifest/v1"
@@ -137,9 +132,54 @@ BROWSER_SUITE_SPEC = {
     ),
 }
 
+_WS_RE = re.compile(r"\s+")
+
 
 def utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def canonical_sha256(value: Any) -> str:
+    data = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(data).hexdigest()
+
+
+def with_self_digest(value: Mapping[str, Any]) -> dict[str, Any]:
+    unsigned = dict(value)
+    unsigned.pop("self_sha256", None)
+    return {**unsigned, "self_sha256": canonical_sha256(unsigned)}
+
+
+def normalize_question(question: str) -> str:
+    normalized = _WS_RE.sub(" ", question).strip()
+    if not normalized:
+        raise ValueError("question must be a non-empty string")
+    if len(normalized) > 12000:
+        raise ValueError("question exceeds the M26.1 bound")
+    return normalized
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError(f"artifact must be a JSON object: {path.as_posix()}")
+    return value
+
+
+def _closure_contracts() -> Any:
+    from . import m26_production_promotion_closure as closure
+
+    return closure
+
+
+def _promotion_error(code: str, message: str) -> Exception:
+    return _closure_contracts().ProductionPromotionClosureError(code, message)
 
 
 def final_formal_query_specs() -> list[dict[str, Any]]:
@@ -235,33 +275,48 @@ def build_final_web_formal_test_manifest(
 
 
 def validate_final_web_formal_test_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
-    verify_self_digest(manifest, "final web formal manifest")
-    reject_secret_or_raw_persistence(manifest, label="final_web_formal_manifest")
+    closure = _closure_contracts()
+    closure.verify_self_digest(manifest, "final web formal manifest")
+    closure.reject_secret_or_raw_persistence(manifest, label="final_web_formal_manifest")
     if manifest.get("schema_version") != FINAL_WEB_FORMAL_MANIFEST_SCHEMA:
-        raise ProductionPromotionClosureError("PA7_FINAL_FORMAL_MANIFEST_INVALID", "schema")
+        raise closure.ProductionPromotionClosureError(
+            "PA7_FINAL_FORMAL_MANIFEST_INVALID", "schema"
+        )
     if manifest.get("stage_id") != "M26.PA.7-FINAL-WEB":
-        raise ProductionPromotionClosureError("PA7_FINAL_FORMAL_MANIFEST_INVALID", "stage")
+        raise closure.ProductionPromotionClosureError(
+            "PA7_FINAL_FORMAL_MANIFEST_INVALID", "stage"
+        )
     if manifest.get("final_owner_authority_self_sha256") != FINAL_OWNER_AUTHORITY_SELF_SHA256:
-        raise ProductionPromotionClosureError("PA7_OWNER_DECISION_MISMATCH", "final authority")
+        raise closure.ProductionPromotionClosureError(
+            "PA7_OWNER_DECISION_MISMATCH", "final authority"
+        )
     if manifest.get("count") != 10:
-        raise ProductionPromotionClosureError("PA7_FINAL_FORMAL_MANIFEST_INVALID", "count")
+        raise closure.ProductionPromotionClosureError(
+            "PA7_FINAL_FORMAL_MANIFEST_INVALID", "count"
+        )
     if manifest.get("classes") != FINAL_CLASSES:
-        raise ProductionPromotionClosureError("PA7_FINAL_FORMAL_MANIFEST_INVALID", "classes")
+        raise closure.ProductionPromotionClosureError(
+            "PA7_FINAL_FORMAL_MANIFEST_INVALID", "classes"
+        )
     queries = _list_value(manifest.get("queries"), "manifest.queries")
     specs = final_formal_query_specs()
     if len(queries) != len(specs):
-        raise ProductionPromotionClosureError("PA7_FINAL_FORMAL_MANIFEST_INVALID", "rows")
+        raise closure.ProductionPromotionClosureError(
+            "PA7_FINAL_FORMAL_MANIFEST_INVALID", "rows"
+        )
     expected_hashes = [str(spec["question_sha256"]) for spec in specs]
     actual_hashes = [str(row.get("question_sha256")) for row in queries]
     if actual_hashes != expected_hashes:
-        raise ProductionPromotionClosureError("PA7_FINAL_FORMAL_MANIFEST_INVALID", "query hashes")
+        raise closure.ProductionPromotionClosureError(
+            "PA7_FINAL_FORMAL_MANIFEST_INVALID", "query hashes"
+        )
     if canonical_sha256(actual_hashes) != manifest.get("query_set_sha256"):
-        raise ProductionPromotionClosureError(
+        raise closure.ProductionPromotionClosureError(
             "PA7_FINAL_FORMAL_MANIFEST_INVALID",
             "query set digest",
         )
     if sum(bool(row.get("browser_suite")) for row in queries) != 1:
-        raise ProductionPromotionClosureError(
+        raise closure.ProductionPromotionClosureError(
             "PA7_FINAL_FORMAL_MANIFEST_INVALID",
             "browser row",
         )
@@ -282,10 +337,11 @@ def run_final_web_product_readiness(
     require_remote_dense: bool = True,
     test_fixture_only: bool = False,
 ) -> dict[str, Any]:
-    validate_resolved_gate(gate, owner_decision)
-    validate_promotion_trigger(promotion_trigger, gate, owner_decision)
+    closure = _closure_contracts()
+    closure.validate_resolved_gate(gate, owner_decision)
+    closure.validate_promotion_trigger(promotion_trigger, gate, owner_decision)
     manifest = validate_final_web_formal_test_manifest(formal_manifest)
-    reject_secret_or_raw_persistence(browser_evidence, label="browser_evidence")
+    closure.reject_secret_or_raw_persistence(browser_evidence, label="browser_evidence")
 
     from .m26_pa5_v8_live import MiniMaxClient
     from .m26_pa7_arbitrary_query_runtime import run_owner_arbitrary_query
@@ -405,8 +461,8 @@ def run_final_web_product_readiness(
 def duplicate_live_guard_status(root: Path) -> dict[str, Any]:
     acceptance_path = root / "pilot/m26/m26-pa-7-acceptance.json"
     closure_path = root / "pilot/m26/m26-pa-7-m26-closure.json"
-    acceptance = load_json(acceptance_path) if acceptance_path.exists() else {}
-    closure = load_json(closure_path) if closure_path.exists() else {}
+    acceptance = _load_json(acceptance_path) if acceptance_path.exists() else {}
+    closure = _load_json(closure_path) if closure_path.exists() else {}
     accepted = acceptance.get("status") == FINAL_ACCEPTED_STATUS
     closed = closure.get("status") == "m26_closed"
     return with_self_digest(
@@ -846,13 +902,13 @@ def _percentile(values: Sequence[int], fraction: float) -> int:
 
 def _list_value(value: Any, label: str) -> list[Any]:
     if not isinstance(value, list):
-        raise ProductionPromotionClosureError("PA7_LIST_INVALID", label)
+        raise _promotion_error("PA7_LIST_INVALID", label)
     return value
 
 
 def _object(value: Any, label: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
-        raise ProductionPromotionClosureError("PA7_OBJECT_INVALID", label)
+        raise _promotion_error("PA7_OBJECT_INVALID", label)
     return value
 
 
