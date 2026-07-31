@@ -1,0 +1,13 @@
+{
+  "m26_closed": false,
+  "owner_authority_self_sha256": "7521cfa5fc038cb5354aa8b8e7b766ad7544e0c2b160db58735409eaa60d4937",
+  "reason_code": "PA7_FALSE_POSITIVE_OPERATOR_QUERY_SURFACE",
+  "schema_version": "knowledge-engine-m26-pa7-product-readiness-corrective-reopen/v1",
+  "self_sha256": "f5412bb39a776e5169c601d3b2d757e212058f215759a4104f0bb79c79c18e8d",
+  "stage_id": "M26.PA.7-CORRECTIVE",
+  "status": "m26_pa_7_product_readiness_repair_required",
+  "supersedes": {
+    "m26_closure_self_sha256": "c68d4fe433856cebfebf7a952b4915d460ddbc71c980baf88d462a39530c690c",
+    "pa7_acceptance_self_sha256": "c3936e3a4d9f93b398053e3d92294eeb520f2adbaac4b1481896a2c6a1a6afc1"
+  }
+}

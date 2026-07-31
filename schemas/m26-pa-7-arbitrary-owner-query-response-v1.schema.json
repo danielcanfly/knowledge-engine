@@ -1,0 +1,98 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-arbitrary-owner-query-response-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "answer_text": { "type": "string" },
+    "candidate_count_by_channel": {
+      "additionalProperties": { "minimum": 0, "type": "integer" },
+      "required": ["lexical", "dense", "combined_unique"],
+      "type": "object"
+    },
+    "citation_locator_valid": { "type": "boolean" },
+    "citations": { "items": { "type": "object" }, "type": "array" },
+    "graph_hops_used": { "minimum": 0, "type": "integer" },
+    "latency_ms": { "minimum": 0, "type": "integer" },
+    "material_claim_support_verified": { "type": "boolean" },
+    "mutations": {
+      "properties": {
+        "answer_to_canonical_writes": { "const": 0 },
+        "canonical_writes": { "const": 0 },
+        "corpus_index_content_mutations": { "const": 0 },
+        "production_pointer_mutations": { "const": 0 },
+        "qdrant_write_operations": { "const": 0 }
+      },
+      "required": [
+        "answer_to_canonical_writes",
+        "canonical_writes",
+        "corpus_index_content_mutations",
+        "production_pointer_mutations",
+        "qdrant_write_operations"
+      ],
+      "type": "object"
+    },
+    "payg_equivalent_cost_usd": { "type": "string" },
+    "privacy": {
+      "properties": {
+        "full_provider_response_persisted": { "const": false },
+        "raw_evidence_persisted": { "const": false },
+        "raw_query_persisted": { "const": false },
+        "secret_values_persisted": { "const": false },
+        "vectors_persisted": { "const": false }
+      },
+      "required": [
+        "full_provider_response_persisted",
+        "raw_evidence_persisted",
+        "raw_query_persisted",
+        "secret_values_persisted",
+        "vectors_persisted"
+      ],
+      "type": "object"
+    },
+    "production_manifest_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "production_pointer_digest": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "production_release_id": { "type": "string" },
+    "provider_call_count": { "minimum": 0, "type": "integer" },
+    "provider_invoked": { "type": "boolean" },
+    "question_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "reason_codes": { "items": { "type": "string" }, "type": "array" },
+    "resolved_gate_self_sha256": { "pattern": "^[0-9a-f]{64}$", "type": "string" },
+    "retrieval_backend_identity": { "type": "object" },
+    "retrieval_mode_summary": { "type": "object" },
+    "safe_abstention": { "type": "boolean" },
+    "schema_version": { "const": "knowledge-engine-m26-pa7-arbitrary-owner-query-response/v1" },
+    "selected_evidence_ids": { "items": { "type": "string" }, "type": "array" },
+    "status": {
+      "enum": [
+        "owner_only_cited_answer",
+        "owner_only_safe_abstention",
+        "denied_non_owner_or_public_request"
+      ]
+    },
+    "terminal_status": { "type": "string" },
+    "trace_id": { "type": "string" },
+    "unsupported_accepted_claims": { "const": 0 }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "terminal_status",
+    "trace_id",
+    "question_sha256",
+    "resolved_gate_self_sha256",
+    "answer_text",
+    "citations",
+    "safe_abstention",
+    "reason_codes",
+    "provider_invoked",
+    "provider_call_count",
+    "latency_ms",
+    "payg_equivalent_cost_usd",
+    "material_claim_support_verified",
+    "citation_locator_valid",
+    "unsupported_accepted_claims",
+    "privacy",
+    "mutations"
+  ],
+  "type": "object"
+}
