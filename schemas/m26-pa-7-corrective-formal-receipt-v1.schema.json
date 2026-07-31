@@ -1,0 +1,139 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-corrective-formal-receipt-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "calibration": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "corrected_gate_self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "corrected_trigger_self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "corrective_formal_test_contract_self_sha256": {
+      "const": "098bf0a450bfb118c53aec08e7772249083b3a1ae696447d10413053a3fc5b51"
+    },
+    "corrective_formal_test_manifest_self_sha256": {
+      "const": "b9474b5274f598670aa8f4146e2aacb82a8a408f3baf79a78a4c78df843572d7"
+    },
+    "corrective_owner_authority_self_sha256": {
+      "const": "7521cfa5fc038cb5354aa8b8e7b766ad7544e0c2b160db58735409eaa60d4937"
+    },
+    "corrective_reopen_self_sha256": {
+      "const": "f5412bb39a776e5169c601d3b2d757e212058f215759a4104f0bb79c79c18e8d"
+    },
+    "formal": {
+      "additionalProperties": true,
+      "properties": {
+        "query_count": {
+          "maximum": 8,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 8,
+          "type": "array"
+        }
+      },
+      "required": [
+        "query_count",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "implementation": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "metrics": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "mutations": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "privacy": {
+      "additionalProperties": {
+        "const": false
+      },
+      "type": "object"
+    },
+    "production_identities": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "public_request_interface": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-7-corrective-formal-receipt/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "slo_pass": {
+      "type": "boolean"
+    },
+    "stage_id": {
+      "const": "M26.PA.7-CORRECTIVE"
+    },
+    "status": {
+      "enum": [
+        "test_fixture_only_corrective_formal_receipt",
+        "live_corrective_formal_receipt_pending_reconciliation",
+        "live_corrective_formal_failed_closed_receipt"
+      ]
+    },
+    "test_fixture_only": {
+      "type": "boolean"
+    },
+    "traffic": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "workflow": {
+      "additionalProperties": true,
+      "type": "object"
+    }
+  },
+  "required": [
+    "calibration",
+    "corrected_gate_self_sha256",
+    "corrected_trigger_self_sha256",
+    "corrective_formal_test_contract_self_sha256",
+    "corrective_formal_test_manifest_self_sha256",
+    "corrective_owner_authority_self_sha256",
+    "corrective_reopen_self_sha256",
+    "formal",
+    "generated_at",
+    "implementation",
+    "metrics",
+    "mutations",
+    "privacy",
+    "production_identities",
+    "public_request_interface",
+    "schema_version",
+    "self_sha256",
+    "slo_pass",
+    "stage_id",
+    "status",
+    "test_fixture_only",
+    "traffic",
+    "workflow"
+  ],
+  "type": "object"
+}

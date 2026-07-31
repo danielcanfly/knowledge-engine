@@ -1,0 +1,131 @@
+{
+  "bounded_scope": {
+    "automatic_expansion": false,
+    "calibration_query_count": 4,
+    "duration_minutes_maximum": 90,
+    "formal_query_cap": 8,
+    "formal_query_count": 8,
+    "logical_attempts_authorized": 1,
+    "maximum_logical_promotion_attempts": 2,
+    "public_traffic_percent": 0,
+    "query_set_ids": [
+      "cd82eb125ecf147e44f0ebdb425c55f2efa66fb0009742b3195cf0226b5b62b7",
+      "47cc5c9b8d085df0aa0b0081008d14e36a8efe444a98e1aad9010fcb00e52261",
+      "de983d6c5b90ea864b5c4dd3266da697ac6c1657cddbcd286459bd0d73683a95",
+      "f2654b884204aff28c896adbe4a6207c3f8d671a39c20ce18255f5cde661dbda",
+      "8db87c490beb8792306fa0613d89568c96a35bec79df1cdc5321541dc6e8301c",
+      "36b9932c895cd739fcf204c9cb71aeadb227be211b669f772f2f15813a920346",
+      "34762c3bfd2a345e2dd4fadf9799dfc4f3f3ca7c332d429c360de6dd560fce36",
+      "95d6ad6e2090aca9edeb09564f96652a53d966eb46880d38b0a26aa1a8f153bc"
+    ],
+    "query_set_sha256": "07878f16142dc34c75e95558692921b703c2756a7bf95b863395d7510456116e",
+    "query_set_source": "M26.PA.7 corrective formal test manifest query digests"
+  },
+  "budgets": {
+    "attempt_payg_equivalent_cost_usd_maximum": "0.75",
+    "attempt_provider_calls_maximum": 32,
+    "cumulative_payg_equivalent_cost_usd_maximum": "1.50",
+    "cumulative_provider_calls_maximum": 96,
+    "cumulative_window_minutes_maximum": 120
+  },
+  "corrective_owner_authority_self_sha256": "7521cfa5fc038cb5354aa8b8e7b766ad7544e0c2b160db58735409eaa60d4937",
+  "corrective_reopen_self_sha256": "f5412bb39a776e5169c601d3b2d757e212058f215759a4104f0bb79c79c18e8d",
+  "denied": {
+    "answer_to_canonical_writes": true,
+    "automatic_expansion": true,
+    "corpus_index_content_mutation": true,
+    "new_user_admission": true,
+    "public_or_unbounded_traffic": true,
+    "secret_persistence": true
+  },
+  "formal_test_contract_self_sha256": "098bf0a450bfb118c53aec08e7772249083b3a1ae696447d10413053a3fc5b51",
+  "formal_test_manifest_self_sha256": "b9474b5274f598670aa8f4146e2aacb82a8a408f3baf79a78a4c78df843572d7",
+  "implementation": {
+    "base_sha": "34204820c362571ff62ff0824ad0a31fd3457559",
+    "expected_head_merge": true,
+    "head_sha": "3d965192242406c2af721a2ffe27e394d624e099",
+    "implementation_issue": 1257,
+    "implementation_pull_request": 1258,
+    "merge_sha": "23413d9336a958fb5915068bc2e5a1ea34f28f57",
+    "scope": "corrective arbitrary owner query runtime and false-positive reopen"
+  },
+  "kill_switch": {
+    "denied_probe_count": 2,
+    "mechanism": "owner_only_runtime_serving_flag_with_denied_probe_readback",
+    "requires_zero_post_kill_provider_calls": true
+  },
+  "owner_decision": {
+    "decision_status": "approved_with_conditions",
+    "path": "pilot/m26/m26-pa-7-owner-final-decision.json",
+    "self_sha256": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa"
+  },
+  "predecessor": {
+    "pa6_acceptance_path": "pilot/m26/m26-pa-6-acceptance.json",
+    "pa6_acceptance_self_sha256": "758f2c8012d37875f7438c1d518f9d9db55e3ce0344640f0e16c9ed8f3fa7144",
+    "pa6_status": "m26_pa_6_canary_slo_rollback_accepted",
+    "pa7_unlock_path": "pilot/m26/m26-pa-7-unlock-pending-owner-promotion.json",
+    "pa7_unlock_self_sha256": "c1984a9d69518958cc6830d34762444263f990b118a8c6a914e480a15c491538",
+    "pa7_unlock_status": "m26_pa_7_unlocked_pending_owner_promotion"
+  },
+  "production_identities": {
+    "access_policy_digest": "owner-only-access:88ec1a2439848e71e59ccbe3728c62f1a028cd0e7ba4c0aab3333fbe10475882",
+    "allowlisted_owner_subject_hash": "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b",
+    "automatic_expansion": false,
+    "canonical_manifest_sha256": "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877",
+    "canonical_release_id": "20260720T160000Z-46137c97263e",
+    "deployment_identity": "github-actions-main-push://danielcanfly/knowledge-engine/.github/workflows/m26-pa-7-production-promotion-closure.yml@23413d9336a958fb5915068bc2e5a1ea34f28f57:environment=m23-r3-diagnostic",
+    "final_production_pointer_target": "owner-only-runtime-pointer:m26-pa7-corrective:23413d9336a958fb5915068bc2e5a1ea34f28f57:serving=true",
+    "immutable_rollback_target_identity": "owner-only-runtime-pointer:m26-pa6:758f2c8012d37875f7438c1d518f9d9db55e3ce0344640f0e16c9ed8f3fa7144:serving=false",
+    "model_identity": "MiniMax-M3",
+    "owner_only_route": "command://knowledge-m26-pa7-query",
+    "pre_production_pointer_identity": "owner-only-runtime-pointer:m26-pa6:758f2c8012d37875f7438c1d518f9d9db55e3ce0344640f0e16c9ed8f3fa7144:serving=false",
+    "provider_identity": "MiniMax / MiniMax-M3",
+    "public_traffic_percent": 0,
+    "qdrant_collection": "llm_wiki_m23_pilot_bge_m3_1024",
+    "runtime_build_sha": "23413d9336a958fb5915068bc2e5a1ea34f28f57"
+  },
+  "rollback": {
+    "final_restoration_required": true,
+    "idempotent": true,
+    "mechanism": "restore_exact_pre_promotion_runtime_pointer_digest",
+    "target_state_digest": "8f12d290c43c316a955bbac8acf0d77cc8840e1015dc446d42130bf4efb5774d"
+  },
+  "schema_version": "knowledge-engine-m26-pa-7-corrective-resolved-production-gate/v1",
+  "self_sha256": "993e33be92109f7e7d798dec0a2e710ad00b2cdac2d3c6e574956ebde81aa08d",
+  "slo_thresholds": {
+    "answerable_grounded_pass_rate_minimum": 0.8,
+    "citation_locator_validity_required": 1.0,
+    "complete_accounting_required": 8,
+    "material_claim_support_precision_required": 1.0,
+    "p95_latency_ms_maximum": 30000,
+    "p99_latency_ms_maximum": 60000,
+    "post_kill_provider_calls_required": 0,
+    "provider_calls_maximum": 32,
+    "provider_error_count_maximum": 0,
+    "safe_terminal_outcome_rate_minimum": 1.0,
+    "total_payg_equivalent_cost_usd_maximum": "0.75",
+    "unsupported_accepted_claims_maximum": 0
+  },
+  "stage_id": "M26.PA.7",
+  "status": "resolved_owner_authorized_formal_product_readiness_gate",
+  "stop_conditions": [
+    "corrective_authority_gate_or_manifest_digest_mismatch",
+    "public_anonymous_or_unbounded_traffic_observed",
+    "non_owner_request_reaches_provider_execution",
+    "secret_or_raw_prohibited_content_persisted",
+    "answer_to_canonical_or_content_index_mutation_observed",
+    "unsupported_accepted_claim_or_invalid_citation_locator",
+    "security_privacy_acl_or_prompt_injection_incident",
+    "incomplete_formal_denominator_or_missing_terminal_outcome",
+    "budget_or_duration_exhausted"
+  ],
+  "workflow": {
+    "environment": "m23-r3-diagnostic",
+    "formal_receipt_artifact": "m26-pa-7-corrective-product-readiness-evidence",
+    "live_job": "production_promotion",
+    "name": "M26.PA.7 Production Promotion and Closure",
+    "path": ".github/workflows/m26-pa-7-production-promotion-closure.yml",
+    "trigger_artifact": "pilot/m26/m26-pa-7-corrected-promotion-trigger.json",
+    "trigger_issue": 1259
+  }
+}

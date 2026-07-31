@@ -1,0 +1,50 @@
+{
+  "authority": {
+    "actions_execution_and_inspection": true,
+    "answer_to_canonical_writes": false,
+    "automatic_traffic_expansion": false,
+    "bounded_live_provider_calls": true,
+    "bounded_owner_only_production_query_execution": true,
+    "close_stale_issues_1251_1253": true,
+    "corpus_index_content_mutation": false,
+    "corrective_acceptance_and_m26_closure": true,
+    "expected_head_merges": true,
+    "git_and_gh_commands": true,
+    "issues_branches_commits_prs": true,
+    "kill_switch_rollback_and_restoration": true,
+    "new_user_admission": false,
+    "ordinary_ci_repairs_without_reapproval": true,
+    "production_route_or_pointer_repair_within_owner_only_scope": true,
+    "public_or_unbounded_traffic": false,
+    "secret_value_persistence": false,
+    "source_foundation_release_mutation": false
+  },
+  "carried_forward_owner_instruction_text": "給我給codex的交接包 我要去睡覺了 我希望一覺醒來看到pa7 / m26都好了\n要什麼權限和authority我一次給 gh指令也全授權 不要中間停下來跟我要權限或是同意",
+  "conditions": [
+    "The existing PA.1 through PA.6 acceptances remain valid and are not rerun.",
+    "The existing PA.7 live promotion evidence remains admissible for control-plane, SLO, kill-switch, rollback, and provider capability proof, but not for arbitrary-query product readiness.",
+    "The existing PA.7 acceptance and m26_closed artifacts are treated as false-positive current-state claims until superseded by corrective reconciliation.",
+    "Production audience remains Daniel owner allowlist only.",
+    "Public, anonymous, and unbounded traffic remain zero.",
+    "No raw secret, full provider response, vector, or private owner query may be persisted.",
+    "Routine implementation, CI, workflow, dependency, schema, or provider-format defects may be repaired autonomously within the budgets.",
+    "Security, privacy, identity, evidence-integrity, or rollback-digest ambiguity must fail closed and must not be repaired by weakening gates."
+  ],
+  "decision_maker": "Daniel Huang",
+  "decision_status": "approved_autonomous_corrective_completion",
+  "exact_latest_instruction_text": "好 給我一個交接包 讓codex做到100%完成",
+  "live_budgets": {
+    "calibration_queries_per_round": 4,
+    "formal_queries_per_attempt": 8,
+    "maximum_calibration_rounds": 2,
+    "maximum_cumulative_payg_equivalent_cost_usd": "1.50",
+    "maximum_cumulative_provider_calls": 96,
+    "maximum_cumulative_window_minutes": 120,
+    "maximum_formal_logical_attempts": 2
+  },
+  "mission": "Repair the false-positive PA.7/M26 closure and complete a real arbitrary natural-language owner query surface end to end, then independently reconcile and close M26 for real.",
+  "no_further_owner_approval_required": true,
+  "schema_version": "knowledge-engine-m26-pa7-product-readiness-corrective-owner-authority/v1",
+  "self_sha256": "7521cfa5fc038cb5354aa8b8e7b766ad7544e0c2b160db58735409eaa60d4937",
+  "stage_id": "M26.PA.7-CORRECTIVE"
+}

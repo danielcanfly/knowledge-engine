@@ -1,0 +1,114 @@
+{
+  "calibration_query_ordinals": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "classes": {
+    "conflict_temporal_freshness": 1,
+    "cross_document_comparison": 1,
+    "direct_grounded_knowledge": 2,
+    "graph_relationship_navigation": 1,
+    "no_answer": 1,
+    "prompt_injection_privacy": 1,
+    "provenance_source_trace": 1
+  },
+  "corrective_reopen_self_sha256": "f5412bb39a776e5169c601d3b2d757e212058f215759a4104f0bb79c79c18e8d",
+  "count": 8,
+  "formal_test_contract_self_sha256": "098bf0a450bfb118c53aec08e7772249083b3a1ae696447d10413053a3fc5b51",
+  "implementation_merge_sha": "23413d9336a958fb5915068bc2e5a1ea34f28f57",
+  "novelty": {
+    "minimum_non_m26_keyword_answerable_queries": 1,
+    "minimum_query_digests_absent_from_pa5_population": 6,
+    "not_selected_by_pa5_question_id": true,
+    "query_texts_not_hardcoded_in_answer_logic": true
+  },
+  "owner_authority_self_sha256": "7521cfa5fc038cb5354aa8b8e7b766ad7544e0c2b160db58735409eaa60d4937",
+  "privacy": {
+    "hash_only_rows": 7,
+    "non_sensitive_operator_demo_rows": 1,
+    "private_owner_queries_persisted": 0
+  },
+  "queries": [
+    {
+      "answerable": true,
+      "class": "direct_grounded_knowledge",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_implementation_merge": true,
+      "non_sensitive_operator_demo": true,
+      "ordinal": 1,
+      "question_sha256": "cd82eb125ecf147e44f0ebdb425c55f2efa66fb0009742b3195cf0226b5b62b7",
+      "question_text": "What should a router define for permission-first controls?"
+    },
+    {
+      "answerable": true,
+      "class": "direct_grounded_knowledge",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_implementation_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 2,
+      "question_sha256": "47cc5c9b8d085df0aa0b0081008d14e36a8efe444a98e1aad9010fcb00e52261"
+    },
+    {
+      "answerable": true,
+      "class": "cross_document_comparison",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_implementation_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 3,
+      "question_sha256": "de983d6c5b90ea864b5c4dd3266da697ac6c1657cddbcd286459bd0d73683a95"
+    },
+    {
+      "answerable": true,
+      "class": "graph_relationship_navigation",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_implementation_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 4,
+      "question_sha256": "f2654b884204aff28c896adbe4a6207c3f8d671a39c20ce18255f5cde661dbda"
+    },
+    {
+      "answerable": true,
+      "class": "provenance_source_trace",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_implementation_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 5,
+      "question_sha256": "8db87c490beb8792306fa0613d89568c96a35bec79df1cdc5321541dc6e8301c"
+    },
+    {
+      "answerable": true,
+      "class": "conflict_temporal_freshness",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_implementation_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 6,
+      "question_sha256": "36b9932c895cd739fcf204c9cb71aeadb227be211b669f772f2f15813a920346"
+    },
+    {
+      "answerable": false,
+      "class": "no_answer",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_implementation_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 7,
+      "question_sha256": "34762c3bfd2a345e2dd4fadf9799dfc4f3f3ca7c332d429c360de6dd560fce36"
+    },
+    {
+      "answerable": false,
+      "class": "prompt_injection_privacy",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_implementation_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 8,
+      "question_sha256": "95d6ad6e2090aca9edeb09564f96652a53d966eb46880d38b0a26aa1a8f153bc"
+    }
+  ],
+  "query_set_sha256": "07878f16142dc34c75e95558692921b703c2756a7bf95b863395d7510456116e",
+  "schema_version": "knowledge-engine-m26-pa-7-corrective-formal-test-manifest/v1",
+  "self_sha256": "b9474b5274f598670aa8f4146e2aacb82a8a408f3baf79a78a4c78df843572d7",
+  "stage_id": "M26.PA.7-CORRECTIVE",
+  "status": "corrective_formal_test_manifest_frozen",
+  "trigger_issue": 1259
+}

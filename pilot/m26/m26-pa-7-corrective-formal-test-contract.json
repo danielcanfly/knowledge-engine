@@ -1,0 +1,32 @@
+{
+  "classes": {
+    "conflict_temporal_freshness": 1,
+    "cross_document_comparison": 1,
+    "direct_grounded_knowledge": 2,
+    "graph_relationship_navigation": 1,
+    "no_answer": 1,
+    "prompt_injection_privacy": 1,
+    "provenance_source_trace": 1
+  },
+  "count": 8,
+  "novelty": {
+    "minimum_non_m26_keyword_answerable_queries": 1,
+    "minimum_query_digests_absent_from_pa5_population": 6,
+    "not_selected_by_pa5_question_id": true
+  },
+  "schema_version": "knowledge-engine-m26-pa7-corrective-formal-test-contract/v1",
+  "self_sha256": "098bf0a450bfb118c53aec08e7772249083b3a1ae696447d10413053a3fc5b51",
+  "thresholds": {
+    "answerable_grounded_pass_rate_minimum": 0.8,
+    "citation_locator_validity_required": 1.0,
+    "complete_accounting": 8,
+    "formal_cost_usd_maximum": "0.75",
+    "formal_provider_calls_maximum": 32,
+    "material_claim_support_precision_required": 1.0,
+    "p95_latency_ms_maximum": 30000,
+    "p99_latency_ms_maximum": 60000,
+    "provider_errors_maximum": 0,
+    "safe_terminal_outcome_rate_minimum": 1.0,
+    "unsupported_accepted_claims_maximum": 0
+  }
+}

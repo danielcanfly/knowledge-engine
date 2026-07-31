@@ -1,0 +1,42 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-corrective-owner-authority-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "authority": {
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "type": "object"
+    },
+    "decision_maker": {
+      "const": "Daniel Huang"
+    },
+    "decision_status": {
+      "const": "approved_autonomous_corrective_completion"
+    },
+    "no_further_owner_approval_required": {
+      "const": true
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa7-product-readiness-corrective-owner-authority/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "stage_id": {
+      "const": "M26.PA.7-CORRECTIVE"
+    }
+  },
+  "required": [
+    "authority",
+    "decision_maker",
+    "decision_status",
+    "no_further_owner_approval_required",
+    "schema_version",
+    "self_sha256",
+    "stage_id"
+  ],
+  "type": "object"
+}

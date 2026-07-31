@@ -1,0 +1,155 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-corrective-promotion-trigger-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation": {
+      "additionalProperties": true,
+      "properties": {
+        "branch": {
+          "const": "main"
+        },
+        "environment": {
+          "const": "m23-r3-diagnostic"
+        },
+        "event": {
+          "const": "push"
+        },
+        "workflow_path": {
+          "const": ".github/workflows/m26-pa-7-production-promotion-closure.yml"
+        }
+      },
+      "required": [
+        "branch",
+        "environment",
+        "event",
+        "required_artifacts",
+        "workflow_path"
+      ],
+      "type": "object"
+    },
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "automatic_expansion": {
+          "const": false
+        },
+        "corpus_index_content_mutation": {
+          "const": false
+        },
+        "new_user_admission": {
+          "const": false
+        },
+        "owner_only_answer_serving": {
+          "const": true
+        },
+        "pa7_acceptance_or_m26_closure": {
+          "const": false
+        },
+        "public_or_unbounded_traffic": {
+          "const": false
+        },
+        "secret_persistence": {
+          "const": false
+        }
+      },
+      "required": [
+        "automatic_expansion",
+        "corpus_index_content_mutation",
+        "new_user_admission",
+        "owner_only_answer_serving",
+        "pa7_acceptance_or_m26_closure",
+        "public_or_unbounded_traffic",
+        "secret_persistence"
+      ],
+      "type": "object"
+    },
+    "corrective_owner_authority_self_sha256": {
+      "const": "7521cfa5fc038cb5354aa8b8e7b766ad7544e0c2b160db58735409eaa60d4937"
+    },
+    "corrective_reopen_self_sha256": {
+      "const": "f5412bb39a776e5169c601d3b2d757e212058f215759a4104f0bb79c79c18e8d"
+    },
+    "formal_test_manifest_self_sha256": {
+      "const": "b9474b5274f598670aa8f4146e2aacb82a8a408f3baf79a78a4c78df843572d7"
+    },
+    "issue_number": {
+      "const": 1259
+    },
+    "owner_decision_self_sha256": {
+      "const": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa"
+    },
+    "promotion_attempt": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_minutes_cap": {
+          "const": 90
+        },
+        "logical_attempt_ordinal": {
+          "const": 1
+        },
+        "maximum_logical_attempts_total": {
+          "const": 2
+        },
+        "payg_equivalent_cost_usd_cap": {
+          "const": "0.75"
+        },
+        "provider_call_cap": {
+          "const": 32
+        },
+        "request_cap": {
+          "const": 8
+        }
+      },
+      "required": [
+        "duration_minutes_cap",
+        "logical_attempt_ordinal",
+        "maximum_logical_attempts_total",
+        "payg_equivalent_cost_usd_cap",
+        "provider_call_cap",
+        "request_cap"
+      ],
+      "type": "object"
+    },
+    "resolved_gate_self_sha256": {
+      "const": "993e33be92109f7e7d798dec0a2e710ad00b2cdac2d3c6e574956ebde81aa08d"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-7-corrective-promotion-trigger/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "stage_id": {
+      "const": "M26.PA.7"
+    },
+    "status": {
+      "const": "owner_authorized_single_logical_formal_attempt_trigger"
+    },
+    "stop_conditions": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "activation",
+    "authority_boundary",
+    "corrective_owner_authority_self_sha256",
+    "corrective_reopen_self_sha256",
+    "formal_test_manifest_self_sha256",
+    "issue_number",
+    "owner_decision_self_sha256",
+    "promotion_attempt",
+    "resolved_gate_self_sha256",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "stop_conditions"
+  ],
+  "type": "object"
+}
