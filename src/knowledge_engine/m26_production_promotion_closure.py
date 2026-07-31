@@ -994,7 +994,7 @@ CORRECTIVE_FORMAL_QUERY_BANK: tuple[dict[str, Any], ...] = (
         "non_sensitive_operator_demo": False,
         "ordinal": 3,
         "question_text": (
-            "What is the difference between a request boundary and a steering control plane?"
+            "What distinction separates execution structure from node-level decision logic?"
         ),
     },
     {
