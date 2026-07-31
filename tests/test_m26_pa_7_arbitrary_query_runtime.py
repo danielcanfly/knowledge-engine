@@ -36,26 +36,31 @@ class ExactSpanProvider:
         self.calls += 1
         self.cost += Decimal("0.00001")
         task = _task(payload)
-        passage = task["passage"]["text"]
-        locator_id = task["passage"]["locator_id"]
         if self.fail_first and self.calls == 1:
-            claim = "unsupported provider-authored claim"
+            body = {
+                "status": "answer_candidate",
+                "relation": None,
+                "selected_evidence_ids": [task["evidence_bundle"][0]["evidence_id"]],
+                "claims": [
+                    {
+                        "claim_id": "claim_1",
+                        "claim_role": "direct",
+                        "support_refs": [
+                            {
+                                "evidence_id": task["evidence_bundle"][0]["evidence_id"],
+                                "locator_id": task["evidence_bundle"][0]["locator_id"],
+                                "exact_quote": "unsupported provider-authored claim",
+                            }
+                        ],
+                    }
+                ],
+                "abstention_reason": None,
+            }
         else:
-            claim = _first_sentence(passage)
+            body = _multi_evidence_answer(task)
         return {
             "text": json.dumps(
-                {
-                    "status": "draft_candidate",
-                    "answer_text": "",
-                    "claims": [
-                        {
-                            "claim_id": "claim_1",
-                            "claim_text": claim,
-                            "citation": {"locator_id": locator_id},
-                        }
-                    ],
-                    "reason_codes": [],
-                }
+                body
             ),
             "usage": {"input_tokens": 100, "output_tokens": 20},
             "cost_usd": "0.00001",
@@ -78,6 +83,64 @@ class ExplodingDense:
         raise AssertionError("retrieval must not run before owner admission")
 
 
+class InvalidMultiEvidenceProvider:
+    def __init__(self, mode: str) -> None:
+        self.mode = mode
+        self.calls = 0
+        self.cost = Decimal("0")
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls += 1
+        self.cost += Decimal("0.00001")
+        task = _task(payload)
+        evidence = task["evidence_bundle"]
+        first = evidence[0]
+        body = _multi_evidence_answer(task)
+        if self.mode == "invented_id":
+            body["claims"][0]["support_refs"][0]["evidence_id"] = "invented"
+        elif self.mode == "wrong_locator":
+            body["claims"][0]["support_refs"][0]["locator_id"] = "wrong"
+        elif self.mode == "quote_drift":
+            body["claims"][0]["support_refs"][0]["exact_quote"] = "not an exact quote"
+        elif self.mode == "one_source_comparison":
+            body = {
+                "status": "answer_candidate",
+                "relation": "contrasts_with",
+                "selected_evidence_ids": [first["evidence_id"]],
+                "claims": [
+                    {
+                        "claim_id": "claim_1",
+                        "claim_role": "relationship",
+                        "support_refs": [_support_ref(first), _support_ref(first)],
+                    }
+                ],
+                "abstention_reason": None,
+            }
+        elif self.mode == "missing_graph_edge":
+            passages = _passage_items(evidence)[:2]
+            body = {
+                "status": "answer_candidate",
+                "relation": "depends_on",
+                "selected_evidence_ids": [item["evidence_id"] for item in passages],
+                "claims": [
+                    {
+                        "claim_id": "claim_1",
+                        "claim_role": "relationship",
+                        "support_refs": [_support_ref(item) for item in passages],
+                    }
+                ],
+                "abstention_reason": None,
+            }
+        return {
+            "text": json.dumps(body),
+            "usage": {"input_tokens": 100, "output_tokens": 20},
+            "cost_usd": "0.00001",
+            "latency_ms": 5,
+            "response_id": f"invalid-{self.mode}-{self.calls}",
+            "call_class": call_class,
+        }
+
+
 def _task(payload: dict[str, Any]) -> dict[str, Any]:
     message = payload["messages"][0]["content"]
     text = message[0]["text"] if isinstance(message, list) else message
@@ -89,6 +152,59 @@ def _first_sentence(passage: str) -> str:
         if delimiter in passage:
             return passage.split(delimiter, 1)[0].strip() + delimiter.strip()
     return passage[:160].strip()
+
+
+def _multi_evidence_answer(task: dict[str, Any]) -> dict[str, Any]:
+    evidence = task["evidence_bundle"]
+    intent = task["intent_class"]
+    relation = None
+    refs: list[dict[str, str]] = []
+    role = "direct"
+    if intent in {"cross_document_comparison", "complementary_synthesis"}:
+        role = "relationship"
+        relation = "contrasts_with" if intent == "cross_document_comparison" else "complements"
+        refs = [_support_ref(item) for item in _passage_items(evidence)[:2]]
+    elif intent == "graph_relationship":
+        role = "relationship"
+        relation = "depends_on"
+        graph_edge = [item for item in evidence if item["evidence_type"] == "graph_edge"][0]
+        endpoint_refs = _passage_items(evidence)[:2]
+        refs = [_support_ref(graph_edge), *[_support_ref(item) for item in endpoint_refs]]
+    elif intent == "provenance_source_trace":
+        role = "provenance"
+        refs = [_support_ref(_passage_items(evidence)[0])]
+        refs.append(
+            _support_ref([item for item in evidence if item["evidence_type"] == "provenance"][0])
+        )
+    elif intent == "temporal_conflict":
+        role = "temporal"
+        relation = "precedes"
+        refs = [
+            _support_ref(item)
+            for item in evidence
+            if item["evidence_type"] == "temporal_record"
+        ][:2]
+    else:
+        refs = [_support_ref(_passage_items(evidence)[0])]
+    return {
+        "status": "answer_candidate",
+        "relation": relation,
+        "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+        "claims": [{"claim_id": "claim_1", "claim_role": role, "support_refs": refs}],
+        "abstention_reason": None,
+    }
+
+
+def _passage_items(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [item for item in evidence if item["evidence_type"] == "passage"]
+
+
+def _support_ref(item: dict[str, Any]) -> dict[str, str]:
+    return {
+        "evidence_id": item["evidence_id"],
+        "locator_id": item["locator_id"],
+        "exact_quote": _first_sentence(item["text"]),
+    }
 
 
 def _schema_errors(schema_name: str, value: dict[str, Any]) -> list[str]:
@@ -207,6 +323,113 @@ def test_bounded_repair_converts_unsupported_provider_claim() -> None:
     assert response["material_claim_support_verified"] is True
 
 
+def test_cross_document_answer_requires_two_distinct_sources() -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="Compare routers and adaptive planning for permission-first controls.",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExactSpanProvider(),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["intent_class"] == "cross_document_comparison"
+    assert response["distinct_source_count"] >= 2
+    assert response["multi_evidence_verification"]["single_primary_passage_used"] is False
+    assert response["multi_evidence_verification"]["distinct_source_count"] >= 2
+    assert response["answer_claims"][0]["support_ref_count"] >= 2
+    assert len(response["answer_claims"][0]["source_identities"]) >= 2
+
+
+def test_graph_relationship_binds_edge_and_both_endpoints() -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="What graph relationship connects harness and headless harness service?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExactSpanProvider(),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["intent_class"] == "graph_relationship"
+    evidence_types = {item["evidence_type"] for item in response["selected_evidence"]}
+    assert "graph_edge" in evidence_types
+    citation_types = {item["evidence_type"] for item in response["citations"]}
+    assert "graph_edge" in citation_types
+    endpoint_concepts = {
+        item["concept_id"] for item in response["citations"] if item["evidence_type"] == "passage"
+    }
+    graph_edge = next(
+        item for item in response["selected_evidence"] if item["evidence_type"] == "graph_edge"
+    )
+    assert {graph_edge["edge_source"], graph_edge["edge_target"]}.issubset(endpoint_concepts)
+
+
+def test_provenance_and_temporal_intents_use_required_evidence_types() -> None:
+    provenance = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="Which provenance source supports router abstention controls?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExactSpanProvider(),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+    assert provenance["status"] == "owner_only_cited_answer"
+    assert provenance["intent_class"] == "provenance_source_trace"
+    assert {"passage", "provenance"}.issubset(
+        {item["evidence_type"] for item in provenance["citations"]}
+    )
+
+    temporal = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=(
+            "What changed between source records about request boundary and steering controls?"
+        ),
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExactSpanProvider(),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+    assert temporal["status"] == "owner_only_cited_answer"
+    assert temporal["intent_class"] == "temporal_conflict"
+    assert temporal["multi_evidence_verification"]["distinct_source_count"] >= 2
+    assert {item["evidence_type"] for item in temporal["citations"]} == {"temporal_record"}
+
+
+@pytest.mark.parametrize(
+    ("mode", "question"),
+    [
+        ("invented_id", "Compare routers and adaptive planning for permission-first controls."),
+        ("wrong_locator", "Compare routers and adaptive planning for permission-first controls."),
+        ("quote_drift", "Compare routers and adaptive planning for permission-first controls."),
+        (
+            "one_source_comparison",
+            "Compare routers and adaptive planning for permission-first controls.",
+        ),
+        (
+            "missing_graph_edge",
+            "What graph relationship connects harness and headless harness service?",
+        ),
+    ],
+)
+def test_invalid_multi_evidence_provider_outputs_fail_closed(mode: str, question: str) -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=InvalidMultiEvidenceProvider(mode),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+
+    assert response["status"] == "owner_only_safe_abstention"
+    assert response["provider_call_count"] == 2
+    assert response["repair_attempted"] is True
+    assert response["unsupported_accepted_claims"] == 0
+
+
 def test_no_answer_and_prompt_injection_abstain_safely() -> None:
     no_answer = run_owner_arbitrary_query(
         root=ROOT,
@@ -240,6 +463,23 @@ def test_corrective_reopen_artifact_schema_and_digest() -> None:
     unsigned.pop("self_sha256")
     assert artifact["self_sha256"] == with_self_digest(unsigned)["self_sha256"]
     assert artifact["m26_closed"] is False
+
+
+def test_final_multi_evidence_reopen_artifact_supersedes_current_v2_closure() -> None:
+    artifact = load_json(PILOT / "m26-pa-7-final-multi-evidence-reopen.json")
+    unsigned = dict(artifact)
+    unsigned.pop("self_sha256")
+
+    assert artifact["self_sha256"] == with_self_digest(unsigned)["self_sha256"]
+    assert artifact["self_sha256"] == (
+        "b5afe0a71ea79bf71f1d63557d6d5e77006b8059b1047f9bc50093b09b468e1d"
+    )
+    assert artifact["status"] == "m26_pa_7_final_multi_evidence_web_completion_reopened"
+    assert artifact["m26_closed"] is False
+    assert artifact["supersedes_for_final_completion"]["history_deleted"] is False
+    assert artifact["required_final_status"] == (
+        "m26_pa_7_multi_evidence_web_product_readiness_accepted"
+    )
 
 
 def test_cli_defaults_to_public_runtime_and_health_status_is_explicit() -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
@@ -37,25 +38,39 @@ from .m26_production_promotion_closure import (
 from .m26_retrieval_envelope import normalize_question, sha256_value
 from .m26_verified_answer_citation_gate import (
     VerifiedAnswerGateError,
-    build_provider_payload,
     canonical_sha256,
     sha256_bytes,
-    verify_provider_output,
 )
 
 RESPONSE_SCHEMA = "knowledge-engine-m26-pa7-arbitrary-owner-query-response/v1"
 MAX_QUERY_CHARS = 2_000
 MAX_EVIDENCE_ITEMS = 3
+MAX_BUNDLE_EVIDENCE_ITEMS = 5
 MAX_PARENT_SECTIONS_PER_EVIDENCE = 3
 LOCAL_DENSE_DIMENSION = 64
 PA4_POLICY_PATH = Path("pilot/m26/m26-pa-4-verified-answer-policy.json")
 PA7_OWNER_DECISION_PATH = Path("pilot/m26/m26-pa-7-owner-final-decision.json")
+RELATIONAL_INTENTS = {
+    "cross_document_comparison",
+    "complementary_synthesis",
+    "graph_relationship",
+    "temporal_conflict",
+}
+MULTI_SOURCE_INTENTS = RELATIONAL_INTENTS | {"provenance_source_trace"}
+PROVIDER_STATUS_VALUES = {"answer_candidate", "abstain"}
 PROMPT_INJECTION_PATTERNS = (
     re.compile(r"\bignore\s+(?:all\s+)?previous\b", re.I),
     re.compile(r"\bsystem\s+prompt\b", re.I),
     re.compile(r"\bdeveloper\s+message\b", re.I),
     re.compile(r"\bhidden\s+(?:instruction|prompt|policy)\b", re.I),
     re.compile(r"\b(?:api[_ -]?key|secret|password|token|credential)\b", re.I),
+)
+SECRET_VALUE_PATTERNS = (
+    re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/=-]{12,}"),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
 )
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u3400-\u9fff]+")
 STOP_TERMS = {
@@ -79,6 +94,53 @@ STOP_TERMS = {
     "which",
     "with",
 }
+
+INTENT_PATTERNS: tuple[tuple[str, tuple[re.Pattern[str], ...]], ...] = (
+    (
+        "temporal_conflict",
+        (
+            re.compile(r"\b(?:temporal|fresh|freshness|newer|older|changed|version)\b", re.I),
+            re.compile(r"\b(?:conflict|contradict|stale|between source records)\b", re.I),
+            re.compile(r"\b(?:edited|adoption state)\b", re.I),
+        ),
+    ),
+    (
+        "provenance_source_trace",
+        (
+            re.compile(
+                r"\b(?:provenance|source trace|source record|which source|supports)\b",
+                re.I,
+            ),
+        ),
+    ),
+    (
+        "graph_relationship",
+        (
+            re.compile(
+                r"\b(?:graph|relationship|edge|connects?|depends|requires|dag)\b",
+                re.I,
+            ),
+            re.compile(r"\bdirected acyclic graph\b", re.I),
+            re.compile(r"\b(?:implemented_by|part_of|has_part)\b", re.I),
+        ),
+    ),
+    (
+        "cross_document_comparison",
+        (
+            re.compile(
+                r"\b(?:compare|contrast|difference|different|distinction|versus|vs)\b",
+                re.I,
+            ),
+            re.compile(r"\bwhile\b", re.I),
+        ),
+    ),
+    (
+        "complementary_synthesis",
+        (
+            re.compile(r"\b(?:complement|synthesis|synthesize|combine|together)\b", re.I),
+        ),
+    ),
+)
 
 
 class PA7ArbitraryQueryError(IntegrityError):
@@ -313,6 +375,7 @@ def run_owner_arbitrary_query(
     started = time.monotonic()
     normalized_question = _normalize_request_question(question)
     question_sha = canonical_sha256(normalized_question)
+    intent_class = _intent_class(normalized_question)
     validated_gate = _validate_gate(root, gate)
     identities = _object(validated_gate.get("production_identities"), "gate.production_identities")
     admission = evaluate_owner_admission(
@@ -375,6 +438,7 @@ def run_owner_arbitrary_query(
         lexical_result=lexical,
         dense_result=dense,
         trace_id=trace_id,
+        intent_class=intent_class,
     )
     if not evidence or not _has_meaningful_overlap(normalized_question, evidence):
         return {
@@ -395,6 +459,7 @@ def run_owner_arbitrary_query(
                 lexical_result=lexical,
                 dense_result=dense,
                 selected_evidence=[],
+                intent_class=intent_class,
             ),
         }
 
@@ -417,6 +482,7 @@ def run_owner_arbitrary_query(
                 root=root,
                 question=normalized_question,
                 trace_id=trace_id,
+                intent_class=intent_class,
                 evidence=evidence,
                 provider_client=provider,
             )
@@ -425,6 +491,7 @@ def run_owner_arbitrary_query(
             root=root,
             question=normalized_question,
             trace_id=trace_id,
+            intent_class=intent_class,
             evidence=evidence,
             provider_client=provider,
         )
@@ -453,8 +520,12 @@ def run_owner_arbitrary_query(
             lexical_result=lexical,
             dense_result=dense,
             selected_evidence=evidence,
+            intent_class=intent_class,
         ),
         "citations": verification["citations"],
+        "answer_claims": verification.get("answer_claims", []),
+        "relationship_summary": verification.get("relationship_summary", {}),
+        "multi_evidence_verification": verification.get("multi_evidence_verification", {}),
     }
     response["latency_ms"] = max(
         int(response["latency_ms"]),
@@ -541,16 +612,42 @@ def _retrieval_response_fields(
     lexical_result: Mapping[str, Any],
     dense_result: Mapping[str, Any],
     selected_evidence: Sequence[Mapping[str, Any]],
+    intent_class: str,
 ) -> dict[str, Any]:
     dense_candidates = _list(dense_result.get("candidates"), "dense candidates")
     lexical_results = _list(lexical_result.get("results"), "lexical results")
     parent_expansion = _parent_expansion_summary(bundle, selected_evidence)
     graph_edges = _graph_edges(
         lexical_results,
-        selected_evidence_ids={str(e["section_id"]) for e in selected_evidence},
+        selected_evidence_ids={
+            str(e["section_id"]) for e in selected_evidence if e.get("section_id")
+        },
     )
+    selected_graph_edges = [
+        {
+            "edge_id": str(item.get("edge_id", "")),
+            "source": str(item.get("edge_source", "")),
+            "target": str(item.get("edge_target", "")),
+            "relation_type": str(item.get("relation_type", "")),
+        }
+        for item in selected_evidence
+        if item.get("evidence_type") == "graph_edge"
+    ]
+    if selected_graph_edges:
+        graph_edges = selected_graph_edges + [
+            item for item in graph_edges if item.get("edge_id") not in {
+                edge["edge_id"] for edge in selected_graph_edges
+            }
+        ]
     identities = _object(gate.get("production_identities"), "gate.production_identities")
     backend_identity = _object(dense_result.get("backend_identity"), "dense backend identity")
+    source_identities = sorted(
+        {
+            _source_identity(item)
+            for item in selected_evidence
+            if item.get("evidence_type") != "graph_edge" or item.get("source_id")
+        }
+    )
     return {
         "production_release_id": bundle.release_id,
         "production_manifest_sha256": bundle.manifest_sha256,
@@ -585,6 +682,8 @@ def _retrieval_response_fields(
             "provenance": True,
             "parent_expansion": parent_expansion["expanded_section_count"] > 0,
             "reranking": "bounded_channel_score_then_release_identity",
+            "intent_class": intent_class,
+            "multi_evidence_bundle": True,
         },
         "candidate_count_by_channel": {
             "lexical": len(lexical_results),
@@ -599,6 +698,11 @@ def _retrieval_response_fields(
         "parent_expansion": parent_expansion,
         "selected_evidence_ids": [str(item["evidence_id"]) for item in selected_evidence],
         "selected_locator_ids": [str(item["locator_id"]) for item in selected_evidence],
+        "selected_evidence": [_public_evidence_summary(item) for item in selected_evidence],
+        "selected_evidence_count": len(selected_evidence),
+        "distinct_source_count": len(source_identities),
+        "distinct_source_identities": source_identities,
+        "intent_class": intent_class,
     }
 
 
@@ -607,44 +711,50 @@ def _synthesize_and_verify(
     root: Path,
     question: str,
     trace_id: str,
+    intent_class: str,
     evidence: Sequence[Mapping[str, Any]],
     provider_client: ProviderClient,
 ) -> dict[str, Any]:
     policy = load_pa7_json(root / PA4_POLICY_PATH)
-    primary = evidence[0]
-    passage_text = str(primary["passage_text"])
-    case = _pa4_case(question=question, trace_id=trace_id, evidence=primary)
     calls: list[dict[str, Any]] = []
     failures: list[str] = []
     repair_attempted = False
     for attempt in (1, 2):
-        payload = build_provider_payload(
+        payload = _build_multi_evidence_provider_payload(
             policy=policy,
-            case=case,
-            passage_text=passage_text,
+            question=question,
+            trace_id=trace_id,
+            intent_class=intent_class,
+            evidence=evidence,
             repair=attempt == 2,
             previous_reason_codes=failures,
         )
         try:
             result = provider_client.call(
                 payload,
-                "pa7_arbitrary_query_repair" if attempt == 2 else "pa7_arbitrary_query",
+                "pa7_multi_evidence_query_repair" if attempt == 2 else "pa7_multi_evidence_query",
             )
             normalized = _normalize_provider_result(result)
             calls.append(normalized)
-            verified = verify_provider_output(
-                case=case,
-                passage_text=passage_text,
+            verified = _verify_multi_evidence_provider_output(
+                trace_id=trace_id,
+                intent_class=intent_class,
+                evidence=evidence,
                 provider_text=normalized["provider_text"],
-                policy=policy,
             )
-            if verified["terminal_status"] == "abstention_required":
+            if verified["terminal_status"] == "safe_abstention":
                 return _verified_abstention(
-                    reason_codes=verified["abstention"]["reason_codes"],
+                    reason_codes=verified["reason_codes"],
                     calls=calls,
                     repair_attempted=repair_attempted,
                 )
-            return _verified_answer(primary, verified, passage_text, calls, repair_attempted)
+            return _verified_multi_evidence_answer(
+                intent_class=intent_class,
+                verified=verified,
+                evidence=evidence,
+                calls=calls,
+                repair_attempted=repair_attempted,
+            )
         except VerifiedAnswerGateError as exc:
             failures.append(exc.code)
             if attempt == 1:
@@ -668,18 +778,404 @@ def _synthesize_and_verify(
     )
 
 
-def _verified_answer(
-    evidence: Mapping[str, Any],
+JSON_FENCE = re.compile(r"^```(?:json)?\s*\n(?P<body>.*?)\n```\s*$", re.DOTALL)
+
+
+def _build_multi_evidence_provider_payload(
+    *,
+    policy: Mapping[str, Any],
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    repair: bool = False,
+    previous_reason_codes: list[str] | None = None,
+) -> dict[str, Any]:
+    provider = _object(policy.get("provider"), "policy provider")
+    budget = _object(policy.get("budget"), "policy budget")
+    evidence_payload = [_provider_evidence_item(item) for item in evidence]
+    task = {
+        "stage_id": "M26.PA.7-FINAL-CORRECTIVE",
+        "case_id": trace_id,
+        "attempt_kind": "bounded_repair" if repair else "initial_multi_evidence_draft",
+        "question": question,
+        "intent_class": intent_class,
+        "evidence_bundle": evidence_payload,
+        "minimum_evidence_rule": _minimum_evidence_rule(intent_class),
+        "previous_reason_codes": previous_reason_codes or [],
+        "output_contract": {
+            "status_values": sorted(PROVIDER_STATUS_VALUES),
+            "relation_values": [
+                "contrasts_with",
+                "complements",
+                "causes",
+                "depends_on",
+                "precedes",
+                "supersedes",
+                "same_as",
+                "insufficient_basis",
+                None,
+            ],
+            "required_json_keys": [
+                "status",
+                "relation",
+                "selected_evidence_ids",
+                "claims",
+                "abstention_reason",
+            ],
+            "claim_contract": (
+                "For answer_candidate, each claim must contain claim_id, claim_role, and "
+                "support_refs. Each support_ref must copy evidence_id, locator_id, and an "
+                "exact_quote byte-for-byte from one supplied evidence text. Do not invent "
+                "IDs, locators, graph edges, provenance fields, or quotations."
+            ),
+            "answer_candidate_json_example": {
+                "status": "answer_candidate",
+                "relation": "complements",
+                "selected_evidence_ids": [item["evidence_id"] for item in evidence_payload[:2]],
+                "claims": [
+                    {
+                        "claim_id": "claim_1",
+                        "claim_role": "relationship",
+                        "support_refs": [
+                            {
+                                "evidence_id": "COPY_SUPPLIED_EVIDENCE_ID",
+                                "locator_id": "COPY_SUPPLIED_LOCATOR_ID",
+                                "exact_quote": "COPY EXACT TEXT FROM THAT EVIDENCE",
+                            }
+                        ],
+                    }
+                ],
+                "abstention_reason": None,
+            },
+            "abstain_json_example": {
+                "status": "abstain",
+                "relation": "insufficient_basis",
+                "selected_evidence_ids": [],
+                "claims": [],
+                "abstention_reason": "INSUFFICIENT_SUPPORT",
+            },
+        },
+        "forbidden": [
+            "single-primary-passage shortcut for multi-evidence questions",
+            "free-form citations",
+            "unsupported material claims",
+            "secret values",
+            "public traffic",
+            "production pointer mutation",
+            "canonical writes",
+        ],
+    }
+    return {
+        "model": provider["model_id"],
+        "max_tokens": budget["max_output_tokens_per_call"],
+        "temperature": 0,
+        "stream": False,
+        "system": (
+            "You are executing a bounded M26.PA.7 multi-evidence verification task. "
+            "Return one compact JSON object only. Use only supplied evidence IDs, locators, "
+            "graph/provenance identities, and exact quotations. If the evidence bundle cannot "
+            "satisfy the intent-specific rule, return status abstain."
+        ),
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(task, ensure_ascii=False, sort_keys=True),
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def _provider_evidence_item(item: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "evidence_id": str(item["evidence_id"]),
+        "evidence_type": str(item.get("evidence_type", "passage")),
+        "locator_id": str(item["locator_id"]),
+        "source_id": str(item.get("source_id", "")),
+        "source_identity": _source_identity(item),
+        "section_id": str(item.get("section_id", "")),
+        "concept_id": str(item.get("concept_id", "")),
+        "artifact_key": str(item.get("artifact_key", "")),
+        "artifact_sha256": str(item.get("artifact_sha256", "")),
+        "release_id": str(item.get("release_id", "")),
+        "text_sha256": str(item.get("passage_text_sha256", "")),
+        "text": str(item.get("passage_text", "")),
+        "edge_id": str(item.get("edge_id", "")),
+        "edge_source": str(item.get("edge_source", "")),
+        "edge_target": str(item.get("edge_target", "")),
+        "relation_type": str(item.get("relation_type", "")),
+        "provenance_record_sha256": str(item.get("provenance_record_sha256", "")),
+        "retrieved_at": str(item.get("retrieved_at", "")),
+    }
+
+
+def _minimum_evidence_rule(intent_class: str) -> dict[str, Any]:
+    if intent_class == "cross_document_comparison":
+        return {"minimum_evidence": 2, "minimum_distinct_source_identities": 2}
+    if intent_class == "complementary_synthesis":
+        return {"minimum_evidence": 2, "minimum_distinct_source_identities": 2}
+    if intent_class == "graph_relationship":
+        return {
+            "minimum_evidence": 3,
+            "requires_graph_edge": True,
+            "requires_both_endpoint_evidence": True,
+        }
+    if intent_class == "provenance_source_trace":
+        return {"minimum_evidence": 2, "requires_passage": True, "requires_provenance": True}
+    if intent_class == "temporal_conflict":
+        return {"minimum_evidence": 2, "minimum_distinct_source_or_version_identities": 2}
+    return {"minimum_evidence": 1}
+
+
+def _parse_multi_provider_json(text: str) -> dict[str, Any]:
+    if len(text) > 12_000:
+        raise _verification_failure("M26-PA7-ME-001", "provider output exceeded bounded length")
+    stripped = text.strip()
+    if not stripped:
+        raise _verification_failure("M26-PA7-ME-002", "provider output is empty")
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        match = JSON_FENCE.fullmatch(stripped)
+        if match is None:
+            raise _verification_failure(
+                "M26-PA7-ME-003", "provider output is not one unambiguous JSON object"
+            ) from None
+        try:
+            parsed = json.loads(match.group("body"))
+        except json.JSONDecodeError as exc:
+            raise _verification_failure("M26-PA7-ME-004", "provider JSON is malformed") from exc
+    value = _object(parsed, "provider JSON")
+    required = {"status", "relation", "selected_evidence_ids", "claims", "abstention_reason"}
+    if not required.issubset(value):
+        raise _verification_failure("M26-PA7-ME-005", "provider JSON missing required fields")
+    if set(value) - required:
+        raise _verification_failure("M26-PA7-ME-006", "provider JSON contains unknown fields")
+    return dict(value)
+
+
+def _verify_multi_evidence_provider_output(
+    *,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    provider_text: str,
+) -> dict[str, Any]:
+    if _secret_like(provider_text):
+        raise _verification_failure("M26-PA7-ME-007", "provider output contains secret-like text")
+    parsed = _parse_multi_provider_json(provider_text)
+    status = parsed.get("status")
+    if status not in PROVIDER_STATUS_VALUES:
+        raise _verification_failure("M26-PA7-ME-008", "provider status is invalid")
+    raw_selected = _list(parsed.get("selected_evidence_ids"), "selected_evidence_ids")
+    selected_ids = [str(item) for item in raw_selected]
+    evidence_by_id = {str(item["evidence_id"]): item for item in evidence}
+    unknown_selected = sorted(set(selected_ids) - set(evidence_by_id))
+    if unknown_selected:
+        raise _verification_failure("M26-PA7-ME-009", "provider selected unknown evidence id")
+    if status == "abstain":
+        if parsed.get("claims") not in ([], None):
+            raise _verification_failure("M26-PA7-ME-010", "abstention response contains claims")
+        reason = str(parsed.get("abstention_reason") or "PROVIDER_ABSTAINED")
+        return {
+            "case_id": trace_id,
+            "terminal_status": "safe_abstention",
+            "reason_codes": sorted({reason}),
+            "material_claims": [],
+        }
+
+    claims = _list(parsed.get("claims"), "provider claims")
+    if not claims:
+        raise _verification_failure("M26-PA7-ME-011", "answer candidate has no claims")
+    claim_records: list[dict[str, Any]] = []
+    used_evidence_ids: set[str] = set()
+    used_graph_edges: set[str] = set()
+    for index, raw_claim in enumerate(claims, start=1):
+        claim = _object(raw_claim, "provider claim")
+        required = {"claim_id", "claim_role", "support_refs"}
+        if not required.issubset(claim):
+            raise _verification_failure("M26-PA7-ME-012", "claim missing required fields")
+        if set(claim) - required:
+            raise _verification_failure("M26-PA7-ME-013", "claim contains unknown fields")
+        claim_id = str(claim.get("claim_id") or f"claim_{index}")
+        claim_role = str(claim.get("claim_role") or "direct")
+        support_refs = _list(claim.get("support_refs"), "claim support refs")
+        if not support_refs:
+            raise _verification_failure("M26-PA7-ME-014", "claim has no support refs")
+        ref_records: list[dict[str, Any]] = []
+        for ref in support_refs:
+            support = _object(ref, "claim support ref")
+            ref_required = {"evidence_id", "locator_id", "exact_quote"}
+            if not ref_required.issubset(support):
+                raise _verification_failure("M26-PA7-ME-015", "support ref missing fields")
+            if set(support) - ref_required:
+                raise _verification_failure("M26-PA7-ME-016", "support ref contains unknown fields")
+            evidence_id = str(support["evidence_id"])
+            evidence_item = evidence_by_id.get(evidence_id)
+            if evidence_item is None:
+                raise _verification_failure("M26-PA7-ME-017", "support ref invented evidence id")
+            if support["locator_id"] != evidence_item["locator_id"]:
+                raise _verification_failure("M26-PA7-ME-018", "support ref locator mismatch")
+            exact_quote = str(support["exact_quote"])
+            if not exact_quote or len(exact_quote) > 800:
+                raise _verification_failure("M26-PA7-ME-019", "support quote is invalid")
+            evidence_text = str(evidence_item.get("passage_text", ""))
+            start = evidence_text.find(exact_quote)
+            if start < 0:
+                raise _verification_failure(
+                    "M26-PA7-ME-020",
+                    "support quote is not exact evidence text",
+                )
+            used_evidence_ids.add(evidence_id)
+            if evidence_item.get("evidence_type") == "graph_edge":
+                used_graph_edges.add(str(evidence_item.get("edge_id", "")))
+            ref_records.append(
+                {
+                    "evidence_id": evidence_id,
+                    "locator_id": str(support["locator_id"]),
+                    "exact_quote": exact_quote,
+                    "exact_quote_sha256": sha256_bytes(exact_quote.encode("utf-8")),
+                    "evidence_type": str(evidence_item.get("evidence_type", "passage")),
+                    "source_identity": _source_identity(evidence_item),
+                    "passage_span": {"start_char": start, "end_char": start + len(exact_quote)},
+                }
+            )
+        if _claim_requires_multi_source(intent_class, claim_role) and _distinct_source_count(
+            evidence_by_id[str(ref["evidence_id"])] for ref in ref_records
+        ) < 2:
+            raise _verification_failure("M26-PA7-ME-021", "relational claim lacks two sources")
+        claim_records.append(
+            {
+                "claim_id": claim_id,
+                "claim_role": claim_role,
+                "material": True,
+                "support_refs": ref_records,
+                "support_verdict": "supported_exact_multi_evidence_bundle",
+            }
+        )
+    _enforce_intent_minimums(
+        intent_class=intent_class,
+        evidence=[evidence_by_id[item] for item in used_evidence_ids],
+    )
+    selected_or_used = selected_ids or sorted(used_evidence_ids)
+    if not set(used_evidence_ids).issubset(set(selected_or_used)):
+        raise _verification_failure("M26-PA7-ME-022", "claim used evidence outside selection")
+    return {
+        "case_id": trace_id,
+        "terminal_status": "verified_answer_ready_candidate",
+        "relation": parsed.get("relation"),
+        "selected_evidence_ids": selected_or_used,
+        "selected_graph_edge_ids": sorted(used_graph_edges),
+        "material_claims": claim_records,
+        "support_verification": {
+            "material_claim_count": len(claim_records),
+            "supported_claim_count": len(claim_records),
+            "unsupported_claim_count": 0,
+            "citation_precision": 1.0,
+            "support_threshold_met": True,
+        },
+    }
+
+
+def _enforce_intent_minimums(
+    *,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> None:
+    evidence_types = {str(item.get("evidence_type", "passage")) for item in evidence}
+    if intent_class in {"cross_document_comparison", "complementary_synthesis"}:
+        if len(evidence) < 2 or _distinct_source_count(evidence) < 2:
+            raise _verification_failure("M26-PA7-ME-023", "multi-document intent used one source")
+    elif intent_class == "graph_relationship":
+        graph_edges = [item for item in evidence if item.get("evidence_type") == "graph_edge"]
+        if not graph_edges:
+            raise _verification_failure("M26-PA7-ME-024", "graph intent missing graph edge")
+        endpoint_concepts = {
+            str(item.get("concept_id", ""))
+            for item in evidence
+            if item.get("evidence_type") == "passage"
+        }
+        edge = graph_edges[0]
+        if not {str(edge.get("edge_source")), str(edge.get("edge_target"))}.issubset(
+            endpoint_concepts
+        ):
+            raise _verification_failure("M26-PA7-ME-025", "graph intent missing endpoint evidence")
+    elif intent_class == "provenance_source_trace":
+        if not {"passage", "provenance"}.issubset(evidence_types):
+            raise _verification_failure(
+                "M26-PA7-ME-026",
+                "provenance intent missing passage/provenance",
+            )
+    elif intent_class == "temporal_conflict":
+        source_or_version = {
+            f"{_source_identity(item)}@{item.get('retrieved_at') or item.get('temporal_identity')}"
+            for item in evidence
+            if item.get("evidence_type") in {"passage", "temporal_record"}
+        }
+        if len(source_or_version) < 2:
+            raise _verification_failure(
+                "M26-PA7-ME-027",
+                "temporal intent lacks two source/version identities",
+            )
+
+
+def _claim_requires_multi_source(intent_class: str, claim_role: str) -> bool:
+    if claim_role in {"relationship", "temporal"}:
+        return True
+    return (
+        intent_class in {"cross_document_comparison", "complementary_synthesis"}
+        and claim_role in {"relationship", "comparison"}
+    )
+
+
+def _verification_failure(code: str, message: str) -> VerifiedAnswerGateError:
+    return VerifiedAnswerGateError(code, message, category="integrity", retryable=True)
+
+
+def _verified_multi_evidence_answer(
+    *,
+    intent_class: str,
     verified: Mapping[str, Any],
-    passage_text: str,
+    evidence: Sequence[Mapping[str, Any]],
     calls: Sequence[Mapping[str, Any]],
     repair_attempted: bool,
 ) -> dict[str, Any]:
-    claim_texts = []
-    for claim in verified["material_claims"]:
-        span = _object(claim.get("passage_span"), "claim passage_span")
-        claim_texts.append(passage_text[int(span["start_char"]) : int(span["end_char"])])
-    answer_text = " ".join(claim_texts).strip()
+    evidence_by_id = {str(item["evidence_id"]): item for item in evidence}
+    claim_texts: list[str] = []
+    public_claims: list[dict[str, Any]] = []
+    citations: list[dict[str, Any]] = []
+    for claim in _list(verified.get("material_claims"), "verified material claims"):
+        support_refs = _list(claim.get("support_refs"), "claim support refs")
+        fragments = []
+        for ref_index, ref in enumerate(support_refs, start=1):
+            evidence_item = evidence_by_id[str(ref["evidence_id"])]
+            exact_quote = str(ref["exact_quote"])
+            fragments.append(exact_quote)
+            citations.append(_public_citation(evidence_item, claim, ref, ref_index))
+        claim_text = _render_claim_clause(claim, fragments)
+        claim_texts.append(claim_text)
+        public_claims.append(
+            {
+                "claim_id": str(claim["claim_id"]),
+                "claim_role": str(claim["claim_role"]),
+                "support_ref_count": len(support_refs),
+                "source_identities": sorted(
+                    {
+                        _source_identity(evidence_by_id[str(ref["evidence_id"])])
+                        for ref in support_refs
+                    }
+                ),
+                "citation_ids": [
+                    f"{claim['claim_id']}_ref_{index}" for index in range(1, len(support_refs) + 1)
+                ],
+            }
+        )
+    answer_text = _render_answer(intent_class, str(verified.get("relation")), claim_texts)
     if not answer_text:
         return _verified_abstention(
             reason_codes=["EMPTY_VERIFIED_CLAIM"],
@@ -690,7 +1186,30 @@ def _verified_answer(
         "status": "owner_only_cited_answer",
         "terminal_status": str(verified["terminal_status"]),
         "answer_text": answer_text,
-        "citations": [_public_citation(evidence, claim) for claim in verified["material_claims"]],
+        "citations": citations,
+        "answer_claims": public_claims,
+        "relationship_summary": {
+            "intent_class": intent_class,
+            "relation": str(verified.get("relation") or "null"),
+            "selected_evidence_ids": list(verified.get("selected_evidence_ids", [])),
+            "selected_graph_edge_ids": list(verified.get("selected_graph_edge_ids", [])),
+        },
+        "multi_evidence_verification": {
+            "claim_count": len(public_claims),
+            "support_ref_count": sum(item["support_ref_count"] for item in public_claims),
+            "distinct_source_count": len(
+                {
+                    source
+                    for item in public_claims
+                    for source in item["source_identities"]
+                }
+            ),
+            "locator_validity": 1.0,
+            "support_precision": 1.0,
+            "unsupported_accepted_claims": 0,
+            "single_primary_passage_used": False,
+            "bounded_repair_attempted": repair_attempted,
+        },
         "safe_abstention": False,
         "reason_codes": [],
         "provider_call_count": len(calls),
@@ -713,6 +1232,18 @@ def _verified_abstention(
         "terminal_status": "safe_abstention",
         "answer_text": "",
         "citations": [],
+        "answer_claims": [],
+        "relationship_summary": {},
+        "multi_evidence_verification": {
+            "claim_count": 0,
+            "support_ref_count": 0,
+            "distinct_source_count": 0,
+            "locator_validity": 1.0,
+            "support_precision": 1.0,
+            "unsupported_accepted_claims": 0,
+            "single_primary_passage_used": False,
+            "bounded_repair_attempted": repair_attempted,
+        },
         "safe_abstention": True,
         "reason_codes": sorted(set(str(item) for item in reason_codes)),
         "provider_call_count": len(calls),
@@ -782,6 +1313,7 @@ def _select_evidence(
     lexical_result: Mapping[str, Any],
     dense_result: Mapping[str, Any],
     trace_id: str,
+    intent_class: str,
 ) -> list[dict[str, Any]]:
     documents = {str(item["section_id"]): item for item in _release_documents(bundle)}
     candidates: dict[str, dict[str, Any]] = {}
@@ -834,7 +1366,55 @@ def _select_evidence(
                 channels=sorted(candidate["channels"]),
             )
         )
-    return evidence
+    return _augment_evidence_for_intent(
+        bundle=bundle,
+        base_evidence=evidence,
+        lexical_results=lexical_results,
+        trace_id=trace_id,
+        intent_class=intent_class,
+    )
+
+
+def _augment_evidence_for_intent(
+    *,
+    bundle: CanonicalReleaseBundle,
+    base_evidence: Sequence[Mapping[str, Any]],
+    lexical_results: Sequence[Any],
+    trace_id: str,
+    intent_class: str,
+) -> list[dict[str, Any]]:
+    evidence = [dict(item) for item in base_evidence]
+    if intent_class in {
+        "cross_document_comparison",
+        "complementary_synthesis",
+        "temporal_conflict",
+    }:
+        evidence = _ensure_distinct_passage_sources(
+            bundle=bundle,
+            evidence=evidence,
+            trace_id=trace_id,
+            minimum=2,
+        )
+    if intent_class == "graph_relationship":
+        evidence = _graph_evidence_bundle(
+            bundle=bundle,
+            evidence=evidence,
+            lexical_results=lexical_results,
+            trace_id=trace_id,
+        )
+    elif intent_class == "provenance_source_trace":
+        evidence = _provenance_evidence_bundle(
+            bundle=bundle,
+            evidence=evidence,
+            trace_id=trace_id,
+        )
+    elif intent_class == "temporal_conflict":
+        evidence = _temporal_evidence_bundle(
+            bundle=bundle,
+            evidence=evidence,
+            trace_id=trace_id,
+        )
+    return _dedupe_evidence(evidence)[:MAX_BUNDLE_EVIDENCE_ITEMS]
 
 
 def _evidence_item(
@@ -866,8 +1446,10 @@ def _evidence_item(
     )[:32]
     citation = _first_citation(lexical_result, document)
     record = _provenance_records_by_concept(bundle).get(str(document["concept_id"]), {})
+    source_identity = _citation_source_identity(citation, section_id)
     return {
         "evidence_id": evidence_id,
+        "evidence_type": "passage",
         "locator_id": locator_id,
         "release_id": bundle.release_id,
         "artifact_key": "pilot/m24/canonical-release/artifacts/lexical-index.json",
@@ -875,6 +1457,7 @@ def _evidence_item(
         "concept_id": str(document["concept_id"]),
         "section_id": section_id,
         "source_id": citation["source_id"],
+        "source_identity": source_identity,
         "source_uri_sha256": canonical_sha256(citation.get("uri", "")),
         "retrieved_at": citation.get("retrieved_at", ""),
         "title": str(document.get("title", "")),
@@ -889,9 +1472,348 @@ def _evidence_item(
     }
 
 
-def _public_citation(evidence: Mapping[str, Any], claim: Mapping[str, Any]) -> dict[str, Any]:
+def _ensure_distinct_passage_sources(
+    *,
+    bundle: CanonicalReleaseBundle,
+    evidence: Sequence[Mapping[str, Any]],
+    trace_id: str,
+    minimum: int,
+) -> list[dict[str, Any]]:
+    selected = [dict(item) for item in evidence]
+    selected_sections = {str(item.get("section_id", "")) for item in selected}
+    source_identities = {_source_identity(item) for item in selected}
+    if len(source_identities) >= minimum:
+        return selected
+    ordinal = len(selected) + 1
+    for document in _release_documents(bundle):
+        section_id = str(document.get("section_id", ""))
+        if section_id in selected_sections:
+            continue
+        item = _evidence_item(
+            bundle=bundle,
+            document=document,
+            lexical_result={},
+            trace_id=trace_id,
+            ordinal=ordinal,
+            channels=["release_distinct_source"],
+        )
+        if _source_identity(item) in source_identities:
+            continue
+        selected.append(item)
+        selected_sections.add(section_id)
+        source_identities.add(_source_identity(item))
+        ordinal += 1
+        if len(source_identities) >= minimum or len(selected) >= MAX_BUNDLE_EVIDENCE_ITEMS:
+            break
+    return selected
+
+
+def _graph_evidence_bundle(
+    *,
+    bundle: CanonicalReleaseBundle,
+    evidence: Sequence[Mapping[str, Any]],
+    lexical_results: Sequence[Any],
+    trace_id: str,
+) -> list[dict[str, Any]]:
+    passages = [dict(item) for item in evidence if item.get("evidence_type") == "passage"]
+    edge = _first_authoritative_edge(passages, lexical_results, bundle)
+    if edge is None:
+        return passages
+    endpoint_passages = _endpoint_passages(
+        bundle=bundle,
+        existing=passages,
+        edge=edge,
+        trace_id=trace_id,
+        start_ordinal=len(passages) + 1,
+    )
+    graph_item = _graph_edge_evidence_item(
+        bundle=bundle,
+        edge=edge,
+        trace_id=trace_id,
+        ordinal=len(endpoint_passages) + 1,
+    )
+    # Keep the edge visible, followed by both endpoints, while staying inside the 1-5 bound.
+    ordered = [graph_item, *endpoint_passages]
+    for item in passages:
+        if len(ordered) >= MAX_BUNDLE_EVIDENCE_ITEMS:
+            break
+        if str(item["evidence_id"]) not in {str(existing["evidence_id"]) for existing in ordered}:
+            ordered.append(item)
+    return ordered
+
+
+def _first_authoritative_edge(
+    passages: Sequence[Mapping[str, Any]],
+    lexical_results: Sequence[Any],
+    bundle: CanonicalReleaseBundle,
+) -> Mapping[str, Any] | None:
+    for item in passages:
+        for edge in item.get("relation_expansions", []):
+            if isinstance(edge, Mapping) and _edge_has_endpoint_documents(edge, bundle):
+                return edge
+    for result in lexical_results:
+        if not isinstance(result, Mapping):
+            continue
+        for edge in result.get("relation_expansions", []):
+            if isinstance(edge, Mapping) and _edge_has_endpoint_documents(edge, bundle):
+                return edge
+    for edge in bundle.graph_v2.get("edges", []):
+        if isinstance(edge, Mapping) and _edge_has_endpoint_documents(edge, bundle):
+            return edge
+    return None
+
+
+def _edge_has_endpoint_documents(edge: Mapping[str, Any], bundle: CanonicalReleaseBundle) -> bool:
+    concepts = {str(document.get("concept_id", "")) for document in _release_documents(bundle)}
+    return str(edge.get("source", "")) in concepts and str(edge.get("target", "")) in concepts
+
+
+def _endpoint_passages(
+    *,
+    bundle: CanonicalReleaseBundle,
+    existing: Sequence[Mapping[str, Any]],
+    edge: Mapping[str, Any],
+    trace_id: str,
+    start_ordinal: int,
+) -> list[dict[str, Any]]:
+    by_concept: dict[str, list[Mapping[str, Any]]] = {}
+    for document in _release_documents(bundle):
+        by_concept.setdefault(str(document.get("concept_id", "")), []).append(document)
+    existing_by_concept = {
+        str(item.get("concept_id", "")): dict(item)
+        for item in existing
+        if item.get("evidence_type") == "passage"
+    }
+    endpoint_items: list[dict[str, Any]] = []
+    ordinal = start_ordinal
+    for concept_id in (str(edge.get("source", "")), str(edge.get("target", ""))):
+        if concept_id in existing_by_concept:
+            endpoint_items.append(existing_by_concept[concept_id])
+            continue
+        documents = by_concept.get(concept_id, [])
+        if not documents:
+            continue
+        endpoint_items.append(
+            _evidence_item(
+                bundle=bundle,
+                document=documents[0],
+                lexical_result={},
+                trace_id=trace_id,
+                ordinal=ordinal,
+                channels=["graph_endpoint"],
+            )
+        )
+        ordinal += 1
+    return endpoint_items
+
+
+def _graph_edge_evidence_item(
+    *,
+    bundle: CanonicalReleaseBundle,
+    edge: Mapping[str, Any],
+    trace_id: str,
+    ordinal: int,
+) -> dict[str, Any]:
+    edge_id = str(edge.get("edge_id", ""))
+    source = str(edge.get("source", ""))
+    target = str(edge.get("target", ""))
+    relation_type = str(edge.get("relation_type", "related_to"))
+    statement = (
+        f"Graph edge {edge_id} states {source} {relation_type} {target} "
+        f"with confidence {edge.get('confidence')} and review "
+        f"{edge.get('review_status', 'approved')}."
+    )
+    text_sha = sha256_bytes(statement.encode("utf-8"))
+    locator_id = "m26pa7edge_" + canonical_sha256(
+        {"trace_id": trace_id, "edge_id": edge_id, "statement_sha256": text_sha}
+    )[:32]
+    evidence_id = "m26pa7ev_" + canonical_sha256(
+        {"trace_id": trace_id, "ordinal": ordinal, "locator_id": locator_id}
+    )[:32]
     return {
-        "citation_id": str(claim.get("claim_id", "claim_1")),
+        "evidence_id": evidence_id,
+        "evidence_type": "graph_edge",
+        "locator_id": locator_id,
+        "release_id": bundle.release_id,
+        "artifact_key": "pilot/m24/canonical-release/artifacts/graph-v2.json",
+        "artifact_sha256": bundle.artifact_sha256["graph_v2"],
+        "concept_id": source,
+        "section_id": edge_id,
+        "source_id": f"graph_v2:{edge_id}",
+        "source_identity": f"graph_v2:{edge_id}",
+        "title": "Graph relationship",
+        "section_title": relation_type,
+        "channels": ["graph"],
+        "passage_text": statement,
+        "passage_text_sha256": text_sha,
+        "edge_id": edge_id,
+        "edge_source": source,
+        "edge_target": target,
+        "relation_type": relation_type,
+        "provenance_record_sha256": canonical_sha256(str(edge.get("provenance_ref", ""))),
+        "retrieved_at": "",
+    }
+
+
+def _provenance_evidence_bundle(
+    *,
+    bundle: CanonicalReleaseBundle,
+    evidence: Sequence[Mapping[str, Any]],
+    trace_id: str,
+) -> list[dict[str, Any]]:
+    selected = [dict(item) for item in evidence]
+    for passage in selected:
+        if passage.get("evidence_type") != "passage":
+            continue
+        record = _provenance_records_by_concept(bundle).get(str(passage.get("concept_id", "")))
+        if not record:
+            continue
+        selected.append(
+            _provenance_evidence_item(
+                bundle=bundle,
+                record=record,
+                passage=passage,
+                trace_id=trace_id,
+                ordinal=len(selected) + 1,
+            )
+        )
+        break
+    return selected
+
+
+def _provenance_evidence_item(
+    *,
+    bundle: CanonicalReleaseBundle,
+    record: Mapping[str, Any],
+    passage: Mapping[str, Any],
+    trace_id: str,
+    ordinal: int,
+) -> dict[str, Any]:
+    subject = record.get("subject") if isinstance(record.get("subject"), Mapping) else {}
+    claims = record.get("claims") if isinstance(record.get("claims"), list) else []
+    first_claim = claims[0] if claims and isinstance(claims[0], Mapping) else {}
+    claim_id = str(first_claim.get("claim_id", "provenance_claim"))
+    claim_text = str(first_claim.get("text", "Provenance record is present for this concept."))
+    statement = (
+        f"Provenance record for {subject.get('concept_id', passage.get('concept_id'))} "
+        f"contains {claim_id}: {claim_text}"
+    )
+    text_sha = sha256_bytes(statement.encode("utf-8"))
+    locator_id = "m26pa7prov_" + canonical_sha256(
+        {"trace_id": trace_id, "passage": passage["evidence_id"], "statement_sha256": text_sha}
+    )[:32]
+    evidence_id = "m26pa7ev_" + canonical_sha256(
+        {"trace_id": trace_id, "ordinal": ordinal, "locator_id": locator_id}
+    )[:32]
+    return {
+        "evidence_id": evidence_id,
+        "evidence_type": "provenance",
+        "locator_id": locator_id,
+        "release_id": bundle.release_id,
+        "artifact_key": "pilot/m24/canonical-release/artifacts/provenance.json",
+        "artifact_sha256": bundle.artifact_sha256["provenance"],
+        "concept_id": str(subject.get("concept_id", passage.get("concept_id", ""))),
+        "section_id": f"provenance#{claim_id}",
+        "source_id": f"provenance:{claim_id}",
+        "source_identity": f"provenance:{claim_id}",
+        "title": "Provenance",
+        "section_title": claim_id,
+        "channels": ["provenance"],
+        "passage_text": statement,
+        "passage_text_sha256": text_sha,
+        "provenance_record_sha256": canonical_sha256(record),
+        "retrieved_at": "",
+    }
+
+
+def _temporal_evidence_bundle(
+    *,
+    bundle: CanonicalReleaseBundle,
+    evidence: Sequence[Mapping[str, Any]],
+    trace_id: str,
+) -> list[dict[str, Any]]:
+    selected = [dict(item) for item in evidence]
+    for item in list(selected)[:2]:
+        if item.get("evidence_type") != "passage":
+            continue
+        selected.append(
+            _temporal_record_evidence_item(
+                bundle=bundle,
+                passage=item,
+                trace_id=trace_id,
+                ordinal=len(selected) + 1,
+            )
+        )
+        if len(selected) >= MAX_BUNDLE_EVIDENCE_ITEMS:
+            break
+    return selected
+
+
+def _temporal_record_evidence_item(
+    *,
+    bundle: CanonicalReleaseBundle,
+    passage: Mapping[str, Any],
+    trace_id: str,
+    ordinal: int,
+) -> dict[str, Any]:
+    temporal_identity = str(passage.get("retrieved_at") or "unknown-retrieved-at")
+    statement = (
+        f"Temporal record for {passage.get('source_id')} section {passage.get('section_id')} "
+        f"was retrieved at {temporal_identity} in release {bundle.release_id}."
+    )
+    text_sha = sha256_bytes(statement.encode("utf-8"))
+    locator_id = "m26pa7time_" + canonical_sha256(
+        {"trace_id": trace_id, "passage": passage["evidence_id"], "statement_sha256": text_sha}
+    )[:32]
+    evidence_id = "m26pa7ev_" + canonical_sha256(
+        {"trace_id": trace_id, "ordinal": ordinal, "locator_id": locator_id}
+    )[:32]
+    return {
+        "evidence_id": evidence_id,
+        "evidence_type": "temporal_record",
+        "locator_id": locator_id,
+        "release_id": bundle.release_id,
+        "artifact_key": "pilot/m24/canonical-release/artifacts/provenance.json",
+        "artifact_sha256": bundle.artifact_sha256["provenance"],
+        "concept_id": str(passage.get("concept_id", "")),
+        "section_id": f"temporal#{passage.get('section_id', '')}",
+        "source_id": f"temporal:{passage.get('source_id', '')}",
+        "source_identity": f"{_source_identity(passage)}@{temporal_identity}",
+        "title": "Temporal record",
+        "section_title": temporal_identity,
+        "channels": ["temporal"],
+        "passage_text": statement,
+        "passage_text_sha256": text_sha,
+        "temporal_identity": temporal_identity,
+        "provenance_record_sha256": str(passage.get("provenance_record_sha256", "")),
+        "retrieved_at": temporal_identity,
+    }
+
+
+def _dedupe_evidence(evidence: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in evidence:
+        evidence_id = str(item.get("evidence_id", ""))
+        if not evidence_id or evidence_id in seen:
+            continue
+        deduped.append(dict(item))
+        seen.add(evidence_id)
+    return deduped
+
+
+def _public_citation(
+    evidence: Mapping[str, Any],
+    claim: Mapping[str, Any],
+    support_ref: Mapping[str, Any],
+    ref_index: int,
+) -> dict[str, Any]:
+    return {
+        "citation_id": f"{claim.get('claim_id', 'claim_1')}_ref_{ref_index}",
+        "claim_id": str(claim.get("claim_id", "claim_1")),
+        "claim_role": str(claim.get("claim_role", "direct")),
+        "evidence_id": evidence["evidence_id"],
+        "evidence_type": str(evidence.get("evidence_type", "passage")),
         "locator_id": evidence["locator_id"],
         "source_id": evidence["source_id"],
         "section_id": evidence["section_id"],
@@ -899,8 +1821,10 @@ def _public_citation(evidence: Mapping[str, Any], claim: Mapping[str, Any]) -> d
         "release_id": evidence["release_id"],
         "source_locator": f"{evidence['artifact_key']}#{evidence['section_id']}",
         "support_text_sha256": evidence["passage_text_sha256"],
+        "exact_quote_sha256": support_ref["exact_quote_sha256"],
         "source_artifact_sha256": evidence["artifact_sha256"],
         "provenance_record_sha256": evidence["provenance_record_sha256"],
+        "source_identity": _source_identity(evidence),
         "runtime_owned_locator": True,
     }
 
@@ -919,6 +1843,59 @@ def _first_citation(
     }
 
 
+def _citation_source_identity(citation: Mapping[str, Any], fallback: str) -> str:
+    source_id = str(citation.get("source_id") or "").strip()
+    uri = str(citation.get("uri") or "").strip()
+    if source_id:
+        return source_id
+    if uri:
+        return "uri:" + canonical_sha256(uri)[:16]
+    return "section:" + fallback
+
+
+def _source_identity(evidence: Mapping[str, Any]) -> str:
+    explicit = str(evidence.get("source_identity") or "").strip()
+    if explicit:
+        return explicit
+    source_id = str(evidence.get("source_id") or "").strip()
+    if source_id:
+        return source_id
+    return f"{evidence.get('artifact_key', 'artifact')}#{evidence.get('section_id', '')}"
+
+
+def _distinct_source_count(evidence: Sequence[Mapping[str, Any]]) -> int:
+    return len({_source_identity(item) for item in evidence})
+
+
+def _public_evidence_summary(evidence: Mapping[str, Any]) -> dict[str, Any]:
+    summary = {
+        "evidence_id": str(evidence["evidence_id"]),
+        "evidence_type": str(evidence.get("evidence_type", "passage")),
+        "locator_id": str(evidence["locator_id"]),
+        "source_id": str(evidence.get("source_id", "")),
+        "source_identity": _source_identity(evidence),
+        "section_id": str(evidence.get("section_id", "")),
+        "concept_id": str(evidence.get("concept_id", "")),
+        "artifact_key": str(evidence.get("artifact_key", "")),
+        "artifact_sha256": str(evidence.get("artifact_sha256", "")),
+        "release_id": str(evidence.get("release_id", "")),
+        "text_sha256": str(evidence.get("passage_text_sha256", "")),
+        "channels": list(evidence.get("channels", [])),
+    }
+    if evidence.get("evidence_type") == "graph_edge":
+        summary.update(
+            {
+                "edge_id": str(evidence.get("edge_id", "")),
+                "edge_source": str(evidence.get("edge_source", "")),
+                "edge_target": str(evidence.get("edge_target", "")),
+                "relation_type": str(evidence.get("relation_type", "")),
+            }
+        )
+    if evidence.get("evidence_type") == "temporal_record":
+        summary["temporal_identity"] = str(evidence.get("temporal_identity", ""))
+    return summary
+
+
 def _parent_expansion_summary(
     bundle: CanonicalReleaseBundle,
     selected_evidence: Sequence[Mapping[str, Any]],
@@ -928,6 +1905,8 @@ def _parent_expansion_summary(
         by_concept.setdefault(str(document["concept_id"]), []).append(str(document["section_id"]))
     expanded: list[dict[str, Any]] = []
     for evidence in selected_evidence:
+        if evidence.get("evidence_type") != "passage":
+            continue
         section_id = str(evidence["section_id"])
         siblings = [
             item
@@ -1027,6 +2006,46 @@ def _bounded_text(text: str, *, max_bytes: int = 1800) -> str:
 
 def _looks_like_prompt_injection(question: str) -> bool:
     return any(pattern.search(question) for pattern in PROMPT_INJECTION_PATTERNS)
+
+
+def _intent_class(question: str) -> str:
+    for intent, patterns in INTENT_PATTERNS:
+        if any(pattern.search(question) for pattern in patterns):
+            return intent
+    return "direct_grounded_knowledge"
+
+
+def _secret_like(text: str) -> bool:
+    return any(pattern.search(text) for pattern in SECRET_VALUE_PATTERNS)
+
+
+def _render_claim_clause(claim: Mapping[str, Any], fragments: Sequence[str]) -> str:
+    claim_id = str(claim.get("claim_id", "claim"))
+    cited_fragments = [
+        f"{fragment} [{claim_id}_ref_{index}]"
+        for index, fragment in enumerate(fragments, start=1)
+    ]
+    if str(claim.get("claim_role")) in {"relationship", "temporal"}:
+        return "; ".join(cited_fragments)
+    return " ".join(cited_fragments)
+
+
+def _render_answer(intent_class: str, relation: str, claim_texts: Sequence[str]) -> str:
+    compact_claims = [item.strip() for item in claim_texts if item.strip()]
+    if not compact_claims:
+        return ""
+    if intent_class == "cross_document_comparison":
+        return "Comparison: " + " While ".join(compact_claims)
+    if intent_class == "complementary_synthesis":
+        return "Synthesis: " + " Together, ".join(compact_claims)
+    if intent_class == "graph_relationship":
+        relation_label = relation if relation and relation != "None" else "relationship"
+        return f"Graph {relation_label}: " + " ".join(compact_claims)
+    if intent_class == "provenance_source_trace":
+        return "Provenance trace: " + " ".join(compact_claims)
+    if intent_class == "temporal_conflict":
+        return "Temporal/conflict verdict: " + " ".join(compact_claims)
+    return " ".join(compact_claims)
 
 
 def _has_meaningful_overlap(question: str, evidence: Sequence[Mapping[str, Any]]) -> bool:

@@ -59,28 +59,12 @@ class ExactSpanProvider:
         self.calls += 1
         self.cost += Decimal("0.00001")
         task = _task(payload)
-        passage = task["passage"]["text"]
-        locator_id = task["passage"]["locator_id"]
-        claim = _first_sentence(passage)
         return {
             "call_class": call_class,
             "cost_usd": "0.00001",
             "latency_ms": 5,
             "response_id": f"formal-fixture-{self.calls}",
-            "text": json.dumps(
-                {
-                    "answer_text": "",
-                    "claims": [
-                        {
-                            "citation": {"locator_id": locator_id},
-                            "claim_id": "claim_1",
-                            "claim_text": claim,
-                        }
-                    ],
-                    "reason_codes": [],
-                    "status": "draft_candidate",
-                }
-            ),
+            "text": json.dumps(_multi_evidence_answer(task)),
             "usage": {"input_tokens": 100, "output_tokens": 20},
         }
 
@@ -96,6 +80,61 @@ def _first_sentence(passage: str) -> str:
         if delimiter in passage:
             return passage.split(delimiter, 1)[0].strip() + delimiter.strip()
     return passage[:160].strip()
+
+
+def _multi_evidence_answer(task: dict[str, Any]) -> dict[str, Any]:
+    evidence = task["evidence_bundle"]
+    intent = task["intent_class"]
+    relation = None
+    refs: list[dict[str, str]] = []
+    role = "direct"
+    if intent in {"cross_document_comparison", "complementary_synthesis"}:
+        role = "relationship"
+        relation = "contrasts_with" if intent == "cross_document_comparison" else "complements"
+        refs = [_support_ref(item) for item in _passage_items(evidence)[:2]]
+    elif intent == "graph_relationship":
+        role = "relationship"
+        relation = "depends_on"
+        graph_edge = [item for item in evidence if item["evidence_type"] == "graph_edge"][0]
+        refs = [
+            _support_ref(graph_edge),
+            *[_support_ref(item) for item in _passage_items(evidence)[:2]],
+        ]
+    elif intent == "provenance_source_trace":
+        role = "provenance"
+        refs = [_support_ref(_passage_items(evidence)[0])]
+        refs.append(
+            _support_ref([item for item in evidence if item["evidence_type"] == "provenance"][0])
+        )
+    elif intent == "temporal_conflict":
+        role = "temporal"
+        relation = "precedes"
+        refs = [
+            _support_ref(item)
+            for item in evidence
+            if item["evidence_type"] == "temporal_record"
+        ][:2]
+    else:
+        refs = [_support_ref(_passage_items(evidence)[0])]
+    return {
+        "status": "answer_candidate",
+        "relation": relation,
+        "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+        "claims": [{"claim_id": "claim_1", "claim_role": role, "support_refs": refs}],
+        "abstention_reason": None,
+    }
+
+
+def _passage_items(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [item for item in evidence if item["evidence_type"] == "passage"]
+
+
+def _support_ref(item: dict[str, Any]) -> dict[str, str]:
+    return {
+        "evidence_id": item["evidence_id"],
+        "locator_id": item["locator_id"],
+        "exact_quote": _first_sentence(item["text"]),
+    }
 
 
 def _schema_errors(schema_name: str, value: dict[str, Any]) -> list[str]:
@@ -267,6 +306,18 @@ def test_corrective_formal_fixture_receipt_satisfies_a01_to_a34_evidence(tmp_pat
     assert any(row["retrieval_channels"]["parent_expansion"] for row in rows[:7])
     assert any(row["graph_hops_used"] > 0 for row in rows)
     assert all(row["selected_evidence_count"] > 0 for row in rows[:6])
+    assert rows[2]["intent_class"] == "cross_document_comparison"
+    assert rows[2]["distinct_source_count"] >= 2
+    assert rows[2]["support_ref_count"] >= 2
+    assert rows[2]["multi_evidence_verification"]["single_primary_passage_used"] is False
+    assert rows[3]["intent_class"] == "graph_relationship"
+    assert {"graph_edge", "passage"}.issubset(set(rows[3]["selected_evidence_types"]))
+    assert rows[3]["support_ref_count"] >= 3
+    assert rows[4]["intent_class"] == "provenance_source_trace"
+    assert {"passage", "provenance"}.issubset(set(rows[4]["selected_evidence_types"]))
+    assert rows[5]["intent_class"] == "temporal_conflict"
+    assert "temporal_record" in rows[5]["selected_evidence_types"]
+    assert rows[5]["distinct_source_count"] >= 2
     assert rows[6]["status"] == "owner_only_safe_abstention"
     assert rows[6]["provider_invoked"] is False
     assert rows[7]["status"] == "owner_only_safe_abstention"

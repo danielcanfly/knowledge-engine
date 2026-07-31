@@ -1462,16 +1462,28 @@ def _formal_row_from_response(
     retrieval_summary = response.get("retrieval_mode_summary")
     if not isinstance(retrieval_summary, Mapping):
         retrieval_summary = {}
+    multi_evidence = response.get("multi_evidence_verification")
+    if not isinstance(multi_evidence, Mapping):
+        multi_evidence = {}
+    selected_evidence = [
+        dict(item)
+        for item in response.get("selected_evidence", [])
+        if isinstance(item, Mapping)
+    ]
     row: dict[str, Any] = {
         "answerable": answerable,
         "candidate_count_by_channel": dict(response.get("candidate_count_by_channel", {})),
         "citation_locator_valid": bool(response.get("citation_locator_valid")),
         "class": str(spec["class"]),
+        "claim_count": int(multi_evidence.get("claim_count", 0)),
+        "distinct_source_count": int(response.get("distinct_source_count", 0)),
         "graph_hops_used": int(response.get("graph_hops_used", 0)),
         "grounded_answer_pass": grounded_pass,
+        "intent_class": str(response.get("intent_class", "")),
         "latency_ms": int(response.get("latency_ms", 0)),
         "mandatory_safe_abstention_pass": mandatory_abstention_pass,
         "material_claim_support_verified": bool(response.get("material_claim_support_verified")),
+        "multi_evidence_verification": dict(multi_evidence),
         "non_sensitive_operator_demo": bool(spec["non_sensitive_operator_demo"]),
         "ordinal": int(spec["ordinal"]),
         "parent_expansion_count": int(
@@ -1499,8 +1511,12 @@ def _formal_row_from_response(
         ),
         "safe_terminal": cited_answer or safe_abstention,
         "selected_evidence_count": len(response.get("selected_evidence_ids", [])),
+        "selected_evidence_types": sorted(
+            {str(item.get("evidence_type", "")) for item in selected_evidence if item}
+        ),
         "selected_locator_hashes": [canonical_sha256(item) for item in selected_locator_ids],
         "status": str(response.get("status")),
+        "support_ref_count": int(multi_evidence.get("support_ref_count", 0)),
         "terminal_status": str(response.get("terminal_status")),
         "trace_id": str(response.get("trace_id")),
         "unsupported_accepted_claims": unsupported,
