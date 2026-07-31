@@ -19,6 +19,7 @@ from .m26_verified_answer_citation_gate import (
 STAGE_ID = "M26.PA.7"
 OWNER_DECISION_SCHEMA = "knowledge-engine-m26-pa-7-owner-final-decision/v1"
 RESOLVED_GATE_SCHEMA = "knowledge-engine-m26-pa-7-resolved-production-gate/v1"
+PROMOTION_TRIGGER_SCHEMA = "knowledge-engine-m26-pa-7-promotion-trigger/v1"
 RECEIPT_SCHEMA = "knowledge-engine-m26-pa-7-production-receipt/v1"
 INCIDENT_SCHEMA = "knowledge-engine-m26-pa-7-incident-packet/v1"
 
@@ -359,6 +360,68 @@ def validate_resolved_gate(
     return dict(gate)
 
 
+def validate_promotion_trigger(
+    trigger: Mapping[str, Any],
+    gate: Mapping[str, Any],
+    owner_decision: Mapping[str, Any],
+) -> dict[str, Any]:
+    validate_resolved_gate(gate, owner_decision)
+    verify_self_digest(trigger, "promotion trigger")
+    reject_secret_or_raw_persistence(trigger, label="promotion_trigger")
+    if trigger.get("schema_version") != PROMOTION_TRIGGER_SCHEMA:
+        raise ProductionPromotionClosureError("PA7_TRIGGER_INVALID", "schema")
+    if trigger.get("stage_id") != STAGE_ID:
+        raise ProductionPromotionClosureError("PA7_TRIGGER_INVALID", "stage")
+    if trigger.get("status") != "owner_authorized_single_logical_live_attempt_trigger":
+        raise ProductionPromotionClosureError("PA7_TRIGGER_INVALID", "status")
+    if trigger.get("owner_decision_self_sha256") != OWNER_DECISION_SELF_SHA256:
+        raise ProductionPromotionClosureError("PA7_OWNER_DECISION_MISMATCH", "trigger binding")
+    if trigger.get("resolved_gate_self_sha256") != gate.get("self_sha256"):
+        raise ProductionPromotionClosureError("PA7_TRIGGER_GATE_MISMATCH", "gate binding")
+
+    attempt = _object(trigger.get("promotion_attempt"), "trigger.promotion_attempt")
+    if attempt.get("logical_attempt_ordinal") != 1:
+        raise ProductionPromotionClosureError("PA7_TRIGGER_INVALID", "logical attempt")
+    if int(attempt.get("maximum_logical_attempts_total", 0)) > 2:
+        raise ProductionPromotionClosureError("PA7_BUDGET_INVALID", "logical attempts")
+    if attempt.get("request_cap") != 20:
+        raise ProductionPromotionClosureError("PA7_TRIGGER_INVALID", "request cap")
+    if int(attempt.get("provider_call_cap", 0)) > 80:
+        raise ProductionPromotionClosureError("PA7_BUDGET_INVALID", "provider call cap")
+    if Decimal(str(attempt.get("payg_equivalent_cost_usd_cap"))) > Decimal("1.00"):
+        raise ProductionPromotionClosureError("PA7_BUDGET_INVALID", "cost cap")
+    if int(attempt.get("duration_minutes_cap", 0)) > 90:
+        raise ProductionPromotionClosureError("PA7_BUDGET_INVALID", "duration cap")
+
+    activation = _object(trigger.get("activation"), "trigger.activation")
+    if activation.get("event") != "push" or activation.get("branch") != "main":
+        raise ProductionPromotionClosureError("PA7_TRIGGER_INVALID", "activation event")
+    expected_workflow_path = ".github/workflows/m26-pa-7-production-promotion-closure.yml"
+    if activation.get("workflow_path") != expected_workflow_path:
+        raise ProductionPromotionClosureError("PA7_TRIGGER_INVALID", "workflow path")
+    required_artifacts = set(str(item) for item in activation.get("required_artifacts", []))
+    if required_artifacts != {
+        "pilot/m26/m26-pa-7-owner-final-decision.json",
+        "pilot/m26/m26-pa-7-resolved-production-gate.json",
+        "pilot/m26/m26-pa-7-promotion-trigger.json",
+    }:
+        raise ProductionPromotionClosureError("PA7_TRIGGER_INVALID", "required artifacts")
+
+    boundary = _object(trigger.get("authority_boundary"), "trigger.authority_boundary")
+    expected_boundary = {
+        "automatic_expansion": False,
+        "corpus_index_content_mutation": False,
+        "new_user_admission": False,
+        "owner_only_answer_serving": True,
+        "pa7_acceptance_or_m26_closure": False,
+        "public_or_unbounded_traffic": False,
+        "secret_persistence": False,
+    }
+    if boundary != expected_boundary:
+        raise ProductionPromotionClosureError("PA7_AUTHORITY_ESCALATION", "trigger boundary")
+    return dict(trigger)
+
+
 def evaluate_owner_admission(gate: Mapping[str, Any], request: Mapping[str, Any]) -> dict[str, Any]:
     identities = _object(gate.get("production_identities"), "gate.production_identities")
     expected = {
@@ -546,8 +609,10 @@ def run_owner_only_production_promotion(
     root: Path,
     gate: Mapping[str, Any],
     owner_decision: Mapping[str, Any],
+    promotion_trigger: Mapping[str, Any],
     evidence_dir: Path,
 ) -> dict[str, Any]:
+    validate_promotion_trigger(promotion_trigger, gate, owner_decision)
     gate = validate_resolved_gate(gate, owner_decision)
     from .m26_pa5_v8_live import run_population
 
