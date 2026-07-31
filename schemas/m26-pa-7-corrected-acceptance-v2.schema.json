@@ -1,0 +1,175 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-corrected-acceptance-v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "accepted": {
+      "const": true
+    },
+    "effective_only_on_reconciliation_merge": {
+      "const": true
+    },
+    "live_evidence": {
+      "additionalProperties": true,
+      "properties": {
+        "artifact_archive_digest": {
+          "const": "sha256:7b0146b8a9f634bfc7da10453724ddacff61cafa92d948b70c927e6ac341a058"
+        },
+        "artifact_id": {
+          "const": 8788807930
+        },
+        "artifact_name": {
+          "const": "m26-pa-7-corrective-product-readiness-evidence"
+        },
+        "production_promotion_job_conclusion": {
+          "const": "success"
+        },
+        "production_promotion_job_id": {
+          "const": 91120694689
+        },
+        "receipt_file_sha256": {
+          "const": "00f9e3ef2ca517f72041bbd17855985319686e212344ecda808660ae183832f3"
+        },
+        "receipt_schema_version": {
+          "const": "knowledge-engine-m26-pa-7-corrective-formal-receipt/v1"
+        },
+        "receipt_self_sha256": {
+          "const": "af9213286079e84395b8e0db9cc68f31760dba45119dc5c805eb0e3bdc1a81a9"
+        },
+        "receipt_status": {
+          "const": "live_corrective_formal_receipt_pending_reconciliation"
+        },
+        "run_id": {
+          "const": 30619558449
+        },
+        "slo_pass": {
+          "const": true
+        },
+        "static_validate_job_id": {
+          "const": 91120581031
+        },
+        "workflow_head_sha": {
+          "const": "4a6222bf7be410f1def23a6b15f68091aa2c20bc"
+        }
+      },
+      "required": [
+        "artifact_archive_digest",
+        "artifact_id",
+        "artifact_name",
+        "production_promotion_job_conclusion",
+        "production_promotion_job_id",
+        "receipt_file_sha256",
+        "receipt_schema_version",
+        "receipt_self_sha256",
+        "receipt_status",
+        "run_id",
+        "slo_pass",
+        "static_validate_job_id",
+        "workflow_head_sha"
+      ],
+      "type": "object"
+    },
+    "promotion_trigger": {
+      "additionalProperties": true,
+      "properties": {
+        "self_sha256": {
+          "const": "c278f66e434290eb4f8cd834588fb4e4b315a0368ad55b90a148e33e2521162e"
+        }
+      },
+      "required": [
+        "self_sha256"
+      ],
+      "type": "object"
+    },
+    "reconciliation": {
+      "additionalProperties": true,
+      "properties": {
+        "current_main_before_reconciliation_pr": {
+          "const": "4a6222bf7be410f1def23a6b15f68091aa2c20bc"
+        },
+        "dedicated_issue_number": {
+          "const": 1262
+        },
+        "no_new_provider_call": {
+          "const": true
+        },
+        "remote_run_and_artifact_verified": {
+          "const": true
+        }
+      },
+      "required": [
+        "current_main_before_reconciliation_pr",
+        "dedicated_issue_number",
+        "no_new_provider_call",
+        "remote_run_and_artifact_verified"
+      ],
+      "type": "object"
+    },
+    "resolved_gate": {
+      "additionalProperties": true,
+      "properties": {
+        "self_sha256": {
+          "const": "667874a2e2873ac7847371b156906c256fab479c494214438b3cf79ca65274c6"
+        }
+      },
+      "required": [
+        "self_sha256"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-7-corrected-acceptance/v2"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "stage_id": {
+      "const": "M26.PA.7"
+    },
+    "status": {
+      "const": "m26_pa_7_arbitrary_owner_query_product_readiness_accepted"
+    },
+    "supersedes_false_positive": {
+      "additionalProperties": true,
+      "properties": {
+        "old_acceptance_self_sha256": {
+          "const": "c3936e3a4d9f93b398053e3d92294eeb520f2adbaac4b1481896a2c6a1a6afc1"
+        },
+        "old_closure_self_sha256": {
+          "const": "c68d4fe433856cebfebf7a952b4915d460ddbc71c980baf88d462a39530c690c"
+        }
+      },
+      "required": [
+        "old_acceptance_self_sha256",
+        "old_closure_self_sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "accepted",
+    "authority_boundary",
+    "bounded_scope",
+    "corrective_authority",
+    "effective_only_on_reconciliation_merge",
+    "generated_at",
+    "implementation",
+    "issue",
+    "live_evidence",
+    "m26_closure",
+    "operation_counts",
+    "owner_decision",
+    "predecessor",
+    "production_answer_authority",
+    "promotion_trigger",
+    "reconciliation",
+    "resolved_gate",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "supersedes_false_positive"
+  ],
+  "type": "object"
+}

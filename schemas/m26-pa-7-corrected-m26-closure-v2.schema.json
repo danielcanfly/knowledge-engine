@@ -1,0 +1,98 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-corrected-m26-closure-v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "acceptance_path": {
+      "const": "pilot/m26/m26-pa-7-acceptance.json"
+    },
+    "acceptance_self_sha256": {
+      "const": "5358898627ededadd825af8794b27ee8be40d1bb5fb9ffd47e403c89909910ba"
+    },
+    "accepted_status": {
+      "const": "m26_pa_7_arbitrary_owner_query_product_readiness_accepted"
+    },
+    "evidence_bindings": {
+      "additionalProperties": true,
+      "properties": {
+        "artifact_id": {
+          "const": 8788807930
+        },
+        "artifact_sha256": {
+          "const": "sha256:7b0146b8a9f634bfc7da10453724ddacff61cafa92d948b70c927e6ac341a058"
+        },
+        "receipt_file_sha256": {
+          "const": "00f9e3ef2ca517f72041bbd17855985319686e212344ecda808660ae183832f3"
+        },
+        "receipt_self_sha256": {
+          "const": "af9213286079e84395b8e0db9cc68f31760dba45119dc5c805eb0e3bdc1a81a9"
+        },
+        "run_id": {
+          "const": 30619558449
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_sha256",
+        "receipt_file_sha256",
+        "receipt_self_sha256",
+        "run_id"
+      ],
+      "type": "object"
+    },
+    "final_state": {
+      "const": {
+        "M26.PA.7": "m26_pa_7_arbitrary_owner_query_product_readiness_accepted",
+        "M26_CLOSED": true,
+        "PRODUCTION_ANSWER_SERVING": true,
+        "PRODUCTION_AUDIENCE": "Daniel owner allowlist only",
+        "PUBLIC_OR_UNBOUNDED_TRAFFIC": false
+      }
+    },
+    "live_receipt_self_sha256": {
+      "const": "af9213286079e84395b8e0db9cc68f31760dba45119dc5c805eb0e3bdc1a81a9"
+    },
+    "live_run_id": {
+      "const": 30619558449
+    },
+    "m26_closed": {
+      "const": true
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-7-corrected-m26-closure/v2"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "stage_id": {
+      "const": "M26.PA.7"
+    },
+    "status": {
+      "const": "m26_closed"
+    }
+  },
+  "required": [
+    "acceptance_path",
+    "acceptance_self_sha256",
+    "accepted_status",
+    "closure_conditions",
+    "effective_only_on_reconciliation_merge",
+    "evidence_bindings",
+    "final_denied_boundaries",
+    "final_state",
+    "generated_at",
+    "live_receipt_self_sha256",
+    "live_run_id",
+    "m26_closed",
+    "owner_decision_self_sha256",
+    "promotion_trigger_self_sha256",
+    "resolved_gate_self_sha256",
+    "schema_version",
+    "self_sha256",
+    "stage_id",
+    "status",
+    "supersedes_false_positive"
+  ],
+  "type": "object"
+}

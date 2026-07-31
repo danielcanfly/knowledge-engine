@@ -17,98 +17,169 @@
   "bounded_scope": {
     "automatic_expansion": false,
     "duration_minutes_max": 90,
-    "logical_attempt": 1,
+    "formal_query_cap": 8,
+    "formal_query_count": 8,
     "owner_only": true,
     "public_traffic_percent": 0,
-    "query_set_sha256": "78d9cbaba17b33171f47498c8791a7792e409187d8dfd3fc1682e6bfdc58da99",
-    "request_cap": 20,
-    "request_count": 20
+    "query_set_sha256": "f3d813d6aa77090224dbfdc76d5a948ab686ad1a9d5fc4dd974e95ff29b80087"
+  },
+  "corrective_authority": {
+    "corrective_reopen_path": "pilot/m26/m26-pa-7-corrective-reopen.json",
+    "corrective_reopen_self_sha256": "f5412bb39a776e5169c601d3b2d757e212058f215759a4104f0bb79c79c18e8d",
+    "formal_test_contract_path": "pilot/m26/m26-pa-7-corrective-formal-test-contract.json",
+    "formal_test_contract_self_sha256": "098bf0a450bfb118c53aec08e7772249083b3a1ae696447d10413053a3fc5b51",
+    "formal_test_manifest_path": "pilot/m26/m26-pa-7-corrective-formal-test-manifest.json",
+    "formal_test_manifest_self_sha256": "62c14a4076238fd9f6c7424f5eccd555248616866caac5f2ea293bf1e6e073b9",
+    "owner_authority_path": "pilot/m26/m26-pa-7-corrective-owner-authority.json",
+    "owner_authority_self_sha256": "7521cfa5fc038cb5354aa8b8e7b766ad7544e0c2b160db58735409eaa60d4937"
   },
   "effective_only_on_reconciliation_merge": true,
-  "generated_at": "2026-07-31T04:09:05Z",
+  "failed_closed_calibration_repair_accounting": {
+    "artifact_archive_digest": "sha256:a4b6df9d5fe185cb1d24c7412fd87687f7566487453a9bd54d4a4638142d143e",
+    "artifact_id": 8788475885,
+    "calibration_slo_pass": false,
+    "formal_query_count": 0,
+    "receipt_file_sha256": "1d2b4f1e1b5a9a7d342ddba786c4e2cf8323abf4e6361ebfcd272203cbcc0f3c",
+    "receipt_self_sha256": "7ccb7d714222b8dc4ce5b75aeaa745c21c9fc4392d7163721aa778f280ed2522",
+    "receipt_status": "live_corrective_formal_failed_closed_receipt",
+    "repair_pr": 1261,
+    "run_id": 30618768225,
+    "workflow_head_sha": "7eb1629dad9228da967989c975cb6a6a900a42c1"
+  },
+  "generated_at": "2026-07-31T09:33:06Z",
   "implementation": {
     "pr_a": {
-      "base_sha": "cdef87f304150225fc47fab0df003500386d2534",
-      "head_sha": "2f3011cc112b9a8b4de587bc937e8ca5dae8540b",
-      "issue": 1251,
-      "merge_sha": "d1fbb9492a789b44b894c64654b7495b2b992f75",
-      "pull_request": 1252
+      "head_sha": "3d965192242406c2af721a2ffe27e394d624e099",
+      "issue": 1257,
+      "merge_sha": "23413d9336a958fb5915068bc2e5a1ea34f28f57",
+      "pull_request": 1258,
+      "scope": "corrective arbitrary owner query runtime and false-positive reopen"
     },
     "pr_b": {
-      "base_sha": "d1fbb9492a789b44b894c64654b7495b2b992f75",
-      "head_sha": "eff049ca8e3061091291efd2194774c91c84121c",
-      "issue": 1253,
-      "merge_sha": "168a403ea5ff69c362009d58382743ad6986850c",
-      "pull_request": 1254
+      "head_sha": "c1e8b4125b8976f7696d26c8822244e353ab59c6",
+      "issue": 1259,
+      "merge_sha": "7eb1629dad9228da967989c975cb6a6a900a42c1",
+      "pull_request": 1260,
+      "scope": "corrected formal gate, trigger, owner authority, schemas, workflow wiring"
+    },
+    "pr_b_calibration_repair": {
+      "head_sha": "bbf40ffe5451b099574f0551cdee3f7d347a560a",
+      "issue": 1259,
+      "merge_sha": "4a6222bf7be410f1def23a6b15f68091aa2c20bc",
+      "pull_request": 1261,
+      "scope": "repair cross-document calibration query and refresh dependent digests"
+    },
+    "pr_c": {
+      "base_sha": "4a6222bf7be410f1def23a6b15f68091aa2c20bc",
+      "effective_only_on_merge": true,
+      "issue": 1262,
+      "pull_request": null
     }
   },
   "issue": {
-    "number": 1255,
+    "number": 1262,
     "repository": "danielcanfly/knowledge-engine",
     "state_before_reconciliation_pr": "open",
-    "title": "M26.PA.7 live receipt reconciliation and M26 closure"
+    "title": "M26.PA.7 corrected arbitrary-query reconciliation and M26 closure"
   },
   "live_evidence": {
-    "artifact_archive_digest": "sha256:d24468d77a9603a41a2cfed3e18d4f454625bd444afc284ec736f59cce54c7cb",
+    "artifact_archive_digest": "sha256:7b0146b8a9f634bfc7da10453724ddacff61cafa92d948b70c927e6ac341a058",
+    "artifact_archive_digest_verified": true,
     "artifact_entry_names": [
-      "m26-pa-7-production-receipt.json",
-      "m26-pa-7-production-receipt.json.sha256"
+      "m26-pa-7-corrective-formal-receipt.json",
+      "m26-pa-7-corrective-formal-receipt.json.sha256"
     ],
-    "artifact_expires_at": "2026-10-29T03:52:10Z",
-    "artifact_id": 8782491199,
-    "artifact_name": "m26-pa-7-production-promotion-closure-evidence",
-    "artifact_size_in_bytes": 3589,
-    "created_at": "2026-07-31T03:54:11Z",
+    "artifact_expires_at": "2026-10-29T09:20:14Z",
+    "artifact_id": 8788807930,
+    "artifact_name": "m26-pa-7-corrective-product-readiness-evidence",
+    "artifact_size_in_bytes": 5214,
+    "calibration": {
+      "provider_calls": 4,
+      "query_count": 4,
+      "slo_pass": true
+    },
+    "created_at": "2026-07-31T09:21:55Z",
+    "formal": {
+      "answerable_count": 6,
+      "answerable_provider_invoked_count": 6,
+      "class_histogram": {
+        "conflict_temporal_freshness": 1,
+        "cross_document_comparison": 1,
+        "direct_grounded_knowledge": 2,
+        "graph_relationship_navigation": 1,
+        "no_answer": 1,
+        "prompt_injection_privacy": 1,
+        "provenance_source_trace": 1
+      },
+      "non_sensitive_operator_demo_present": true,
+      "query_count": 8,
+      "runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "temporal_conflict_outcome": "safe_abstention_allowed_by_acceptance_matrix_a24"
+    },
     "metrics": {
+      "answerable_count": 6,
+      "answerable_grounded_pass_rate": 0.8333333333333334,
       "citation_locator_validity": 1.0,
-      "complete_accounting": 20,
-      "kill_switch_propagation_ms": 250,
+      "class_histogram": {
+        "conflict_temporal_freshness": 1,
+        "cross_document_comparison": 1,
+        "direct_grounded_knowledge": 2,
+        "graph_relationship_navigation": 1,
+        "no_answer": 1,
+        "prompt_injection_privacy": 1,
+        "provenance_source_trace": 1
+      },
+      "complete_accounting": 8,
+      "mandatory_abstention_correctness": 1.0,
       "material_claim_support_precision": 1.0,
-      "mean_payg_equivalent_cost_usd": "0.000364026",
-      "p95_latency_ms": 9441,
-      "p95_payg_equivalent_cost_usd": "0.00050736",
-      "p99_latency_ms": 9441,
-      "post_kill_provider_calls": 0,
-      "provider_calls": 40,
+      "p95_latency_ms": 4281,
+      "p99_latency_ms": 4281,
+      "provider_calls": 6,
       "provider_error_count": 0,
       "safe_terminal_outcome_rate": 1.0,
       "terminal_status_histogram": {
-        "accepted": 20
+        "safe_abstention": 3,
+        "verified_answer_ready_candidate": 5
       },
-      "total_payg_equivalent_cost_usd": "0.00728052",
+      "total_payg_equivalent_cost_usd": "0.00142464",
       "unsupported_accepted_claims": 0
     },
     "mutations": {
+      "answer_to_canonical_writes": 0,
+      "canonical_writes": 0,
       "corpus_index_content_mutations": 0,
-      "production_pointer_or_route_mutations": 3
+      "production_pointer_or_route_mutations": 0,
+      "qdrant_write_operations": 0
     },
-    "owner_query_response_status": "owner_only_cited_answer",
     "privacy": {
       "full_provider_response_persisted": false,
+      "private_owner_query_persisted": false,
       "raw_evidence_persisted": false,
       "raw_query_persisted": false,
       "secret_values_persisted": false,
       "vectors_persisted": false
     },
     "production_promotion_job_conclusion": "success",
-    "production_promotion_job_id": 91068521832,
-    "receipt_file_sha256": "1e950799e7a67b3a403b9dd64ba97d9e8d5c59f7a7fe22a9c35d53f15bb67f17",
-    "receipt_generated_at": "2026-07-31T03:54:10Z",
-    "receipt_schema_version": "knowledge-engine-m26-pa-7-production-receipt/v1",
-    "receipt_self_sha256": "4cdbd4fd73f467d33dd54258b185af9b59512b1960e19e86f5e3aa56d3fc38be",
-    "receipt_sha256_file_value": "4cdbd4fd73f467d33dd54258b185af9b59512b1960e19e86f5e3aa56d3fc38be",
-    "receipt_status": "live_production_receipt_pending_reconciliation",
+    "production_promotion_job_id": 91120694689,
+    "receipt_file_sha256": "00f9e3ef2ca517f72041bbd17855985319686e212344ecda808660ae183832f3",
+    "receipt_generated_at": "2026-07-31T09:21:54Z",
+    "receipt_schema_version": "knowledge-engine-m26-pa-7-corrective-formal-receipt/v1",
+    "receipt_self_sha256": "af9213286079e84395b8e0db9cc68f31760dba45119dc5c805eb0e3bdc1a81a9",
+    "receipt_sha256_file_value": "af9213286079e84395b8e0db9cc68f31760dba45119dc5c805eb0e3bdc1a81a9",
+    "receipt_sha256_sidecar_file_sha256": "c86eb3be3628e547491a1192b65766306566377137881e7b0bd7f0ead6cfbbe9",
+    "receipt_status": "live_corrective_formal_receipt_pending_reconciliation",
     "run_attempt": 1,
     "run_event": "push",
-    "run_id": 30602658208,
+    "run_id": 30619558449,
     "slo_pass": true,
-    "static_validate_job_id": 91068464907,
+    "static_validate_job_id": 91120581031,
     "traffic": {
       "non_owner_denied_probes": 2,
-      "owner_requests": 20,
+      "non_owner_provider_calls": 0,
+      "owner_requests": 8,
       "public_traffic_operations": 0
     },
-    "workflow_head_sha": "168a403ea5ff69c362009d58382743ad6986850c",
+    "workflow_head_sha": "4a6222bf7be410f1def23a6b15f68091aa2c20bc",
     "workflow_name": "M26.PA.7 Production Promotion and Closure"
   },
   "m26_closure": {
@@ -118,12 +189,14 @@
   },
   "operation_counts": {
     "answer_to_canonical_writes": 0,
+    "calibration_owner_requests": 4,
+    "calibration_provider_calls": 4,
     "corpus_index_content_mutations": 0,
+    "formal_owner_requests": 8,
+    "formal_provider_calls": 6,
     "non_owner_denied_probes": 2,
-    "owner_requests": 20,
-    "post_kill_provider_calls": 0,
-    "production_pointer_or_route_mutations": 3,
-    "provider_calls": 40,
+    "non_owner_provider_calls": 0,
+    "provider_calls_total_successful_run": 10,
     "public_traffic_operations": 0
   },
   "owner_decision": {
@@ -143,23 +216,22 @@
     "audience": "Daniel owner allowlist only",
     "automatic_expansion": false,
     "owner_only_route": "command://knowledge-m26-pa7-query",
-    "owner_query_response_status": "owner_only_cited_answer",
     "public_or_unbounded_traffic": false,
-    "resolved_gate_self_sha256": "6adf0f4fa53d0b061f9e587b72e99ce38de2805f8b35b23841d5a63e44d9af5b",
+    "runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
     "serving_enabled": true
   },
   "promotion_trigger": {
-    "path": "pilot/m26/m26-pa-7-promotion-trigger.json",
-    "self_sha256": "6ae1c5f86783634e10ad319c36e5aef8cbb4dc0ee5ff6fc1c780f53063f84902",
-    "status": "owner_authorized_single_logical_live_attempt_trigger"
+    "path": "pilot/m26/m26-pa-7-corrected-promotion-trigger.json",
+    "self_sha256": "c278f66e434290eb4f8cd834588fb4e4b315a0368ad55b90a148e33e2521162e",
+    "status": "owner_authorized_single_logical_formal_attempt_trigger"
   },
   "reconciliation": {
     "artifact_archive_digest_verified": true,
-    "current_main_before_reconciliation_pr": "168a403ea5ff69c362009d58382743ad6986850c",
-    "dedicated_issue_number": 1255,
+    "current_main_before_reconciliation_pr": "4a6222bf7be410f1def23a6b15f68091aa2c20bc",
+    "dedicated_issue_number": 1262,
     "m26_closure_authorized": true,
     "no_new_provider_call": true,
-    "no_second_promotion_attempt": true,
+    "no_successful_duplicate_live_run_after_formal_pass": true,
     "receipt_file_digest_verified": true,
     "receipt_schema_verified": true,
     "receipt_self_digest_verified": true,
@@ -167,12 +239,21 @@
     "thresholds_verified": true
   },
   "resolved_gate": {
-    "path": "pilot/m26/m26-pa-7-resolved-production-gate.json",
-    "self_sha256": "6adf0f4fa53d0b061f9e587b72e99ce38de2805f8b35b23841d5a63e44d9af5b",
-    "status": "resolved_owner_authorized_production_gate"
+    "path": "pilot/m26/m26-pa-7-corrected-resolved-production-gate.json",
+    "self_sha256": "667874a2e2873ac7847371b156906c256fab479c494214438b3cf79ca65274c6",
+    "status": "resolved_owner_authorized_formal_product_readiness_gate"
   },
-  "schema_version": "knowledge-engine-m26-pa-7-acceptance/v1",
-  "self_sha256": "c3936e3a4d9f93b398053e3d92294eeb520f2adbaac4b1481896a2c6a1a6afc1",
+  "schema_version": "knowledge-engine-m26-pa-7-corrected-acceptance/v2",
+  "self_sha256": "5358898627ededadd825af8794b27ee8be40d1bb5fb9ffd47e403c89909910ba",
   "stage_id": "M26.PA.7",
-  "status": "m26_pa_7_production_answer_authority_and_closure_accepted"
+  "status": "m26_pa_7_arbitrary_owner_query_product_readiness_accepted",
+  "supersedes_false_positive": {
+    "old_acceptance_path": "pilot/m26/m26-pa-7-acceptance.json",
+    "old_acceptance_self_sha256": "c3936e3a4d9f93b398053e3d92294eeb520f2adbaac4b1481896a2c6a1a6afc1",
+    "old_acceptance_status": "m26_pa_7_production_answer_authority_and_closure_accepted",
+    "old_closure_path": "pilot/m26/m26-pa-7-m26-closure.json",
+    "old_closure_self_sha256": "c68d4fe433856cebfebf7a952b4915d460ddbc71c980baf88d462a39530c690c",
+    "old_closure_status": "m26_closed",
+    "reason": "prior PA.7/M26 closure proved fixed status/control-plane promotion but not arbitrary owner query product readiness"
+  }
 }
