@@ -11,14 +11,14 @@
     "query_set_ids": [
       "cd82eb125ecf147e44f0ebdb425c55f2efa66fb0009742b3195cf0226b5b62b7",
       "47cc5c9b8d085df0aa0b0081008d14e36a8efe444a98e1aad9010fcb00e52261",
-      "de983d6c5b90ea864b5c4dd3266da697ac6c1657cddbcd286459bd0d73683a95",
+      "555a610ad848330fe2904f57065e53976c73db21c28069a1642f50655460304c",
       "f2654b884204aff28c896adbe4a6207c3f8d671a39c20ce18255f5cde661dbda",
       "8db87c490beb8792306fa0613d89568c96a35bec79df1cdc5321541dc6e8301c",
       "36b9932c895cd739fcf204c9cb71aeadb227be211b669f772f2f15813a920346",
       "34762c3bfd2a345e2dd4fadf9799dfc4f3f3ca7c332d429c360de6dd560fce36",
       "95d6ad6e2090aca9edeb09564f96652a53d966eb46880d38b0a26aa1a8f153bc"
     ],
-    "query_set_sha256": "07878f16142dc34c75e95558692921b703c2756a7bf95b863395d7510456116e",
+    "query_set_sha256": "f3d813d6aa77090224dbfdc76d5a948ab686ad1a9d5fc4dd974e95ff29b80087",
     "query_set_source": "M26.PA.7 corrective formal test manifest query digests"
   },
   "budgets": {
@@ -39,7 +39,7 @@
     "secret_persistence": true
   },
   "formal_test_contract_self_sha256": "098bf0a450bfb118c53aec08e7772249083b3a1ae696447d10413053a3fc5b51",
-  "formal_test_manifest_self_sha256": "b9474b5274f598670aa8f4146e2aacb82a8a408f3baf79a78a4c78df843572d7",
+  "formal_test_manifest_self_sha256": "62c14a4076238fd9f6c7424f5eccd555248616866caac5f2ea293bf1e6e073b9",
   "implementation": {
     "base_sha": "34204820c362571ff62ff0824ad0a31fd3457559",
     "expected_head_merge": true,
@@ -91,7 +91,7 @@
     "target_state_digest": "8f12d290c43c316a955bbac8acf0d77cc8840e1015dc446d42130bf4efb5774d"
   },
   "schema_version": "knowledge-engine-m26-pa-7-corrective-resolved-production-gate/v1",
-  "self_sha256": "993e33be92109f7e7d798dec0a2e710ad00b2cdac2d3c6e574956ebde81aa08d",
+  "self_sha256": "667874a2e2873ac7847371b156906c256fab479c494214438b3cf79ca65274c6",
   "slo_thresholds": {
     "answerable_grounded_pass_rate_minimum": 0.8,
     "citation_locator_validity_required": 1.0,

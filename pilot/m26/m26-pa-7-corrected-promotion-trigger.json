@@ -24,7 +24,7 @@
   },
   "corrective_owner_authority_self_sha256": "7521cfa5fc038cb5354aa8b8e7b766ad7544e0c2b160db58735409eaa60d4937",
   "corrective_reopen_self_sha256": "f5412bb39a776e5169c601d3b2d757e212058f215759a4104f0bb79c79c18e8d",
-  "formal_test_manifest_self_sha256": "b9474b5274f598670aa8f4146e2aacb82a8a408f3baf79a78a4c78df843572d7",
+  "formal_test_manifest_self_sha256": "62c14a4076238fd9f6c7424f5eccd555248616866caac5f2ea293bf1e6e073b9",
   "issue_number": 1259,
   "owner_decision_self_sha256": "6506690cb7acc45c378f6399df578a7adbe585a7457a5605105a9d5995cde2aa",
   "promotion_attempt": {
@@ -35,9 +35,9 @@
     "provider_call_cap": 32,
     "request_cap": 8
   },
-  "resolved_gate_self_sha256": "993e33be92109f7e7d798dec0a2e710ad00b2cdac2d3c6e574956ebde81aa08d",
+  "resolved_gate_self_sha256": "667874a2e2873ac7847371b156906c256fab479c494214438b3cf79ca65274c6",
   "schema_version": "knowledge-engine-m26-pa-7-corrective-promotion-trigger/v1",
-  "self_sha256": "5ef19c74e8c59b88a61002ddee119e731021075871908efd3e11be049efb5bf4",
+  "self_sha256": "c278f66e434290eb4f8cd834588fb4e4b315a0368ad55b90a148e33e2521162e",
   "stage_id": "M26.PA.7",
   "status": "owner_authorized_single_logical_formal_attempt_trigger",
   "stop_conditions": [
