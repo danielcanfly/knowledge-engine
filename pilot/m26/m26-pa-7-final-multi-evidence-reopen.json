@@ -1,0 +1,31 @@
+{
+  "authority_boundaries": {
+    "browser_secret_delivery": false,
+    "non_owner_provider_calls": 0,
+    "protected_knowledge_index_content_mutations": 0,
+    "public_or_anonymous_traffic": false,
+    "raw_private_question_persistence": false
+  },
+  "fresh_branch": "codex/m26-pa7-final-multi-evidence-runtime-1264",
+  "handoff_package_zip_sha256": "ea62e54e1fbbd664aa2f8ce1cc7382281f832b96979bb6b7df04809a5fce8984",
+  "m26_closed": false,
+  "main_anchor": "17e22fd103c78499ccc5841b80399437fe8ed1c3",
+  "owner_final_authority_self_sha256": "19a1a5d41f8c935a235631975a225a622e4767e95b80ce23da2ff867c31ba2ce",
+  "remaining_defects": [
+    "single_primary_evidence_bottleneck_in_synthesis_and_verification",
+    "missing_visible_m24_internal_ask_ui_and_owner_api"
+  ],
+  "required_final_status": "m26_pa_7_multi_evidence_web_product_readiness_accepted",
+  "runtime_issue": 1264,
+  "schema_version": "knowledge-engine-m26-pa-7-final-multi-evidence-reopen/v1",
+  "self_sha256": "b5afe0a71ea79bf71f1d63557d6d5e77006b8059b1047f9bc50093b09b468e1d",
+  "stage_id": "M26.PA.7-FINAL-CORRECTIVE",
+  "status": "m26_pa_7_final_multi_evidence_web_completion_reopened",
+  "supersedes_for_final_completion": {
+    "history_deleted": false,
+    "m26_closure_self_sha256": "8557ee70c9693634c20e353bfd82a64088346369ef0a7eba39e4f044d82319f3",
+    "m26_closure_status": "m26_closed",
+    "pa7_acceptance_self_sha256": "5358898627ededadd825af8794b27ee8be40d1bb5fb9ffd47e403c89909910ba",
+    "pa7_acceptance_status": "m26_pa_7_arbitrary_owner_query_product_readiness_accepted"
+  }
+}
