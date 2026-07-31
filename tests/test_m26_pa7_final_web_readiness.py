@@ -357,6 +357,7 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "backend-tunnel-rollback.log" in workflow
     assert "raw_tunnel_url_recorded" in workflow
     assert "getent hosts" in workflow
+    assert 'export M26_QUERY_BACKEND_ORIGIN="$backend_origin"' in workflow
     assert "health_attempts" in workflow
     assert "origin_ca_rsa_root.pem" in workflow
     assert "origin_ca_ecc_root.pem" in workflow

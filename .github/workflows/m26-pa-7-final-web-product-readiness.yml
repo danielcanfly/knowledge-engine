@@ -385,6 +385,7 @@ jobs:
           set -euo pipefail
           backend_origin="${M26_QUERY_BACKEND_URL:-https://$ORACLE_VM_HOST}"
           echo "::add-mask::$backend_origin"
+          export M26_QUERY_BACKEND_ORIGIN="$backend_origin"
           printf 'M26_QUERY_BACKEND_ORIGIN=%s\n' "$backend_origin" >> "$GITHUB_ENV"
 
           tls_trust_profile="system_ca"
