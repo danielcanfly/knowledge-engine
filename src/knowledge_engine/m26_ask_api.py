@@ -182,6 +182,22 @@ def create_app(
     gate_path: Path | None = None,
     require_remote_dense: bool | None = None,
 ) -> FastAPI:
+    app = FastAPI(title="M26 PA7 Owner Ask API", version="1.0.0")
+    return register_m26_ask_routes(
+        app,
+        root=root,
+        gate_path=gate_path,
+        require_remote_dense=require_remote_dense,
+    )
+
+
+def register_m26_ask_routes(
+    app: FastAPI,
+    *,
+    root: Path | None = None,
+    gate_path: Path | None = None,
+    require_remote_dense: bool | None = None,
+) -> FastAPI:
     app_root = (root or Path(os.environ.get("KNOWLEDGE_ENGINE_ROOT", "."))).resolve()
     resolved_gate_path = (
         gate_path
@@ -194,7 +210,6 @@ def create_app(
         if require_remote_dense is not None
         else os.environ.get("M26_QUERY_REQUIRE_REMOTE_DENSE", "").lower() == "true"
     )
-    app = FastAPI(title="M26 PA7 Owner Ask API", version="1.0.0")
 
     @app.get("/api/m26/health")
     async def health(request: Request) -> dict[str, Any]:

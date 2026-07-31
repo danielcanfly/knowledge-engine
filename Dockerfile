@@ -9,6 +9,7 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY src ./src
+COPY pilot ./pilot
 RUN python -m pip install --upgrade pip && python -m pip install .
 
 RUN mkdir -p /var/lib/knowledge-engine/cache && \

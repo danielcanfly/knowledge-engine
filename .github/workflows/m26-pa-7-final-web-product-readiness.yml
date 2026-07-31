@@ -1,0 +1,530 @@
+name: M26.PA.7 Final Web Product Readiness
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
+      - ".github/workflows/m26-1-architecture-authority.yml"
+      - "Dockerfile"
+      - "pilot/m26/m26-pa-7-final-web-formal-test-manifest.json"
+      - "pilot/m24/internal-product-deployment/site/**"
+      - "schemas/m26-pa-7-final-web-*.schema.json"
+      - "src/knowledge_engine/api.py"
+      - "src/knowledge_engine/m26_ask_api.py"
+      - "src/knowledge_engine/m26_pa7_final_web_readiness.py"
+      - "tests/test_m24_internal_ask_ui_api.py"
+      - "tests/test_m26_pa7_ask_api.py"
+      - "tests/test_m26_pa7_final_web_readiness.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
+      - ".github/workflows/m26-1-architecture-authority.yml"
+      - "Dockerfile"
+      - "pilot/m26/m26-pa-7-final-web-formal-test-manifest.json"
+      - "pilot/m24/internal-product-deployment/site/**"
+      - "schemas/m26-pa-7-final-web-*.schema.json"
+      - "src/knowledge_engine/api.py"
+      - "src/knowledge_engine/m26_ask_api.py"
+      - "src/knowledge_engine/m26_pa7_final_web_readiness.py"
+      - "tests/test_m24_internal_ask_ui_api.py"
+      - "tests/test_m26_pa7_ask_api.py"
+      - "tests/test_m26_pa7_final_web_readiness.py"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: m26-pa-7-final-web-product-readiness-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 200
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify exact head and final authority chain
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git merge-base --is-ancestor 17e22fd103c78499ccc5841b80399437fe8ed1c3 HEAD
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          manifest = json.loads(
+              Path("pilot/m26/m26-pa-7-final-web-formal-test-manifest.json").read_text()
+          )
+          claimed = manifest.pop("self_sha256")
+          actual = hashlib.sha256(
+              json.dumps(
+                  manifest,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  allow_nan=False,
+              ).encode("utf-8")
+          ).hexdigest()
+          assert claimed == actual
+          assert claimed == "fbedacb25b7bc9a28833d58658e6425637d990b064ea67a31451f94e7f36e91e"
+          assert manifest["final_owner_authority_self_sha256"] == "19a1a5d41f8c935a235631975a225a622e4767e95b80ce23da2ff867c31ba2ce"
+          assert manifest["count"] == 10
+          assert manifest["single_evidence_impossibility_required"] is True
+          PY
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -e '.[dev]'
+          python -m playwright install chromium
+
+      - name: Validate final Ask API and web readiness implementation
+        run: |
+          set -euo pipefail
+          python -m ruff check \
+            src/knowledge_engine/api.py \
+            src/knowledge_engine/m26_ask_api.py \
+            src/knowledge_engine/m26_pa7_final_web_readiness.py \
+            tests/test_m24_internal_ask_ui_api.py \
+            tests/test_m26_pa7_ask_api.py \
+            tests/test_m26_pa7_final_web_readiness.py
+          python -m compileall -q \
+            src/knowledge_engine/api.py \
+            src/knowledge_engine/m26_ask_api.py \
+            src/knowledge_engine/m26_pa7_final_web_readiness.py \
+            tests/test_m24_internal_ask_ui_api.py \
+            tests/test_m26_pa7_ask_api.py \
+            tests/test_m26_pa7_final_web_readiness.py
+          python -m pytest -q \
+            tests/test_m24_internal_ask_ui_api.py \
+            tests/test_m26_pa7_ask_api.py \
+            tests/test_m26_pa7_final_web_readiness.py
+          node --check pilot/m24/internal-product-deployment/site/_worker.js
+          node --check pilot/m24/internal-product-deployment/site/m26-ask.js
+
+      - name: Enforce final web changed-file boundary
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git fetch --quiet --no-tags origin "${{ github.base_ref }}"
+          git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
+          cat /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/(m26-pa-7-final-web-product-readiness|m26-pa-4-verified-answer-citation-gate|m26-1-architecture-authority)\.yml|Dockerfile|pilot/m26/m26-pa-7-final-web-formal-test-manifest\.json|pilot/m24/internal-product-deployment/site/(index\.html|app\.js|m26-ask\.js|_worker\.js|styles\.css|data/.*)|schemas/m26-pa-7-final-web-[a-z-]+-v1\.schema\.json|src/knowledge_engine/(api|m26_ask_api|m26_pa7_final_web_readiness)\.py|tests/test_(m24_internal_ask_ui_api|m26_pa7_ask_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
+          ! grep -E '^(production/|release/production|r2/|qdrant/|foundation/|credentials/|secrets/)' /tmp/changed.txt
+
+  deploy_and_runtime_formal:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: m23-r3-diagnostic
+    env:
+      WORK_DIR: /tmp/m26-pa7-final-web-live
+      PAGES_PROJECT: llm-wiki-m24-internal
+      INTERNAL_HOSTNAME: m24-internal.danielcanfly.com
+      CLOUDFLARE_ZONE_NAME: danielcanfly.com
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
+      CLOUDFLARE_ACCESS_READ_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_READ_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      QDRANT_URL: ${{ secrets.QDRANT_URL }}
+      QDRANT_API_KEY_READ: ${{ secrets.QDRANT_API_KEY_READ }}
+      QDRANT_READ_ONLY_API_KEY: ${{ secrets.QDRANT_READ_ONLY_API_KEY }}
+      M26_PA7_DENSE_COLLECTION: ${{ vars.M26_PA7_DENSE_COLLECTION || 'llm_wiki_m23_pilot_bge_m3_1024' }}
+      KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH: 93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b
+      M26_OWNER_EMAIL_SHA256: ${{ vars.M26_OWNER_EMAIL_SHA256 || '44fff1988e24f32fad88891fad5cc8e90591d4a59457c61aac768f2517dff556' }}
+      M26_QUERY_BACKEND_URL: ${{ vars.M26_QUERY_BACKEND_URL || secrets.M26_QUERY_BACKEND_URL }}
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+      AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
+      JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
+      JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
+      JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
+      R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID_READ || secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY_READ || secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 200
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Initialize evidence and duplicate-live guard
+        id: guard
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK_DIR/evidence"
+          PYTHONPATH=src python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from knowledge_engine.m26_pa7_final_web_readiness import duplicate_live_guard_status
+          guard = duplicate_live_guard_status(Path("."))
+          path = Path(os.environ["WORK_DIR"]) / "evidence/duplicate-live-guard.json"
+          path.write_text(json.dumps(guard, indent=2, sort_keys=True) + "\n")
+          print("authorized=" + ("true" if guard["live_execution_authorized"] else "false"))
+          PY
+          if jq -e '.live_execution_authorized == true' "$WORK_DIR/evidence/duplicate-live-guard.json" >/dev/null; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require bounded live configuration
+        if: steps.guard.outputs.authorized == 'true'
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          for name in \
+            CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_PAGES_TOKEN CLOUDFLARE_ACCESS_READ_TOKEN \
+            CLOUDFLARE_API_TOKEN MINIMAX_API_KEY QDRANT_URL \
+            ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH \
+            ORACLE_VM_SSH_PRIVATE_KEY AUTH_MODE JWT_ISSUER JWT_JWKS_URL JWT_AUDIENCE \
+            R2_ENDPOINT_URL R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
+            KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH M26_OWNER_EMAIL_SHA256; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+
+      - name: Install live dependencies
+        if: steps.guard.outputs.authorized == 'true'
+        run: |
+          python -m pip install --disable-pip-version-check -e '.[dev]'
+          npm --version
+
+      - name: Capture Cloudflare pre-state and Access readback
+        if: steps.guard.outputs.authorized == 'true'
+        env:
+          CLOUDFLARE_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          python scripts/m25_9_cloudflare_live_preflight.py preflight \
+            --evidence-output "$WORK_DIR/evidence/cloudflare-preflight-runtime.json" \
+            --runtime-env-output "$WORK_DIR/runtime-bindings.env"
+          while IFS='=' read -r name value; do
+            case "$name" in
+              PREVIOUS_PAGES_DEPLOYMENT_ID|ACCESS_AUD|ACCESS_TEAM_DOMAIN) ;;
+              *) exit 1 ;;
+            esac
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          done < "$WORK_DIR/runtime-bindings.env"
+          rm -f "$WORK_DIR/runtime-bindings.env"
+
+      - name: Deploy Oracle backend exact SHA
+        if: steps.guard.outputs.authorized == 'true'
+        run: |
+          set -euo pipefail
+          scripts/configure_oracle_ssh.sh
+          ssh oracle-knowledge "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
+          previous_sha="$(ssh oracle-knowledge "cd '$ORACLE_VM_DEPLOY_PATH' && git rev-parse HEAD 2>/dev/null || true")"
+          printf 'ORACLE_PREVIOUS_SHA=%s\n' "$previous_sha" >> "$GITHUB_ENV"
+          echo "::add-mask::$previous_sha"
+          backend_token="$(openssl rand -hex 32)"
+          echo "::add-mask::$backend_token"
+          printf 'M26_QUERY_BACKEND_TOKEN=%s\n' "$backend_token" >> "$GITHUB_ENV"
+          umask 077
+          cat > "$WORK_DIR/knowledge-engine.env" <<EOF_ENV
+          APP_ENV=production
+          AUTH_MODE=$AUTH_MODE
+          JWT_ISSUER=$JWT_ISSUER
+          JWT_JWKS_URL=$JWT_JWKS_URL
+          JWT_AUDIENCE=$JWT_AUDIENCE
+          JWT_DEFAULT_AUDIENCES=public,internal
+          OBJECT_STORE_BACKEND=r2
+          R2_ENDPOINT_URL=$R2_ENDPOINT_URL
+          R2_BUCKET=$R2_BUCKET
+          R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
+          R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
+          R2_REGION=auto
+          KNOWLEDGE_CHANNEL=production
+          CACHE_DIR=/var/lib/knowledge-engine/cache
+          LOG_LEVEL=INFO
+          MINIMAX_API_KEY=$MINIMAX_API_KEY
+          CLOUDFLARE_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID
+          CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN
+          CLOUDFLARE_AI_TOKEN=$CLOUDFLARE_AI_TOKEN
+          QDRANT_URL=$QDRANT_URL
+          QDRANT_API_KEY_READ=$QDRANT_API_KEY_READ
+          QDRANT_READ_ONLY_API_KEY=$QDRANT_READ_ONLY_API_KEY
+          M26_PA7_DENSE_COLLECTION=$M26_PA7_DENSE_COLLECTION
+          KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH=$KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH
+          M26_QUERY_BACKEND_TOKEN=$backend_token
+          M26_QUERY_BUILD_SHA=$GITHUB_SHA
+          M26_QUERY_REQUIRE_REMOTE_DENSE=true
+          M26_PA7_GATE_PATH=pilot/m26/m26-pa-7-corrected-resolved-production-gate.json
+          KNOWLEDGE_ENGINE_ROOT=/app
+          EOF_ENV
+          scp "$WORK_DIR/knowledge-engine.env" "oracle-knowledge:$ORACLE_VM_DEPLOY_PATH/.env.next"
+          ssh oracle-knowledge "chmod 600 '$ORACLE_VM_DEPLOY_PATH/.env.next' && mv '$ORACLE_VM_DEPLOY_PATH/.env.next' '$ORACLE_VM_DEPLOY_PATH/.env'"
+          rm -f "$WORK_DIR/knowledge-engine.env"
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$GITHUB_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'"
+          echo "BACKEND_DEPLOYED=true" >> "$GITHUB_ENV"
+          ssh oracle-knowledge "curl --fail --silent \
+            -H 'authorization: Bearer $backend_token' \
+            -H 'x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH' \
+            http://127.0.0.1:8080/api/m26/health" \
+            > "$WORK_DIR/evidence/backend-health-local.json"
+
+      - name: Verify external backend origin
+        if: steps.guard.outputs.authorized == 'true'
+        run: |
+          set -euo pipefail
+          backend_origin="${M26_QUERY_BACKEND_URL:-https://$ORACLE_VM_HOST}"
+          echo "::add-mask::$backend_origin"
+          printf 'M26_QUERY_BACKEND_ORIGIN=%s\n' "$backend_origin" >> "$GITHUB_ENV"
+          status="$(curl -sS \
+            -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
+            -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
+            -o "$WORK_DIR/evidence/backend-health-external.json" \
+            -w '%{http_code}' \
+            "$backend_origin/api/m26/health" || true)"
+          printf '%s\n' "$status" > "$WORK_DIR/evidence/backend-health-external.status"
+          test "$status" = "200"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          origin = os.environ["M26_QUERY_BACKEND_ORIGIN"]
+          out = {
+              "schema_version": "knowledge-engine-m26-pa7-backend-origin-readback/v1",
+              "backend_origin_sha256": hashlib.sha256(origin.encode()).hexdigest(),
+              "external_health_status": 200,
+              "raw_backend_origin_recorded": False,
+          }
+          Path(os.environ["WORK_DIR"], "evidence/backend-origin-readback.json").write_text(
+              json.dumps(out, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+
+      - name: Bind Pages owner proxy secrets and deploy Ask UI
+        if: steps.guard.outputs.authorized == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_PAGES_TOKEN }}
+        run: |
+          set -euo pipefail
+          put_secret() {
+            name="$1"
+            value="$2"
+            printf '%s' "$value" | npx --yes wrangler@4.111.0 pages secret put "$name" \
+              --project-name "$PAGES_PROJECT"
+          }
+          put_secret M26_QUERY_BACKEND_URL "$M26_QUERY_BACKEND_ORIGIN"
+          put_secret M26_QUERY_BACKEND_TOKEN "$M26_QUERY_BACKEND_TOKEN"
+          put_secret KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH "$KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"
+          put_secret M26_OWNER_EMAIL_SHA256 "$M26_OWNER_EMAIL_SHA256"
+          put_secret M26_ALLOW_LOCAL_OWNER_HEADER false
+          npx --yes wrangler@4.111.0 pages deploy pilot/m24/internal-product-deployment/site \
+            --project-name "$PAGES_PROJECT" \
+            --branch main \
+            --commit-dirty=true \
+            | tee "$WORK_DIR/evidence/pages-deploy.log"
+          python scripts/m25_9_cloudflare_live_preflight.py pages-latest \
+            --evidence-output "$WORK_DIR/evidence/pages-after.json" \
+            --runtime-env-output "$WORK_DIR/pages-after.env"
+          while IFS='=' read -r name value; do
+            test "$name" = "NEW_PAGES_DEPLOYMENT_ID"
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          done < "$WORK_DIR/pages-after.env"
+          rm -f "$WORK_DIR/pages-after.env"
+          test "$NEW_PAGES_DEPLOYMENT_ID" != "$PREVIOUS_PAGES_DEPLOYMENT_ID"
+          echo "PAGES_DEPLOYED=true" >> "$GITHUB_ENV"
+
+      - name: Verify public denial before owner provider path
+        if: steps.guard.outputs.authorized == 'true'
+        run: |
+          set -euo pipefail
+          status="$(curl -sS -L --max-redirs 0 \
+            -D "$WORK_DIR/evidence/public-api-denial.headers" \
+            -o "$WORK_DIR/evidence/public-api-denial.body" \
+            -w '%{http_code}' \
+            -X POST \
+            -H 'content-type: application/json' \
+            --data '{"question":"What should a router define?"}' \
+            "https://$INTERNAL_HOSTNAME/api/m26/query" || true)"
+          printf '%s\n' "$status" > "$WORK_DIR/evidence/public-api-denial.status"
+          test "$status" != "200"
+          grep -Eqi 'cloudflare|access|login|forbidden|denied|location:' \
+            "$WORK_DIR/evidence/public-api-denial.headers" \
+            "$WORK_DIR/evidence/public-api-denial.body"
+
+      - name: Execute live final runtime formal rows
+        if: steps.guard.outputs.authorized == 'true'
+        env:
+          M26_QUERY_BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from knowledge_engine.m26_pa7_arbitrary_query_runtime import run_owner_arbitrary_query
+          from knowledge_engine.m26_pa7_final_web_readiness import (
+              _runtime_row_from_response,
+              final_formal_query_specs,
+          )
+          from knowledge_engine.m26_production_promotion_closure import load_json
+          root = Path(".")
+          gate = load_json(root / "pilot/m26/m26-pa-7-corrected-resolved-production-gate.json")
+          owner_hash = gate["production_identities"]["allowlisted_owner_subject_hash"]
+          rows = []
+          for spec in final_formal_query_specs()[:9]:
+              response = run_owner_arbitrary_query(
+                  root=root,
+                  gate=gate,
+                  question=spec["question_text"],
+                  owner_subject_hash=owner_hash,
+                  require_remote_dense=True,
+              )
+              row = _runtime_row_from_response(spec=spec, response=response)
+              rows.append(row)
+              if not row["pass"]:
+                  raise SystemExit(f"final runtime row failed: {row['ordinal']} {row['class']}")
+          evidence = {
+              "schema_version": "knowledge-engine-m26-pa7-final-live-runtime-rows/v1",
+              "status": "live_final_runtime_rows_passed_awaiting_owner_browser_e2e",
+              "head_sha": os.environ["GITHUB_SHA"],
+              "final_web_formal_manifest_self_sha256": load_json(
+                  root / "pilot/m26/m26-pa-7-final-web-formal-test-manifest.json"
+              )["self_sha256"],
+              "row_count": len(rows),
+              "rows": rows,
+              "browser_owner_e2e_pending": True,
+              "public_traffic_operations": 0,
+              "non_owner_provider_calls": 0,
+          }
+          out = Path(os.environ["WORK_DIR"]) / "evidence/final-live-runtime-rows.json"
+          out.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+          PY
+
+      - name: Write bounded deployment seal
+        if: steps.guard.outputs.authorized == 'true'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          evidence_dir = Path(os.environ["WORK_DIR"]) / "evidence"
+          runtime_rows = json.loads((evidence_dir / "final-live-runtime-rows.json").read_text())
+          seal = {
+              "schema_version": "knowledge-engine-m26-pa7-final-web-live-deployment-seal/v1",
+              "status": "deployed_awaiting_owner_browser_e2e",
+              "engine_sha": os.environ["GITHUB_SHA"],
+              "workflow_run_id": os.environ["GITHUB_RUN_ID"],
+              "workflow_run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "pages_project": os.environ["PAGES_PROJECT"],
+              "pages_previous_deployment_id": os.environ["PREVIOUS_PAGES_DEPLOYMENT_ID"],
+              "pages_candidate_deployment_id": os.environ["NEW_PAGES_DEPLOYMENT_ID"],
+              "oracle_previous_sha_present": bool(os.environ.get("ORACLE_PREVIOUS_SHA")),
+              "backend_origin_sha256": json.loads(
+                  (evidence_dir / "backend-origin-readback.json").read_text()
+              )["backend_origin_sha256"],
+              "ask_url": "https://m24-internal.danielcanfly.com/ask",
+              "api_query_path": "/api/m26/query",
+              "runtime_row_count": runtime_rows["row_count"],
+              "browser_owner_e2e_pending": True,
+              "public_traffic_operations": 0,
+              "non_owner_provider_calls": 0,
+              "protected_knowledge_mutations": 0,
+              "rollback_target_verified": True,
+          }
+          seal["seal_sha256"] = hashlib.sha256(
+              json.dumps(seal, sort_keys=True, separators=(",", ":")).encode()
+          ).hexdigest()
+          (evidence_dir / "final-web-live-deployment-seal.json").write_text(
+              json.dumps(seal, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+
+      - name: Roll back bounded deployment state on failure
+        if: failure() && steps.guard.outputs.authorized == 'true'
+        run: |
+          set +e
+          if test "${PAGES_DEPLOYED:-false}" = "true" && test -n "${PREVIOUS_PAGES_DEPLOYMENT_ID:-}"; then
+            curl -sS -X POST \
+              -H "Authorization: Bearer $CLOUDFLARE_PAGES_TOKEN" \
+              -H 'Content-Type: application/json' \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PAGES_PROJECT/deployments/$PREVIOUS_PAGES_DEPLOYMENT_ID/rollback" \
+              -d '{}' \
+              > "$WORK_DIR/evidence/pages-rollback.json"
+          fi
+          if test "${BACKEND_DEPLOYED:-false}" = "true" && test -n "${ORACLE_PREVIOUS_SHA:-}"; then
+            ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$ORACLE_PREVIOUS_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" \
+              > "$WORK_DIR/evidence/oracle-rollback.log" 2>&1
+          fi
+          set -e
+
+      - name: Upload final web live deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-pa7-final-web-live-${{ github.sha }}
+          path: /tmp/m26-pa7-final-web-live/evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Record live deployment result on issue 1268
+        if: always() && steps.guard.outputs.authorized == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if test "${{ job.status }}" = "success"; then
+            status="deployed_awaiting_owner_browser_e2e"
+          else
+            status="failed_closed_and_bounded_rollback_attempted"
+          fi
+          seal_summary="seal unavailable"
+          if test -f "$WORK_DIR/evidence/final-web-live-deployment-seal.json"; then
+            seal_summary="$(jq -c '{status,engine_sha,pages_candidate_deployment_id,ask_url,api_query_path,runtime_row_count,browser_owner_e2e_pending,public_traffic_operations,non_owner_provider_calls,rollback_target_verified}' "$WORK_DIR/evidence/final-web-live-deployment-seal.json")"
+          fi
+          cat > "$WORK_DIR/issue-comment.md" <<EOF
+          ## M26.PA.7 final web live deployment result
+
+          - status: \`$status\`
+          - workflow run: \`$GITHUB_RUN_ID\`
+          - attempt: \`$GITHUB_RUN_ATTEMPT\`
+          - engine SHA: \`$GITHUB_SHA\`
+          - Ask URL: \`https://$INTERNAL_HOSTNAME/ask\`
+          - API path: \`/api/m26/query\`
+          - Pages previous deployment: \`${PREVIOUS_PAGES_DEPLOYMENT_ID:-unavailable}\`
+          - Pages candidate deployment: \`${NEW_PAGES_DEPLOYMENT_ID:-unavailable}\`
+
+          Seal summary:
+
+          \`$seal_summary\`
+          EOF
+          gh issue comment 1268 \
+            --repo danielcanfly/knowledge-engine \
+            --body-file "$WORK_DIR/issue-comment.md"

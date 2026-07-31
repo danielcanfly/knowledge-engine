@@ -1,0 +1,109 @@
+{
+  "$id": "knowledge-engine/m26-pa-7-final-web-product-readiness-receipt-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "canonical_runtime": {
+      "additionalProperties": true,
+      "properties": {
+        "entrypoint": {
+          "const": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+        }
+      },
+      "required": [
+        "entrypoint"
+      ],
+      "type": "object"
+    },
+    "final_acceptance_status_on_success": {
+      "const": "m26_pa_7_multi_evidence_web_product_readiness_accepted"
+    },
+    "final_owner_authority_self_sha256": {
+      "const": "19a1a5d41f8c935a235631975a225a622e4767e95b80ce23da2ff867c31ba2ce"
+    },
+    "formal": {
+      "additionalProperties": true,
+      "properties": {
+        "query_count": {
+          "minimum": 10,
+          "type": "integer"
+        },
+        "rows": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "class": {
+                "type": "string"
+              },
+              "ordinal": {
+                "minimum": 1,
+                "maximum": 10,
+                "type": "integer"
+              },
+              "pass": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "class",
+              "ordinal",
+              "pass"
+            ],
+            "type": "object"
+          },
+          "minItems": 10,
+          "type": "array"
+        }
+      },
+      "required": [
+        "query_count",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "metrics": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "privacy": {
+      "additionalProperties": {
+        "const": false
+      },
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "knowledge-engine-m26-pa-7-final-web-product-readiness-receipt/v1"
+    },
+    "self_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "slo_pass": {
+      "type": "boolean"
+    },
+    "stage_id": {
+      "const": "M26.PA.7-FINAL-WEB"
+    },
+    "status": {
+      "enum": [
+        "test_fixture_only_final_web_readiness_receipt",
+        "live_final_web_readiness_receipt_pending_reconciliation",
+        "live_final_web_readiness_failed_closed_receipt"
+      ]
+    }
+  },
+  "required": [
+    "canonical_runtime",
+    "final_acceptance_status_on_success",
+    "final_owner_authority_self_sha256",
+    "formal",
+    "metrics",
+    "privacy",
+    "schema_version",
+    "self_sha256",
+    "slo_pass",
+    "stage_id",
+    "status"
+  ],
+  "type": "object"
+}

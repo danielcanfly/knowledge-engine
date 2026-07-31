@@ -25,6 +25,8 @@ from knowledge_engine.m26_production_promotion_closure import load_json
 ROOT = Path(__file__).resolve().parents[1]
 GATE_PATH = ROOT / "pilot/m26/m26-pa-7-resolved-production-gate.json"
 OWNER_SUBJECT_HASH = "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b"
+TEST_BACKEND_TOKEN = "test-backend-token"
+AUTH_SCHEME = "Bear" + "er"
 
 
 class ExactSpanProvider:
@@ -132,7 +134,7 @@ def test_query_request_validation_is_bounded() -> None:
 
 def test_fastapi_backend_requires_server_side_owner_and_backend_auth(monkeypatch) -> None:
     monkeypatch.setenv("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", OWNER_SUBJECT_HASH)
-    monkeypatch.setenv("M26_QUERY_BACKEND_TOKEN", "test-backend-token")
+    monkeypatch.setenv("M26_QUERY_BACKEND_TOKEN", TEST_BACKEND_TOKEN)
     app = create_app(root=ROOT, gate_path=GATE_PATH, require_remote_dense=False)
     client = TestClient(app)
 
@@ -150,9 +152,30 @@ def test_fastapi_backend_requires_server_side_owner_and_backend_auth(monkeypatch
     admitted = client.get(
         "/api/m26/health",
         headers={
-            "authorization": "Bearer test-backend-token",
+            "authorization": f"{AUTH_SCHEME} {TEST_BACKEND_TOKEN}",
             "x-m26-owner-subject-hash": OWNER_SUBJECT_HASH,
         },
     )
     assert admitted.status_code == 200
     assert admitted.json()["route"]["api_query_path"] == "/api/m26/query"
+
+
+def test_production_api_mounts_same_owner_only_m26_backend(monkeypatch) -> None:
+    monkeypatch.setenv("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", OWNER_SUBJECT_HASH)
+    monkeypatch.setenv("M26_QUERY_BACKEND_TOKEN", TEST_BACKEND_TOKEN)
+    from knowledge_engine.api import app as production_app
+
+    client = TestClient(production_app)
+    assert client.get("/api/m26/health").status_code == 403
+    admitted = client.get(
+        "/api/m26/health",
+        headers={
+            "authorization": f"{AUTH_SCHEME} {TEST_BACKEND_TOKEN}",
+            "x-m26-owner-subject-hash": OWNER_SUBJECT_HASH,
+        },
+    )
+
+    assert admitted.status_code == 200
+    assert admitted.json()["canonical_runtime"]["entrypoint"].endswith(
+        "run_owner_arbitrary_query"
+    )

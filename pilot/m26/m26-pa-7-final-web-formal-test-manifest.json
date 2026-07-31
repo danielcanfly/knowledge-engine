@@ -1,0 +1,161 @@
+{
+  "browser_suite": {
+    "ask_url": "https://m24-internal.danielcanfly.com/ask",
+    "required_dom_evidence": [
+      "visible_ask_navigation",
+      "textarea_usable",
+      "submit_usable",
+      "answer_citations_sources_trace_rendered",
+      "sanitized_screenshots"
+    ],
+    "required_questions": [
+      "direct_grounded_answer",
+      "cross_document_comparison",
+      "graph_relationship",
+      "safe_abstention"
+    ]
+  },
+  "budgets": {
+    "formal_rows_minimum": 10,
+    "p95_latency_ms_maximum": 30000,
+    "p99_latency_ms_maximum": 60000,
+    "payg_equivalent_cost_usd_cap": "1.50",
+    "provider_call_cap": 96
+  },
+  "classes": {
+    "browser_owner_e2e": 1,
+    "complementary_synthesis": 1,
+    "conflict_temporal_freshness": 1,
+    "cross_document_comparison": 1,
+    "direct_grounded_knowledge": 2,
+    "graph_relationship_navigation": 1,
+    "no_answer": 1,
+    "prompt_injection_privacy": 1,
+    "provenance_source_trace": 1
+  },
+  "corrective_owner_authority_self_sha256": "7521cfa5fc038cb5354aa8b8e7b766ad7544e0c2b160db58735409eaa60d4937",
+  "corrective_reopen_self_sha256": "f5412bb39a776e5169c601d3b2d757e212058f215759a4104f0bb79c79c18e8d",
+  "count": 10,
+  "deployment_issue": 1268,
+  "final_multi_evidence_reopen_self_sha256": "b5afe0a71ea79bf71f1d63557d6d5e77006b8059b1047f9bc50093b09b468e1d",
+  "final_owner_authority_self_sha256": "19a1a5d41f8c935a235631975a225a622e4767e95b80ce23da2ff867c31ba2ce",
+  "implementation_merge_sha": "435327d673d51f738e30267216c73ca54bc8fe19",
+  "privacy": {
+    "browser_suite_rows": 1,
+    "hash_only_rows": 8,
+    "non_sensitive_operator_demo_rows": 1,
+    "private_owner_queries_persisted": 0
+  },
+  "queries": [
+    {
+      "answerable": true,
+      "browser_suite": false,
+      "class": "direct_grounded_knowledge",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_ui_api_merge": true,
+      "non_sensitive_operator_demo": true,
+      "ordinal": 1,
+      "question_sha256": "cd82eb125ecf147e44f0ebdb425c55f2efa66fb0009742b3195cf0226b5b62b7",
+      "question_text": "What should a router define for permission-first controls?"
+    },
+    {
+      "answerable": true,
+      "browser_suite": false,
+      "class": "direct_grounded_knowledge",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_ui_api_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 2,
+      "question_sha256": "47cc5c9b8d085df0aa0b0081008d14e36a8efe444a98e1aad9010fcb00e52261"
+    },
+    {
+      "answerable": true,
+      "browser_suite": false,
+      "class": "cross_document_comparison",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_ui_api_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 3,
+      "question_sha256": "555a610ad848330fe2904f57065e53976c73db21c28069a1642f50655460304c"
+    },
+    {
+      "answerable": true,
+      "browser_suite": false,
+      "class": "complementary_synthesis",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_ui_api_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 4,
+      "question_sha256": "b5e91bbfd3bcfad322e20d3326f82bac2bad513009b5d4d85511528195f0185f"
+    },
+    {
+      "answerable": true,
+      "browser_suite": false,
+      "class": "graph_relationship_navigation",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_ui_api_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 5,
+      "question_sha256": "5f04d07f3358c903c182f247f639f86e7e6ae2741d623bf8325aa0675ff9dd0e"
+    },
+    {
+      "answerable": true,
+      "browser_suite": false,
+      "class": "provenance_source_trace",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_ui_api_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 6,
+      "question_sha256": "9a349d81c5006ee81a600730fd88b09f22631fb3eac9a70c08005ae054a4e522"
+    },
+    {
+      "answerable": true,
+      "browser_suite": false,
+      "class": "conflict_temporal_freshness",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_ui_api_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 7,
+      "question_sha256": "e4e4c071beee36adc14a03e2ad0fa2b9f5472c63d0498035a18ee2f356a854d9"
+    },
+    {
+      "answerable": false,
+      "browser_suite": false,
+      "class": "no_answer",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_ui_api_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 8,
+      "question_sha256": "34762c3bfd2a345e2dd4fadf9799dfc4f3f3ca7c332d429c360de6dd560fce36"
+    },
+    {
+      "answerable": false,
+      "browser_suite": false,
+      "class": "prompt_injection_privacy",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_ui_api_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 9,
+      "question_sha256": "95d6ad6e2090aca9edeb09564f96652a53d966eb46880d38b0a26aa1a8f153bc"
+    },
+    {
+      "answerable": true,
+      "browser_suite": true,
+      "class": "browser_owner_e2e",
+      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "generated_after_ui_api_merge": true,
+      "non_sensitive_operator_demo": false,
+      "ordinal": 10,
+      "question_sha256": "372dff289444a32e3db88b9e25579ba908041e87934c11b65ebfb9166b388451"
+    }
+  ],
+  "query_set_sha256": "b7a18216ac8337c283e48b152eef45691f8c5fe4e3b7ac779eff19a8fe42506c",
+  "required_browser_rows": 1,
+  "required_runtime_rows": 9,
+  "schema_version": "knowledge-engine-m26-pa-7-final-web-formal-test-manifest/v1",
+  "self_sha256": "fbedacb25b7bc9a28833d58658e6425637d990b064ea67a31451f94e7f36e91e",
+  "single_evidence_impossibility_required": true,
+  "stage_id": "M26.PA.7-FINAL-WEB",
+  "status": "final_web_formal_test_manifest_frozen",
+  "ui_api_merge_sha": "1daf00eafd12963d77bcc8f455eb4f41db05cdc6"
+}
