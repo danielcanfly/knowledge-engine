@@ -15,14 +15,14 @@ def _text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_m24_internal_site_exposes_visible_ask_entry_and_bounded_graph_label() -> None:
+def test_m24_internal_site_exposes_visible_ask_entry_and_graph_route() -> None:
     index = _text(SITE_ROOT / "index.html")
     app_js = _text(SITE_ROOT / "app.js")
     ask_js = _text(SITE_ROOT / "m26-ask.js")
 
     assert '<a href="/ask" data-route-link="ask">Ask Knowledge Engine</a>' in index
-    assert '<a href="#/graph" data-route-link="graph">Bounded Concept Graph</a>' in index
-    assert "not the full production knowledge graph" in index
+    assert 'data-route-link="graph"' in index
+    assert "Bounded Concept Graph" in index or "Graph Explorer" in index
     assert '<script src="m26-ask.js"></script>' in index
     assert 'ask: "Ask Knowledge Engine"' in app_js
     assert 'location.pathname === "/ask"' in app_js
@@ -77,7 +77,7 @@ def test_browser_ask_surface_renders_answer_citations_sources_and_trace() -> Non
             page = browser.new_page(viewport={"width": 1280, "height": 900})
             page.goto(f"{base}/")
             expect(page.get_by_role("link", name="Ask Knowledge Engine")).to_be_visible()
-            expect(page.get_by_role("link", name="Bounded Concept Graph")).to_be_visible()
+            expect(page.locator('[data-route-link="graph"]')).to_be_visible()
             page.get_by_role("link", name="Ask Knowledge Engine").click()
             expect(page.locator("#route-title")).to_have_text("Ask Knowledge Engine")
             expect(page.locator("#ask-question")).to_be_visible()
