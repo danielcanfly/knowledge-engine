@@ -25,6 +25,7 @@ jobs:
       PAGES_PROJECT: llm-wiki-m24-internal
       SITE_DIR: pilot/m24/internal-product-deployment/site
       EXPECTED_BACKEND_SHA: 7e01348fa68e599108c70528183be501f29c5c3e
+      RESYNC_TRIGGER_BUMP: "2026-08-01T16:15:00+07:00"
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
       CLOUDFLARE_FALLBACK_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -63,6 +64,7 @@ jobs:
           grep -F 'm26-title-guard.js?v=pa7-title-cache-guard-20260801' "$SITE_DIR/index.html"
           printf '%s\n' "$EXPECTED_BACKEND_SHA" > "$WORK_DIR/evidence/expected-backend-sha.txt"
           printf '%s\n' "$GITHUB_SHA" > "$WORK_DIR/evidence/resync-workflow-sha.txt"
+          printf '%s\n' "$RESYNC_TRIGGER_BUMP" > "$WORK_DIR/evidence/resync-trigger-bump.txt"
 
       - name: Verify Oracle backend current health and token source
         run: |
