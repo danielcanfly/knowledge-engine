@@ -340,11 +340,26 @@ jobs:
           )
           PY
               rm -f "$WORK_DIR/backend-named-tunnel.err"
-              python scripts/m26_pa7_durable_backend_origin.py oracle-https \
-                --hostname "$ORACLE_VM_HOST" \
-                --evidence-output "$WORK_DIR/evidence/backend-oracle-https-origin.json" \
-                --runtime-env-output "$WORK_DIR/backend-oracle-https-origin.env"
-              backend_origin_env="$WORK_DIR/backend-oracle-https-origin.env"
+              if python - "$ORACLE_VM_HOST" <<'PY'
+          import ipaddress
+          import sys
+          ipaddress.ip_address(sys.argv[1])
+          PY
+              then
+                python scripts/m26_pa7_durable_backend_origin.py cloudflare-dns-a \
+                  --zone-name "$CLOUDFLARE_ZONE_NAME" \
+                  --hostname "$M26_QUERY_BACKEND_TUNNEL_HOSTNAME" \
+                  --address "$ORACLE_VM_HOST" \
+                  --evidence-output "$WORK_DIR/evidence/backend-cloudflare-dns-a-origin.json" \
+                  --runtime-env-output "$WORK_DIR/backend-cloudflare-dns-a-origin.env"
+                backend_origin_env="$WORK_DIR/backend-cloudflare-dns-a-origin.env"
+              else
+                python scripts/m26_pa7_durable_backend_origin.py oracle-https \
+                  --hostname "$ORACLE_VM_HOST" \
+                  --evidence-output "$WORK_DIR/evidence/backend-oracle-https-origin.json" \
+                  --runtime-env-output "$WORK_DIR/backend-oracle-https-origin.env"
+                backend_origin_env="$WORK_DIR/backend-oracle-https-origin.env"
+              fi
               backend_origin_mode="oracle_https"
             fi
             while IFS='=' read -r name value; do
@@ -504,7 +519,7 @@ jobs:
 
           if test "$status" != "200" && \
              { test "$curl_exit_code" = "6" || test "$status" = "000" || [[ "$status" == 5* ]]; }; then
-            for _attempt in $(seq 2 30); do
+            for _attempt in $(seq 2 60); do
               sleep 2
               health_attempts="$_attempt"
               tmp_error="$WORK_DIR/backend-health-external.retry.curl.err.tmp"
