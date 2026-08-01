@@ -15,6 +15,10 @@ export default {
     if (url.pathname === "/api/m26/health") {
       return handleOwnerApi(request, env, "/api/m26/health");
     }
+    if (url.pathname === "/api/m26/graph") {
+      if (request.method !== "GET") return jsonError("M26_GRAPH_METHOD_NOT_ALLOWED", 405);
+      return handleOwnerApi(request, env, "/api/m26/graph");
+    }
     if (url.pathname === "/api/m26/query") {
       if (request.method !== "POST") return jsonError("M26_ASK_METHOD_NOT_ALLOWED", 405);
       return handleOwnerApi(request, env, "/api/m26/query");
