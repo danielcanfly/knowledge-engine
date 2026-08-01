@@ -561,13 +561,17 @@ jobs:
           python scripts/m25_9_cloudflare_live_preflight.py pages-latest \
             --evidence-output "$WORK_DIR/evidence/pages-after.json" \
             --runtime-env-output "$WORK_DIR/pages-after.env"
+          new_pages_deployment_id=""
           while IFS='=' read -r name value; do
             test "$name" = "NEW_PAGES_DEPLOYMENT_ID"
             echo "::add-mask::$value"
+            new_pages_deployment_id="$value"
+            export NEW_PAGES_DEPLOYMENT_ID="$value"
             printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
           done < "$WORK_DIR/pages-after.env"
           rm -f "$WORK_DIR/pages-after.env"
-          test "$NEW_PAGES_DEPLOYMENT_ID" != "$PREVIOUS_PAGES_DEPLOYMENT_ID"
+          test -n "$new_pages_deployment_id"
+          test "$new_pages_deployment_id" != "$PREVIOUS_PAGES_DEPLOYMENT_ID"
           echo "PAGES_DEPLOYED=true" >> "$GITHUB_ENV"
 
       - name: Verify public denial before owner provider path
