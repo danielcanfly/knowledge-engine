@@ -72,33 +72,55 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Report sanitized result on PA7 issue
+      - name: Build sanitized issue comment
         env:
-          GH_TOKEN: ${{ github.token }}
           ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
           ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
         run: |
           set -euo pipefail
-          status="$(jq -r '.status' "$WORK_DIR/full-graph-summary.json")"
-          candidate_count="$(jq '.likely_full_graph_candidates | length' "$WORK_DIR/full-graph-summary.json")"
-          top_candidates="$(jq -c '.likely_full_graph_candidates[:5]' "$WORK_DIR/full-graph-summary.json")"
-          qdrant_collections="$(jq -c '[.qdrant_collections[] | {name, points_count, indexed_vectors_count, status}]' "$WORK_DIR/full-graph-summary.json")"
-          cat > "$WORK_DIR/comment.md" <<EOF
-          ### M26.PA.7 owner-access repair result
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-          - merge SHA: `${GITHUB_SHA}`
-          - inventory status: `${status}`
-          - likely full-graph candidate count: `${candidate_count}`
-          - artifact ID: `${ARTIFACT_ID}`
-          - artifact URL: ${ARTIFACT_URL}
-          - protected mutations: `0`
+          work = Path(os.environ["WORK_DIR"])
+          summary = json.loads((work / "full-graph-summary.json").read_text())
+          candidates = summary.get("likely_full_graph_candidates", [])[:5]
+          qdrant = [
+              {
+                  "name": item.get("name"),
+                  "points_count": item.get("points_count"),
+                  "indexed_vectors_count": item.get("indexed_vectors_count"),
+                  "status": item.get("status"),
+              }
+              for item in summary.get("qdrant_collections", [])
+              if isinstance(item, dict)
+          ]
+          lines = [
+              "### M26.PA.7 owner-access repair result",
+              "",
+              f"- merge SHA: `{os.environ['GITHUB_SHA']}`",
+              f"- inventory status: `{summary.get('status', 'unknown')}`",
+              f"- likely full-graph candidate count: `{len(summary.get('likely_full_graph_candidates', []))}`",
+              f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
+              f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
+              "- protected mutations: `0`",
+              "",
+              "Top graph candidates (sanitized):",
+              "",
+              f"`{json.dumps(candidates, sort_keys=True, separators=(',', ':'))}`",
+              "",
+              "Qdrant collection counts (read-only):",
+              "",
+              f"`{json.dumps(qdrant, sort_keys=True, separators=(',', ':'))}`",
+              "",
+          ]
+          (work / "comment.md").write_text("\n".join(lines), encoding="utf-8")
+          PY
 
-          Top graph candidates (sanitized):
-          
-          `${top_candidates}`
-
-          Qdrant collection counts (read-only):
-
-          `${qdrant_collections}`
-          EOF
+      - name: Report sanitized result on PA7 issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           gh issue comment 1268 --repo "${GITHUB_REPOSITORY}" --body-file "$WORK_DIR/comment.md"
