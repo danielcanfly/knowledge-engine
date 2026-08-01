@@ -408,6 +408,79 @@ jobs:
               echo "M26_BACKEND_TUNNEL_DEPLOYED=true" >> "$GITHUB_ENV"
             else
               caddy_dir="$ORACLE_VM_DEPLOY_PATH/.m26-pa7-final-web-https-origin"
+              legacy_port_owner="llamaindex-oracle-e2-api"
+              legacy_status="$WORK_DIR/legacy-oracle-https-port-owner.status"
+              legacy_script="$WORK_DIR/legacy-oracle-https-port-handoff.py"
+              cat > "$legacy_script" <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+
+          owner = os.environ["LEGACY_PORT_OWNER"]
+
+          inspect = subprocess.run(
+              ["docker", "inspect", owner],
+              check=False,
+              capture_output=True,
+              text=True,
+          )
+          if inspect.returncode == 0:
+              parsed = json.loads(inspect.stdout)[0]
+              container_id = str(parsed.get("Id") or "")
+              image = str(parsed.get("Config", {}).get("Image") or "")
+              running = bool(parsed.get("State", {}).get("Running"))
+              if running:
+                  stopped = subprocess.run(
+                      ["docker", "stop", owner],
+                      check=False,
+                      capture_output=True,
+                      text=True,
+                  )
+                  action = "stopped" if stopped.returncode == 0 else "stop_failed"
+              else:
+                  action = "already_stopped"
+              evidence = {
+                  "action": action,
+                  "container_id_sha256": hashlib.sha256(container_id.encode()).hexdigest(),
+                  "container_image_sha256": hashlib.sha256(image.encode()).hexdigest(),
+                  "container_name_sha256": hashlib.sha256(owner.encode()).hexdigest(),
+                  "raw_container_id_recorded": False,
+                  "raw_container_image_recorded": False,
+                  "raw_container_name_recorded": False,
+              }
+          else:
+              evidence = {
+                  "action": "absent",
+                  "raw_container_id_recorded": False,
+                  "raw_container_image_recorded": False,
+                  "raw_container_name_recorded": False,
+              }
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+              ssh oracle-knowledge "mkdir -p '$caddy_dir' && chmod 700 '$caddy_dir'"
+              scp "$legacy_script" "oracle-knowledge:$caddy_dir/legacy-port-handoff.py"
+              rm -f "$legacy_script"
+              ssh oracle-knowledge "LEGACY_PORT_OWNER='$legacy_port_owner' python3 '$caddy_dir/legacy-port-handoff.py'" > "$legacy_status"
+              LEGACY_STATUS_PATH="$legacy_status" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          status = json.loads(Path(os.environ["LEGACY_STATUS_PATH"]).read_text())
+          evidence = {
+              "schema_version": "knowledge-engine-m26-pa7-legacy-oracle-https-port-handoff/v1",
+              "status": "pass",
+              "protected_knowledge_mutations": 0,
+              **status,
+          }
+          Path(os.environ["WORK_DIR"], "evidence/legacy-oracle-https-port-handoff.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          if status.get("action") == "stopped":
+              with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+                  env_file.write("M26_LEGACY_ORACLE_HTTPS_PORT_OWNER_STOPPED=true\n")
+          PY
+              rm -f "$legacy_status"
               printf '%s\n' \
                 "$M26_ORACLE_BACKEND_TLS_HOSTNAME {" \
                 "  reverse_proxy 127.0.0.1:8080" \
@@ -846,6 +919,10 @@ jobs:
           if test "${M26_BACKEND_HTTPS_PROXY_DEPLOYED:-false}" = "true"; then
             ssh oracle-knowledge "docker rm -f m26-pa7-backend-https-origin >/dev/null 2>&1 || true" \
               > "$WORK_DIR/evidence/backend-https-origin-rollback.log" 2>&1
+          fi
+          if test "${M26_LEGACY_ORACLE_HTTPS_PORT_OWNER_STOPPED:-false}" = "true"; then
+            ssh oracle-knowledge "docker start llamaindex-oracle-e2-api >/dev/null 2>&1 || true" \
+              > "$WORK_DIR/evidence/legacy-oracle-https-port-owner-rollback.log" 2>&1
           fi
           set -e
 

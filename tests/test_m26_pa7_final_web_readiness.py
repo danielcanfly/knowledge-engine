@@ -371,6 +371,9 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "--connect-timeout 5 --max-time 15" in workflow
     assert "backend-https-origin-diagnostic.json" in workflow
     assert "raw_log_recorded" in workflow
+    assert "legacy-oracle-https-port-handoff.json" in workflow
+    assert "M26_LEGACY_ORACLE_HTTPS_PORT_OWNER_STOPPED" in workflow
+    assert "legacy-oracle-https-port-owner-rollback.log" in workflow
     assert "m26-pa7-backend-tunnel" in workflow
     assert "m26-pa7-backend-https-origin" in workflow
     assert "caddy:2-alpine" in workflow
