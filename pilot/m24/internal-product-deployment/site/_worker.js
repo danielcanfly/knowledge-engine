@@ -1,3 +1,8 @@
+const STATIC_OWNER_EMAIL_SHA256_ALLOWLIST = [
+  // Daniel owner email hash. The raw email is intentionally not stored in source.
+  "9427ba8408d7bc179c5f2582b03675f2e0a704b3b95f03b1e07857755694337f",
+];
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -104,15 +109,15 @@ async function verifyOwnerAccess(request, env) {
     return denied("M26_OWNER_ACCESS_JWT_INVALID");
   }
 
-  const expectedEmailHash = String(env.M26_OWNER_EMAIL_SHA256 || "").toLowerCase();
-  if (!expectedEmailHash) return denied("M26_OWNER_EMAIL_HASH_UNCONFIGURED");
+  const allowedEmailHashes = ownerEmailHashAllowlist(env);
+  if (allowedEmailHashes.length === 0) return denied("M26_OWNER_EMAIL_HASH_UNCONFIGURED");
   const email = String(payload.email || "").trim().toLowerCase();
   if (!email) return denied("M26_OWNER_ACCESS_EMAIL_MISSING");
   const actualEmailHash = await sha256Hex(email);
-  if (!timingSafeEqualHex(actualEmailHash, expectedEmailHash)) {
+  if (!timingSafeAnyHex(actualEmailHash, allowedEmailHashes)) {
     return denied("M26_OWNER_ACCESS_EMAIL_NOT_ALLOWLISTED");
   }
-  return admitted(expectedOwnerHash, contract.identitySource);
+  return admitted(expectedOwnerHash, `${contract.identitySource}_email_sha256_allowlist`);
 }
 
 function admitted(ownerSubjectHash, identitySource) {
@@ -121,6 +126,22 @@ function admitted(ownerSubjectHash, identitySource) {
 
 function denied(reason) {
   return { ok: false, reason };
+}
+
+function ownerEmailHashAllowlist(env) {
+  const candidates = [
+    ...STATIC_OWNER_EMAIL_SHA256_ALLOWLIST,
+    String(env.M26_OWNER_EMAIL_SHA256 || ""),
+    ...String(env.M26_OWNER_EMAIL_SHA256_ALLOWLIST || "")
+      .split(/[\s,]+/)
+      .map((value) => value.trim()),
+  ];
+  const normalized = [];
+  for (const candidate of candidates) {
+    const value = String(candidate || "").trim().toLowerCase();
+    if (/^[0-9a-f]{64}$/.test(value) && !normalized.includes(value)) normalized.push(value);
+  }
+  return normalized;
 }
 
 function resolveAccessJwtContract(token, env) {
@@ -265,6 +286,14 @@ async function sha256Hex(value) {
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
+}
+
+function timingSafeAnyHex(left, candidates) {
+  let matched = false;
+  for (const candidate of candidates) {
+    matched = timingSafeEqualHex(left, candidate) || matched;
+  }
+  return matched;
 }
 
 function timingSafeEqualHex(left, right) {
