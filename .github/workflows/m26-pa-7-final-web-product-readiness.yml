@@ -11,8 +11,10 @@ on:
       - "schemas/m26-pa-7-final-web-*.schema.json"
       - "src/knowledge_engine/api.py"
       - "src/knowledge_engine/m26_ask_api.py"
+      - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
       - "src/knowledge_engine/m26_pa7_final_web_readiness.py"
       - "tests/test_m24_internal_ask_ui_api.py"
+      - "tests/test_m26_pa_7_arbitrary_query_runtime.py"
       - "tests/test_m26_pa7_ask_api.py"
       - "tests/test_m26_pa7_final_web_readiness.py"
   push:
@@ -26,8 +28,10 @@ on:
       - "schemas/m26-pa-7-final-web-*.schema.json"
       - "src/knowledge_engine/api.py"
       - "src/knowledge_engine/m26_ask_api.py"
+      - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
       - "src/knowledge_engine/m26_pa7_final_web_readiness.py"
       - "tests/test_m24_internal_ask_ui_api.py"
+      - "tests/test_m26_pa_7_arbitrary_query_runtime.py"
       - "tests/test_m26_pa7_ask_api.py"
       - "tests/test_m26_pa7_final_web_readiness.py"
 
