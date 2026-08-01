@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
+      - "src/knowledge_engine/m26_ask_api.py"
   push:
     branches: [main]
     paths:
@@ -54,6 +55,7 @@ jobs:
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'EOF'
           .github/workflows/m26-pa7-explicit-backend-redeploy.yml
+          src/knowledge_engine/m26_ask_api.py
           EOF
           sed -i 's/^          //' /tmp/expected.txt
           cmp /tmp/expected.txt /tmp/changed.txt
