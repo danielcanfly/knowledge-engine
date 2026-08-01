@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -33,13 +34,25 @@ CANONICAL_MANIFEST_SHA256 = (
     "ef5ee828069731e3e7106e1b12fb82e3a578c377930568410bc78421d1600877"
 )
 CANONICAL_SOURCE_SHA = "acf78596ace8a7366688ccef72b507204d09d9f9"
-CANONICAL_ROOT = Path(__file__).resolve().parents[2] / "pilot/m24/canonical-release"
 P3_QUERIES = (
     "harness",
     "stopping policy",
     "canonical run authority",
     "tool call proposal",
 )
+
+
+def _default_canonical_root() -> Path:
+    configured_root = os.environ.get("KNOWLEDGE_ENGINE_ROOT", "").strip()
+    if configured_root:
+        return Path(configured_root).resolve() / "pilot/m24/canonical-release"
+    source_tree_candidate = Path(__file__).resolve().parents[2] / "pilot/m24/canonical-release"
+    if source_tree_candidate.exists():
+        return source_tree_candidate
+    return Path.cwd().resolve() / "pilot/m24/canonical-release"
+
+
+CANONICAL_ROOT = _default_canonical_root()
 
 
 class P3AuthorityBoundary(BaseModel):
