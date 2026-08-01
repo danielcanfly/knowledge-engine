@@ -5,12 +5,14 @@ import os
 import time
 from collections.abc import Mapping
 from decimal import Decimal
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, status
 
+from .config import Settings
 from .m26_pa7_arbitrary_query_runtime import (
     MAX_QUERY_CHARS,
     DenseChannel,
@@ -20,9 +22,12 @@ from .m26_pa7_arbitrary_query_runtime import (
 from .m26_production_promotion_closure import load_json
 from .m26_retrieval_envelope import sha256_value
 from .m26_verified_answer_citation_gate import canonical_sha256
+from .runtime import Runtime
+from .storage import create_object_store
 
 WEB_RESPONSE_SCHEMA = "knowledge-engine-m26-pa7-ask-web-response/v1"
 WEB_HEALTH_SCHEMA = "knowledge-engine-m26-pa7-ask-web-health/v1"
+WEB_GRAPH_SCHEMA = "knowledge-engine-m26-pa7-owner-full-graph/v1"
 DEFAULT_GATE_PATH = Path("pilot/m26/m26-pa-7-resolved-production-gate.json")
 OWNER_HASH_HEADER = "x-m26-owner-subject-hash"
 BACKEND_TOKEN_HEADER = "authorization"
@@ -30,6 +35,26 @@ RUNTIME_ENTRYPOINT = "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner
 MAX_BODY_BYTES = 4096
 RATE_WINDOW_SECONDS = 60
 RATE_WINDOW_MAX_REQUESTS = 12
+MAX_OWNER_GRAPH_NODES = 50_000
+MAX_OWNER_GRAPH_EDGES = 100_000
+
+FULL_GRAPH_RELEASE_ID = "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+FULL_GRAPH_MANIFEST_SHA256 = (
+    "72bb03e3fa22e453735719ab43898adfd4c7f186f818ed71685efb4fcd87de2b"
+)
+FULL_GRAPH_V2_SHA256 = (
+    "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869"
+)
+FULL_GRAPH_POINTER_SHA256 = (
+    "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9"
+)
+FULL_GRAPH_NODE_COUNT = 4222
+FULL_GRAPH_EDGE_COUNT = 8525
+FULL_GRAPH_INVENTORY_RUN_ID = 30680636103
+FULL_GRAPH_INVENTORY_ARTIFACT_ID = 8812152272
+FULL_GRAPH_PA2_ACCEPTANCE_SELF_SHA256 = (
+    "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67"
+)
 
 
 class M26AskApiError(ValueError):
@@ -41,6 +66,19 @@ class M26AskApiError(ValueError):
 
 
 _RATE_BUCKETS: dict[str, list[float]] = {}
+
+
+@lru_cache(maxsize=1)
+def _owner_graph_runtime() -> Runtime:
+    settings = Settings.from_env()
+    return Runtime(
+        create_object_store(settings),
+        settings.cache_dir,
+        settings.channel,
+        relation_aware_expansion_enabled=(
+            settings.relation_aware_expansion_enabled
+        ),
+    )
 
 
 def validate_query_request(payload: Any, *, max_chars: int = MAX_QUERY_CHARS) -> str:
@@ -158,8 +196,12 @@ def build_health_dto(*, root: Path, gate_path: Path) -> dict[str, Any]:
         },
         "route": {
             "ask_url": "https://m24-internal.danielcanfly.com/ask",
+            "full_graph_url": (
+                "https://m24-internal.danielcanfly.com/ask?surface=full-graph"
+            ),
             "api_query_path": "/api/m26/query",
             "api_health_path": "/api/m26/health",
+            "api_graph_path": "/api/m26/graph",
             "owner_only_route": identities.get("owner_only_route"),
         },
         "resolved_gate_self_sha256": gate.get("self_sha256"),
@@ -174,6 +216,124 @@ def build_health_dto(*, root: Path, gate_path: Path) -> dict[str, Any]:
             "qdrant_write_operations": 0,
         },
     }
+
+
+def _manifest_graph_v2_sha256(manifest: Mapping[str, Any]) -> str:
+    artifacts = manifest.get("artifacts")
+    if isinstance(artifacts, list):
+        for artifact in artifacts:
+            if not isinstance(artifact, Mapping):
+                continue
+            kind = str(artifact.get("kind", ""))
+            key = str(artifact.get("key", ""))
+            if kind == "graph_v2" or key.endswith("/artifacts/graph-v2.json"):
+                return str(artifact.get("sha256", ""))
+    if isinstance(artifacts, Mapping):
+        artifact = artifacts.get("graph_v2")
+        if isinstance(artifact, Mapping):
+            return str(artifact.get("sha256", ""))
+        if isinstance(artifact, str):
+            return artifact
+    return ""
+
+
+def build_owner_graph_dto(
+    active: Any,
+    *,
+    expected_release_id: str = FULL_GRAPH_RELEASE_ID,
+    expected_manifest_sha256: str = FULL_GRAPH_MANIFEST_SHA256,
+    expected_graph_v2_sha256: str = FULL_GRAPH_V2_SHA256,
+    expected_node_count: int = FULL_GRAPH_NODE_COUNT,
+    expected_edge_count: int = FULL_GRAPH_EDGE_COUNT,
+) -> dict[str, Any]:
+    release_id = str(getattr(active, "release_id", ""))
+    manifest_sha256 = str(getattr(active, "manifest_sha256", ""))
+    manifest = getattr(active, "manifest", None)
+    graph = getattr(active, "graph_v2", None)
+    if release_id != expected_release_id:
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_RELEASE_IDENTITY_MISMATCH",
+            "current production release does not match the accepted full graph binding",
+        )
+    if manifest_sha256 != expected_manifest_sha256:
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_MANIFEST_IDENTITY_MISMATCH",
+            "current production manifest does not match the accepted full graph binding",
+        )
+    if not isinstance(manifest, Mapping) or not isinstance(graph, Mapping):
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_UNAVAILABLE",
+            "current production relation graph is unavailable",
+        )
+    graph_v2_sha256 = _manifest_graph_v2_sha256(manifest)
+    if graph_v2_sha256 != expected_graph_v2_sha256:
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_ARTIFACT_IDENTITY_MISMATCH",
+            "current production graph artifact does not match the accepted binding",
+        )
+    nodes = _object_list(graph.get("nodes"))
+    edges = _object_list(graph.get("edges"))
+    if len(nodes) > MAX_OWNER_GRAPH_NODES or len(edges) > MAX_OWNER_GRAPH_EDGES:
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_BOUND_EXCEEDED",
+            "current production graph exceeds the owner browser bound",
+        )
+    if len(nodes) != expected_node_count or len(edges) != expected_edge_count:
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_COUNT_MISMATCH",
+            "current production graph counts do not match the accepted inventory",
+        )
+
+    payload = {
+        key: value
+        for key, value in graph.items()
+        if key not in {"nodes", "edges", "release_id"}
+    }
+    payload.update(
+        {
+            "schema_version": WEB_GRAPH_SCHEMA,
+            "status": "ok",
+            "graph_scope": "full_current_production_relation_graph",
+            "release_id": release_id,
+            "manifest_sha256": manifest_sha256,
+            "graph_v2_sha256": graph_v2_sha256,
+            "loaded_at": str(getattr(active, "loaded_at", "")),
+            "counts": {"nodes": len(nodes), "edges": len(edges)},
+            "nodes": nodes,
+            "edges": edges,
+            "available_actions": [
+                "select_node",
+                "search_node",
+                "filter_relation",
+                "one_hop",
+                "two_hop",
+            ],
+            "binding": {
+                "production_pointer_key": "channels/production.json",
+                "production_pointer_sha256": FULL_GRAPH_POINTER_SHA256,
+                "pa2_acceptance_self_sha256": (
+                    FULL_GRAPH_PA2_ACCEPTANCE_SELF_SHA256
+                ),
+                "inventory_run_id": FULL_GRAPH_INVENTORY_RUN_ID,
+                "inventory_artifact_id": FULL_GRAPH_INVENTORY_ARTIFACT_ID,
+            },
+            "authority": {
+                "owner_only": True,
+                "read_only": True,
+                "canonical_writes": 0,
+                "corpus_index_content_mutations": 0,
+                "production_pointer_mutations": 0,
+                "qdrant_write_operations": 0,
+                "r2_write_operations": 0,
+            },
+            "privacy": {
+                "raw_access_jwt_persisted": False,
+                "secret_values_exposed": False,
+                "raw_r2_endpoint_exposed": False,
+            },
+        }
+    )
+    return payload
 
 
 def create_app(
@@ -215,6 +375,20 @@ def register_m26_ask_routes(
     async def health(request: Request) -> dict[str, Any]:
         _authorize_backend_request(request)
         return build_health_dto(root=app_root, gate_path=resolved_gate_path)
+
+    @app.get("/api/m26/graph")
+    async def graph(request: Request) -> dict[str, Any]:
+        _authorize_backend_request(request)
+        try:
+            active = _owner_graph_runtime().ensure_loaded()
+            return build_owner_graph_dto(active)
+        except M26AskApiError as exc:
+            raise _http_error(status.HTTP_503_SERVICE_UNAVAILABLE, exc.reason_code) from exc
+        except Exception as exc:
+            raise _http_error(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "M26_OWNER_GRAPH_LOAD_FAILED",
+            ) from exc
 
     @app.post("/api/m26/query")
     async def query(request: Request) -> dict[str, Any]:
