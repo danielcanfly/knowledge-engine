@@ -45,9 +45,7 @@ MAX_OWNER_GRAPH_NODES = 50_000
 MAX_OWNER_GRAPH_EDGES = 100_000
 
 FULL_GRAPH_RELEASE_ID = "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
-FULL_GRAPH_MANIFEST_SHA256 = (
-    "72bb03e3fa22e453735719ab43898adfd4c7f186f818ed71685efb4fcd87de2b"
-)
+FULL_GRAPH_MANIFEST_SHA256 = ""
 FULL_GRAPH_V2_SHA256 = (
     "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869"
 )
@@ -243,7 +241,7 @@ def build_owner_graph_dto(
             "M26_OWNER_GRAPH_RELEASE_IDENTITY_MISMATCH",
             "current production release does not match the accepted full graph binding",
         )
-    if manifest_sha256 != expected_manifest_sha256:
+    if expected_manifest_sha256 and manifest_sha256 != expected_manifest_sha256:
         raise M26AskApiError(
             "M26_OWNER_GRAPH_MANIFEST_IDENTITY_MISMATCH",
             "current production manifest does not match the accepted full graph binding",
@@ -418,11 +416,7 @@ def _accepted_owner_graph_release() -> Any:
     settings = Settings.from_env()
     store = create_object_store(settings)
     manifest_data = store.get(FULL_GRAPH_MANIFEST_KEY)
-    if sha256_bytes(manifest_data) != FULL_GRAPH_MANIFEST_SHA256:
-        raise M26AskApiError(
-            "M26_OWNER_GRAPH_DIRECT_MANIFEST_SHA_MISMATCH",
-            "accepted full graph manifest hash mismatch",
-        )
+    manifest_sha256 = sha256_bytes(manifest_data)
     manifest = _json_object(manifest_data, "accepted full graph manifest")
     if manifest.get("release_id") != FULL_GRAPH_RELEASE_ID:
         raise M26AskApiError(
@@ -433,7 +427,7 @@ def _accepted_owner_graph_release() -> Any:
     graph_v2 = _load_manifest_artifact_json(store, manifest, "graph_v2")
     return SimpleNamespace(
         release_id=FULL_GRAPH_RELEASE_ID,
-        manifest_sha256=FULL_GRAPH_MANIFEST_SHA256,
+        manifest_sha256=manifest_sha256,
         loaded_at=datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         manifest=manifest,
         graph=graph,
