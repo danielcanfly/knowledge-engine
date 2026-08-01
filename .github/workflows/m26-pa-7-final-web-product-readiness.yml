@@ -373,7 +373,7 @@ jobs:
                   rm -f "$WORK_DIR/backend-cloudflare-dns-a-origin.err"
                   python scripts/m26_pa7_durable_backend_origin.py wildcard-dns \
                     --address "$ORACLE_VM_HOST" \
-                    --suffix sslip.io \
+                    --suffix nip.io \
                     --evidence-output "$WORK_DIR/evidence/backend-wildcard-dns-origin.json" \
                     --runtime-env-output "$WORK_DIR/backend-wildcard-dns-origin.env"
                   backend_origin_env="$WORK_DIR/backend-wildcard-dns-origin.env"
@@ -389,7 +389,7 @@ jobs:
             fi
             while IFS='=' read -r name value; do
               case "$name" in
-                M26_BACKEND_TUNNEL_ID|M26_BACKEND_TUNNEL_TOKEN|M26_ORACLE_BACKEND_TLS_HOSTNAME|M26_QUERY_BACKEND_ORIGIN) ;;
+                M26_BACKEND_ORIGIN_CLASS|M26_BACKEND_TUNNEL_ID|M26_BACKEND_TUNNEL_TOKEN|M26_ORACLE_BACKEND_TLS_HOSTNAME|M26_QUERY_BACKEND_ORIGIN) ;;
                 *) exit 1 ;;
               esac
               test -n "$value"
@@ -501,6 +501,7 @@ jobs:
 
           if test "$status" != "200" && \
              [[ "$backend_origin" == https://* ]] && \
+             test "${M26_BACKEND_ORIGIN_CLASS:-}" = "cloudflare_dns_a_to_oracle_https_reverse_proxy" && \
              test "$curl_error_class" = "tls_certificate_validation_failed"; then
             ca_dir="$WORK_DIR/cloudflare-origin-ca"
             mkdir -p "$ca_dir"
@@ -544,7 +545,7 @@ jobs:
 
           if test "$status" != "200" && \
              { test "$curl_exit_code" = "6" || test "$status" = "000" || [[ "$status" == 5* ]]; }; then
-            for _attempt in $(seq 2 60); do
+            for _attempt in $(seq 2 180); do
               sleep 2
               health_attempts="$_attempt"
               tmp_error="$WORK_DIR/backend-health-external.retry.curl.err.tmp"

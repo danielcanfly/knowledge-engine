@@ -59,6 +59,7 @@ def oracle_https_origin(hostname: str) -> tuple[dict[str, object], dict[str, str
         "trycloudflare_rejected": True,
     }
     runtime = {
+        "M26_BACKEND_ORIGIN_CLASS": "oracle_stable_hostname_https_reverse_proxy",
         "M26_ORACLE_BACKEND_TLS_HOSTNAME": normalized,
         "M26_QUERY_BACKEND_ORIGIN": origin,
     }
@@ -139,6 +140,7 @@ def cloudflare_dns_a_origin(
         "trycloudflare_rejected": True,
     }
     runtime = {
+        "M26_BACKEND_ORIGIN_CLASS": "cloudflare_dns_a_to_oracle_https_reverse_proxy",
         "M26_ORACLE_BACKEND_TLS_HOSTNAME": hostname,
         "M26_QUERY_BACKEND_ORIGIN": origin,
     }
@@ -170,6 +172,7 @@ def wildcard_dns_origin(
         "trycloudflare_rejected": True,
     }
     runtime = {
+        "M26_BACKEND_ORIGIN_CLASS": "wildcard_dns_to_oracle_https_reverse_proxy",
         "M26_ORACLE_BACKEND_TLS_HOSTNAME": hostname,
         "M26_QUERY_BACKEND_ORIGIN": origin,
     }
