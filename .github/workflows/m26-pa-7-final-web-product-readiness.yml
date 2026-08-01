@@ -12,10 +12,12 @@ on:
       - "schemas/m26-pa-7-final-web-*.schema.json"
       - "scripts/m26_pa7_durable_backend_origin.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
+      - "src/knowledge_engine/m23_cloudflare_qdrant.py"
       - "src/knowledge_engine/api.py"
       - "src/knowledge_engine/m26_ask_api.py"
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
       - "src/knowledge_engine/m26_pa7_final_web_readiness.py"
+      - "tests/test_m23_5_cloudflare_qdrant.py"
       - "tests/test_m24_internal_ask_ui_api.py"
       - "tests/test_m26_pa_7_arbitrary_query_runtime.py"
       - "tests/test_m26_pa7_ask_api.py"
@@ -32,10 +34,12 @@ on:
       - "schemas/m26-pa-7-final-web-*.schema.json"
       - "scripts/m26_pa7_durable_backend_origin.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
+      - "src/knowledge_engine/m23_cloudflare_qdrant.py"
       - "src/knowledge_engine/api.py"
       - "src/knowledge_engine/m26_ask_api.py"
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
       - "src/knowledge_engine/m26_pa7_final_web_readiness.py"
+      - "tests/test_m23_5_cloudflare_qdrant.py"
       - "tests/test_m24_internal_ask_ui_api.py"
       - "tests/test_m26_pa_7_arbitrary_query_runtime.py"
       - "tests/test_m26_pa7_ask_api.py"
@@ -105,24 +109,29 @@ jobs:
         run: |
           set -euo pipefail
           python -m ruff check \
+            src/knowledge_engine/m23_cloudflare_qdrant.py \
             src/knowledge_engine/api.py \
             src/knowledge_engine/m26_ask_api.py \
             src/knowledge_engine/m26_pa7_final_web_readiness.py \
             scripts/m26_pa7_durable_backend_origin.py \
             scripts/m26_pa7_named_backend_tunnel.py \
+            tests/test_m23_5_cloudflare_qdrant.py \
             tests/test_m24_internal_ask_ui_api.py \
             tests/test_m26_pa7_ask_api.py \
             tests/test_m26_pa7_final_web_readiness.py
           python -m compileall -q \
+            src/knowledge_engine/m23_cloudflare_qdrant.py \
             src/knowledge_engine/api.py \
             src/knowledge_engine/m26_ask_api.py \
             src/knowledge_engine/m26_pa7_final_web_readiness.py \
             scripts/m26_pa7_durable_backend_origin.py \
             scripts/m26_pa7_named_backend_tunnel.py \
+            tests/test_m23_5_cloudflare_qdrant.py \
             tests/test_m24_internal_ask_ui_api.py \
             tests/test_m26_pa7_ask_api.py \
             tests/test_m26_pa7_final_web_readiness.py
           python -m pytest -q \
+            tests/test_m23_5_cloudflare_qdrant.py \
             tests/test_m24_internal_ask_ui_api.py \
             tests/test_m26_pa7_ask_api.py \
             tests/test_m26_pa7_final_web_readiness.py
@@ -136,7 +145,7 @@ jobs:
           git fetch --quiet --no-tags origin "${{ github.base_ref }}"
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat /tmp/changed.txt
-          ! grep -Ev '^(\.github/workflows/(m26-pa-7-final-web-product-readiness|m26-pa7-owner-access-and-full-graph-repair|m26-pa7-explicit-pages-deploy|m26-pa7-explicit-backend-redeploy|m26-pa-4-verified-answer-citation-gate|m26-1-architecture-authority)\.yml|Dockerfile|deploy/deploy\.sh|pilot/m26/m26-pa-7-final-web-formal-test-manifest\.json|pilot/m24/internal-product-deployment/site/(index\.html|app\.js|m26-ask\.js|_worker\.js|styles\.css|data/.*)|schemas/m26-pa-7-final-web-[a-z-]+-v1\.schema\.json|scripts/m26_pa7_(durable_backend_origin|named_backend_tunnel)\.py|src/knowledge_engine/(api|m26_ask_api|m26_pa7_final_web_readiness)\.py|tests/test_(m24_internal_ask_ui_api|m26_pa7_ask_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/(m26-pa-7-final-web-product-readiness|m26-pa7-owner-access-and-full-graph-repair|m26-pa7-explicit-pages-deploy|m26-pa7-explicit-backend-redeploy|m26-pa-4-verified-answer-citation-gate|m26-1-architecture-authority)\.yml|Dockerfile|deploy/deploy\.sh|pilot/m26/m26-pa-7-final-web-formal-test-manifest\.json|pilot/m24/internal-product-deployment/site/(index\.html|app\.js|m26-ask\.js|_worker\.js|styles\.css|data/.*)|schemas/m26-pa-7-final-web-[a-z-]+-v1\.schema\.json|scripts/m26_pa7_(durable_backend_origin|named_backend_tunnel)\.py|src/knowledge_engine/(api|m23_cloudflare_qdrant|m26_ask_api|m26_pa7_final_web_readiness)\.py|tests/test_(m23_5_cloudflare_qdrant|m24_internal_ask_ui_api|m26_pa7_ask_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
           ! grep -E '^(production/|release/production|r2/|qdrant/|foundation/|credentials/|secrets/)' /tmp/changed.txt
 
   deploy_and_runtime_formal:

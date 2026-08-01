@@ -5,6 +5,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import src.knowledge_engine.m23_cloudflare_qdrant as cloudflare_qdrant
 from src.knowledge_engine.errors import IntegrityError
 from src.knowledge_engine.m23_cloudflare_qdrant import (
     CLOUDFLARE_MODEL,
@@ -374,6 +375,37 @@ def test_cloudflare_context_limit_recursively_splits_and_preserves_order():
     ] == texts
 
 
+def test_cloudflare_transient_embedding_errors_retry_then_succeed(monkeypatch):
+    calls = []
+    sleeps = []
+
+    monkeypatch.setattr(
+        cloudflare_qdrant.time,
+        "sleep",
+        lambda delay: sleeps.append(delay),
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(json.loads(request.content)["text"])
+        if len(calls) < 3:
+            return httpx.Response(500, json={"success": False, "errors": []})
+        return httpx.Response(
+            200,
+            json={"success": True, "result": {"data": _vectors()}},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        vectors = embed_sections(
+            _sections(),
+            CloudflareConfig(account_id="account", api_token="secret"),
+            client=client,
+        )
+
+    assert vectors == _vectors()
+    assert len(calls) == 3
+    assert sleeps == [1.0, 2.0]
+
+
 def test_cloudflare_non_context_http_error_remains_fail_closed():
     calls = []
 
@@ -399,4 +431,3 @@ def test_cloudflare_non_context_http_error_remains_fail_closed():
                 client=client,
             )
     assert len(calls) == 1
-

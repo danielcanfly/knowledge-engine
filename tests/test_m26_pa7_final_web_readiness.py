@@ -350,6 +350,8 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "deploy_and_runtime_formal" in workflow
     assert '"src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"' in workflow
     assert '"tests/test_m26_pa_7_arbitrary_query_runtime.py"' in workflow
+    assert "src/knowledge_engine/m23_cloudflare_qdrant.py" in workflow
+    assert "tests/test_m23_5_cloudflare_qdrant.py" in workflow
     assert "scripts/configure_oracle_ssh.sh" in workflow
     assert "M26_QUERY_BACKEND_TOKEN" in workflow
     assert "M26_QUERY_BACKEND_URL" in workflow
