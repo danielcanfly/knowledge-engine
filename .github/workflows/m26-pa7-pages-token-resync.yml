@@ -1,0 +1,207 @@
+name: M26.PA.7 Pages Token Resync
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/m26-pa7-pages-token-resync.yml"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: m26-pa7-pages-token-resync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resync_pages_token:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: m23-r3-diagnostic
+    env:
+      WORK_DIR: /tmp/m26-pa7-pages-token-resync
+      PAGES_PROJECT: llm-wiki-m24-internal
+      SITE_DIR: pilot/m24/internal-product-deployment/site
+      EXPECTED_BACKEND_SHA: 7e01348fa68e599108c70528183be501f29c5c3e
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
+      CLOUDFLARE_FALLBACK_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+          show-progress: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate bounded resync input
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK_DIR/evidence"
+          export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          test -f scripts/configure_oracle_ssh.sh
+          test -f "$SITE_DIR/_worker.js"
+          test -f "$SITE_DIR/index.html"
+          node --check "$SITE_DIR/_worker.js"
+          node --check "$SITE_DIR/app.js"
+          node --check "$SITE_DIR/m26-ask.js"
+          node --check "$SITE_DIR/m26-title-guard.js"
+          grep -F 'data-pa7-full-graph-title' "$SITE_DIR/m26-title-guard.js"
+          grep -F 'm26-title-guard.js?v=pa7-title-cache-guard-20260801' "$SITE_DIR/index.html"
+          printf '%s\n' "$EXPECTED_BACKEND_SHA" > "$WORK_DIR/evidence/expected-backend-sha.txt"
+          printf '%s\n' "$GITHUB_SHA" > "$WORK_DIR/evidence/resync-workflow-sha.txt"
+
+      - name: Verify Oracle backend current health and token source
+        run: |
+          set -euo pipefail
+          bash scripts/configure_oracle_ssh.sh
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_BACKEND_SHA='$EXPECTED_BACKEND_SHA' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/oracle-current-backend.json"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a
+          . ./.env
+          set +a
+          : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
+          : "${KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH:?missing owner hash}"
+          tmp="$(mktemp)"
+          code="$(curl --silent --show-error \
+            -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
+            -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
+            -o "$tmp" \
+            -w '%{http_code}' \
+            http://127.0.0.1:8080/api/m26/health || true)"
+          python3 - "$tmp" "$code" <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          try:
+              payload = json.loads(Path(sys.argv[1]).read_text())
+          except Exception:
+              payload = {}
+          evidence = {
+              "schema_version": "knowledge-engine-m26-pa7-pages-token-resync-oracle-health/v1",
+              "status": "pass",
+              "expected_backend_sha": os.environ["EXPECTED_BACKEND_SHA"],
+              "health_http_status": sys.argv[2],
+              "health_status": payload.get("status"),
+              "health_build_sha": payload.get("canonical_runtime", {}).get("build_sha"),
+              "backend_token_value_recorded": False,
+              "protected_knowledge_mutations": 0,
+              "raw_token_recorded": False,
+          }
+          if evidence["health_http_status"] != "200":
+              evidence["status"] = "fail_health_http"
+          elif evidence["health_build_sha"] != evidence["expected_backend_sha"]:
+              evidence["status"] = "fail_backend_sha"
+          print(json.dumps(evidence, indent=2, sort_keys=True))
+          PY
+          rm -f "$tmp"
+          REMOTE
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          evidence = json.loads(Path(os.environ["WORK_DIR"], "evidence/oracle-current-backend.json").read_text())
+          if evidence.get("status") != "pass":
+              raise SystemExit(json.dumps(evidence, sort_keys=True))
+          PY
+
+      - name: Sync current Oracle backend token into Pages secret
+        run: |
+          set -euo pipefail
+          export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          bash scripts/configure_oracle_ssh.sh
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' \
+            | npx --yes wrangler@4.111.0 pages secret put M26_QUERY_BACKEND_TOKEN \
+                --project-name "$PAGES_PROJECT" \
+                > "$WORK_DIR/evidence/pages-secret-sync.log"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a
+          . ./.env
+          set +a
+          : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
+          printf '%s' "$M26_QUERY_BACKEND_TOKEN"
+          REMOTE
+          grep -E 'Success|Uploaded|Created|Updated|secret' "$WORK_DIR/evidence/pages-secret-sync.log" \
+            > "$WORK_DIR/evidence/pages-secret-sync-summary.txt" || true
+          printf '%s\n' 'M26_QUERY_BACKEND_TOKEN synced from Oracle current backend without logging value' \
+            > "$WORK_DIR/evidence/pages-secret-sync-contract.txt"
+
+      - name: Redeploy Pages site after token resync
+        run: |
+          set -euo pipefail
+          export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
+          npx --yes wrangler@4.111.0 pages deploy "$SITE_DIR" \
+            --project-name "$PAGES_PROJECT" \
+            --branch main \
+            --commit-dirty=true \
+            | tee "$WORK_DIR/evidence/pages-token-resync-deploy.log"
+          grep -E 'Uploaded|Success|deployment|https://' "$WORK_DIR/evidence/pages-token-resync-deploy.log" \
+            > "$WORK_DIR/evidence/pages-token-resync-deploy-summary.txt" || true
+
+      - name: Upload PA7 token resync evidence
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-pa7-pages-token-resync-${{ github.sha }}
+          path: /tmp/m26-pa7-pages-token-resync/evidence
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report PA7 token resync evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          work = Path(os.environ["WORK_DIR"]) / "evidence"
+          oracle = json.loads((work / "oracle-current-backend.json").read_text())
+          secret_summary = (work / "pages-secret-sync-summary.txt").read_text(encoding="utf-8") if (work / "pages-secret-sync-summary.txt").exists() else ""
+          deploy_summary = (work / "pages-token-resync-deploy-summary.txt").read_text(encoding="utf-8") if (work / "pages-token-resync-deploy-summary.txt").exists() else ""
+          body = "\n".join([
+              "### M26.PA.7 Pages token resync result",
+              "",
+              f"- resync workflow SHA: `{os.environ['GITHUB_SHA']}`",
+              f"- expected backend SHA: `{oracle.get('expected_backend_sha')}`",
+              f"- Oracle health build SHA: `{oracle.get('health_build_sha')}`",
+              f"- Oracle health status: `{oracle.get('health_status')}`",
+              f"- Oracle health HTTP status: `{oracle.get('health_http_status')}`",
+              "- Pages backend token secret synced from Oracle current backend: `true`",
+              "- backend token value recorded: `false`",
+              "- protected knowledge mutations: `0`",
+              "- raw token recorded: `false`",
+              f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
+              f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
+              "",
+              "Sanitized secret sync summary:",
+              "",
+              "```text",
+              secret_summary[-2000:],
+              "```",
+              "",
+              "Sanitized Pages deploy summary:",
+              "",
+              "```text",
+              deploy_summary[-4000:],
+              "```",
+          ])
+          (work / "issue-comment.md").write_text(body, encoding="utf-8")
+          PY
+          gh issue comment 1268 --repo "$GITHUB_REPOSITORY" --body-file "$WORK_DIR/evidence/issue-comment.md"
