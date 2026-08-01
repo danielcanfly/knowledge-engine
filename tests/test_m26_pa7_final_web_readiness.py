@@ -376,12 +376,21 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "legacy-oracle-https-port-owner-rollback.log" in workflow
     assert "oracle-https-port-handoff.json" in workflow
     assert "knowledge-engine-m26-pa7-oracle-https-port-handoff/v1" in workflow
+    assert "non_docker_owner_classes" in workflow
+    assert "system_caddy" in workflow
     assert "raw_listener_recorded" in workflow
     assert "raw_pid_recorded" in workflow
     assert "M26_ORACLE_HTTPS_PORT_HANDOFF_STOPPED" in workflow
     assert "oracle-https-port-handoff-rollback.log" in workflow
     assert '["sudo", "-n", "ss", "-H", "-ltnp"]' in workflow
     assert '["ss", "-H", "-ltnp"]' in workflow
+    assert "system-caddy-origin-binding.json" in workflow
+    assert "knowledge-engine-m26-pa7-system-caddy-origin-binding/v1" in workflow
+    assert "raw_snippet_recorded" in workflow
+    assert "M26_SYSTEM_CADDY_ORIGIN_DEPLOYED" in workflow
+    assert "M26_BACKEND_HTTPS_PROXY_MODE=system_caddy" in workflow
+    assert "journalctl -u caddy" in workflow
+    assert "system-caddy-origin-rollback.log" in workflow
     assert "m26-pa7-backend-tunnel" in workflow
     assert "m26-pa7-backend-https-origin" in workflow
     assert "caddy:2-alpine" in workflow
