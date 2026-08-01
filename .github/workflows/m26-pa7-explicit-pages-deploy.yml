@@ -9,6 +9,7 @@ on:
       - "pilot/m24/internal-product-deployment/site/index.html"
       - "pilot/m24/internal-product-deployment/site/m26-pa7-route-prelock.js"
       - "pilot/m24/internal-product-deployment/site/data/m26-pa7-route-prelock-deploy-trigger-20260801-1134.json"
+      - "pilot/m24/internal-product-deployment/site/data/m26-pa7-route-prelock-deploy-trigger-20260801-1134c.json"
 
 permissions:
   contents: read
@@ -57,6 +58,7 @@ jobs:
               "pilot/m24/internal-product-deployment/site/index.html",
               "pilot/m24/internal-product-deployment/site/m26-pa7-route-prelock.js",
               "pilot/m24/internal-product-deployment/site/data/m26-pa7-route-prelock-deploy-trigger-20260801-1134.json",
+              "pilot/m24/internal-product-deployment/site/data/m26-pa7-route-prelock-deploy-trigger-20260801-1134c.json",
           }
           actual = set(Path('/tmp/m26-pa7-production-sync/evidence/changed-files.txt').read_text().splitlines())
           extra = sorted(actual - expected)
