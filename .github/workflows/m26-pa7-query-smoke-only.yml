@@ -74,11 +74,14 @@ jobs:
             --data '{"question":"Compare routers and adaptive planning for permission-first controls."}' \
             http://127.0.0.1:8080/api/m26/query || true)"
           if [ "$query_code" != "200" ]; then
-            docker compose logs --tail=200 knowledge-engine \
-              | python3 - <<'PY' > "$tmp_dir/query-runtime-sanitized.log"
+            docker compose logs --tail=200 knowledge-engine > "$tmp_dir/query-runtime-raw.log" 2>&1 || true
+            python3 - "$tmp_dir/query-runtime-raw.log" "$tmp_dir/query-runtime-sanitized.log" <<'PY'
           import re
           import sys
-          text = sys.stdin.read()
+          from pathlib import Path
+          source = Path(sys.argv[1])
+          target = Path(sys.argv[2])
+          text = source.read_text(errors="replace") if source.exists() else ""
           patterns = [
               (re.compile(r'(?i)bearer\s+[a-z0-9._~+/=-]{8,}'), 'Bearer [REDACTED]'),
               (re.compile(r'(?i)(token|secret|password|api[_-]?key)=([^\s]+)'), r'\1=[REDACTED]'),
@@ -87,7 +90,7 @@ jobs:
           ]
           for pattern, repl in patterns:
               text = pattern.sub(repl, text)
-          print(text[-12000:])
+          target.write_text(text[-12000:] or 'no backend logs captured\n', encoding='utf-8')
           PY
           else
             printf 'query passed; no runtime log captured\n' > "$tmp_dir/query-runtime-sanitized.log"
@@ -188,7 +191,8 @@ jobs:
           import os
           from pathlib import Path
           work = Path(os.environ["WORK_DIR"]) / "evidence"
-          smoke = json.loads((work / "query-smoke-only.json").read_text())
+          smoke_path = work / "query-smoke-only.json"
+          smoke = json.loads(smoke_path.read_text()) if smoke_path.exists() else {"status": "missing"}
           body = "\n".join([
               "### M26.PA.7 query smoke-only result",
               "",
