@@ -354,13 +354,16 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "M26_QUERY_BACKEND_TUNNEL_NAME" in workflow
     assert "scripts/m26_pa7_named_backend_tunnel.py ensure" in workflow
     assert "scripts/m26_pa7_durable_backend_origin.py oracle-https" in workflow
+    assert "scripts/m26_pa7_durable_backend_origin.py cloudflare-dns-a" in workflow
     assert "backend-named-tunnel.json" in workflow
+    assert "backend-cloudflare-dns-a-origin.json" in workflow
     assert "backend-oracle-https-origin.json" in workflow
     assert "m26-pa7-backend-tunnel" in workflow
     assert "m26-pa7-backend-https-origin" in workflow
     assert "caddy:2-alpine" in workflow
     assert "cloudflare/cloudflared:latest" in workflow
     assert "m26-pa7-oracle-backend-production-${{ github.ref }}" in workflow
+    assert "seq 2 60" in workflow
     assert "wrangler@4.111.0 pages secret put" in workflow
     assert "wrangler@4.111.0 pages deploy" in workflow
     assert "final_formal_query_specs()[:9]" in workflow
@@ -444,6 +447,16 @@ def test_oracle_https_origin_accepts_dns_hostname() -> None:
     assert _normalized_oracle_hostname("Oracle-Backend.Example.com.") == (
         "oracle-backend.example.com"
     )
+
+
+def test_durable_origin_script_can_prepare_cloudflare_dns_a_origin() -> None:
+    script = (ROOT / "scripts/m26_pa7_durable_backend_origin.py").read_text(encoding="utf-8")
+
+    assert "cloudflare-dns-a" in script
+    assert '"type": "A"' in script
+    assert '"proxied": False' in script
+    assert '"raw_ip_recorded": False' in script
+    assert "cloudflare_dns_a_to_oracle_https_reverse_proxy" in script
 
 
 def test_deploy_script_clears_stale_compose_state_before_service_up() -> None:
