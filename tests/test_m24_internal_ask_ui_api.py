@@ -8,26 +8,21 @@ from pathlib import Path
 
 from playwright.sync_api import expect
 
-from knowledge_engine.m24_internal_product_deployment import (
-    SITE_ROOT,
-    build_p6_internal_product_deployment,
-)
+from knowledge_engine.m24_internal_product_deployment import SITE_ROOT
 
 
 def _text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_m24_internal_site_exposes_visible_ask_entry_and_route() -> None:
-    report = build_p6_internal_product_deployment()
-    artifact_paths = {artifact.path for artifact in report.artifacts}
+def test_m24_internal_site_exposes_visible_ask_entry_and_bounded_graph_label() -> None:
     index = _text(SITE_ROOT / "index.html")
     app_js = _text(SITE_ROOT / "app.js")
     ask_js = _text(SITE_ROOT / "m26-ask.js")
 
-    assert "pilot/m24/internal-product-deployment/site/m26-ask.js" in artifact_paths
-    assert "pilot/m24/internal-product-deployment/site/_worker.js" in artifact_paths
     assert '<a href="/ask" data-route-link="ask">Ask Knowledge Engine</a>' in index
+    assert '<a href="#/graph" data-route-link="graph">Bounded Concept Graph</a>' in index
+    assert "not the full production knowledge graph" in index
     assert '<script src="m26-ask.js"></script>' in index
     assert 'ask: "Ask Knowledge Engine"' in app_js
     assert 'location.pathname === "/ask"' in app_js
@@ -41,18 +36,26 @@ def test_m24_internal_site_exposes_visible_ask_entry_and_route() -> None:
     assert "data-ask-sources" in ask_js
 
 
-def test_worker_api_is_owner_only_fail_closed_proxy() -> None:
+def test_worker_api_verifies_owner_access_jwt_and_falls_back_safely() -> None:
     worker = _text(SITE_ROOT / "_worker.js")
 
     assert "/api/m26/query" in worker
     assert "/api/m26/health" in worker
     assert "verifyOwnerAccess" in worker
+    assert "verifyAccessJwtPayload" in worker
+    assert "decodeAccessJwtPayload" in worker
     assert "cf-access-jwt-assertion" in worker
     assert "cf-access-authenticated-user-email" in worker
+    assert "ACCESS_TEAM_DOMAIN" in worker
+    assert "ACCESS_AUD" in worker
     assert "M26_OWNER_EMAIL_SHA256" in worker
     assert "KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" in worker
+    assert "cloudflare_access_jwt_verified_email_hash" in worker
+    assert "cloudflare_access_jwt_payload_email_hash_outer_access_boundary" in worker
+    assert "cloudflare_access_authenticated_email_header_hash" in worker
     assert "M26_QUERY_BACKEND_URL" in worker
     assert "M26_QUERY_BACKEND_TOKEN" in worker
+    assert "crypto.subtle.verify" in worker
     assert "crypto.subtle.digest" in worker
     assert "timingSafeEqualHex" in worker
     assert "env.ASSETS.fetch(request)" in worker
@@ -66,7 +69,6 @@ def test_worker_api_is_owner_only_fail_closed_proxy() -> None:
 
 
 def test_browser_ask_surface_renders_answer_citations_sources_and_trace() -> None:
-    build_p6_internal_product_deployment()
     with _ask_smoke_server() as base:
         from playwright.sync_api import sync_playwright
 
@@ -75,6 +77,7 @@ def test_browser_ask_surface_renders_answer_citations_sources_and_trace() -> Non
             page = browser.new_page(viewport={"width": 1280, "height": 900})
             page.goto(f"{base}/")
             expect(page.get_by_role("link", name="Ask Knowledge Engine")).to_be_visible()
+            expect(page.get_by_role("link", name="Bounded Concept Graph")).to_be_visible()
             page.get_by_role("link", name="Ask Knowledge Engine").click()
             expect(page.locator("#route-title")).to_have_text("Ask Knowledge Engine")
             expect(page.locator("#ask-question")).to_be_visible()
