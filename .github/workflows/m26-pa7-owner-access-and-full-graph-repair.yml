@@ -61,7 +61,7 @@ jobs:
           git fetch --quiet --no-tags origin "${{ github.base_ref }}"
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat /tmp/changed.txt
-          ! grep -Ev '^(\.github/workflows/(m26-pa7-owner-access-and-full-graph-repair|m26-pa-7-final-web-product-readiness|m26-pa7-explicit-pages-deploy|m26-pa7-explicit-backend-redeploy)\.yml|deploy/deploy\.sh|pilot/m24/internal-product-deployment/site/_worker\.js|scripts/(m26_pa7_full_graph_readonly_inventory|m26_pa7_named_backend_tunnel)\.py|tests/test_(m24_internal_ask_ui_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/(m26-pa7-owner-access-and-full-graph-repair|m26-pa-7-final-web-product-readiness|m26-pa7-explicit-pages-deploy|m26-pa7-explicit-backend-redeploy)\.yml|deploy/deploy\.sh|pilot/m24/internal-product-deployment/site/_worker\.js|scripts/(m26_pa7_full_graph_readonly_inventory|m26_pa7_named_backend_tunnel|m26_pa7_durable_backend_origin)\.py|tests/test_(m24_internal_ask_ui_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
           ! grep -E '^(production/|release/production|r2/|qdrant/|foundation/|credentials/|secrets/)' /tmp/changed.txt
 
   deploy_and_inventory:

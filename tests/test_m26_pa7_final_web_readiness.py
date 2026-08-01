@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator
+from scripts.m26_pa7_durable_backend_origin import _normalized_oracle_hostname
 from scripts.m26_pa7_named_backend_tunnel import _require_hostname_under_zone
 
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import LocalDenseProjectionChannel
@@ -352,9 +353,14 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "M26_QUERY_BACKEND_TUNNEL_HOSTNAME" in workflow
     assert "M26_QUERY_BACKEND_TUNNEL_NAME" in workflow
     assert "scripts/m26_pa7_named_backend_tunnel.py ensure" in workflow
+    assert "scripts/m26_pa7_durable_backend_origin.py oracle-https" in workflow
     assert "backend-named-tunnel.json" in workflow
+    assert "backend-oracle-https-origin.json" in workflow
     assert "m26-pa7-backend-tunnel" in workflow
+    assert "m26-pa7-backend-https-origin" in workflow
+    assert "caddy:2-alpine" in workflow
     assert "cloudflare/cloudflared:latest" in workflow
+    assert "m26-pa7-oracle-backend-production-${{ github.ref }}" in workflow
     assert "wrangler@4.111.0 pages secret put" in workflow
     assert "wrangler@4.111.0 pages deploy" in workflow
     assert "final_formal_query_specs()[:9]" in workflow
@@ -417,6 +423,29 @@ def test_named_backend_tunnel_accepts_zone_subdomain() -> None:
     _require_hostname_under_zone("m26-query-backend.danielcanfly.com", "danielcanfly.com")
 
 
+@pytest.mark.parametrize(
+    ("hostname", "message"),
+    [
+        ("https://backend.example.com", "host-only"),
+        ("127.0.0.1", "raw IP"),
+        ("abc.trycloudflare.com", "trycloudflare quick tunnel"),
+        ("localhost", "DNS hostname"),
+    ],
+)
+def test_oracle_https_origin_rejects_non_durable_hostnames(
+    hostname: str,
+    message: str,
+) -> None:
+    with pytest.raises(SystemExit, match=message):
+        _normalized_oracle_hostname(hostname)
+
+
+def test_oracle_https_origin_accepts_dns_hostname() -> None:
+    assert _normalized_oracle_hostname("Oracle-Backend.Example.com.") == (
+        "oracle-backend.example.com"
+    )
+
+
 def test_deploy_script_clears_stale_compose_state_before_service_up() -> None:
     deploy = (ROOT / "deploy/deploy.sh").read_text(encoding="utf-8")
 
@@ -435,6 +464,7 @@ def test_explicit_pages_deploy_boundary_accepts_production_wiring_fix() -> None:
     assert '".github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml"' in workflow
     assert '"deploy/deploy.sh"' in workflow
     assert '"scripts/m26_pa7_named_backend_tunnel.py"' in workflow
+    assert '"scripts/m26_pa7_durable_backend_origin.py"' in workflow
 
 
 def test_explicit_backend_redeploy_boundary_accepts_production_wiring_fix() -> None:
@@ -445,3 +475,5 @@ def test_explicit_backend_redeploy_boundary_accepts_production_wiring_fix() -> N
     assert ".github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml" in workflow
     assert "deploy/deploy.sh" in workflow
     assert "scripts/m26_pa7_named_backend_tunnel.py" in workflow
+    assert "scripts/m26_pa7_durable_backend_origin.py" in workflow
+    assert "m26-pa7-oracle-backend-production-${{ github.ref }}" in workflow
