@@ -1,10 +1,9 @@
 (function () {
   const API_QUERY_PATH = "/api/m26/query";
-  const API_GRAPH_PATH = "/api/m26/graph";
   const FULL_GRAPH_TITLE = "Full Knowledge Graph";
 
   function isFullGraphSurface() {
-    return new URLSearchParams(location.search).get("surface") === "full-graph";
+    return false;
   }
 
   function ensureFullGraphTitle() {

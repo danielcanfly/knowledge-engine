@@ -26,26 +26,38 @@ def _committed_text(relative: Path) -> str:
 
 def test_committed_site_exposes_ask_bounded_graph_and_full_graph() -> None:
     index = _committed_text(SITE_RELATIVE / "index.html")
+    full_graph = _committed_text(SITE_RELATIVE / "full-graph.html")
+    full_graph_js = _committed_text(SITE_RELATIVE / "m26-full-graph.js")
     app_js = _committed_text(SITE_RELATIVE / "app.js")
     ask_js = _committed_text(SITE_RELATIVE / "m26-ask.js")
 
     assert '<a href="/ask" data-route-link="ask">Ask Knowledge Engine</a>' in index
     assert "Bounded Concept Graph" in index
-    assert 'href="/ask?surface=full-graph"' in index
+    assert 'href="/full-graph"' in index
     assert "Full Knowledge Graph" in index
-    assert '<script src="m26-ask.js"></script>' in index
+    assert "m26-pa7-route-prelock.js" not in index
+    assert "m26-title-guard.js" not in index
+    assert "m26-pa7-full-graph-guard.js" not in index
+    assert "m26-ask.js" in index
+    assert 'data-pa7-surface="full-knowledge-graph"' in full_graph
+    assert 'data-pa7-route-family="dedicated-static-route"' in full_graph
+    assert "app.js" not in full_graph
+    assert "m26-ask.js" not in full_graph
+    assert "m26-full-graph.js" in full_graph
     assert 'ask: "Ask Knowledge Engine"' in app_js
     assert 'location.pathname === "/ask"' in app_js
     assert "window.M26AskSurface.render" in app_js
     assert "window.M26AskSurface.wire" in app_js
     assert 'const API_QUERY_PATH = "/api/m26/query";' in ask_js
-    assert 'const API_GRAPH_PATH = "/api/m26/graph";' in ask_js
-    assert 'get("surface") === "full-graph"' in ask_js
-    assert "full_current_production_relation_graph" in ask_js
-    assert "data-full-production-graph" in ask_js
+    assert 'get("surface") === "full-graph"' not in ask_js
     assert "data-ask-answer" in ask_js
     assert "citation-chip" in ask_js
     assert "data-ask-sources" in ask_js
+    assert 'const API_GRAPH_PATH = "/api/m26/graph";' in full_graph_js
+    assert "full_current_production_relation_graph" in full_graph_js
+    assert "data-full-production-graph" in full_graph_js
+    assert 'data-pa7-surface="full-knowledge-graph"' in full_graph_js
+    assert "m26-pa7-dedicated-full-graph-route-v1" in full_graph_js
 
 
 def test_committed_worker_is_owner_only_fail_closed_proxy() -> None:
@@ -54,6 +66,7 @@ def test_committed_worker_is_owner_only_fail_closed_proxy() -> None:
     assert "/api/m26/query" in worker
     assert "/api/m26/health" in worker
     assert "/api/m26/graph" in worker
+    assert "/full-graph.html" in worker
     assert "M26_GRAPH_METHOD_NOT_ALLOWED" in worker
     assert "verifyOwnerAccess" in worker
     assert "resolveAccessJwtContract" in worker
@@ -120,14 +133,46 @@ def test_browser_full_graph_surface_loads_exact_owner_graph() -> None:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             page = browser.new_page(viewport={"width": 1440, "height": 1000})
-            page.goto(f"{base}/ask?surface=full-graph")
+            page.goto(f"{base}/full-graph")
             expect(page.locator("#route-title")).to_have_text("Full Knowledge Graph")
+            expect(page.locator('[data-pa7-surface="full-knowledge-graph"]')).not_to_have_count(0)
             expect(page.locator("[data-full-production-graph]")).to_be_visible()
+            expect(page.locator("[data-full-graph-node-count]")).to_have_text("2")
+            expect(page.locator("[data-full-graph-edge-count]")).to_have_text("1")
             expect(page.locator("#release-id")).to_have_text("release-full-graph-test")
             expect(page.locator("[data-sigma-stage]")).to_be_visible()
             expect(page.locator("#app-status")).to_contain_text(
                 "Sigma.js canvas ready: 2 visible nodes, 1 visible edges."
             )
+            browser.close()
+
+
+def test_browser_full_graph_surface_ignores_stale_spa_hash() -> None:
+    with _committed_site() as site_root, _ask_smoke_server(site_root) as base:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            page.goto(f"{base}/full-graph#/overview")
+            expect(page.locator("#route-title")).to_have_text("Full Knowledge Graph")
+            expect(page.locator("[data-full-production-graph]")).to_be_visible()
+            expect(page.locator("body")).not_to_contain_text("Internal product status")
+            expect(page.locator("[data-full-graph-node-count]")).to_have_text("2")
+            browser.close()
+
+
+def test_browser_ask_route_ignores_retired_full_graph_surface_param() -> None:
+    with _committed_site() as site_root, _ask_smoke_server(site_root) as base:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            page = browser.new_page(viewport={"width": 1280, "height": 900})
+            page.goto(f"{base}/ask?surface=full-graph")
+            expect(page.locator("#route-title")).to_have_text("Ask Knowledge Engine")
+            expect(page.locator("[data-ask-form]")).to_be_visible()
+            expect(page.locator("[data-full-production-graph]")).to_have_count(0)
             browser.close()
 
 
@@ -154,6 +199,12 @@ class _AskSmokeHandler(http.server.SimpleHTTPRequestHandler):
         if parsed.path in {"/ask", "/ask/"}:
             self.path = "/index.html"
             return super().do_GET()
+        if parsed.path in {"/full-graph", "/full-graph/"}:
+            self.path = "/full-graph.html"
+            return super().do_GET()
+        if parsed.path == "/api/m26/health":
+            self._json_response(_sample_health_response())
+            return
         if parsed.path == "/api/m26/graph":
             self._json_response(_sample_graph_response())
             return
@@ -262,6 +313,28 @@ def _sample_graph_response() -> dict[str, object]:
             "qdrant_write_operations": 0,
             "r2_write_operations": 0,
         },
+    }
+
+
+def _sample_health_response() -> dict[str, object]:
+    return {
+        "schema_version": "knowledge-engine-m26-pa7-ask-health/v1",
+        "status": "ok",
+        "canonical_runtime": {
+            "entrypoint": "knowledge_engine.m26_ask_api:create_app",
+            "build_sha": "backend-build-test",
+            "root_sha256": "f" * 64,
+        },
+        "route": {
+            "ask_url": "https://m24-internal.danielcanfly.com/ask",
+            "full_graph_url": "https://m24-internal.danielcanfly.com/full-graph",
+            "api_query_path": "/api/m26/query",
+            "api_health_path": "/api/m26/health",
+            "api_graph_path": "/api/m26/graph",
+            "owner_only_route": True,
+        },
+        "privacy": {"browser_secret_delivery": False},
+        "mutations": {"canonical_writes": 0, "production_pointer_mutations": 0},
     }
 
 

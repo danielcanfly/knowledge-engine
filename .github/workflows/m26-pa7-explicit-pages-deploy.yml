@@ -5,11 +5,18 @@ on:
   pull_request:
     paths:
       - ".github/workflows/m26-pa7-explicit-pages-deploy.yml"
+      - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
+      - ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
       - "pilot/m24/internal-product-deployment/site/_headers"
+      - "pilot/m24/internal-product-deployment/site/_worker.js"
+      - "pilot/m24/internal-product-deployment/site/full-graph.html"
       - "pilot/m24/internal-product-deployment/site/index.html"
-      - "pilot/m24/internal-product-deployment/site/m26-pa7-route-prelock.js"
-      - "pilot/m24/internal-product-deployment/site/data/m26-pa7-route-prelock-deploy-trigger-20260801-1134.json"
-      - "pilot/m24/internal-product-deployment/site/data/m26-pa7-route-prelock-deploy-trigger-20260801-1134c.json"
+      - "pilot/m24/internal-product-deployment/site/m26-full-graph.js"
+      - "pilot/m24/internal-product-deployment/site/m26-ask.js"
+      - "src/knowledge_engine/m26_ask_api.py"
+      - "tests/test_m24_internal_ask_ui_api.py"
+      - "tests/test_m26_pa7_ask_api.py"
+      - "tests/test_m26_pa7_final_web_readiness.py"
 
 permissions:
   contents: read
@@ -24,7 +31,7 @@ jobs:
     runs-on: ubuntu-24.04
     environment: m23-r3-diagnostic
     env:
-      WORK_DIR: /tmp/m26-pa7-production-sync
+      WORK_DIR: /tmp/m26-pa7-dedicated-full-graph
       PAGES_PROJECT: llm-wiki-m24-internal
       SITE_DIR: pilot/m24/internal-product-deployment/site
       CUSTOM_DOMAIN: m24-internal.danielcanfly.com
@@ -39,7 +46,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Validate bounded route prelock production sync input
+      - name: Validate dedicated full graph production sync input
         run: |
           set -euo pipefail
           mkdir -p "$WORK_DIR/evidence"
@@ -53,34 +60,43 @@ jobs:
             python3 - <<'PY'
           from pathlib import Path
           expected = {
+              ".github/workflows/m26-pa-7-final-web-product-readiness.yml",
+              ".github/workflows/m26-pa7-explicit-backend-redeploy.yml",
               ".github/workflows/m26-pa7-explicit-pages-deploy.yml",
               "pilot/m24/internal-product-deployment/site/_headers",
+              "pilot/m24/internal-product-deployment/site/_worker.js",
+              "pilot/m24/internal-product-deployment/site/full-graph.html",
               "pilot/m24/internal-product-deployment/site/index.html",
-              "pilot/m24/internal-product-deployment/site/m26-pa7-route-prelock.js",
-              "pilot/m24/internal-product-deployment/site/data/m26-pa7-route-prelock-deploy-trigger-20260801-1134.json",
-              "pilot/m24/internal-product-deployment/site/data/m26-pa7-route-prelock-deploy-trigger-20260801-1134c.json",
+              "pilot/m24/internal-product-deployment/site/m26-full-graph.js",
+              "pilot/m24/internal-product-deployment/site/m26-ask.js",
+              "src/knowledge_engine/m26_ask_api.py",
+              "tests/test_m24_internal_ask_ui_api.py",
+              "tests/test_m26_pa7_ask_api.py",
+              "tests/test_m26_pa7_final_web_readiness.py",
           }
-          actual = set(Path('/tmp/m26-pa7-production-sync/evidence/changed-files.txt').read_text().splitlines())
+          actual = set(Path('/tmp/m26-pa7-dedicated-full-graph/evidence/changed-files.txt').read_text().splitlines())
           extra = sorted(actual - expected)
-          missing = sorted(expected - actual)
-          if extra or missing:
-              raise SystemExit(f"bounded changed files failed extra={extra} missing={missing}")
+          if extra:
+              raise SystemExit(f"bounded changed files failed extra={extra}")
           PY
           fi
           node --check "$SITE_DIR/_worker.js"
           node --check "$SITE_DIR/app.js"
           node --check "$SITE_DIR/m26-ask.js"
-          node --check "$SITE_DIR/m26-title-guard.js"
-          node --check "$SITE_DIR/m26-pa7-full-graph-guard.js"
-          node --check "$SITE_DIR/m26-pa7-route-prelock.js"
-          grep -F 'm26-pa7-route-prelock.js?v=pa7-full-graph-dom-20260801-1134' "$SITE_DIR/index.html"
-          grep -F 'm26-pa7-full-graph-guard.js?v=pa7-full-graph-dom-20260801-1134' "$SITE_DIR/index.html"
-          grep -F 'data-m26-pa7-route-prelock' "$SITE_DIR/m26-pa7-route-prelock.js"
-          grep -F 'history.replaceState(null, "", nextUrl)' "$SITE_DIR/m26-pa7-route-prelock.js"
-          grep -F '/m26-pa7-route-prelock.js' "$SITE_DIR/_headers"
-          grep -F '/m26-pa7-full-graph-guard.js' "$SITE_DIR/_headers"
+          node --check "$SITE_DIR/m26-full-graph.js"
+          grep -F 'href="/full-graph"' "$SITE_DIR/index.html"
+          grep -F 'data-pa7-surface="full-knowledge-graph"' "$SITE_DIR/full-graph.html"
+          grep -F 'data-pa7-route-family="dedicated-static-route"' "$SITE_DIR/full-graph.html"
+          grep -F 'm26-full-graph.js?v=pa7-dedicated-full-graph-20260801' "$SITE_DIR/full-graph.html"
+          grep -F '"/api/m26/graph"' "$SITE_DIR/m26-full-graph.js"
+          grep -F 'm26-pa7-dedicated-full-graph-route-v1' "$SITE_DIR/m26-full-graph.js"
+          ! grep -F 'm26-pa7-route-prelock.js?v=' "$SITE_DIR/index.html"
+          ! grep -F 'm26-title-guard.js?v=' "$SITE_DIR/index.html"
+          ! grep -F 'm26-pa7-full-graph-guard.js?v=' "$SITE_DIR/index.html"
+          grep -F '/full-graph.html' "$SITE_DIR/_worker.js"
+          grep -F '/full-graph' "$SITE_DIR/_headers"
           grep -F 'Cache-Control: no-store' "$SITE_DIR/_headers"
-          sha256sum "$SITE_DIR/index.html" "$SITE_DIR/_headers" "$SITE_DIR/m26-pa7-route-prelock.js" "$SITE_DIR/m26-pa7-full-graph-guard.js" > "$WORK_DIR/evidence/site-production-sync-sha256s.txt"
+          sha256sum "$SITE_DIR/index.html" "$SITE_DIR/full-graph.html" "$SITE_DIR/m26-full-graph.js" "$SITE_DIR/_headers" "$SITE_DIR/_worker.js" > "$WORK_DIR/evidence/site-production-sync-sha256s.txt"
           git rev-parse HEAD > "$WORK_DIR/evidence/site-head-sha.txt"
           printf '%s\n' "$EXPECTED_BACKEND_SHA" > "$WORK_DIR/evidence/expected-backend-sha.txt"
       - name: Deploy production branch Pages site
@@ -98,7 +114,7 @@ jobs:
           zone_id="$(curl --silent --show-error --fail -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=danielcanfly.com" | python3 -c 'import json,sys; data=json.load(sys.stdin); result=data.get("result") or []; print(result[0].get("id","") if result else "")')"
           test -n "$zone_id"
           cat > "$WORK_DIR/evidence/purge-request.redacted.json" <<'JSON'
-          {"files":["https://m24-internal.danielcanfly.com/ask","https://m24-internal.danielcanfly.com/ask?surface=full-graph","https://m24-internal.danielcanfly.com/app.js","https://m24-internal.danielcanfly.com/m26-pa7-route-prelock.js","https://m24-internal.danielcanfly.com/m26-pa7-full-graph-guard.js"]}
+          {"files":["https://m24-internal.danielcanfly.com/ask","https://m24-internal.danielcanfly.com/full-graph","https://m24-internal.danielcanfly.com/full-graph.html","https://m24-internal.danielcanfly.com/m26-full-graph.js","https://m24-internal.danielcanfly.com/app.js"]}
           JSON
           curl --silent --show-error --fail -X POST "https://api.cloudflare.com/client/v4/zones/$zone_id/purge_cache" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
@@ -106,18 +122,20 @@ jobs:
             --data @"$WORK_DIR/evidence/purge-request.redacted.json" > "$WORK_DIR/evidence/purge-result.json"
           python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
-          p=Path('/tmp/m26-pa7-production-sync/evidence/purge-result.json')
+          evidence_dir = Path(os.environ["WORK_DIR"]) / "evidence"
+          p=evidence_dir / "purge-result.json"
           data=json.loads(p.read_text()) if p.exists() else {}
           summary={"success": data.get("success"), "errors_count": len(data.get("errors") or []), "messages_count": len(data.get("messages") or []), "raw_token_recorded": False}
-          Path('/tmp/m26-pa7-production-sync/evidence/purge-summary.json').write_text(json.dumps(summary, indent=2, sort_keys=True))
+          (evidence_dir / "purge-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True))
           PY
       - name: Upload production sync evidence
         id: upload
         uses: actions/upload-artifact@v4
         with:
-          name: m26-pa7-route-prelock-production-sync
-          path: /tmp/m26-pa7-production-sync/evidence
+          name: m26-pa7-dedicated-full-graph-production-sync
+          path: /tmp/m26-pa7-dedicated-full-graph/evidence
           if-no-files-found: error
           retention-days: 30
       - name: Report production sync evidence
@@ -135,15 +153,15 @@ jobs:
           purge = json.loads((work / 'purge-summary.json').read_text()) if (work / 'purge-summary.json').exists() else {"success": None}
           head = (work / 'site-head-sha.txt').read_text().strip() if (work / 'site-head-sha.txt').exists() else ''
           body = "\n".join([
-            "### M26.PA.7 route prelock production sync result",
+            "### M26.PA.7 dedicated Full Graph production sync result",
             "",
             f"- site head SHA: `{head}`",
             f"- expected backend SHA: `{os.environ['EXPECTED_BACKEND_SHA']}`",
             "- production branch deploy: `attempted`",
-            "- route prelock included before app router: `true`",
-            "- route prelock cache-buster: `pa7-full-graph-dom-20260801-1134`",
-            "- route prelock asset no-store header included: `true`",
-            "- uncached full graph guard header included: `true`",
+            "- dedicated `/full-graph` route included: `true`",
+            "- dedicated page avoids SPA hash router: `true`",
+            "- retired route-prelock/title-guard scripts absent from index: `true`",
+            "- full graph marker included: `data-pa7-surface=full-knowledge-graph`",
             f"- custom domain cache purge success: `{purge.get('success')}`",
             f"- purge errors count: `{purge.get('errors_count')}`",
             "- raw backend URL recorded: `false`",

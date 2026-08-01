@@ -201,9 +201,7 @@ def build_health_dto(*, root: Path, gate_path: Path) -> dict[str, Any]:
         },
         "route": {
             "ask_url": "https://m24-internal.danielcanfly.com/ask",
-            "full_graph_url": (
-                "https://m24-internal.danielcanfly.com/ask?surface=full-graph"
-            ),
+            "full_graph_url": "https://m24-internal.danielcanfly.com/full-graph",
             "api_query_path": "/api/m26/query",
             "api_health_path": "/api/m26/health",
             "api_graph_path": "/api/m26/graph",

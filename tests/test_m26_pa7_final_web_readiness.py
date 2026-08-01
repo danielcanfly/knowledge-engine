@@ -353,12 +353,19 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "live_final_runtime_rows_passed_awaiting_owner_browser_e2e" in workflow
     assert "duplicate_live_guard_status" in workflow
     assert "public-api-denial" in workflow
-    assert "cloudflared" in workflow
-    assert "trycloudflare" in workflow
-    assert "backend-tunnel-readback.json" in workflow
-    assert "backend-tunnel-rollback.log" in workflow
-    assert "raw_tunnel_url_recorded" in workflow
-    assert "getent hosts" in workflow
+    assert "durable backend origin" in workflow
+    assert "backend-origin-required.json" in workflow
+    assert "backend-origin-contract.json" in workflow
+    assert "missing_durable_backend_origin" in workflow
+    assert "backend_origin_must_use_https" in workflow
+    assert "backend_origin_hostname_required" in workflow
+    assert "trycloudflare_quick_tunnel_forbidden" in workflow
+    assert 'hostname == "trycloudflare.com"' in workflow
+    assert 'hostname.endswith(".trycloudflare.com")' in workflow
+    assert "raw_backend_origin_recorded" in workflow
+    assert "trycloudflare.com" in workflow
+    assert "backend-quick-tunnel" not in workflow
+    assert "cloudflared tunnel --no-autoupdate --url" not in workflow
     assert 'export M26_QUERY_BACKEND_ORIGIN="$backend_origin"' in workflow
     assert 'export NEW_PAGES_DEPLOYMENT_ID="$value"' in workflow
     assert 'test "$new_pages_deployment_id" != "$PREVIOUS_PAGES_DEPLOYMENT_ID"' in workflow

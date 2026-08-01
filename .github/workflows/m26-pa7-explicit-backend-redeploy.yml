@@ -56,14 +56,18 @@ jobs:
           python -m py_compile src/knowledge_engine/m26_ask_api.py
           python -m py_compile src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
           node --check pilot/m24/internal-product-deployment/site/m26-ask.js
-          node --check pilot/m24/internal-product-deployment/site/m26-title-guard.js
+          node --check pilot/m24/internal-product-deployment/site/m26-full-graph.js
+          node --check pilot/m24/internal-product-deployment/site/_worker.js
           test -f deploy/deploy.sh
           test -f scripts/configure_oracle_ssh.sh
           grep -F 'def _default_canonical_root()' src/knowledge_engine/m24_product_surface_integration.py
           grep -F 'FULL_GRAPH_RELEASE_ID = "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"' src/knowledge_engine/m26_ask_api.py
           grep -F 'M26_OWNER_GRAPH_DIRECT_LOAD_FAILED' src/knowledge_engine/m26_ask_api.py
-          grep -F 'FULL_GRAPH_TITLE' pilot/m24/internal-product-deployment/site/m26-ask.js
-          grep -F 'data-pa7-full-graph-title' pilot/m24/internal-product-deployment/site/m26-title-guard.js
+          grep -F 'https://m24-internal.danielcanfly.com/full-graph' src/knowledge_engine/m26_ask_api.py
+          grep -F 'data-pa7-surface="full-knowledge-graph"' pilot/m24/internal-product-deployment/site/full-graph.html
+          grep -F 'm26-pa7-dedicated-full-graph-route-v1' pilot/m24/internal-product-deployment/site/m26-full-graph.js
+          ! grep -F 'm26-pa7-route-prelock.js?v=' pilot/m24/internal-product-deployment/site/index.html
+          ! grep -F 'm26-title-guard.js?v=' pilot/m24/internal-product-deployment/site/index.html
 
       - name: Enforce bounded changed files
         if: github.event_name == 'pull_request'
@@ -72,15 +76,19 @@ jobs:
           git fetch --quiet --no-tags origin "${{ github.base_ref }}"
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'EOF'
+          .github/workflows/m26-pa-7-final-web-product-readiness.yml
           .github/workflows/m26-pa7-explicit-backend-redeploy.yml
           .github/workflows/m26-pa7-explicit-pages-deploy.yml
-          .github/workflows/m26-pa7-oracle-deploy-probe.yml
-          .github/workflows/m26-pa7-query-smoke-only.yml
           pilot/m24/internal-product-deployment/site/_headers
+          pilot/m24/internal-product-deployment/site/_worker.js
+          pilot/m24/internal-product-deployment/site/full-graph.html
           pilot/m24/internal-product-deployment/site/index.html
           pilot/m24/internal-product-deployment/site/m26-ask.js
-          pilot/m24/internal-product-deployment/site/m26-title-guard.js
-          src/knowledge_engine/m24_product_surface_integration.py
+          pilot/m24/internal-product-deployment/site/m26-full-graph.js
+          src/knowledge_engine/m26_ask_api.py
+          tests/test_m24_internal_ask_ui_api.py
+          tests/test_m26_pa7_ask_api.py
+          tests/test_m26_pa7_final_web_readiness.py
           EOF
           sed -i 's/^          //' /tmp/expected.txt
           cmp /tmp/expected.txt /tmp/changed.txt

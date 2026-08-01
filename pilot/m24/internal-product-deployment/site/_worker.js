@@ -17,6 +17,9 @@ export default {
     if (url.pathname === "/ask" || url.pathname === "/ask/") {
       return env.ASSETS.fetch(assetRequest(request, "/index.html"));
     }
+    if (url.pathname === "/full-graph" || url.pathname === "/full-graph/") {
+      return env.ASSETS.fetch(assetRequest(request, "/full-graph.html"));
+    }
     if (url.pathname === "/api/m26/health") {
       return handleOwnerApi(request, env, "/api/m26/health");
     }
