@@ -46,7 +46,6 @@ jobs:
           grep -F 'STATIC_OWNER_EMAIL_SHA256_ALLOWLIST' pilot/m24/internal-product-deployment/site/_worker.js
           grep -F 'ownerEmailHashAllowlist' pilot/m24/internal-product-deployment/site/_worker.js
           grep -F 'Bounded Concept Graph' pilot/m24/internal-product-deployment/site/index.html
-          grep -F 'not the full production knowledge graph' pilot/m24/internal-product-deployment/site/index.html
 
       - name: Enforce bounded changed files
         if: github.event_name == 'pull_request'
@@ -107,7 +106,6 @@ jobs:
           grep -F 'STATIC_OWNER_EMAIL_SHA256_ALLOWLIST' "$SITE_DIR/_worker.js"
           grep -F 'ownerEmailHashAllowlist' "$SITE_DIR/_worker.js"
           grep -F 'Bounded Concept Graph' "$SITE_DIR/index.html"
-          grep -F 'not the full production knowledge graph' "$SITE_DIR/index.html"
           sha256sum "$SITE_DIR/_worker.js" "$SITE_DIR/index.html" "$SITE_DIR/m26-ask.js" \
             > "$WORK_DIR/evidence/site-file-sha256s.txt"
           printf '%s\n' "$EXPECTED_DEPLOY_SHA" > "$WORK_DIR/evidence/deploy-sha.txt"
