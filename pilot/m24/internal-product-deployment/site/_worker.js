@@ -1,3 +1,5 @@
+let ACCESS_JWKS_CACHE = null;
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -58,6 +60,7 @@ async function handleOwnerApi(request, env, backendPath) {
   const headers = new Headers({
     "content-type": "application/json",
     "x-m26-owner-subject-hash": admission.ownerSubjectHash,
+    "x-m26-owner-identity-source": admission.identitySource,
   });
   if (env.M26_QUERY_BACKEND_TOKEN) {
     headers.set("authorization", `Bearer ${env.M26_QUERY_BACKEND_TOKEN}`);
@@ -86,13 +89,153 @@ async function verifyOwnerAccess(request, env) {
     }
   }
 
-  const accessJwt = request.headers.get("cf-access-jwt-assertion");
-  const authenticatedEmail = request.headers.get("cf-access-authenticated-user-email");
   const expectedEmailHash = String(env.M26_OWNER_EMAIL_SHA256 || "").toLowerCase();
-  if (!accessJwt || !authenticatedEmail || !expectedEmailHash) return null;
-  const actualEmailHash = await sha256Hex(authenticatedEmail.trim().toLowerCase());
+  if (!expectedEmailHash) return null;
+
+  const accessJwt = request.headers.get("cf-access-jwt-assertion");
+  if (accessJwt) {
+    const jwtAdmission = await ownerAdmissionFromAccessJwt(accessJwt, env, expectedEmailHash);
+    if (jwtAdmission) {
+      return { ownerSubjectHash: expectedOwnerHash, identitySource: jwtAdmission.identitySource };
+    }
+  }
+
+  const authenticatedEmail = request.headers.get("cf-access-authenticated-user-email");
+  if (authenticatedEmail) {
+    const actualEmailHash = await sha256Hex(authenticatedEmail.trim().toLowerCase());
+    if (timingSafeEqualHex(actualEmailHash, expectedEmailHash)) {
+      return {
+        ownerSubjectHash: expectedOwnerHash,
+        identitySource: "cloudflare_access_authenticated_email_header_hash",
+      };
+    }
+  }
+  return null;
+}
+
+async function ownerAdmissionFromAccessJwt(accessJwt, env, expectedEmailHash) {
+  let payload = null;
+  let verified = false;
+  const teamDomain = normalizedAccessTeamDomain(env.ACCESS_TEAM_DOMAIN);
+  const accessAud = String(env.ACCESS_AUD || "").trim();
+  try {
+    if (teamDomain && accessAud) {
+      payload = await verifyAccessJwtPayload(accessJwt, teamDomain, accessAud);
+      verified = true;
+    } else {
+      payload = decodeAccessJwtPayload(accessJwt);
+    }
+  } catch (_error) {
+    return null;
+  }
+  const email = String(payload.email || payload.common_name || "").trim().toLowerCase();
+  if (!email) return null;
+  const actualEmailHash = await sha256Hex(email);
   if (!timingSafeEqualHex(actualEmailHash, expectedEmailHash)) return null;
-  return { ownerSubjectHash: expectedOwnerHash, identitySource: "cloudflare_access_email_hash" };
+  return {
+    identitySource: verified
+      ? "cloudflare_access_jwt_verified_email_hash"
+      : "cloudflare_access_jwt_payload_email_hash_outer_access_boundary",
+  };
+}
+
+function normalizedAccessTeamDomain(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const withScheme = raw.startsWith("https://") ? raw : `https://${raw}`;
+  return withScheme.replace(/\/+$/, "");
+}
+
+async function verifyAccessJwtPayload(token, teamDomain, accessAud) {
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("invalid_access_jwt_shape");
+  const header = base64UrlJson(parts[0]);
+  const payload = base64UrlJson(parts[1]);
+  if (header.alg !== "RS256") throw new Error("unsupported_access_jwt_alg");
+  if (!header.kid) throw new Error("missing_access_jwt_kid");
+
+  const jwks = await fetchAccessJwks(teamDomain);
+  const jwk = jwks.keys.find((item) => item.kid === header.kid);
+  if (!jwk) throw new Error("access_jwt_kid_not_found");
+  const key = await crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  const verified = await crypto.subtle.verify(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    base64UrlBytes(parts[2]),
+    new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+  );
+  if (!verified) throw new Error("access_jwt_signature_invalid");
+  verifyAccessClaims(payload, teamDomain, accessAud);
+  return payload;
+}
+
+async function fetchAccessJwks(teamDomain) {
+  const now = Date.now();
+  if (
+    ACCESS_JWKS_CACHE &&
+    ACCESS_JWKS_CACHE.teamDomain === teamDomain &&
+    ACCESS_JWKS_CACHE.expiresAt > now
+  ) {
+    return ACCESS_JWKS_CACHE.jwks;
+  }
+  const response = await fetch(`${teamDomain}/cdn-cgi/access/certs`, {
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) throw new Error("access_jwks_fetch_failed");
+  const jwks = await response.json();
+  if (!jwks || !Array.isArray(jwks.keys)) throw new Error("access_jwks_invalid");
+  ACCESS_JWKS_CACHE = {
+    teamDomain,
+    jwks,
+    expiresAt: now + 5 * 60 * 1000,
+  };
+  return jwks;
+}
+
+function verifyAccessClaims(payload, teamDomain, accessAud) {
+  const now = Math.floor(Date.now() / 1000);
+  if (typeof payload.exp !== "number" || payload.exp <= now) {
+    throw new Error("access_jwt_expired");
+  }
+  if (typeof payload.nbf === "number" && payload.nbf > now + 60) {
+    throw new Error("access_jwt_not_yet_valid");
+  }
+  if (payload.iss !== teamDomain) {
+    throw new Error("access_jwt_issuer_mismatch");
+  }
+  const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  if (!aud.includes(accessAud)) {
+    throw new Error("access_jwt_audience_mismatch");
+  }
+}
+
+function decodeAccessJwtPayload(token) {
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("invalid_access_jwt_shape");
+  return base64UrlJson(parts[1]);
+}
+
+function base64UrlJson(value) {
+  return JSON.parse(new TextDecoder().decode(base64UrlBytes(value)));
+}
+
+function base64UrlBytes(value) {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(
+    Math.ceil(value.length / 4) * 4,
+    "=",
+  );
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
 }
 
 async function boundedJsonRequest(request) {
@@ -128,7 +271,7 @@ function jsonError(reasonCode, status) {
         "cache-control": "no-store",
         "content-type": "application/json; charset=utf-8",
       },
-    }
+    },
   );
 }
 
