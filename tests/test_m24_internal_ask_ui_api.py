@@ -5,6 +5,7 @@ import json
 import socket
 import threading
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from playwright.sync_api import expect
 
@@ -18,7 +19,7 @@ def _text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_m24_internal_site_exposes_visible_ask_entry_and_route() -> None:
+def test_m24_internal_site_exposes_ask_bounded_graph_and_full_graph() -> None:
     report = build_p6_internal_product_deployment()
     artifact_paths = {artifact.path for artifact in report.artifacts}
     index = _text(SITE_ROOT / "index.html")
@@ -28,12 +29,19 @@ def test_m24_internal_site_exposes_visible_ask_entry_and_route() -> None:
     assert "pilot/m24/internal-product-deployment/site/m26-ask.js" in artifact_paths
     assert "pilot/m24/internal-product-deployment/site/_worker.js" in artifact_paths
     assert '<a href="/ask" data-route-link="ask">Ask Knowledge Engine</a>' in index
+    assert "Bounded Concept Graph" in index
+    assert 'href="/ask?surface=full-graph"' in index
+    assert "Full Knowledge Graph" in index
     assert '<script src="m26-ask.js"></script>' in index
     assert 'ask: "Ask Knowledge Engine"' in app_js
     assert 'location.pathname === "/ask"' in app_js
     assert "window.M26AskSurface.render" in app_js
     assert "window.M26AskSurface.wire" in app_js
     assert 'const API_QUERY_PATH = "/api/m26/query";' in ask_js
+    assert 'const API_GRAPH_PATH = "/api/m26/graph";' in ask_js
+    assert 'get("surface") === "full-graph"' in ask_js
+    assert "full_current_production_relation_graph" in ask_js
+    assert "data-full-production-graph" in ask_js
     assert "<textarea" in ask_js
     assert "aria-keyshortcuts" in ask_js
     assert "data-ask-answer" in ask_js
@@ -46,6 +54,8 @@ def test_worker_api_is_owner_only_fail_closed_proxy() -> None:
 
     assert "/api/m26/query" in worker
     assert "/api/m26/health" in worker
+    assert "/api/m26/graph" in worker
+    assert "M26_GRAPH_METHOD_NOT_ALLOWED" in worker
     assert "verifyOwnerAccess" in worker
     assert "verifyAccessJwt" in worker
     assert "cf-access-jwt-assertion" in worker
@@ -106,17 +116,48 @@ def test_browser_ask_surface_renders_answer_citations_sources_and_trace() -> Non
             browser.close()
 
 
+def test_browser_full_graph_surface_loads_exact_owner_graph() -> None:
+    build_p6_internal_product_deployment()
+    with _ask_smoke_server() as base:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            page = browser.new_page(viewport={"width": 1440, "height": 1000})
+            page.goto(f"{base}/ask?surface=full-graph")
+            expect(page.locator("#route-title")).to_have_text("Full Knowledge Graph")
+            expect(page.locator("[data-full-production-graph]")).to_be_visible()
+            expect(page.get_by_text("release-full-graph-test", exact=True)).to_be_visible()
+            expect(page.get_by_text("full production", exact=True)).to_be_visible()
+            expect(page.locator("[data-sigma-stage]")).to_be_visible()
+            expect(page.locator("#app-status")).to_contain_text(
+                "Full production graph verified: 2 nodes, 1 edges."
+            )
+            browser.close()
+
+
 class _AskSmokeHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *_args: object) -> None:
         return
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path in {"/ask", "/ask/"}:
+        parsed = urlsplit(self.path)
+        if parsed.path in {"/ask", "/ask/"}:
             self.path = "/index.html"
+            return super().do_GET()
+        if parsed.path == "/api/m26/graph":
+            body = json.dumps(_sample_graph_response()).encode("utf-8")
+            self.send_response(200)
+            self.send_header("cache-control", "no-store")
+            self.send_header("content-type", "application/json; charset=utf-8")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         return super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path != "/api/m26/query":
+        if urlsplit(self.path).path != "/api/m26/query":
             self.send_error(404)
             return
         length = int(self.headers.get("content-length", "0"))
@@ -149,6 +190,70 @@ class _ask_smoke_server:
         self.server.shutdown()
         self.thread.join(timeout=5)
         self.server.server_close()
+
+
+def _sample_graph_response() -> dict[str, object]:
+    return {
+        "schema_version": "knowledge-engine-m26-pa7-owner-full-graph/v1",
+        "status": "ok",
+        "graph_scope": "full_current_production_relation_graph",
+        "release_id": "release-full-graph-test",
+        "manifest_sha256": "a" * 64,
+        "graph_v2_sha256": "b" * 64,
+        "loaded_at": "2026-08-01T00:00:00Z",
+        "counts": {"nodes": 2, "edges": 1},
+        "nodes": [
+            {
+                "concept_id": "concepts/alpha",
+                "title": "Alpha",
+                "description": "Alpha concept",
+                "type": "Concept",
+                "audience": "internal",
+                "tags": ["alpha"],
+            },
+            {
+                "concept_id": "concepts/beta",
+                "title": "Beta",
+                "description": "Beta concept",
+                "type": "Concept",
+                "audience": "internal",
+                "tags": ["beta"],
+            },
+        ],
+        "edges": [
+            {
+                "edge_id": "edge-alpha-beta",
+                "source": "concepts/alpha",
+                "target": "concepts/beta",
+                "relation_type": "supports",
+                "directed": True,
+                "audience": "internal",
+            }
+        ],
+        "available_actions": [
+            "select_node",
+            "search_node",
+            "filter_relation",
+            "one_hop",
+            "two_hop",
+        ],
+        "binding": {
+            "production_pointer_key": "channels/production.json",
+            "production_pointer_sha256": "c" * 64,
+            "pa2_acceptance_self_sha256": "d" * 64,
+            "inventory_run_id": 30680636103,
+            "inventory_artifact_id": 8812152272,
+        },
+        "authority": {
+            "owner_only": True,
+            "read_only": True,
+            "canonical_writes": 0,
+            "corpus_index_content_mutations": 0,
+            "production_pointer_mutations": 0,
+            "qdrant_write_operations": 0,
+            "r2_write_operations": 0,
+        },
+    }
 
 
 def _sample_web_response() -> dict[str, object]:
