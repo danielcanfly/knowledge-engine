@@ -547,6 +547,20 @@ jobs:
               return matches
 
 
+          def process_owner_class(pid):
+              try:
+                  comm = Path(f"/proc/{pid}/comm").read_text(errors="replace").strip().lower()
+              except OSError:
+                  return "unknown"
+              if comm == "caddy":
+                  return "system_caddy"
+              if comm in {"nginx", "apache2", "httpd"}:
+                  return "system_web_server_other"
+              if comm == "docker-proxy":
+                  return "docker_proxy"
+              return "unrecognized"
+
+
           def inspect_running_containers():
               ps = run(["docker", "ps", "-q"])
               if ps.returncode != 0:
@@ -592,6 +606,7 @@ jobs:
           containers = inspect_running_containers()
           owner_ports = {}
           owner_methods = {}
+          non_docker_owner_classes = set()
           non_docker_listener_count = 0
           for listener in listeners:
               matched = set()
@@ -612,6 +627,11 @@ jobs:
                       owner_methods.setdefault(cid, set()).update(methods)
               if not matched:
                   non_docker_listener_count += 1
+                  if listener["pids"]:
+                      for pid in listener["pids"]:
+                          non_docker_owner_classes.add(process_owner_class(pid))
+                  else:
+                      non_docker_owner_classes.add("pid_unavailable")
 
           records = []
           stopped_names = []
@@ -651,6 +671,7 @@ jobs:
               "listener_error": listener_error,
               "listener_ports_checked": sorted(PORTS),
               "non_docker_listener_count": non_docker_listener_count,
+              "non_docker_owner_classes": sorted(non_docker_owner_classes),
               "owner_records": records,
               "protected_knowledge_mutations": 0,
               "raw_container_id_recorded": False,
@@ -691,20 +712,151 @@ jobs:
           if int(status.get("stopped_docker_owner_count") or 0) > 0:
               with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
                   env_file.write("M26_ORACLE_HTTPS_PORT_HANDOFF_STOPPED=true\n")
-          if status.get("status") != "pass":
+          mode = None
+          if status.get("status") == "pass":
+              mode = "docker_caddy"
+          elif (
+              status.get("non_docker_owner_classes") == ["system_caddy"]
+              and int(status.get("stop_failed_count") or 0) == 0
+              and int(status.get("docker_owner_count") or 0) == 0
+          ):
+              mode = "system_caddy"
+          if not mode:
               raise SystemExit("oracle_https_port_handoff_failed")
+          Path(os.environ["WORK_DIR"], "oracle-https-port-handoff-mode").write_text(mode + "\n")
           PY
               rm -f "$https_handoff_status"
-              printf '%s\n' \
-                "$M26_ORACLE_BACKEND_TLS_HOSTNAME {" \
-                "  reverse_proxy 127.0.0.1:8080" \
-                "}" \
-                > "$WORK_DIR/Caddyfile"
-              ssh oracle-knowledge "mkdir -p '$caddy_dir' && chmod 700 '$caddy_dir'"
-              scp "$WORK_DIR/Caddyfile" "oracle-knowledge:$caddy_dir/Caddyfile.next"
-              rm -f "$WORK_DIR/Caddyfile"
-              ssh oracle-knowledge "set -euo pipefail; mv '$caddy_dir/Caddyfile.next' '$caddy_dir/Caddyfile'; docker rm -f m26-pa7-backend-https-origin >/dev/null 2>&1 || true; docker run -d --restart unless-stopped --name m26-pa7-backend-https-origin --network host -v '$caddy_dir/Caddyfile:/etc/caddy/Caddyfile:ro' -v m26-pa7-caddy-data:/data -v m26-pa7-caddy-config:/config caddy:2-alpine >/dev/null"
-              echo "M26_BACKEND_HTTPS_PROXY_DEPLOYED=true" >> "$GITHUB_ENV"
+              https_origin_mode="$(cat "$WORK_DIR/oracle-https-port-handoff-mode")"
+              rm -f "$WORK_DIR/oracle-https-port-handoff-mode"
+              if test "$https_origin_mode" = "system_caddy"; then
+                system_caddy_status="$WORK_DIR/system-caddy-origin-binding.status"
+                system_caddy_script="$WORK_DIR/system-caddy-origin-binding.py"
+                cat > "$system_caddy_script" <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          CADDYFILE = Path("/etc/caddy/Caddyfile")
+          BACKUP = Path("/etc/caddy/Caddyfile.m26-pa7-before-final-web")
+          SNIPPET = Path("/etc/caddy/m26-pa7-backend-https-origin.caddy")
+
+
+          def run(cmd):
+              return subprocess.run(cmd, check=False, capture_output=True, text=True)
+
+
+          def write_evidence(status, reason_code=None, **extra):
+              evidence = {
+                  "caddyfile_backup_path_recorded": False,
+                  "protected_knowledge_mutations": 0,
+                  "raw_hostname_recorded": False,
+                  "raw_snippet_recorded": False,
+                  "reason_code": reason_code,
+                  "schema_version": "knowledge-engine-m26-pa7-system-caddy-origin-binding/v1",
+                  "snippet_path_recorded": False,
+                  "status": status,
+                  **extra,
+              }
+              print(json.dumps(evidence, sort_keys=True))
+              raise SystemExit(0 if status == "pass" else 1)
+
+
+          def restore_from_backup():
+              if run(["sudo", "-n", "test", "-f", str(BACKUP)]).returncode == 0:
+                  run(["sudo", "-n", "cp", str(BACKUP), str(CADDYFILE)])
+              run(["sudo", "-n", "rm", "-f", str(SNIPPET)])
+              run(["sudo", "-n", "systemctl", "reload", "caddy"])
+
+
+          state_dir = Path(os.environ["HANDOFF_STATE_DIR"])
+          hostname = os.environ["M26_ORACLE_BACKEND_TLS_HOSTNAME"]
+          if run(["sudo", "-n", "systemctl", "is-active", "--quiet", "caddy"]).returncode != 0:
+              write_evidence("fail", "system_caddy_inactive")
+
+          current = run(["sudo", "-n", "cat", str(CADDYFILE)])
+          if current.returncode != 0:
+              write_evidence("fail", "system_caddyfile_unreadable")
+
+          snippet_next = state_dir / "system-caddy-origin-binding.next"
+          snippet_next.write_text(f"{hostname} {{\n  reverse_proxy 127.0.0.1:8080\n}}\n")
+          if run(["sudo", "-n", "install", "-m", "0644", str(snippet_next), str(SNIPPET)]).returncode != 0:
+              write_evidence("fail", "system_caddy_snippet_install_failed")
+
+          import_line = f"import {SNIPPET}"
+          backup_present_before = run(["sudo", "-n", "test", "-f", str(BACKUP)]).returncode == 0
+          backup_written = False
+          import_added = False
+          if import_line not in current.stdout:
+              if not backup_present_before:
+                  if run(["sudo", "-n", "cp", str(CADDYFILE), str(BACKUP)]).returncode != 0:
+                      write_evidence("fail", "system_caddyfile_backup_failed")
+                  backup_written = True
+              caddyfile_next = state_dir / "Caddyfile.system-caddy.next"
+              caddyfile_next.write_text(
+                  current.stdout.rstrip()
+                  + "\n\n# M26.PA.7 final web backend origin\n"
+                  + import_line
+                  + "\n"
+              )
+              if run(["sudo", "-n", "install", "-m", "0644", str(caddyfile_next), str(CADDYFILE)]).returncode != 0:
+                  restore_from_backup()
+                  write_evidence("fail", "system_caddyfile_install_failed")
+              import_added = True
+
+          if run(["sudo", "-n", "caddy", "validate", "--config", str(CADDYFILE)]).returncode != 0:
+              restore_from_backup()
+              write_evidence("fail", "system_caddy_validate_failed")
+
+          reload_result = run(["sudo", "-n", "systemctl", "reload", "caddy"])
+          if reload_result.returncode != 0:
+              reload_result = run(["sudo", "-n", "caddy", "reload", "--config", str(CADDYFILE)])
+          if reload_result.returncode != 0:
+              restore_from_backup()
+              write_evidence("fail", "system_caddy_reload_failed")
+
+          write_evidence(
+              "pass",
+              backup_present_before=backup_present_before,
+              backup_written=backup_written,
+              import_added=import_added,
+              snippet_installed=True,
+          )
+          PY
+                scp "$system_caddy_script" "oracle-knowledge:$caddy_dir/system-caddy-origin-binding.py"
+                rm -f "$system_caddy_script"
+                ssh oracle-knowledge "HANDOFF_STATE_DIR='$caddy_dir' M26_ORACLE_BACKEND_TLS_HOSTNAME='$M26_ORACLE_BACKEND_TLS_HOSTNAME' python3 '$caddy_dir/system-caddy-origin-binding.py'" \
+                  > "$system_caddy_status"
+                SYSTEM_CADDY_STATUS_PATH="$system_caddy_status" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          status = json.loads(Path(os.environ["SYSTEM_CADDY_STATUS_PATH"]).read_text())
+          Path(os.environ["WORK_DIR"], "evidence/system-caddy-origin-binding.json").write_text(
+              json.dumps(status, indent=2, sort_keys=True) + "\n"
+          )
+          if status.get("status") != "pass":
+              raise SystemExit("system_caddy_origin_binding_failed")
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+              env_file.write("M26_SYSTEM_CADDY_ORIGIN_DEPLOYED=true\n")
+              env_file.write("M26_BACKEND_HTTPS_PROXY_DEPLOYED=true\n")
+              env_file.write("M26_BACKEND_HTTPS_PROXY_MODE=system_caddy\n")
+          PY
+                rm -f "$system_caddy_status"
+              else
+                printf '%s\n' \
+                  "$M26_ORACLE_BACKEND_TLS_HOSTNAME {" \
+                  "  reverse_proxy 127.0.0.1:8080" \
+                  "}" \
+                  > "$WORK_DIR/Caddyfile"
+                ssh oracle-knowledge "mkdir -p '$caddy_dir' && chmod 700 '$caddy_dir'"
+                scp "$WORK_DIR/Caddyfile" "oracle-knowledge:$caddy_dir/Caddyfile.next"
+                rm -f "$WORK_DIR/Caddyfile"
+                ssh oracle-knowledge "set -euo pipefail; mv '$caddy_dir/Caddyfile.next' '$caddy_dir/Caddyfile'; docker rm -f m26-pa7-backend-https-origin >/dev/null 2>&1 || true; docker run -d --restart unless-stopped --name m26-pa7-backend-https-origin --network host -v '$caddy_dir/Caddyfile:/etc/caddy/Caddyfile:ro' -v m26-pa7-caddy-data:/data -v m26-pa7-caddy-config:/config caddy:2-alpine >/dev/null"
+                echo "M26_BACKEND_HTTPS_PROXY_DEPLOYED=true" >> "$GITHUB_ENV"
+                echo "M26_BACKEND_HTTPS_PROXY_MODE=docker_caddy" >> "$GITHUB_ENV"
+              fi
             fi
           else
             backend_origin="$M26_QUERY_BACKEND_URL"
@@ -894,8 +1046,13 @@ jobs:
           PY
           if test "$status" != "200" && test "${M26_BACKEND_HTTPS_PROXY_DEPLOYED:-false}" = "true"; then
             caddy_raw="$WORK_DIR/backend-https-origin-diagnostic.raw.log"
-            ssh oracle-knowledge "docker logs --tail 200 m26-pa7-backend-https-origin 2>&1 || true" \
-              > "$caddy_raw" 2>&1 || true
+            if test "${M26_BACKEND_HTTPS_PROXY_MODE:-docker_caddy}" = "system_caddy"; then
+              ssh oracle-knowledge "sudo -n journalctl -u caddy --no-pager -n 200 2>&1 || true" \
+                > "$caddy_raw" 2>&1 || true
+            else
+              ssh oracle-knowledge "docker logs --tail 200 m26-pa7-backend-https-origin 2>&1 || true" \
+                > "$caddy_raw" 2>&1 || true
+            fi
             CADDY_RAW_LOG="$caddy_raw" python - <<'PY'
           import json
           import os
@@ -1133,6 +1290,10 @@ jobs:
           if test "${M26_BACKEND_HTTPS_PROXY_DEPLOYED:-false}" = "true"; then
             ssh oracle-knowledge "docker rm -f m26-pa7-backend-https-origin >/dev/null 2>&1 || true" \
               > "$WORK_DIR/evidence/backend-https-origin-rollback.log" 2>&1
+          fi
+          if test "${M26_SYSTEM_CADDY_ORIGIN_DEPLOYED:-false}" = "true"; then
+            ssh oracle-knowledge "set +e; backup=/etc/caddy/Caddyfile.m26-pa7-before-final-web; caddyfile=/etc/caddy/Caddyfile; snippet=/etc/caddy/m26-pa7-backend-https-origin.caddy; if sudo -n test -f \"\$backup\"; then sudo -n cp \"\$backup\" \"\$caddyfile\" >/dev/null 2>&1 || true; fi; sudo -n rm -f \"\$snippet\" >/dev/null 2>&1 || true; sudo -n systemctl reload caddy >/dev/null 2>&1 || sudo -n caddy reload --config \"\$caddyfile\" >/dev/null 2>&1 || true; echo SYSTEM_CADDY_ORIGIN_ROLLBACK_ATTEMPTED" \
+              > "$WORK_DIR/evidence/system-caddy-origin-rollback.log" 2>&1
           fi
           if test "${M26_ORACLE_HTTPS_PORT_HANDOFF_STOPPED:-false}" = "true"; then
             ssh oracle-knowledge "set +e; state_file='$ORACLE_VM_DEPLOY_PATH/.m26-pa7-final-web-https-origin/oracle-https-port-handoff-stopped-containers'; if test -f \"\$state_file\"; then while IFS= read -r container_name; do test -n \"\$container_name\" && docker start \"\$container_name\" >/dev/null 2>&1 || true; done < \"\$state_file\"; echo ORACLE_HTTPS_PORT_HANDOFF_RESTART_ATTEMPTED; else echo ORACLE_HTTPS_PORT_HANDOFF_STATE_MISSING; fi" \
