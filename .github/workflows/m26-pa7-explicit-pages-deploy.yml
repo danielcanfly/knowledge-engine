@@ -55,7 +55,7 @@ jobs:
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'EOF'
           .github/workflows/m26-pa7-explicit-pages-deploy.yml
-          pilot/m24/internal-product-deployment/site/_worker.js
+          pilot/m24/internal-product-deployment/site/data/m26-pa7-sha-alignment-trigger.json
           EOF
           sed -i 's/^          //' /tmp/expected.txt
           cmp /tmp/expected.txt /tmp/changed.txt
