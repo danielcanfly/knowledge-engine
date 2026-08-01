@@ -5,7 +5,9 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import pytest
 from jsonschema import Draft202012Validator
+from scripts.m26_pa7_named_backend_tunnel import _require_hostname_under_zone
 
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import LocalDenseProjectionChannel
 from knowledge_engine.m26_pa7_final_web_readiness import (
@@ -347,6 +349,12 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "scripts/configure_oracle_ssh.sh" in workflow
     assert "M26_QUERY_BACKEND_TOKEN" in workflow
     assert "M26_QUERY_BACKEND_URL" in workflow
+    assert "M26_QUERY_BACKEND_TUNNEL_HOSTNAME" in workflow
+    assert "M26_QUERY_BACKEND_TUNNEL_NAME" in workflow
+    assert "scripts/m26_pa7_named_backend_tunnel.py ensure" in workflow
+    assert "backend-named-tunnel.json" in workflow
+    assert "m26-pa7-backend-tunnel" in workflow
+    assert "cloudflare/cloudflared:latest" in workflow
     assert "wrangler@4.111.0 pages secret put" in workflow
     assert "wrangler@4.111.0 pages deploy" in workflow
     assert "final_formal_query_specs()[:9]" in workflow
@@ -354,9 +362,7 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "duplicate_live_guard_status" in workflow
     assert "public-api-denial" in workflow
     assert "durable backend origin" in workflow
-    assert "backend-origin-required.json" in workflow
     assert "backend-origin-contract.json" in workflow
-    assert "missing_durable_backend_origin" in workflow
     assert "backend_origin_must_use_https" in workflow
     assert "backend_origin_hostname_required" in workflow
     assert "trycloudflare_quick_tunnel_forbidden" in workflow
@@ -375,3 +381,67 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "91a8a5567efa6bf941162aa806b3ba476aaddf7867640e53053b35fb225a5dae" in workflow
     assert "ca56c5b29918faf79046b1c1726c35d7715951a35445b2e63f56ea5a70b7af9c" in workflow
     assert "--insecure" not in workflow
+
+
+def test_named_backend_tunnel_script_uses_sanitized_cloudflare_control_plane() -> None:
+    script = (ROOT / "scripts/m26_pa7_named_backend_tunnel.py").read_text(encoding="utf-8")
+
+    assert "/cfd_tunnel" in script
+    assert "config_src" in script
+    assert "cfargotunnel.com" in script
+    assert "raw_backend_origin_recorded" in script
+    assert '"raw_hostname_recorded": False' in script
+    assert '"tunnel_token_recorded": False' in script
+    assert "M26_BACKEND_TUNNEL_TOKEN" in script
+    assert "trycloudflare quick tunnel hostnames are forbidden" in script
+
+
+@pytest.mark.parametrize(
+    ("hostname", "message"),
+    [
+        ("trycloudflare.com", "trycloudflare quick tunnel hostnames are forbidden"),
+        ("abc.trycloudflare.com", "trycloudflare quick tunnel hostnames are forbidden"),
+        ("danielcanfly.com", "backend tunnel hostname must be a subdomain"),
+        ("m26-query-backend.example.com", "backend tunnel hostname must be within"),
+    ],
+)
+def test_named_backend_tunnel_rejects_unsafe_hostnames(
+    hostname: str,
+    message: str,
+) -> None:
+    with pytest.raises(SystemExit, match=message):
+        _require_hostname_under_zone(hostname, "danielcanfly.com")
+
+
+def test_named_backend_tunnel_accepts_zone_subdomain() -> None:
+    _require_hostname_under_zone("m26-query-backend.danielcanfly.com", "danielcanfly.com")
+
+
+def test_deploy_script_clears_stale_compose_state_before_service_up() -> None:
+    deploy = (ROOT / "deploy/deploy.sh").read_text(encoding="utf-8")
+
+    assert "docker compose down --remove-orphans || true" in deploy
+    assert "docker compose rm -f -s -v knowledge-engine" in deploy
+    assert deploy.index("docker compose down --remove-orphans || true") < deploy.index(
+        "docker compose run --rm --no-deps knowledge-engine"
+    )
+
+
+def test_explicit_pages_deploy_boundary_accepts_production_wiring_fix() -> None:
+    workflow = (ROOT / ".github/workflows/m26-pa7-explicit-pages-deploy.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert '".github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml"' in workflow
+    assert '"deploy/deploy.sh"' in workflow
+    assert '"scripts/m26_pa7_named_backend_tunnel.py"' in workflow
+
+
+def test_explicit_backend_redeploy_boundary_accepts_production_wiring_fix() -> None:
+    workflow = (
+        ROOT / ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
+    ).read_text(encoding="utf-8")
+
+    assert ".github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml" in workflow
+    assert "deploy/deploy.sh" in workflow
+    assert "scripts/m26_pa7_named_backend_tunnel.py" in workflow

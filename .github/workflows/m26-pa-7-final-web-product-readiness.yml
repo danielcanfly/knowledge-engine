@@ -8,7 +8,9 @@ on:
       - "Dockerfile"
       - "pilot/m26/m26-pa-7-final-web-formal-test-manifest.json"
       - "pilot/m24/internal-product-deployment/site/**"
+      - "deploy/deploy.sh"
       - "schemas/m26-pa-7-final-web-*.schema.json"
+      - "scripts/m26_pa7_named_backend_tunnel.py"
       - "src/knowledge_engine/api.py"
       - "src/knowledge_engine/m26_ask_api.py"
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
@@ -25,7 +27,9 @@ on:
       - "Dockerfile"
       - "pilot/m26/m26-pa-7-final-web-formal-test-manifest.json"
       - "pilot/m24/internal-product-deployment/site/**"
+      - "deploy/deploy.sh"
       - "schemas/m26-pa-7-final-web-*.schema.json"
+      - "scripts/m26_pa7_named_backend_tunnel.py"
       - "src/knowledge_engine/api.py"
       - "src/knowledge_engine/m26_ask_api.py"
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
@@ -102,6 +106,7 @@ jobs:
             src/knowledge_engine/api.py \
             src/knowledge_engine/m26_ask_api.py \
             src/knowledge_engine/m26_pa7_final_web_readiness.py \
+            scripts/m26_pa7_named_backend_tunnel.py \
             tests/test_m24_internal_ask_ui_api.py \
             tests/test_m26_pa7_ask_api.py \
             tests/test_m26_pa7_final_web_readiness.py
@@ -109,6 +114,7 @@ jobs:
             src/knowledge_engine/api.py \
             src/knowledge_engine/m26_ask_api.py \
             src/knowledge_engine/m26_pa7_final_web_readiness.py \
+            scripts/m26_pa7_named_backend_tunnel.py \
             tests/test_m24_internal_ask_ui_api.py \
             tests/test_m26_pa7_ask_api.py \
             tests/test_m26_pa7_final_web_readiness.py
@@ -126,7 +132,7 @@ jobs:
           git fetch --quiet --no-tags origin "${{ github.base_ref }}"
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat /tmp/changed.txt
-          ! grep -Ev '^(\.github/workflows/(m26-pa-7-final-web-product-readiness|m26-pa-4-verified-answer-citation-gate|m26-1-architecture-authority)\.yml|Dockerfile|pilot/m26/m26-pa-7-final-web-formal-test-manifest\.json|pilot/m24/internal-product-deployment/site/(index\.html|app\.js|m26-ask\.js|_worker\.js|styles\.css|data/.*)|schemas/m26-pa-7-final-web-[a-z-]+-v1\.schema\.json|src/knowledge_engine/(api|m26_ask_api|m26_pa7_final_web_readiness)\.py|tests/test_(m24_internal_ask_ui_api|m26_pa7_ask_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/(m26-pa-7-final-web-product-readiness|m26-pa7-owner-access-and-full-graph-repair|m26-pa7-explicit-pages-deploy|m26-pa7-explicit-backend-redeploy|m26-pa-4-verified-answer-citation-gate|m26-1-architecture-authority)\.yml|Dockerfile|deploy/deploy\.sh|pilot/m26/m26-pa-7-final-web-formal-test-manifest\.json|pilot/m24/internal-product-deployment/site/(index\.html|app\.js|m26-ask\.js|_worker\.js|styles\.css|data/.*)|schemas/m26-pa-7-final-web-[a-z-]+-v1\.schema\.json|scripts/m26_pa7_named_backend_tunnel\.py|src/knowledge_engine/(api|m26_ask_api|m26_pa7_final_web_readiness)\.py|tests/test_(m24_internal_ask_ui_api|m26_pa7_ask_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
           ! grep -E '^(production/|release/production|r2/|qdrant/|foundation/|credentials/|secrets/)' /tmp/changed.txt
 
   deploy_and_runtime_formal:
@@ -144,6 +150,7 @@ jobs:
       CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
       CLOUDFLARE_ACCESS_READ_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_READ_TOKEN }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
       QDRANT_URL: ${{ secrets.QDRANT_URL }}
@@ -153,6 +160,8 @@ jobs:
       KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH: 93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b
       M26_OWNER_EMAIL_SHA256: ${{ vars.M26_OWNER_EMAIL_SHA256 || '44fff1988e24f32fad88891fad5cc8e90591d4a59457c61aac768f2517dff556' }}
       M26_QUERY_BACKEND_URL: ${{ vars.M26_QUERY_BACKEND_URL || secrets.M26_QUERY_BACKEND_URL }}
+      M26_QUERY_BACKEND_TUNNEL_HOSTNAME: ${{ vars.M26_QUERY_BACKEND_TUNNEL_HOSTNAME || secrets.M26_QUERY_BACKEND_TUNNEL_HOSTNAME || 'm26-query-backend.danielcanfly.com' }}
+      M26_QUERY_BACKEND_TUNNEL_NAME: ${{ vars.M26_QUERY_BACKEND_TUNNEL_NAME || secrets.M26_QUERY_BACKEND_TUNNEL_NAME || 'm26-pa7-query-backend' }}
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
@@ -209,7 +218,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           for name in \
             CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_PAGES_TOKEN CLOUDFLARE_ACCESS_READ_TOKEN \
-            CLOUDFLARE_API_TOKEN MINIMAX_API_KEY QDRANT_URL \
+            CLOUDFLARE_API_TOKEN CLOUDFLARE_WORKERS_TOKEN \
+            MINIMAX_API_KEY QDRANT_URL \
             ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH \
             ORACLE_VM_SSH_PRIVATE_KEY AUTH_MODE JWT_ISSUER JWT_JWKS_URL JWT_AUDIENCE \
             R2_ENDPOINT_URL R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
@@ -297,34 +307,48 @@ jobs:
             http://127.0.0.1:8080/api/m26/health" \
             > "$WORK_DIR/evidence/backend-health-local.json"
           if test -z "${M26_QUERY_BACKEND_URL:-}"; then
-            python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          evidence = {
-              "schema_version": "knowledge-engine-m26-pa7-durable-backend-origin-required/v1",
-              "browser_secret_delivery": False,
-              "raw_backend_origin_recorded": False,
-              "server_side_pages_secret_only": True,
-              "status": "missing_durable_backend_origin",
-          }
-          Path(os.environ["WORK_DIR"], "evidence/backend-origin-required.json").write_text(
-              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
-          )
-          PY
-            echo "M26_QUERY_BACKEND_URL must be a durable HTTPS origin, such as a named Cloudflare Tunnel hostname." >&2
-            exit 4
+            : "${M26_QUERY_BACKEND_TUNNEL_HOSTNAME:?missing backend tunnel hostname}"
+            : "${M26_QUERY_BACKEND_TUNNEL_NAME:?missing backend tunnel name}"
+            python scripts/m26_pa7_named_backend_tunnel.py ensure \
+              --account-id "$CLOUDFLARE_ACCOUNT_ID" \
+              --zone-name "$CLOUDFLARE_ZONE_NAME" \
+              --hostname "$M26_QUERY_BACKEND_TUNNEL_HOSTNAME" \
+              --tunnel-name "$M26_QUERY_BACKEND_TUNNEL_NAME" \
+              --service http://127.0.0.1:8080 \
+              --evidence-output "$WORK_DIR/evidence/backend-named-tunnel.json" \
+              --runtime-env-output "$WORK_DIR/backend-named-tunnel.env"
+            while IFS='=' read -r name value; do
+              case "$name" in
+                M26_BACKEND_TUNNEL_ID|M26_BACKEND_TUNNEL_TOKEN|M26_QUERY_BACKEND_ORIGIN) ;;
+                *) exit 1 ;;
+              esac
+              test -n "$value"
+              echo "::add-mask::$value"
+              printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+              export "$name=$value"
+            done < "$WORK_DIR/backend-named-tunnel.env"
+            rm -f "$WORK_DIR/backend-named-tunnel.env"
+            tunnel_state_dir="$ORACLE_VM_DEPLOY_PATH/.m26-pa7-final-web-tunnel"
+            printf '%s' "$M26_BACKEND_TUNNEL_TOKEN" > "$WORK_DIR/backend-tunnel-token"
+            ssh oracle-knowledge "mkdir -p '$tunnel_state_dir' && chmod 700 '$tunnel_state_dir'"
+            scp "$WORK_DIR/backend-tunnel-token" "oracle-knowledge:$tunnel_state_dir/token.next"
+            rm -f "$WORK_DIR/backend-tunnel-token"
+            ssh oracle-knowledge "set -euo pipefail; mv '$tunnel_state_dir/token.next' '$tunnel_state_dir/token'; chmod 600 '$tunnel_state_dir/token'; docker rm -f m26-pa7-backend-tunnel >/dev/null 2>&1 || true; docker run -d --restart unless-stopped --name m26-pa7-backend-tunnel --network host cloudflare/cloudflared:latest tunnel --no-autoupdate run --token \"\$(cat '$tunnel_state_dir/token')\" >/dev/null"
+            echo "M26_BACKEND_TUNNEL_DEPLOYED=true" >> "$GITHUB_ENV"
+          else
+            backend_origin="$M26_QUERY_BACKEND_URL"
+            echo "::add-mask::$backend_origin"
+            export M26_QUERY_BACKEND_ORIGIN="$backend_origin"
+            printf 'M26_QUERY_BACKEND_ORIGIN=%s\n' "$backend_origin" >> "$GITHUB_ENV"
           fi
 
       - name: Verify external backend origin
         if: steps.guard.outputs.authorized == 'true'
         run: |
           set -euo pipefail
-          : "${M26_QUERY_BACKEND_URL:?missing durable backend origin}"
-          backend_origin="$M26_QUERY_BACKEND_URL"
+          : "${M26_QUERY_BACKEND_ORIGIN:?missing durable backend origin}"
+          backend_origin="$M26_QUERY_BACKEND_ORIGIN"
           echo "::add-mask::$backend_origin"
-          export M26_QUERY_BACKEND_ORIGIN="$backend_origin"
-          printf 'M26_QUERY_BACKEND_ORIGIN=%s\n' "$backend_origin" >> "$GITHUB_ENV"
           python - <<'PY'
           import hashlib
           import json

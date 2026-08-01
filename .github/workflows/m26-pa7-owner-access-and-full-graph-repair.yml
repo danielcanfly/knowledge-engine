@@ -61,7 +61,7 @@ jobs:
           git fetch --quiet --no-tags origin "${{ github.base_ref }}"
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat /tmp/changed.txt
-          ! grep -Ev '^(\.github/workflows/m26-pa7-owner-access-and-full-graph-repair\.yml|pilot/m24/internal-product-deployment/site/_worker\.js|scripts/m26_pa7_full_graph_readonly_inventory\.py|tests/test_m24_internal_ask_ui_api\.py)$' /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/(m26-pa7-owner-access-and-full-graph-repair|m26-pa-7-final-web-product-readiness|m26-pa7-explicit-pages-deploy|m26-pa7-explicit-backend-redeploy)\.yml|deploy/deploy\.sh|pilot/m24/internal-product-deployment/site/_worker\.js|scripts/(m26_pa7_full_graph_readonly_inventory|m26_pa7_named_backend_tunnel)\.py|tests/test_(m24_internal_ask_ui_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
           ! grep -E '^(production/|release/production|r2/|qdrant/|foundation/|credentials/|secrets/)' /tmp/changed.txt
 
   deploy_and_inventory:
@@ -78,6 +78,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
       CLOUDFLARE_ACCESS_READ_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_READ_TOKEN }}
+      CLOUDFLARE_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
       R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID_READ || secrets.R2_ACCESS_KEY_ID }}
