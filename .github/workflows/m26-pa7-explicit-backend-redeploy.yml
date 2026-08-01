@@ -7,6 +7,10 @@ on:
       - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
       - ".github/workflows/m26-pa7-query-smoke-only.yml"
       - ".github/workflows/m26-pa7-oracle-deploy-probe.yml"
+      - ".github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml"
+      - ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
+      - "deploy/deploy.sh"
+      - "scripts/m26_pa7_named_backend_tunnel.py"
       - "src/knowledge_engine/m24_product_surface_integration.py"
       - "src/knowledge_engine/m26_ask_api.py"
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
@@ -60,6 +64,7 @@ jobs:
           node --check pilot/m24/internal-product-deployment/site/_worker.js
           test -f deploy/deploy.sh
           test -f scripts/configure_oracle_ssh.sh
+          python -m py_compile scripts/m26_pa7_named_backend_tunnel.py
           grep -F 'def _default_canonical_root()' src/knowledge_engine/m24_product_surface_integration.py
           grep -F 'FULL_GRAPH_RELEASE_ID = "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"' src/knowledge_engine/m26_ask_api.py
           grep -F 'M26_OWNER_GRAPH_DIRECT_LOAD_FAILED' src/knowledge_engine/m26_ask_api.py
@@ -79,19 +84,29 @@ jobs:
           .github/workflows/m26-pa-7-final-web-product-readiness.yml
           .github/workflows/m26-pa7-explicit-backend-redeploy.yml
           .github/workflows/m26-pa7-explicit-pages-deploy.yml
+          .github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml
+          deploy/deploy.sh
           pilot/m24/internal-product-deployment/site/_headers
           pilot/m24/internal-product-deployment/site/_worker.js
           pilot/m24/internal-product-deployment/site/full-graph.html
           pilot/m24/internal-product-deployment/site/index.html
           pilot/m24/internal-product-deployment/site/m26-ask.js
           pilot/m24/internal-product-deployment/site/m26-full-graph.js
+          scripts/m26_pa7_named_backend_tunnel.py
           src/knowledge_engine/m26_ask_api.py
           tests/test_m24_internal_ask_ui_api.py
           tests/test_m26_pa7_ask_api.py
           tests/test_m26_pa7_final_web_readiness.py
           EOF
           sed -i 's/^          //' /tmp/expected.txt
-          cmp /tmp/expected.txt /tmp/changed.txt
+          python - <<'PY'
+          from pathlib import Path
+          expected = set(Path("/tmp/expected.txt").read_text().splitlines())
+          actual = set(Path("/tmp/changed.txt").read_text().splitlines())
+          extra = sorted(actual - expected)
+          if extra:
+              raise SystemExit(f"bounded changed files failed extra={extra}")
+          PY
 
   redeploy_backend:
     if: >

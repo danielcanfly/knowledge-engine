@@ -7,12 +7,15 @@ on:
       - ".github/workflows/m26-pa7-explicit-pages-deploy.yml"
       - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
       - ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
+      - ".github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml"
+      - "deploy/deploy.sh"
       - "pilot/m24/internal-product-deployment/site/_headers"
       - "pilot/m24/internal-product-deployment/site/_worker.js"
       - "pilot/m24/internal-product-deployment/site/full-graph.html"
       - "pilot/m24/internal-product-deployment/site/index.html"
       - "pilot/m24/internal-product-deployment/site/m26-full-graph.js"
       - "pilot/m24/internal-product-deployment/site/m26-ask.js"
+      - "scripts/m26_pa7_named_backend_tunnel.py"
       - "src/knowledge_engine/m26_ask_api.py"
       - "tests/test_m24_internal_ask_ui_api.py"
       - "tests/test_m26_pa7_ask_api.py"
@@ -63,12 +66,15 @@ jobs:
               ".github/workflows/m26-pa-7-final-web-product-readiness.yml",
               ".github/workflows/m26-pa7-explicit-backend-redeploy.yml",
               ".github/workflows/m26-pa7-explicit-pages-deploy.yml",
+              ".github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml",
+              "deploy/deploy.sh",
               "pilot/m24/internal-product-deployment/site/_headers",
               "pilot/m24/internal-product-deployment/site/_worker.js",
               "pilot/m24/internal-product-deployment/site/full-graph.html",
               "pilot/m24/internal-product-deployment/site/index.html",
               "pilot/m24/internal-product-deployment/site/m26-full-graph.js",
               "pilot/m24/internal-product-deployment/site/m26-ask.js",
+              "scripts/m26_pa7_named_backend_tunnel.py",
               "src/knowledge_engine/m26_ask_api.py",
               "tests/test_m24_internal_ask_ui_api.py",
               "tests/test_m26_pa7_ask_api.py",

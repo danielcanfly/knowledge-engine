@@ -9,6 +9,9 @@ git fetch --prune origin
 git checkout --detach "$RELEASE_SHA"
 docker compose build --pull
 
+docker compose down --remove-orphans || true
+docker compose rm -f -s -v knowledge-engine >/dev/null 2>&1 || true
+
 docker compose run --rm --no-deps knowledge-engine \
   python -c 'from knowledge_engine.config import Settings; Settings.from_env(); print("CONFIG_OK")'
 
