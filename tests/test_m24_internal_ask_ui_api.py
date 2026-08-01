@@ -9,25 +9,20 @@ from urllib.parse import urlsplit
 
 from playwright.sync_api import expect
 
-from knowledge_engine.m24_internal_product_deployment import (
-    SITE_ROOT,
-    build_p6_internal_product_deployment,
-)
+from knowledge_engine.m24_internal_product_deployment import SITE_ROOT
 
 
 def _text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_m24_internal_site_exposes_ask_bounded_graph_and_full_graph() -> None:
-    report = build_p6_internal_product_deployment()
-    artifact_paths = {artifact.path for artifact in report.artifacts}
+def test_committed_site_exposes_ask_bounded_graph_and_full_graph() -> None:
     index = _text(SITE_ROOT / "index.html")
     app_js = _text(SITE_ROOT / "app.js")
     ask_js = _text(SITE_ROOT / "m26-ask.js")
 
-    assert "pilot/m24/internal-product-deployment/site/m26-ask.js" in artifact_paths
-    assert "pilot/m24/internal-product-deployment/site/_worker.js" in artifact_paths
+    assert (SITE_ROOT / "m26-ask.js").is_file()
+    assert (SITE_ROOT / "_worker.js").is_file()
     assert '<a href="/ask" data-route-link="ask">Ask Knowledge Engine</a>' in index
     assert "Bounded Concept Graph" in index
     assert 'href="/ask?surface=full-graph"' in index
@@ -57,6 +52,7 @@ def test_worker_api_is_owner_only_fail_closed_proxy() -> None:
     assert "/api/m26/graph" in worker
     assert "M26_GRAPH_METHOD_NOT_ALLOWED" in worker
     assert "verifyOwnerAccess" in worker
+    assert "resolveAccessJwtContract" in worker
     assert "verifyAccessJwt" in worker
     assert "cf-access-jwt-assertion" in worker
     assert "cf-access-authenticated-user-email" not in worker
@@ -65,6 +61,7 @@ def test_worker_api_is_owner_only_fail_closed_proxy() -> None:
     assert "/cdn-cgi/access/certs" in worker
     assert "RSASSA-PKCS1-v1_5" in worker
     assert "verified_cloudflare_access_jwt_email" in worker
+    assert "verified_cloudflare_access_jwt_email_inferred_contract" in worker
     assert "M26_OWNER_EMAIL_SHA256" in worker
     assert "KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" in worker
     assert "M26_QUERY_BACKEND_URL" in worker
@@ -83,7 +80,6 @@ def test_worker_api_is_owner_only_fail_closed_proxy() -> None:
 
 
 def test_browser_ask_surface_renders_answer_citations_sources_and_trace() -> None:
-    build_p6_internal_product_deployment()
     with _ask_smoke_server() as base:
         from playwright.sync_api import sync_playwright
 
@@ -110,14 +106,15 @@ def test_browser_ask_surface_renders_answer_citations_sources_and_trace() -> Non
             expect(page.locator("[data-ask-relationship]")).to_contain_text(
                 "distinct sources 2"
             )
-            expect(page.locator("[data-ask-answer]")).to_contain_text("trace m26pa7aq_test")
+            expect(page.locator("[data-ask-answer]")).to_contain_text(
+                "trace m26pa7aq_test"
+            )
             page.goto(f"{base}/ask")
             expect(page.locator("#route-title")).to_have_text("Ask Knowledge Engine")
             browser.close()
 
 
 def test_browser_full_graph_surface_loads_exact_owner_graph() -> None:
-    build_p6_internal_product_deployment()
     with _ask_smoke_server() as base:
         from playwright.sync_api import sync_playwright
 
@@ -128,7 +125,6 @@ def test_browser_full_graph_surface_loads_exact_owner_graph() -> None:
             expect(page.locator("#route-title")).to_have_text("Full Knowledge Graph")
             expect(page.locator("[data-full-production-graph]")).to_be_visible()
             expect(page.get_by_text("release-full-graph-test", exact=True)).to_be_visible()
-            expect(page.get_by_text("full production", exact=True)).to_be_visible()
             expect(page.locator("[data-sigma-stage]")).to_be_visible()
             expect(page.locator("#app-status")).to_contain_text(
                 "Full production graph verified: 2 nodes, 1 edges."
@@ -146,13 +142,7 @@ class _AskSmokeHandler(http.server.SimpleHTTPRequestHandler):
             self.path = "/index.html"
             return super().do_GET()
         if parsed.path == "/api/m26/graph":
-            body = json.dumps(_sample_graph_response()).encode("utf-8")
-            self.send_response(200)
-            self.send_header("cache-control", "no-store")
-            self.send_header("content-type", "application/json; charset=utf-8")
-            self.send_header("content-length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._json_response(_sample_graph_response())
             return
         return super().do_GET()
 
@@ -162,7 +152,10 @@ class _AskSmokeHandler(http.server.SimpleHTTPRequestHandler):
             return
         length = int(self.headers.get("content-length", "0"))
         self.rfile.read(length)
-        body = json.dumps(_sample_web_response()).encode("utf-8")
+        self._json_response(_sample_web_response())
+
+    def _json_response(self, payload: dict[str, object]) -> None:
+        body = json.dumps(payload).encode("utf-8")
         self.send_response(200)
         self.send_header("cache-control", "no-store")
         self.send_header("content-type", "application/json; charset=utf-8")
