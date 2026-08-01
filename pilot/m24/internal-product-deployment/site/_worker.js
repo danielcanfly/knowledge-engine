@@ -16,9 +16,6 @@ export default {
     if (url.pathname === "/ask" || url.pathname === "/ask/") {
       return env.ASSETS.fetch(assetRequest(request, "/index.html"));
     }
-    if (url.pathname === "/full-graph" || url.pathname === "/full-graph/") {
-      return env.ASSETS.fetch(assetRequest(request, "/full-graph.html"));
-    }
     if (url.pathname === "/api/m26/health") {
       return handleOwnerApi(request, env, "/api/m26/health");
     }
@@ -159,7 +156,9 @@ async function verifyAccessJwt(token, teamDomain, expectedAudience) {
   if (!verified) throw new Error("JWT signature invalid");
 
   const now = Math.floor(Date.now() / 1000);
-  if (payload.iss !== teamDomain) throw new Error("JWT issuer mismatch");
+  if (String(payload.iss || "").replace(/\/$/, "") !== teamDomain.replace(/\/$/, "")) {
+    throw new Error("JWT issuer mismatch");
+  }
   const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
   if (!audiences.includes(expectedAudience)) throw new Error("JWT audience mismatch");
   if (!Number.isFinite(payload.exp) || payload.exp <= now) throw new Error("JWT expired");
