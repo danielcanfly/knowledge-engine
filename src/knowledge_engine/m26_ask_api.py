@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import time
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import uvicorn
@@ -16,6 +19,7 @@ from .config import Settings
 from .m26_pa7_arbitrary_query_runtime import (
     MAX_QUERY_CHARS,
     DenseChannel,
+    PA7ArbitraryQueryError,
     ProviderClient,
     run_owner_arbitrary_query,
 )
@@ -23,7 +27,7 @@ from .m26_production_promotion_closure import load_json
 from .m26_retrieval_envelope import sha256_value
 from .m26_verified_answer_citation_gate import canonical_sha256
 from .runtime import Runtime
-from .storage import create_object_store
+from .storage import create_object_store, sha256_bytes
 
 WEB_RESPONSE_SCHEMA = "knowledge-engine-m26-pa7-ask-web-response/v1"
 WEB_HEALTH_SCHEMA = "knowledge-engine-m26-pa7-ask-web-health/v1"
@@ -31,7 +35,9 @@ WEB_GRAPH_SCHEMA = "knowledge-engine-m26-pa7-owner-full-graph/v1"
 DEFAULT_GATE_PATH = Path("pilot/m26/m26-pa-7-resolved-production-gate.json")
 OWNER_HASH_HEADER = "x-m26-owner-subject-hash"
 BACKEND_TOKEN_HEADER = "authorization"
-RUNTIME_ENTRYPOINT = "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+RUNTIME_ENTRYPOINT = (
+    "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+)
 MAX_BODY_BYTES = 4096
 RATE_WINDOW_SECONDS = 60
 RATE_WINDOW_MAX_REQUESTS = 12
@@ -55,6 +61,7 @@ FULL_GRAPH_INVENTORY_ARTIFACT_ID = 8812152272
 FULL_GRAPH_PA2_ACCEPTANCE_SELF_SHA256 = (
     "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67"
 )
+FULL_GRAPH_MANIFEST_KEY = f"releases/{FULL_GRAPH_RELEASE_ID}/manifest.json"
 
 
 class M26AskApiError(ValueError):
@@ -218,25 +225,6 @@ def build_health_dto(*, root: Path, gate_path: Path) -> dict[str, Any]:
     }
 
 
-def _manifest_graph_v2_sha256(manifest: Mapping[str, Any]) -> str:
-    artifacts = manifest.get("artifacts")
-    if isinstance(artifacts, list):
-        for artifact in artifacts:
-            if not isinstance(artifact, Mapping):
-                continue
-            kind = str(artifact.get("kind", ""))
-            key = str(artifact.get("key", ""))
-            if kind == "graph_v2" or key.endswith("/artifacts/graph-v2.json"):
-                return str(artifact.get("sha256", ""))
-    if isinstance(artifacts, Mapping):
-        artifact = artifacts.get("graph_v2")
-        if isinstance(artifact, Mapping):
-            return str(artifact.get("sha256", ""))
-        if isinstance(artifact, str):
-            return artifact
-    return ""
-
-
 def build_owner_graph_dto(
     active: Any,
     *,
@@ -284,11 +272,7 @@ def build_owner_graph_dto(
             "current production graph counts do not match the accepted inventory",
         )
 
-    payload = {
-        key: value
-        for key, value in graph.items()
-        if key not in {"nodes", "edges", "release_id"}
-    }
+    payload = {key: value for key, value in graph.items() if key not in {"nodes", "edges", "release_id"}}
     payload.update(
         {
             "schema_version": WEB_GRAPH_SCHEMA,
@@ -311,11 +295,10 @@ def build_owner_graph_dto(
             "binding": {
                 "production_pointer_key": "channels/production.json",
                 "production_pointer_sha256": FULL_GRAPH_POINTER_SHA256,
-                "pa2_acceptance_self_sha256": (
-                    FULL_GRAPH_PA2_ACCEPTANCE_SELF_SHA256
-                ),
+                "pa2_acceptance_self_sha256": FULL_GRAPH_PA2_ACCEPTANCE_SELF_SHA256,
                 "inventory_run_id": FULL_GRAPH_INVENTORY_RUN_ID,
                 "inventory_artifact_id": FULL_GRAPH_INVENTORY_ARTIFACT_ID,
+                "direct_manifest_key_sha256": canonical_sha256(FULL_GRAPH_MANIFEST_KEY),
             },
             "authority": {
                 "owner_only": True,
@@ -359,9 +342,8 @@ def register_m26_ask_routes(
     require_remote_dense: bool | None = None,
 ) -> FastAPI:
     app_root = (root or Path(os.environ.get("KNOWLEDGE_ENGINE_ROOT", "."))).resolve()
-    resolved_gate_path = (
-        gate_path
-        or Path(os.environ.get("M26_PA7_GATE_PATH", DEFAULT_GATE_PATH.as_posix()))
+    resolved_gate_path = gate_path or Path(
+        os.environ.get("M26_PA7_GATE_PATH", DEFAULT_GATE_PATH.as_posix())
     )
     if not resolved_gate_path.is_absolute():
         resolved_gate_path = app_root / resolved_gate_path
@@ -380,42 +362,129 @@ def register_m26_ask_routes(
     async def graph(request: Request) -> dict[str, Any]:
         _authorize_backend_request(request)
         try:
-            active = _owner_graph_runtime().ensure_loaded()
-            return build_owner_graph_dto(active)
-        except M26AskApiError as exc:
-            raise _http_error(status.HTTP_503_SERVICE_UNAVAILABLE, exc.reason_code) from exc
-        except Exception as exc:
-            raise _http_error(
-                status.HTTP_503_SERVICE_UNAVAILABLE,
-                "M26_OWNER_GRAPH_LOAD_FAILED",
-            ) from exc
+            return build_owner_graph_dto(_accepted_owner_graph_release())
+        except Exception as direct_exc:
+            try:
+                return build_owner_graph_dto(_owner_graph_runtime().ensure_loaded())
+            except M26AskApiError as exc:
+                raise _http_error(status.HTTP_503_SERVICE_UNAVAILABLE, exc.reason_code) from exc
+            except Exception as exc:
+                reason = "M26_OWNER_GRAPH_DIRECT_LOAD_FAILED"
+                if isinstance(direct_exc, M26AskApiError):
+                    reason = direct_exc.reason_code
+                raise _http_error(status.HTTP_503_SERVICE_UNAVAILABLE, reason) from exc
 
     @app.post("/api/m26/query")
     async def query(request: Request) -> dict[str, Any]:
         owner_subject_hash = _authorize_backend_request(request)
         body = await request.body()
         if len(body) > MAX_BODY_BYTES:
-            raise _http_error(
-                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                "M26_ASK_BODY_TOO_LARGE",
-            )
+            raise _http_error(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "M26_ASK_BODY_TOO_LARGE")
         try:
             payload = await request.json()
             question = validate_query_request(payload)
         except M26AskApiError as exc:
             raise _http_error(status.HTTP_400_BAD_REQUEST, exc.reason_code) from exc
-        except Exception as exc:  # pragma: no cover - Starlette JSON variants differ.
+        except Exception as exc:
             raise _http_error(status.HTTP_400_BAD_REQUEST, "M26_ASK_INVALID_JSON") from exc
         _rate_limit(owner_subject_hash, question)
-        return run_owner_query_for_web(
-            root=app_root,
-            gate_path=resolved_gate_path,
-            request_payload={"question": question},
-            owner_subject_hash=owner_subject_hash,
-            require_remote_dense=remote_dense_required,
-        )
+        try:
+            return run_owner_query_for_web(
+                root=app_root,
+                gate_path=resolved_gate_path,
+                request_payload={"question": question},
+                owner_subject_hash=owner_subject_hash,
+                require_remote_dense=remote_dense_required,
+            )
+        except PA7ArbitraryQueryError as exc:
+            raise _http_error(status.HTTP_503_SERVICE_UNAVAILABLE, exc.reason_code) from exc
+        except M26AskApiError as exc:
+            raise _http_error(status.HTTP_503_SERVICE_UNAVAILABLE, exc.reason_code) from exc
+        except Exception as exc:
+            raise _http_error(status.HTTP_503_SERVICE_UNAVAILABLE, "M26_ASK_RUNTIME_FAILED") from exc
 
     return app
+
+
+@lru_cache(maxsize=1)
+def _accepted_owner_graph_release() -> Any:
+    settings = Settings.from_env()
+    store = create_object_store(settings)
+    manifest_data = store.get(FULL_GRAPH_MANIFEST_KEY)
+    if sha256_bytes(manifest_data) != FULL_GRAPH_MANIFEST_SHA256:
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_DIRECT_MANIFEST_SHA_MISMATCH",
+            "accepted full graph manifest hash mismatch",
+        )
+    manifest = _json_object(manifest_data, "accepted full graph manifest")
+    if manifest.get("release_id") != FULL_GRAPH_RELEASE_ID:
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_DIRECT_RELEASE_MISMATCH",
+            "accepted full graph release identity mismatch",
+        )
+    graph = _load_manifest_artifact_json(store, manifest, "graph")
+    graph_v2 = _load_manifest_artifact_json(store, manifest, "graph_v2")
+    return SimpleNamespace(
+        release_id=FULL_GRAPH_RELEASE_ID,
+        manifest_sha256=FULL_GRAPH_MANIFEST_SHA256,
+        loaded_at=datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        manifest=manifest,
+        graph=graph,
+        graph_v2=graph_v2,
+    )
+
+
+def _load_manifest_artifact_json(store: Any, manifest: Mapping[str, Any], kind: str) -> dict[str, Any]:
+    entry = _manifest_artifact(manifest, kind)
+    key = str(entry.get("key", ""))
+    data = store.get(key)
+    expected_bytes = entry.get("bytes")
+    if isinstance(expected_bytes, int) and len(data) != expected_bytes:
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_DIRECT_ARTIFACT_BYTES_MISMATCH",
+            f"accepted full graph {kind} byte count mismatch",
+        )
+    if sha256_bytes(data) != entry.get("sha256"):
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_DIRECT_ARTIFACT_SHA_MISMATCH",
+            f"accepted full graph {kind} hash mismatch",
+        )
+    return _json_object(data, f"accepted full graph {kind}")
+
+
+def _manifest_artifact(manifest: Mapping[str, Any], kind: str) -> Mapping[str, Any]:
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_DIRECT_MANIFEST_INVALID",
+            "accepted full graph manifest artifacts must be a list",
+        )
+    for artifact in artifacts:
+        if isinstance(artifact, Mapping) and artifact.get("kind") == kind:
+            key = artifact.get("key")
+            digest = artifact.get("sha256")
+            if isinstance(key, str) and isinstance(digest, str):
+                return artifact
+    raise M26AskApiError(
+        "M26_OWNER_GRAPH_DIRECT_ARTIFACT_MISSING",
+        f"accepted full graph manifest missing {kind}",
+    )
+
+
+def _json_object(data: bytes, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(data)
+    except json.JSONDecodeError as exc:
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_DIRECT_JSON_INVALID",
+            f"{label} is invalid JSON",
+        ) from exc
+    if not isinstance(payload, dict):
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_DIRECT_JSON_INVALID",
+            f"{label} must be a JSON object",
+        )
+    return payload
 
 
 def _authorize_backend_request(request: Request) -> str:
@@ -442,11 +511,7 @@ def _rate_limit(owner_subject_hash: str, question: str) -> None:
             "question_sha256": canonical_sha256(question),
         }
     )
-    bucket = [
-        item
-        for item in _RATE_BUCKETS.get(bucket_id, [])
-        if now - item < RATE_WINDOW_SECONDS
-    ]
+    bucket = [item for item in _RATE_BUCKETS.get(bucket_id, []) if now - item < RATE_WINDOW_SECONDS]
     if len(bucket) >= RATE_WINDOW_MAX_REQUESTS:
         _RATE_BUCKETS[bucket_id] = bucket
         raise _http_error(status.HTTP_429_TOO_MANY_REQUESTS, "M26_ASK_RATE_LIMITED")
@@ -463,6 +528,25 @@ def _http_error(status_code: int, reason_code: str) -> HTTPException:
             "reason_code": reason_code,
         },
     )
+
+
+def _manifest_graph_v2_sha256(manifest: Mapping[str, Any]) -> str:
+    artifacts = manifest.get("artifacts")
+    if isinstance(artifacts, list):
+        for artifact in artifacts:
+            if not isinstance(artifact, Mapping):
+                continue
+            kind = str(artifact.get("kind", ""))
+            key = str(artifact.get("key", ""))
+            if kind == "graph_v2" or key.endswith("/artifacts/graph-v2.json"):
+                return str(artifact.get("sha256", ""))
+    if isinstance(artifacts, Mapping):
+        artifact = artifacts.get("graph_v2")
+        if isinstance(artifact, Mapping):
+            return str(artifact.get("sha256", ""))
+        if isinstance(artifact, str):
+            return artifact
+    return ""
 
 
 def _web_citations(runtime_response: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -559,29 +643,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(os.environ.get("KNOWLEDGE_ENGINE_ROOT", ".")),
     )
-    parser.add_argument(
-        "--gate",
-        type=Path,
-        default=Path(os.environ.get("M26_PA7_GATE_PATH", DEFAULT_GATE_PATH.as_posix())),
-    )
-    parser.add_argument("--require-remote-dense", action="store_true")
     return parser
 
 
-def main() -> int:
-    args = build_parser().parse_args()
-    uvicorn.run(
-        create_app(
-            root=args.root,
-            gate_path=args.gate,
-            require_remote_dense=args.require_remote_dense,
-        ),
-        host=args.host,
-        port=args.port,
-        log_level="info",
-    )
-    return 0
+def main(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
+    app = create_app(root=args.root)
+    uvicorn.run(app, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
