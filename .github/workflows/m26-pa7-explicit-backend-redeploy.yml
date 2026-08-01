@@ -11,6 +11,7 @@ on:
       - ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
       - "deploy/deploy.sh"
       - "scripts/m26_pa7_durable_backend_origin.py"
+      - "scripts/m26_pa7_evidence_privacy_hygiene.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
       - "src/knowledge_engine/m23_cloudflare_qdrant.py"
       - "src/knowledge_engine/m24_product_surface_integration.py"
@@ -29,6 +30,7 @@ on:
       - "src/knowledge_engine/api.py"
       - "deploy/**"
       - "scripts/m26_pa7_durable_backend_origin.py"
+      - "scripts/m26_pa7_evidence_privacy_hygiene.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
 
 permissions:
@@ -71,6 +73,7 @@ jobs:
           test -f deploy/deploy.sh
           test -f scripts/configure_oracle_ssh.sh
           python -m py_compile scripts/m26_pa7_durable_backend_origin.py
+          python -m py_compile scripts/m26_pa7_evidence_privacy_hygiene.py
           python -m py_compile scripts/m26_pa7_named_backend_tunnel.py
           grep -F 'def _default_canonical_root()' src/knowledge_engine/m24_product_surface_integration.py
           grep -F 'FULL_GRAPH_RELEASE_ID = "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"' src/knowledge_engine/m26_ask_api.py
@@ -100,6 +103,7 @@ jobs:
           pilot/m24/internal-product-deployment/site/m26-ask.js
           pilot/m24/internal-product-deployment/site/m26-full-graph.js
           scripts/m26_pa7_durable_backend_origin.py
+          scripts/m26_pa7_evidence_privacy_hygiene.py
           scripts/m26_pa7_named_backend_tunnel.py
           src/knowledge_engine/m23_cloudflare_qdrant.py
           src/knowledge_engine/m26_ask_api.py
