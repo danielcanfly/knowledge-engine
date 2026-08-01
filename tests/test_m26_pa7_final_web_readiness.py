@@ -368,6 +368,9 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "M26_BACKEND_ORIGIN_CLASS" in workflow
     assert "cloudflare_dns_a_to_oracle_https_reverse_proxy" in workflow
     assert "seq 2 180" in workflow
+    assert "--connect-timeout 5 --max-time 15" in workflow
+    assert "backend-https-origin-diagnostic.json" in workflow
+    assert "raw_log_recorded" in workflow
     assert "m26-pa7-backend-tunnel" in workflow
     assert "m26-pa7-backend-https-origin" in workflow
     assert "caddy:2-alpine" in workflow
