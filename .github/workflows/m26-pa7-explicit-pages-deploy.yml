@@ -177,7 +177,15 @@ jobs:
           public_tmp="$(mktemp)"
           public_code="000"
           if [ -n "$tunnel_url" ]; then
-            public_code="$(curl --silent --output "$public_tmp" --max-time 25 -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" -w '%{http_code}' "$tunnel_url/api/m26/health" 2>/dev/null || true)"
+            for _public_attempt in $(seq 1 60); do
+              rm -f "$public_tmp"
+              public_tmp="$(mktemp)"
+              public_code="$(curl --silent --output "$public_tmp" --connect-timeout 10 --max-time 25 -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" -w '%{http_code}' "$tunnel_url/api/m26/health" 2>/dev/null || true)"
+              if [ "$public_code" = "200" ]; then
+                break
+              fi
+              sleep 2
+            done
           fi
           python3 - "$public_tmp" "$public_code" "$tunnel_url" "$RUN_DIR/cloudflared.log" <<'PY'
           import hashlib, json, os, re, sys
@@ -191,7 +199,7 @@ jobs:
           raw_log_tail = "\n".join(log_path.read_text(errors="replace").splitlines()[-80:]) if log_path.exists() else ""
           sanitized_tail = re.sub(r"https://[-A-Za-z0-9]+\.trycloudflare\.com", "<redacted_trycloudflare_url>", raw_log_tail)
           evidence = {
-              "schema_version": "knowledge-engine-m26-pa7-public-backend-origin/v2",
+              "schema_version": "knowledge-engine-m26-pa7-public-backend-origin/v3",
               "status": "pass",
               "expected_backend_sha": os.environ["EXPECTED_BACKEND_SHA"],
               "tunnel_url_present": bool(url),
