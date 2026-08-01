@@ -176,6 +176,15 @@ def _write_json(path: Path, value: dict[str, object]) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _read_optional_text(path: str | None) -> str:
+    if not path:
+        return ""
+    optional_path = Path(path)
+    if not optional_path.exists():
+        return ""
+    return optional_path.read_text(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -192,9 +201,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "public-denial":
         headers_text = Path(args.headers).read_text(encoding="utf-8", errors="replace")
-        body_text = (
-            Path(args.body).read_text(encoding="utf-8", errors="replace") if args.body else ""
-        )
+        body_text = _read_optional_text(args.body)
         evidence = build_public_denial_evidence(
             http_status=args.status,
             headers_text=headers_text,

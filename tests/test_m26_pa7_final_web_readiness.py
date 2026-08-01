@@ -15,6 +15,9 @@ from scripts.m26_pa7_evidence_privacy_hygiene import (
     build_public_denial_evidence,
     scan_evidence_path,
 )
+from scripts.m26_pa7_evidence_privacy_hygiene import (
+    main as evidence_privacy_hygiene_main,
+)
 from scripts.m26_pa7_named_backend_tunnel import _require_hostname_under_zone
 
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import LocalDenseProjectionChannel
@@ -478,6 +481,41 @@ def test_public_denial_sanitizer_records_semantics_without_raw_headers() -> None
     assert "secret" not in json.dumps(evidence, sort_keys=True)
     assert "Set-Cookie" not in json.dumps(evidence, sort_keys=True)
     assert "meta=" not in json.dumps(evidence, sort_keys=True)
+
+
+def test_public_denial_cli_accepts_missing_redirect_body_file(tmp_path: Path) -> None:
+    headers = tmp_path / "response-headers.tmp"
+    missing_body = tmp_path / "response-body.tmp"
+    output = tmp_path / "public-api-denial-sanitized.json"
+    status_output = tmp_path / "public-api-denial.status"
+    headers.write_text(
+        "HTTP/2 302\r\n"
+        "Location: https://team.cloudflareaccess.com/cdn-cgi/access/login/app\r\n",
+        encoding="utf-8",
+    )
+
+    result = evidence_privacy_hygiene_main(
+        [
+            "public-denial",
+            "--status",
+            "302",
+            "--headers",
+            str(headers),
+            "--body",
+            str(missing_body),
+            "--output",
+            str(output),
+            "--status-output",
+            str(status_output),
+        ]
+    )
+
+    evidence = json.loads(output.read_text(encoding="utf-8"))
+    assert result == 0
+    assert evidence["access_denied"] is True
+    assert evidence["redirect_class"] == "cloudflare_access_login"
+    assert evidence["raw_response_body_recorded"] is False
+    assert status_output.read_text(encoding="utf-8") == "302\n"
 
 
 def test_evidence_privacy_scan_fails_on_raw_set_cookie_header(tmp_path: Path) -> None:
