@@ -12,6 +12,7 @@ on:
       - "deploy/deploy.sh"
       - "scripts/m26_pa7_durable_backend_origin.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
+      - "src/knowledge_engine/m23_cloudflare_qdrant.py"
       - "src/knowledge_engine/m24_product_surface_integration.py"
       - "src/knowledge_engine/m26_ask_api.py"
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
@@ -21,6 +22,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
+      - "src/knowledge_engine/m23_cloudflare_qdrant.py"
       - "src/knowledge_engine/m24_product_surface_integration.py"
       - "src/knowledge_engine/m26_ask_api.py"
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
@@ -60,6 +62,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
           python -m py_compile src/knowledge_engine/m24_product_surface_integration.py
+          python -m py_compile src/knowledge_engine/m23_cloudflare_qdrant.py
           python -m py_compile src/knowledge_engine/m26_ask_api.py
           python -m py_compile src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
           node --check pilot/m24/internal-product-deployment/site/m26-ask.js
@@ -98,7 +101,9 @@ jobs:
           pilot/m24/internal-product-deployment/site/m26-full-graph.js
           scripts/m26_pa7_durable_backend_origin.py
           scripts/m26_pa7_named_backend_tunnel.py
+          src/knowledge_engine/m23_cloudflare_qdrant.py
           src/knowledge_engine/m26_ask_api.py
+          tests/test_m23_5_cloudflare_qdrant.py
           tests/test_m24_internal_ask_ui_api.py
           tests/test_m26_pa7_ask_api.py
           tests/test_m26_pa7_final_web_readiness.py

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import time
 import unicodedata
 import uuid
 from collections.abc import Mapping, Sequence
@@ -20,6 +21,8 @@ VECTOR_DIMENSION = 1024
 MAX_BATCH_SIZE = 100
 MAX_BATCH_TEXT_CHARACTERS = 16_000
 CLOUDFLARE_CONTEXT_ERROR_CODE = 3030
+EMBED_TRANSIENT_RETRY_DELAYS_SECONDS = (1.0, 2.0, 4.0)
+EMBED_TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 504}
 QDRANT_DISTANCE = "Cosine"
 QDRANT_VECTOR_NAME = "default"
 RECEIPT_SCHEMA = "knowledge-engine-m23-cloudflare-qdrant-receipt/v1"
@@ -333,6 +336,26 @@ def _is_context_limit_response(response: httpx.Response) -> bool:
     return False
 
 
+def _post_embedding_batch_with_transient_retry(
+    http: httpx.Client,
+    *,
+    url: str,
+    token: str,
+    batch: Sequence[SectionInput],
+) -> httpx.Response:
+    request = {
+        "headers": {"Authorization": f"Bearer {token}"},
+        "json": build_cloudflare_request([section.text for section in batch]),
+    }
+    for delay in (*EMBED_TRANSIENT_RETRY_DELAYS_SECONDS, None):
+        response = http.post(url, **request)
+        status_code = getattr(response, "status_code", 200)
+        if status_code not in EMBED_TRANSIENT_STATUS_CODES or delay is None:
+            return response
+        time.sleep(delay)
+    raise AssertionError("unreachable embedding retry loop")
+
+
 def _embed_batch(
     http: httpx.Client,
     *,
@@ -340,12 +363,11 @@ def _embed_batch(
     token: str,
     batch: Sequence[SectionInput],
 ) -> list[list[float]]:
-    response = http.post(
-        url,
-        headers={"Authorization": f"Bearer {token}"},
-        json=build_cloudflare_request(
-            [section.text for section in batch]
-        ),
+    response = _post_embedding_batch_with_transient_retry(
+        http,
+        url=url,
+        token=token,
+        batch=batch,
     )
     if _is_context_limit_response(response) and len(batch) > 1:
         midpoint = len(batch) // 2
