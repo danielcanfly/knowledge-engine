@@ -145,6 +145,37 @@ def cloudflare_dns_a_origin(
     return evidence, runtime
 
 
+def wildcard_dns_origin(
+    *,
+    address: str,
+    suffix: str = "sslip.io",
+) -> tuple[dict[str, object], dict[str, str]]:
+    ip = str(ipaddress.ip_address(address.strip()))
+    normalized_suffix = _normalized_oracle_hostname(suffix)
+    label = ip.replace(".", "-").replace(":", "-")
+    hostname = f"{label}.{normalized_suffix}"
+    origin = f"https://{hostname}"
+    evidence = {
+        "schema_version": "knowledge-engine-m26-pa7-wildcard-dns-backend-origin/v1",
+        "backend_hostname_sha256": _sha256(hostname),
+        "backend_origin_sha256": _sha256(origin),
+        "hostname_present": True,
+        "ip_address_sha256": _sha256(ip),
+        "origin_class": "wildcard_dns_to_oracle_https_reverse_proxy",
+        "raw_backend_origin_recorded": False,
+        "raw_hostname_recorded": False,
+        "raw_ip_recorded": False,
+        "status": "pass",
+        "suffix_sha256": _sha256(normalized_suffix),
+        "trycloudflare_rejected": True,
+    }
+    runtime = {
+        "M26_ORACLE_BACKEND_TLS_HOSTNAME": hostname,
+        "M26_QUERY_BACKEND_ORIGIN": origin,
+    }
+    return evidence, runtime
+
+
 def _write_env(path: Path, env: dict[str, str]) -> None:
     path.write_text("".join(f"{name}={value}\n" for name, value in sorted(env.items())))
 
@@ -162,11 +193,16 @@ def main(argv: list[str] | None = None) -> int:
     dns_a.add_argument("--address", required=True)
     dns_a.add_argument("--evidence-output", required=True)
     dns_a.add_argument("--runtime-env-output", required=True)
+    wildcard = subparsers.add_parser("wildcard-dns")
+    wildcard.add_argument("--address", required=True)
+    wildcard.add_argument("--suffix", default="sslip.io")
+    wildcard.add_argument("--evidence-output", required=True)
+    wildcard.add_argument("--runtime-env-output", required=True)
     args = parser.parse_args(argv)
 
     if args.command == "oracle-https":
         evidence, runtime = oracle_https_origin(args.hostname)
-    else:
+    elif args.command == "cloudflare-dns-a":
         token = os.environ.get("CLOUDFLARE_API_TOKEN") or os.environ.get(
             "CLOUDFLARE_WORKERS_TOKEN"
         )
@@ -178,6 +214,8 @@ def main(argv: list[str] | None = None) -> int:
             hostname=args.hostname,
             address=args.address,
         )
+    else:
+        evidence, runtime = wildcard_dns_origin(address=args.address, suffix=args.suffix)
     evidence_path = Path(args.evidence_output)
     runtime_path = Path(args.runtime_env_output)
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
