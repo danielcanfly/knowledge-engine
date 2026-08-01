@@ -73,6 +73,8 @@ jobs:
     env:
       WORK_DIR: /tmp/m26-pa7-owner-access-repair
       PAGES_PROJECT: llm-wiki-m24-internal
+      INTERNAL_HOSTNAME: m24-internal.danielcanfly.com
+      CLOUDFLARE_ZONE_NAME: danielcanfly.com
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
       CLOUDFLARE_ACCESS_READ_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_READ_TOKEN }}
