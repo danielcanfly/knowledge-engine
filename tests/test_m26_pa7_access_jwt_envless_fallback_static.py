@@ -4,7 +4,8 @@ from pathlib import Path
 
 
 def test_m26_pa7_worker_supports_envless_access_jwt_contract() -> None:
-    worker = Path("pilot/m24/internal-product-deployment/site/_worker.js").read_text(encoding="utf-8")
+    worker_path = Path("pilot/m24/internal-product-deployment/site/_worker.js")
+    worker = worker_path.read_text(encoding="utf-8")
 
     assert "resolveAccessJwtContract" in worker
     assert "verified_cloudflare_access_jwt_email_inferred_contract" in worker
