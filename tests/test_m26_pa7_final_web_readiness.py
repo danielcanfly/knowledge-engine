@@ -11,6 +11,10 @@ from scripts.m26_pa7_durable_backend_origin import (
     _normalized_oracle_hostname,
     wildcard_dns_origin,
 )
+from scripts.m26_pa7_evidence_privacy_hygiene import (
+    build_public_denial_evidence,
+    scan_evidence_path,
+)
 from scripts.m26_pa7_named_backend_tunnel import _require_hostname_under_zone
 
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import LocalDenseProjectionChannel
@@ -412,6 +416,13 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "live_final_runtime_rows_passed_awaiting_owner_browser_e2e" in workflow
     assert "duplicate_live_guard_status" in workflow
     assert "public-api-denial" in workflow
+    assert "public-api-denial-sanitized.json" in workflow
+    assert "public-api-denial.headers" not in workflow
+    assert "public-api-denial.body" not in workflow
+    assert "m26_pa7_evidence_privacy_hygiene.py public-denial" in workflow
+    assert "m26_pa7_evidence_privacy_hygiene.py scan" in workflow
+    assert "evidence-privacy-scan.json" in workflow
+    assert "steps.privacy_scan.outcome == 'success'" in workflow
     assert "durable backend origin" in workflow
     assert "backend-origin-contract.json" in workflow
     assert "backend_origin_must_use_https" in workflow
@@ -432,6 +443,96 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "91a8a5567efa6bf941162aa806b3ba476aaddf7867640e53053b35fb225a5dae" in workflow
     assert "ca56c5b29918faf79046b1c1726c35d7715951a35445b2e63f56ea5a70b7af9c" in workflow
     assert "--insecure" not in workflow
+
+
+def test_public_denial_sanitizer_records_semantics_without_raw_headers() -> None:
+    evidence = build_public_denial_evidence(
+        http_status=302,
+        headers_text=(
+            "HTTP/2 302\r\n"
+            "Location: https://team.cloudflareaccess.com/cdn-cgi/access/login/app?meta=secret\r\n"
+            "Set-Cookie: CF_Authorization=secret; HttpOnly\r\n"
+        ),
+        body_text="Cloudflare Access login",
+    )
+
+    assert evidence == {
+        "schema_version": "knowledge-engine-m26-pa7-public-denial-sanitized/v1",
+        "http_status": 302,
+        "access_denied": True,
+        "redirect_class": "cloudflare_access_login",
+        "redirect_host_sha256": (
+            "564ae06c9e97b2a35acd958e7da734bf65a83473ec0dcc8ceec4399647f34ec7"
+        ),
+        "location_header_present": True,
+        "www_authenticate_present": False,
+        "set_cookie_present": True,
+        "access_marker_present": True,
+        "raw_header_values_recorded": False,
+        "raw_location_recorded": False,
+        "raw_cookie_recorded": False,
+        "raw_jwt_recorded": False,
+        "raw_token_recorded": False,
+        "raw_response_body_recorded": False,
+    }
+    assert "secret" not in json.dumps(evidence, sort_keys=True)
+    assert "Set-Cookie" not in json.dumps(evidence, sort_keys=True)
+    assert "meta=" not in json.dumps(evidence, sort_keys=True)
+
+
+def test_evidence_privacy_scan_fails_on_raw_set_cookie_header(tmp_path: Path) -> None:
+    (tmp_path / "public-api-denial.headers").write_text(
+        "HTTP/2 302\nSet-Cookie: CF_Authorization=secret; HttpOnly\n",
+        encoding="utf-8",
+    )
+
+    scan = scan_evidence_path(tmp_path)
+
+    assert scan["status"] == "fail"
+    assert scan["violations"] == 1
+    assert scan["findings"][0]["violation_classes"] == ["set_cookie_header"]
+    assert scan["raw_secret_values_recorded"] is False
+
+
+def test_evidence_privacy_scan_fails_on_access_login_metadata_and_jwt(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "dirty.txt").write_text(
+        "https://team.cloudflareaccess.com/cdn-cgi/access/login/app?kid=abc&meta="
+        "eyJaaaaaaaaaaaa.eyJbbbbbbbbbbbb.cccccccccccccc\n",
+        encoding="utf-8",
+    )
+
+    scan = scan_evidence_path(tmp_path)
+
+    assert scan["status"] == "fail"
+    classes = set(scan["findings"][0]["violation_classes"])
+    assert "cloudflare_access_login_metadata" in classes
+    assert "jwt_like_value" in classes
+
+
+def test_evidence_privacy_scan_passes_sanitized_public_denial_dto(
+    tmp_path: Path,
+) -> None:
+    evidence = build_public_denial_evidence(
+        http_status=302,
+        headers_text=(
+            "HTTP/2 302\r\n"
+            "Location: https://team.cloudflareaccess.com/cdn-cgi/access/login/app?meta=secret\r\n"
+            "Set-Cookie: CF_Authorization=secret; HttpOnly\r\n"
+        ),
+        body_text="Cloudflare Access login",
+    )
+    (tmp_path / "public-api-denial-sanitized.json").write_text(
+        json.dumps(evidence, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+    scan = scan_evidence_path(tmp_path)
+
+    assert scan["status"] == "pass"
+    assert scan["violations"] == 0
+    assert scan["files_scanned"] == 1
 
 
 def test_named_backend_tunnel_script_uses_sanitized_cloudflare_control_plane() -> None:
@@ -532,6 +633,7 @@ def test_explicit_pages_deploy_boundary_accepts_production_wiring_fix() -> None:
     assert '"deploy/deploy.sh"' in workflow
     assert '"scripts/m26_pa7_named_backend_tunnel.py"' in workflow
     assert '"scripts/m26_pa7_durable_backend_origin.py"' in workflow
+    assert '"scripts/m26_pa7_evidence_privacy_hygiene.py"' in workflow
 
 
 def test_explicit_backend_redeploy_boundary_accepts_production_wiring_fix() -> None:
@@ -543,4 +645,5 @@ def test_explicit_backend_redeploy_boundary_accepts_production_wiring_fix() -> N
     assert "deploy/deploy.sh" in workflow
     assert "scripts/m26_pa7_named_backend_tunnel.py" in workflow
     assert "scripts/m26_pa7_durable_backend_origin.py" in workflow
+    assert "scripts/m26_pa7_evidence_privacy_hygiene.py" in workflow
     assert "m26-pa7-oracle-backend-production-${{ github.ref }}" in workflow

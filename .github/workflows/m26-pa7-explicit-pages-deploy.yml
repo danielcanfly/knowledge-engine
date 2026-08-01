@@ -16,6 +16,7 @@ on:
       - "pilot/m24/internal-product-deployment/site/m26-full-graph.js"
       - "pilot/m24/internal-product-deployment/site/m26-ask.js"
       - "scripts/m26_pa7_durable_backend_origin.py"
+      - "scripts/m26_pa7_evidence_privacy_hygiene.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
       - "src/knowledge_engine/m23_cloudflare_qdrant.py"
       - "src/knowledge_engine/m26_ask_api.py"
@@ -78,6 +79,7 @@ jobs:
               "pilot/m24/internal-product-deployment/site/m26-full-graph.js",
               "pilot/m24/internal-product-deployment/site/m26-ask.js",
               "scripts/m26_pa7_durable_backend_origin.py",
+              "scripts/m26_pa7_evidence_privacy_hygiene.py",
               "scripts/m26_pa7_named_backend_tunnel.py",
               "src/knowledge_engine/m23_cloudflare_qdrant.py",
               "src/knowledge_engine/m26_ask_api.py",

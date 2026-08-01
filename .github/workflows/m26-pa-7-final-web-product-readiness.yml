@@ -11,6 +11,7 @@ on:
       - "deploy/deploy.sh"
       - "schemas/m26-pa-7-final-web-*.schema.json"
       - "scripts/m26_pa7_durable_backend_origin.py"
+      - "scripts/m26_pa7_evidence_privacy_hygiene.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
       - "src/knowledge_engine/m23_cloudflare_qdrant.py"
       - "src/knowledge_engine/api.py"
@@ -33,6 +34,7 @@ on:
       - "deploy/deploy.sh"
       - "schemas/m26-pa-7-final-web-*.schema.json"
       - "scripts/m26_pa7_durable_backend_origin.py"
+      - "scripts/m26_pa7_evidence_privacy_hygiene.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
       - "src/knowledge_engine/m23_cloudflare_qdrant.py"
       - "src/knowledge_engine/api.py"
@@ -114,6 +116,7 @@ jobs:
             src/knowledge_engine/m26_ask_api.py \
             src/knowledge_engine/m26_pa7_final_web_readiness.py \
             scripts/m26_pa7_durable_backend_origin.py \
+            scripts/m26_pa7_evidence_privacy_hygiene.py \
             scripts/m26_pa7_named_backend_tunnel.py \
             tests/test_m23_5_cloudflare_qdrant.py \
             tests/test_m24_internal_ask_ui_api.py \
@@ -125,6 +128,7 @@ jobs:
             src/knowledge_engine/m26_ask_api.py \
             src/knowledge_engine/m26_pa7_final_web_readiness.py \
             scripts/m26_pa7_durable_backend_origin.py \
+            scripts/m26_pa7_evidence_privacy_hygiene.py \
             scripts/m26_pa7_named_backend_tunnel.py \
             tests/test_m23_5_cloudflare_qdrant.py \
             tests/test_m24_internal_ask_ui_api.py \
@@ -145,7 +149,7 @@ jobs:
           git fetch --quiet --no-tags origin "${{ github.base_ref }}"
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat /tmp/changed.txt
-          ! grep -Ev '^(\.github/workflows/(m26-pa-7-final-web-product-readiness|m26-pa7-owner-access-and-full-graph-repair|m26-pa7-explicit-pages-deploy|m26-pa7-explicit-backend-redeploy|m26-pa-4-verified-answer-citation-gate|m26-1-architecture-authority)\.yml|Dockerfile|deploy/deploy\.sh|pilot/m26/m26-pa-7-final-web-formal-test-manifest\.json|pilot/m24/internal-product-deployment/site/(index\.html|app\.js|m26-ask\.js|_worker\.js|styles\.css|data/.*)|schemas/m26-pa-7-final-web-[a-z-]+-v1\.schema\.json|scripts/m26_pa7_(durable_backend_origin|named_backend_tunnel)\.py|src/knowledge_engine/(api|m23_cloudflare_qdrant|m26_ask_api|m26_pa7_final_web_readiness)\.py|tests/test_(m23_5_cloudflare_qdrant|m24_internal_ask_ui_api|m26_pa7_ask_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/(m26-pa-7-final-web-product-readiness|m26-pa7-owner-access-and-full-graph-repair|m26-pa7-explicit-pages-deploy|m26-pa7-explicit-backend-redeploy|m26-pa-4-verified-answer-citation-gate|m26-1-architecture-authority)\.yml|Dockerfile|deploy/deploy\.sh|pilot/m26/m26-pa-7-final-web-formal-test-manifest\.json|pilot/m24/internal-product-deployment/site/(index\.html|app\.js|m26-ask\.js|_worker\.js|styles\.css|data/.*)|schemas/m26-pa-7-final-web-[a-z-]+-v1\.schema\.json|scripts/m26_pa7_(durable_backend_origin|evidence_privacy_hygiene|named_backend_tunnel)\.py|src/knowledge_engine/(api|m23_cloudflare_qdrant|m26_ask_api|m26_pa7_final_web_readiness)\.py|tests/test_(m23_5_cloudflare_qdrant|m24_internal_ask_ui_api|m26_pa7_ask_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
           ! grep -E '^(production/|release/production|r2/|qdrant/|foundation/|credentials/|secrets/)' /tmp/changed.txt
 
   deploy_and_runtime_formal:
@@ -1218,19 +1222,22 @@ jobs:
         if: steps.guard.outputs.authorized == 'true'
         run: |
           set -euo pipefail
+          denial_tmp="$(mktemp -d)"
           status="$(curl -sS -L --max-redirs 0 \
-            -D "$WORK_DIR/evidence/public-api-denial.headers" \
-            -o "$WORK_DIR/evidence/public-api-denial.body" \
+            -D "$denial_tmp/response-headers.tmp" \
+            -o "$denial_tmp/response-body.tmp" \
             -w '%{http_code}' \
             -X POST \
             -H 'content-type: application/json' \
             --data '{"question":"What should a router define?"}' \
             "https://$INTERNAL_HOSTNAME/api/m26/query" || true)"
-          printf '%s\n' "$status" > "$WORK_DIR/evidence/public-api-denial.status"
-          test "$status" != "200"
-          grep -Eqi 'cloudflare|access|login|forbidden|denied|location:' \
-            "$WORK_DIR/evidence/public-api-denial.headers" \
-            "$WORK_DIR/evidence/public-api-denial.body"
+          python scripts/m26_pa7_evidence_privacy_hygiene.py public-denial \
+            --status "$status" \
+            --headers "$denial_tmp/response-headers.tmp" \
+            --body "$denial_tmp/response-body.tmp" \
+            --output "$WORK_DIR/evidence/public-api-denial-sanitized.json" \
+            --status-output "$WORK_DIR/evidence/public-api-denial.status"
+          rm -rf "$denial_tmp"
 
       - name: Execute live final runtime formal rows
         if: steps.guard.outputs.authorized == 'true'
@@ -1378,8 +1385,18 @@ jobs:
           fi
           set -e
 
-      - name: Upload final web live deployment evidence
+      - name: Scan final evidence privacy hygiene before upload
+        id: privacy_scan
         if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK_DIR/evidence"
+          python scripts/m26_pa7_evidence_privacy_hygiene.py scan \
+            --path "$WORK_DIR/evidence" \
+            --output "$WORK_DIR/evidence/evidence-privacy-scan.json"
+
+      - name: Upload final web live deployment evidence
+        if: always() && steps.privacy_scan.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: m26-pa7-final-web-live-${{ github.sha }}
