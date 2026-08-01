@@ -4,11 +4,19 @@
   Cache-Control: no-store
 /ask/*
   Cache-Control: no-store
+/full-graph
+  Cache-Control: no-store
+/full-graph/*
+  Cache-Control: no-store
+/full-graph.html
+  Cache-Control: no-store
 /index.html
   Cache-Control: no-store
 /app.js
   Cache-Control: no-store
 /m26-ask.js
+  Cache-Control: no-store
+/m26-full-graph.js
   Cache-Control: no-store
 /m26-title-guard.js
   Cache-Control: no-store

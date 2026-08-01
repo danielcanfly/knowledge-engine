@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" data-pa7-surface="full-knowledge-graph">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'none'; base-uri 'none'; form-action 'none'">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <title>Full Knowledge Graph</title>
+  <link rel="stylesheet" href="styles.css?v=pa7-dedicated-full-graph-20260801">
+  <script src="vendor/graphology.umd.min.js"></script>
+  <script src="vendor/sigma.min.js"></script>
+  <script src="graph-explorer.js?v=pa7-dedicated-full-graph-20260801"></script>
+  <script defer src="m26-full-graph.js?v=pa7-dedicated-full-graph-20260801"></script>
+</head>
+<body>
+  <a class="skip-link" href="#app-main">Skip to content</a>
+  <div
+    class="app-shell"
+    data-pa7-surface="full-knowledge-graph"
+    data-pa7-route-family="dedicated-static-route"
+    data-pa7-frontend-identity="m26-pa7-dedicated-full-graph-route-v1"
+  >
+    <aside class="sidebar" aria-label="Product navigation">
+      <div class="brand-block">
+        <p class="eyebrow">Authenticated internal</p>
+        <h1>LLM Wiki</h1>
+        <p class="release">M26 owner-only graph</p>
+      </div>
+      <nav class="primary-nav" aria-label="M24 surfaces">
+        <a href="/ask" data-route-link="ask">Ask Knowledge Engine</a>
+        <a href="/full-graph" data-full-graph-link aria-current="page">Full Knowledge Graph</a>
+        <a href="/#/graph" data-route-link="graph">Bounded Concept Graph</a>
+        <a href="/#/overview" data-route-link="overview">Overview</a>
+      </nav>
+      <section class="boundary-panel" aria-label="Authority boundary">
+        <h2>Boundary</h2>
+        <p>This dedicated page reads the owner-only full production relation graph through the trusted same-origin API. It does not use the M24 SPA hash router.</p>
+      </section>
+    </aside>
+    <main id="app-main" class="workspace" tabindex="-1">
+      <header class="workspace-header">
+        <div>
+          <p class="eyebrow">M26.PA.7 owner surface</p>
+          <h2 id="route-title">Full Knowledge Graph</h2>
+        </div>
+        <dl class="identity-strip" aria-label="Graph identity">
+          <div>
+            <dt>Release</dt>
+            <dd id="release-id">loading</dd>
+          </div>
+          <div>
+            <dt>Manifest</dt>
+            <dd id="manifest-sha">loading</dd>
+          </div>
+          <div>
+            <dt>Scope</dt>
+            <dd>full production</dd>
+          </div>
+        </dl>
+      </header>
+      <section id="app-status" class="status-banner" role="status" aria-live="polite">
+        Loading owner-only full production graph.
+      </section>
+      <section id="app" class="surface-region" aria-label="Full Knowledge Graph surface">
+        <section class="state-panel" data-state="full-graph-loading">
+          <h3>Full Knowledge Graph</h3>
+          <p>Reading and verifying the owner-only production graph.</p>
+        </section>
+      </section>
+    </main>
+  </div>
+  <noscript>
+    <main class="noscript">
+      <h1>Full Knowledge Graph requires JavaScript</h1>
+      <p>This owner-only graph surface uses same-origin API access and local graph rendering assets.</p>
+    </main>
+  </noscript>
+</body>
+</html>

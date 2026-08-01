@@ -257,9 +257,7 @@ def test_fastapi_backend_requires_server_side_owner_and_backend_auth(monkeypatch
     assert admitted.status_code == 200
     assert admitted.json()["route"]["api_query_path"] == "/api/m26/query"
     assert admitted.json()["route"]["api_graph_path"] == "/api/m26/graph"
-    assert admitted.json()["route"]["full_graph_url"].endswith(
-        "/ask?surface=full-graph"
-    )
+    assert admitted.json()["route"]["full_graph_url"].endswith("/full-graph")
 
 
 def test_owner_graph_endpoint_is_owner_only_and_read_only(monkeypatch) -> None:
