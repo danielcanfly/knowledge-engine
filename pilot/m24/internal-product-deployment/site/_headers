@@ -12,5 +12,7 @@
   Cache-Control: no-store
 /m26-title-guard.js
   Cache-Control: no-store
+/m26-pa7-full-graph-guard.js
+  Cache-Control: no-store
 /api/m26/*
   Cache-Control: no-store
