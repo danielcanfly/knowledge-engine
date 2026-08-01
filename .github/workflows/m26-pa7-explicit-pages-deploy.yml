@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/m26-pa7-explicit-pages-deploy.yml"
+      - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
       - ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
       - "pilot/m24/internal-product-deployment/site/_headers"
       - "pilot/m24/internal-product-deployment/site/_worker.js"
@@ -60,6 +61,7 @@ jobs:
           from pathlib import Path
           expected = {
               ".github/workflows/m26-pa-7-final-web-product-readiness.yml",
+              ".github/workflows/m26-pa7-explicit-backend-redeploy.yml",
               ".github/workflows/m26-pa7-explicit-pages-deploy.yml",
               "pilot/m24/internal-product-deployment/site/_headers",
               "pilot/m24/internal-product-deployment/site/_worker.js",
