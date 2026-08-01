@@ -8,9 +8,12 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from knowledge_engine import m26_ask_api
 from knowledge_engine.m26_ask_api import (
+    WEB_GRAPH_SCHEMA,
     WEB_RESPONSE_SCHEMA,
     M26AskApiError,
+    build_owner_graph_dto,
     build_web_query_dto,
     create_app,
     run_owner_query_for_web,
@@ -65,6 +68,46 @@ class ExactSpanProvider:
         }
 
 
+class FakeActiveRelease:
+    release_id = "release-full-graph"
+    manifest_sha256 = "a" * 64
+    loaded_at = "2026-08-01T00:00:00Z"
+    graph_v2 = {
+        "renderer_neutral": True,
+        "nodes": [
+            {
+                "concept_id": "concepts/alpha",
+                "title": "Alpha",
+                "type": "Concept",
+                "audience": "internal",
+                "tags": [],
+            },
+            {
+                "concept_id": "concepts/beta",
+                "title": "Beta",
+                "type": "Concept",
+                "audience": "internal",
+                "tags": [],
+            },
+        ],
+        "edges": [
+            {
+                "edge_id": "edge-alpha-beta",
+                "source": "concepts/alpha",
+                "target": "concepts/beta",
+                "relation_type": "supports",
+                "directed": True,
+                "audience": "internal",
+            }
+        ],
+    }
+
+
+class FakeRuntime:
+    def ensure_loaded(self) -> FakeActiveRelease:
+        return FakeActiveRelease()
+
+
 def _task(payload: dict[str, Any]) -> dict[str, Any]:
     message = payload["messages"][0]["content"]
     text = message[0]["text"] if isinstance(message, list) else message
@@ -78,6 +121,13 @@ def _support_ref(item: dict[str, Any]) -> dict[str, str]:
         "evidence_id": item["evidence_id"],
         "locator_id": item["locator_id"],
         "exact_quote": quote,
+    }
+
+
+def _owner_headers() -> dict[str, str]:
+    return {
+        "authorization": f"{AUTH_SCHEME} {TEST_BACKEND_TOKEN}",
+        "x-m26-owner-subject-hash": OWNER_SUBJECT_HASH,
     }
 
 
@@ -122,6 +172,19 @@ def test_web_dto_matches_cli_runtime_response_identity() -> None:
     assert dto["identities"]["resolved_gate_self_sha256"] == runtime["resolved_gate_self_sha256"]
 
 
+def test_owner_graph_dto_is_full_read_only_runtime_graph() -> None:
+    dto = build_owner_graph_dto(FakeActiveRelease())
+
+    assert dto["schema_version"] == WEB_GRAPH_SCHEMA
+    assert dto["status"] == "ok"
+    assert dto["graph_scope"] == "full_current_production_relation_graph"
+    assert dto["counts"] == {"nodes": 2, "edges": 1}
+    assert dto["release_id"] == FakeActiveRelease.release_id
+    assert dto["authority"]["owner_only"] is True
+    assert dto["authority"]["read_only"] is True
+    assert dto["authority"]["production_pointer_mutations"] == 0
+
+
 def test_query_request_validation_is_bounded() -> None:
     assert validate_query_request({"question": "  explain   harness  "}) == "explain harness"
     with pytest.raises(M26AskApiError, match="question exceeds"):
@@ -149,15 +212,25 @@ def test_fastapi_backend_requires_server_side_owner_and_backend_auth(monkeypatch
         ).status_code
         == 403
     )
-    admitted = client.get(
-        "/api/m26/health",
-        headers={
-            "authorization": f"{AUTH_SCHEME} {TEST_BACKEND_TOKEN}",
-            "x-m26-owner-subject-hash": OWNER_SUBJECT_HASH,
-        },
-    )
+    admitted = client.get("/api/m26/health", headers=_owner_headers())
     assert admitted.status_code == 200
     assert admitted.json()["route"]["api_query_path"] == "/api/m26/query"
+    assert admitted.json()["route"]["api_graph_path"] == "/api/m26/graph"
+
+
+def test_owner_graph_endpoint_uses_current_runtime_without_mutation(monkeypatch) -> None:
+    monkeypatch.setenv("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", OWNER_SUBJECT_HASH)
+    monkeypatch.setenv("M26_QUERY_BACKEND_TOKEN", TEST_BACKEND_TOKEN)
+    monkeypatch.setattr(m26_ask_api, "_owner_graph_runtime", lambda: FakeRuntime())
+    app = create_app(root=ROOT, gate_path=GATE_PATH, require_remote_dense=False)
+    client = TestClient(app)
+
+    assert client.get("/api/m26/graph").status_code == 403
+    admitted = client.get("/api/m26/graph", headers=_owner_headers())
+    assert admitted.status_code == 200
+    payload = admitted.json()
+    assert payload["counts"] == {"nodes": 2, "edges": 1}
+    assert payload["authority"]["corpus_index_content_mutations"] == 0
 
 
 def test_production_api_mounts_same_owner_only_m26_backend(monkeypatch) -> None:
@@ -167,13 +240,7 @@ def test_production_api_mounts_same_owner_only_m26_backend(monkeypatch) -> None:
 
     client = TestClient(production_app)
     assert client.get("/api/m26/health").status_code == 403
-    admitted = client.get(
-        "/api/m26/health",
-        headers={
-            "authorization": f"{AUTH_SCHEME} {TEST_BACKEND_TOKEN}",
-            "x-m26-owner-subject-hash": OWNER_SUBJECT_HASH,
-        },
-    )
+    admitted = client.get("/api/m26/health", headers=_owner_headers())
 
     assert admitted.status_code == 200
     assert admitted.json()["canonical_runtime"]["entrypoint"].endswith(
