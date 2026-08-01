@@ -1,0 +1,1 @@
+{"schema_version":"knowledge-engine-m26-pa7-route-prelock-sentinel/v1","purpose":"temporary sentinel for PR opening, remove if not admitted","protected_knowledge_mutations":0,"r2_writes":0,"qdrant_writes":0,"production_pointer_mutations":0,"raw_token_recorded":false}
