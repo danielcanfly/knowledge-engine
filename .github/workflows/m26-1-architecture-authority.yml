@@ -35,7 +35,6 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-
           accepted = json.loads(Path('pilot/m25/m25-5-acceptance.json').read_text())
           baseline = json.loads(Path('pilot/m26/m26-1-entry-baseline.json').read_text())
           assert accepted['status'] == 'm25_5_identity_governance_accepted'
@@ -71,16 +70,17 @@ jobs:
             -e 'src/knowledge_engine/api.py' \
             -e 'src/knowledge_engine/m26_ask_api.py' \
             -e 'src/knowledge_engine/m26_pa7_final_web_readiness.py' \
-            -e 'src/knowledge_engine/m26_pa7_query_cli.py' || true)"
+            -e 'src/knowledge_engine/m26_pa7_query_cli.py' \
+            -e 'pilot/m24/internal-product-deployment/site/index.html' \
+            -e 'pilot/m24/internal-product-deployment/site/m26-ask.js' \
+            -e 'pilot/m24/internal-product-deployment/site/_worker.js' || true)"
           test -z "$unexpected"
           python - <<'PY'
           import pathlib
           import re
           import subprocess
-
           changed = subprocess.check_output(
-              ['git', 'diff', '--name-only', 'origin/main...HEAD'],
-              text=True,
+              ['git', 'diff', '--name-only', 'origin/main...HEAD'], text=True
           ).splitlines()
           patterns = [
               re.compile(r'\bsk-[A-Za-z0-9_-]{30,}'),
@@ -114,7 +114,6 @@ jobs:
           import json
           import os
           from pathlib import Path
-
           files = [
               'pilot/m26/m26-1-entry-baseline.json',
               'pilot/m26/m26-1-architecture-freeze.json',
@@ -173,15 +172,12 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 50
           show-progress: false
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-
       - name: Verify exact repair head and static owner surfaces
         run: |
           set -euo pipefail
@@ -193,7 +189,6 @@ jobs:
           grep -F '/api/m26/graph' pilot/m24/internal-product-deployment/site/_worker.js
           grep -F 'Full Knowledge Graph' pilot/m24/internal-product-deployment/site/index.html
           grep -F 'full_current_production_relation_graph' src/knowledge_engine/m26_ask_api.py
-
       - name: Read Access application identity
         run: |
           set -euo pipefail
@@ -211,7 +206,6 @@ jobs:
             printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
           done < "$WORK_DIR/access.env"
           rm -f "$WORK_DIR/access.env"
-
       - name: Bind verified Access JWT configuration
         env:
           CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_PAGES_TOKEN }}
@@ -221,7 +215,6 @@ jobs:
             --project-name "$PAGES_PROJECT"
           printf '%s' "$ACCESS_TEAM_DOMAIN" | npx --yes wrangler@4.111.0 pages secret put ACCESS_TEAM_DOMAIN \
             --project-name "$PAGES_PROJECT"
-
       - name: Redeploy repaired owner surfaces
         env:
           CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_PAGES_TOKEN }}
@@ -232,7 +225,6 @@ jobs:
             --branch main \
             --commit-dirty=true \
             | tee "$WORK_DIR/evidence/pages-repair-deploy.log"
-
       - name: Verify fail-closed public boundary
         run: |
           set -euo pipefail
@@ -243,7 +235,6 @@ jobs:
           test ! -s "$WORK_DIR/evidence/public-health-body.txt" || \
             ! grep -Eqi 'api[_-]?key|authorization:|bearer [A-Za-z0-9._~-]{16,}' \
               "$WORK_DIR/evidence/public-health-body.txt"
-
       - name: Write sanitized repair receipt
         env:
           REPAIR_HEAD: ${{ github.event.workflow_run.head_sha }}
@@ -254,7 +245,6 @@ jobs:
           import json
           import os
           from pathlib import Path
-
           root = Path(os.environ['WORK_DIR'])
           receipt = {
               'schema_version': 'knowledge-engine-m26-pa7-access-full-graph-repair/v1',
@@ -278,11 +268,9 @@ jobs:
           canonical = json.dumps(receipt, sort_keys=True, separators=(',', ':')).encode()
           receipt['self_sha256'] = hashlib.sha256(canonical).hexdigest()
           (root / 'evidence/repair-receipt.json').write_text(
-              json.dumps(receipt, indent=2, sort_keys=True) + '\n',
-              encoding='utf-8',
+              json.dumps(receipt, indent=2, sort_keys=True) + '\n', encoding='utf-8'
           )
           PY
-
       - uses: actions/upload-artifact@v4
         with:
           name: m26-pa7-access-full-graph-repair-${{ github.event.workflow_run.head_sha }}
