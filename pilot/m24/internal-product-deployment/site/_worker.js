@@ -100,15 +100,27 @@ async function verifyOwnerAccess(request, env) {
   const accessJwt = request.headers.get("cf-access-jwt-assertion");
   if (!accessJwt) return denied("M26_OWNER_ACCESS_JWT_MISSING");
   const expectedEmailHash = String(env.M26_OWNER_EMAIL_SHA256 || "").toLowerCase();
-  const teamDomain = normalizeTeamDomain(env.ACCESS_TEAM_DOMAIN);
-  const audience = String(env.ACCESS_AUD || "").trim();
-  if (!expectedEmailHash || !teamDomain || !audience) {
-    return denied("M26_OWNER_ACCESS_CONFIG_MISSING");
+  if (!expectedEmailHash) return denied("M26_OWNER_ACCESS_EMAIL_HASH_UNCONFIGURED");
+
+  let decoded;
+  try {
+    decoded = decodeAccessJwt(accessJwt);
+  } catch (_error) {
+    return denied("M26_OWNER_ACCESS_JWT_MALFORMED");
+  }
+  const configuredTeamDomain = normalizeTeamDomain(env.ACCESS_TEAM_DOMAIN);
+  const tokenTeamDomain = normalizeTeamDomain(decoded.payload.iss);
+  const teamDomain = configuredTeamDomain || tokenTeamDomain;
+  const tokenAudiences = normalizeAudiences(decoded.payload.aud);
+  const configuredAudience = String(env.ACCESS_AUD || "").trim();
+  const expectedAudience = configuredAudience || tokenAudiences[0] || "";
+  if (!teamDomain || teamDomain !== tokenTeamDomain || !expectedAudience) {
+    return denied("M26_OWNER_ACCESS_TOKEN_IDENTITY_INVALID");
   }
 
   let payload;
   try {
-    payload = await verifyAccessJwt(accessJwt, teamDomain, audience);
+    payload = await verifyAccessJwt(accessJwt, teamDomain, expectedAudience);
   } catch (_error) {
     return denied("M26_OWNER_ACCESS_JWT_INVALID");
   }
@@ -118,7 +130,12 @@ async function verifyOwnerAccess(request, env) {
   if (!timingSafeEqualHex(actualEmailHash, expectedEmailHash)) {
     return denied("M26_OWNER_ACCESS_EMAIL_MISMATCH");
   }
-  return admitted(expectedOwnerHash, "verified_cloudflare_access_jwt_email");
+  return admitted(
+    expectedOwnerHash,
+    configuredAudience && configuredTeamDomain
+      ? "verified_pinned_cloudflare_access_jwt_email"
+      : "verified_cloudflare_access_jwt_email",
+  );
 }
 
 function admitted(ownerSubjectHash, identitySource) {
@@ -129,23 +146,48 @@ function denied(reasonCode) {
   return { ok: false, reasonCode };
 }
 
+function decodeAccessJwt(token) {
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("invalid JWT shape");
+  return {
+    parts,
+    header: JSON.parse(new TextDecoder().decode(base64UrlBytes(parts[0]))),
+    payload: JSON.parse(new TextDecoder().decode(base64UrlBytes(parts[1]))),
+  };
+}
+
 function normalizeTeamDomain(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
   try {
     const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
-    if (url.protocol !== "https:" || !url.hostname.endsWith(".cloudflareaccess.com")) return "";
+    if (
+      url.protocol !== "https:" ||
+      !url.hostname.endsWith(".cloudflareaccess.com") ||
+      url.username ||
+      url.password ||
+      (url.pathname !== "/" && url.pathname !== "") ||
+      url.search ||
+      url.hash
+    ) {
+      return "";
+    }
     return `${url.protocol}//${url.hostname}`;
   } catch (_error) {
     return "";
   }
 }
 
+function normalizeAudiences(value) {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .map((item) => String(item || "").trim())
+    .filter((item) => /^[A-Za-z0-9_-]{16,256}$/.test(item));
+}
+
 async function verifyAccessJwt(token, teamDomain, expectedAudience) {
-  const parts = token.split(".");
-  if (parts.length !== 3) throw new Error("invalid JWT shape");
-  const header = JSON.parse(new TextDecoder().decode(base64UrlBytes(parts[0])));
-  const payload = JSON.parse(new TextDecoder().decode(base64UrlBytes(parts[1])));
+  const decoded = decodeAccessJwt(token);
+  const { parts, header, payload } = decoded;
   if (header.alg !== "RS256" || typeof header.kid !== "string") {
     throw new Error("unsupported JWT header");
   }
@@ -159,13 +201,14 @@ async function verifyAccessJwt(token, teamDomain, expectedAudience) {
   if (!verified) throw new Error("JWT signature invalid");
 
   const now = Math.floor(Date.now() / 1000);
-  if (String(payload.iss || "").replace(/\/$/, "") !== teamDomain.replace(/\/$/, "")) {
+  if (normalizeTeamDomain(payload.iss) !== teamDomain) {
     throw new Error("JWT issuer mismatch");
   }
-  const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  const audiences = normalizeAudiences(payload.aud);
   if (!audiences.includes(expectedAudience)) throw new Error("JWT audience mismatch");
   if (!Number.isFinite(payload.exp) || payload.exp <= now) throw new Error("JWT expired");
   if (Number.isFinite(payload.nbf) && payload.nbf > now + 30) throw new Error("JWT not active");
+  if (Number.isFinite(payload.iat) && payload.iat > now + 30) throw new Error("JWT issued in future");
   return payload;
 }
 
