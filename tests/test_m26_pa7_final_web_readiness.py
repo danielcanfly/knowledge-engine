@@ -7,7 +7,10 @@ from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator
-from scripts.m26_pa7_durable_backend_origin import _normalized_oracle_hostname
+from scripts.m26_pa7_durable_backend_origin import (
+    _normalized_oracle_hostname,
+    wildcard_dns_origin,
+)
 from scripts.m26_pa7_named_backend_tunnel import _require_hostname_under_zone
 
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import LocalDenseProjectionChannel
@@ -355,8 +358,11 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "scripts/m26_pa7_named_backend_tunnel.py ensure" in workflow
     assert "scripts/m26_pa7_durable_backend_origin.py oracle-https" in workflow
     assert "scripts/m26_pa7_durable_backend_origin.py cloudflare-dns-a" in workflow
+    assert "scripts/m26_pa7_durable_backend_origin.py wildcard-dns" in workflow
     assert "backend-named-tunnel.json" in workflow
     assert "backend-cloudflare-dns-a-origin.json" in workflow
+    assert "backend-cloudflare-dns-a-unavailable.json" in workflow
+    assert "backend-wildcard-dns-origin.json" in workflow
     assert "backend-oracle-https-origin.json" in workflow
     assert "m26-pa7-backend-tunnel" in workflow
     assert "m26-pa7-backend-https-origin" in workflow
@@ -457,6 +463,17 @@ def test_durable_origin_script_can_prepare_cloudflare_dns_a_origin() -> None:
     assert '"proxied": False' in script
     assert '"raw_ip_recorded": False' in script
     assert "cloudflare_dns_a_to_oracle_https_reverse_proxy" in script
+
+
+def test_wildcard_dns_origin_derives_hostname_without_raw_evidence() -> None:
+    evidence, runtime = wildcard_dns_origin(address="203.0.113.7")
+
+    assert evidence["origin_class"] == "wildcard_dns_to_oracle_https_reverse_proxy"
+    assert evidence["raw_backend_origin_recorded"] is False
+    assert evidence["raw_hostname_recorded"] is False
+    assert evidence["raw_ip_recorded"] is False
+    assert runtime["M26_QUERY_BACKEND_ORIGIN"] == "https://203-0-113-7.sslip.io"
+    assert runtime["M26_ORACLE_BACKEND_TLS_HOSTNAME"] == "203-0-113-7.sslip.io"
 
 
 def test_deploy_script_clears_stale_compose_state_before_service_up() -> None:

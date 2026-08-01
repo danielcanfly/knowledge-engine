@@ -333,7 +333,7 @@ jobs:
               "schema_version": "knowledge-engine-m26-pa7-named-backend-tunnel-unavailable/v1",
               "raw_backend_origin_recorded": False,
               "raw_error_recorded": False,
-              "status": "cloudflare_tunnel_api_unavailable_falling_back_to_oracle_https",
+              "status": "cloudflare_tunnel_api_unavailable_falling_back_to_durable_https_origin",
           }
           Path(os.environ["WORK_DIR"], "evidence/backend-named-tunnel-unavailable.json").write_text(
               json.dumps(evidence, indent=2, sort_keys=True) + "\n"
@@ -346,13 +346,38 @@ jobs:
           ipaddress.ip_address(sys.argv[1])
           PY
               then
-                python scripts/m26_pa7_durable_backend_origin.py cloudflare-dns-a \
+                if python scripts/m26_pa7_durable_backend_origin.py cloudflare-dns-a \
                   --zone-name "$CLOUDFLARE_ZONE_NAME" \
                   --hostname "$M26_QUERY_BACKEND_TUNNEL_HOSTNAME" \
                   --address "$ORACLE_VM_HOST" \
                   --evidence-output "$WORK_DIR/evidence/backend-cloudflare-dns-a-origin.json" \
-                  --runtime-env-output "$WORK_DIR/backend-cloudflare-dns-a-origin.env"
-                backend_origin_env="$WORK_DIR/backend-cloudflare-dns-a-origin.env"
+                  --runtime-env-output "$WORK_DIR/backend-cloudflare-dns-a-origin.env" \
+                  2> "$WORK_DIR/backend-cloudflare-dns-a-origin.err"; then
+                  backend_origin_env="$WORK_DIR/backend-cloudflare-dns-a-origin.env"
+                else
+                  python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          evidence = {
+              "schema_version": "knowledge-engine-m26-pa7-cloudflare-dns-a-unavailable/v1",
+              "raw_backend_origin_recorded": False,
+              "raw_error_recorded": False,
+              "raw_ip_recorded": False,
+              "status": "cloudflare_dns_a_unavailable_falling_back_to_wildcard_dns",
+          }
+          Path(os.environ["WORK_DIR"], "evidence/backend-cloudflare-dns-a-unavailable.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+                  rm -f "$WORK_DIR/backend-cloudflare-dns-a-origin.err"
+                  python scripts/m26_pa7_durable_backend_origin.py wildcard-dns \
+                    --address "$ORACLE_VM_HOST" \
+                    --suffix sslip.io \
+                    --evidence-output "$WORK_DIR/evidence/backend-wildcard-dns-origin.json" \
+                    --runtime-env-output "$WORK_DIR/backend-wildcard-dns-origin.env"
+                  backend_origin_env="$WORK_DIR/backend-wildcard-dns-origin.env"
+                fi
               else
                 python scripts/m26_pa7_durable_backend_origin.py oracle-https \
                   --hostname "$ORACLE_VM_HOST" \
