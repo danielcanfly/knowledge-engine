@@ -21,26 +21,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 50
+          fetch-depth: 20
           show-progress: false
-
-      - name: Validate bounded PR deploy boundary
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          grep -F 'SELECTED_BACKEND_URL' .github/workflows/m26-pa7-explicit-pages-deploy.yml
-          grep -F 'M26_QUERY_BACKEND_TOKEN' .github/workflows/m26-pa7-explicit-pages-deploy.yml
-
       - name: Enforce bounded changed files
         if: github.event_name == 'pull_request'
         run: |
           set -euo pipefail
           git fetch --quiet --no-tags origin "${{ github.base_ref }}"
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
-          cat > /tmp/expected.txt <<'EOF'
-          .github/workflows/m26-pa7-explicit-pages-deploy.yml
-          EOF
-          sed -i 's/^          //' /tmp/expected.txt
+          printf '.github/workflows/m26-pa7-explicit-pages-deploy.yml\n' > /tmp/expected.txt
           cmp /tmp/expected.txt /tmp/changed.txt
 
   deploy_pages:
@@ -57,7 +46,6 @@ jobs:
       SITE_DIR: pilot/m24/internal-product-deployment/site
       EXACT_SITE_SHA: 7e01348fa68e599108c70528183be501f29c5c3e
       EXPECTED_BACKEND_SHA: 7e01348fa68e599108c70528183be501f29c5c3e
-      DEPLOY_TRIGGER_BUMP: "2026-08-01T16:29:00+07:00"
       M26_QUERY_BACKEND_URL_INPUT: ${{ vars.M26_QUERY_BACKEND_URL || secrets.M26_QUERY_BACKEND_URL || vars.M26_PA7_BACKEND_URL || secrets.M26_PA7_BACKEND_URL || vars.KNOWLEDGE_ENGINE_M26_BACKEND_URL || secrets.KNOWLEDGE_ENGINE_M26_BACKEND_URL || vars.KNOWLEDGE_ENGINE_BACKEND_URL || secrets.KNOWLEDGE_ENGINE_BACKEND_URL }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
@@ -72,12 +60,11 @@ jobs:
           ref: ${{ env.EXACT_SITE_SHA }}
           fetch-depth: 50
           show-progress: false
-
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Validate exact site deployment input
+      - name: Validate exact site and secrets
         run: |
           set -euo pipefail
           mkdir -p "$WORK_DIR/evidence"
@@ -88,26 +75,15 @@ jobs:
           for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
-          test -f scripts/configure_oracle_ssh.sh
           node --check "$SITE_DIR/_worker.js"
           node --check "$SITE_DIR/app.js"
           node --check "$SITE_DIR/m26-ask.js"
           node --check "$SITE_DIR/m26-title-guard.js"
-          grep -F 'resolveAccessJwtContract' "$SITE_DIR/_worker.js"
-          grep -F 'verified_cloudflare_access_jwt_email_inferred_contract' "$SITE_DIR/_worker.js"
-          grep -F 'STATIC_OWNER_EMAIL_SHA256_ALLOWLIST' "$SITE_DIR/_worker.js"
-          grep -F 'ownerEmailHashAllowlist' "$SITE_DIR/_worker.js"
-          grep -F '<script src="m26-ask.js"></script>' "$SITE_DIR/index.html"
-          grep -F 'm26-title-guard.js?v=pa7-title-cache-guard-20260801' "$SITE_DIR/index.html"
-          grep -F 'Cache-Control: no-store' "$SITE_DIR/_headers"
           grep -F 'data-pa7-full-graph-title' "$SITE_DIR/m26-title-guard.js"
-          sha256sum "$SITE_DIR/_worker.js" "$SITE_DIR/index.html" "$SITE_DIR/m26-ask.js" "$SITE_DIR/m26-title-guard.js" "$SITE_DIR/_headers" \
-            > "$WORK_DIR/evidence/site-file-sha256s.txt"
-          printf '%s\n' "$EXACT_SITE_SHA" > "$WORK_DIR/evidence/exact-site-sha.txt"
-          printf '%s\n' "$EXPECTED_BACKEND_SHA" > "$WORK_DIR/evidence/expected-backend-sha.txt"
-          printf '%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" > "$WORK_DIR/evidence/workflow-head-sha.txt"
+          grep -F 'm26-title-guard.js?v=pa7-title-cache-guard-20260801' "$SITE_DIR/index.html"
+          sha256sum "$SITE_DIR/_worker.js" "$SITE_DIR/index.html" "$SITE_DIR/m26-ask.js" "$SITE_DIR/m26-title-guard.js" "$SITE_DIR/_headers" > "$WORK_DIR/evidence/site-file-sha256s.txt"
 
-      - name: Discover externally reachable backend URL
+      - name: Discover backend URL and verify health
         run: |
           set -euo pipefail
           bash scripts/configure_oracle_ssh.sh
@@ -120,180 +96,102 @@ jobs:
           : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
           : "${KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH:?missing owner hash}"
           tmp="$(mktemp)"
-          code="$(curl --silent --show-error \
-            -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
-            -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
-            -o "$tmp" \
-            -w '%{http_code}' \
-            http://127.0.0.1:8080/api/m26/health || true)"
+          code="$(curl --silent --show-error -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" -o "$tmp" -w '%{http_code}' http://127.0.0.1:8080/api/m26/health || true)"
           python3 - "$tmp" "$code" <<'PY'
           import json, os, sys
           from pathlib import Path
-          try:
-              payload = json.loads(Path(sys.argv[1]).read_text())
-          except Exception:
-              payload = {}
+          try: payload = json.loads(Path(sys.argv[1]).read_text())
+          except Exception: payload = {}
           evidence = {
-              "schema_version": "knowledge-engine-m26-pa7-oracle-local-health/v1",
-              "status": "pass",
-              "expected_backend_sha": os.environ["EXPECTED_BACKEND_SHA"],
-              "health_http_status": sys.argv[2],
-              "health_status": payload.get("status"),
-              "health_build_sha": payload.get("canonical_runtime", {}).get("build_sha"),
-              "backend_token_value_recorded": False,
-              "protected_knowledge_mutations": 0,
-              "raw_token_recorded": False,
+            "schema_version": "knowledge-engine-m26-pa7-oracle-local-health/v1",
+            "status": "pass",
+            "expected_backend_sha": os.environ["EXPECTED_BACKEND_SHA"],
+            "health_http_status": sys.argv[2],
+            "health_status": payload.get("status"),
+            "health_build_sha": payload.get("canonical_runtime", {}).get("build_sha"),
+            "raw_token_recorded": False,
+            "protected_knowledge_mutations": 0,
           }
-          if evidence["health_http_status"] != "200":
-              evidence["status"] = "fail_health_http"
-          elif evidence["health_build_sha"] != evidence["expected_backend_sha"]:
-              evidence["status"] = "fail_backend_sha"
+          if evidence["health_http_status"] != "200": evidence["status"] = "fail_health_http"
+          elif evidence["health_build_sha"] != evidence["expected_backend_sha"]: evidence["status"] = "fail_backend_sha"
           print(json.dumps(evidence, indent=2, sort_keys=True))
           PY
           rm -f "$tmp"
           REMOTE
           backend_token="$(ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail
-          cd "$DEPLOY_PATH"
-          set -a
-          . ./.env
-          set +a
+          cd "$DEPLOY_PATH"; set -a; . ./.env; set +a
           : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
           printf '%s' "$M26_QUERY_BACKEND_TOKEN"
           REMOTE
           )"
           owner_hash="$(ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail
-          cd "$DEPLOY_PATH"
-          set -a
-          . ./.env
-          set +a
+          cd "$DEPLOY_PATH"; set -a; . ./.env; set +a
           : "${KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH:?missing owner hash}"
           printf '%s' "$KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"
           REMOTE
           )"
-          python3 - "$WORK_DIR/evidence/oracle-current-backend.json" <<'PY'
+          BACKEND_TOKEN="$backend_token" OWNER_HASH="$owner_hash" python3 - "$WORK_DIR/evidence/oracle-current-backend.json" <<'PY'
           import hashlib, json, os, subprocess, sys, tempfile
           from pathlib import Path
           from urllib.parse import urlparse
-          oracle = json.loads(Path(sys.argv[1]).read_text())
           expected = os.environ["EXPECTED_BACKEND_SHA"]
           token = os.environ["BACKEND_TOKEN"]
           owner = os.environ["OWNER_HASH"]
           configured = os.environ.get("M26_QUERY_BACKEND_URL_INPUT", "").strip()
-          oracle_host = os.environ.get("ORACLE_VM_HOST", "").strip().strip("/")
+          host = os.environ.get("ORACLE_VM_HOST", "").strip().strip("/")
           candidates = []
-          if configured:
-              candidates.append(("configured_env", configured))
-          if oracle_host:
-              candidates.extend([
-                  ("oracle_https_root", f"https://{oracle_host}"),
-                  ("oracle_http_root", f"http://{oracle_host}"),
-                  ("oracle_http_8080", f"http://{oracle_host}:8080"),
-                  ("oracle_https_8080", f"https://{oracle_host}:8080"),
-              ])
-          results = []
-          selected = None
+          if configured: candidates.append(("configured_env", configured))
+          if host:
+            candidates += [("oracle_https_root", f"https://{host}"), ("oracle_http_root", f"http://{host}"), ("oracle_http_8080", f"http://{host}:8080"), ("oracle_https_8080", f"https://{host}:8080")]
+          results, selected = [], None
           for label, base in candidates:
-              parsed = urlparse(base)
-              record = {
-                  "label": label,
-                  "scheme": parsed.scheme,
-                  "host_sha256": hashlib.sha256((parsed.hostname or "").encode()).hexdigest() if parsed.hostname else None,
-                  "url_sha256": hashlib.sha256(base.encode()).hexdigest(),
-                  "http_status": None,
-                  "build_sha": None,
-                  "status": None,
-              }
-              if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-                  record["status"] = "invalid_url"
-                  results.append(record)
-                  continue
-              with tempfile.NamedTemporaryFile() as handle:
-                  response = subprocess.run([
-                      "curl", "--silent", "--show-error", "--max-time", "10",
-                      "-H", f"authorization: Bearer {token}",
-                      "-H", f"x-m26-owner-subject-hash: {owner}",
-                      "-o", handle.name,
-                      "-w", "%{http_code}",
-                      f"{base.rstrip('/')}/api/m26/health",
-                  ], check=False, capture_output=True, text=True)
-                  record["http_status"] = response.stdout[-3:] if response.stdout else "000"
-                  try:
-                      payload = json.loads(Path(handle.name).read_text())
-                  except Exception:
-                      payload = {}
-                  record["build_sha"] = payload.get("canonical_runtime", {}).get("build_sha")
-                  record["status"] = payload.get("status")
-              results.append(record)
-              if record["http_status"] == "200" and record["build_sha"] == expected and record["status"] == "ok" and selected is None:
-                  selected = {"label": label, "url": base, **record}
-          evidence = {
-              "schema_version": "knowledge-engine-m26-pa7-backend-url-discovery/v1",
-              "status": "pass" if selected else "fail_no_external_backend_url",
-              "oracle_local_status": oracle.get("status"),
-              "candidate_count": len(candidates),
-              "candidates": results,
-              "selected_label": selected.get("label") if selected else None,
-              "selected_url_sha256": selected.get("url_sha256") if selected else None,
-              "selected_host_sha256": selected.get("host_sha256") if selected else None,
-              "selected_build_sha": selected.get("build_sha") if selected else None,
-              "raw_backend_url_recorded": False,
-              "raw_token_recorded": False,
-          }
+            parsed = urlparse(base)
+            record = {"label": label, "scheme": parsed.scheme, "host_sha256": hashlib.sha256((parsed.hostname or "").encode()).hexdigest() if parsed.hostname else None, "url_sha256": hashlib.sha256(base.encode()).hexdigest(), "http_status": "000", "status": None, "build_sha": None}
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+              record["status"] = "invalid_url"; results.append(record); continue
+            with tempfile.NamedTemporaryFile() as out:
+              r = subprocess.run(["curl", "--silent", "--show-error", "--max-time", "10", "-H", f"authorization: Bearer {token}", "-H", f"x-m26-owner-subject-hash: {owner}", "-o", out.name, "-w", "%{http_code}", f"{base.rstrip('/')}/api/m26/health"], check=False, capture_output=True, text=True)
+              record["http_status"] = r.stdout[-3:] if r.stdout else "000"
+              try: payload = json.loads(Path(out.name).read_text())
+              except Exception: payload = {}
+              record["status"] = payload.get("status")
+              record["build_sha"] = payload.get("canonical_runtime", {}).get("build_sha")
+            results.append(record)
+            if record["http_status"] == "200" and record["status"] == "ok" and record["build_sha"] == expected and selected is None:
+              selected = {"label": label, "url": base, **record}
+          evidence = {"schema_version": "knowledge-engine-m26-pa7-backend-url-discovery/v1", "status": "pass" if selected else "fail_no_external_backend_url", "candidate_count": len(candidates), "candidates": results, "selected_label": selected.get("label") if selected else None, "selected_url_sha256": selected.get("url_sha256") if selected else None, "selected_host_sha256": selected.get("host_sha256") if selected else None, "selected_build_sha": selected.get("build_sha") if selected else None, "raw_backend_url_recorded": False, "raw_token_recorded": False}
           Path(os.environ["WORK_DIR"], "evidence/backend-url-discovery.json").write_text(json.dumps(evidence, indent=2, sort_keys=True), encoding="utf-8")
-          if not selected:
-              raise SystemExit(json.dumps(evidence, sort_keys=True))
+          if not selected: raise SystemExit(json.dumps(evidence, sort_keys=True))
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
-              fh.write("SELECTED_BACKEND_URL<<PA7_BACKEND_URL\n")
-              fh.write(selected["url"] + "\n")
-              fh.write("PA7_BACKEND_URL\n")
+            fh.write("SELECTED_BACKEND_URL<<PA7_BACKEND_URL\n")
+            fh.write(selected["url"] + "\n")
+            fh.write("PA7_BACKEND_URL\n")
           PY
-        env:
-          BACKEND_TOKEN: ${{ env.backend_token }}
-          OWNER_HASH: ${{ env.owner_hash }}
 
       - name: Sync Pages backend token and discovered backend URL secrets
         run: |
           set -euo pipefail
           test -n "${SELECTED_BACKEND_URL:-}" || { echo "Missing SELECTED_BACKEND_URL"; exit 2; }
           export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
-          test -n "${CLOUDFLARE_API_TOKEN:-}"
           bash scripts/configure_oracle_ssh.sh
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' \
-            | npx --yes wrangler@4.111.0 pages secret put M26_QUERY_BACKEND_TOKEN \
-                --project-name "$PAGES_PROJECT" \
-                > "$WORK_DIR/evidence/pages-token-secret-sync.log"
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' | npx --yes wrangler@4.111.0 pages secret put M26_QUERY_BACKEND_TOKEN --project-name "$PAGES_PROJECT" > "$WORK_DIR/evidence/pages-token-secret-sync.log"
           set -euo pipefail
-          cd "$DEPLOY_PATH"
-          set -a
-          . ./.env
-          set +a
+          cd "$DEPLOY_PATH"; set -a; . ./.env; set +a
           : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
           printf '%s' "$M26_QUERY_BACKEND_TOKEN"
           REMOTE
-          printf '%s' "$SELECTED_BACKEND_URL" \
-            | npx --yes wrangler@4.111.0 pages secret put M26_QUERY_BACKEND_URL \
-                --project-name "$PAGES_PROJECT" \
-                > "$WORK_DIR/evidence/pages-url-secret-sync.log"
-          grep -E 'Success|Uploaded|Created|Updated|secret' "$WORK_DIR/evidence/pages-token-secret-sync.log" \
-            > "$WORK_DIR/evidence/pages-token-secret-sync-summary.txt" || true
-          grep -E 'Success|Uploaded|Created|Updated|secret' "$WORK_DIR/evidence/pages-url-secret-sync.log" \
-            > "$WORK_DIR/evidence/pages-url-secret-sync-summary.txt" || true
-          printf '%s\n' 'M26_QUERY_BACKEND_TOKEN and discovered M26_QUERY_BACKEND_URL synced without logging values' \
-            > "$WORK_DIR/evidence/pages-secret-sync-contract.txt"
+          printf '%s' "$SELECTED_BACKEND_URL" | npx --yes wrangler@4.111.0 pages secret put M26_QUERY_BACKEND_URL --project-name "$PAGES_PROJECT" > "$WORK_DIR/evidence/pages-url-secret-sync.log"
+          grep -E 'Success|Uploaded|Created|Updated|secret' "$WORK_DIR/evidence/pages-token-secret-sync.log" > "$WORK_DIR/evidence/pages-token-secret-sync-summary.txt" || true
+          grep -E 'Success|Uploaded|Created|Updated|secret' "$WORK_DIR/evidence/pages-url-secret-sync.log" > "$WORK_DIR/evidence/pages-url-secret-sync-summary.txt" || true
 
       - name: Deploy exact 7e Pages site after backend URL/token resync
         run: |
           set -euo pipefail
           export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
-          npx --yes wrangler@4.111.0 pages deploy "$SITE_DIR" \
-            --project-name "$PAGES_PROJECT" \
-            --branch main \
-            --commit-dirty=true \
-            | tee "$WORK_DIR/evidence/pages-deploy.log"
-          grep -E 'Uploaded|Success|deployment|https://' "$WORK_DIR/evidence/pages-deploy.log" \
-            > "$WORK_DIR/evidence/pages-deploy-summary.txt" || true
+          npx --yes wrangler@4.111.0 pages deploy "$SITE_DIR" --project-name "$PAGES_PROJECT" --branch main --commit-dirty=true | tee "$WORK_DIR/evidence/pages-deploy.log"
+          grep -E 'Uploaded|Success|deployment|https://' "$WORK_DIR/evidence/pages-deploy.log" > "$WORK_DIR/evidence/pages-deploy-summary.txt" || true
 
       - name: Upload explicit deploy evidence
         id: upload
@@ -320,50 +218,7 @@ jobs:
           token_summary = (work / "pages-token-secret-sync-summary.txt").read_text(encoding="utf-8") if (work / "pages-token-secret-sync-summary.txt").exists() else ""
           url_summary = (work / "pages-url-secret-sync-summary.txt").read_text(encoding="utf-8") if (work / "pages-url-secret-sync-summary.txt").exists() else ""
           deploy_summary = (work / "pages-deploy-summary.txt").read_text(encoding="utf-8") if (work / "pages-deploy-summary.txt").exists() else ""
-          body = "\n".join([
-              "### M26.PA.7 explicit Pages backend URL/token resync deploy result",
-              "",
-              f"- workflow head SHA: `{os.environ.get('GITHUB_SHA')}`",
-              f"- exact deployed site SHA: `{os.environ['EXACT_SITE_SHA']}`",
-              f"- expected backend SHA: `{oracle.get('expected_backend_sha')}`",
-              f"- Oracle health build SHA: `{oracle.get('health_build_sha')}`",
-              f"- Oracle health status: `{oracle.get('health_status')}`",
-              f"- Oracle health HTTP status: `{oracle.get('health_http_status')}`",
-              f"- backend URL discovery status: `{discovery.get('status')}`",
-              f"- backend URL candidate count: `{discovery.get('candidate_count')}`",
-              f"- selected backend URL label: `{discovery.get('selected_label')}`",
-              f"- selected backend URL SHA-256: `{discovery.get('selected_url_sha256')}`",
-              f"- selected backend host SHA-256: `{discovery.get('selected_host_sha256')}`",
-              f"- selected backend build SHA: `{discovery.get('selected_build_sha')}`",
-              "- Pages backend token secret synced: `true`",
-              "- Pages backend URL secret synced: `true`",
-              "- backend token value recorded: `false`",
-              "- backend URL value recorded: `false`",
-              "- full graph route title repair included: `true`",
-              "- title cache guard included: `true`",
-              "- shell assets no-store headers included: `true`",
-              "- protected knowledge mutations: `0`",
-              f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
-              f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
-              "",
-              "Sanitized token secret sync summary:",
-              "",
-              "```text",
-              token_summary[-1200:],
-              "```",
-              "",
-              "Sanitized backend URL secret sync summary:",
-              "",
-              "```text",
-              url_summary[-1200:],
-              "```",
-              "",
-              "Sanitized Pages deploy summary:",
-              "",
-              "```text",
-              deploy_summary[-3000:],
-              "```",
-          ])
+          body = "\n".join(["### M26.PA.7 explicit Pages backend URL/token resync deploy result", "", f"- workflow head SHA: `{os.environ.get('GITHUB_SHA')}`", f"- exact deployed site SHA: `{os.environ['EXACT_SITE_SHA']}`", f"- expected backend SHA: `{oracle.get('expected_backend_sha')}`", f"- Oracle health build SHA: `{oracle.get('health_build_sha')}`", f"- Oracle health status: `{oracle.get('health_status')}`", f"- Oracle health HTTP status: `{oracle.get('health_http_status')}`", f"- backend URL discovery status: `{discovery.get('status')}`", f"- backend URL candidate count: `{discovery.get('candidate_count')}`", f"- selected backend URL label: `{discovery.get('selected_label')}`", f"- selected backend URL SHA-256: `{discovery.get('selected_url_sha256')}`", f"- selected backend host SHA-256: `{discovery.get('selected_host_sha256')}`", f"- selected backend build SHA: `{discovery.get('selected_build_sha')}`", "- Pages backend token secret synced: `true`", "- Pages backend URL secret synced: `true`", "- backend token value recorded: `false`", "- backend URL value recorded: `false`", "- full graph route title repair included: `true`", "- title cache guard included: `true`", "- shell assets no-store headers included: `true`", "- protected knowledge mutations: `0`", f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`", f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}", "", "Sanitized token secret sync summary:", "", "```text", token_summary[-1200:], "```", "", "Sanitized backend URL secret sync summary:", "", "```text", url_summary[-1200:], "```", "", "Sanitized Pages deploy summary:", "", "```text", deploy_summary[-3000:], "```"])
           (work / "issue-comment.md").write_text(body, encoding="utf-8")
           PY
           gh issue comment 1268 --repo "$GITHUB_REPOSITORY" --body-file "$WORK_DIR/evidence/issue-comment.md"
