@@ -5,12 +5,14 @@ import os
 import time
 from collections.abc import Mapping
 from decimal import Decimal
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, status
 
+from .config import Settings
 from .m26_pa7_arbitrary_query_runtime import (
     MAX_QUERY_CHARS,
     DenseChannel,
@@ -20,9 +22,12 @@ from .m26_pa7_arbitrary_query_runtime import (
 from .m26_production_promotion_closure import load_json
 from .m26_retrieval_envelope import sha256_value
 from .m26_verified_answer_citation_gate import canonical_sha256
+from .runtime import Runtime
+from .storage import create_object_store
 
 WEB_RESPONSE_SCHEMA = "knowledge-engine-m26-pa7-ask-web-response/v1"
 WEB_HEALTH_SCHEMA = "knowledge-engine-m26-pa7-ask-web-health/v1"
+WEB_GRAPH_SCHEMA = "knowledge-engine-m26-pa7-owner-full-graph/v1"
 DEFAULT_GATE_PATH = Path("pilot/m26/m26-pa-7-resolved-production-gate.json")
 OWNER_HASH_HEADER = "x-m26-owner-subject-hash"
 BACKEND_TOKEN_HEADER = "authorization"
@@ -30,6 +35,8 @@ RUNTIME_ENTRYPOINT = "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner
 MAX_BODY_BYTES = 4096
 RATE_WINDOW_SECONDS = 60
 RATE_WINDOW_MAX_REQUESTS = 12
+MAX_OWNER_GRAPH_NODES = 50_000
+MAX_OWNER_GRAPH_EDGES = 100_000
 
 
 class M26AskApiError(ValueError):
@@ -41,6 +48,19 @@ class M26AskApiError(ValueError):
 
 
 _RATE_BUCKETS: dict[str, list[float]] = {}
+
+
+@lru_cache(maxsize=1)
+def _owner_graph_runtime() -> Runtime:
+    settings = Settings.from_env()
+    return Runtime(
+        create_object_store(settings),
+        settings.cache_dir,
+        settings.channel,
+        relation_aware_expansion_enabled=(
+            settings.relation_aware_expansion_enabled
+        ),
+    )
 
 
 def validate_query_request(payload: Any, *, max_chars: int = MAX_QUERY_CHARS) -> str:
@@ -158,8 +178,10 @@ def build_health_dto(*, root: Path, gate_path: Path) -> dict[str, Any]:
         },
         "route": {
             "ask_url": "https://m24-internal.danielcanfly.com/ask",
+            "full_graph_url": "https://m24-internal.danielcanfly.com/full-graph.html",
             "api_query_path": "/api/m26/query",
             "api_health_path": "/api/m26/health",
+            "api_graph_path": "/api/m26/graph",
             "owner_only_route": identities.get("owner_only_route"),
         },
         "resolved_gate_self_sha256": gate.get("self_sha256"),
@@ -172,6 +194,47 @@ def build_health_dto(*, root: Path, gate_path: Path) -> dict[str, Any]:
             "canonical_writes": 0,
             "production_pointer_mutations": 0,
             "qdrant_write_operations": 0,
+        },
+    }
+
+
+def build_owner_graph_dto(active: Any) -> dict[str, Any]:
+    graph = getattr(active, "graph_v2", None)
+    if not isinstance(graph, Mapping):
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_UNAVAILABLE",
+            "current production relation graph is unavailable",
+        )
+    nodes = _object_list(graph.get("nodes"))
+    edges = _object_list(graph.get("edges"))
+    if len(nodes) > MAX_OWNER_GRAPH_NODES or len(edges) > MAX_OWNER_GRAPH_EDGES:
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_BOUND_EXCEEDED",
+            "current production graph exceeds the owner browser bound",
+        )
+    return {
+        "schema_version": WEB_GRAPH_SCHEMA,
+        "status": "ok",
+        "graph_scope": "full_current_production_relation_graph",
+        "release_id": str(getattr(active, "release_id", "")),
+        "manifest_sha256": str(getattr(active, "manifest_sha256", "")),
+        "loaded_at": str(getattr(active, "loaded_at", "")),
+        "renderer_neutral": bool(graph.get("renderer_neutral", True)),
+        "counts": {"nodes": len(nodes), "edges": len(edges)},
+        "nodes": nodes,
+        "edges": edges,
+        "available_actions": [
+            "select_node",
+            "search_node",
+            "filter_relation",
+            "one_hop",
+            "two_hop",
+        ],
+        "authority": {
+            "owner_only": True,
+            "read_only": True,
+            "production_pointer_mutations": 0,
+            "corpus_index_content_mutations": 0,
         },
     }
 
@@ -215,6 +278,20 @@ def register_m26_ask_routes(
     async def health(request: Request) -> dict[str, Any]:
         _authorize_backend_request(request)
         return build_health_dto(root=app_root, gate_path=resolved_gate_path)
+
+    @app.get("/api/m26/graph")
+    async def graph(request: Request) -> dict[str, Any]:
+        _authorize_backend_request(request)
+        try:
+            active = _owner_graph_runtime().ensure_loaded()
+            return build_owner_graph_dto(active)
+        except M26AskApiError as exc:
+            raise _http_error(status.HTTP_503_SERVICE_UNAVAILABLE, exc.reason_code) from exc
+        except Exception as exc:
+            raise _http_error(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "M26_OWNER_GRAPH_LOAD_FAILED",
+            ) from exc
 
     @app.post("/api/m26/query")
     async def query(request: Request) -> dict[str, Any]:
