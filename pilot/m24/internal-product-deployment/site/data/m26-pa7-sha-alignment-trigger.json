@@ -1,0 +1,9 @@
+{
+  "schema_version": "knowledge-engine-m26-pa7-sha-alignment-trigger/v1",
+  "purpose": "Force a bounded Final Web push deployment so the Pages worker and Oracle backend agree on one exact main SHA after the full-graph repair.",
+  "created_ict": "2026-08-01T11:24:00+07:00",
+  "protected_knowledge_mutations": 0,
+  "production_pointer_mutations": 0,
+  "qdrant_write_operations": 0,
+  "r2_write_operations": 0
+}
