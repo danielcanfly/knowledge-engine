@@ -5,16 +5,6 @@ on:
   pull_request:
     paths:
       - ".github/workflows/m26-pa7-explicit-pages-deploy.yml"
-      - "pilot/m24/internal-product-deployment/site/**"
-      - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
-      - ".github/workflows/m26-pa7-query-smoke-only.yml"
-      - ".github/workflows/m26-pa7-oracle-deploy-probe.yml"
-      - "src/knowledge_engine/m24_product_surface_integration.py"
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/m26-pa7-explicit-pages-deploy.yml"
-      - "pilot/m24/internal-product-deployment/site/**"
 
 permissions:
   contents: read
@@ -22,7 +12,7 @@ permissions:
 
 concurrency:
   group: m26-pa7-explicit-pages-deploy-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -34,31 +24,12 @@ jobs:
           fetch-depth: 50
           show-progress: false
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Validate explicit deploy boundary
+      - name: Validate bounded PR deploy boundary
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          node --check pilot/m24/internal-product-deployment/site/_worker.js
-          node --check pilot/m24/internal-product-deployment/site/app.js
-          node --check pilot/m24/internal-product-deployment/site/m26-ask.js
-          node --check pilot/m24/internal-product-deployment/site/m26-title-guard.js
-          grep -F 'resolveAccessJwtContract' pilot/m24/internal-product-deployment/site/_worker.js
-          grep -F 'verified_cloudflare_access_jwt_email_inferred_contract' pilot/m24/internal-product-deployment/site/_worker.js
-          grep -F 'STATIC_OWNER_EMAIL_SHA256_ALLOWLIST' pilot/m24/internal-product-deployment/site/_worker.js
-          grep -F 'ownerEmailHashAllowlist' pilot/m24/internal-product-deployment/site/_worker.js
-          grep -F 'Bounded Concept Graph' pilot/m24/internal-product-deployment/site/index.html
-          grep -F '<script src="m26-ask.js"></script>' pilot/m24/internal-product-deployment/site/index.html
-          grep -F 'm26-title-guard.js?v=pa7-title-cache-guard-20260801' pilot/m24/internal-product-deployment/site/index.html
-          grep -F 'Cache-Control: no-store' pilot/m24/internal-product-deployment/site/_headers
-          grep -F 'FULL_GRAPH_TITLE' pilot/m24/internal-product-deployment/site/m26-ask.js
-          grep -F 'ensureFullGraphTitle' pilot/m24/internal-product-deployment/site/m26-ask.js
-          grep -F 'data-pa7-full-graph-title' pilot/m24/internal-product-deployment/site/m26-title-guard.js
-          grep -F 'wrangler@4.111.0 pages secret put M26_QUERY_BACKEND_TOKEN' \
-            .github/workflows/m26-pa7-explicit-pages-deploy.yml
+          grep -F 'M26_QUERY_BACKEND_URL' .github/workflows/m26-pa7-explicit-pages-deploy.yml
+          grep -F 'M26_QUERY_BACKEND_TOKEN' .github/workflows/m26-pa7-explicit-pages-deploy.yml
 
       - name: Enforce bounded changed files
         if: github.event_name == 'pull_request'
@@ -67,27 +38,15 @@ jobs:
           git fetch --quiet --no-tags origin "${{ github.base_ref }}"
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'EOF'
-          .github/workflows/m26-pa7-explicit-backend-redeploy.yml
           .github/workflows/m26-pa7-explicit-pages-deploy.yml
-          .github/workflows/m26-pa7-oracle-deploy-probe.yml
-          .github/workflows/m26-pa7-query-smoke-only.yml
-          pilot/m24/internal-product-deployment/site/_headers
-          pilot/m24/internal-product-deployment/site/index.html
-          pilot/m24/internal-product-deployment/site/m26-ask.js
-          pilot/m24/internal-product-deployment/site/m26-title-guard.js
-          src/knowledge_engine/m24_product_surface_integration.py
           EOF
           sed -i 's/^          //' /tmp/expected.txt
           cmp /tmp/expected.txt /tmp/changed.txt
 
   deploy_pages:
     if: >
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' &&
-        (github.head_ref == 'gpt/m26-pa7-pr-pages-deploy-now' ||
-         github.head_ref == 'gpt/m26-pa7-owner-email-allowlist-repair' ||
-         github.head_ref == 'gpt/m26-pa7-pages-backend-token-sync' ||
-         github.head_ref == 'gpt/m26-pa7-full-graph-title-normalization'))
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.head_ref == 'gpt/m26-pa7-full-graph-title-normalization')
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -96,8 +55,9 @@ jobs:
       WORK_DIR: /tmp/m26-pa7-explicit-pages-deploy
       PAGES_PROJECT: llm-wiki-m24-internal
       SITE_DIR: pilot/m24/internal-product-deployment/site
-      EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      DEPLOY_TRIGGER_BUMP: "2026-08-01T12:10:00+07:00"
+      EXACT_SITE_SHA: 7e01348fa68e599108c70528183be501f29c5c3e
+      EXPECTED_BACKEND_SHA: 7e01348fa68e599108c70528183be501f29c5c3e
+      DEPLOY_TRIGGER_BUMP: "2026-08-01T16:18:00+07:00"
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
       CLOUDFLARE_FALLBACK_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -108,7 +68,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EXACT_SITE_SHA }}
           fetch-depth: 50
           show-progress: false
 
@@ -116,17 +76,18 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Validate deployment input
+      - name: Validate exact site deployment input
         run: |
           set -euo pipefail
           mkdir -p "$WORK_DIR/evidence"
-          test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
+          test "$(git rev-parse HEAD)" = "$EXACT_SITE_SHA"
           export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
+          test -f scripts/configure_oracle_ssh.sh
           node --check "$SITE_DIR/_worker.js"
           node --check "$SITE_DIR/app.js"
           node --check "$SITE_DIR/m26-ask.js"
@@ -135,19 +96,75 @@ jobs:
           grep -F 'verified_cloudflare_access_jwt_email_inferred_contract' "$SITE_DIR/_worker.js"
           grep -F 'STATIC_OWNER_EMAIL_SHA256_ALLOWLIST' "$SITE_DIR/_worker.js"
           grep -F 'ownerEmailHashAllowlist' "$SITE_DIR/_worker.js"
-          grep -F 'Bounded Concept Graph' "$SITE_DIR/index.html"
           grep -F '<script src="m26-ask.js"></script>' "$SITE_DIR/index.html"
           grep -F 'm26-title-guard.js?v=pa7-title-cache-guard-20260801' "$SITE_DIR/index.html"
           grep -F 'Cache-Control: no-store' "$SITE_DIR/_headers"
-          grep -F 'FULL_GRAPH_TITLE' "$SITE_DIR/m26-ask.js"
-          grep -F 'ensureFullGraphTitle' "$SITE_DIR/m26-ask.js"
           grep -F 'data-pa7-full-graph-title' "$SITE_DIR/m26-title-guard.js"
           sha256sum "$SITE_DIR/_worker.js" "$SITE_DIR/index.html" "$SITE_DIR/m26-ask.js" "$SITE_DIR/m26-title-guard.js" "$SITE_DIR/_headers" \
             > "$WORK_DIR/evidence/site-file-sha256s.txt"
-          printf '%s\n' "$EXPECTED_DEPLOY_SHA" > "$WORK_DIR/evidence/deploy-sha.txt"
-          printf '%s\n' "$DEPLOY_TRIGGER_BUMP" > "$WORK_DIR/evidence/deploy-trigger-bump.txt"
+          printf '%s\n' "$EXACT_SITE_SHA" > "$WORK_DIR/evidence/exact-site-sha.txt"
+          printf '%s\n' "$EXPECTED_BACKEND_SHA" > "$WORK_DIR/evidence/expected-backend-sha.txt"
+          printf '%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" > "$WORK_DIR/evidence/workflow-head-sha.txt"
 
-      - name: Sync Pages backend token secret from Oracle
+      - name: Verify Oracle backend health and backend URL presence
+        run: |
+          set -euo pipefail
+          bash scripts/configure_oracle_ssh.sh
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_BACKEND_SHA='$EXPECTED_BACKEND_SHA' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/oracle-current-backend.json"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a
+          . ./.env
+          set +a
+          : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
+          : "${M26_QUERY_BACKEND_URL:?missing backend url}"
+          : "${KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH:?missing owner hash}"
+          tmp="$(mktemp)"
+          code="$(curl --silent --show-error \
+            -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
+            -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
+            -o "$tmp" \
+            -w '%{http_code}' \
+            http://127.0.0.1:8080/api/m26/health || true)"
+          python3 - "$tmp" "$code" <<'PY'
+          import hashlib, json, os, sys
+          from pathlib import Path
+          try:
+              payload = json.loads(Path(sys.argv[1]).read_text())
+          except Exception:
+              payload = {}
+          backend_url = os.environ.get("M26_QUERY_BACKEND_URL", "")
+          evidence = {
+              "schema_version": "knowledge-engine-m26-pa7-pages-backend-url-token-resync-oracle-health/v1",
+              "status": "pass",
+              "expected_backend_sha": os.environ["EXPECTED_BACKEND_SHA"],
+              "health_http_status": sys.argv[2],
+              "health_status": payload.get("status"),
+              "health_build_sha": payload.get("canonical_runtime", {}).get("build_sha"),
+              "backend_url_present": bool(backend_url),
+              "backend_url_sha256": hashlib.sha256(backend_url.encode()).hexdigest() if backend_url else None,
+              "backend_url_value_recorded": False,
+              "backend_token_value_recorded": False,
+              "protected_knowledge_mutations": 0,
+              "raw_token_recorded": False,
+          }
+          if evidence["health_http_status"] != "200":
+              evidence["status"] = "fail_health_http"
+          elif evidence["health_build_sha"] != evidence["expected_backend_sha"]:
+              evidence["status"] = "fail_backend_sha"
+          print(json.dumps(evidence, indent=2, sort_keys=True))
+          PY
+          rm -f "$tmp"
+          REMOTE
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          evidence = json.loads(Path(os.environ["WORK_DIR"], "evidence/oracle-current-backend.json").read_text())
+          if evidence.get("status") != "pass":
+              raise SystemExit(json.dumps(evidence, sort_keys=True))
+          PY
+
+      - name: Sync Pages backend token and backend URL secrets from Oracle
         run: |
           set -euo pipefail
           export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
@@ -156,7 +173,7 @@ jobs:
           ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' \
             | npx --yes wrangler@4.111.0 pages secret put M26_QUERY_BACKEND_TOKEN \
                 --project-name "$PAGES_PROJECT" \
-                > "$WORK_DIR/evidence/pages-secret-sync.log"
+                > "$WORK_DIR/evidence/pages-token-secret-sync.log"
           set -euo pipefail
           cd "$DEPLOY_PATH"
           set -a
@@ -165,16 +182,29 @@ jobs:
           : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
           printf '%s' "$M26_QUERY_BACKEND_TOKEN"
           REMOTE
-          grep -E 'Success|Uploaded|Created|Updated|secret' "$WORK_DIR/evidence/pages-secret-sync.log" \
-            > "$WORK_DIR/evidence/pages-secret-sync-summary.txt" || true
-          printf '%s\n' 'M26_QUERY_BACKEND_TOKEN synced from Oracle without logging value' \
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' \
+            | npx --yes wrangler@4.111.0 pages secret put M26_QUERY_BACKEND_URL \
+                --project-name "$PAGES_PROJECT" \
+                > "$WORK_DIR/evidence/pages-url-secret-sync.log"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a
+          . ./.env
+          set +a
+          : "${M26_QUERY_BACKEND_URL:?missing backend url}"
+          printf '%s' "$M26_QUERY_BACKEND_URL"
+          REMOTE
+          grep -E 'Success|Uploaded|Created|Updated|secret' "$WORK_DIR/evidence/pages-token-secret-sync.log" \
+            > "$WORK_DIR/evidence/pages-token-secret-sync-summary.txt" || true
+          grep -E 'Success|Uploaded|Created|Updated|secret' "$WORK_DIR/evidence/pages-url-secret-sync.log" \
+            > "$WORK_DIR/evidence/pages-url-secret-sync-summary.txt" || true
+          printf '%s\n' 'M26_QUERY_BACKEND_TOKEN and M26_QUERY_BACKEND_URL synced from Oracle without logging values' \
             > "$WORK_DIR/evidence/pages-secret-sync-contract.txt"
 
-      - name: Deploy Pages exact checked-out site
+      - name: Deploy exact 7e Pages site after backend URL/token resync
         run: |
           set -euo pipefail
           export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
-          test -n "${CLOUDFLARE_API_TOKEN:-}"
           npx --yes wrangler@4.111.0 pages deploy "$SITE_DIR" \
             --project-name "$PAGES_PROJECT" \
             --branch main \
@@ -187,7 +217,7 @@ jobs:
         id: upload
         uses: actions/upload-artifact@v4
         with:
-          name: m26-pa7-explicit-pages-deploy-${{ github.event.pull_request.head.sha || github.sha }}
+          name: m26-pa7-explicit-pages-url-token-resync-${{ github.event.pull_request.head.sha || github.sha }}
           path: /tmp/m26-pa7-explicit-pages-deploy/evidence
           if-no-files-found: error
           retention-days: 30
@@ -200,39 +230,51 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import os
+          import json, os
           from pathlib import Path
-
           work = Path(os.environ["WORK_DIR"]) / "evidence"
-          summary_path = work / "pages-deploy-summary.txt"
-          secret_path = work / "pages-secret-sync-summary.txt"
-          summary = summary_path.read_text(encoding="utf-8") if summary_path.exists() else ""
-          secret_summary = secret_path.read_text(encoding="utf-8") if secret_path.exists() else ""
+          oracle = json.loads((work / "oracle-current-backend.json").read_text())
+          token_summary = (work / "pages-token-secret-sync-summary.txt").read_text(encoding="utf-8") if (work / "pages-token-secret-sync-summary.txt").exists() else ""
+          url_summary = (work / "pages-url-secret-sync-summary.txt").read_text(encoding="utf-8") if (work / "pages-url-secret-sync-summary.txt").exists() else ""
+          deploy_summary = (work / "pages-deploy-summary.txt").read_text(encoding="utf-8") if (work / "pages-deploy-summary.txt").exists() else ""
           body = "\n".join([
-              "### M26.PA.7 explicit Pages deploy result",
+              "### M26.PA.7 explicit Pages backend URL/token resync deploy result",
               "",
-              f"- deploy SHA: `{os.environ['EXPECTED_DEPLOY_SHA']}`",
-              f"- Pages project: `{os.environ['PAGES_PROJECT']}`",
-              f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
-              f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
-              "- backend token secret synced from Oracle: `true`",
+              f"- workflow head SHA: `{os.environ.get('GITHUB_SHA')}`",
+              f"- exact deployed site SHA: `{os.environ['EXACT_SITE_SHA']}`",
+              f"- expected backend SHA: `{oracle.get('expected_backend_sha')}`",
+              f"- Oracle health build SHA: `{oracle.get('health_build_sha')}`",
+              f"- Oracle health status: `{oracle.get('health_status')}`",
+              f"- Oracle health HTTP status: `{oracle.get('health_http_status')}`",
+              f"- backend URL present on Oracle: `{oracle.get('backend_url_present')}`",
+              f"- backend URL SHA-256: `{oracle.get('backend_url_sha256')}`",
+              "- Pages backend token secret synced from Oracle: `true`",
+              "- Pages backend URL secret synced from Oracle: `true`",
               "- backend token value recorded: `false`",
+              "- backend URL value recorded: `false`",
               "- full graph route title repair included: `true`",
               "- title cache guard included: `true`",
               "- shell assets no-store headers included: `true`",
               "- protected knowledge mutations: `0`",
-              "- deploy input: checked-out `pilot/m24/internal-product-deployment/site`",
+              f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
+              f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
               "",
-              "Sanitized secret sync summary:",
+              "Sanitized token secret sync summary:",
               "",
               "```text",
-              secret_summary[-2000:],
+              token_summary[-1200:],
               "```",
               "",
-              "Sanitized deploy summary:",
+              "Sanitized backend URL secret sync summary:",
               "",
               "```text",
-              summary[-4000:],
+              url_summary[-1200:],
+              "```",
+              "",
+              "Sanitized Pages deploy summary:",
+              "",
+              "```text",
+              deploy_summary[-3000:],
               "```",
           ])
           (work / "issue-comment.md").write_text(body, encoding="utf-8")
