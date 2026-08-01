@@ -1,5 +1,10 @@
 (function () {
   const API_QUERY_PATH = "/api/m26/query";
+  const API_GRAPH_PATH = "/api/m26/graph";
+
+  function isFullGraphSurface() {
+    return new URLSearchParams(location.search).get("surface") === "full-graph";
+  }
 
   function compactList(items, escapeHtml) {
     if (!Array.isArray(items) || items.length === 0) return "";
@@ -130,9 +135,86 @@
     `;
   }
 
+  function renderFullGraph(options) {
+    const state = options.state;
+    const escapeHtml = options.escapeHtml;
+    const payload = state.m26FullGraph;
+    if (state.m26FullGraphLoading) {
+      return `
+        <section class="state-panel" data-state="full-graph-loading">
+          <h3>Loading Full Knowledge Graph</h3>
+          <p>Reading the current owner-only production relation graph.</p>
+        </section>
+      `;
+    }
+    if (state.m26FullGraphError) {
+      return `
+        <section class="state-panel" data-state="full-graph-blocked">
+          <h3>Full production graph blocked</h3>
+          <p>${escapeHtml(state.m26FullGraphError)}</p>
+          <p>The smaller Concept Graph remains available, but it is not the full corpus graph.</p>
+        </section>
+      `;
+    }
+    if (!payload) {
+      return `
+        <section class="state-panel" data-state="full-graph-ready-to-load">
+          <h3>Full Knowledge Graph</h3>
+          <p>Preparing the owner-only current production graph.</p>
+        </section>
+      `;
+    }
+    const nodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+    const edges = Array.isArray(payload.edges) ? payload.edges : [];
+    return `
+      <div class="metric-grid">
+        <section class="panel"><h3>Nodes</h3><p>${escapeHtml(nodes.length)}</p></section>
+        <section class="panel"><h3>Edges</h3><p>${escapeHtml(edges.length)}</p></section>
+        <section class="panel"><h3>Release</h3><p>${escapeHtml(payload.release_id)}</p></section>
+        <section class="panel"><h3>Scope</h3><p>full production</p></section>
+      </div>
+      <section class="panel">
+        <h3>Graph surface identity</h3>
+        <p>This is the current production relation graph loaded through the owner-only runtime. The original 20-node view is retained separately as the release-pinned Concept Graph.</p>
+        ${compactList([
+          `manifest ${payload.manifest_sha256}`,
+          `loaded ${payload.loaded_at}`,
+          "read-only",
+          "zero corpus/index mutations",
+        ], escapeHtml)}
+      </section>
+      <section class="panel" data-graph-root data-full-production-graph>
+        <h3>Sigma Full Knowledge Graph</h3>
+        <div class="graph-toolbar" aria-label="Graph controls">
+          <label for="graph-search">Search
+            <input id="graph-search" data-graph-search autocomplete="off" value="">
+          </label>
+          <label for="graph-relation">Relation
+            <select id="graph-relation" data-graph-relation>
+              <option value="">All relations</option>
+            </select>
+          </label>
+          <label><input type="checkbox" data-graph-orphans checked> Show orphans</label>
+          <button type="button" data-graph-neighbor="1">1-hop</button>
+          <button type="button" data-graph-neighbor="2">2-hop</button>
+          <button type="button" data-graph-reset>Reset</button>
+          <button type="button" data-graph-clear>Clear</button>
+        </div>
+        <div class="graph-workbench">
+          <div class="graph-stage" data-sigma-stage role="application" aria-label="Interactive read-only full Sigma.js graph canvas"></div>
+          <aside class="graph-side-panel" aria-label="Graph node details">
+            <section><h4>Matches</h4><div class="graph-result-list" data-graph-results></div></section>
+            <section class="graph-details"><h4>Selection</h4><div data-graph-details></div></section>
+          </aside>
+        </div>
+      </section>
+    `;
+  }
+
   function render(options) {
     const state = options.state;
     const escapeHtml = options.escapeHtml;
+    if (isFullGraphSurface()) return renderFullGraph(options);
     return `
       <form class="ask-form" data-ask-form>
         <label for="ask-question">Ask Knowledge Engine</label>
@@ -167,6 +249,57 @@
         </section>
       `}
     `;
+  }
+
+  async function loadFullGraph(options) {
+    const state = options.state;
+    if (state.m26FullGraph || state.m26FullGraphLoading) return;
+    state.m26FullGraphLoading = true;
+    state.m26FullGraphError = "";
+    options.setStatus("Loading full production graph.", "loading");
+    options.render();
+    try {
+      const response = await fetch(API_GRAPH_PATH, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json" },
+      });
+      let payload = null;
+      try { payload = await response.json(); } catch (_error) {}
+      if (!response.ok) {
+        const reason = payload?.detail?.reason_code || payload?.reason_code || `HTTP_${response.status}`;
+        throw new Error(reason);
+      }
+      if (!payload || payload.status !== "ok" || !Array.isArray(payload.nodes) || !Array.isArray(payload.edges)) {
+        throw new Error("M26_OWNER_GRAPH_PAYLOAD_INVALID");
+      }
+      state.m26FullGraph = payload;
+      options.setStatus(`Full production graph loaded: ${payload.nodes.length} nodes, ${payload.edges.length} edges.`, "ready");
+    } catch (error) {
+      state.m26FullGraphError = String(error && error.message ? error.message : "M26_OWNER_GRAPH_NETWORK_ERROR");
+      options.setStatus("Full production graph blocked.", "blocked");
+    } finally {
+      state.m26FullGraphLoading = false;
+      options.render();
+    }
+  }
+
+  function initializeFullGraph(options) {
+    const state = options.state;
+    const root = options.app.querySelector("[data-full-production-graph]");
+    if (!root || !state.m26FullGraph || typeof window.createM24GraphExplorer !== "function") return;
+    state.graphExplorer = window.createM24GraphExplorer({
+      root,
+      payload: state.m26FullGraph,
+      selectedNodeId: null,
+      sourceCountsByConcept: {},
+      onStatus: (message) => options.setStatus(message, "ready"),
+      onOpenWiki: (selection) => {
+        if (selection?.id) location.href = `/#/wiki?concept=${encodeURIComponent(selection.id)}`;
+      },
+      onViewSources: () => { location.href = "/#/sources"; },
+    });
   }
 
   async function submitAsk(options, form) {
@@ -215,6 +348,14 @@
   }
 
   function wire(options) {
+    if (isFullGraphSurface()) {
+      if (!options.state.m26FullGraph && !options.state.m26FullGraphLoading) {
+        loadFullGraph(options);
+      } else {
+        initializeFullGraph(options);
+      }
+      return;
+    }
     const form = options.app.querySelector("[data-ask-form]");
     const textarea = options.app.querySelector("#ask-question");
     if (!form || !textarea) return;
