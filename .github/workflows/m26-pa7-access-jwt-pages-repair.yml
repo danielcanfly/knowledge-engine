@@ -1,0 +1,104 @@
+name: M26.PA.7 Access JWT Pages Repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/m26-pa7-access-jwt-pages-repair.yml"
+      - "pilot/m24/internal-product-deployment/site/_worker.js"
+      - "pilot/m24/internal-product-deployment/site/index.html"
+      - "tests/test_m24_internal_ask_ui_api.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-pa7-access-jwt-pages-repair-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify_and_redeploy_pages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: m23-r3-diagnostic
+    env:
+      WORK_DIR: /tmp/m26-pa7-access-jwt-pages-repair
+      PAGES_PROJECT: llm-wiki-m24-internal
+      INTERNAL_HOSTNAME: m24-internal.danielcanfly.com
+      CLOUDFLARE_ZONE_NAME: danielcanfly.com
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
+      CLOUDFLARE_ACCESS_READ_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_READ_TOKEN }}
+      CLOUDFLARE_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 200
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate static repair files
+        run: |
+          set -euo pipefail
+          node --check pilot/m24/internal-product-deployment/site/_worker.js
+          node --check pilot/m24/internal-product-deployment/site/app.js
+          python -m py_compile tests/test_m24_internal_ask_ui_api.py
+          grep -q 'verifyAccessJwtPayload' pilot/m24/internal-product-deployment/site/_worker.js
+          grep -q 'Bounded Concept Graph' pilot/m24/internal-product-deployment/site/index.html
+          grep -q 'not the full production knowledge graph' pilot/m24/internal-product-deployment/site/index.html
+
+      - name: Capture Access application readback
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK_DIR/evidence"
+          python scripts/m25_9_cloudflare_live_preflight.py preflight \
+            --evidence-output "$WORK_DIR/evidence/cloudflare-access-readback.json" \
+            --runtime-env-output "$WORK_DIR/access-runtime.env"
+          while IFS='=' read -r name value; do
+            case "$name" in
+              PREVIOUS_PAGES_DEPLOYMENT_ID|ACCESS_AUD|ACCESS_TEAM_DOMAIN) ;;
+              *) echo "unexpected runtime env key: $name" >&2; exit 1 ;;
+            esac
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          done < "$WORK_DIR/access-runtime.env"
+          rm -f "$WORK_DIR/access-runtime.env"
+
+      - name: Bind verified Access JWT validation secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_PAGES_TOKEN }}
+        run: |
+          set -euo pipefail
+          put_secret() {
+            name="$1"
+            value="$2"
+            printf '%s' "$value" | npx --yes wrangler@4.111.0 pages secret put "$name" \
+              --project-name "$PAGES_PROJECT"
+          }
+          test -n "${ACCESS_AUD:-}"
+          test -n "${ACCESS_TEAM_DOMAIN:-}"
+          put_secret ACCESS_AUD "$ACCESS_AUD"
+          put_secret ACCESS_TEAM_DOMAIN "$ACCESS_TEAM_DOMAIN"
+
+      - name: Redeploy Pages exact SHA
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_PAGES_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.111.0 pages deploy pilot/m24/internal-product-deployment/site \
+            --project-name "$PAGES_PROJECT" \
+            --branch main \
+            --commit-dirty=true \
+            | tee "$WORK_DIR/evidence/pages-redeploy.log"
+          python scripts/m25_9_cloudflare_live_preflight.py pages-latest \
+            --evidence-output "$WORK_DIR/evidence/pages-after.json" \
+            --runtime-env-output "$WORK_DIR/pages-after.env"
+          test -s "$WORK_DIR/pages-after.env"
