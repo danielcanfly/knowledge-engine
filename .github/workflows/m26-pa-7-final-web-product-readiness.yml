@@ -480,9 +480,10 @@ jobs:
           curl_exit_code="0"
           curl_error_class="none"
           health_attempts="1"
+          curl_common=(--connect-timeout 5 --max-time 15)
           tmp_error="$WORK_DIR/backend-health-external.curl.err.tmp"
           set +e
-          status="$(curl -sS \
+          status="$(curl -sS "${curl_common[@]}" \
             -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
             -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
             -o "$WORK_DIR/evidence/backend-health-external.json" \
@@ -522,7 +523,7 @@ jobs:
             tls_trust_profile="cloudflare_origin_ca"
             tmp_error="$WORK_DIR/backend-health-external.cloudflare-origin-ca.curl.err.tmp"
             set +e
-            status="$(curl -sS \
+            status="$(curl -sS "${curl_common[@]}" \
               --cacert "$ca_dir/origin_ca_bundle.pem" \
               -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
               -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
@@ -550,7 +551,7 @@ jobs:
               health_attempts="$_attempt"
               tmp_error="$WORK_DIR/backend-health-external.retry.curl.err.tmp"
               set +e
-              status="$(curl -sS \
+              status="$(curl -sS "${curl_common[@]}" \
                 -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
                 -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
                 -o "$WORK_DIR/evidence/backend-health-external.json" \
@@ -604,6 +605,45 @@ jobs:
               json.dumps(diagnostic, indent=2, sort_keys=True) + "\n"
           )
           PY
+          if test "$status" != "200" && test "${M26_BACKEND_HTTPS_PROXY_DEPLOYED:-false}" = "true"; then
+            caddy_raw="$WORK_DIR/backend-https-origin-diagnostic.raw.log"
+            ssh oracle-knowledge "docker logs --tail 200 m26-pa7-backend-https-origin 2>&1 || true" \
+              > "$caddy_raw" 2>&1 || true
+            CADDY_RAW_LOG="$caddy_raw" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          raw = Path(os.environ["CADDY_RAW_LOG"]).read_text(
+              encoding="utf-8", errors="replace"
+          )
+          redactions = [
+              os.environ.get("M26_QUERY_BACKEND_ORIGIN", ""),
+              os.environ.get("M26_ORACLE_BACKEND_TLS_HOSTNAME", ""),
+              os.environ.get("ORACLE_VM_HOST", ""),
+              os.environ.get("ORACLE_VM_DEPLOY_PATH", ""),
+          ]
+          sanitized = raw
+          for value in redactions:
+              if value:
+                  sanitized = sanitized.replace(value, "<redacted>")
+          lines = [line for line in sanitized.splitlines() if line.strip()]
+          evidence = {
+              "schema_version": "knowledge-engine-m26-pa7-backend-https-origin-diagnostic/v1",
+              "line_count": len(lines),
+              "raw_backend_origin_recorded": False,
+              "raw_hostname_recorded": False,
+              "raw_ip_recorded": False,
+              "raw_log_recorded": False,
+              "sanitized_tail": lines[-80:],
+              "status": "captured" if lines else "empty",
+          }
+          Path(os.environ["WORK_DIR"], "evidence/backend-https-origin-diagnostic.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+            rm -f "$caddy_raw"
+          fi
           test "$status" = "200"
           python - <<'PY'
           import hashlib
