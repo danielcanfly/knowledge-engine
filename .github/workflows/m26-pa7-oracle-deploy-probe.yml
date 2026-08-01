@@ -1,0 +1,115 @@
+name: M26.PA.7 Oracle Deploy Probe
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-pa7-oracle-deploy-probe.yml"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: m26-pa7-oracle-deploy-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  oracle_probe:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.head_ref == 'gpt/m26-pa7-full-graph-title-normalization')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: m23-r3-diagnostic
+    env:
+      WORK_DIR: /tmp/m26-pa7-oracle-deploy-probe
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 10
+          show-progress: false
+
+      - name: Probe Oracle deploy state
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK_DIR/evidence"
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_HEAD_SHA='$EXPECTED_HEAD_SHA' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/oracle-deploy-probe.json"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          current_sha="$(git rev-parse HEAD 2>/dev/null || true)"
+          compose_ps="$(docker compose ps --format json 2>/dev/null || true)"
+          recent_processes="$(ps -eo pid,ppid,etime,comm,args | grep -E 'docker|git|deploy|compose' | grep -v grep | tail -20 || true)"
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+          current_sha = os.popen('git rev-parse HEAD 2>/dev/null').read().strip()
+          compose_ps = os.popen('docker compose ps --format json 2>/dev/null').read().strip()
+          processes = os.popen("ps -eo pid,ppid,etime,comm,args | grep -E 'docker|git|deploy|compose' | grep -v grep | tail -20 || true").read()[-4000:]
+          health = os.popen('curl --silent --output /dev/null --write-out "%{http_code}" http://127.0.0.1:8080/v1/health || true').read().strip()
+          print(json.dumps({
+              'schema_version': 'knowledge-engine-m26-pa7-oracle-deploy-probe/v1',
+              'expected_head_sha': os.environ.get('EXPECTED_HEAD_SHA'),
+              'repo_head_sha': current_sha,
+              'repo_head_matches_expected': current_sha == os.environ.get('EXPECTED_HEAD_SHA'),
+              'health_http_status': health,
+              'compose_ps_present': bool(compose_ps),
+              'recent_processes_present': bool(processes.strip()),
+              'recent_processes_sha256': __import__('hashlib').sha256(processes.encode()).hexdigest(),
+              'protected_knowledge_mutations': 0,
+              'raw_token_recorded': False,
+          }, indent=2, sort_keys=True))
+          PY
+          REMOTE
+
+      - name: Upload probe evidence
+        id: upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-pa7-oracle-deploy-probe-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/m26-pa7-oracle-deploy-probe/evidence
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Report probe evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          work = Path(os.environ['WORK_DIR']) / 'evidence'
+          probe = json.loads((work / 'oracle-deploy-probe.json').read_text())
+          body = "\n".join([
+              "### M26.PA.7 Oracle deploy probe",
+              "",
+              f"- expected head SHA: `{probe.get('expected_head_sha')}`",
+              f"- repo head SHA: `{probe.get('repo_head_sha')}`",
+              f"- repo head matches expected: `{probe.get('repo_head_matches_expected')}`",
+              f"- health HTTP status: `{probe.get('health_http_status')}`",
+              f"- compose ps present: `{probe.get('compose_ps_present')}`",
+              f"- recent deploy/docker processes present: `{probe.get('recent_processes_present')}`",
+              f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
+              f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
+              "- protected knowledge mutations: `0`",
+              "- raw token recorded: `false`",
+          ])
+          (work / 'issue-comment.md').write_text(body, encoding='utf-8')
+          PY
+          gh issue comment 1268 --repo "$GITHUB_REPOSITORY" --body-file "$WORK_DIR/evidence/issue-comment.md"

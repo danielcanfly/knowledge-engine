@@ -1,16 +1,26 @@
 (function () {
   const API_QUERY_PATH = "/api/m26/query";
   const API_GRAPH_PATH = "/api/m26/graph";
+  const FULL_GRAPH_TITLE = "Full Knowledge Graph";
 
   function isFullGraphSurface() {
     return new URLSearchParams(location.search).get("surface") === "full-graph";
   }
 
+  function ensureFullGraphTitle() {
+    if (!isFullGraphSurface()) return;
+    const routeTitle = document.querySelector("#route-title");
+    if (routeTitle) routeTitle.textContent = FULL_GRAPH_TITLE;
+    const fullGraphLink = document.querySelector("[data-full-graph-link]");
+    if (fullGraphLink) fullGraphLink.setAttribute("aria-current", "page");
+  }
+
   function compactList(items, escapeHtml) {
-    if (!Array.isArray(items) || items.length === 0) return "";
+    const values = (Array.isArray(items) ? items : []).filter(Boolean);
+    if (!values.length) return "";
     return `
       <ul class="compact-meta">
-        ${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        ${values.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
       </ul>
     `;
   }
@@ -54,7 +64,7 @@
                 `locator ${citation.locator_id}`,
                 `artifact ${citation.source_artifact_sha256}`,
                 `quote ${citation.exact_quote_sha256}`,
-              ].filter(Boolean), escapeHtml)}
+              ], escapeHtml)}
             </article>
           `).join("")}
         </div>
@@ -77,7 +87,7 @@
                 `release ${source.release_id}`,
                 `artifact ${source.source_artifact_sha256}`,
                 ...((source.section_ids || []).slice(0, 3)),
-              ].filter(Boolean), escapeHtml)}
+              ], escapeHtml)}
             </article>
           `).join("") || `
             <section class="state-panel" data-state="ask-no-sources">
@@ -138,15 +148,12 @@
   function renderFullGraph(options) {
     const state = options.state;
     const escapeHtml = options.escapeHtml;
-    const routeTitle = document.querySelector("#route-title");
-    if (routeTitle) routeTitle.textContent = "Full Knowledge Graph";
-    const fullGraphLink = document.querySelector("[data-full-graph-link]");
-    if (fullGraphLink) fullGraphLink.setAttribute("aria-current", "page");
+    ensureFullGraphTitle();
     const payload = state.m26FullGraph;
     if (state.m26FullGraphLoading) {
       return `
         <section class="state-panel" data-state="full-graph-loading">
-          <h3>Loading Full Knowledge Graph</h3>
+          <h3>${FULL_GRAPH_TITLE}</h3>
           <p>Reading and verifying the owner-only production graph.</p>
         </section>
       `;
@@ -163,7 +170,7 @@
     if (!payload) {
       return `
         <section class="state-panel" data-state="full-graph-ready-to-load">
-          <h3>Full Knowledge Graph</h3>
+          <h3>${FULL_GRAPH_TITLE}</h3>
           <p>Preparing the exact production graph binding.</p>
         </section>
       `;
@@ -224,35 +231,17 @@
     return `
       <form class="ask-form" data-ask-form>
         <label for="ask-question">Ask Knowledge Engine</label>
-        <textarea
-          id="ask-question"
-          name="question"
-          rows="5"
-          maxlength="2000"
-          aria-keyshortcuts="Control+Enter Meta+Enter"
-          ${state.askLoading ? "disabled" : ""}
-        >${escapeHtml(state.askQuestion || "")}</textarea>
-        <div class="detail-actions">
-          <button type="submit" ${state.askLoading ? "disabled" : ""}>Ask</button>
-        </div>
+        <textarea id="ask-question" name="question" rows="5" maxlength="2000" aria-keyshortcuts="Control+Enter Meta+Enter" ${state.askLoading ? "disabled" : ""}>${escapeHtml(state.askQuestion || "")}</textarea>
+        <div class="detail-actions"><button type="submit" ${state.askLoading ? "disabled" : ""}>Ask</button></div>
       </form>
       ${state.askLoading ? `
-        <section class="state-panel" data-state="ask-loading">
-          <h3>Running query</h3>
-          <p>The owner-only runtime is verifying evidence and citations.</p>
-        </section>
+        <section class="state-panel" data-state="ask-loading"><h3>Running query</h3><p>The owner-only runtime is verifying evidence and citations.</p></section>
       ` : ""}
       ${state.askError ? `
-        <section class="state-panel" data-state="ask-error">
-          <h3>Query blocked</h3>
-          <p>${escapeHtml(state.askError)}</p>
-        </section>
+        <section class="state-panel" data-state="ask-error"><h3>Query blocked</h3><p>${escapeHtml(state.askError)}</p></section>
       ` : ""}
       ${state.askResponse ? renderResponse(state.askResponse, escapeHtml) : `
-        <section class="panel" data-state="ask-ready">
-          <h3>Owner-only query surface</h3>
-          <p>Responses come from the canonical M26.PA.7 runtime through the trusted same-origin API.</p>
-        </section>
+        <section class="panel" data-state="ask-ready"><h3>Owner-only query surface</h3><p>Responses come from the canonical M26.PA.7 runtime through the trusted same-origin API.</p></section>
       `}
     `;
   }
@@ -262,6 +251,7 @@
     if (state.m26FullGraph || state.m26FullGraphLoading) return;
     state.m26FullGraphLoading = true;
     state.m26FullGraphError = "";
+    ensureFullGraphTitle();
     options.setStatus("Loading and verifying full production graph.", "loading");
     options.render();
     try {
@@ -298,11 +288,16 @@
     } finally {
       state.m26FullGraphLoading = false;
       options.render();
+      ensureFullGraphTitle();
+      requestAnimationFrame(ensureFullGraphTitle);
+      setTimeout(ensureFullGraphTitle, 250);
+      setTimeout(ensureFullGraphTitle, 1000);
     }
   }
 
   function initializeFullGraph(options) {
     const state = options.state;
+    ensureFullGraphTitle();
     const root = options.app.querySelector("[data-full-production-graph]");
     if (!root || !state.m26FullGraph || typeof window.createM24GraphExplorer !== "function") return;
     state.graphExplorer = window.createM24GraphExplorer({
@@ -317,8 +312,12 @@
         }
       },
       onViewSources: () => { location.href = "/#/sources"; },
-      onStatus: (message) => options.setStatus(message, "ready"),
+      onStatus: (message) => {
+        ensureFullGraphTitle();
+        options.setStatus(message, "ready");
+      },
     });
+    ensureFullGraphTitle();
   }
 
   async function submitAsk(options, form) {
@@ -345,18 +344,13 @@
         body: JSON.stringify({ question }),
       });
       let payload = null;
-      try {
-        payload = await response.json();
-      } catch (_error) {
-        payload = null;
-      }
+      try { payload = await response.json(); } catch (_error) { payload = null; }
       if (!response.ok) {
         const reason = payload?.detail?.reason_code || payload?.reason_code || `HTTP_${response.status}`;
         throw new Error(reason);
       }
       state.askResponse = payload;
-      const terminal = payload.safe_abstention ? "Ask safely abstained." : "Ask answer verified.";
-      setStatus(terminal, "ready");
+      setStatus(payload.safe_abstention ? "Ask safely abstained." : "Ask answer verified.", "ready");
     } catch (error) {
       state.askError = String(error && error.message ? error.message : "M26_ASK_NETWORK_ERROR");
       setStatus("Ask query blocked.", "blocked");
@@ -368,11 +362,14 @@
 
   function wire(options) {
     if (isFullGraphSurface()) {
+      ensureFullGraphTitle();
       if (!options.state.m26FullGraph && !options.state.m26FullGraphLoading) {
         loadFullGraph(options);
       } else {
         initializeFullGraph(options);
       }
+      requestAnimationFrame(ensureFullGraphTitle);
+      setTimeout(ensureFullGraphTitle, 250);
       return;
     }
     const form = options.app.querySelector("[data-ask-form]");

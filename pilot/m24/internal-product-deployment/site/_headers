@@ -1,2 +1,16 @@
 /*
   Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+/ask
+  Cache-Control: no-store
+/ask/*
+  Cache-Control: no-store
+/index.html
+  Cache-Control: no-store
+/app.js
+  Cache-Control: no-store
+/m26-ask.js
+  Cache-Control: no-store
+/m26-title-guard.js
+  Cache-Control: no-store
+/api/m26/*
+  Cache-Control: no-store

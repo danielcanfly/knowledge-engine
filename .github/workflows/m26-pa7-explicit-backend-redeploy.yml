@@ -5,11 +5,18 @@ on:
   pull_request:
     paths:
       - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
+      - ".github/workflows/m26-pa7-query-smoke-only.yml"
+      - ".github/workflows/m26-pa7-oracle-deploy-probe.yml"
+      - "src/knowledge_engine/m24_product_surface_integration.py"
       - "src/knowledge_engine/m26_ask_api.py"
+      - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
+      - "pilot/m24/internal-product-deployment/site/**"
+      - ".github/workflows/m26-pa7-explicit-pages-deploy.yml"
   push:
     branches: [main]
     paths:
       - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
+      - "src/knowledge_engine/m24_product_surface_integration.py"
       - "src/knowledge_engine/m26_ask_api.py"
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
       - "src/knowledge_engine/api.py"
@@ -21,7 +28,7 @@ permissions:
 
 concurrency:
   group: m26-pa7-explicit-backend-redeploy-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -37,15 +44,26 @@ jobs:
         with:
           python-version: "3.11"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Validate backend redeploy boundary
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          python -m py_compile src/knowledge_engine/m24_product_surface_integration.py
           python -m py_compile src/knowledge_engine/m26_ask_api.py
+          python -m py_compile src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
+          node --check pilot/m24/internal-product-deployment/site/m26-ask.js
+          node --check pilot/m24/internal-product-deployment/site/m26-title-guard.js
           test -f deploy/deploy.sh
           test -f scripts/configure_oracle_ssh.sh
+          grep -F 'def _default_canonical_root()' src/knowledge_engine/m24_product_surface_integration.py
           grep -F 'FULL_GRAPH_RELEASE_ID = "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"' src/knowledge_engine/m26_ask_api.py
           grep -F 'M26_OWNER_GRAPH_DIRECT_LOAD_FAILED' src/knowledge_engine/m26_ask_api.py
+          grep -F 'FULL_GRAPH_TITLE' pilot/m24/internal-product-deployment/site/m26-ask.js
+          grep -F 'data-pa7-full-graph-title' pilot/m24/internal-product-deployment/site/m26-title-guard.js
 
       - name: Enforce bounded changed files
         if: github.event_name == 'pull_request'
@@ -55,7 +73,14 @@ jobs:
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'EOF'
           .github/workflows/m26-pa7-explicit-backend-redeploy.yml
-          src/knowledge_engine/m26_ask_api.py
+          .github/workflows/m26-pa7-explicit-pages-deploy.yml
+          .github/workflows/m26-pa7-oracle-deploy-probe.yml
+          .github/workflows/m26-pa7-query-smoke-only.yml
+          pilot/m24/internal-product-deployment/site/_headers
+          pilot/m24/internal-product-deployment/site/index.html
+          pilot/m24/internal-product-deployment/site/m26-ask.js
+          pilot/m24/internal-product-deployment/site/m26-title-guard.js
+          src/knowledge_engine/m24_product_surface_integration.py
           EOF
           sed -i 's/^          //' /tmp/expected.txt
           cmp /tmp/expected.txt /tmp/changed.txt
@@ -63,7 +88,9 @@ jobs:
   redeploy_backend:
     if: >
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' && github.head_ref == 'gpt/m26-pa7-observable-backend-redeploy')
+      (github.event_name == 'pull_request' &&
+        (github.head_ref == 'gpt/m26-pa7-observable-backend-redeploy' ||
+         github.head_ref == 'gpt/m26-pa7-full-graph-title-normalization'))
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -149,7 +176,15 @@ jobs:
             -o "$tmp_dir/graph.json" \
             -w '%{http_code}' \
             http://127.0.0.1:8080/api/m26/graph || true)"
-          python3 - "$tmp_dir/health.json" "$tmp_dir/graph.json" "$health_code" "$graph_code" <<'PY'
+          query_code="$(curl --silent --show-error \
+            -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
+            -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
+            -H "content-type: application/json" \
+            -o "$tmp_dir/query.json" \
+            -w '%{http_code}' \
+            --data '{"question":"Compare routers and adaptive planning for permission-first controls."}' \
+            http://127.0.0.1:8080/api/m26/query || true)"
+          python3 - "$tmp_dir/health.json" "$tmp_dir/graph.json" "$tmp_dir/query.json" "$health_code" "$graph_code" "$query_code" <<'PY'
           import json
           import os
           import sys
@@ -161,17 +196,24 @@ jobs:
               except Exception:
                   return {}
 
+          def reason(payload):
+              detail = payload.get("detail") if isinstance(payload, dict) else None
+              if isinstance(detail, dict):
+                  return detail.get("reason_code")
+              if isinstance(payload, dict):
+                  return payload.get("reason_code")
+              return None
+
           health = read_json(sys.argv[1])
           graph = read_json(sys.argv[2])
-          health_code = sys.argv[3]
-          graph_code = sys.argv[4]
-          graph_reason = (
-              graph.get("detail", {}).get("reason_code")
-              if isinstance(graph.get("detail"), dict)
-              else graph.get("reason_code")
-          )
+          query = read_json(sys.argv[3])
+          health_code = sys.argv[4]
+          graph_code = sys.argv[5]
+          query_code = sys.argv[6]
+          query_runtime = query.get("canonical_runtime", {}) if isinstance(query, dict) else {}
+          query_reason_codes = query.get("reason_codes", []) if isinstance(query, dict) else []
           evidence = {
-              "schema_version": "knowledge-engine-m26-pa7-explicit-backend-redeploy-smoke/v1",
+              "schema_version": "knowledge-engine-m26-pa7-explicit-backend-redeploy-smoke/v3",
               "status": "pass",
               "deploy_sha": os.environ["EXPECTED_DEPLOY_SHA"],
               "health_http_status": health_code,
@@ -179,13 +221,25 @@ jobs:
               "health_build_sha": health.get("canonical_runtime", {}).get("build_sha"),
               "graph_http_status": graph_code,
               "graph_status": graph.get("status"),
-              "graph_reason_code": graph_reason,
+              "graph_reason_code": reason(graph),
               "graph_scope": graph.get("graph_scope"),
               "graph_release_id": graph.get("release_id"),
               "graph_v2_sha256": graph.get("graph_v2_sha256"),
               "node_count": len(graph.get("nodes", [])),
               "edge_count": len(graph.get("edges", [])),
+              "query_http_status": query_code,
+              "query_reason_code": reason(query),
+              "query_schema_version": query.get("schema_version") if isinstance(query, dict) else None,
+              "query_status": query.get("status") if isinstance(query, dict) else None,
+              "query_terminal_status": query.get("terminal_status") if isinstance(query, dict) else None,
+              "query_trace_id_present": bool(query.get("trace_id")) if isinstance(query, dict) else False,
+              "query_safe_abstention": query.get("safe_abstention") if isinstance(query, dict) else None,
+              "query_reason_codes": query_reason_codes if isinstance(query_reason_codes, list) else [],
+              "query_citation_count": len(query.get("citations", [])) if isinstance(query, dict) else 0,
+              "query_source_count": len(query.get("sources", [])) if isinstance(query, dict) else 0,
+              "query_runtime_build_sha": query_runtime.get("build_sha") if isinstance(query_runtime, dict) else None,
               "protected_knowledge_mutations": 0,
+              "raw_answer_text_recorded": False,
               "raw_token_recorded": False,
               "raw_r2_endpoint_recorded": False,
           }
@@ -197,6 +251,12 @@ jobs:
               evidence["status"] = "fail_graph_http"
           elif evidence["node_count"] != 4222 or evidence["edge_count"] != 8525:
               evidence["status"] = "fail_graph_count"
+          elif evidence["query_http_status"] != "200":
+              evidence["status"] = "fail_query_http"
+          elif evidence["query_schema_version"] != "knowledge-engine-m26-pa7-ask-web-response/v1":
+              evidence["status"] = "fail_query_schema"
+          elif not evidence["query_trace_id_present"]:
+              evidence["status"] = "fail_query_trace"
           print(json.dumps(evidence, indent=2, sort_keys=True))
           PY
           REMOTE
@@ -238,9 +298,17 @@ jobs:
               f"- graph: `{smoke.get('node_count')} nodes / {smoke.get('edge_count')} edges`",
               f"- graph release: `{smoke.get('graph_release_id')}`",
               f"- graph-v2 SHA: `{smoke.get('graph_v2_sha256')}`",
+              f"- query HTTP status: `{smoke.get('query_http_status')}`",
+              f"- query reason code: `{smoke.get('query_reason_code')}`",
+              f"- query status: `{smoke.get('query_status')}`",
+              f"- query terminal status: `{smoke.get('query_terminal_status')}`",
+              f"- query trace present: `{smoke.get('query_trace_id_present')}`",
+              f"- query citations: `{smoke.get('query_citation_count')}`",
+              f"- query sources: `{smoke.get('query_source_count')}`",
               f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
               f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
               "- protected knowledge mutations: `0`",
+              "- raw answer text recorded: `false`",
               "- raw token recorded: `false`",
               "- raw R2 endpoint recorded: `false`",
           ])
