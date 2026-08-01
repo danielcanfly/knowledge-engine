@@ -554,11 +554,23 @@ jobs:
                   return "unknown"
               if comm == "caddy":
                   return "system_caddy"
-              if comm in {"nginx", "apache2", "httpd"}:
-                  return "system_web_server_other"
+              if comm == "nginx":
+                  return "system_nginx"
+              if comm == "apache2":
+                  return "system_apache2"
+              if comm == "httpd":
+                  return "system_httpd"
               if comm == "docker-proxy":
                   return "docker_proxy"
               return "unrecognized"
+
+
+          def system_service_for_class(owner_class):
+              return {
+                  "system_nginx": "nginx",
+                  "system_apache2": "apache2",
+                  "system_httpd": "httpd",
+              }.get(owner_class)
 
 
           def inspect_running_containers():
@@ -600,13 +612,16 @@ jobs:
           state_dir = Path(os.environ["HANDOFF_STATE_DIR"])
           state_dir.mkdir(parents=True, exist_ok=True)
           stopped_file = state_dir / "oracle-https-port-handoff-stopped-containers"
+          stopped_services_file = state_dir / "oracle-https-port-handoff-stopped-services"
           stopped_file.write_text("")
+          stopped_services_file.write_text("")
 
           listeners, listener_error = listener_snapshot()
           containers = inspect_running_containers()
           owner_ports = {}
           owner_methods = {}
           non_docker_owner_classes = set()
+          system_services_to_stop = set()
           non_docker_listener_count = 0
           for listener in listeners:
               matched = set()
@@ -629,7 +644,11 @@ jobs:
                   non_docker_listener_count += 1
                   if listener["pids"]:
                       for pid in listener["pids"]:
-                          non_docker_owner_classes.add(process_owner_class(pid))
+                          owner_class = process_owner_class(pid)
+                          non_docker_owner_classes.add(owner_class)
+                          service = system_service_for_class(owner_class)
+                          if service:
+                              system_services_to_stop.add(service)
                   else:
                       non_docker_owner_classes.add("pid_unavailable")
 
@@ -665,6 +684,36 @@ jobs:
           if stopped_names:
               stopped_file.write_text("\n".join(stopped_names) + "\n")
 
+          system_service_records = []
+          stopped_services = []
+          system_service_stop_failed_count = 0
+          stoppable_system_classes = {"system_nginx", "system_apache2", "system_httpd"}
+          if (
+              non_docker_owner_classes
+              and non_docker_owner_classes.issubset(stoppable_system_classes)
+          ):
+              for service in sorted(system_services_to_stop):
+                  stopped = run(["sudo", "-n", "systemctl", "stop", service])
+                  if stopped.returncode == 0:
+                      action = "stopped"
+                      stopped_services.append(service)
+                  else:
+                      action = "stop_failed"
+                      system_service_stop_failed_count += 1
+                  system_service_records.append(
+                      {
+                          "action": action,
+                          "service_name_sha256": digest(service),
+                          "service_owner_class": {
+                              "nginx": "system_nginx",
+                              "apache2": "system_apache2",
+                              "httpd": "system_httpd",
+                          }[service],
+                      }
+                  )
+          if stopped_services:
+              stopped_services_file.write_text("\n".join(stopped_services) + "\n")
+
           remaining, remaining_error = listener_snapshot()
           evidence = {
               "docker_owner_count": len(records),
@@ -679,18 +728,26 @@ jobs:
               "raw_container_name_recorded": False,
               "raw_listener_recorded": False,
               "raw_pid_recorded": False,
+              "raw_system_service_name_recorded": False,
               "remaining_listener_count": len(remaining),
               "remaining_listener_error": remaining_error,
               "schema_version": "knowledge-engine-m26-pa7-oracle-https-port-handoff/v1",
               "stop_failed_count": stop_failed_count,
               "stopped_docker_owner_count": len(stopped_names),
+              "stopped_system_service_count": len(stopped_services),
+              "system_service_owner_records": system_service_records,
+              "system_service_stop_failed_count": system_service_stop_failed_count,
           }
           evidence["status"] = (
               "pass"
               if not listener_error
               and not remaining_error
-              and non_docker_listener_count == 0
+              and (
+                  non_docker_listener_count == 0
+                  or len(stopped_services) == len(system_services_to_stop)
+              )
               and stop_failed_count == 0
+              and system_service_stop_failed_count == 0
               and len(remaining) == 0
               else "fail"
           )
@@ -712,6 +769,9 @@ jobs:
           if int(status.get("stopped_docker_owner_count") or 0) > 0:
               with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
                   env_file.write("M26_ORACLE_HTTPS_PORT_HANDOFF_STOPPED=true\n")
+          if int(status.get("stopped_system_service_count") or 0) > 0:
+              with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+                  env_file.write("M26_ORACLE_SYSTEM_WEB_PORT_OWNER_STOPPED=true\n")
           mode = None
           if status.get("status") == "pass":
               mode = "docker_caddy"
@@ -1294,6 +1354,10 @@ jobs:
           if test "${M26_SYSTEM_CADDY_ORIGIN_DEPLOYED:-false}" = "true"; then
             ssh oracle-knowledge "set +e; backup=/etc/caddy/Caddyfile.m26-pa7-before-final-web; caddyfile=/etc/caddy/Caddyfile; snippet=/etc/caddy/m26-pa7-backend-https-origin.caddy; if sudo -n test -f \"\$backup\"; then sudo -n cp \"\$backup\" \"\$caddyfile\" >/dev/null 2>&1 || true; fi; sudo -n rm -f \"\$snippet\" >/dev/null 2>&1 || true; sudo -n systemctl reload caddy >/dev/null 2>&1 || sudo -n caddy reload --config \"\$caddyfile\" >/dev/null 2>&1 || true; echo SYSTEM_CADDY_ORIGIN_ROLLBACK_ATTEMPTED" \
               > "$WORK_DIR/evidence/system-caddy-origin-rollback.log" 2>&1
+          fi
+          if test "${M26_ORACLE_SYSTEM_WEB_PORT_OWNER_STOPPED:-false}" = "true"; then
+            ssh oracle-knowledge "set +e; state_file='$ORACLE_VM_DEPLOY_PATH/.m26-pa7-final-web-https-origin/oracle-https-port-handoff-stopped-services'; if test -f \"\$state_file\"; then while IFS= read -r service_name; do test -n \"\$service_name\" && sudo -n systemctl start \"\$service_name\" >/dev/null 2>&1 || true; done < \"\$state_file\"; echo ORACLE_SYSTEM_WEB_PORT_HANDOFF_RESTART_ATTEMPTED; else echo ORACLE_SYSTEM_WEB_PORT_HANDOFF_STATE_MISSING; fi" \
+              > "$WORK_DIR/evidence/oracle-system-web-port-handoff-rollback.log" 2>&1
           fi
           if test "${M26_ORACLE_HTTPS_PORT_HANDOFF_STOPPED:-false}" = "true"; then
             ssh oracle-knowledge "set +e; state_file='$ORACLE_VM_DEPLOY_PATH/.m26-pa7-final-web-https-origin/oracle-https-port-handoff-stopped-containers'; if test -f \"\$state_file\"; then while IFS= read -r container_name; do test -n \"\$container_name\" && docker start \"\$container_name\" >/dev/null 2>&1 || true; done < \"\$state_file\"; echo ORACLE_HTTPS_PORT_HANDOFF_RESTART_ATTEMPTED; else echo ORACLE_HTTPS_PORT_HANDOFF_STATE_MISSING; fi" \

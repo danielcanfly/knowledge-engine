@@ -378,6 +378,14 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "knowledge-engine-m26-pa7-oracle-https-port-handoff/v1" in workflow
     assert "non_docker_owner_classes" in workflow
     assert "system_caddy" in workflow
+    assert "system_nginx" in workflow
+    assert "system_apache2" in workflow
+    assert "system_httpd" in workflow
+    assert "raw_system_service_name_recorded" in workflow
+    assert "stopped_system_service_count" in workflow
+    assert "system_service_owner_records" in workflow
+    assert "M26_ORACLE_SYSTEM_WEB_PORT_OWNER_STOPPED" in workflow
+    assert "oracle-system-web-port-handoff-rollback.log" in workflow
     assert "raw_listener_recorded" in workflow
     assert "raw_pid_recorded" in workflow
     assert "M26_ORACLE_HTTPS_PORT_HANDOFF_STOPPED" in workflow
