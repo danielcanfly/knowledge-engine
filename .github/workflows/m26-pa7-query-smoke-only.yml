@@ -73,9 +73,29 @@ jobs:
             -w '%{http_code}' \
             --data '{"question":"Compare routers and adaptive planning for permission-first controls."}' \
             http://127.0.0.1:8080/api/m26/query || true)"
-          python3 - "$tmp_dir/health.json" "$tmp_dir/query.json" "$health_code" "$query_code" <<'PY'
+          if [ "$query_code" != "200" ]; then
+            docker compose logs --tail=200 knowledge-engine \
+              | python3 - <<'PY' > "$tmp_dir/query-runtime-sanitized.log"
+          import re
+          import sys
+          text = sys.stdin.read()
+          patterns = [
+              (re.compile(r'(?i)bearer\s+[a-z0-9._~+/=-]{8,}'), 'Bearer [REDACTED]'),
+              (re.compile(r'(?i)(token|secret|password|api[_-]?key)=([^\s]+)'), r'\1=[REDACTED]'),
+              (re.compile(r'gh[pousr]_[A-Za-z0-9_]{20,}'), '[REDACTED_GITHUB_TOKEN]'),
+              (re.compile(r'sk-[A-Za-z0-9_-]{16,}'), '[REDACTED_OPENAI_STYLE_KEY]'),
+          ]
+          for pattern, repl in patterns:
+              text = pattern.sub(repl, text)
+          print(text[-12000:])
+          PY
+          else
+            printf 'query passed; no runtime log captured\n' > "$tmp_dir/query-runtime-sanitized.log"
+          fi
+          python3 - "$tmp_dir/health.json" "$tmp_dir/query.json" "$tmp_dir/query-runtime-sanitized.log" "$health_code" "$query_code" <<'PY'
           import json
           import os
+          import re
           import sys
           from pathlib import Path
 
@@ -93,14 +113,23 @@ jobs:
                   return payload.get("reason_code")
               return None
 
+          def exception_hint(log_text):
+              matches = re.findall(r'([A-Za-z_][A-Za-z0-9_]*(?:Error|Exception))', log_text)
+              ignored = {"Exception", "BaseException"}
+              for item in reversed(matches):
+                  if item not in ignored:
+                      return item
+              return None
+
           health = read_json(sys.argv[1])
           query = read_json(sys.argv[2])
-          health_code = sys.argv[3]
-          query_code = sys.argv[4]
+          log_text = Path(sys.argv[3]).read_text(errors="replace")
+          health_code = sys.argv[4]
+          query_code = sys.argv[5]
           runtime = query.get("canonical_runtime", {}) if isinstance(query, dict) else {}
           reasons = query.get("reason_codes", []) if isinstance(query, dict) else []
           evidence = {
-              "schema_version": "knowledge-engine-m26-pa7-query-smoke-only/v1",
+              "schema_version": "knowledge-engine-m26-pa7-query-smoke-only/v2",
               "status": "pass",
               "expected_head_sha": os.environ["EXPECTED_HEAD_SHA"],
               "health_http_status": health_code,
@@ -116,6 +145,8 @@ jobs:
               "query_runtime_build_sha": runtime.get("build_sha") if isinstance(runtime, dict) else None,
               "query_citation_count": len(query.get("citations", [])) if isinstance(query, dict) else 0,
               "query_source_count": len(query.get("sources", [])) if isinstance(query, dict) else 0,
+              "query_exception_hint": exception_hint(log_text),
+              "sanitized_runtime_log_captured": query_code != "200",
               "protected_knowledge_mutations": 0,
               "raw_answer_text_recorded": False,
               "raw_token_recorded": False,
@@ -130,7 +161,9 @@ jobs:
               evidence["status"] = "fail_query_trace"
           print(json.dumps(evidence, indent=2, sort_keys=True))
           PY
+          cp "$tmp_dir/query-runtime-sanitized.log" /tmp/query-runtime-sanitized.log
           REMOTE
+          scp oracle-knowledge:/tmp/query-runtime-sanitized.log "$WORK_DIR/evidence/query-runtime-sanitized.log" || true
 
       - name: Upload query smoke evidence
         id: upload
@@ -164,11 +197,13 @@ jobs:
               f"- health build SHA: `{smoke.get('health_build_sha')}`",
               f"- query HTTP status: `{smoke.get('query_http_status')}`",
               f"- query reason code: `{smoke.get('query_reason_code')}`",
+              f"- query exception hint: `{smoke.get('query_exception_hint')}`",
               f"- query status: `{smoke.get('query_status')}`",
               f"- query terminal status: `{smoke.get('query_terminal_status')}`",
               f"- query trace present: `{smoke.get('query_trace_id_present')}`",
               f"- query citations: `{smoke.get('query_citation_count')}`",
               f"- query sources: `{smoke.get('query_source_count')}`",
+              f"- sanitized runtime log captured: `{smoke.get('sanitized_runtime_log_captured')}`",
               f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
               f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
               "- protected knowledge mutations: `0`",
