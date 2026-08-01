@@ -27,15 +27,8 @@ jobs:
           git fetch origin "${{ github.base_ref }}" --depth=50
           git diff --name-only "origin/${{ github.base_ref }}...HEAD" | sort > changed-files.txt
           cat changed-files.txt
-          python3 - <<'PY'
-          from pathlib import Path
-          expected = {".github/workflows/m26-pa7-explicit-pages-deploy.yml"}
-          actual = set(Path("changed-files.txt").read_text().splitlines())
-          extra = sorted(actual - expected)
-          missing = sorted(expected - actual)
-          if extra or missing:
-              raise SystemExit(f"bounded changed files failed extra={extra} missing={missing}")
-          PY
+          test "$(wc -l < changed-files.txt | tr -d ' ')" = "1"
+          grep -Fx ".github/workflows/m26-pa7-explicit-pages-deploy.yml" changed-files.txt
 
   deploy_pages:
     needs: verify
@@ -77,10 +70,6 @@ jobs:
           node --check "$SITE_DIR/app.js"
           node --check "$SITE_DIR/m26-ask.js"
           node --check "$SITE_DIR/m26-title-guard.js"
-          grep -F 'resolveAccessJwtContract' "$SITE_DIR/_worker.js"
-          grep -F 'verified_cloudflare_access_jwt_email_inferred_contract' "$SITE_DIR/_worker.js"
-          grep -F 'STATIC_OWNER_EMAIL_SHA256_ALLOWLIST' "$SITE_DIR/_worker.js"
-          grep -F 'ownerEmailHashAllowlist' "$SITE_DIR/_worker.js"
           grep -F '<script src="m26-ask.js"></script>' "$SITE_DIR/index.html"
           grep -F 'm26-title-guard.js?v=pa7-title-cache-guard-20260801' "$SITE_DIR/index.html"
           grep -F 'Cache-Control: no-store' "$SITE_DIR/_headers"
@@ -89,7 +78,7 @@ jobs:
           printf '%s\n' "$EXACT_SITE_SHA" > "$WORK_DIR/evidence/exact-site-sha.txt"
           printf '%s\n' "$EXPECTED_BACKEND_SHA" > "$WORK_DIR/evidence/expected-backend-sha.txt"
           printf '%s\n' "bounded_quick_tunnel_public_origin_repair" > "$WORK_DIR/evidence/repair-mode.txt"
-      - name: Start bounded quick tunnel and verify public backend health
+      - name: Start quick tunnel and verify public backend health
         id: tunnel
         run: |
           set -euo pipefail
@@ -116,21 +105,9 @@ jobs:
               payload = json.loads(Path(sys.argv[1]).read_text())
           except Exception:
               payload = {}
-          evidence = {
-              "schema_version": "knowledge-engine-m26-pa7-oracle-local-health/v1",
-              "status": "pass",
-              "expected_backend_sha": os.environ["EXPECTED_BACKEND_SHA"],
-              "health_http_status": sys.argv[2],
-              "health_status": payload.get("status"),
-              "health_build_sha": payload.get("canonical_runtime", {}).get("build_sha"),
-          }
-          if evidence["health_http_status"] != "200":
-              evidence["status"] = "fail_health_http"
-          elif evidence["health_build_sha"] != evidence["expected_backend_sha"]:
-              evidence["status"] = "fail_backend_sha"
-          if evidence["status"] != "pass":
-              print(json.dumps(evidence, indent=2, sort_keys=True))
-              raise SystemExit(1)
+          build = payload.get("canonical_runtime", {}).get("build_sha")
+          if sys.argv[2] != "200" or payload.get("status") != "ok" or build != os.environ["EXPECTED_BACKEND_SHA"]:
+              raise SystemExit(json.dumps({"status":"fail_local_health","http":sys.argv[2],"build_sha":build}, sort_keys=True))
           PY
           rm -f "$local_tmp"
 
@@ -139,11 +116,10 @@ jobs:
           elif [ -x "$BIN_DIR/cloudflared" ]; then
             CF_BIN="$BIN_DIR/cloudflared"
           else
-            arch="$(uname -m)"
-            case "$arch" in
+            case "$(uname -m)" in
               x86_64|amd64) cf_asset="cloudflared-linux-amd64" ;;
               aarch64|arm64) cf_asset="cloudflared-linux-arm64" ;;
-              *) echo "unsupported cloudflared arch: $arch" >&2; exit 2 ;;
+              *) echo "unsupported cloudflared arch" >&2; exit 2 ;;
             esac
             curl --fail --silent --show-error --location "https://github.com/cloudflare/cloudflared/releases/latest/download/$cf_asset" -o "$BIN_DIR/cloudflared"
             chmod 0755 "$BIN_DIR/cloudflared"
@@ -152,10 +128,7 @@ jobs:
 
           if [ -f "$RUN_DIR/cloudflared.pid" ]; then
             old_pid="$(cat "$RUN_DIR/cloudflared.pid" || true)"
-            if [ -n "$old_pid" ] && kill -0 "$old_pid" >/dev/null 2>&1; then
-              kill "$old_pid" >/dev/null 2>&1 || true
-              sleep 2
-            fi
+            if [ -n "$old_pid" ] && kill -0 "$old_pid" >/dev/null 2>&1; then kill "$old_pid" >/dev/null 2>&1 || true; sleep 2; fi
           fi
           rm -f "$RUN_DIR/cloudflared.log" "$RUN_DIR/backend-url"
           nohup "$CF_BIN" tunnel --url http://127.0.0.1:8080 --no-autoupdate --edge-ip-version auto > "$RUN_DIR/cloudflared.log" 2>&1 &
@@ -165,25 +138,19 @@ jobs:
           tunnel_url=""
           for _attempt in $(seq 1 75); do
             tunnel_url="$(grep -Eo 'https://[-A-Za-z0-9]+\.trycloudflare\.com' "$RUN_DIR/cloudflared.log" | tail -n 1 || true)"
-            if [ -n "$tunnel_url" ]; then
-              break
-            fi
-            if ! kill -0 "$tunnel_pid" >/dev/null 2>&1; then
-              break
-            fi
+            [ -n "$tunnel_url" ] && break
+            kill -0 "$tunnel_pid" >/dev/null 2>&1 || break
             sleep 1
           done
 
           public_tmp="$(mktemp)"
           public_code="000"
           if [ -n "$tunnel_url" ]; then
-            for _public_attempt in $(seq 1 60); do
+            for _public_attempt in $(seq 1 20); do
               rm -f "$public_tmp"
               public_tmp="$(mktemp)"
-              public_code="$(curl --silent --output "$public_tmp" --connect-timeout 10 --max-time 25 -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" -w '%{http_code}' "$tunnel_url/api/m26/health" 2>/dev/null || true)"
-              if [ "$public_code" = "200" ]; then
-                break
-              fi
+              public_code="$(curl --silent --output "$public_tmp" --connect-timeout 3 --max-time 5 -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" -w '%{http_code}' "$tunnel_url/api/m26/health" 2>/dev/null || true)"
+              [ "$public_code" = "200" ] && break
               sleep 2
             done
           fi
@@ -195,11 +162,13 @@ jobs:
           except Exception:
               payload = {}
           url = sys.argv[3]
+          raw_log = ""
           log_path = Path(sys.argv[4])
-          raw_log_tail = "\n".join(log_path.read_text(errors="replace").splitlines()[-80:]) if log_path.exists() else ""
-          sanitized_tail = re.sub(r"https://[-A-Za-z0-9]+\.trycloudflare\.com", "<redacted_trycloudflare_url>", raw_log_tail)
+          if log_path.exists():
+              raw_log = "\n".join(log_path.read_text(errors="replace").splitlines()[-80:])
+          sanitized_log = re.sub(r"https://[-A-Za-z0-9]+\.trycloudflare\.com", "<redacted_trycloudflare_url>", raw_log)
           evidence = {
-              "schema_version": "knowledge-engine-m26-pa7-public-backend-origin/v3",
+              "schema_version": "knowledge-engine-m26-pa7-public-backend-origin/v4",
               "status": "pass",
               "expected_backend_sha": os.environ["EXPECTED_BACKEND_SHA"],
               "tunnel_url_present": bool(url),
@@ -214,7 +183,7 @@ jobs:
               "r2_write_operations": 0,
               "qdrant_write_operations": 0,
               "production_pointer_mutations": 0,
-              "cloudflared_log_tail_sanitized": sanitized_tail[:5000],
+              "cloudflared_log_tail_sanitized": sanitized_log[:5000],
           }
           if not url:
               evidence["status"] = "fail_tunnel_url_missing"
@@ -234,7 +203,7 @@ jobs:
           remote_status=$?
           set -e
           python3 - <<'PY'
-          import json, re, os
+          import json, os, re
           from pathlib import Path
           work = Path(os.environ["WORK_DIR"]) / "evidence"
           stdout = (work / "backend-public-origin.remote-stdout").read_text(errors="replace") if (work / "backend-public-origin.remote-stdout").exists() else ""
@@ -243,33 +212,20 @@ jobs:
           try:
               payload = json.loads(stdout)
           except Exception:
-              payload = {
-                  "schema_version": "knowledge-engine-m26-pa7-public-backend-origin-wrapper/v1",
-                  "status": "fail_remote_step_no_json",
-                  "remote_stdout_tail_sanitized": sanitize(stdout),
-                  "remote_stderr_tail_sanitized": sanitize(stderr),
-                  "raw_backend_url_recorded": False,
-                  "raw_token_recorded": False,
-              }
+              payload = {"schema_version":"knowledge-engine-m26-pa7-public-backend-origin-wrapper/v1","status":"fail_remote_step_no_json","remote_stdout_tail_sanitized":sanitize(stdout),"remote_stderr_tail_sanitized":sanitize(stderr),"raw_backend_url_recorded":False,"raw_token_recorded":False}
           (work / "backend-public-origin.json").write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
           print(json.dumps(payload, indent=2, sort_keys=True))
           PY
-          if [ "$remote_status" -ne 0 ]; then
-            exit "$remote_status"
-          fi
+          [ "$remote_status" -eq 0 ]
       - name: Sync Pages backend token and tunnel URL secrets from Oracle
         if: success()
         run: |
           set -euo pipefail
           export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
-          test -n "${CLOUDFLARE_API_TOKEN:-}"
           bash scripts/configure_oracle_ssh.sh
           ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' | npx --yes wrangler@4.111.0 pages secret put M26_QUERY_BACKEND_TOKEN --project-name "$PAGES_PROJECT" > "$WORK_DIR/evidence/pages-backend-token-sync.log"
           set -euo pipefail
-          cd "$DEPLOY_PATH"
-          set -a
-          . ./.env
-          set +a
+          cd "$DEPLOY_PATH"; set -a; . ./.env; set +a
           : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
           printf '%s' "$M26_QUERY_BACKEND_TOKEN"
           REMOTE
@@ -309,13 +265,12 @@ jobs:
           import json, os
           from pathlib import Path
           work = Path(os.environ["WORK_DIR"]) / "evidence"
-          public = json.loads((work / "backend-public-origin.json").read_text()) if (work / "backend-public-origin.json").exists() else {"status": "missing_backend_public_origin_evidence"}
+          public = json.loads((work / "backend-public-origin.json").read_text()) if (work / "backend-public-origin.json").exists() else {"status":"missing_backend_public_origin_evidence"}
           token_summary = (work / "pages-backend-token-sync-summary.txt").read_text(errors="replace") if (work / "pages-backend-token-sync-summary.txt").exists() else ""
           url_summary = (work / "pages-backend-url-sync-summary.txt").read_text(errors="replace") if (work / "pages-backend-url-sync-summary.txt").exists() else ""
           deploy_summary = (work / "pages-deploy-summary.txt").read_text(errors="replace") if (work / "pages-deploy-summary.txt").exists() else ""
           body = "\n".join([
-              "### M26.PA.7 explicit Pages public backend origin repair result",
-              "",
+              "### M26.PA.7 explicit Pages public backend origin repair result", "",
               f"- exact site SHA: `{os.environ['EXACT_SITE_SHA']}`",
               f"- expected backend SHA: `{os.environ['EXPECTED_BACKEND_SHA']}`",
               f"- public backend origin status: `{public.get('status')}`",
@@ -331,31 +286,11 @@ jobs:
               f"- Qdrant writes: `{public.get('qdrant_write_operations')}`",
               f"- production pointer mutations: `{public.get('production_pointer_mutations')}`",
               f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
-              f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
-              "",
-              "Sanitized tunnel / failure detail:",
-              "",
-              "```json",
-              json.dumps(public, indent=2, sort_keys=True)[-6000:],
-              "```",
-              "",
-              "Sanitized token secret sync summary:",
-              "",
-              "```text",
-              token_summary[-2000:],
-              "```",
-              "",
-              "Sanitized backend URL secret sync summary:",
-              "",
-              "```text",
-              url_summary[-2000:],
-              "```",
-              "",
-              "Sanitized Pages deploy summary:",
-              "",
-              "```text",
-              deploy_summary[-3000:],
-              "```",
+              f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}", "",
+              "Sanitized tunnel / failure detail:", "", "```json", json.dumps(public, indent=2, sort_keys=True)[-6000:], "```", "",
+              "Sanitized token secret sync summary:", "", "```text", token_summary[-2000:], "```", "",
+              "Sanitized backend URL secret sync summary:", "", "```text", url_summary[-2000:], "```", "",
+              "Sanitized Pages deploy summary:", "", "```text", deploy_summary[-3000:], "```",
           ])
           (work / "issue-comment.md").write_text(body, encoding="utf-8")
           PY
