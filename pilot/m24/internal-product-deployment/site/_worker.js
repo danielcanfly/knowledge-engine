@@ -89,13 +89,13 @@ async function verifyOwnerAccess(request, env) {
 
   const token = request.headers.get("cf-access-jwt-assertion");
   if (!token) return denied("M26_OWNER_ACCESS_JWT_MISSING");
-  const teamDomain = normalizeTeamDomain(env.ACCESS_TEAM_DOMAIN || env.TEAM_DOMAIN);
-  const audience = String(env.ACCESS_AUD || env.POLICY_AUD || "").trim();
-  if (!teamDomain || !audience) return denied("M26_OWNER_ACCESS_JWT_CONFIG_MISSING");
+
+  const contract = resolveAccessJwtContract(token, env);
+  if (!contract.ok) return denied(contract.reason);
 
   let payload;
   try {
-    payload = await verifyAccessJwt(token, teamDomain, audience);
+    payload = await verifyAccessJwt(token, contract.issuer, contract.audience);
   } catch (_error) {
     return denied("M26_OWNER_ACCESS_JWT_INVALID");
   }
@@ -108,7 +108,7 @@ async function verifyOwnerAccess(request, env) {
   if (!timingSafeEqualHex(actualEmailHash, expectedEmailHash)) {
     return denied("M26_OWNER_ACCESS_EMAIL_NOT_ALLOWLISTED");
   }
-  return admitted(expectedOwnerHash, "verified_cloudflare_access_jwt_email");
+  return admitted(expectedOwnerHash, contract.identitySource);
 }
 
 function admitted(ownerSubjectHash, identitySource) {
@@ -119,10 +119,58 @@ function denied(reason) {
   return { ok: false, reason };
 }
 
+function resolveAccessJwtContract(token, env) {
+  const configuredIssuer = normalizeTeamDomain(env.ACCESS_TEAM_DOMAIN || env.TEAM_DOMAIN);
+  const configuredAudience = String(env.ACCESS_AUD || env.POLICY_AUD || "").trim();
+  if (configuredIssuer && configuredAudience) {
+    return {
+      ok: true,
+      issuer: configuredIssuer,
+      audience: configuredAudience,
+      identitySource: "verified_cloudflare_access_jwt_email",
+    };
+  }
+
+  let unsignedPayload;
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return { ok: false, reason: "M26_OWNER_ACCESS_JWT_INVALID" };
+    unsignedPayload = decodeJwtPart(parts[1]);
+  } catch (_error) {
+    return { ok: false, reason: "M26_OWNER_ACCESS_JWT_INVALID" };
+  }
+
+  const inferredIssuer = normalizeTeamDomain(unsignedPayload.iss || "");
+  const inferredAudiences = Array.isArray(unsignedPayload.aud)
+    ? unsignedPayload.aud.map((value) => String(value || "").trim()).filter(Boolean)
+    : [String(unsignedPayload.aud || "").trim()].filter(Boolean);
+  if (!inferredIssuer || inferredAudiences.length !== 1) {
+    return { ok: false, reason: "M26_OWNER_ACCESS_JWT_CONFIG_MISSING" };
+  }
+  if (!isCloudflareAccessIssuer(inferredIssuer)) {
+    return { ok: false, reason: "M26_OWNER_ACCESS_JWT_INVALID" };
+  }
+  return {
+    ok: true,
+    issuer: inferredIssuer,
+    audience: inferredAudiences[0],
+    identitySource: "verified_cloudflare_access_jwt_email_inferred_contract",
+  };
+}
+
 function normalizeTeamDomain(value) {
   const raw = String(value || "").trim().replace(/\/$/, "");
   if (!raw) return "";
   return raw.startsWith("https://") ? raw : `https://${raw}`;
+}
+
+function isCloudflareAccessIssuer(value) {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === "cloudflareaccess.com" || hostname.endsWith(".cloudflareaccess.com");
+  } catch (_error) {
+    return false;
+  }
 }
 
 async function verifyAccessJwt(token, issuer, audience) {
