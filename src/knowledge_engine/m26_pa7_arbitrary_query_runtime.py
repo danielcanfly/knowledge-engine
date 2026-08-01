@@ -743,6 +743,17 @@ def _synthesize_and_verify(
                 provider_text=normalized["provider_text"],
             )
             if verified["terminal_status"] == "safe_abstention":
+                deterministic = _deterministic_evidence_synthesis(
+                    trace_id=trace_id,
+                    intent_class=intent_class,
+                    evidence=evidence,
+                    calls=calls,
+                    repair_attempted=repair_attempted,
+                    trigger_reason_codes=verified["reason_codes"],
+                    allow_after_repair_failure=False,
+                )
+                if deterministic is not None:
+                    return deterministic
                 return _verified_abstention(
                     reason_codes=verified["reason_codes"],
                     calls=calls,
@@ -760,6 +771,17 @@ def _synthesize_and_verify(
             if attempt == 1:
                 repair_attempted = True
                 continue
+            deterministic = _deterministic_evidence_synthesis(
+                trace_id=trace_id,
+                intent_class=intent_class,
+                evidence=evidence,
+                calls=calls,
+                repair_attempted=True,
+                trigger_reason_codes=[*failures, "BOUNDED_REPAIR_EXHAUSTED"],
+                allow_after_repair_failure=True,
+            )
+            if deterministic is not None:
+                return deterministic
             return _verified_abstention(
                 reason_codes=[*failures, "BOUNDED_REPAIR_EXHAUSTED"],
                 calls=calls,
@@ -776,6 +798,171 @@ def _synthesize_and_verify(
         calls=calls,
         repair_attempted=True,
     )
+
+
+def _deterministic_evidence_synthesis(
+    *,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    calls: Sequence[Mapping[str, Any]],
+    repair_attempted: bool,
+    trigger_reason_codes: Sequence[str],
+    allow_after_repair_failure: bool,
+) -> dict[str, Any] | None:
+    if allow_after_repair_failure and intent_class != "direct_grounded_knowledge":
+        return None
+    candidate = _deterministic_provider_candidate(intent_class=intent_class, evidence=evidence)
+    if candidate is None:
+        return None
+    try:
+        verified = _verify_multi_evidence_provider_output(
+            trace_id=trace_id,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_text=json.dumps(candidate, ensure_ascii=False, sort_keys=True),
+        )
+    except VerifiedAnswerGateError:
+        return None
+    answer = _verified_multi_evidence_answer(
+        intent_class=intent_class,
+        verified=verified,
+        evidence=evidence,
+        calls=calls,
+        repair_attempted=repair_attempted,
+    )
+    if answer["status"] != "owner_only_cited_answer":
+        return None
+    answer["relationship_summary"] = {
+        **dict(answer.get("relationship_summary", {})),
+        "synthesis_source": "deterministic_verified_evidence_spans",
+    }
+    answer["multi_evidence_verification"] = {
+        **dict(answer.get("multi_evidence_verification", {})),
+        "deterministic_evidence_synthesis_used": True,
+        "trigger_reason_codes": sorted({str(item) for item in trigger_reason_codes}),
+    }
+    return answer
+
+
+def _deterministic_provider_candidate(
+    *,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    passages = [item for item in evidence if item.get("evidence_type") == "passage"]
+    relation = None
+    role = "direct"
+    selected: list[Mapping[str, Any]]
+    if intent_class == "cross_document_comparison":
+        selected = _first_distinct_source_items(passages, minimum=2)
+        relation = "contrasts_with"
+        role = "relationship"
+    elif intent_class == "complementary_synthesis":
+        selected = _first_distinct_source_items(passages, minimum=2)
+        relation = "complements"
+        role = "relationship"
+    elif intent_class == "graph_relationship":
+        selected = _deterministic_graph_items(evidence)
+        graph_edge = next(
+            (item for item in selected if item.get("evidence_type") == "graph_edge"),
+            {},
+        )
+        relation = str(graph_edge.get("relation_type") or "depends_on")
+        role = "relationship"
+    elif intent_class == "provenance_source_trace":
+        provenance = next(
+            (item for item in evidence if item.get("evidence_type") == "provenance"),
+            None,
+        )
+        if provenance is None or not passages:
+            return None
+        selected = [passages[0], provenance]
+        role = "provenance"
+    elif intent_class == "temporal_conflict":
+        temporal = [
+            item for item in evidence if item.get("evidence_type") == "temporal_record"
+        ]
+        selected = _first_distinct_source_items(temporal, minimum=2)
+        relation = "precedes"
+        role = "temporal"
+    else:
+        selected = _first_distinct_source_items(passages, minimum=1)
+        if len(_first_distinct_source_items(passages, minimum=2)) >= 2:
+            selected = _first_distinct_source_items(passages, minimum=2)
+    if not selected:
+        return None
+    refs = [_deterministic_support_ref(item) for item in selected]
+    if any(ref is None for ref in refs):
+        return None
+    return {
+        "status": "answer_candidate",
+        "relation": relation,
+        "selected_evidence_ids": [str(item["evidence_id"]) for item in evidence],
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_role": role,
+                "support_refs": [ref for ref in refs if ref is not None],
+            }
+        ],
+        "abstention_reason": None,
+    }
+
+
+def _first_distinct_source_items(
+    items: Sequence[Mapping[str, Any]],
+    *,
+    minimum: int,
+) -> list[Mapping[str, Any]]:
+    selected: list[Mapping[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        source = _source_identity(item)
+        if source in seen:
+            continue
+        selected.append(item)
+        seen.add(source)
+        if len(selected) >= minimum:
+            return selected
+    if minimum <= 1 and items:
+        return [items[0]]
+    return []
+
+
+def _deterministic_graph_items(
+    evidence: Sequence[Mapping[str, Any]],
+) -> list[Mapping[str, Any]]:
+    graph_edge = next(
+        (item for item in evidence if item.get("evidence_type") == "graph_edge"),
+        None,
+    )
+    if graph_edge is None:
+        return []
+    endpoint_concepts = {
+        str(graph_edge.get("edge_source", "")),
+        str(graph_edge.get("edge_target", "")),
+    }
+    endpoints: list[Mapping[str, Any]] = []
+    for item in evidence:
+        if item.get("evidence_type") != "passage":
+            continue
+        if str(item.get("concept_id", "")) in endpoint_concepts:
+            endpoints.append(item)
+    if {str(item.get("concept_id", "")) for item in endpoints} != endpoint_concepts:
+        return []
+    return [graph_edge, *endpoints[:2]]
+
+
+def _deterministic_support_ref(item: Mapping[str, Any]) -> dict[str, str] | None:
+    quote = _first_exact_evidence_quote(str(item.get("passage_text", "")))
+    if not quote:
+        return None
+    return {
+        "evidence_id": str(item["evidence_id"]),
+        "locator_id": str(item["locator_id"]),
+        "exact_quote": quote,
+    }
 
 
 JSON_FENCE = re.compile(r"^```(?:json)?\s*\n(?P<body>.*?)\n```\s*$", re.DOTALL)
@@ -2002,6 +2189,23 @@ def _bounded_text(text: str, *, max_bytes: int = 1800) -> str:
             break
         result += character
     return result.rstrip()
+
+
+def _first_exact_evidence_quote(text: str, *, max_chars: int = 760) -> str:
+    normalized = text.strip()
+    if not normalized:
+        return ""
+    for delimiter in (". ", "\n"):
+        index = normalized.find(delimiter)
+        if index >= 0:
+            end = index + (1 if delimiter == ". " else 0)
+            quote = normalized[:end].strip()
+            break
+    else:
+        quote = normalized
+    if len(quote) <= max_chars:
+        return quote
+    return quote[:max_chars].rstrip()
 
 
 def _looks_like_prompt_injection(question: str) -> bool:
