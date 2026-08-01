@@ -411,6 +411,7 @@ jobs:
               legacy_port_owner="llamaindex-oracle-e2-api"
               legacy_status="$WORK_DIR/legacy-oracle-https-port-owner.status"
               legacy_script="$WORK_DIR/legacy-oracle-https-port-handoff.py"
+              ssh oracle-knowledge "docker rm -f m26-pa7-backend-https-origin >/dev/null 2>&1 || true"
               cat > "$legacy_script" <<'PY'
           import hashlib
           import json
@@ -481,6 +482,219 @@ jobs:
                   env_file.write("M26_LEGACY_ORACLE_HTTPS_PORT_OWNER_STOPPED=true\n")
           PY
               rm -f "$legacy_status"
+              https_handoff_status="$WORK_DIR/oracle-https-port-handoff.status"
+              https_handoff_script="$WORK_DIR/oracle-https-port-handoff.py"
+              cat > "$https_handoff_script" <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          PORTS = {80, 443}
+
+
+          def digest(value):
+              return hashlib.sha256(str(value).encode()).hexdigest()
+
+
+          def run(cmd):
+              return subprocess.run(cmd, check=False, capture_output=True, text=True)
+
+
+          def listener_port(local_address):
+              if not local_address:
+                  return None
+              if local_address.endswith("]"):
+                  return None
+              candidate = local_address.rsplit(":", 1)[-1]
+              try:
+                  return int(candidate)
+              except ValueError:
+                  return None
+
+
+          def listener_snapshot():
+              result = run(["sudo", "-n", "ss", "-H", "-ltnp"])
+              probe_mode = "sudo_ss"
+              if result.returncode != 0:
+                  result = run(["ss", "-H", "-ltnp"])
+                  probe_mode = "ss"
+              listeners = []
+              if result.returncode != 0:
+                  return listeners, "ss_unavailable"
+              for line in result.stdout.splitlines():
+                  parts = line.split()
+                  if len(parts) < 4:
+                      continue
+                  port = listener_port(parts[3])
+                  if port not in PORTS:
+                      continue
+                  process_text = " ".join(parts[5:]) if len(parts) > 5 else ""
+                  pids = {int(pid) for pid in re.findall(r"pid=(\d+)", process_text)}
+                  listeners.append({"port": port, "pids": sorted(pids), "probe_mode": probe_mode})
+              return listeners, None
+
+
+          def read_cgroup_container_ids(pid):
+              try:
+                  text = Path(f"/proc/{pid}/cgroup").read_text(errors="replace")
+              except OSError:
+                  return set()
+              matches = set(re.findall(r"([0-9a-f]{64})", text))
+              matches.update(re.findall(r"docker-([0-9a-f]{64})\.scope", text))
+              return matches
+
+
+          def inspect_running_containers():
+              ps = run(["docker", "ps", "-q"])
+              if ps.returncode != 0:
+                  return {}
+              ids = [line.strip() for line in ps.stdout.splitlines() if line.strip()]
+              if not ids:
+                  return {}
+              inspect = run(["docker", "inspect", *ids])
+              if inspect.returncode != 0:
+                  return {}
+              containers = {}
+              for item in json.loads(inspect.stdout):
+                  cid = str(item.get("Id") or "")
+                  if not cid:
+                      continue
+                  ports = set()
+                  network_ports = item.get("NetworkSettings", {}).get("Ports") or {}
+                  for bindings in network_ports.values():
+                      for binding in bindings or []:
+                          try:
+                              host_port = int(binding.get("HostPort") or 0)
+                          except ValueError:
+                              continue
+                          if host_port in PORTS:
+                              ports.add(host_port)
+                  containers[cid] = {
+                      "id": cid,
+                      "image": str(item.get("Config", {}).get("Image") or ""),
+                      "name": str(item.get("Name") or "").lstrip("/"),
+                      "pid": int(item.get("State", {}).get("Pid") or 0),
+                      "published_ports": ports,
+                      "running": bool(item.get("State", {}).get("Running")),
+                  }
+              return containers
+
+
+          state_dir = Path(os.environ["HANDOFF_STATE_DIR"])
+          state_dir.mkdir(parents=True, exist_ok=True)
+          stopped_file = state_dir / "oracle-https-port-handoff-stopped-containers"
+          stopped_file.write_text("")
+
+          listeners, listener_error = listener_snapshot()
+          containers = inspect_running_containers()
+          owner_ports = {}
+          owner_methods = {}
+          non_docker_listener_count = 0
+          for listener in listeners:
+              matched = set()
+              cgroup_ids = set()
+              for pid in listener["pids"]:
+                  cgroup_ids.update(read_cgroup_container_ids(pid))
+              for cid, info in containers.items():
+                  methods = set()
+                  if info["pid"] and info["pid"] in listener["pids"]:
+                      methods.add("state_pid")
+                  if info["published_ports"] and listener["port"] in info["published_ports"]:
+                      methods.add("published_port")
+                  if any(cid.startswith(cgroup_id) or cgroup_id.startswith(cid[:12]) for cgroup_id in cgroup_ids):
+                      methods.add("cgroup")
+                  if methods:
+                      matched.add(cid)
+                      owner_ports.setdefault(cid, set()).add(listener["port"])
+                      owner_methods.setdefault(cid, set()).update(methods)
+              if not matched:
+                  non_docker_listener_count += 1
+
+          records = []
+          stopped_names = []
+          stop_failed_count = 0
+          for cid in sorted(owner_ports):
+              info = containers[cid]
+              if info["name"] == "m26-pa7-backend-https-origin":
+                  action = "already_replaced"
+              elif info["running"]:
+                  stopped = run(["docker", "stop", info["name"] or cid])
+                  if stopped.returncode == 0:
+                      action = "stopped"
+                      if info["name"]:
+                          stopped_names.append(info["name"])
+                  else:
+                      action = "stop_failed"
+                      stop_failed_count += 1
+              else:
+                  action = "already_stopped"
+              records.append(
+                  {
+                      "action": action,
+                      "container_id_sha256": digest(cid),
+                      "container_image_sha256": digest(info["image"]),
+                      "container_name_sha256": digest(info["name"]),
+                      "detected_ports": sorted(owner_ports[cid]),
+                      "detection_methods": sorted(owner_methods.get(cid, set())),
+                  }
+              )
+
+          if stopped_names:
+              stopped_file.write_text("\n".join(stopped_names) + "\n")
+
+          remaining, remaining_error = listener_snapshot()
+          evidence = {
+              "docker_owner_count": len(records),
+              "listener_error": listener_error,
+              "listener_ports_checked": sorted(PORTS),
+              "non_docker_listener_count": non_docker_listener_count,
+              "owner_records": records,
+              "protected_knowledge_mutations": 0,
+              "raw_container_id_recorded": False,
+              "raw_container_image_recorded": False,
+              "raw_container_name_recorded": False,
+              "raw_listener_recorded": False,
+              "raw_pid_recorded": False,
+              "remaining_listener_count": len(remaining),
+              "remaining_listener_error": remaining_error,
+              "schema_version": "knowledge-engine-m26-pa7-oracle-https-port-handoff/v1",
+              "stop_failed_count": stop_failed_count,
+              "stopped_docker_owner_count": len(stopped_names),
+          }
+          evidence["status"] = (
+              "pass"
+              if not listener_error
+              and not remaining_error
+              and non_docker_listener_count == 0
+              and stop_failed_count == 0
+              and len(remaining) == 0
+              else "fail"
+          )
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+              scp "$https_handoff_script" "oracle-knowledge:$caddy_dir/oracle-https-port-handoff.py"
+              rm -f "$https_handoff_script"
+              ssh oracle-knowledge "HANDOFF_STATE_DIR='$caddy_dir' python3 '$caddy_dir/oracle-https-port-handoff.py'" \
+                > "$https_handoff_status"
+              ORACLE_HTTPS_HANDOFF_STATUS_PATH="$https_handoff_status" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          status = json.loads(Path(os.environ["ORACLE_HTTPS_HANDOFF_STATUS_PATH"]).read_text())
+          Path(os.environ["WORK_DIR"], "evidence/oracle-https-port-handoff.json").write_text(
+              json.dumps(status, indent=2, sort_keys=True) + "\n"
+          )
+          if int(status.get("stopped_docker_owner_count") or 0) > 0:
+              with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+                  env_file.write("M26_ORACLE_HTTPS_PORT_HANDOFF_STOPPED=true\n")
+          if status.get("status") != "pass":
+              raise SystemExit("oracle_https_port_handoff_failed")
+          PY
+              rm -f "$https_handoff_status"
               printf '%s\n' \
                 "$M26_ORACLE_BACKEND_TLS_HOSTNAME {" \
                 "  reverse_proxy 127.0.0.1:8080" \
@@ -919,6 +1133,10 @@ jobs:
           if test "${M26_BACKEND_HTTPS_PROXY_DEPLOYED:-false}" = "true"; then
             ssh oracle-knowledge "docker rm -f m26-pa7-backend-https-origin >/dev/null 2>&1 || true" \
               > "$WORK_DIR/evidence/backend-https-origin-rollback.log" 2>&1
+          fi
+          if test "${M26_ORACLE_HTTPS_PORT_HANDOFF_STOPPED:-false}" = "true"; then
+            ssh oracle-knowledge "set +e; state_file='$ORACLE_VM_DEPLOY_PATH/.m26-pa7-final-web-https-origin/oracle-https-port-handoff-stopped-containers'; if test -f \"\$state_file\"; then while IFS= read -r container_name; do test -n \"\$container_name\" && docker start \"\$container_name\" >/dev/null 2>&1 || true; done < \"\$state_file\"; echo ORACLE_HTTPS_PORT_HANDOFF_RESTART_ATTEMPTED; else echo ORACLE_HTTPS_PORT_HANDOFF_STATE_MISSING; fi" \
+              > "$WORK_DIR/evidence/oracle-https-port-handoff-rollback.log" 2>&1
           fi
           if test "${M26_LEGACY_ORACLE_HTTPS_PORT_OWNER_STOPPED:-false}" = "true"; then
             ssh oracle-knowledge "docker start llamaindex-oracle-e2-api >/dev/null 2>&1 || true" \
