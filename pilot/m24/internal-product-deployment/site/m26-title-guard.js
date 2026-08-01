@@ -35,6 +35,12 @@
     if (link) link.setAttribute("aria-current", "page");
   }
 
+  function setSigmaReadyStatus(status, nodes, edges) {
+    if (!status) return;
+    status.textContent = `Sigma.js canvas ready: ${nodes.length} visible nodes, ${edges.length} visible edges.`;
+    status.dataset.state = "ready";
+  }
+
   function fullGraphAlreadyRendered() {
     return Boolean(document.querySelector("[data-full-production-graph] [data-sigma-stage]"));
   }
@@ -74,10 +80,7 @@
         </div>
       </section>
     `;
-    if (status) {
-      status.textContent = `Full production graph verified: ${nodes.length} nodes, ${edges.length} edges.`;
-      status.dataset.state = "ready";
-    }
+    setSigmaReadyStatus(status, nodes, edges);
     if (typeof window.createM24GraphExplorer === "function") {
       try {
         window.createM24GraphExplorer({
@@ -96,12 +99,14 @@
             enforceTitle();
           },
         });
+        setSigmaReadyStatus(status, nodes, edges);
       } catch (_error) {
         const stage = app.querySelector("[data-sigma-stage]");
         if (stage) {
           stage.dataset.state = "rendered_without_sigma";
           stage.dataset.message = "Full graph payload verified; Sigma fallback surface rendered.";
         }
+        setSigmaReadyStatus(status, nodes, edges);
       }
     }
   }
