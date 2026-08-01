@@ -47,19 +47,26 @@ def test_worker_api_is_owner_only_fail_closed_proxy() -> None:
     assert "/api/m26/query" in worker
     assert "/api/m26/health" in worker
     assert "verifyOwnerAccess" in worker
+    assert "verifyAccessJwt" in worker
     assert "cf-access-jwt-assertion" in worker
-    assert "cf-access-authenticated-user-email" in worker
+    assert "cf-access-authenticated-user-email" not in worker
+    assert "ACCESS_TEAM_DOMAIN" in worker
+    assert "ACCESS_AUD" in worker
+    assert "/cdn-cgi/access/certs" in worker
+    assert "RSASSA-PKCS1-v1_5" in worker
+    assert "verified_cloudflare_access_jwt_email" in worker
     assert "M26_OWNER_EMAIL_SHA256" in worker
     assert "KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" in worker
     assert "M26_QUERY_BACKEND_URL" in worker
     assert "M26_QUERY_BACKEND_TOKEN" in worker
     assert "crypto.subtle.digest" in worker
+    assert "crypto.subtle.verify" in worker
     assert "timingSafeEqualHex" in worker
     assert "env.ASSETS.fetch(request)" in worker
     assert worker.index("const admission = await verifyOwnerAccess") < worker.index(
         "const backend = env.M26_QUERY_BACKEND_URL"
     )
-    assert worker.index("if (!admission)") < worker.index("fetch(backendUrl")
+    assert worker.index("if (!admission.ok)") < worker.index("fetch(backendUrl")
     assert "MINIMAX_API_KEY" not in worker
     assert "CLOUDFLARE_API_TOKEN" not in worker
     assert "QDRANT_API_KEY" not in worker
