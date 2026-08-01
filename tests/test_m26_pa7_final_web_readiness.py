@@ -417,6 +417,10 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "wrangler@4.111.0 pages deploy" in workflow
     assert "final_formal_query_specs()[:9]" in workflow
     assert "live_final_runtime_rows_passed_awaiting_owner_browser_e2e" in workflow
+    assert "live_final_runtime_rows_failed" in workflow
+    assert "failed_row" in workflow
+    assert "raw_provider_payload_recorded" in workflow
+    assert "raw_answer_text_recorded" in workflow
     assert "duplicate_live_guard_status" in workflow
     assert "public-api-denial" in workflow
     assert "public-api-denial-sanitized.json" in workflow

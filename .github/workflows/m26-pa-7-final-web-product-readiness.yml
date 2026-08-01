@@ -1258,7 +1258,26 @@ jobs:
           root = Path(".")
           gate = load_json(root / "pilot/m26/m26-pa-7-corrected-resolved-production-gate.json")
           owner_hash = gate["production_identities"]["allowlisted_owner_subject_hash"]
+          out = Path(os.environ["WORK_DIR"]) / "evidence/final-live-runtime-rows.json"
           rows = []
+          def write_runtime_rows(status, failed_row=None):
+              evidence = {
+                  "schema_version": "knowledge-engine-m26-pa7-final-live-runtime-rows/v1",
+                  "status": status,
+                  "head_sha": os.environ["GITHUB_SHA"],
+                  "final_web_formal_manifest_self_sha256": load_json(
+                      root / "pilot/m26/m26-pa-7-final-web-formal-test-manifest.json"
+                  )["self_sha256"],
+                  "row_count": len(rows),
+                  "rows": rows,
+                  "failed_row": failed_row,
+                  "browser_owner_e2e_pending": True,
+                  "public_traffic_operations": 0,
+                  "non_owner_provider_calls": 0,
+                  "raw_provider_payload_recorded": False,
+                  "raw_answer_text_recorded": False,
+              }
+              out.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
           for spec in final_formal_query_specs()[:9]:
               response = run_owner_arbitrary_query(
                   root=root,
@@ -1270,22 +1289,18 @@ jobs:
               row = _runtime_row_from_response(spec=spec, response=response)
               rows.append(row)
               if not row["pass"]:
+                  write_runtime_rows(
+                      "live_final_runtime_rows_failed",
+                      {
+                          "ordinal": row["ordinal"],
+                          "class": row["class"],
+                          "reason_codes": row["reason_codes"],
+                          "status": row["status"],
+                          "terminal_status": row["terminal_status"],
+                      },
+                  )
                   raise SystemExit(f"final runtime row failed: {row['ordinal']} {row['class']}")
-          evidence = {
-              "schema_version": "knowledge-engine-m26-pa7-final-live-runtime-rows/v1",
-              "status": "live_final_runtime_rows_passed_awaiting_owner_browser_e2e",
-              "head_sha": os.environ["GITHUB_SHA"],
-              "final_web_formal_manifest_self_sha256": load_json(
-                  root / "pilot/m26/m26-pa-7-final-web-formal-test-manifest.json"
-              )["self_sha256"],
-              "row_count": len(rows),
-              "rows": rows,
-              "browser_owner_e2e_pending": True,
-              "public_traffic_operations": 0,
-              "non_owner_provider_calls": 0,
-          }
-          out = Path(os.environ["WORK_DIR"]) / "evidence/final-live-runtime-rows.json"
-          out.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+          write_runtime_rows("live_final_runtime_rows_passed_awaiting_owner_browser_e2e")
           PY
 
       - name: Write bounded deployment seal
