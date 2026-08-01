@@ -1,6 +1,7 @@
 name: M26.PA.7 Owner Access and Full Graph Repair
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - ".github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml"
