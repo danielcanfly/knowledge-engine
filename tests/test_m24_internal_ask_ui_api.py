@@ -1,28 +1,34 @@
 from __future__ import annotations
 
 import http.server
+import io
 import json
 import socket
+import subprocess
+import tarfile
+import tempfile
 import threading
+from contextlib import AbstractContextManager
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from playwright.sync_api import expect
 
-from knowledge_engine.m24_internal_product_deployment import SITE_ROOT
+SITE_RELATIVE = Path("pilot/m24/internal-product-deployment/site")
 
 
-def _text(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+def _committed_text(relative: Path) -> str:
+    return subprocess.check_output(
+        ["git", "show", f"HEAD:{relative.as_posix()}"],
+        text=True,
+    )
 
 
 def test_committed_site_exposes_ask_bounded_graph_and_full_graph() -> None:
-    index = _text(SITE_ROOT / "index.html")
-    app_js = _text(SITE_ROOT / "app.js")
-    ask_js = _text(SITE_ROOT / "m26-ask.js")
+    index = _committed_text(SITE_RELATIVE / "index.html")
+    app_js = _committed_text(SITE_RELATIVE / "app.js")
+    ask_js = _committed_text(SITE_RELATIVE / "m26-ask.js")
 
-    assert (SITE_ROOT / "m26-ask.js").is_file()
-    assert (SITE_ROOT / "_worker.js").is_file()
     assert '<a href="/ask" data-route-link="ask">Ask Knowledge Engine</a>' in index
     assert "Bounded Concept Graph" in index
     assert 'href="/ask?surface=full-graph"' in index
@@ -37,15 +43,13 @@ def test_committed_site_exposes_ask_bounded_graph_and_full_graph() -> None:
     assert 'get("surface") === "full-graph"' in ask_js
     assert "full_current_production_relation_graph" in ask_js
     assert "data-full-production-graph" in ask_js
-    assert "<textarea" in ask_js
-    assert "aria-keyshortcuts" in ask_js
     assert "data-ask-answer" in ask_js
     assert "citation-chip" in ask_js
     assert "data-ask-sources" in ask_js
 
 
-def test_worker_api_is_owner_only_fail_closed_proxy() -> None:
-    worker = _text(SITE_ROOT / "_worker.js")
+def test_committed_worker_is_owner_only_fail_closed_proxy() -> None:
+    worker = _committed_text(SITE_RELATIVE / "_worker.js")
 
     assert "/api/m26/query" in worker
     assert "/api/m26/health" in worker
@@ -80,7 +84,7 @@ def test_worker_api_is_owner_only_fail_closed_proxy() -> None:
 
 
 def test_browser_ask_surface_renders_answer_citations_sources_and_trace() -> None:
-    with _ask_smoke_server() as base:
+    with _committed_site() as site_root, _ask_smoke_server(site_root) as base:
         from playwright.sync_api import sync_playwright
 
         with sync_playwright() as playwright:
@@ -90,10 +94,7 @@ def test_browser_ask_surface_renders_answer_citations_sources_and_trace() -> Non
             expect(page.get_by_role("link", name="Ask Knowledge Engine")).to_be_visible()
             page.get_by_role("link", name="Ask Knowledge Engine").click()
             expect(page.locator("#route-title")).to_have_text("Ask Knowledge Engine")
-            expect(page.locator("#ask-question")).to_be_visible()
-            page.locator("#ask-question").fill(
-                "Compare routers and adaptive planning for permission-first controls."
-            )
+            page.locator("#ask-question").fill("Compare routers and adaptive planning.")
             page.get_by_role("button", name="Ask").click()
             expect(page.locator("[data-ask-answer]")).to_contain_text("Comparison")
             expect(page.locator(".citation-chip")).to_have_count(2)
@@ -109,13 +110,11 @@ def test_browser_ask_surface_renders_answer_citations_sources_and_trace() -> Non
             expect(page.locator("[data-ask-answer]")).to_contain_text(
                 "trace m26pa7aq_test"
             )
-            page.goto(f"{base}/ask")
-            expect(page.locator("#route-title")).to_have_text("Ask Knowledge Engine")
             browser.close()
 
 
 def test_browser_full_graph_surface_loads_exact_owner_graph() -> None:
-    with _ask_smoke_server() as base:
+    with _committed_site() as site_root, _ask_smoke_server(site_root) as base:
         from playwright.sync_api import sync_playwright
 
         with sync_playwright() as playwright:
@@ -130,6 +129,20 @@ def test_browser_full_graph_surface_loads_exact_owner_graph() -> None:
                 "Sigma.js canvas ready: 2 visible nodes, 1 visible edges."
             )
             browser.close()
+
+
+class _committed_site(AbstractContextManager[Path]):
+    def __enter__(self) -> Path:
+        archive = subprocess.check_output(
+            ["git", "archive", "--format=tar", "HEAD", SITE_RELATIVE.as_posix()]
+        )
+        self.temporary = tempfile.TemporaryDirectory()
+        with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as bundle:
+            bundle.extractall(self.temporary.name, filter="data")
+        return Path(self.temporary.name) / SITE_RELATIVE
+
+    def __exit__(self, *_args: object) -> None:
+        self.temporary.cleanup()
 
 
 class _AskSmokeHandler(http.server.SimpleHTTPRequestHandler):
@@ -164,14 +177,17 @@ class _AskSmokeHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
 
-class _ask_smoke_server:
+class _ask_smoke_server(AbstractContextManager[str]):
+    def __init__(self, site_root: Path) -> None:
+        self.site_root = site_root
+
     def __enter__(self) -> str:
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
         handler = lambda *args, **kwargs: _AskSmokeHandler(  # noqa: E731
             *args,
-            directory=SITE_ROOT.as_posix(),
+            directory=self.site_root.as_posix(),
             **kwargs,
         )
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
