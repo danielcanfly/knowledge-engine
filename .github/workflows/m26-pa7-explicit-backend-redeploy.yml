@@ -135,29 +135,49 @@ jobs:
           : "${KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH:?missing owner hash}"
           tmp_dir="$(mktemp -d)"
           trap 'rm -rf "$tmp_dir"' EXIT
-          curl --fail --silent \
+          health_code="$(curl --silent --show-error \
             -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
             -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
-            http://127.0.0.1:8080/api/m26/health > "$tmp_dir/health.json"
-          curl --fail --silent \
+            -o "$tmp_dir/health.json" \
+            -w '%{http_code}' \
+            http://127.0.0.1:8080/api/m26/health || true)"
+          graph_code="$(curl --silent --show-error \
             -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
             -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
-            http://127.0.0.1:8080/api/m26/graph > "$tmp_dir/graph.json"
-          python3 - "$tmp_dir/health.json" "$tmp_dir/graph.json" <<'PY'
+            -o "$tmp_dir/graph.json" \
+            -w '%{http_code}' \
+            http://127.0.0.1:8080/api/m26/graph || true)"
+          python3 - "$tmp_dir/health.json" "$tmp_dir/graph.json" "$health_code" "$graph_code" <<'PY'
           import json
           import os
           import sys
           from pathlib import Path
 
-          health = json.loads(Path(sys.argv[1]).read_text())
-          graph = json.loads(Path(sys.argv[2]).read_text())
+          def read_json(path):
+              try:
+                  return json.loads(Path(path).read_text())
+              except Exception:
+                  return {}
+
+          health = read_json(sys.argv[1])
+          graph = read_json(sys.argv[2])
+          health_code = sys.argv[3]
+          graph_code = sys.argv[4]
+          graph_reason = (
+              graph.get("detail", {}).get("reason_code")
+              if isinstance(graph.get("detail"), dict)
+              else graph.get("reason_code")
+          )
           evidence = {
               "schema_version": "knowledge-engine-m26-pa7-explicit-backend-redeploy-smoke/v1",
               "status": "pass",
               "deploy_sha": os.environ["EXPECTED_DEPLOY_SHA"],
+              "health_http_status": health_code,
               "health_status": health.get("status"),
               "health_build_sha": health.get("canonical_runtime", {}).get("build_sha"),
+              "graph_http_status": graph_code,
               "graph_status": graph.get("status"),
+              "graph_reason_code": graph_reason,
               "graph_scope": graph.get("graph_scope"),
               "graph_release_id": graph.get("release_id"),
               "graph_v2_sha256": graph.get("graph_v2_sha256"),
@@ -167,16 +187,21 @@ jobs:
               "raw_token_recorded": False,
               "raw_r2_endpoint_recorded": False,
           }
-          if evidence["health_build_sha"] != evidence["deploy_sha"]:
-              raise SystemExit(json.dumps({**evidence, "status": "fail_build_sha"}, sort_keys=True))
-          if evidence["node_count"] != 4222 or evidence["edge_count"] != 8525:
-              raise SystemExit(json.dumps({**evidence, "status": "fail_graph_count"}, sort_keys=True))
+          if evidence["health_http_status"] != "200":
+              evidence["status"] = "fail_health_http"
+          elif evidence["health_build_sha"] != evidence["deploy_sha"]:
+              evidence["status"] = "fail_build_sha"
+          elif evidence["graph_http_status"] != "200":
+              evidence["status"] = "fail_graph_http"
+          elif evidence["node_count"] != 4222 or evidence["edge_count"] != 8525:
+              evidence["status"] = "fail_graph_count"
           print(json.dumps(evidence, indent=2, sort_keys=True))
           PY
           REMOTE
 
       - name: Upload backend redeploy evidence
         id: upload
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: m26-pa7-explicit-backend-redeploy-${{ github.event.pull_request.head.sha || github.sha }}
@@ -185,6 +210,7 @@ jobs:
           retention-days: 30
 
       - name: Report backend redeploy evidence on PA7 issue
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
@@ -197,15 +223,19 @@ jobs:
           from pathlib import Path
 
           work = Path(os.environ['WORK_DIR']) / 'evidence'
-          smoke = json.loads((work / 'backend-owner-smoke.json').read_text())
+          smoke_path = work / 'backend-owner-smoke.json'
+          smoke = json.loads(smoke_path.read_text()) if smoke_path.exists() else {}
           body = "\n".join([
               "### M26.PA.7 explicit backend redeploy result",
               "",
-              f"- deploy SHA: `{smoke['deploy_sha']}`",
-              f"- health build SHA: `{smoke['health_build_sha']}`",
-              f"- graph: `{smoke['node_count']} nodes / {smoke['edge_count']} edges`",
-              f"- graph release: `{smoke['graph_release_id']}`",
-              f"- graph-v2 SHA: `{smoke['graph_v2_sha256']}`",
+              f"- deploy SHA: `{smoke.get('deploy_sha', os.environ.get('EXPECTED_DEPLOY_SHA', ''))}`",
+              f"- smoke status: `{smoke.get('status', 'missing')}`",
+              f"- health build SHA: `{smoke.get('health_build_sha')}`",
+              f"- graph HTTP status: `{smoke.get('graph_http_status')}`",
+              f"- graph reason code: `{smoke.get('graph_reason_code')}`",
+              f"- graph: `{smoke.get('node_count')} nodes / {smoke.get('edge_count')} edges`",
+              f"- graph release: `{smoke.get('graph_release_id')}`",
+              f"- graph-v2 SHA: `{smoke.get('graph_v2_sha256')}`",
               f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
               f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
               "- protected knowledge mutations: `0`",
@@ -215,3 +245,15 @@ jobs:
           (work / 'issue-comment.md').write_text(body, encoding='utf-8')
           PY
           gh issue comment 1268 --repo "$GITHUB_REPOSITORY" --body-file "$WORK_DIR/evidence/issue-comment.md"
+
+      - name: Fail if backend smoke failed
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          smoke = json.loads((Path(os.environ['WORK_DIR']) / 'evidence/backend-owner-smoke.json').read_text())
+          if smoke.get('status') != 'pass':
+              raise SystemExit(json.dumps(smoke, sort_keys=True))
+          PY
