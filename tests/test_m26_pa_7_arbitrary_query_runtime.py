@@ -141,6 +141,32 @@ class InvalidMultiEvidenceProvider:
         }
 
 
+class AbstainingProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.cost = Decimal("0")
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls += 1
+        self.cost += Decimal("0.00001")
+        return {
+            "text": json.dumps(
+                {
+                    "status": "abstain",
+                    "relation": "insufficient_basis",
+                    "selected_evidence_ids": [],
+                    "claims": [],
+                    "abstention_reason": "INSUFFICIENT_SUPPORT",
+                }
+            ),
+            "usage": {"input_tokens": 100, "output_tokens": 20},
+            "cost_usd": "0.00001",
+            "latency_ms": 5,
+            "response_id": f"abstain-{self.calls}",
+            "call_class": call_class,
+        }
+
+
 def _task(payload: dict[str, Any]) -> dict[str, Any]:
     message = payload["messages"][0]["content"]
     text = message[0]["text"] if isinstance(message, list) else message
@@ -321,6 +347,80 @@ def test_bounded_repair_converts_unsupported_provider_claim() -> None:
     assert response["provider_call_count"] == 2
     assert response["repair_attempted"] is True
     assert response["material_claim_support_verified"] is True
+
+
+def test_direct_repair_exhaustion_uses_deterministic_evidence_synthesis() -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="What should a router define for permission-first controls?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=InvalidMultiEvidenceProvider("one_source_comparison"),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["provider_call_count"] == 2
+    assert response["repair_attempted"] is True
+    assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
+    assert "M26-PA7-ME-021" in response["multi_evidence_verification"]["trigger_reason_codes"]
+    assert response["multi_evidence_verification"]["support_ref_count"] >= 2
+    assert len(response["citations"]) >= 2
+    assert response["unsupported_accepted_claims"] == 0
+
+
+@pytest.mark.parametrize(
+    ("question", "expected_intent", "required_citation_types", "minimum_support_refs"),
+    [
+        (
+            "How do routers and directed acyclic graphs complement each other "
+            "for permission-first execution?",
+            "complementary_synthesis",
+            {"passage"},
+            2,
+        ),
+        (
+            "Which provenance source supports router abstention controls?",
+            "provenance_source_trace",
+            {"passage", "provenance"},
+            2,
+        ),
+        (
+            "What changed between source records about request boundary and steering controls?",
+            "temporal_conflict",
+            {"temporal_record"},
+            2,
+        ),
+    ],
+)
+def test_answerable_provider_abstention_uses_deterministic_evidence_synthesis(
+    question: str,
+    expected_intent: str,
+    required_citation_types: set[str],
+    minimum_support_refs: int,
+) -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=AbstainingProvider(),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["intent_class"] == expected_intent
+    assert response["provider_call_count"] == 1
+    assert response["repair_attempted"] is False
+    assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
+    assert response["multi_evidence_verification"]["trigger_reason_codes"] == [
+        "INSUFFICIENT_SUPPORT"
+    ]
+    assert response["multi_evidence_verification"]["support_ref_count"] >= minimum_support_refs
+    assert required_citation_types.issubset(
+        {item["evidence_type"] for item in response["citations"]}
+    )
+    assert response["unsupported_accepted_claims"] == 0
 
 
 def test_cross_document_answer_requires_two_distinct_sources() -> None:
