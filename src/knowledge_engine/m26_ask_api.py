@@ -272,7 +272,11 @@ def build_owner_graph_dto(
             "current production graph counts do not match the accepted inventory",
         )
 
-    payload = {key: value for key, value in graph.items() if key not in {"nodes", "edges", "release_id"}}
+    payload = {
+        key: value
+        for key, value in graph.items()
+        if key not in {"nodes", "edges", "release_id"}
+    }
     payload.update(
         {
             "schema_version": WEB_GRAPH_SCHEMA,
@@ -401,7 +405,10 @@ def register_m26_ask_routes(
         except M26AskApiError as exc:
             raise _http_error(status.HTTP_503_SERVICE_UNAVAILABLE, exc.reason_code) from exc
         except Exception as exc:
-            raise _http_error(status.HTTP_503_SERVICE_UNAVAILABLE, "M26_ASK_RUNTIME_FAILED") from exc
+            raise _http_error(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "M26_ASK_RUNTIME_FAILED",
+            ) from exc
 
     return app
 
@@ -434,7 +441,11 @@ def _accepted_owner_graph_release() -> Any:
     )
 
 
-def _load_manifest_artifact_json(store: Any, manifest: Mapping[str, Any], kind: str) -> dict[str, Any]:
+def _load_manifest_artifact_json(
+    store: Any,
+    manifest: Mapping[str, Any],
+    kind: str,
+) -> dict[str, Any]:
     entry = _manifest_artifact(manifest, kind)
     key = str(entry.get("key", ""))
     data = store.get(key)
