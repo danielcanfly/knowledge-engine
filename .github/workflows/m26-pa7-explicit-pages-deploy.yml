@@ -5,6 +5,8 @@ on:
   pull_request:
     paths:
       - ".github/workflows/m26-pa7-explicit-pages-deploy.yml"
+      - "pilot/m24/internal-product-deployment/site/index.html"
+      - "pilot/m24/internal-product-deployment/site/m26-pa7-full-graph-guard.js"
 
 permissions:
   contents: read
@@ -27,8 +29,19 @@ jobs:
           git fetch origin "${{ github.base_ref }}" --depth=50
           git diff --name-only "origin/${{ github.base_ref }}...HEAD" | sort > changed-files.txt
           cat changed-files.txt
-          test "$(wc -l < changed-files.txt | tr -d ' ')" = "1"
-          grep -Fx ".github/workflows/m26-pa7-explicit-pages-deploy.yml" changed-files.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          expected = {
+              ".github/workflows/m26-pa7-explicit-pages-deploy.yml",
+              "pilot/m24/internal-product-deployment/site/index.html",
+              "pilot/m24/internal-product-deployment/site/m26-pa7-full-graph-guard.js",
+          }
+          actual = set(Path("changed-files.txt").read_text().splitlines())
+          extra = sorted(actual - expected)
+          missing = sorted(expected - actual)
+          if extra or missing:
+              raise SystemExit(f"bounded changed files failed extra={extra} missing={missing}")
+          PY
 
   deploy_pages:
     needs: verify
@@ -38,7 +51,6 @@ jobs:
       WORK_DIR: /tmp/m26-pa7-explicit-pages-deploy
       PAGES_PROJECT: llm-wiki-m24-internal
       SITE_DIR: pilot/m24/internal-product-deployment/site
-      EXACT_SITE_SHA: 7e01348fa68e599108c70528183be501f29c5c3e
       EXPECTED_BACKEND_SHA: 7e01348fa68e599108c70528183be501f29c5c3e
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
@@ -50,16 +62,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 7e01348fa68e599108c70528183be501f29c5c3e
           fetch-depth: 50
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Validate exact site deployment input
+      - name: Validate PR-head site deployment input
         run: |
           set -euo pipefail
           mkdir -p "$WORK_DIR/evidence"
-          test "$(git rev-parse HEAD)" = "$EXACT_SITE_SHA"
           export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -n "${CLOUDFLARE_API_TOKEN:-}"
@@ -70,16 +80,18 @@ jobs:
           node --check "$SITE_DIR/app.js"
           node --check "$SITE_DIR/m26-ask.js"
           node --check "$SITE_DIR/m26-title-guard.js"
-          grep -F '<script src="m26-ask.js"></script>' "$SITE_DIR/index.html"
-          grep -F 'm26-title-guard.js?v=pa7-title-cache-guard-20260801' "$SITE_DIR/index.html"
+          node --check "$SITE_DIR/m26-pa7-full-graph-guard.js"
+          grep -F 'm26-pa7-full-graph-guard.js?v=pa7-full-graph-dom-20260801-1017' "$SITE_DIR/index.html"
+          grep -F 'data-m26-pa7-full-graph-guard' "$SITE_DIR/m26-pa7-full-graph-guard.js"
+          grep -F 'data-full-production-graph' "$SITE_DIR/m26-pa7-full-graph-guard.js"
+          grep -F 'Sigma Full Knowledge Graph' "$SITE_DIR/m26-pa7-full-graph-guard.js"
           grep -F 'Cache-Control: no-store' "$SITE_DIR/_headers"
-          grep -F 'data-pa7-full-graph-title' "$SITE_DIR/m26-title-guard.js"
-          sha256sum "$SITE_DIR/_worker.js" "$SITE_DIR/index.html" "$SITE_DIR/m26-ask.js" "$SITE_DIR/m26-title-guard.js" "$SITE_DIR/_headers" > "$WORK_DIR/evidence/site-file-sha256s.txt"
-          printf '%s\n' "$EXACT_SITE_SHA" > "$WORK_DIR/evidence/exact-site-sha.txt"
+          git rev-parse HEAD > "$WORK_DIR/evidence/site-head-sha.txt"
           printf '%s\n' "$EXPECTED_BACKEND_SHA" > "$WORK_DIR/evidence/expected-backend-sha.txt"
-          printf '%s\n' "runner_smoked_quick_tunnel_public_origin_repair" > "$WORK_DIR/evidence/repair-mode.txt"
+          printf '%s\n' "uncached_full_graph_dom_guard_plus_runner_smoked_public_origin" > "$WORK_DIR/evidence/repair-mode.txt"
+          sha256sum "$SITE_DIR/_worker.js" "$SITE_DIR/index.html" "$SITE_DIR/m26-ask.js" "$SITE_DIR/m26-title-guard.js" "$SITE_DIR/m26-pa7-full-graph-guard.js" "$SITE_DIR/_headers" > "$WORK_DIR/evidence/site-file-sha256s.txt"
+
       - name: Start Oracle quick tunnel
-        id: tunnel
         run: |
           set -euo pipefail
           bash scripts/configure_oracle_ssh.sh
@@ -95,7 +107,6 @@ jobs:
           RUN_DIR="$DEPLOY_PATH/.pa7-public-origin"
           BIN_DIR="$RUN_DIR/bin"
           mkdir -p "$BIN_DIR"
-
           tmp="$(mktemp)"
           code="$(curl --silent --show-error -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" -o "$tmp" -w '%{http_code}' http://127.0.0.1:8080/api/m26/health || true)"
           python3 - "$tmp" "$code" <<'PY'
@@ -110,7 +121,6 @@ jobs:
               raise SystemExit(json.dumps({"status":"fail_local_health","http":sys.argv[2],"build_sha":build}, sort_keys=True))
           PY
           rm -f "$tmp"
-
           if command -v cloudflared >/dev/null 2>&1; then
             CF_BIN="$(command -v cloudflared)"
           elif [ -x "$BIN_DIR/cloudflared" ]; then
@@ -125,7 +135,6 @@ jobs:
             chmod 0755 "$BIN_DIR/cloudflared"
             CF_BIN="$BIN_DIR/cloudflared"
           fi
-
           if [ -f "$RUN_DIR/cloudflared.pid" ]; then
             old_pid="$(cat "$RUN_DIR/cloudflared.pid" || true)"
             if [ -n "$old_pid" ] && kill -0 "$old_pid" >/dev/null 2>&1; then kill "$old_pid" >/dev/null 2>&1 || true; sleep 2; fi
@@ -134,7 +143,6 @@ jobs:
           nohup "$CF_BIN" tunnel --url http://127.0.0.1:8080 --no-autoupdate --edge-ip-version auto > "$RUN_DIR/cloudflared.log" 2>&1 &
           tunnel_pid="$!"
           printf '%s' "$tunnel_pid" > "$RUN_DIR/cloudflared.pid"
-
           tunnel_url=""
           for _attempt in $(seq 1 90); do
             tunnel_url="$(grep -Eo 'https://[-A-Za-z0-9]+\.trycloudflare\.com' "$RUN_DIR/cloudflared.log" | tail -n 1 || true)"
@@ -146,11 +154,10 @@ jobs:
           import hashlib, json, re, sys
           from pathlib import Path
           url = sys.argv[1]
-          log_path = Path(sys.argv[2])
-          raw_log = "\n".join(log_path.read_text(errors="replace").splitlines()[-80:]) if log_path.exists() else ""
+          raw_log = "\n".join(Path(sys.argv[2]).read_text(errors="replace").splitlines()[-80:]) if Path(sys.argv[2]).exists() else ""
           sanitized_log = re.sub(r"https://[-A-Za-z0-9]+\.trycloudflare\.com", "<redacted_trycloudflare_url>", raw_log)
           evidence = {
-              "schema_version": "knowledge-engine-m26-pa7-quick-tunnel-bootstrap/v2",
+              "schema_version": "knowledge-engine-m26-pa7-quick-tunnel-bootstrap/v3",
               "status": "pass" if url else "fail_tunnel_url_missing",
               "tunnel_url_present": bool(url),
               "tunnel_url_sha256": hashlib.sha256(url.encode()).hexdigest() if url else None,
@@ -181,8 +188,8 @@ jobs:
           print(json.dumps(payload, indent=2, sort_keys=True))
           PY
           [ "$remote_status" -eq 0 ]
+
       - name: Smoke quick tunnel public backend health from runner
-        if: success()
         run: |
           set -euo pipefail
           bash scripts/configure_oracle_ssh.sh
@@ -228,7 +235,7 @@ jobs:
               payload = {}
           url = os.environ["BACKEND_URL"]
           evidence = {
-              "schema_version": "knowledge-engine-m26-pa7-public-backend-origin-runner-smoke/v1",
+              "schema_version": "knowledge-engine-m26-pa7-public-backend-origin-runner-smoke/v2",
               "status": "pass",
               "expected_backend_sha": os.environ["EXPECTED_BACKEND_SHA"],
               "public_health_http_status": sys.argv[2],
@@ -257,35 +264,35 @@ jobs:
           rm -f "$tmp"
           printf '%s' "$backend_token" > "$WORK_DIR/evidence/.backend-token-for-sync"
           printf '%s' "$backend_url" > "$WORK_DIR/evidence/.backend-url-for-sync"
+
       - name: Sync Pages backend token and tunnel URL secrets
-        if: success()
         run: |
           set -euo pipefail
           export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
           test -n "${CLOUDFLARE_API_TOKEN:-}"
-          test -s "$WORK_DIR/evidence/.backend-token-for-sync"
-          test -s "$WORK_DIR/evidence/.backend-url-for-sync"
           npx --yes wrangler@4.111.0 pages secret put M26_QUERY_BACKEND_TOKEN --project-name "$PAGES_PROJECT" < "$WORK_DIR/evidence/.backend-token-for-sync" > "$WORK_DIR/evidence/pages-backend-token-sync.log"
           npx --yes wrangler@4.111.0 pages secret put M26_QUERY_BACKEND_URL --project-name "$PAGES_PROJECT" < "$WORK_DIR/evidence/.backend-url-for-sync" > "$WORK_DIR/evidence/pages-backend-url-sync.log"
           rm -f "$WORK_DIR/evidence/.backend-token-for-sync" "$WORK_DIR/evidence/.backend-url-for-sync"
           grep -E 'Success|Uploaded|Created|Updated|secret' "$WORK_DIR/evidence/pages-backend-token-sync.log" > "$WORK_DIR/evidence/pages-backend-token-sync-summary.txt" || true
           grep -E 'Success|Uploaded|Created|Updated|secret' "$WORK_DIR/evidence/pages-backend-url-sync.log" > "$WORK_DIR/evidence/pages-backend-url-sync-summary.txt" || true
-      - name: Deploy exact 7e Pages site after tunnel URL/token resync
-        if: success()
+
+      - name: Deploy PR-head Pages site after guard and origin sync
         run: |
           set -euo pipefail
           export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
           npx --yes wrangler@4.111.0 pages deploy "$SITE_DIR" --project-name "$PAGES_PROJECT" --branch main --commit-dirty=true | tee "$WORK_DIR/evidence/pages-deploy.log"
           grep -E 'Uploaded|Success|deployment|https://' "$WORK_DIR/evidence/pages-deploy.log" > "$WORK_DIR/evidence/pages-deploy-summary.txt" || true
+
       - name: Upload explicit deploy evidence
         if: always()
         id: upload
         uses: actions/upload-artifact@v4
         with:
-          name: m26-pa7-explicit-pages-public-origin-repair-7e01348fa68e599108c70528183be501f29c5c3e
+          name: m26-pa7-explicit-pages-full-graph-guard-${{ github.sha }}
           path: /tmp/m26-pa7-explicit-pages-deploy/evidence
           if-no-files-found: error
           retention-days: 30
+
       - name: Report deploy evidence on PA7 issue
         if: always()
         env:
@@ -298,34 +305,55 @@ jobs:
           import json, os
           from pathlib import Path
           work = Path(os.environ["WORK_DIR"]) / "evidence"
-          public = json.loads((work / "backend-public-origin.json").read_text()) if (work / "backend-public-origin.json").exists() else {"status":"missing_backend_public_origin_evidence"}
-          tunnel = json.loads((work / "tunnel-bootstrap.json").read_text()) if (work / "tunnel-bootstrap.json").exists() else {"status":"missing_tunnel_bootstrap_evidence"}
+          public = json.loads((work / "backend-public-origin.json").read_text()) if (work / "backend-public-origin.json").exists() else {"status":"missing_public_origin_evidence"}
+          tunnel = json.loads((work / "tunnel-bootstrap.json").read_text()) if (work / "tunnel-bootstrap.json").exists() else {"status":"missing_tunnel_evidence"}
           token_summary = (work / "pages-backend-token-sync-summary.txt").read_text(errors="replace") if (work / "pages-backend-token-sync-summary.txt").exists() else ""
           url_summary = (work / "pages-backend-url-sync-summary.txt").read_text(errors="replace") if (work / "pages-backend-url-sync-summary.txt").exists() else ""
           deploy_summary = (work / "pages-deploy-summary.txt").read_text(errors="replace") if (work / "pages-deploy-summary.txt").exists() else ""
+          site_head = (work / "site-head-sha.txt").read_text().strip() if (work / "site-head-sha.txt").exists() else "unknown"
           body = "\n".join([
-              "### M26.PA.7 explicit Pages public backend origin repair result", "",
-              f"- exact site SHA: `{os.environ['EXACT_SITE_SHA']}`",
+              "### M26.PA.7 explicit Pages uncached Full Graph guard deploy result",
+              "",
+              f"- site head SHA: `{site_head}`",
               f"- expected backend SHA: `{os.environ['EXPECTED_BACKEND_SHA']}`",
               f"- tunnel bootstrap status: `{tunnel.get('status')}`",
               f"- public backend origin status: `{public.get('status')}`",
               f"- public health HTTP status: `{public.get('public_health_http_status')}`",
               f"- public health build SHA: `{public.get('public_health_build_sha')}`",
-              f"- selected backend URL SHA-256: `{public.get('selected_backend_url_sha256')}`",
-              f"- selected backend host SHA-256: `{public.get('selected_backend_host_sha256')}`",
+              "- uncached full graph guard included: `true`",
+              "- guard asset: `m26-pa7-full-graph-guard.js?v=pa7-full-graph-dom-20260801-1017`",
               f"- raw backend URL recorded: `{public.get('raw_backend_url_recorded')}`",
               f"- raw token recorded: `{public.get('raw_token_recorded')}`",
               f"- protected knowledge mutations: `{public.get('protected_knowledge_mutations')}`",
               f"- R2 writes: `{public.get('r2_write_operations')}`",
               f"- Qdrant writes: `{public.get('qdrant_write_operations')}`",
               f"- production pointer mutations: `{public.get('production_pointer_mutations')}`",
-              f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
-              f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}", "",
-              "Sanitized tunnel detail:", "", "```json", json.dumps(tunnel, indent=2, sort_keys=True)[-3000:], "```", "",
-              "Sanitized public health detail:", "", "```json", json.dumps(public, indent=2, sort_keys=True)[-3000:], "```", "",
-              "Sanitized token secret sync summary:", "", "```text", token_summary[-1500:], "```", "",
-              "Sanitized backend URL secret sync summary:", "", "```text", url_summary[-1500:], "```", "",
-              "Sanitized Pages deploy summary:", "", "```text", deploy_summary[-2500:], "```",
+              f"- artifact ID: `{os.environ.get('ARTIFACT_ID','')}`",
+              f"- artifact URL: {os.environ.get('ARTIFACT_URL','')}",
+              "",
+              "Sanitized public health detail:",
+              "",
+              "```json",
+              json.dumps(public, indent=2, sort_keys=True)[-5000:],
+              "```",
+              "",
+              "Sanitized token secret sync summary:",
+              "",
+              "```text",
+              token_summary[-1000:],
+              "```",
+              "",
+              "Sanitized backend URL secret sync summary:",
+              "",
+              "```text",
+              url_summary[-1000:],
+              "```",
+              "",
+              "Sanitized Pages deploy summary:",
+              "",
+              "```text",
+              deploy_summary[-2000:],
+              "```",
           ])
           (work / "issue-comment.md").write_text(body, encoding="utf-8")
           PY
