@@ -10,6 +10,7 @@ on:
       - "pilot/m24/internal-product-deployment/site/**"
       - "deploy/deploy.sh"
       - "schemas/m26-pa-7-final-web-*.schema.json"
+      - "scripts/m26_pa7_durable_backend_origin.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
       - "src/knowledge_engine/api.py"
       - "src/knowledge_engine/m26_ask_api.py"
@@ -29,6 +30,7 @@ on:
       - "pilot/m24/internal-product-deployment/site/**"
       - "deploy/deploy.sh"
       - "schemas/m26-pa-7-final-web-*.schema.json"
+      - "scripts/m26_pa7_durable_backend_origin.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
       - "src/knowledge_engine/api.py"
       - "src/knowledge_engine/m26_ask_api.py"
@@ -44,7 +46,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: m26-pa-7-final-web-product-readiness-${{ github.ref }}
+  group: m26-pa7-oracle-backend-production-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -106,6 +108,7 @@ jobs:
             src/knowledge_engine/api.py \
             src/knowledge_engine/m26_ask_api.py \
             src/knowledge_engine/m26_pa7_final_web_readiness.py \
+            scripts/m26_pa7_durable_backend_origin.py \
             scripts/m26_pa7_named_backend_tunnel.py \
             tests/test_m24_internal_ask_ui_api.py \
             tests/test_m26_pa7_ask_api.py \
@@ -114,6 +117,7 @@ jobs:
             src/knowledge_engine/api.py \
             src/knowledge_engine/m26_ask_api.py \
             src/knowledge_engine/m26_pa7_final_web_readiness.py \
+            scripts/m26_pa7_durable_backend_origin.py \
             scripts/m26_pa7_named_backend_tunnel.py \
             tests/test_m24_internal_ask_ui_api.py \
             tests/test_m26_pa7_ask_api.py \
@@ -132,7 +136,7 @@ jobs:
           git fetch --quiet --no-tags origin "${{ github.base_ref }}"
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat /tmp/changed.txt
-          ! grep -Ev '^(\.github/workflows/(m26-pa-7-final-web-product-readiness|m26-pa7-owner-access-and-full-graph-repair|m26-pa7-explicit-pages-deploy|m26-pa7-explicit-backend-redeploy|m26-pa-4-verified-answer-citation-gate|m26-1-architecture-authority)\.yml|Dockerfile|deploy/deploy\.sh|pilot/m26/m26-pa-7-final-web-formal-test-manifest\.json|pilot/m24/internal-product-deployment/site/(index\.html|app\.js|m26-ask\.js|_worker\.js|styles\.css|data/.*)|schemas/m26-pa-7-final-web-[a-z-]+-v1\.schema\.json|scripts/m26_pa7_named_backend_tunnel\.py|src/knowledge_engine/(api|m26_ask_api|m26_pa7_final_web_readiness)\.py|tests/test_(m24_internal_ask_ui_api|m26_pa7_ask_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/(m26-pa-7-final-web-product-readiness|m26-pa7-owner-access-and-full-graph-repair|m26-pa7-explicit-pages-deploy|m26-pa7-explicit-backend-redeploy|m26-pa-4-verified-answer-citation-gate|m26-1-architecture-authority)\.yml|Dockerfile|deploy/deploy\.sh|pilot/m26/m26-pa-7-final-web-formal-test-manifest\.json|pilot/m24/internal-product-deployment/site/(index\.html|app\.js|m26-ask\.js|_worker\.js|styles\.css|data/.*)|schemas/m26-pa-7-final-web-[a-z-]+-v1\.schema\.json|scripts/m26_pa7_(durable_backend_origin|named_backend_tunnel)\.py|src/knowledge_engine/(api|m26_ask_api|m26_pa7_final_web_readiness)\.py|tests/test_(m24_internal_ask_ui_api|m26_pa7_ask_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
           ! grep -E '^(production/|release/production|r2/|qdrant/|foundation/|credentials/|secrets/)' /tmp/changed.txt
 
   deploy_and_runtime_formal:
@@ -309,32 +313,72 @@ jobs:
           if test -z "${M26_QUERY_BACKEND_URL:-}"; then
             : "${M26_QUERY_BACKEND_TUNNEL_HOSTNAME:?missing backend tunnel hostname}"
             : "${M26_QUERY_BACKEND_TUNNEL_NAME:?missing backend tunnel name}"
-            python scripts/m26_pa7_named_backend_tunnel.py ensure \
+            if python scripts/m26_pa7_named_backend_tunnel.py ensure \
               --account-id "$CLOUDFLARE_ACCOUNT_ID" \
               --zone-name "$CLOUDFLARE_ZONE_NAME" \
               --hostname "$M26_QUERY_BACKEND_TUNNEL_HOSTNAME" \
               --tunnel-name "$M26_QUERY_BACKEND_TUNNEL_NAME" \
               --service http://127.0.0.1:8080 \
               --evidence-output "$WORK_DIR/evidence/backend-named-tunnel.json" \
-              --runtime-env-output "$WORK_DIR/backend-named-tunnel.env"
+              --runtime-env-output "$WORK_DIR/backend-named-tunnel.env" \
+              2> "$WORK_DIR/backend-named-tunnel.err"; then
+              backend_origin_env="$WORK_DIR/backend-named-tunnel.env"
+              backend_origin_mode="named_tunnel"
+            else
+              python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          evidence = {
+              "schema_version": "knowledge-engine-m26-pa7-named-backend-tunnel-unavailable/v1",
+              "raw_backend_origin_recorded": False,
+              "raw_error_recorded": False,
+              "status": "cloudflare_tunnel_api_unavailable_falling_back_to_oracle_https",
+          }
+          Path(os.environ["WORK_DIR"], "evidence/backend-named-tunnel-unavailable.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+              rm -f "$WORK_DIR/backend-named-tunnel.err"
+              python scripts/m26_pa7_durable_backend_origin.py oracle-https \
+                --hostname "$ORACLE_VM_HOST" \
+                --evidence-output "$WORK_DIR/evidence/backend-oracle-https-origin.json" \
+                --runtime-env-output "$WORK_DIR/backend-oracle-https-origin.env"
+              backend_origin_env="$WORK_DIR/backend-oracle-https-origin.env"
+              backend_origin_mode="oracle_https"
+            fi
             while IFS='=' read -r name value; do
               case "$name" in
-                M26_BACKEND_TUNNEL_ID|M26_BACKEND_TUNNEL_TOKEN|M26_QUERY_BACKEND_ORIGIN) ;;
+                M26_BACKEND_TUNNEL_ID|M26_BACKEND_TUNNEL_TOKEN|M26_ORACLE_BACKEND_TLS_HOSTNAME|M26_QUERY_BACKEND_ORIGIN) ;;
                 *) exit 1 ;;
               esac
               test -n "$value"
               echo "::add-mask::$value"
               printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
               export "$name=$value"
-            done < "$WORK_DIR/backend-named-tunnel.env"
-            rm -f "$WORK_DIR/backend-named-tunnel.env"
-            tunnel_state_dir="$ORACLE_VM_DEPLOY_PATH/.m26-pa7-final-web-tunnel"
-            printf '%s' "$M26_BACKEND_TUNNEL_TOKEN" > "$WORK_DIR/backend-tunnel-token"
-            ssh oracle-knowledge "mkdir -p '$tunnel_state_dir' && chmod 700 '$tunnel_state_dir'"
-            scp "$WORK_DIR/backend-tunnel-token" "oracle-knowledge:$tunnel_state_dir/token.next"
-            rm -f "$WORK_DIR/backend-tunnel-token"
-            ssh oracle-knowledge "set -euo pipefail; mv '$tunnel_state_dir/token.next' '$tunnel_state_dir/token'; chmod 600 '$tunnel_state_dir/token'; docker rm -f m26-pa7-backend-tunnel >/dev/null 2>&1 || true; docker run -d --restart unless-stopped --name m26-pa7-backend-tunnel --network host cloudflare/cloudflared:latest tunnel --no-autoupdate run --token \"\$(cat '$tunnel_state_dir/token')\" >/dev/null"
-            echo "M26_BACKEND_TUNNEL_DEPLOYED=true" >> "$GITHUB_ENV"
+            done < "$backend_origin_env"
+            rm -f "$backend_origin_env"
+            if test "$backend_origin_mode" = "named_tunnel"; then
+              tunnel_state_dir="$ORACLE_VM_DEPLOY_PATH/.m26-pa7-final-web-tunnel"
+              printf '%s' "$M26_BACKEND_TUNNEL_TOKEN" > "$WORK_DIR/backend-tunnel-token"
+              ssh oracle-knowledge "mkdir -p '$tunnel_state_dir' && chmod 700 '$tunnel_state_dir'"
+              scp "$WORK_DIR/backend-tunnel-token" "oracle-knowledge:$tunnel_state_dir/token.next"
+              rm -f "$WORK_DIR/backend-tunnel-token"
+              ssh oracle-knowledge "set -euo pipefail; mv '$tunnel_state_dir/token.next' '$tunnel_state_dir/token'; chmod 600 '$tunnel_state_dir/token'; docker rm -f m26-pa7-backend-tunnel >/dev/null 2>&1 || true; docker run -d --restart unless-stopped --name m26-pa7-backend-tunnel --network host cloudflare/cloudflared:latest tunnel --no-autoupdate run --token \"\$(cat '$tunnel_state_dir/token')\" >/dev/null"
+              echo "M26_BACKEND_TUNNEL_DEPLOYED=true" >> "$GITHUB_ENV"
+            else
+              caddy_dir="$ORACLE_VM_DEPLOY_PATH/.m26-pa7-final-web-https-origin"
+              printf '%s\n' \
+                "$M26_ORACLE_BACKEND_TLS_HOSTNAME {" \
+                "  reverse_proxy 127.0.0.1:8080" \
+                "}" \
+                > "$WORK_DIR/Caddyfile"
+              ssh oracle-knowledge "mkdir -p '$caddy_dir' && chmod 700 '$caddy_dir'"
+              scp "$WORK_DIR/Caddyfile" "oracle-knowledge:$caddy_dir/Caddyfile.next"
+              rm -f "$WORK_DIR/Caddyfile"
+              ssh oracle-knowledge "set -euo pipefail; mv '$caddy_dir/Caddyfile.next' '$caddy_dir/Caddyfile'; docker rm -f m26-pa7-backend-https-origin >/dev/null 2>&1 || true; docker run -d --restart unless-stopped --name m26-pa7-backend-https-origin --network host -v '$caddy_dir/Caddyfile:/etc/caddy/Caddyfile:ro' -v m26-pa7-caddy-data:/data -v m26-pa7-caddy-config:/config caddy:2-alpine >/dev/null"
+              echo "M26_BACKEND_HTTPS_PROXY_DEPLOYED=true" >> "$GITHUB_ENV"
+            fi
           else
             backend_origin="$M26_QUERY_BACKEND_URL"
             echo "::add-mask::$backend_origin"
@@ -717,6 +761,10 @@ jobs:
             echo "BACKEND_TUNNEL_PID_MISSING"
           fi
           REMOTE
+          fi
+          if test "${M26_BACKEND_HTTPS_PROXY_DEPLOYED:-false}" = "true"; then
+            ssh oracle-knowledge "docker rm -f m26-pa7-backend-https-origin >/dev/null 2>&1 || true" \
+              > "$WORK_DIR/evidence/backend-https-origin-rollback.log" 2>&1
           fi
           set -e
 
