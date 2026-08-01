@@ -1,0 +1,233 @@
+name: M26.PA.7 Inventory Observer
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-pa7-inventory-observer.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/m26-pa7-inventory-observer.yml"
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  static-observer:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 50
+          show-progress: false
+      - name: Verify exact one-file observer boundary
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git fetch --quiet --no-tags origin "${{ github.base_ref }}"
+          git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
+          printf '%s\n' '.github/workflows/m26-pa7-inventory-observer.yml' > /tmp/expected.txt
+          cmp /tmp/expected.txt /tmp/changed.txt
+          grep -F 'TARGET_HEAD_SHA: d5ed1ce388bfd028db9c82edc285d184d50b9412' "$GITHUB_WORKSPACE/.github/workflows/m26-pa7-inventory-observer.yml"
+          grep -F 'mutation_counts' "$GITHUB_WORKSPACE/.github/workflows/m26-pa7-inventory-observer.yml"
+
+  observe-existing-inventory:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_HEAD_SHA: d5ed1ce388bfd028db9c82edc285d184d50b9412
+      TARGET_WORKFLOW_NAME: M26.PA.7 Repair Result Report
+      TARGET_ARTIFACT_NAME: m26-pa7-repair-result-d5ed1ce388bfd028db9c82edc285d184d50b9412
+      TARGET_ISSUE: '1268'
+      OBSERVATION_MARKER: '<!-- m26-pa7-inventory-observation-v1 -->'
+    steps:
+      - name: Observe exact immutable run and report sanitized result
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import io
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          import zipfile
+          from typing import Any
+
+          repository = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GH_TOKEN"]
+          target_head = os.environ["TARGET_HEAD_SHA"]
+          workflow_name = os.environ["TARGET_WORKFLOW_NAME"]
+          artifact_name = os.environ["TARGET_ARTIFACT_NAME"]
+          issue = os.environ["TARGET_ISSUE"]
+          marker = os.environ["OBSERVATION_MARKER"]
+          api = "https://api.github.com"
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {token}",
+              "User-Agent": "knowledge-engine-m26-pa7-inventory-observer/1",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+
+          def request_json(path: str, *, method: str = "GET", body: Any = None) -> Any:
+              data = None
+              request_headers = dict(headers)
+              if body is not None:
+                  data = json.dumps(body).encode("utf-8")
+                  request_headers["Content-Type"] = "application/json"
+              request = urllib.request.Request(
+                  api + path,
+                  data=data,
+                  headers=request_headers,
+                  method=method,
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      payload = response.read()
+              except urllib.error.HTTPError as error:
+                  raise RuntimeError(f"GitHub API request failed with HTTP {error.code}") from None
+              return json.loads(payload.decode("utf-8")) if payload else {}
+
+          def request_bytes(path: str) -> bytes:
+              request = urllib.request.Request(api + path, headers=headers, method="GET")
+              try:
+                  with urllib.request.urlopen(request, timeout=90) as response:
+                      return response.read()
+              except urllib.error.HTTPError as error:
+                  raise RuntimeError(f"GitHub artifact request failed with HTTP {error.code}") from None
+
+          query = urllib.parse.urlencode(
+              {
+                  "head_sha": target_head,
+                  "event": "push",
+                  "per_page": 100,
+                  "exclude_pull_requests": "true",
+              }
+          )
+          run = None
+          candidates = []
+          for _ in range(90):
+              payload = request_json(f"/repos/{repository}/actions/runs?{query}")
+              candidates = [
+                  item
+                  for item in payload.get("workflow_runs", [])
+                  if item.get("name") == workflow_name
+                  and item.get("head_sha") == target_head
+                  and item.get("event") == "push"
+              ]
+              if len(candidates) == 1:
+                  run = candidates[0]
+                  if run.get("status") == "completed":
+                      break
+              elif len(candidates) > 1:
+                  raise RuntimeError("Exact PA7 inventory run was not unique")
+              time.sleep(5)
+          if run is None or run.get("status") != "completed":
+              raise RuntimeError("Exact PA7 inventory run did not complete in bound")
+
+          run_id = int(run["id"])
+          jobs_payload = request_json(f"/repos/{repository}/actions/runs/{run_id}/jobs?per_page=100")
+          job_summary = [
+              {
+                  "name": job.get("name"),
+                  "status": job.get("status"),
+                  "conclusion": job.get("conclusion"),
+              }
+              for job in jobs_payload.get("jobs", [])
+          ]
+          artifacts_payload = request_json(
+              f"/repos/{repository}/actions/runs/{run_id}/artifacts?per_page=100"
+          )
+          artifacts = [
+              item
+              for item in artifacts_payload.get("artifacts", [])
+              if item.get("name") == artifact_name and not item.get("expired", False)
+          ]
+
+          observation: dict[str, Any] = {
+              "schema_version": "knowledge-engine-m26-pa7-inventory-observation/v1",
+              "target_head_sha": target_head,
+              "run_id": run_id,
+              "run_attempt": int(run.get("run_attempt", 0)),
+              "status": run.get("status"),
+              "conclusion": run.get("conclusion"),
+              "jobs": job_summary,
+              "artifact": None,
+              "inventory": None,
+          }
+
+          if run.get("conclusion") == "success":
+              if len(artifacts) != 1:
+                  raise RuntimeError("Successful PA7 inventory run did not expose one exact artifact")
+              artifact = artifacts[0]
+              archive = request_bytes(
+                  f"/repos/{repository}/actions/artifacts/{int(artifact['id'])}/zip"
+              )
+              with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
+                  names = set(bundle.namelist())
+                  inventory_name = "full-graph-readonly-inventory.json"
+                  if inventory_name not in names:
+                      raise RuntimeError("PA7 inventory artifact is missing the canonical inventory")
+                  inventory = json.loads(bundle.read(inventory_name).decode("utf-8"))
+              expected_mutations = {
+                  "canonical_writes": 0,
+                  "production_pointer_writes": 0,
+                  "qdrant_writes": 0,
+                  "r2_writes": 0,
+              }
+              if inventory.get("mutation_counts") != expected_mutations:
+                  raise RuntimeError("PA7 inventory mutation boundary mismatch")
+              full_candidates = inventory.get("likely_full_graph_candidates", [])
+              qdrant = [
+                  {
+                      "name": item.get("name"),
+                      "points_count": item.get("points_count"),
+                      "indexed_vectors_count": item.get("indexed_vectors_count"),
+                      "status": item.get("status"),
+                  }
+                  for item in inventory.get("qdrant_collections", [])
+                  if isinstance(item, dict)
+              ]
+              observation["artifact"] = {
+                  "id": int(artifact["id"]),
+                  "name": artifact["name"],
+                  "digest": artifact.get("digest"),
+                  "size_in_bytes": int(artifact.get("size_in_bytes", 0)),
+                  "expires_at": artifact.get("expires_at"),
+              }
+              observation["inventory"] = {
+                  "status": inventory.get("status"),
+                  "repository_candidate_count": len(inventory.get("repository_candidates", [])),
+                  "r2_candidate_count": len(inventory.get("r2_candidates", [])),
+                  "likely_full_graph_candidate_count": len(full_candidates),
+                  "likely_full_graph_candidates": full_candidates[:10],
+                  "qdrant_collections": qdrant,
+                  "mutation_counts": inventory.get("mutation_counts"),
+              }
+
+          body = (
+              f"{marker}\n"
+              "## M26.PA.7 exact full-graph inventory observation\n\n"
+              "```json\n"
+              f"{json.dumps(observation, indent=2, sort_keys=True)}\n"
+              "```\n\n"
+              "This observer reads one immutable GitHub Actions run and artifact only. "
+              "It cannot rerun inventory or mutate R2, Qdrant, pointers, corpus, or indexes."
+          )
+          request_json(
+              f"/repos/{repository}/issues/{issue}/comments",
+              method="POST",
+              body={"body": body},
+          )
+          print("m26_pa7_inventory_observation=posted")
+          PY
