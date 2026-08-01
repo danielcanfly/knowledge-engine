@@ -124,10 +124,10 @@ def test_browser_full_graph_surface_loads_exact_owner_graph() -> None:
             page.goto(f"{base}/ask?surface=full-graph")
             expect(page.locator("#route-title")).to_have_text("Full Knowledge Graph")
             expect(page.locator("[data-full-production-graph]")).to_be_visible()
-            expect(page.get_by_text("release-full-graph-test", exact=True)).to_be_visible()
+            expect(page.locator("#release-id")).to_have_text("release-full-graph-test")
             expect(page.locator("[data-sigma-stage]")).to_be_visible()
             expect(page.locator("#app-status")).to_contain_text(
-                "Full production graph verified: 2 nodes, 1 edges."
+                "Sigma.js canvas ready: 2 visible nodes, 1 visible edges."
             )
             browser.close()
 
