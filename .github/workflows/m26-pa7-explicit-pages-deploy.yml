@@ -122,11 +122,13 @@ jobs:
             --data @"$WORK_DIR/evidence/purge-request.redacted.json" > "$WORK_DIR/evidence/purge-result.json"
           python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
-          p=Path('/tmp/m26-pa7-production-sync/evidence/purge-result.json')
+          evidence_dir = Path(os.environ["WORK_DIR"]) / "evidence"
+          p=evidence_dir / "purge-result.json"
           data=json.loads(p.read_text()) if p.exists() else {}
           summary={"success": data.get("success"), "errors_count": len(data.get("errors") or []), "messages_count": len(data.get("messages") or []), "raw_token_recorded": False}
-          Path('/tmp/m26-pa7-production-sync/evidence/purge-summary.json').write_text(json.dumps(summary, indent=2, sort_keys=True))
+          (evidence_dir / "purge-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True))
           PY
       - name: Upload production sync evidence
         id: upload

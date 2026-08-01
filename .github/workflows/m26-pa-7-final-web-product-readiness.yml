@@ -325,6 +325,47 @@ jobs:
           echo "::add-mask::$backend_origin"
           export M26_QUERY_BACKEND_ORIGIN="$backend_origin"
           printf 'M26_QUERY_BACKEND_ORIGIN=%s\n' "$backend_origin" >> "$GITHUB_ENV"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          origin = os.environ["M26_QUERY_BACKEND_ORIGIN"]
+          parsed = urlparse(origin)
+          hostname = (parsed.hostname or "").lower()
+          reason = ""
+          if parsed.scheme != "https":
+              reason = "backend_origin_must_use_https"
+          elif not hostname:
+              reason = "backend_origin_hostname_required"
+          elif parsed.username or parsed.password:
+              reason = "backend_origin_credentials_forbidden"
+          elif parsed.params or parsed.query or parsed.fragment or parsed.path not in ("", "/"):
+              reason = "backend_origin_must_be_origin_only"
+          elif hostname == "trycloudflare.com" or hostname.endswith(".trycloudflare.com"):
+              reason = "trycloudflare_quick_tunnel_forbidden"
+
+          evidence = {
+              "schema_version": "knowledge-engine-m26-pa7-durable-backend-origin-contract/v1",
+              "backend_origin_sha256": hashlib.sha256(origin.encode()).hexdigest(),
+              "backend_hostname_sha256": hashlib.sha256(hostname.encode()).hexdigest()
+              if hostname else None,
+              "hostname_present": bool(hostname),
+              "origin_class": "durable_https_origin_candidate" if not reason else "rejected",
+              "raw_backend_origin_recorded": False,
+              "reason_code": reason or None,
+              "scheme": parsed.scheme,
+              "status": "pass" if not reason else "fail",
+              "trycloudflare_rejected": hostname == "trycloudflare.com"
+              or hostname.endswith(".trycloudflare.com"),
+          }
+          out = Path(os.environ["WORK_DIR"]) / "evidence/backend-origin-contract.json"
+          out.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+          if reason:
+              raise SystemExit(reason)
+          PY
 
           tls_trust_profile="system_ca"
           retry_used="false"
