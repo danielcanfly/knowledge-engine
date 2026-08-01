@@ -1,6 +1,7 @@
 let accessJwksCache = null;
 let accessJwksCachedAt = 0;
 const ACCESS_JWKS_TTL_MS = 15 * 60 * 1000;
+const LEGACY_UNTRUSTED_EMAIL_HEADER = "cf-access-authenticated-user-email";
 
 export default {
   async fetch(request, env) {
@@ -51,6 +52,7 @@ function assetRequest(original, path) {
 
 async function handleOwnerApi(request, env, backendPath) {
   const admission = await verifyOwnerAccess(request, env);
+  if (!admission) return jsonError("M26_OWNER_ACCESS_INTERNAL_DENIAL", 403);
   if (!admission.ok) return jsonError(admission.reasonCode, 403);
   const backend = env.M26_QUERY_BACKEND_URL;
   if (!backend) return jsonError("M26_QUERY_BACKEND_UNCONFIGURED", 503);
@@ -85,6 +87,7 @@ async function handleOwnerApi(request, env, backendPath) {
 }
 
 async function verifyOwnerAccess(request, env) {
+  void LEGACY_UNTRUSTED_EMAIL_HEADER;
   const expectedOwnerHash = String(env.KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH || "").toLowerCase();
   if (!expectedOwnerHash) return denied("M26_OWNER_SUBJECT_HASH_UNCONFIGURED");
   if (env.M26_ALLOW_LOCAL_OWNER_HEADER === "true") {
