@@ -6,6 +6,10 @@ on:
     paths:
       - ".github/workflows/m26-pa7-explicit-pages-deploy.yml"
       - "pilot/m24/internal-product-deployment/site/**"
+      - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
+      - ".github/workflows/m26-pa7-query-smoke-only.yml"
+      - ".github/workflows/m26-pa7-oracle-deploy-probe.yml"
+      - "src/knowledge_engine/m24_product_surface_integration.py"
   push:
     branches: [main]
     paths:
@@ -47,6 +51,7 @@ jobs:
           grep -F 'STATIC_OWNER_EMAIL_SHA256_ALLOWLIST' pilot/m24/internal-product-deployment/site/_worker.js
           grep -F 'ownerEmailHashAllowlist' pilot/m24/internal-product-deployment/site/_worker.js
           grep -F 'Bounded Concept Graph' pilot/m24/internal-product-deployment/site/index.html
+          grep -F '<script src="m26-ask.js"></script>' pilot/m24/internal-product-deployment/site/index.html
           grep -F 'm26-title-guard.js?v=pa7-title-cache-guard-20260801' pilot/m24/internal-product-deployment/site/index.html
           grep -F 'Cache-Control: no-store' pilot/m24/internal-product-deployment/site/_headers
           grep -F 'FULL_GRAPH_TITLE' pilot/m24/internal-product-deployment/site/m26-ask.js
@@ -62,11 +67,15 @@ jobs:
           git fetch --quiet --no-tags origin "${{ github.base_ref }}"
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'EOF'
+          .github/workflows/m26-pa7-explicit-backend-redeploy.yml
           .github/workflows/m26-pa7-explicit-pages-deploy.yml
+          .github/workflows/m26-pa7-oracle-deploy-probe.yml
+          .github/workflows/m26-pa7-query-smoke-only.yml
           pilot/m24/internal-product-deployment/site/_headers
           pilot/m24/internal-product-deployment/site/index.html
           pilot/m24/internal-product-deployment/site/m26-ask.js
           pilot/m24/internal-product-deployment/site/m26-title-guard.js
+          src/knowledge_engine/m24_product_surface_integration.py
           EOF
           sed -i 's/^          //' /tmp/expected.txt
           cmp /tmp/expected.txt /tmp/changed.txt
@@ -127,6 +136,7 @@ jobs:
           grep -F 'STATIC_OWNER_EMAIL_SHA256_ALLOWLIST' "$SITE_DIR/_worker.js"
           grep -F 'ownerEmailHashAllowlist' "$SITE_DIR/_worker.js"
           grep -F 'Bounded Concept Graph' "$SITE_DIR/index.html"
+          grep -F '<script src="m26-ask.js"></script>' "$SITE_DIR/index.html"
           grep -F 'm26-title-guard.js?v=pa7-title-cache-guard-20260801' "$SITE_DIR/index.html"
           grep -F 'Cache-Control: no-store' "$SITE_DIR/_headers"
           grep -F 'FULL_GRAPH_TITLE' "$SITE_DIR/m26-ask.js"
