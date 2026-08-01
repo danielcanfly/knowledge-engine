@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
       - ".github/workflows/m26-pa7-query-smoke-only.yml"
+      - ".github/workflows/m26-pa7-oracle-deploy-probe.yml"
       - "src/knowledge_engine/m24_product_surface_integration.py"
       - "src/knowledge_engine/m26_ask_api.py"
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
@@ -73,6 +74,7 @@ jobs:
           cat > /tmp/expected.txt <<'EOF'
           .github/workflows/m26-pa7-explicit-backend-redeploy.yml
           .github/workflows/m26-pa7-explicit-pages-deploy.yml
+          .github/workflows/m26-pa7-oracle-deploy-probe.yml
           .github/workflows/m26-pa7-query-smoke-only.yml
           pilot/m24/internal-product-deployment/site/_headers
           pilot/m24/internal-product-deployment/site/index.html
