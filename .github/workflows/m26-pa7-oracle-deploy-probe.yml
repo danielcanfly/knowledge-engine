@@ -53,10 +53,27 @@ jobs:
           import os
           import subprocess
           from pathlib import Path
+          import re
           current_sha = os.popen('git rev-parse HEAD 2>/dev/null').read().strip()
           compose_ps = os.popen('docker compose ps --format json 2>/dev/null').read().strip()
           processes = os.popen("ps -eo pid,ppid,etime,comm,args | grep -E 'docker|git|deploy|compose' | grep -v grep | tail -20 || true").read()[-4000:]
           health = os.popen('curl --silent --output /dev/null --write-out "%{http_code}" http://127.0.0.1:8080/v1/health || true').read().strip()
+          listeners = os.popen("ss -H -ltnp '( sport = :80 or sport = :443 )' 2>/dev/null || true").read()
+          docker_rows = os.popen("docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}' 2>/dev/null || true").read()
+          listener_processes = sorted(set(re.findall(r'"([^"]+)"\\s*,pid=', listeners)))
+          docker_summary = []
+          for line in docker_rows.splitlines():
+              parts = line.split('|', 3)
+              if len(parts) != 4:
+                  continue
+              name, image, status, ports = parts
+              docker_summary.append({
+                  'name': name,
+                  'image': image,
+                  'status_prefix': status.split(',', 1)[0],
+                  'ports_sha256': __import__('hashlib').sha256(ports.encode()).hexdigest(),
+                  'mentions_80_or_443': any(token in ports for token in (':80', ':443', '->80', '->443')),
+              })
           print(json.dumps({
               'schema_version': 'knowledge-engine-m26-pa7-oracle-deploy-probe/v1',
               'expected_head_sha': os.environ.get('EXPECTED_HEAD_SHA'),
@@ -64,6 +81,11 @@ jobs:
               'repo_head_matches_expected': current_sha == os.environ.get('EXPECTED_HEAD_SHA'),
               'health_http_status': health,
               'compose_ps_present': bool(compose_ps),
+              'port_80_or_443_listener_present': bool(listeners.strip()),
+              'port_listener_process_names': listener_processes,
+              'port_listener_raw_recorded': False,
+              'docker_container_summary': docker_summary,
+              'docker_raw_ports_recorded': False,
               'recent_processes_present': bool(processes.strip()),
               'recent_processes_sha256': __import__('hashlib').sha256(processes.encode()).hexdigest(),
               'protected_knowledge_mutations': 0,
@@ -104,11 +126,16 @@ jobs:
               f"- repo head matches expected: `{probe.get('repo_head_matches_expected')}`",
               f"- health HTTP status: `{probe.get('health_http_status')}`",
               f"- compose ps present: `{probe.get('compose_ps_present')}`",
+              f"- port 80/443 listener present: `{probe.get('port_80_or_443_listener_present')}`",
+              f"- port listener process names: `{probe.get('port_listener_process_names')}`",
+              f"- docker containers observed: `{len(probe.get('docker_container_summary') or [])}`",
               f"- recent deploy/docker processes present: `{probe.get('recent_processes_present')}`",
               f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
               f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
               "- protected knowledge mutations: `0`",
               "- raw token recorded: `false`",
+              "- raw port listener recorded: `false`",
+              "- raw Docker ports recorded: `false`",
           ])
           (work / 'issue-comment.md').write_text(body, encoding='utf-8')
           PY
