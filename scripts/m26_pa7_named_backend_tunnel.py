@@ -253,6 +253,7 @@ def ensure_named_backend_tunnel(
         "tunnel_token_recorded": False,
     }
     runtime = {
+        "M26_BACKEND_ORIGIN_CLASS": "named_cloudflare_tunnel_https_origin",
         "M26_BACKEND_TUNNEL_ID": tunnel_id,
         "M26_BACKEND_TUNNEL_TOKEN": token_value,
         "M26_QUERY_BACKEND_ORIGIN": origin,
