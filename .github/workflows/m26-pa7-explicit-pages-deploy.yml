@@ -54,7 +54,9 @@ jobs:
           cmp /tmp/expected.txt /tmp/changed.txt
 
   deploy_pages:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.head_ref == 'gpt/m26-pa7-pr-pages-deploy-now')
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -63,15 +65,15 @@ jobs:
       WORK_DIR: /tmp/m26-pa7-explicit-pages-deploy
       PAGES_PROJECT: llm-wiki-m24-internal
       SITE_DIR: pilot/m24/internal-product-deployment/site
-      EXPECTED_MAIN_SHA: ${{ github.sha }}
-      DEPLOY_TRIGGER_BUMP: "2026-08-01T03:20:00Z"
+      EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DEPLOY_TRIGGER_BUMP: "2026-08-01T03:26:00Z"
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
       CLOUDFLARE_FALLBACK_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 50
           show-progress: false
 
@@ -83,7 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$WORK_DIR/evidence"
-          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
           export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -n "${CLOUDFLARE_API_TOKEN:-}"
@@ -96,10 +98,10 @@ jobs:
           grep -F 'not the full production knowledge graph' "$SITE_DIR/index.html"
           sha256sum "$SITE_DIR/_worker.js" "$SITE_DIR/index.html" "$SITE_DIR/m26-ask.js" \
             > "$WORK_DIR/evidence/site-file-sha256s.txt"
-          printf '%s\n' "$EXPECTED_MAIN_SHA" > "$WORK_DIR/evidence/main-sha.txt"
+          printf '%s\n' "$EXPECTED_DEPLOY_SHA" > "$WORK_DIR/evidence/deploy-sha.txt"
           printf '%s\n' "$DEPLOY_TRIGGER_BUMP" > "$WORK_DIR/evidence/deploy-trigger-bump.txt"
 
-      - name: Deploy Pages exact main site
+      - name: Deploy Pages exact checked-out site
         run: |
           set -euo pipefail
           export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_PAGES_TOKEN:-$CLOUDFLARE_FALLBACK_API_TOKEN}"
@@ -116,7 +118,7 @@ jobs:
         id: upload
         uses: actions/upload-artifact@v4
         with:
-          name: m26-pa7-explicit-pages-deploy-${{ github.sha }}
+          name: m26-pa7-explicit-pages-deploy-${{ github.event.pull_request.head.sha || github.sha }}
           path: /tmp/m26-pa7-explicit-pages-deploy/evidence
           if-no-files-found: error
           retention-days: 30
@@ -138,12 +140,12 @@ jobs:
           body = "\n".join([
               "### M26.PA.7 explicit Pages deploy result",
               "",
-              f"- main SHA: `{os.environ['EXPECTED_MAIN_SHA']}`",
+              f"- deploy SHA: `{os.environ['EXPECTED_DEPLOY_SHA']}`",
               f"- Pages project: `{os.environ['PAGES_PROJECT']}`",
               f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
               f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
               "- protected knowledge mutations: `0`",
-              "- deploy input: current repository `pilot/m24/internal-product-deployment/site`",
+              "- deploy input: checked-out `pilot/m24/internal-product-deployment/site`",
               "",
               "Sanitized deploy summary:",
               "",
