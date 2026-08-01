@@ -213,9 +213,14 @@ def main() -> int:
         if int(row.get("node_count") or 0) >= 1000
         or int(row.get("edge_count") or 0) >= 1000
     ]
+    status = (
+        "full_graph_candidates_found"
+        if likely_full
+        else "full_graph_candidate_not_found"
+    )
     report = {
         "schema_version": SCHEMA,
-        "status": "full_graph_candidates_found" if likely_full else "full_graph_candidate_not_found",
+        "status": status,
         "repository_candidates": local,
         "r2": r2_meta,
         "r2_candidates": r2,
