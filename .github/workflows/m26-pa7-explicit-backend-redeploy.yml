@@ -1,0 +1,217 @@
+name: M26.PA.7 Explicit Backend Redeploy
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
+      - "src/knowledge_engine/m26_ask_api.py"
+      - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
+      - "src/knowledge_engine/api.py"
+      - "deploy/**"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: m26-pa7-explicit-backend-redeploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 50
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate backend redeploy boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          python -m py_compile src/knowledge_engine/m26_ask_api.py
+          test -f deploy/deploy.sh
+          test -f scripts/configure_oracle_ssh.sh
+          grep -F 'FULL_GRAPH_RELEASE_ID = "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"' src/knowledge_engine/m26_ask_api.py
+          grep -F 'M26_OWNER_GRAPH_DIRECT_LOAD_FAILED' src/knowledge_engine/m26_ask_api.py
+
+      - name: Enforce bounded changed files
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git fetch --quiet --no-tags origin "${{ github.base_ref }}"
+          git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
+          cat > /tmp/expected.txt <<'EOF'
+          .github/workflows/m26-pa7-explicit-backend-redeploy.yml
+          EOF
+          sed -i 's/^          //' /tmp/expected.txt
+          cmp /tmp/expected.txt /tmp/changed.txt
+
+  redeploy_backend:
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.head_ref == 'gpt/m26-pa7-observable-backend-redeploy')
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: m23-r3-diagnostic
+    env:
+      WORK_DIR: /tmp/m26-pa7-explicit-backend-redeploy
+      EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 50
+          show-progress: false
+
+      - name: Prepare evidence and SSH
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK_DIR/evidence"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+          printf '%s\n' "$EXPECTED_DEPLOY_SHA" > "$WORK_DIR/evidence/backend-deploy-sha.txt"
+
+      - name: Redeploy Oracle backend preserving server-side secrets
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          deploy_path = Path(os.environ['DEPLOY_PATH'])
+          release_sha = os.environ['RELEASE_SHA']
+          env_path = deploy_path / '.env'
+          if not env_path.exists():
+              raise SystemExit('missing .env')
+          lines = env_path.read_text(encoding='utf-8').splitlines()
+          output = []
+          seen = False
+          for line in lines:
+              if line.startswith('M26_QUERY_BUILD_SHA='):
+                  output.append(f'M26_QUERY_BUILD_SHA={release_sha}')
+                  seen = True
+              else:
+                  output.append(line)
+          if not seen:
+              output.append(f'M26_QUERY_BUILD_SHA={release_sha}')
+          tmp = env_path.with_suffix('.env.next')
+          tmp.write_text('\n'.join(output) + '\n', encoding='utf-8')
+          tmp.replace(env_path)
+          os.chmod(env_path, 0o600)
+          PY"
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" | tee "$WORK_DIR/evidence/backend-deploy.log"
+
+      - name: Smoke owner-only backend routes locally on Oracle
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/backend-owner-smoke.json"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a
+          . ./.env
+          set +a
+          : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
+          : "${KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH:?missing owner hash}"
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+          curl --fail --silent \
+            -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
+            -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
+            http://127.0.0.1:8080/api/m26/health > "$tmp_dir/health.json"
+          curl --fail --silent \
+            -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
+            -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
+            http://127.0.0.1:8080/api/m26/graph > "$tmp_dir/graph.json"
+          python3 - "$tmp_dir/health.json" "$tmp_dir/graph.json" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          health = json.loads(Path(sys.argv[1]).read_text())
+          graph = json.loads(Path(sys.argv[2]).read_text())
+          evidence = {
+              "schema_version": "knowledge-engine-m26-pa7-explicit-backend-redeploy-smoke/v1",
+              "status": "pass",
+              "deploy_sha": os.environ["EXPECTED_DEPLOY_SHA"],
+              "health_status": health.get("status"),
+              "health_build_sha": health.get("canonical_runtime", {}).get("build_sha"),
+              "graph_status": graph.get("status"),
+              "graph_scope": graph.get("graph_scope"),
+              "graph_release_id": graph.get("release_id"),
+              "graph_v2_sha256": graph.get("graph_v2_sha256"),
+              "node_count": len(graph.get("nodes", [])),
+              "edge_count": len(graph.get("edges", [])),
+              "protected_knowledge_mutations": 0,
+              "raw_token_recorded": False,
+              "raw_r2_endpoint_recorded": False,
+          }
+          if evidence["health_build_sha"] != evidence["deploy_sha"]:
+              raise SystemExit(json.dumps({**evidence, "status": "fail_build_sha"}, sort_keys=True))
+          if evidence["node_count"] != 4222 or evidence["edge_count"] != 8525:
+              raise SystemExit(json.dumps({**evidence, "status": "fail_graph_count"}, sort_keys=True))
+          print(json.dumps(evidence, indent=2, sort_keys=True))
+          PY
+          REMOTE
+
+      - name: Upload backend redeploy evidence
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-pa7-explicit-backend-redeploy-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/m26-pa7-explicit-backend-redeploy/evidence
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report backend redeploy evidence on PA7 issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          work = Path(os.environ['WORK_DIR']) / 'evidence'
+          smoke = json.loads((work / 'backend-owner-smoke.json').read_text())
+          body = "\n".join([
+              "### M26.PA.7 explicit backend redeploy result",
+              "",
+              f"- deploy SHA: `{smoke['deploy_sha']}`",
+              f"- health build SHA: `{smoke['health_build_sha']}`",
+              f"- graph: `{smoke['node_count']} nodes / {smoke['edge_count']} edges`",
+              f"- graph release: `{smoke['graph_release_id']}`",
+              f"- graph-v2 SHA: `{smoke['graph_v2_sha256']}`",
+              f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
+              f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
+              "- protected knowledge mutations: `0`",
+              "- raw token recorded: `false`",
+              "- raw R2 endpoint recorded: `false`",
+          ])
+          (work / 'issue-comment.md').write_text(body, encoding='utf-8')
+          PY
+          gh issue comment 1268 --repo "$GITHUB_REPOSITORY" --body-file "$WORK_DIR/evidence/issue-comment.md"
