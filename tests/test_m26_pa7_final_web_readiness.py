@@ -355,8 +355,21 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     ).read_text(encoding="utf-8")
 
     assert "deploy_and_runtime_formal" in workflow
+    assert "workflow_dispatch:" in workflow
+    assert (
+        "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')"
+        in workflow
+    )
     assert '"src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"' in workflow
     assert '"tests/test_m26_pa_7_arbitrary_query_runtime.py"' in workflow
+    assert '"scripts/m26_pa7_access_browser_session_contract.py"' in workflow
+    assert '"tests/test_m26_pa7_access_browser_session_contract.py"' in workflow
+    assert "scripts/m26_pa7_access_browser_session_contract.py inspect" in workflow
+    assert "access-browser-session-contract.json" in workflow
+    assert "Access browser-session contract summary" in workflow
+    assert "same_site_cookie_attribute" in workflow
+    assert "path_cookie_attribute" in workflow
+    assert "path_specific_overlap_counts" in workflow
     assert "src/knowledge_engine/m23_cloudflare_qdrant.py" in workflow
     assert "tests/test_m23_5_cloudflare_qdrant.py" in workflow
     assert "scripts/configure_oracle_ssh.sh" in workflow
@@ -450,6 +463,34 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "91a8a5567efa6bf941162aa806b3ba476aaddf7867640e53053b35fb225a5dae" in workflow
     assert "ca56c5b29918faf79046b1c1726c35d7715951a35445b2e63f56ea5a70b7af9c" in workflow
     assert "--insecure" not in workflow
+
+
+def test_access_redirect_repair_workflow_enforces_cookie_contract() -> None:
+    workflow = (
+        ROOT / ".github/workflows/m26-pa7-access-redirect-repair.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "workflow_dispatch:" in workflow
+    assert "repair_access_redirect_contract" in workflow
+    assert "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'" in workflow
+    assert "CLOUDFLARE_ACCESS_READ_TOKEN" in workflow
+    assert "CLOUDFLARE_ACCESS_WRITE_TOKEN" in workflow
+    assert "scripts/m26_pa7_access_browser_session_contract.py repair" in workflow
+    assert "access-browser-session-before.json" in workflow
+    assert "access-browser-session-repair.json" in workflow
+    assert "access-browser-session-after.json" in workflow
+    assert "scripts/m26_pa7_evidence_privacy_hygiene.py scan" in workflow
+    assert "raw domains/cookies/login URLs/tokens recorded:" in workflow
+    assert "\\`false\\`" in workflow
+    assert (
+        "jq -e '.status == \"pass\"' \"$WORK_DIR/evidence/access-browser-session-after.json\""
+        in workflow
+    )
+    assert "path_specific_overlap_counts" in workflow
+    assert "same_site_cookie_attribute" in workflow
+    assert "path_cookie_attribute" in workflow
+    assert "CF_Authorization" not in workflow
+    assert "cdn-cgi/access/login" not in workflow
 
 
 def test_public_denial_sanitizer_records_semantics_without_raw_headers() -> None:
