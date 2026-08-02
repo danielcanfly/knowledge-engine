@@ -30,7 +30,7 @@ permissions:
 
 concurrency:
   group: m26-owner-production-oracle
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   regression:
