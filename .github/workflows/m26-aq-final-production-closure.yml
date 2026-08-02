@@ -13,6 +13,9 @@ on:
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
       - "src/knowledge_engine/m26_production_answer_bundle.py"
       - "src/knowledge_engine/m26_ask_api.py"
+  push:
+    branches:
+      - "gpt/aq-final-closure-run"
   workflow_dispatch:
 
 permissions:
@@ -67,15 +70,17 @@ jobs:
 
   deploy_and_live_closure:
     if: >
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.number == 1325 &&
-      github.head_ref == 'codex/answer-quality-aq-runtime'
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.number == 1325 &&
+       github.head_ref == 'codex/answer-quality-aq-runtime') ||
+      (github.event_name == 'push' &&
+       github.ref == 'refs/heads/gpt/aq-final-closure-run')
     needs: regression
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: m23-r3-diagnostic
     env:
-      EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha }}
+      EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
@@ -83,7 +88,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 50
           show-progress: false
 
@@ -143,7 +148,7 @@ jobs:
       - name: Upload production closure evidence
         uses: actions/upload-artifact@v4
         with:
-          name: m26-aq-final-production-closure-${{ github.event.pull_request.head.sha }}
+          name: m26-aq-final-production-closure-${{ github.event.pull_request.head.sha || github.sha }}
           path: /tmp/m26-aq-final-live-closure.json
           if-no-files-found: error
           retention-days: 14
