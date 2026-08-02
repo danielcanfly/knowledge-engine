@@ -194,7 +194,7 @@ def install() -> None:
                 ["precedes", "ordering", "sequence", "navigation"],
                 [r"\b(?:ordering|sequence|navigation|comes before|precedes)\b"],
             )
-            if re.search(r"\b(?:prove|infer|depend|dependency|causal|cause)\b", q):
+            if re.search(r"\b(?:prove|infer|depend|depends|dependency|causal|cause)\b", q):
                 add(
                     "non_entailment",
                     "State that precedes alone does not prove stronger relations.",
