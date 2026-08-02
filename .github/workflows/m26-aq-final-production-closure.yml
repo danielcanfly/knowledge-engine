@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "Dockerfile"
+      - "pyproject.toml"
       - ".github/workflows/m26-aq-final-production-closure.yml"
       - "src/knowledge_engine/m26_pa7_semantic_closure_runtime.py"
       - "src/knowledge_engine/m26_production_api.py"
