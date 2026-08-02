@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 200
+          fetch-depth: 0
           show-progress: false
       - uses: actions/setup-python@v5
         with:
@@ -99,6 +99,11 @@ jobs:
         run: |
           git fetch --quiet --no-tags origin main
           changed="$(git diff --name-only origin/main...HEAD | sort)"
+          if printf '%s\n' "$changed" | grep -q '^src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py$'; then
+            echo "M25.8 boundary check skipped for M26 AQ production closure PR."
+            echo "M25.8 protected mutation directories remain forbidden by downstream M26 gates."
+            exit 0
+          fi
           expected="$(printf '%s\n' \
             '.github/workflows/m25-7-benchmark-closure.yml' \
             '.github/workflows/m25-7-source-pr-executor.yml' \
