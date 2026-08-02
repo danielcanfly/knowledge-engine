@@ -80,7 +80,11 @@ def normalize_legacy_aq_formal_fixture_provider_schema(
             return original(text)
         return original(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
 
-    monkeypatch.setattr(aq_runtime, "_parse_multi_provider_json", parse_with_legacy_envelope_upgrade)
+    monkeypatch.setattr(
+        aq_runtime,
+        "_parse_multi_provider_json",
+        parse_with_legacy_envelope_upgrade,
+    )
 
 
 def _upgrade_legacy_fixture_provider_value(value: dict[str, Any]) -> dict[str, Any] | None:
