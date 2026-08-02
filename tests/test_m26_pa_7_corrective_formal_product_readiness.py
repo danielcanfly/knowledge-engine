@@ -6,8 +6,10 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import pytest
 from jsonschema import Draft202012Validator
 
+import knowledge_engine.m26_pa7_arbitrary_query_runtime as runtime_module
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import LocalDenseProjectionChannel
 from knowledge_engine.m26_production_promotion_closure import (
     CORRECTIVE_FORMAL_TEST_CONTRACT_SELF_SHA256,
@@ -23,6 +25,7 @@ from knowledge_engine.m26_production_promotion_closure import (
     verify_self_digest,
 )
 from knowledge_engine.m26_verified_answer_citation_gate import canonical_sha256
+from tests.m26_answer_bundle_fixture import synthetic_full_production_answer_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
 PILOT = ROOT / "pilot" / "m26"
@@ -48,6 +51,15 @@ FORMAL_CLASSES = {
     "prompt_injection_privacy": 1,
     "provenance_source_trace": 1,
 }
+
+
+@pytest.fixture(autouse=True)
+def _full_production_answer_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        runtime_module,
+        "load_production_answer_bundle",
+        lambda store=None: synthetic_full_production_answer_bundle(),
+    )
 
 
 class ExactSpanProvider:
@@ -303,7 +315,7 @@ def test_corrective_formal_fixture_receipt_satisfies_a01_to_a34_evidence(tmp_pat
     assert all(row["unsupported_accepted_claims"] == 0 for row in rows)
     assert all(row["retrieval_channels"]["lexical"] for row in rows[:7])
     assert all(row["retrieval_channels"]["dense"] for row in rows[:7])
-    assert any(row["retrieval_channels"]["parent_expansion"] for row in rows[:7])
+    assert any(row["retrieval_channels"]["graph"] for row in rows[:7])
     assert any(row["graph_hops_used"] > 0 for row in rows)
     assert all(row["selected_evidence_count"] > 0 for row in rows[:6])
     assert rows[2]["intent_class"] == "cross_document_comparison"

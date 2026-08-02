@@ -1,0 +1,378 @@
+{
+  "citations": [
+    {
+      "citation_id": "claim_1_ref_1",
+      "claim_id": "claim_1",
+      "claim_role": "direct",
+      "concept_id": "article_6d48e0c9f6981f35750c",
+      "evidence_id": "m26pa7ev_de8299fce7330eccf664c702c2b43043",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "7c3a1273aa1eed26d12e0195bf4cd17eade830bb5422d75df287a71c2456c40f",
+      "locator_id": "m26pa7loc_5d8b342f695948ae267cf4d5e8c2cb17",
+      "provenance_record_sha256": "6d3e3d911077717fedba5f19f0d280503dd870261a15e6623c82b67db96ecb86",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "article_6d48e0c9f6981f35750c",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-6",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-6",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#article_6d48e0c9f6981f35750c",
+      "support_text_sha256": "6a6f2fc64bab234a72294f5190eb294535aa1b6e7ec7bb2ef3ba636e6a0e9d8c"
+    }
+  ],
+  "evidence_utilization_trace": {
+    "selected_evidence_count": 8,
+    "selected_evidence_used_fraction": 0.125,
+    "selected_gt_zero_used_zero_failure": false,
+    "unused_selected_evidence_count": 7,
+    "unused_selected_evidence_ids": [
+      "m26pa7ev_00009a35df5049a9f3a3c2124997597c",
+      "m26pa7ev_068e3157cdb4de078323c321db314bb3",
+      "m26pa7ev_17ff2b76a5e48fcb5f235eac2acb8a6b",
+      "m26pa7ev_51bedaf1dd1aa2263ea38e32b17dc7ac",
+      "m26pa7ev_7cb09a31312d04276ab54d40ee5f00a1",
+      "m26pa7ev_c802eacee6f662455ad0eb3ebff2b836",
+      "m26pa7ev_c8039c438c7175bb55adb56f7f8ebb86"
+    ],
+    "used_evidence_count": 1,
+    "used_evidence_ids": [
+      "m26pa7ev_de8299fce7330eccf664c702c2b43043"
+    ],
+    "used_evidence_type_counts": {
+      "passage": 1
+    },
+    "used_source_identities": [
+      "daniel_blog_en__from-rag-to-production-rag-part-6"
+    ]
+  },
+  "graph_v2": {
+    "artifact_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+    "edge_count": 8525,
+    "node_count": 4222,
+    "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+  },
+  "mutations": {
+    "answer_to_canonical_writes": 0,
+    "canonical_writes": 0,
+    "corpus_index_content_mutations": 0,
+    "production_pointer_mutations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0
+  },
+  "old_m24_concept_count": 20,
+  "old_m24_concept_ids": [
+    "concepts/agent-execution-paths",
+    "concepts/agent-planning-strategies",
+    "concepts/candidate-delivery-controls",
+    "concepts/canonical-run-authority",
+    "concepts/completion-gate",
+    "concepts/durable-thread-state",
+    "concepts/goal-drift",
+    "concepts/harness",
+    "concepts/harness-agent-loop",
+    "concepts/harness-verification",
+    "concepts/harnessability",
+    "concepts/headless-harness-service",
+    "concepts/item-turn-thread-protocol",
+    "concepts/request-boundary",
+    "concepts/six-dimensional-map-of-llm-agent-architectures",
+    "concepts/source-governance",
+    "concepts/steering-control-plane",
+    "concepts/stopping-policy",
+    "concepts/task-contract",
+    "concepts/tool-call-proposal"
+  ],
+  "outside_old20_cited_concepts": [
+    "article_6d48e0c9f6981f35750c"
+  ],
+  "outside_old20_cited_concepts_disjoint_from_old_m24": true,
+  "privacy": {
+    "full_provider_response_persisted": false,
+    "raw_evidence_persisted": false,
+    "raw_query_persisted": false,
+    "secret_values_persisted": false,
+    "vectors_persisted": false
+  },
+  "production_release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+  "query": "Explain outside old twenty production retrieval neighbour hydration.",
+  "retrieval_trace": [
+    {
+      "confidence": 1.0,
+      "edge_id": "edge_332748f2e8a48404668d",
+      "provenance_ref_sha256": "43f8a67a459f07f78f3a4db0af4bd9ed230499ea604f0ca1ef4330a10c57e9e9",
+      "relation_type": "precedes",
+      "source": "article_6d48e0c9f6981f35750c",
+      "target": "article_66e4a2dc1c430b14987d"
+    },
+    {
+      "confidence": 1.0,
+      "edge_id": "edge_ecac4f2d9de534b35736",
+      "provenance_ref_sha256": "43f8a67a459f07f78f3a4db0af4bd9ed230499ea604f0ca1ef4330a10c57e9e9",
+      "relation_type": "precedes",
+      "source": "article_697445898d7a940e39be",
+      "target": "article_9c0dcb80beb2068e1b50"
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-aq-outside-old20-semantic-crosswalk-proof/v1",
+  "selected_evidence_preview": [
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_66e4a2dc1c430b14987d",
+      "evidence_id": "m26pa7ev_17ff2b76a5e48fcb5f235eac2acb8a6b",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_db62d8ff4b238c9b6bf376a148314698",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 29.35,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_b66d39ac0b27435992a5",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-7",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-7",
+      "text_sha256": "67ffd3e67e701d4df9505ea791faedc16dc645b9efbc84054ff232e356fe4cb6"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_697445898d7a940e39be",
+      "evidence_id": "m26pa7ev_00009a35df5049a9f3a3c2124997597c",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_3f841299926943e82cf0ae76dcbe3ce6",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 27.85,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_87288cf4f59dfd26057e",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-11",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-11",
+      "text_sha256": "3610f9a5017fd4e80313fca959c48b26ba7b14a2c7bb06ad821892cccc555eac"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "graph_1hop",
+        "graph_2hop"
+      ],
+      "concept_id": "article_6d48e0c9f6981f35750c",
+      "evidence_id": "m26pa7ev_de8299fce7330eccf664c702c2b43043",
+      "evidence_text_role": "article_root_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_5d8b342f695948ae267cf4d5e8c2cb17",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_332748f2e8a48404668d",
+            "relation_type": "precedes",
+            "source": "article_6d48e0c9f6981f35750c",
+            "target": "article_66e4a2dc1c430b14987d"
+          },
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_332748f2e8a48404668d",
+            "relation_type": "precedes",
+            "source": "article_6d48e0c9f6981f35750c",
+            "target": "article_66e4a2dc1c430b14987d"
+          },
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_342bca7cd97b58c4af59",
+            "relation_type": "precedes",
+            "source": "article_579e739ddb1cb2705715",
+            "target": "article_6d48e0c9f6981f35750c"
+          }
+        ],
+        "graph_hop": 1,
+        "graph_relevance_scores": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "graph_seed_concepts": [
+          "article_579e739ddb1cb2705715",
+          "article_66e4a2dc1c430b14987d"
+        ],
+        "relation_types": [
+          "precedes"
+        ],
+        "rerank_score": 25.38,
+        "structural_relation_only": false
+      },
+      "section_granularity": "article_root",
+      "section_id": "article_6d48e0c9f6981f35750c",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-6",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-6",
+      "text_sha256": "6a6f2fc64bab234a72294f5190eb294535aa1b6e7ec7bb2ef3ba636e6a0e9d8c"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "graph_1hop",
+        "graph_2hop"
+      ],
+      "concept_id": "article_66e4a2dc1c430b14987d",
+      "evidence_id": "m26pa7ev_c8039c438c7175bb55adb56f7f8ebb86",
+      "evidence_text_role": "article_root_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_528a6f9a350324ed652ae63bf939a9dc",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_332748f2e8a48404668d",
+            "relation_type": "precedes",
+            "source": "article_6d48e0c9f6981f35750c",
+            "target": "article_66e4a2dc1c430b14987d"
+          },
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_1f776ec0966cd262d0c4",
+            "relation_type": "precedes",
+            "source": "article_66e4a2dc1c430b14987d",
+            "target": "article_6d430e058d1392e85678"
+          },
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_332748f2e8a48404668d",
+            "relation_type": "precedes",
+            "source": "article_6d48e0c9f6981f35750c",
+            "target": "article_66e4a2dc1c430b14987d"
+          }
+        ],
+        "graph_hop": 1,
+        "graph_relevance_scores": [
+          0.375,
+          0.375,
+          0.375
+        ],
+        "graph_seed_concepts": [
+          "article_6d430e058d1392e85678",
+          "article_6d48e0c9f6981f35750c"
+        ],
+        "relation_types": [
+          "precedes"
+        ],
+        "rerank_score": 24.743333,
+        "structural_relation_only": false
+      },
+      "section_granularity": "article_root",
+      "section_id": "article_66e4a2dc1c430b14987d",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-7",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-7",
+      "text_sha256": "75e890c28bcd5fd982a400463d4707b09368c1d553976977becc10df723924cc"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "graph_1hop",
+        "graph_2hop"
+      ],
+      "concept_id": "article_9c0dcb80beb2068e1b50",
+      "evidence_id": "m26pa7ev_51bedaf1dd1aa2263ea38e32b17dc7ac",
+      "evidence_text_role": "article_root_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_6f3756421476cbf57656ff70ffdd0fbd",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_ecac4f2d9de534b35736",
+            "relation_type": "precedes",
+            "source": "article_697445898d7a940e39be",
+            "target": "article_9c0dcb80beb2068e1b50"
+          },
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_ecac4f2d9de534b35736",
+            "relation_type": "precedes",
+            "source": "article_697445898d7a940e39be",
+            "target": "article_9c0dcb80beb2068e1b50"
+          },
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_ecac4f2d9de534b35736",
+            "relation_type": "precedes",
+            "source": "article_697445898d7a940e39be",
+            "target": "article_9c0dcb80beb2068e1b50"
+          }
+        ],
+        "graph_hop": 1,
+        "graph_relevance_scores": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "graph_seed_concepts": [
+          "article_697445898d7a940e39be"
+        ],
+        "relation_types": [
+          "precedes"
+        ],
+        "rerank_score": 23.14125,
+        "structural_relation_only": false
+      },
+      "section_granularity": "article_root",
+      "section_id": "article_9c0dcb80beb2068e1b50",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-appendix-a",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-appendix-a",
+      "text_sha256": "49f2178e12e3b1f634172ad1b091615e8f28cec0060376e365c4946da4876442"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_6d48e0c9f6981f35750c",
+      "evidence_id": "m26pa7ev_c802eacee6f662455ad0eb3ebff2b836",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_ff75d9ffa9fc3ccded49d7a97da6c177",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 20.683333,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_ef60cd9d71257b7b4923",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-6",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-6",
+      "text_sha256": "41e45f1f64abe1eb5b03c01df58091dec81942f35c50cb52dbfd1dfdcad2c58d"
+    }
+  ],
+  "selected_graph_derived_evidence_count": 4,
+  "status": "owner_only_cited_answer"
+}

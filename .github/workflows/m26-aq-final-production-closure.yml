@@ -1,0 +1,204 @@
+name: M26 AQ Final Production Closure
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - "pyproject.toml"
+      - ".github/workflows/m26-aq-final-production-closure.yml"
+      - "src/knowledge_engine/m26_pa7_semantic_closure_runtime.py"
+      - "src/knowledge_engine/m26_production_api.py"
+      - "src/knowledge_engine/m26_intent_compat.py"
+      - "scripts/m26_aq_final_closure.py"
+      - "pilot/m26/m26-aq-final-r3-questions.json"
+      - "tests/test_m26_aq_semantic_closure_runtime.py"
+      - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
+      - "src/knowledge_engine/m26_production_answer_bundle.py"
+      - "src/knowledge_engine/m26_ask_api.py"
+      - "tests/conftest.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-aq-final-production-closure-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose_current_runtime:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'gpt/aq-final-production-closure-isolated'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: m23-r3-diagnostic
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          show-progress: false
+      - name: Configure Oracle SSH
+        run: |
+          set -euo pipefail
+          bash scripts/configure_oracle_ssh.sh
+      - name: Diagnose current deployed retrieval path without exposing secrets
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "cd '$ORACLE_VM_DEPLOY_PATH' && set -a && . ./.env && set +a && PYTHONPATH=src python3 - <<'PY'
+          import os
+          import traceback
+          from pathlib import Path
+          from knowledge_engine.m26_production_promotion_closure import load_json
+          from knowledge_engine.m26_pa7_semantic_closure_runtime import run_owner_arbitrary_query
+
+          try:
+              result = run_owner_arbitrary_query(
+                  root=Path('.'),
+                  gate=load_json(Path('pilot/m26/m26-pa-7-resolved-production-gate.json')),
+                  question='What checksum proves the zxqv nonexistent quasar asparagus ledger?',
+                  owner_subject_hash=os.environ['KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH'],
+              )
+              print('DIAG_RESULT_STATUS=' + str(result.get('status', '')))
+              print('DIAG_RESULT_TERMINAL=' + str(result.get('terminal_status', '')))
+              print('DIAG_REASON_CODES=' + ','.join(str(x) for x in result.get('reason_codes', [])))
+          except Exception as exc:
+              print('DIAG_EXCEPTION_CLASS=' + type(exc).__name__)
+              print('DIAG_REASON_CODE=' + str(getattr(exc, 'reason_code', '')))
+              response = getattr(exc, 'response', None)
+              print('DIAG_HTTP_STATUS=' + str(getattr(response, 'status_code', '')))
+              traceback.print_exc(limit=8)
+              raise
+          PY"
+
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 50
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Compile semantic closure path
+        run: |
+          python -m py_compile \
+            src/knowledge_engine/m26_pa7_semantic_closure_runtime.py \
+            src/knowledge_engine/m26_production_api.py \
+            src/knowledge_engine/m26_intent_compat.py \
+            scripts/m26_aq_final_closure.py \
+            tests/test_m26_aq_semantic_closure_runtime.py
+
+      - name: Run full AQ regression population
+        run: |
+          set -euo pipefail
+          python -m pytest --showlocals \
+            tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_pa_7_arbitrary_query_runtime.py \
+            tests/test_m26_pa7_ask_api.py \
+            tests/test_m26_pa7_final_web_readiness.py \
+            tests/test_m26_pa_7_corrective_formal_product_readiness.py \
+            tests/test_m26_pa_7_production_promotion_closure.py \
+            tests/test_m26_pa_7_reconciliation.py \
+            tests/test_m26_aq_semantic_closure_runtime.py \
+            --junitxml=/tmp/m26-aq-regression.xml
+          python scripts/m26_aq_final_closure.py validate-junit \
+            --junit /tmp/m26-aq-regression.xml \
+            --minimum 82
+
+  deploy_and_live_closure:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'gpt/aq-final-production-closure-isolated'
+    needs: regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: m23-r3-diagnostic
+    env:
+      EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha }}
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 50
+          show-progress: false
+
+      - name: Verify exact-head and deployment credentials
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+
+      - name: Deploy exact repaired head to owner-only production
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          deploy_path = Path(os.environ['DEPLOY_PATH'])
+          release_sha = os.environ['RELEASE_SHA']
+          env_path = deploy_path / '.env'
+          if not env_path.exists():
+              raise SystemExit('missing server-side .env')
+          lines = env_path.read_text(encoding='utf-8').splitlines()
+          out = []
+          seen = False
+          for line in lines:
+              if line.startswith('M26_QUERY_BUILD_SHA='):
+                  out.append(f'M26_QUERY_BUILD_SHA={release_sha}')
+                  seen = True
+              else:
+                  out.append(line)
+          if not seen:
+              out.append(f'M26_QUERY_BUILD_SHA={release_sha}')
+          tmp = env_path.with_suffix('.env.next')
+          tmp.write_text('\n'.join(out) + '\n', encoding='utf-8')
+          tmp.replace(env_path)
+          os.chmod(env_path, 0o600)
+          PY"
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'"
+
+      - name: Run frozen real-provider R3 against deployed exact head
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "cd '$ORACLE_VM_DEPLOY_PATH' && set -a && . ./.env && set +a && PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
+            --questions pilot/m26/m26-aq-final-r3-questions.json \
+            --output /tmp/m26-aq-final-live-closure.json \
+            --expected-sha '$EXPECTED_DEPLOY_SHA'"
+          scp oracle-knowledge:/tmp/m26-aq-final-live-closure.json /tmp/m26-aq-final-live-closure.json
+          PYTHONPATH=src python scripts/m26_aq_final_closure.py validate \
+            --input /tmp/m26-aq-final-live-closure.json \
+            --gate pilot/m26/m26-pa-7-resolved-production-gate.json \
+            --expected-sha "$EXPECTED_DEPLOY_SHA"
+
+      - name: Upload production closure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-aq-final-production-closure-${{ github.event.pull_request.head.sha }}
+          path: /tmp/m26-aq-final-live-closure.json
+          if-no-files-found: warn
+          retention-days: 14

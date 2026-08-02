@@ -1,0 +1,61 @@
+name: M26 AQ Container Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-aq-container-diagnostic.yml"
+      - "src/knowledge_engine/m26_pa7_semantic_closure_runtime.py"
+      - "src/knowledge_engine/m26_production_api.py"
+      - "src/knowledge_engine/m26_intent_compat.py"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: github.head_ref == 'gpt/aq-final-production-closure-isolated'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: m23-r3-diagnostic
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          show-progress: false
+      - name: Configure Oracle SSH
+        run: bash scripts/configure_oracle_ssh.sh
+      - name: Execute diagnostic inside production container
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "cd '$ORACLE_VM_DEPLOY_PATH' && docker compose exec -T knowledge-engine python - <<'PY'
+          import os
+          import traceback
+          from pathlib import Path
+          from knowledge_engine.m26_production_promotion_closure import load_json
+          from knowledge_engine.m26_pa7_semantic_closure_runtime import run_owner_arbitrary_query
+
+          try:
+              result = run_owner_arbitrary_query(
+                  root=Path('/app'),
+                  gate=load_json(Path('/app/pilot/m26/m26-pa-7-resolved-production-gate.json')),
+                  question='What checksum proves the zxqv nonexistent quasar asparagus ledger?',
+                  owner_subject_hash=os.environ['KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH'],
+              )
+              print('DIAG_RESULT_STATUS=' + str(result.get('status', '')))
+              print('DIAG_RESULT_TERMINAL=' + str(result.get('terminal_status', '')))
+              print('DIAG_REASON_CODES=' + ','.join(str(x) for x in result.get('reason_codes', [])))
+          except Exception as exc:
+              print('DIAG_EXCEPTION_CLASS=' + type(exc).__name__)
+              print('DIAG_REASON_CODE=' + str(getattr(exc, 'reason_code', '')))
+              response = getattr(exc, 'response', None)
+              print('DIAG_HTTP_STATUS=' + str(getattr(response, 'status_code', '')))
+              traceback.print_exc(limit=12)
+              raise
+          PY"

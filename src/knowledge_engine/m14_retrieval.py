@@ -10,6 +10,7 @@ AUDIENCE_RANK = {"public": 0, "internal": 1, "confidential": 2, "restricted": 3}
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u3400-\u9fff]+")
 SEMANTIC_SCHEMA = "knowledge-engine-semantic-index/v1"
 RELATION_GRAPH_SCHEMA = "knowledge-os-graph/v2"
+PRODUCTION_RELATION_GRAPH_SCHEMA = "knowledge-engine-graph-v2/v1"
 MAX_RELATION_NEIGHBORS_PER_SEED = 20
 RENDERER_FIELDS = {
     "color",
@@ -21,6 +22,7 @@ RENDERER_FIELDS = {
     "x",
     "y",
 }
+_RELATION_GRAPH_VALIDATION_CACHE: dict[tuple[int, int | None, str | None], dict[str, Any]] = {}
 
 
 def _tokens(value: str) -> list[str]:
@@ -148,9 +150,22 @@ def validate_relation_graph_v2(
     compatibility_graph: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validate the renderer-neutral typed graph before Runtime activation."""
-    if graph.get("schema_version") != RELATION_GRAPH_SCHEMA:
+    cache_key = (
+        id(graph),
+        id(compatibility_graph) if compatibility_graph is not None else None,
+        expected_release_id,
+    )
+    cached = _RELATION_GRAPH_VALIDATION_CACHE.get(cache_key)
+    if cached is not None:
+        return {
+            **cached,
+            "node_audiences": dict(cached["node_audiences"]),
+            "relation_types": list(cached["relation_types"]),
+        }
+    schema_version = graph.get("schema_version")
+    if schema_version not in {RELATION_GRAPH_SCHEMA, PRODUCTION_RELATION_GRAPH_SCHEMA}:
         raise IntegrityError("graph v2 schema is incompatible")
-    if graph.get("renderer_neutral") is not True:
+    if schema_version == RELATION_GRAPH_SCHEMA and graph.get("renderer_neutral") is not True:
         raise IntegrityError("graph v2 must be renderer neutral")
     release = graph.get("release")
     if not isinstance(release, dict):
@@ -234,10 +249,16 @@ def validate_relation_graph_v2(
             raise IntegrityError(f"graph v2 edge confidence is invalid: {edge_id}")
         edge_ids.add(edge_id)
         relation_types.add(relation_type)
-    return {
+    result = {
         "node_audiences": node_audiences,
         "edge_count": len(edge_ids),
         "relation_types": sorted(relation_types),
+    }
+    _RELATION_GRAPH_VALIDATION_CACHE[cache_key] = result
+    return {
+        **result,
+        "node_audiences": dict(result["node_audiences"]),
+        "relation_types": list(result["relation_types"]),
     }
 
 

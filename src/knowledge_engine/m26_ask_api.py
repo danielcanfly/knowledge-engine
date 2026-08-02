@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import time
 from collections.abc import Mapping
-from datetime import UTC, datetime
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import uvicorn
@@ -23,11 +20,20 @@ from .m26_pa7_arbitrary_query_runtime import (
     ProviderClient,
     run_owner_arbitrary_query,
 )
+from .m26_production_answer_bundle import (
+    FULL_PRODUCTION_EDGE_COUNT,
+    FULL_PRODUCTION_GRAPH_V2_SHA256,
+    FULL_PRODUCTION_MANIFEST_KEY,
+    FULL_PRODUCTION_NODE_COUNT,
+    FULL_PRODUCTION_POINTER_SHA256,
+    FULL_PRODUCTION_RELEASE_ID,
+    load_production_answer_bundle,
+)
 from .m26_production_promotion_closure import load_json
 from .m26_retrieval_envelope import sha256_value
 from .m26_verified_answer_citation_gate import canonical_sha256
 from .runtime import Runtime
-from .storage import create_object_store, sha256_bytes
+from .storage import create_object_store
 
 WEB_RESPONSE_SCHEMA = "knowledge-engine-m26-pa7-ask-web-response/v1"
 WEB_HEALTH_SCHEMA = "knowledge-engine-m26-pa7-ask-web-health/v1"
@@ -44,22 +50,18 @@ RATE_WINDOW_MAX_REQUESTS = 12
 MAX_OWNER_GRAPH_NODES = 50_000
 MAX_OWNER_GRAPH_EDGES = 100_000
 
-FULL_GRAPH_RELEASE_ID = "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+FULL_GRAPH_RELEASE_ID = FULL_PRODUCTION_RELEASE_ID
 FULL_GRAPH_MANIFEST_SHA256 = ""
-FULL_GRAPH_V2_SHA256 = (
-    "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869"
-)
-FULL_GRAPH_POINTER_SHA256 = (
-    "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9"
-)
-FULL_GRAPH_NODE_COUNT = 4222
-FULL_GRAPH_EDGE_COUNT = 8525
+FULL_GRAPH_V2_SHA256 = FULL_PRODUCTION_GRAPH_V2_SHA256
+FULL_GRAPH_POINTER_SHA256 = FULL_PRODUCTION_POINTER_SHA256
+FULL_GRAPH_NODE_COUNT = FULL_PRODUCTION_NODE_COUNT
+FULL_GRAPH_EDGE_COUNT = FULL_PRODUCTION_EDGE_COUNT
 FULL_GRAPH_INVENTORY_RUN_ID = 30680636103
 FULL_GRAPH_INVENTORY_ARTIFACT_ID = 8812152272
 FULL_GRAPH_PA2_ACCEPTANCE_SELF_SHA256 = (
     "f6f597699390135b0bf7a8e31417c2e8e6f48af2dc2af4168eca1fd1e7f24f67"
 )
-FULL_GRAPH_MANIFEST_KEY = f"releases/{FULL_GRAPH_RELEASE_ID}/manifest.json"
+FULL_GRAPH_MANIFEST_KEY = FULL_PRODUCTION_MANIFEST_KEY
 
 
 class M26AskApiError(ValueError):
@@ -411,83 +413,7 @@ def register_m26_ask_routes(
 
 @lru_cache(maxsize=1)
 def _accepted_owner_graph_release() -> Any:
-    settings = Settings.from_env()
-    store = create_object_store(settings)
-    manifest_data = store.get(FULL_GRAPH_MANIFEST_KEY)
-    manifest_sha256 = sha256_bytes(manifest_data)
-    manifest = _json_object(manifest_data, "accepted full graph manifest")
-    if manifest.get("release_id") != FULL_GRAPH_RELEASE_ID:
-        raise M26AskApiError(
-            "M26_OWNER_GRAPH_DIRECT_RELEASE_MISMATCH",
-            "accepted full graph release identity mismatch",
-        )
-    graph = _load_manifest_artifact_json(store, manifest, "graph")
-    graph_v2 = _load_manifest_artifact_json(store, manifest, "graph_v2")
-    return SimpleNamespace(
-        release_id=FULL_GRAPH_RELEASE_ID,
-        manifest_sha256=manifest_sha256,
-        loaded_at=datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        manifest=manifest,
-        graph=graph,
-        graph_v2=graph_v2,
-    )
-
-
-def _load_manifest_artifact_json(
-    store: Any,
-    manifest: Mapping[str, Any],
-    kind: str,
-) -> dict[str, Any]:
-    entry = _manifest_artifact(manifest, kind)
-    key = str(entry.get("key", ""))
-    data = store.get(key)
-    expected_bytes = entry.get("bytes")
-    if isinstance(expected_bytes, int) and len(data) != expected_bytes:
-        raise M26AskApiError(
-            "M26_OWNER_GRAPH_DIRECT_ARTIFACT_BYTES_MISMATCH",
-            f"accepted full graph {kind} byte count mismatch",
-        )
-    if sha256_bytes(data) != entry.get("sha256"):
-        raise M26AskApiError(
-            "M26_OWNER_GRAPH_DIRECT_ARTIFACT_SHA_MISMATCH",
-            f"accepted full graph {kind} hash mismatch",
-        )
-    return _json_object(data, f"accepted full graph {kind}")
-
-
-def _manifest_artifact(manifest: Mapping[str, Any], kind: str) -> Mapping[str, Any]:
-    artifacts = manifest.get("artifacts")
-    if not isinstance(artifacts, list):
-        raise M26AskApiError(
-            "M26_OWNER_GRAPH_DIRECT_MANIFEST_INVALID",
-            "accepted full graph manifest artifacts must be a list",
-        )
-    for artifact in artifacts:
-        if isinstance(artifact, Mapping) and artifact.get("kind") == kind:
-            key = artifact.get("key")
-            digest = artifact.get("sha256")
-            if isinstance(key, str) and isinstance(digest, str):
-                return artifact
-    raise M26AskApiError(
-        "M26_OWNER_GRAPH_DIRECT_ARTIFACT_MISSING",
-        f"accepted full graph manifest missing {kind}",
-    )
-
-
-def _json_object(data: bytes, label: str) -> dict[str, Any]:
-    try:
-        payload = json.loads(data)
-    except json.JSONDecodeError as exc:
-        raise M26AskApiError(
-            "M26_OWNER_GRAPH_DIRECT_JSON_INVALID",
-            f"{label} is invalid JSON",
-        ) from exc
-    if not isinstance(payload, dict):
-        raise M26AskApiError(
-            "M26_OWNER_GRAPH_DIRECT_JSON_INVALID",
-            f"{label} must be a JSON object",
-        )
-    return payload
+    return load_production_answer_bundle()
 
 
 def _authorize_backend_request(request: Request) -> str:
