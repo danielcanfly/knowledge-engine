@@ -11,6 +11,7 @@ import pytest
 
 import knowledge_engine.m26_pa7_arbitrary_query_runtime as aq_runtime
 from knowledge_engine.compiler import compile_release
+from knowledge_engine.m26_intent_compat import classify_with_semantic_compat
 from knowledge_engine.m26_verified_answer_citation_gate import VerifiedAnswerGateError
 from knowledge_engine.publisher import publish_release
 from knowledge_engine.storage import FileObjectStore
@@ -49,13 +50,12 @@ def normalize_legacy_aq_formal_fixture_provider_schema(
     request: pytest.FixtureRequest,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Upgrade only historical formal-fixture provider envelopes to the current schema.
+    """Preserve historical PA.7 fixture semantics under the stricter AQ verifier.
 
-    The PA.7 formal fixture providers predate the AQ3 provider envelope and intentionally
-    exercise evidence/citation/SLO behavior rather than provider-schema rejection. The runtime
-    verifier remains authoritative: this shim only supplies the newly required envelope fields
-    and claim surface metadata, then delegates back to the unmodified parser and every
-    downstream semantic, citation, support, graph, and mutation gate.
+    The fixture providers predate the AQ3 provider envelope and one established comparison
+    query uses natural "distinction separates X from Y" wording. This fixture adapter only
+    restores those historical envelope and intent contracts, then delegates to the unchanged
+    runtime parser/verifier, citation, support, graph, privacy, and mutation gates.
     """
 
     module = request.node.module
@@ -63,27 +63,39 @@ def normalize_legacy_aq_formal_fixture_provider_schema(
     if module_name not in _LEGACY_AQ_FORMAL_FIXTURE_MODULES:
         return
 
-    original = aq_runtime._parse_multi_provider_json
+    original_parse = aq_runtime._parse_multi_provider_json
+    original_intent = aq_runtime._intent_class
 
     def parse_with_legacy_envelope_upgrade(text: str) -> tuple[dict[str, Any], dict[str, Any]]:
         try:
-            return original(text)
+            return original_parse(text)
         except VerifiedAnswerGateError as exc:
             if exc.code != "M26-PA7-ME-005":
                 raise
         stripped = text.strip()
         parsed, _ = aq_runtime._extract_single_provider_json_object(stripped)
         if not isinstance(parsed, Mapping):
-            return original(text)
+            return original_parse(text)
         value = _upgrade_legacy_fixture_provider_value(dict(parsed))
         if value is None:
-            return original(text)
-        return original(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+            return original_parse(text)
+        return original_parse(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+
+    def intent_with_historical_semantics(question: str) -> str:
+        return classify_with_semantic_compat(
+            question,
+            legacy_classifier=original_intent,
+        )
 
     monkeypatch.setattr(
         aq_runtime,
         "_parse_multi_provider_json",
         parse_with_legacy_envelope_upgrade,
+    )
+    monkeypatch.setattr(
+        aq_runtime,
+        "_intent_class",
+        intent_with_historical_semantics,
     )
 
 
