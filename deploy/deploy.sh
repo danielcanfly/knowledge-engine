@@ -4,6 +4,14 @@ set -euo pipefail
 : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
 : "${RELEASE_SHA:?RELEASE_SHA is required}"
 
+# Production deployment is sometimes invoked from `ssh ... bash -s`. Isolate the
+# entire deploy subprocess from that caller's stdin so no Docker/BuildKit child
+# can consume the remaining remote acceptance program.
+if [[ "${KNOWLEDGE_ENGINE_DEPLOY_STDIN_ISOLATED:-0}" != "1" ]]; then
+  export KNOWLEDGE_ENGINE_DEPLOY_STDIN_ISOLATED=1
+  exec bash "$0" </dev/null
+fi
+
 DEPLOY_LOCK_FILE="${KNOWLEDGE_ENGINE_DEPLOY_LOCK_FILE:-/tmp/knowledge-engine-production-oracle.lock}"
 runtime_env=""
 
@@ -57,9 +65,7 @@ PY
   docker compose rm -f -s -v knowledge-engine >/dev/null 2>&1 || true
   docker compose config >/dev/null
 
-  # Never let the one-shot config probe inherit a caller's stdin. Production
-  # closure executes this script inside `ssh ... bash -s`; redirecting stdin
-  # prevents compose from consuming the remaining remote acceptance program.
+  # Keep the one-shot probe non-interactive as an additional local safeguard.
   docker compose run --rm --no-deps knowledge-engine \
     python -c 'from knowledge_engine.config import Settings; Settings.from_env(); print("CONFIG_OK")' \
     </dev/null
