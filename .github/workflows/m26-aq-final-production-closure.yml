@@ -25,8 +25,6 @@ on:
 permissions:
   contents: read
 
-# This group is deliberately constant across refs for this production target. The
-# remote flock below is the cross-workflow safety net for other Oracle deployers.
 concurrency:
   group: m26-owner-production-oracle
   cancel-in-progress: false
@@ -41,14 +39,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 50
           show-progress: false
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install test dependencies
         run: python -m pip install -e '.[dev]'
-
       - name: Compile semantic closure path
         run: |
           python -m py_compile \
@@ -56,7 +51,6 @@ jobs:
             src/knowledge_engine/m26_production_api.py \
             scripts/m26_aq_final_closure.py \
             tests/test_m26_aq_semantic_closure_runtime.py
-
       - name: Run full AQ regression population
         run: |
           set -euo pipefail
@@ -71,9 +65,7 @@ jobs:
             tests/test_m26_aq_semantic_closure_runtime.py \
             tests/test_m26_aq_production_deploy_lock.py \
             --junitxml=/tmp/m26-aq-regression.xml
-          python scripts/m26_aq_final_closure.py validate-junit \
-            --junit /tmp/m26-aq-regression.xml \
-            --minimum 82
+          python scripts/m26_aq_final_closure.py validate-junit --junit /tmp/m26-aq-regression.xml --minimum 82
 
   deploy_and_live_closure:
     if: >
@@ -98,7 +90,6 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 50
           show-progress: false
-
       - name: Verify exact-head and deployment credentials
         run: |
           set -euo pipefail
@@ -107,7 +98,6 @@ jobs:
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
           bash scripts/configure_oracle_ssh.sh
-
       - name: Atomically deploy exact head, prove runtime identity, and collect live closure
         run: |
           set -euo pipefail
@@ -122,16 +112,17 @@ jobs:
             git clone https://github.com/danielcanfly/knowledge-engine.git "$DEPLOY_PATH"
           fi
 
-          KNOWLEDGE_ENGINE_DEPLOY_LOCK_HELD=1 \
-            DEPLOY_PATH="$DEPLOY_PATH" \
-            RELEASE_SHA="$RELEASE_SHA" \
+          KNOWLEDGE_ENGINE_DEPLOY_LOCK_HELD=1 DEPLOY_PATH="$DEPLOY_PATH" RELEASE_SHA="$RELEASE_SHA" \
             bash "$DEPLOY_PATH/deploy/deploy.sh"
 
           cd "$DEPLOY_PATH"
           git_sha="$(git rev-parse HEAD)"
           test "$git_sha" = "$EXPECTED_DEPLOY_SHA"
 
-          container_id="$(docker compose ps -q knowledge-engine)"
+          # Do not re-resolve the service through compose after deploy.sh removes its
+          # release-scoped temporary env file. Identify the running Compose service
+          # directly from Docker labels, then prove the immutable runtime env.
+          container_id="$(docker ps --filter 'label=com.docker.compose.service=knowledge-engine' --filter status=running -q | head -n 1)"
           test -n "$container_id"
           image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
           runtime_sha="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" | awk -F= '$1 == "M26_QUERY_BUILD_SHA" {print substr($0, index($0, "=") + 1)}' | tail -n 1)"
@@ -147,18 +138,12 @@ jobs:
           health_code="$(curl --silent --show-error \
             -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
             -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
-            -o /tmp/m26-aq-local-health.json \
-            -w '%{http_code}' \
+            -o /tmp/m26-aq-local-health.json -w '%{http_code}' \
             http://127.0.0.1:8080/api/m26/health)"
           test "$health_code" = "200"
 
-          EXPECTED_DEPLOY_SHA="$EXPECTED_DEPLOY_SHA" \
-          GIT_SHA="$git_sha" \
-          CONTAINER_ID="$container_id" \
-          IMAGE_ID="$image_id" \
-          RUNTIME_SHA="$runtime_sha" \
-          PROCESS_CMD="$process_cmd" \
-          python3 - <<'PY'
+          EXPECTED_DEPLOY_SHA="$EXPECTED_DEPLOY_SHA" GIT_SHA="$git_sha" CONTAINER_ID="$container_id" \
+          IMAGE_ID="$image_id" RUNTIME_SHA="$runtime_sha" PROCESS_CMD="$process_cmd" python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -184,9 +169,7 @@ jobs:
               'process_cmd': os.environ['PROCESS_CMD'],
               'raw_secret_recorded': False,
           }
-          Path('/tmp/m26-aq-production-identity.json').write_text(
-              json.dumps(evidence, indent=2) + '\n', encoding='utf-8'
-          )
+          Path('/tmp/m26-aq-production-identity.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
           PY
 
           PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
@@ -202,7 +185,6 @@ jobs:
           import json
           import os
           from pathlib import Path
-
           evidence = json.loads(Path('/tmp/m26-aq-production-identity.json').read_text())
           expected = os.environ['EXPECTED_DEPLOY_SHA']
           for key in ('git_head_sha', 'container_runtime_sha', 'local_health_sha'):
@@ -217,7 +199,6 @@ jobs:
             --input /tmp/m26-aq-final-live-closure.json \
             --gate pilot/m26/m26-pa-7-resolved-production-gate.json \
             --expected-sha "$EXPECTED_DEPLOY_SHA"
-
       - name: Upload production closure evidence
         if: always()
         uses: actions/upload-artifact@v4
