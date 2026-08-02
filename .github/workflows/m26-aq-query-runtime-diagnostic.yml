@@ -1,0 +1,184 @@
+name: M26 AQ Query Runtime Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-aq-query-runtime-diagnostic.yml"
+      - "deploy/deploy.sh"
+      - "src/knowledge_engine/m26_ask_api.py"
+      - "src/knowledge_engine/m26_pa7_semantic_closure_runtime.py"
+      - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
+      - "src/knowledge_engine/m26_production_api.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-aq-query-runtime-diagnostic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnostic:
+    if: >
+      github.event.pull_request.number == 1325 &&
+      github.head_ref == 'codex/answer-quality-aq-runtime'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: m23-r3-diagnostic
+    env:
+      EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha }}
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 20
+          show-progress: false
+
+      - name: Configure exact-head diagnostic
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+
+      - name: Deploy exact head and diagnose one owner query
+        run: |
+          set -euo pipefail
+          cat > /tmp/m26-aq-query-diagnostic.sh <<'REMOTE'
+          set -euo pipefail
+          exec 9>/tmp/knowledge-engine-production-oracle.lock
+          flock -x 9
+
+          KNOWLEDGE_ENGINE_DEPLOY_LOCK_HELD=1 \
+            DEPLOY_PATH="$DEPLOY_PATH" \
+            RELEASE_SHA="$EXPECTED_DEPLOY_SHA" \
+            bash "$DEPLOY_PATH/deploy/deploy.sh" </dev/null
+
+          cd "$DEPLOY_PATH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
+          container_id="$(docker compose ps -q knowledge-engine | head -n 1)"
+          test -n "$container_id"
+
+          container_env() {
+            docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" \
+              | awk -F= -v key="$1" '$1 == key {print substr($0, index($0, "=") + 1)}' \
+              | tail -n 1
+          }
+
+          export M26_QUERY_BACKEND_TOKEN="$(container_env M26_QUERY_BACKEND_TOKEN)"
+          export KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH="$(container_env KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH)"
+          test -n "$M26_QUERY_BACKEND_TOKEN"
+          test -n "$KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"
+
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+          query_code="$(curl --silent --show-error --max-time 200 \
+            -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
+            -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
+            -H 'content-type: application/json' \
+            -o "$tmp_dir/query.json" \
+            -w '%{http_code}' \
+            --data '{"question":"Compare routers and adaptive planning for permission-first controls."}' \
+            http://127.0.0.1:8080/api/m26/query || true)"
+
+          docker compose exec -T knowledge-engine python - <<'PY' > "$tmp_dir/direct.json" 2>/dev/null || true
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          from knowledge_engine.m26_ask_api import DEFAULT_GATE_PATH, run_owner_query_for_web
+
+          env_keys = {
+              "require_remote_dense": os.environ.get("M26_QUERY_REQUIRE_REMOTE_DENSE", "").lower() == "true",
+              "cloudflare_account_id_present": bool(os.environ.get("CLOUDFLARE_ACCOUNT_ID")),
+              "cloudflare_ai_token_present": bool(os.environ.get("CLOUDFLARE_AI_TOKEN") or os.environ.get("CLOUDFLARE_API_TOKEN")),
+              "qdrant_url_present": bool(os.environ.get("QDRANT_URL")),
+              "qdrant_api_key_present": bool(os.environ.get("QDRANT_API_KEY_READ") or os.environ.get("QDRANT_READ_ONLY_API_KEY") or os.environ.get("QDRANT_API_KEY")),
+              "qdrant_collection_present": bool(os.environ.get("M26_PA7_DENSE_COLLECTION") or os.environ.get("QDRANT_COLLECTION") or os.environ.get("QDRANT_COLLECTION_NAME")),
+              "minimax_api_key_present": bool(os.environ.get("MINIMAX_API_KEY")),
+          }
+          question = "Compare routers and adaptive planning for permission-first controls."
+          try:
+              root = Path(os.environ.get("KNOWLEDGE_ENGINE_ROOT", ".")).resolve()
+              gate_path = Path(os.environ.get("M26_PA7_GATE_PATH", DEFAULT_GATE_PATH.as_posix()))
+              if not gate_path.is_absolute():
+                  gate_path = root / gate_path
+              response = run_owner_query_for_web(
+                  root=root,
+                  gate_path=gate_path,
+                  request_payload={"question": question},
+                  owner_subject_hash=os.environ.get("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", ""),
+                  require_remote_dense=env_keys["require_remote_dense"],
+              )
+              result = {
+                  "status": "response",
+                  "response_status": response.get("status"),
+                  "terminal_status": response.get("terminal_status"),
+                  "reason_codes": response.get("reason_codes", []),
+                  "citation_count": len(response.get("citations", [])),
+              }
+          except Exception as exc:
+              message = str(exc)
+              result = {
+                  "status": "exception",
+                  "exception_type": type(exc).__name__,
+                  "exception_module": type(exc).__module__,
+                  "reason_code": getattr(exc, "reason_code", None),
+                  "message_sha256": hashlib.sha256(message.encode("utf-8", "replace")).hexdigest(),
+              }
+          print(json.dumps({"environment": env_keys, "direct": result}, sort_keys=True))
+          PY
+
+          python3 - "$tmp_dir/query.json" "$tmp_dir/direct.json" "$query_code" "$EXPECTED_DEPLOY_SHA" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          def load(path):
+              try:
+                  return json.loads(Path(path).read_text())
+              except Exception:
+                  return {}
+
+          query = load(sys.argv[1])
+          direct = load(sys.argv[2])
+          detail = query.get("detail") if isinstance(query, dict) else None
+          reason = detail.get("reason_code") if isinstance(detail, dict) else None
+          if reason is None and isinstance(query, dict):
+              reason = query.get("reason_code")
+          out = {
+              "schema_version": "m26-aq-query-runtime-diagnostic/v1",
+              "expected_deploy_sha": sys.argv[4],
+              "query_http_status": sys.argv[3],
+              "query_reason_code": reason,
+              "environment": direct.get("environment", {}),
+              "direct": direct.get("direct", {}),
+              "raw_answer_text_recorded": False,
+              "raw_secret_recorded": False,
+              "protected_knowledge_mutations": 0,
+          }
+          print(json.dumps(out, indent=2, sort_keys=True))
+          PY
+          REMOTE
+
+          chmod 700 /tmp/m26-aq-query-diagnostic.sh
+          scp /tmp/m26-aq-query-diagnostic.sh oracle-knowledge:/tmp/m26-aq-query-diagnostic.sh
+          ssh oracle-knowledge \
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' bash /tmp/m26-aq-query-diagnostic.sh" \
+            | tee /tmp/m26-aq-query-runtime-diagnostic.json
+
+      - name: Upload sanitized diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-aq-query-runtime-diagnostic-${{ github.event.pull_request.head.sha }}
+          path: /tmp/m26-aq-query-runtime-diagnostic.json
+          if-no-files-found: warn
+          retention-days: 14
