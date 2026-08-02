@@ -471,6 +471,8 @@ def test_access_redirect_repair_workflow_enforces_cookie_contract() -> None:
     ).read_text(encoding="utf-8")
 
     assert "workflow_dispatch:" in workflow
+    assert ".github/workflows/m26-pa7-explicit-backend-redeploy.yml" in workflow
+    assert ".github/workflows/m26-pa7-explicit-pages-deploy.yml" in workflow
     assert "repair_access_redirect_contract" in workflow
     assert "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'" in workflow
     assert "CLOUDFLARE_ACCESS_READ_TOKEN" in workflow
@@ -712,11 +714,14 @@ def test_explicit_pages_deploy_boundary_accepts_production_wiring_fix() -> None:
         encoding="utf-8"
     )
 
+    assert '".github/workflows/m26-pa7-access-redirect-repair.yml"' in workflow
     assert '".github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml"' in workflow
     assert '"deploy/deploy.sh"' in workflow
+    assert '"scripts/m26_pa7_access_browser_session_contract.py"' in workflow
     assert '"scripts/m26_pa7_named_backend_tunnel.py"' in workflow
     assert '"scripts/m26_pa7_durable_backend_origin.py"' in workflow
     assert '"scripts/m26_pa7_evidence_privacy_hygiene.py"' in workflow
+    assert '"tests/test_m26_pa7_access_browser_session_contract.py"' in workflow
 
 
 def test_explicit_backend_redeploy_boundary_accepts_production_wiring_fix() -> None:
@@ -724,9 +729,12 @@ def test_explicit_backend_redeploy_boundary_accepts_production_wiring_fix() -> N
         ROOT / ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
     ).read_text(encoding="utf-8")
 
+    assert ".github/workflows/m26-pa7-access-redirect-repair.yml" in workflow
     assert ".github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml" in workflow
     assert "deploy/deploy.sh" in workflow
+    assert "scripts/m26_pa7_access_browser_session_contract.py" in workflow
     assert "scripts/m26_pa7_named_backend_tunnel.py" in workflow
     assert "scripts/m26_pa7_durable_backend_origin.py" in workflow
     assert "scripts/m26_pa7_evidence_privacy_hygiene.py" in workflow
+    assert "tests/test_m26_pa7_access_browser_session_contract.py" in workflow
     assert "m26-pa7-oracle-backend-production-${{ github.ref }}" in workflow
