@@ -477,6 +477,7 @@ def test_access_redirect_repair_workflow_enforces_cookie_contract() -> None:
     assert "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'" in workflow
     assert "CLOUDFLARE_ACCESS_READ_TOKEN" in workflow
     assert "CLOUDFLARE_ACCESS_WRITE_TOKEN" in workflow
+    assert "CLOUDFLARE_ZONE_NAME" in workflow
     assert "scripts/m26_pa7_access_browser_session_contract.py repair" in workflow
     assert "access-browser-session-before.json" in workflow
     assert "access-browser-session-repair.json" in workflow
@@ -491,6 +492,8 @@ def test_access_redirect_repair_workflow_enforces_cookie_contract() -> None:
     assert "path_specific_overlap_counts" in workflow
     assert "same_site_cookie_attribute" in workflow
     assert "path_cookie_attribute" in workflow
+    assert "update_scope" in workflow
+    assert "zone_name_recorded" in workflow
     assert "CF_Authorization" not in workflow
     assert "cdn-cgi/access/login" not in workflow
 

@@ -24,6 +24,8 @@ SPEC.loader.exec_module(access_contract)
 
 ACCOUNT_ID = "a" * 32
 HOSTNAME = "m24-internal.danielcanfly.com"
+ZONE = "danielcanfly.com"
+ZONE_ID = "zone-id-hidden"
 ROOT_APP_ID = "root-access-app-id"
 ROOT_AUD = "root-access-audience"
 READ_TOKEN = "read-token-hidden"
@@ -36,9 +38,11 @@ class FakeRequester:
         apps: list[dict[str, Any]],
         *,
         fail_read_detail: bool = False,
+        fail_account_update: bool = False,
     ) -> None:
         self.apps = apps
         self.fail_read_detail = fail_read_detail
+        self.fail_account_update = fail_account_update
         self.calls: list[dict[str, Any]] = []
 
     def __call__(
@@ -77,20 +81,36 @@ class FakeRequester:
                     None,
                 )
             return 200, {"success": True, "result": dict(self.apps[0])}, None
-        if method == "PUT" and f"/access/apps/{ROOT_APP_ID}" in url:
+        if method == "GET" and "/zones?name=" in url:
+            return 200, {"success": True, "result": [{"id": ZONE_ID, "name": ZONE}]}, None
+        if method == "PUT" and f"/accounts/{ACCOUNT_ID}/access/apps/{ROOT_APP_ID}" in url:
+            if self.fail_account_update:
+                return (
+                    403,
+                    {"success": False, "errors": [{"code": 1010}]},
+                    None,
+                )
+            self._apply_update(data)
             payload = json.loads(data.decode("utf-8")) if data else {}
-            for app in self.apps:
-                if app.get("id") == ROOT_APP_ID:
-                    app.update(
-                        {
-                            "same_site_cookie_attribute": payload[
-                                "same_site_cookie_attribute"
-                            ],
-                            "path_cookie_attribute": payload["path_cookie_attribute"],
-                        }
-                    )
+            return 200, {"success": True, "result": payload}, None
+        if method == "PUT" and f"/zones/{ZONE_ID}/access/apps/{ROOT_APP_ID}" in url:
+            self._apply_update(data)
+            payload = json.loads(data.decode("utf-8")) if data else {}
             return 200, {"success": True, "result": payload}, None
         raise AssertionError(f"unexpected request: {method} {url}")
+
+    def _apply_update(self, data: bytes | None) -> None:
+        payload = json.loads(data.decode("utf-8")) if data else {}
+        for app in self.apps:
+            if app.get("id") == ROOT_APP_ID:
+                app.update(
+                    {
+                        "same_site_cookie_attribute": payload[
+                            "same_site_cookie_attribute"
+                        ],
+                        "path_cookie_attribute": payload["path_cookie_attribute"],
+                    }
+                )
 
 
 def root_app(
@@ -244,6 +264,7 @@ def test_repair_updates_strict_root_app_to_lax_without_raw_evidence(tmp_path: Pa
     assert repair["mutations"] == 1
     assert repair["mutation_kind"] == "cloudflare_access_application_update"
     assert repair["detail_read_token_class"] == "read_token"
+    assert repair["update_scope"] == "account"
     assert repair["before_same_site_cookie_attribute"] == "strict"
     assert repair["after_same_site_cookie_attribute"] == "lax"
     assert repair["before_path_cookie_attribute"] is True
@@ -277,6 +298,36 @@ def test_repair_retries_detail_read_with_write_token_before_update(tmp_path: Pat
     repair = json.loads((tmp_path / "repair.json").read_text(encoding="utf-8"))
     assert repair["status"] == "access_browser_session_contract_repaired"
     assert repair["detail_read_token_class"] == "write_token"
+    assert repair["update_scope"] == "account"
     assert repair["before_path_cookie_attribute"] is True
     assert repair["after_path_cookie_attribute"] is False
     evidence_text_does_not_leak_raw_identity(tmp_path / "repair.json")
+
+
+def test_repair_falls_back_to_zone_scoped_update_without_zone_name_leak(
+    tmp_path: Path,
+) -> None:
+    requester = FakeRequester([root_app(path_cookie=True)], fail_account_update=True)
+    after = access_contract.repair_contract(
+        account_id=ACCOUNT_ID,
+        read_token=READ_TOKEN,
+        write_token=WRITE_TOKEN,
+        target_hostname=HOSTNAME,
+        before_output=tmp_path / "before.json",
+        repair_output=tmp_path / "repair.json",
+        after_output=tmp_path / "after.json",
+        requester=requester,
+        zone_name=ZONE,
+    )
+
+    put_calls = [call for call in requester.calls if call["method"] == "PUT"]
+    assert ["/accounts/" in call["url"] for call in put_calls] == [True, False]
+    assert ["/zones/" in call["url"] for call in put_calls] == [False, True]
+    assert after["status"] == "pass"
+
+    repair = json.loads((tmp_path / "repair.json").read_text(encoding="utf-8"))
+    assert repair["status"] == "access_browser_session_contract_repaired"
+    assert repair["update_scope"] == "zone"
+    assert repair["zone_name_recorded"] is False
+    assert ZONE not in (tmp_path / "repair.json").read_text(encoding="utf-8")
+    assert ZONE_ID not in (tmp_path / "repair.json").read_text(encoding="utf-8")

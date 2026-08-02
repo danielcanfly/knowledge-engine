@@ -149,6 +149,30 @@ def get_access_app(
     return result
 
 
+def get_zone_id(
+    *,
+    zone_name: str,
+    token: str,
+    requester: Requester = default_requester,
+    timeout: float = 20.0,
+) -> str:
+    query = urllib.parse.urlencode({"name": zone_name, "per_page": 50})
+    payload = request_json(
+        method="GET",
+        url=f"{API_ROOT}/zones?{query}",
+        token=token,
+        requester=requester,
+        timeout=timeout,
+    )
+    result = payload.get("result")
+    if not isinstance(result, list) or len(result) != 1:
+        raise CloudflareApiFailure("zone_lookup_not_unique")
+    zone_id = result[0].get("id") if isinstance(result[0], dict) else None
+    if not isinstance(zone_id, str) or not zone_id:
+        raise CloudflareApiFailure("zone_lookup_missing_id")
+    return zone_id
+
+
 def _domain_values(app: Mapping[str, Any]) -> list[str]:
     values: list[str] = []
     domain = app.get("domain")
@@ -388,6 +412,7 @@ def repair_contract(
     requester: Requester = default_requester,
     timeout: float = 20.0,
     preferred_same_site: str = "lax",
+    zone_name: str = "",
 ) -> dict[str, Any]:
     apps = list_access_apps(
         account_id=account_id,
@@ -467,38 +492,75 @@ def repair_contract(
         same_site=preferred_same_site,
         path_cookie=False,
     )
+    update_scope = "account"
+    account_update_error = None
     try:
-        request_json(
-            method="PUT",
-            url=(
-                f"{API_ROOT}/accounts/{account_id}/access/apps/"
-                f"{urllib.parse.quote(app_id, safe='')}"
-            ),
+        update_access_application(
+            scope_kind="accounts",
+            scope_id=account_id,
+            app_id=app_id,
             token=write_token,
             requester=requester,
             timeout=timeout,
             payload=update_payload,
         )
     except CloudflareApiFailure as exc:
-        repair = {
-            "schema_version": SCHEMA,
-            "status": "blocked_access_application_update_failed",
-            "mutations": 0,
-            "root_cause_classification": reason,
-            "update_error_class": str(exc),
-            "detail_read_token_class": detail_read_token_class,
-            "target_app_id_sha256": sha256_text(app_id),
-            "raw_domains_recorded": False,
-            "raw_tokens_recorded": False,
-        }
-        write_evidence(repair_output, repair)
-        raise
+        account_update_error = str(exc)
+        if not zone_name:
+            repair = {
+                "schema_version": SCHEMA,
+                "status": "blocked_access_application_update_failed",
+                "mutations": 0,
+                "root_cause_classification": reason,
+                "update_error_class": account_update_error,
+                "detail_read_token_class": detail_read_token_class,
+                "target_app_id_sha256": sha256_text(app_id),
+                "raw_domains_recorded": False,
+                "raw_tokens_recorded": False,
+                "zone_name_recorded": False,
+            }
+            write_evidence(repair_output, repair)
+            raise
+        try:
+            zone_id = get_zone_id(
+                zone_name=zone_name,
+                token=write_token,
+                requester=requester,
+                timeout=timeout,
+            )
+            update_access_application(
+                scope_kind="zones",
+                scope_id=zone_id,
+                app_id=app_id,
+                token=write_token,
+                requester=requester,
+                timeout=timeout,
+                payload=update_payload,
+            )
+            update_scope = "zone"
+        except CloudflareApiFailure as zone_exc:
+            repair = {
+                "schema_version": SCHEMA,
+                "status": "blocked_access_application_update_failed",
+                "mutations": 0,
+                "root_cause_classification": reason,
+                "account_update_error_class": account_update_error,
+                "zone_update_error_class": str(zone_exc),
+                "detail_read_token_class": detail_read_token_class,
+                "target_app_id_sha256": sha256_text(app_id),
+                "raw_domains_recorded": False,
+                "raw_tokens_recorded": False,
+                "zone_name_recorded": False,
+            }
+            write_evidence(repair_output, repair)
+            raise
     repair = {
         "schema_version": SCHEMA,
         "status": "access_browser_session_contract_repaired",
         "mutations": 1,
         "mutation_kind": "cloudflare_access_application_update",
         "detail_read_token_class": detail_read_token_class,
+        "update_scope": update_scope,
         "target_app_id_sha256": sha256_text(app_id),
         "before_same_site_cookie_attribute": root.get("same_site_cookie_attribute"),
         "after_same_site_cookie_attribute": preferred_same_site,
@@ -506,6 +568,7 @@ def repair_contract(
         "after_path_cookie_attribute": False,
         "raw_domains_recorded": False,
         "raw_tokens_recorded": False,
+        "zone_name_recorded": False,
     }
     write_evidence(repair_output, repair)
     after_apps = list_access_apps(
@@ -519,6 +582,31 @@ def repair_contract(
     if after["status"] != "pass":
         raise AccessContractFailure(str(after["root_cause_classification"]))
     return after
+
+
+def update_access_application(
+    *,
+    scope_kind: str,
+    scope_id: str,
+    app_id: str,
+    token: str,
+    requester: Requester,
+    timeout: float,
+    payload: Mapping[str, Any],
+) -> None:
+    if scope_kind not in {"accounts", "zones"}:
+        raise CloudflareApiFailure("access_application_update_scope_invalid")
+    request_json(
+        method="PUT",
+        url=(
+            f"{API_ROOT}/{scope_kind}/{urllib.parse.quote(scope_id, safe='')}/"
+            f"access/apps/{urllib.parse.quote(app_id, safe='')}"
+        ),
+        token=token,
+        requester=requester,
+        timeout=timeout,
+        payload=payload,
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -546,6 +634,7 @@ def parse_args() -> argparse.Namespace:
     repair.add_argument("--repair-output", type=Path, required=True)
     repair.add_argument("--after-output", type=Path, required=True)
     repair.add_argument("--preferred-same-site", choices=("lax", "none"), default="lax")
+    repair.add_argument("--zone-name", default=os.environ.get("CLOUDFLARE_ZONE_NAME", ""))
     repair.add_argument("--timeout", type=float, default=20.0)
     return parser.parse_args()
 
@@ -577,6 +666,7 @@ def main() -> int:
                 repair_output=args.repair_output,
                 after_output=args.after_output,
                 preferred_same_site=args.preferred_same_site,
+                zone_name=args.zone_name,
                 timeout=args.timeout,
             )
     except (AccessContractFailure, CloudflareApiFailure) as exc:
