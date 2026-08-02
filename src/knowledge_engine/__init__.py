@@ -8,7 +8,7 @@ __version__ = "0.2.0"
 # import the owner-only runtime.  The installer is idempotent and fail-closed:
 # import-time errors should not mask ordinary package import failures elsewhere.
 try:
-    from .m26_aq_semantic_runtime_patch import install as _install_aq_semantic_patch
+    from .m26_aq_semantic_runtime_patch_v2 import install as _install_aq_semantic_patch
     from .m26_pa7_semantic_closure_runtime import (
         run_owner_arbitrary_query as _semantic_run_owner_arbitrary_query,
     )
