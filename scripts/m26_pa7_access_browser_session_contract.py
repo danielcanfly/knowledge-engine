@@ -260,6 +260,8 @@ def _sanitized_app(app: Mapping[str, Any], target_host: str) -> dict[str, Any]:
     app_id = str(app.get("id") or "")
     same_site = str(app.get("same_site_cookie_attribute") or "").strip().lower()
     path_cookie = app.get("path_cookie_attribute")
+    path_cookie_raw_class = "boolean" if isinstance(path_cookie, bool) else "omitted_or_null"
+    path_cookie_effective = bool(path_cookie) if isinstance(path_cookie, bool) else False
     domains = _domain_values(app)
     return {
         "app_id_sha256": sha256_text(app_id) if app_id else None,
@@ -268,6 +270,8 @@ def _sanitized_app(app: Mapping[str, Any], target_host: str) -> dict[str, Any]:
         "domain_classes": sorted({_domain_class(domain, target_host) for domain in domains}),
         "same_site_cookie_attribute": same_site or "missing",
         "path_cookie_attribute": bool(path_cookie) if isinstance(path_cookie, bool) else None,
+        "path_cookie_attribute_effective": path_cookie_effective,
+        "path_cookie_attribute_raw_class": path_cookie_raw_class,
         "session_duration_class": _session_duration_class(app.get("session_duration")),
         "aud_sha256": sha256_text(str(app.get("aud"))) if app.get("aud") else None,
     }
@@ -309,7 +313,7 @@ def build_contract_evidence(
             reason = "same_site_strict_confirmed_redirect_loop_risk"
         elif same_site not in {"lax", "none"}:
             reason = "same_site_cookie_attribute_not_machine_readable_or_not_allowed"
-        elif root_sanitized["path_cookie_attribute"] is not False:
+        elif root_sanitized["path_cookie_attribute_effective"] is not False:
             reason = "path_cookie_attribute_must_be_disabled_for_ask_full_graph_session"
         elif any(path_specific_overlaps[path] for path in target_paths):
             reason = "path_specific_access_application_overlap"

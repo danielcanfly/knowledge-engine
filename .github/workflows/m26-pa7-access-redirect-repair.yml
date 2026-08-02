@@ -190,13 +190,13 @@ jobs:
           after_summary="after unavailable"
           privacy_summary="privacy scan unavailable"
           if test -f "$WORK_DIR/evidence/access-browser-session-before.json"; then
-            before_summary="$(jq -c '{status,root_cause_classification,target_root_app_count,target_path_match_counts,path_specific_overlap_counts,same_site_cookie_attribute:.target_root_app.same_site_cookie_attribute,path_cookie_attribute:.target_root_app.path_cookie_attribute,raw_domains_recorded,raw_cookie_values_recorded,raw_login_urls_recorded,raw_tokens_recorded,target_root_app}' "$WORK_DIR/evidence/access-browser-session-before.json")"
+            before_summary="$(jq -c '{status,root_cause_classification,target_root_app_count,target_path_match_counts,path_specific_overlap_counts,same_site_cookie_attribute:.target_root_app.same_site_cookie_attribute,path_cookie_attribute:.target_root_app.path_cookie_attribute,path_cookie_attribute_effective:.target_root_app.path_cookie_attribute_effective,path_cookie_attribute_raw_class:.target_root_app.path_cookie_attribute_raw_class,raw_domains_recorded,raw_cookie_values_recorded,raw_login_urls_recorded,raw_tokens_recorded,target_root_app}' "$WORK_DIR/evidence/access-browser-session-before.json")"
           fi
           if test -f "$WORK_DIR/evidence/access-browser-session-repair.json"; then
             repair_summary="$(jq -c '{status,mutations,mutation_kind,root_cause_classification,detail_read_token_class,update_scope,before_same_site_cookie_attribute,after_same_site_cookie_attribute,before_path_cookie_attribute,after_path_cookie_attribute,account_update_error_class,zone_update_error_class,raw_domains_recorded,raw_tokens_recorded,zone_name_recorded}' "$WORK_DIR/evidence/access-browser-session-repair.json")"
           fi
           if test -f "$WORK_DIR/evidence/access-browser-session-after.json"; then
-            after_summary="$(jq -c '{status,root_cause_classification,target_root_app_count,target_path_match_counts,path_specific_overlap_counts,same_site_cookie_attribute:.target_root_app.same_site_cookie_attribute,path_cookie_attribute:.target_root_app.path_cookie_attribute,raw_domains_recorded,raw_cookie_values_recorded,raw_login_urls_recorded,raw_tokens_recorded,target_root_app}' "$WORK_DIR/evidence/access-browser-session-after.json")"
+            after_summary="$(jq -c '{status,root_cause_classification,target_root_app_count,target_path_match_counts,path_specific_overlap_counts,same_site_cookie_attribute:.target_root_app.same_site_cookie_attribute,path_cookie_attribute:.target_root_app.path_cookie_attribute,path_cookie_attribute_effective:.target_root_app.path_cookie_attribute_effective,path_cookie_attribute_raw_class:.target_root_app.path_cookie_attribute_raw_class,raw_domains_recorded,raw_cookie_values_recorded,raw_login_urls_recorded,raw_tokens_recorded,target_root_app}' "$WORK_DIR/evidence/access-browser-session-after.json")"
           fi
           if test -f "$WORK_DIR/evidence/evidence-privacy-scan.json"; then
             privacy_summary="$(jq -c '{status,violations,raw_secret_values_recorded,files_scanned}' "$WORK_DIR/evidence/evidence-privacy-scan.json")"
