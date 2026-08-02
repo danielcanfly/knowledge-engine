@@ -6,8 +6,11 @@ from typing import Any
 
 from . import m26_ask_api
 from . import m26_pa7_arbitrary_query_runtime as legacy_runtime
+from .m26_aq_semantic_runtime_patch import install as install_aq_semantic_runtime_patch
 from .m26_intent_compat import classify_with_semantic_compat
 from .m26_pa7_semantic_closure_runtime import run_owner_arbitrary_query
+
+install_aq_semantic_runtime_patch()
 
 _original_named_question_entities = legacy_runtime._named_question_entities
 _original_intent_class = legacy_runtime._intent_class
