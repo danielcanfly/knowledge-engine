@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+from knowledge_engine.m26_pa7_semantic_closure_runtime import (
+    _compact_provider_payload,
+    _semantic_requirements,
+    _visible_semantic_failures,
+)
+
+
+def _ids(question: str, intent: str = "direct_grounded_knowledge") -> set[str]:
+    return {item.requirement_id for item in _semantic_requirements(question, intent)}
+
+
+def test_heldout_router_replanner_contrast_terms_are_visible() -> None:
+    question = (
+        "A dispatcher picks the first capability, but a planner later changes unfinished "
+        "steps after the world proves the assumption false.  What is the difference?"
+    )
+    answer = (
+        "The router handles the initial path and capability choice.  Adaptive replanning "
+        "is different because it later changes the remaining work after evidence "
+        "invalidates the assumption."
+    )
+    requirements = _semantic_requirements(question, "cross_document_comparison")
+    assert {"initial_routing_role", "replanning_role", "role_contrast"}.issubset(
+        {item.requirement_id for item in requirements}
+    )
+    assert not _visible_semantic_failures(answer, requirements, question)
+
+
+def test_heldout_router_dag_composition_requires_both_jobs() -> None:
+    question = "How should a query router and DAG cooperate inside an owner-only ask pipeline?"
+    answer = (
+        "The query router selects the route, path, mode, or capability under policy and "
+        "capability constraints.  Inside that chosen path, the DAG orders dependent steps "
+        "and parallel work so the same flow can execute and verify the route safely."
+    )
+    requirements = _semantic_requirements(question, "complementary_synthesis")
+    assert {"router_role", "dag_role", "router_dag_composition"}.issubset(
+        {item.requirement_id for item in requirements}
+    )
+    assert not _visible_semantic_failures(answer, requirements, question)
+
+
+def test_heldout_precedes_false_premise_preserves_relation_boundary() -> None:
+    question = (
+        "Can an A precedes B graph edge establish that A depends on B, or is it only an "
+        "ordering signal?"
+    )
+    answer = (
+        "No.  A precedes B is an ordering or navigation relation; it does not prove a "
+        "dependency, causality, implementation, or requirement relationship."
+    )
+    requirements = _semantic_requirements(question, "graph_relationship")
+    assert {"ordering_semantics", "non_entailment"}.issubset(
+        {item.requirement_id for item in requirements}
+    )
+    assert not _visible_semantic_failures(answer, requirements, question)
+
+
+def test_heldout_state_machine_bounds_replanner_authority() -> None:
+    question = "How can a replanner change a plan without escaping the state machine?"
+    answer = (
+        "The state machine defines legal transitions, permissions, policy, and approval "
+        "gates.  The replanner may change remaining steps when assumptions become invalid, "
+        "but it cannot override or bypass the state machine authority."
+    )
+    requirements = _semantic_requirements(question, "complementary_synthesis")
+    assert {"state_machine_authority", "adaptive_replan", "authority_boundary"}.issubset(
+        {item.requirement_id for item in requirements}
+    )
+    assert not _visible_semantic_failures(answer, requirements, question)
+
+
+def test_heldout_controlled_architecture_requires_all_components() -> None:
+    question = (
+        "Design a governed multi-source investigation with saved progress, concurrent "
+        "branches, checks, and a person approving release."
+    )
+    answer = (
+        "Start with source selection that routes the request to the relevant sources.  Store "
+        "persisted progress in durable state, run parallel branches for research work, close "
+        "them through a verification gate, and require human approval before release."
+    )
+    requirements = _semantic_requirements(question, "complementary_synthesis")
+    assert {
+        "source_selection",
+        "persisted_progress",
+        "parallel_branches",
+        "verification_gate",
+        "human_approval",
+    }.issubset({item.requirement_id for item in requirements})
+    assert not _visible_semantic_failures(answer, requirements, question)
+
+
+def test_heldout_obsidian_graphology_sigma_trust_anchor() -> None:
+    question = "Separate Obsidian, Graphology, and Sigma.js, then name the trust anchor."
+    answer = (
+        "Obsidian is the human Markdown vault authoring and inspection surface.  Graphology "
+        "is the graph data model and processing layer, while Sigma.js renders the graph for "
+        "visual interaction.  The source of trust is the canonical source/provenance artifact "
+        "authority, not any UI or graph library."
+    )
+    requirements = _semantic_requirements(question, "complementary_synthesis")
+    assert {"obsidian_role", "graphology_role", "sigma_role", "trust_anchor"}.issubset(
+        {item.requirement_id for item in requirements}
+    )
+    assert not _visible_semantic_failures(answer, requirements, question)
+
+
+def test_compact_payload_exposes_semantic_contract_without_case_ids() -> None:
+    question = "Can a precedes relation prove a dependency?"
+    requirements = _semantic_requirements(question, "graph_relationship")
+    payload, _, _ = _compact_provider_payload(
+        question=question,
+        intent_class="graph_relationship",
+        evidence=[
+            {
+                "evidence_id": "ev1",
+                "evidence_type": "graph_edge",
+                "source_identity": "graph",
+                "locator_id": "loc1",
+                "relation_type": "precedes",
+                "edge_source": "A",
+                "edge_target": "B",
+                "passage_text": "A precedes B in the graph.",
+            }
+        ],
+        requirements=requirements,
+        repair=True,
+        previous_failures=["SEMANTIC_VISIBLE_MISSING:non_entailment"],
+    )
+    content = payload["messages"][0]["content"]
+    assert "semantic_requirement_contract" in content
+    assert "does not prove" in content
+    assert "R3-Q" not in content
