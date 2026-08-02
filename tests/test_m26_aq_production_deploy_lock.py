@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from knowledge_engine.m26_production_answer_bundle import FULL_PRODUCTION_QDRANT_COLLECTION
+
 
 def test_production_deploy_is_serialized_and_release_scoped() -> None:
     deploy = Path("deploy/deploy.sh").read_text(encoding="utf-8")
@@ -15,6 +17,14 @@ def test_production_deploy_is_serialized_and_release_scoped() -> None:
     assert "docker compose run --rm --no-deps" in deploy
     assert "</dev/null" in deploy
     assert '${M26_RUNTIME_ENV_FILE:-.env}' in compose
+
+
+def test_production_deploy_binds_accepted_qdrant_collection() -> None:
+    deploy = Path("deploy/deploy.sh").read_text(encoding="utf-8")
+
+    assert f'CANONICAL_M26_QDRANT_COLLECTION="{FULL_PRODUCTION_QDRANT_COLLECTION}"' in deploy
+    assert 'out.append(f"M26_PA7_DENSE_COLLECTION={canonical_collection}")' in deploy
+    assert 'stripped.startswith("M26_PA7_DENSE_COLLECTION=")' in deploy
 
 
 def test_final_closure_holds_host_lock_through_live_collection() -> None:
