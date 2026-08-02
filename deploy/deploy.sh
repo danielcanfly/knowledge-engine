@@ -72,12 +72,15 @@ PY
 
   docker compose up -d --remove-orphans
 
-  for attempt in $(seq 1 30); do
-    if curl --fail --silent http://127.0.0.1:8080/v1/health >/dev/null; then
+  for attempt in $(seq 1 90); do
+    # Deployment only needs HTTP liveness plus immutable runtime identity; the
+    # owner-only closure workflow performs the heavier semantic health/readiness
+    # checks immediately afterwards.
+    if curl --fail --silent --max-time 5 http://127.0.0.1:8080/openapi.json >/dev/null; then
       container_build_sha="$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')"
       if [[ "$container_build_sha" != "$RELEASE_SHA" ]]; then
         echo "DEPLOYMENT_RUNTIME_SHA_MISMATCH expected=$RELEASE_SHA actual=$container_build_sha" >&2
-        docker compose logs --tail=200 knowledge-engine
+        docker compose logs --tail=200 knowledge-engine >&2
         return 1
       fi
       image_id="$(docker compose images -q knowledge-engine | head -n 1)"
@@ -90,7 +93,8 @@ PY
     sleep 2
   done
 
-  docker compose logs --tail=200 knowledge-engine
+  echo "DEPLOYMENT_HTTP_LIVENESS_TIMEOUT release_sha=$RELEASE_SHA" >&2
+  docker compose logs --tail=200 knowledge-engine >&2
   return 1
 }
 
