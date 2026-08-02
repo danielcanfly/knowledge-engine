@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import pathlib
 import subprocess
 import sys
-from pathlib import Path
 
 
 EXPECTED_ENTRYPOINT = (
@@ -21,7 +21,7 @@ def _assert_import_order(code: str) -> None:
 
 
 def test_docker_has_one_canonical_production_app() -> None:
-    dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+    dockerfile = pathlib.Path("Dockerfile").read_text(encoding="utf-8")
     assert "knowledge_engine.m26_production_api:app" in dockerfile
     assert dockerfile.count("knowledge_engine.m26_production_api:app") == 1
 
@@ -51,7 +51,7 @@ def test_production_runtime_identity_survives_wrapper_first_import() -> None:
 
 
 def test_production_wrapper_declares_bounded_compatibility_layer() -> None:
-    source = Path("src/knowledge_engine/m26_production_api.py").read_text(encoding="utf-8")
+    source = pathlib.Path("src/knowledge_engine/m26_production_api.py").read_text(encoding="utf-8")
     assert "classify_with_semantic_compat" in source
     assert "run_owner_arbitrary_query" in source
     assert "m26_ask_api.RUNTIME_ENTRYPOINT" in source
