@@ -36,6 +36,17 @@ def test_final_closure_holds_host_lock_through_live_collection() -> None:
     assert deploy_position < collect_position < remote_end_position
 
 
+def test_final_closure_uses_canonical_named_tunnel_without_recording_it() -> None:
+    workflow = Path(
+        ".github/workflows/m26-aq-final-production-closure.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "M26_QUERY_BACKEND_TUNNEL_HOSTNAME" in workflow
+    assert 'routed_origin="https://${ROUTED_BACKEND_HOSTNAME}"' in workflow
+    assert "container_env M26_QUERY_BACKEND_ORIGIN" not in workflow
+    assert '"raw_routed_origin_recorded": False' in workflow
+
+
 def test_final_closure_does_not_mutate_shared_build_sha_before_deploy() -> None:
     workflow = Path(
         ".github/workflows/m26-aq-final-production-closure.yml"
