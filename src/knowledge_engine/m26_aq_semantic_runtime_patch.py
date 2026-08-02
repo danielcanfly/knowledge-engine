@@ -7,7 +7,7 @@ from typing import Any
 
 
 def install() -> None:
-    """Install question-id-agnostic AQ semantic closure compatibility patches."""
+    """Install question-id-agnostic AQ semantic closure patches."""
     from . import m26_pa7_arbitrary_query_runtime as legacy
     from . import m26_pa7_semantic_closure_runtime as runtime
     from .m26_intent_compat import classify_with_semantic_compat
@@ -15,346 +15,84 @@ def install() -> None:
     if getattr(runtime, "_m26_aq_semantic_runtime_patch_installed", False):
         return
 
-    original_named_entities = getattr(
+    original_entities = getattr(
         legacy,
         "_m26_aq_original_named_question_entities",
         legacy._named_question_entities,
     )
-    original_intent_class = getattr(
+    original_intent = getattr(
         legacy,
         "_m26_aq_original_intent_class",
         legacy._intent_class,
     )
-    original_semantic_requirements = runtime._semantic_requirements
-    original_compact_payload = runtime._compact_provider_payload
-    original_exact_edge = runtime._exact_named_graph_edge
+    original_requirements = runtime._semantic_requirements
+    original_payload = runtime._compact_provider_payload
+    original_edge = runtime._exact_named_graph_edge
 
-    legacy._m26_aq_original_named_question_entities = original_named_entities
-    legacy._m26_aq_original_intent_class = original_intent_class
+    legacy._m26_aq_original_named_question_entities = original_entities
+    legacy._m26_aq_original_intent_class = original_intent
 
-    def named_question_entities_with_semantic_cleanup(question: str) -> list[str]:
+    def clean_entities(question: str) -> list[str]:
         entities: list[str] = []
         seen: set[str] = set()
 
         def add(value: str) -> None:
-            cleaned = " ".join(value.strip().split())
-            if not cleaned:
-                return
-            key = cleaned.casefold()
-            if key not in seen:
-                entities.append(cleaned)
+            value = " ".join(value.strip().split())
+            key = value.casefold()
+            if value and key not in seen:
+                entities.append(value)
                 seen.add(key)
 
-        q = question
-        prefix_match = re.search(
+        prefix = re.search(
             r"\b([A-Z][A-Za-z0-9 .'/&-]+?)\s+Part\s+\d+\b",
-            q,
+            question,
         )
-        if prefix_match:
-            prefix = prefix_match.group(1).strip()
-            for part in re.findall(r"\bPart\s+(\d+)\b", q, flags=re.I):
-                add(f"{prefix} Part {part}")
-        if re.search(r"\bquery router\b", q, flags=re.I):
-            add("query router")
-        if re.search(r"\bDAG\b", q):
-            add("DAG")
-        if re.search(r"\bstate machine\b", q, flags=re.I):
-            add("state machine")
-        if re.search(r"\badaptive replanning\b", q, flags=re.I):
-            add("adaptive replanning")
-        for name in ("Obsidian", "Graphology", "Sigma.js"):
-            if name.casefold() in q.casefold():
+        if prefix:
+            root = prefix.group(1).strip()
+            for part in re.findall(r"\bPart\s+(\d+)\b", question, flags=re.I):
+                add(f"{root} Part {part}")
+        for name in (
+            "query router",
+            "DAG",
+            "state machine",
+            "adaptive replanning",
+            "Obsidian",
+            "Graphology",
+            "Sigma.js",
+        ):
+            if name.casefold() in question.casefold():
                 add(name)
-
-        scaffolding = (
+        noisy = (
             "the production graph says",
-            "does the precedes edge between",
+            "does the precedes edge",
             "one mechanism",
             "another changes",
             "what can",
-            "what can't",
             "how are",
             "how can",
             "sketch a",
         )
-        for raw in original_named_entities(question):
+        for raw in original_entities(question):
             lowered = raw.casefold()
-            if any(item in lowered for item in scaffolding):
+            if len(raw) > 80 or any(item in lowered for item in noisy):
                 continue
-            if len(raw) > 80:
-                continue
-            if any(entity.casefold() in lowered for entity in entities):
+            if any(existing.casefold() in lowered for existing in entities):
                 continue
             add(raw)
         return entities
 
-    def intent_class_with_semantic_compat(question: str) -> str:
+    def compat_intent(question: str) -> str:
         return classify_with_semantic_compat(
             question,
-            legacy_classifier=original_intent_class,
+            legacy_classifier=original_intent,
         )
 
-    def semantic_requirements_with_synonyms(
-        question: str,
-        intent_class: str,
-    ) -> list[Any]:
-        requirements = list(original_semantic_requirements(question, intent_class))
-        q = question.casefold()
-        seen = {str(item.requirement_id) for item in requirements}
+    def requirements(question: str, intent_class: str) -> list[Any]:
+        items = list(original_requirements(question, intent_class))
+        _augment_requirements(runtime, question, items)
+        return items
 
-        def add(
-            requirement_id: str,
-            instruction: str,
-            evidence_terms: Sequence[str],
-            visible_patterns: Sequence[str],
-            *,
-            exact_phrase: str = "",
-        ) -> None:
-            if requirement_id in seen:
-                return
-            seen.add(requirement_id)
-            requirements.append(
-                runtime.SemanticRequirement(
-                    requirement_id=requirement_id,
-                    instruction=instruction,
-                    evidence_terms=tuple(evidence_terms),
-                    visible_patterns=tuple(visible_patterns),
-                    exact_phrase=exact_phrase,
-                )
-            )
-
-        routerish = any(
-            item in q
-            for item in (
-                "router",
-                "dispatcher",
-                "where a request should go",
-                "first capability",
-                "initial capability",
-                "route",
-            )
-        )
-        replanish = any(
-            item in q
-            for item in (
-                "replan",
-                "planner",
-                "remaining work",
-                "unfinished steps",
-                "remaining steps",
-                "invalidates",
-                "invalid assumptions",
-                "reality",
-                "world proves",
-            )
-        )
-        if routerish and replanish:
-            add(
-                "initial_routing_role",
-                "Explain that routing chooses the initial path/capability.",
-                ["router", "route", "initial", "path", "capability"],
-                [
-                    r"\b(?:router|routing|dispatcher|dispatch).{0,120}"
-                    r"(?:initial|path|route|request|capability)"
-                ],
-            )
-            add(
-                "replanning_role",
-                "Explain that adaptive replanning changes remaining work.",
-                ["adaptive", "replan", "remaining", "invalid", "assumption"],
-                [
-                    r"\b(?:replan|replanning|replanner|planner|adaptive).{0,140}"
-                    r"(?:remaining|unfinished|invalid|assumption|evidence|reality)"
-                ],
-            )
-            add(
-                "role_contrast",
-                "Contrast initial dispatch with later replanning.",
-                ["initial", "later", "after", "different"],
-                [
-                    r"\b(?:whereas|while|by contrast|different|initial).{0,180}"
-                    r"(?:later|after|replan|remaining|unfinished)"
-                ],
-            )
-
-        if "router" in q and "dag" in q:
-            add(
-                "router_role",
-                "State that the query router selects the path/mode/capability.",
-                ["query router", "route", "path", "mode", "capability"],
-                [
-                    r"(?:query router|router).{0,140}"
-                    r"(?:path|route|mode|capability|select)"
-                ],
-            )
-            add(
-                "router_decision",
-                "Explain what the router chooses or bounds.",
-                ["router", "query", "path", "route", "capability"],
-                [r"router.{0,120}(?:path|route|select|choose|capability)"],
-            )
-            add(
-                "routing_constraints",
-                "State one permission/safety/policy/capability constraint.",
-                ["permission", "safety", "policy", "capability"],
-                [
-                    r"\b(?:permission|safety|policy|risk|cost|latency|capability)"
-                    r"s?\b"
-                ],
-            )
-            add(
-                "dag_role",
-                "State that the DAG structures dependency/parallel work.",
-                ["dag", "dependency", "parallel", "task", "step"],
-                [r"\bdag\b.{0,160}(?:depend|parallel|task|step|work)"],
-            )
-            add(
-                "router_dag_composition",
-                "Explain how router selection and DAG execution compose.",
-                ["together", "within", "then", "chosen path", "flow"],
-                [
-                    r"(?:router|route).{0,200}(?:dag|within|then|flow)",
-                    r"dag.{0,200}(?:router|route|chosen path|flow)",
-                ],
-            )
-
-        if "precedes" in q:
-            add(
-                "ordering_semantics",
-                "State that precedes supports ordering/sequence/navigation only.",
-                ["precedes", "ordering", "sequence", "navigation"],
-                [r"\b(?:ordering|sequence|navigation|comes before|precedes)\b"],
-            )
-            if re.search(r"\b(?:prove|infer|depend|depends|dependency|causal|cause)\b", q):
-                add(
-                    "non_entailment",
-                    "State that precedes alone does not prove stronger relations.",
-                    ["dependency", "causality", "implementation", "requirement"],
-                    [
-                        r"\b(?:does not|doesn't|cannot|can't|only).{0,140}"
-                        r"(?:depend|causal|implement|require|prove|infer)"
-                    ],
-                )
-
-        if "state machine" in q and any(
-            item in q for item in ("replanner", "replanning", "replan", "change a plan")
-        ):
-            add(
-                "state_machine_authority",
-                "Explain the state machine as the transition/policy envelope.",
-                ["state machine", "transition", "permission", "approval", "policy"],
-                [
-                    r"state machine.{0,180}"
-                    r"(?:transition|permission|approval|guard|legal|policy)"
-                ],
-            )
-            add(
-                "adaptive_replan",
-                "Explain that replanning may change remaining steps.",
-                ["replan", "remaining", "assumption", "invalid"],
-                [
-                    r"\b(?:replan|replanning|replanner).{0,160}"
-                    r"(?:remaining|assumption|invalid|plan|step)"
-                ],
-            )
-            add(
-                "authority_boundary",
-                "State that replanning cannot bypass policy/approval authority.",
-                ["cannot bypass", "authority", "policy", "approval", "transition"],
-                [
-                    r"\b(?:cannot|can't|must not|does not).{0,160}"
-                    r"(?:bypass|override|escape).{0,120}"
-                    r"(?:state|policy|transition|approval|authority)"
-                ],
-            )
-
-        architecture_terms = (
-            "different sources",
-            "multi-source",
-            "source selection",
-            "saved progress",
-            "persisted progress",
-            "durable state",
-            "parallel",
-            "concurrent",
-            "branches",
-            "verification",
-            "checks",
-            "human approval",
-            "person approving",
-        )
-        if sum(term in q for term in architecture_terms) >= 3:
-            add(
-                "source_selection",
-                "Include source selection/routing for different sources.",
-                ["source", "routing", "selection"],
-                [
-                    r"\bsource.{0,100}(?:select|route|routing)",
-                    r"\b(?:select|route).{0,100}source",
-                ],
-            )
-            add(
-                "persisted_progress",
-                "Include persisted/durable progress state.",
-                ["persisted", "durable", "progress", "state"],
-                [r"\b(?:persisted|durable|saved).{0,100}(?:progress|state)"],
-            )
-            add(
-                "parallel_branches",
-                "Include parallel research branches/DAG execution.",
-                ["parallel", "branch", "dag", "research"],
-                [
-                    r"\b(?:parallel|concurrent).{0,100}"
-                    r"(?:branch|research|dag|work)"
-                ],
-            )
-            add(
-                "verification_gate",
-                "Include an explicit verification/completion gate.",
-                ["verification", "verify", "completion", "gate"],
-                [r"\b(?:verification|verify|checks?|completion gate)\b"],
-            )
-            add(
-                "human_approval",
-                "Include human approval as an authority gate.",
-                ["human approval", "approval", "person approving"],
-                [r"\b(?:human approval|person approving|approval)\b"],
-            )
-
-        if all(name in q for name in ("obsidian", "graphology", "sigma.js")):
-            add(
-                "obsidian_role",
-                "Explain Obsidian as a human-facing Markdown/vault surface.",
-                ["obsidian", "markdown", "vault", "human", "authoring"],
-                [r"obsidian.{0,180}(?:markdown|vault|human|author|inspect)"],
-            )
-            add(
-                "graphology_role",
-                "Explain Graphology as graph data/model/processing.",
-                ["graphology", "graph", "data", "model", "processing"],
-                [r"graphology.{0,180}(?:data|model|process|graph)"],
-            )
-            add(
-                "sigma_role",
-                "Explain Sigma.js as graph visualization/rendering/interaction.",
-                ["sigma.js", "visual", "render", "interaction"],
-                [r"sigma\.js.{0,180}(?:visual|render|interact|display)"],
-            )
-            add(
-                "trust_anchor",
-                "Assign trust to canonical provenance/artifact authority.",
-                ["canonical", "provenance", "artifact", "source of trust"],
-                [
-                    r"\b(?:canonical|provenance|artifact).{0,140}"
-                    r"(?:trust|authority|source)",
-                    r"\b(?:source of trust|trust anchor).{0,140}"
-                    r"(?:canonical|provenance|artifact)",
-                ],
-            )
-
-        return requirements
-
-    def compact_provider_payload_with_answer_contract(
+    def payload(
         *,
         question: str,
         intent_class: str,
@@ -363,7 +101,7 @@ def install() -> None:
         repair: bool,
         previous_failures: Sequence[str],
     ) -> tuple[dict[str, Any], dict[str, Mapping[str, Any]], dict[str, str]]:
-        payload, label_map, snippet_map = original_compact_payload(
+        packed, label_map, snippet_map = original_payload(
             question=question,
             intent_class=intent_class,
             evidence=evidence,
@@ -371,18 +109,13 @@ def install() -> None:
             repair=repair,
             previous_failures=previous_failures,
         )
-        messages = payload.get("messages", [])
-        task: dict[str, Any] = {}
-        if messages and isinstance(messages[0], Mapping):
-            try:
-                task = json.loads(str(messages[0].get("content", "{}")))
-            except json.JSONDecodeError:
-                task = {}
+        messages = packed.get("messages", [])
+        task = _message_task(messages)
         contract = [
             {
                 "id": str(item.requirement_id),
                 "must_say": str(item.instruction),
-                "visible_terms_to_use": _visible_terms_for_requirement(item),
+                "visible_terms_to_use": _visible_terms(item),
             }
             for item in requirements
         ]
@@ -391,20 +124,21 @@ def install() -> None:
             "evidence_was_selected_by_verified_retrieval": True,
             "abstain_only_when_evidence_array_is_empty": True,
             "never_return_empty_answer_when_evidence_labels_exist": True,
-            "cover_each_requirement_id_explicitly": [item["id"] for item in contract],
+            "cover_each_requirement_id_explicitly": [
+                item["id"] for item in contract
+            ],
             "do_not_substitute_a_nearby_graph_edge": True,
             "precedes_boundary": (
-                "precedes means ordering/navigation; it does not by itself prove "
-                "dependency, causality, implementation, or requirement"
+                "precedes means ordering/navigation only, not dependency, "
+                "causality, implementation, or requirement"
             ),
         }
-        if _question_requires_initial_no(question):
+        if _needs_initial_no(question):
             task["answer_quality_contract"]["required_opening"] = "No."
         if repair:
             task["repair_instruction"] = (
-                "The previous response missed required semantics or abstained despite "
-                "runtime-selected evidence. Return status=answer and make each required "
-                "role visible, unless the evidence array is empty."
+                "Do not abstain when evidence labels exist. Return status=answer "
+                "and make every missing semantic role visible."
             )
         if messages and isinstance(messages[0], dict):
             messages[0]["content"] = json.dumps(
@@ -412,82 +146,266 @@ def install() -> None:
                 ensure_ascii=False,
                 separators=(",", ":"),
             )
-        payload["messages"] = messages
-        payload["max_tokens"] = max(int(payload.get("max_tokens", 512)), 900)
-        payload["system"] = _semantic_system_message(question, requirements, repair=repair)
-        return payload, label_map, snippet_map
+        packed["messages"] = messages
+        packed["max_tokens"] = max(int(packed.get("max_tokens", 512)), 900)
+        packed["system"] = _system_message(question, requirements, repair=repair)
+        return packed, label_map, snippet_map
 
-    def exact_named_graph_edge_with_cleanup(
-        bundle: Any,
-        question: str,
-    ) -> Mapping[str, Any] | None:
-        edge = original_exact_edge(bundle, question)
+    def exact_edge(bundle: Any, question: str) -> Mapping[str, Any] | None:
+        edge = original_edge(bundle, question)
         if edge is not None:
             return edge
-        entities = named_question_entities_with_semantic_cleanup(question)
+        entities = clean_entities(question)
         if len(entities) < 2:
             return None
-        required_relation = "precedes" if "precedes" in question.casefold() else ""
-        source_candidates = _loose_entity_concepts(runtime, bundle, entities[0])
-        target_candidates = _loose_entity_concepts(runtime, bundle, entities[1])
-        if not source_candidates or not target_candidates:
-            return None
+        required = "precedes" if "precedes" in question.casefold() else ""
+        source_candidates = _loose_concepts(runtime, bundle, entities[0])
+        target_candidates = _loose_concepts(runtime, bundle, entities[1])
         matches = []
-        for raw_edge in bundle.graph_v2.get("edges", []):
-            if not isinstance(raw_edge, Mapping):
+        for candidate in bundle.graph_v2.get("edges", []):
+            if not isinstance(candidate, Mapping):
                 continue
-            if required_relation and str(raw_edge.get("relation_type", "")) != required_relation:
+            if required and str(candidate.get("relation_type")) != required:
                 continue
-            source = str(raw_edge.get("source", ""))
-            target = str(raw_edge.get("target", ""))
+            source = str(candidate.get("source", ""))
+            target = str(candidate.get("target", ""))
             if source in source_candidates and target in target_candidates:
-                matches.append(raw_edge)
+                matches.append(candidate)
         if not matches:
             return None
-        return max(matches, key=lambda item: float(item.get("confidence", 0.0) or 0.0))
+        return max(matches, key=lambda item: float(item.get("confidence") or 0.0))
 
-    legacy._named_question_entities = named_question_entities_with_semantic_cleanup
-    legacy._intent_class = intent_class_with_semantic_compat
-    runtime._semantic_requirements = semantic_requirements_with_synonyms
-    runtime._compact_provider_payload = compact_provider_payload_with_answer_contract
-    runtime._exact_named_graph_edge = exact_named_graph_edge_with_cleanup
+    legacy._named_question_entities = clean_entities
+    legacy._intent_class = compat_intent
+    runtime._semantic_requirements = requirements
+    runtime._compact_provider_payload = payload
+    runtime._exact_named_graph_edge = exact_edge
     runtime._m26_aq_semantic_runtime_patch_installed = True
 
 
-def _visible_terms_for_requirement(requirement: Any) -> list[str]:
+def _message_task(messages: Any) -> dict[str, Any]:
+    if messages and isinstance(messages[0], Mapping):
+        try:
+            value = json.loads(str(messages[0].get("content", "{}")))
+            if isinstance(value, dict):
+                return value
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def _augment_requirements(runtime: Any, question: str, items: list[Any]) -> None:
+    q = question.casefold()
+    seen = {str(item.requirement_id) for item in items}
+
+    def add(
+        requirement_id: str,
+        instruction: str,
+        evidence_terms: Sequence[str],
+        visible_patterns: Sequence[str],
+    ) -> None:
+        if requirement_id in seen:
+            return
+        seen.add(requirement_id)
+        items.append(
+            runtime.SemanticRequirement(
+                requirement_id=requirement_id,
+                instruction=instruction,
+                evidence_terms=tuple(evidence_terms),
+                visible_patterns=tuple(visible_patterns),
+            )
+        )
+
+    routerish = any(
+        term in q
+        for term in ("router", "dispatcher", "where a request should go", "route")
+    )
+    replanish = any(
+        term in q
+        for term in ("replan", "planner", "remaining", "invalidates", "reality")
+    )
+    if routerish and replanish:
+        add(
+            "initial_routing_role",
+            "Explain that routing chooses the initial path/capability.",
+            ["router", "route", "initial", "path", "capability"],
+            [r"\b(?:router|routing|dispatcher).{0,120}(?:initial|path|route)"],
+        )
+        add(
+            "replanning_role",
+            "Explain that replanning changes remaining work.",
+            ["adaptive", "replan", "remaining", "invalid", "assumption"],
+            [r"\b(?:replan|replanning|adaptive).{0,140}(?:remaining|invalid)"],
+        )
+        add(
+            "role_contrast",
+            "Contrast initial dispatch with later replanning.",
+            ["initial", "later", "after", "different"],
+            [r"\b(?:whereas|while|different|initial).{0,180}(?:later|replan)"],
+        )
+
+    if "router" in q and "dag" in q:
+        add(
+            "router_role",
+            "State that the query router selects the path/mode/capability.",
+            ["query router", "route", "path", "mode", "capability"],
+            [r"(?:query router|router).{0,140}(?:path|route|capability)"],
+        )
+        add(
+            "router_decision",
+            "Explain what the router chooses or bounds.",
+            ["router", "query", "path", "route", "capability"],
+            [r"router.{0,120}(?:path|route|select|choose|capability)"],
+        )
+        add(
+            "routing_constraints",
+            "State one permission/safety/policy/capability constraint.",
+            ["permission", "safety", "policy", "capability"],
+            [r"\b(?:permission|safety|policy|capability|risk|cost|latency)"],
+        )
+        add(
+            "dag_role",
+            "State that the DAG structures dependency/parallel work.",
+            ["dag", "dependency", "parallel", "task", "step"],
+            [r"\bdag\b.{0,160}(?:depend|parallel|task|step|work)"],
+        )
+        add(
+            "router_dag_composition",
+            "Explain how router selection and DAG execution compose.",
+            ["router", "DAG", "chosen path", "flow"],
+            [r"(?:router|route).{0,200}(?:dag|within|then|flow)"],
+        )
+
+    if "precedes" in q:
+        add(
+            "ordering_semantics",
+            "State that precedes supports ordering/sequence/navigation only.",
+            ["precedes", "ordering", "sequence", "navigation"],
+            [r"\b(?:ordering|sequence|navigation|comes before|precedes)\b"],
+        )
+        if re.search(r"\b(?:prove|infer|depend|depends|dependency|causal)\b", q):
+            add(
+                "non_entailment",
+                "State that precedes alone does not prove stronger relations.",
+                ["dependency", "causality", "implementation", "requirement"],
+                [r"\b(?:does not|cannot|can't|only).{0,140}(?:depend|causal|prove)"],
+            )
+
+    if "state machine" in q and any(term in q for term in ("replan", "replanner")):
+        add(
+            "state_machine_authority",
+            "Explain the state machine as the transition/policy envelope.",
+            ["state machine", "transition", "permission", "approval", "policy"],
+            [r"state machine.{0,180}(?:transition|permission|approval|policy)"],
+        )
+        add(
+            "adaptive_replan",
+            "Explain that replanning may change remaining steps.",
+            ["replan", "remaining", "assumption", "invalid"],
+            [r"\b(?:replan|replanning|replanner).{0,160}(?:remaining|invalid)"],
+        )
+        add(
+            "authority_boundary",
+            "State that replanning cannot bypass policy/approval authority.",
+            ["cannot bypass", "authority", "policy", "approval"],
+            [r"\b(?:cannot|can't|must not).{0,160}(?:bypass|override)"],
+        )
+
+    architecture_terms = (
+        "different sources",
+        "multi-source",
+        "saved progress",
+        "persisted progress",
+        "parallel",
+        "branches",
+        "verification",
+        "human approval",
+    )
+    if sum(term in q for term in architecture_terms) >= 3:
+        for req_id, instruction, terms, pattern in (
+            (
+                "source_selection",
+                "Include source selection/routing for different sources.",
+                ["source", "routing", "selection"],
+                r"\bsource.{0,100}(?:select|route|routing)",
+            ),
+            (
+                "persisted_progress",
+                "Include persisted/durable progress state.",
+                ["persisted", "durable", "progress", "state"],
+                r"\b(?:persisted|durable|saved).{0,100}(?:progress|state)",
+            ),
+            (
+                "parallel_branches",
+                "Include parallel research branches/DAG execution.",
+                ["parallel", "branch", "dag", "research"],
+                r"\b(?:parallel|concurrent).{0,100}(?:branch|research|dag)",
+            ),
+            (
+                "verification_gate",
+                "Include an explicit verification/completion gate.",
+                ["verification", "verify", "completion", "gate"],
+                r"\b(?:verification|verify|checks?|completion gate)\b",
+            ),
+            (
+                "human_approval",
+                "Include human approval as an authority gate.",
+                ["human approval", "approval"],
+                r"\b(?:human approval|approval)\b",
+            ),
+        ):
+            add(req_id, instruction, terms, [pattern])
+
+    if all(name in q for name in ("obsidian", "graphology", "sigma.js")):
+        for req_id, instruction, terms, pattern in (
+            (
+                "obsidian_role",
+                "Explain Obsidian as a human-facing Markdown/vault surface.",
+                ["obsidian", "markdown", "vault", "human"],
+                r"obsidian.{0,180}(?:markdown|vault|human|author|inspect)",
+            ),
+            (
+                "graphology_role",
+                "Explain Graphology as graph data/model/processing.",
+                ["graphology", "graph", "model", "processing"],
+                r"graphology.{0,180}(?:data|model|process|graph)",
+            ),
+            (
+                "sigma_role",
+                "Explain Sigma.js as graph visualization/rendering.",
+                ["sigma.js", "visual", "render", "interaction"],
+                r"sigma\.js.{0,180}(?:visual|render|interact|display)",
+            ),
+            (
+                "trust_anchor",
+                "Assign trust to canonical provenance/artifact authority.",
+                ["canonical", "provenance", "artifact", "source of trust"],
+                r"\b(?:canonical|provenance|artifact).{0,140}(?:trust|authority)",
+            ),
+        ):
+            add(req_id, instruction, terms, [pattern])
+
+
+def _visible_terms(requirement: Any) -> list[str]:
     rid = str(requirement.requirement_id)
-    terms_by_id = {
+    terms = {
         "initial_routing_role": ["router", "initial", "path", "capability"],
-        "replanning_role": ["adaptive replanning", "remaining work", "invalidates"],
+        "replanning_role": ["adaptive replanning", "remaining work"],
         "role_contrast": ["initial", "later", "different"],
-        "router_role": ["query router", "selects", "path", "capability"],
-        "router_decision": ["router", "route", "capability", "constraints"],
-        "routing_constraints": ["permission", "policy", "safety", "capability"],
-        "dag_role": ["DAG", "dependencies", "parallel", "steps"],
-        "router_dag_composition": ["router", "DAG", "chosen path", "flow"],
+        "router_role": ["query router", "path", "capability"],
+        "dag_role": ["DAG", "dependencies", "parallel"],
         "ordering_semantics": ["precedes", "ordering", "navigation"],
         "non_entailment": ["does not prove", "dependency", "causality"],
-        "state_machine_authority": ["state machine", "transitions", "policy"],
-        "adaptive_replan": ["replanner", "remaining steps", "invalid assumptions"],
-        "authority_boundary": ["cannot override", "state machine", "policy"],
-        "source_selection": ["source selection", "route sources"],
-        "persisted_progress": ["persisted progress", "durable state"],
-        "parallel_branches": ["parallel branches", "research"],
-        "verification_gate": ["verification gate"],
-        "human_approval": ["human approval"],
-        "obsidian_role": ["Obsidian", "Markdown", "vault", "human"],
-        "graphology_role": ["Graphology", "graph", "model", "processing"],
-        "sigma_role": ["Sigma.js", "visualisation", "rendering"],
         "trust_anchor": ["canonical", "provenance", "source of trust"],
     }
-    if rid in terms_by_id:
-        return terms_by_id[rid]
+    if rid in terms:
+        return terms[rid]
     if rid.startswith("entity_") and getattr(requirement, "exact_phrase", ""):
         return [str(requirement.exact_phrase)]
     return [str(term) for term in getattr(requirement, "evidence_terms", ())[:4]]
 
 
-def _semantic_system_message(
+def _system_message(
     question: str,
     requirements: Sequence[Any],
     *,
@@ -496,36 +414,48 @@ def _semantic_system_message(
     terms: list[str] = []
     seen: set[str] = set()
     for requirement in requirements:
-        for term in _visible_terms_for_requirement(requirement):
+        for term in _visible_terms(requirement):
             key = term.casefold()
             if key not in seen:
                 terms.append(term)
                 seen.add(key)
     pieces = [
         "Return exactly one compact JSON object with keys status, answer, used.",
-        "Use status=answer when the evidence array contains labels; abstain only when no supplied evidence can address the question at all.",
-        "Never return an empty answer with status=answer, and do not abstain merely because the answer needs synthesis.",
-        "Write 2-5 direct sentences that explicitly cover every semantic requirement.",
+        (
+            "Use status=answer when the evidence array contains labels; "
+            "abstain only when no supplied evidence can address the question."
+        ),
+        (
+            "Never return an empty answer with status=answer, and do not "
+            "abstain merely because the answer needs synthesis."
+        ),
+        "Write 2-5 direct sentences covering every semantic requirement.",
         "Use these visible terms where accurate: " + "; ".join(terms[:40]) + ".",
-        "For router/DAG/state-machine/replanning questions, assign each component its own job and then state how the jobs compose or differ.",
-        "For graph relation questions, use only the named edge endpoints and relation; a precedes edge means ordering/navigation only, not dependency, causality, implementation, or requirement.",
-        "List the evidence labels actually used. Do not invent facts or citation labels.",
+        (
+            "For router, DAG, state-machine, and replanning questions, assign "
+            "each component its own job and state how the jobs compose or differ."
+        ),
+        (
+            "For graph relation questions, use only the named edge endpoints "
+            "and relation; precedes means ordering/navigation only."
+        ),
+        "Do not invent facts or citation labels.",
     ]
-    if _question_requires_initial_no(question):
-        pieces.append("This is a false-premise relation question; begin the answer with 'No.'")
+    if _needs_initial_no(question):
+        pieces.append("For this false-premise relation question, begin with 'No.'")
     if repair:
-        pieces.append("This is a repair attempt. Fix the missing semantic roles instead of abstaining.")
+        pieces.append("Repair missing semantic roles instead of abstaining.")
     return " ".join(pieces)
 
 
-def _question_requires_initial_no(question: str) -> bool:
+def _needs_initial_no(question: str) -> bool:
     q = question.casefold()
     return "precedes" in q and any(
         word in q for word in ("prove", "depends on", "dependency")
     )
 
 
-def _loose_entity_concepts(runtime: Any, bundle: Any, entity: str) -> set[str]:
+def _loose_concepts(runtime: Any, bundle: Any, entity: str) -> set[str]:
     concepts = set(runtime._entity_concepts(bundle, entity))
     if concepts:
         return concepts
@@ -533,7 +463,13 @@ def _loose_entity_concepts(runtime: Any, bundle: Any, entity: str) -> set[str]:
     if not normalized:
         return concepts
     for document in runtime.legacy._release_documents(bundle):
-        text = f"{document.get('title', '')} {document.get('section_title', '')} {runtime.legacy._document_text(document)}"
+        text = " ".join(
+            (
+                str(document.get("title", "")),
+                str(document.get("section_title", "")),
+                runtime.legacy._document_text(document),
+            )
+        )
         haystack = re.sub(r"[^a-z0-9]+", " ", text.casefold())
         if normalized in haystack:
             concept = str(document.get("concept_id", ""))
