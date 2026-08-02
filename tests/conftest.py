@@ -22,6 +22,26 @@ _LEGACY_AQ_FORMAL_FIXTURE_MODULES = {
     "test_m26_pa_7_corrective_formal_product_readiness",
 }
 _FIXED_ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
+_LEGACY_PROVIDER_SCHEMA = "aq3-provider-candidate/v3"
+_LEGACY_FIXTURE_FACETS = {
+    "direct_answer",
+    "entity_role",
+    "entity_a",
+    "entity_b",
+    "comparison_basis",
+    "relationship_semantics",
+    "complementary_roles",
+    "graph_edge",
+    "source_endpoint",
+    "target_endpoint",
+    "relation_semantics",
+    "provenance_source",
+    "source_identity",
+    "temporal_ordering",
+    "temporal_record",
+    "ordering_boundary",
+    "non_entailment_boundary",
+}
 
 
 @pytest.fixture(autouse=True)
@@ -33,9 +53,9 @@ def normalize_legacy_aq_formal_fixture_provider_schema(
 
     The PA.7 formal fixture providers predate the AQ3 provider envelope and intentionally
     exercise evidence/citation/SLO behavior rather than provider-schema rejection. The runtime
-    verifier remains authoritative: this shim only supplies the two newly required envelope
-    fields, then delegates back to the unmodified parser and every downstream semantic,
-    citation, support, graph, and mutation gate.
+    verifier remains authoritative: this shim only supplies the newly required envelope fields
+    and claim surface metadata, then delegates back to the unmodified parser and every
+    downstream semantic, citation, support, graph, and mutation gate.
     """
 
     module = request.node.module
@@ -55,22 +75,60 @@ def normalize_legacy_aq_formal_fixture_provider_schema(
         parsed, _ = aq_runtime._extract_single_provider_json_object(stripped)
         if not isinstance(parsed, Mapping):
             return original(text)
-        value = dict(parsed)
-        legacy_keys = {
-            "status",
-            "relation",
-            "selected_evidence_ids",
-            "claims",
-            "abstention_reason",
-        }
-        if not legacy_keys.issubset(value) or set(value) - legacy_keys - {"missing_facets"}:
+        value = _upgrade_legacy_fixture_provider_value(dict(parsed))
+        if value is None:
             return original(text)
-        value.setdefault("schema_version", "aq3-provider-candidate/v3")
-        value.setdefault("answer_text", "")
-        value.setdefault("missing_facets", [])
         return original(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
 
     monkeypatch.setattr(aq_runtime, "_parse_multi_provider_json", parse_with_legacy_envelope_upgrade)
+
+
+def _upgrade_legacy_fixture_provider_value(value: dict[str, Any]) -> dict[str, Any] | None:
+    legacy_keys = {
+        "status",
+        "relation",
+        "selected_evidence_ids",
+        "claims",
+        "abstention_reason",
+    }
+    if not legacy_keys.issubset(value) or set(value) - legacy_keys - {"missing_facets"}:
+        return None
+    if value.get("status") == "abstain":
+        value.setdefault("schema_version", _LEGACY_PROVIDER_SCHEMA)
+        value.setdefault("answer_text", "")
+        value.setdefault("claims", [])
+        value.setdefault("selected_evidence_ids", [])
+        value.setdefault("missing_facets", [])
+        return value
+
+    upgraded_claims: list[dict[str, Any]] = []
+    answer_parts: list[str] = []
+    for raw_claim in value.get("claims") or []:
+        if not isinstance(raw_claim, Mapping):
+            return None
+        claim = dict(raw_claim)
+        support_refs = claim.get("support_refs") or []
+        if not isinstance(support_refs, list):
+            return None
+        exact_quotes = [
+            str(ref.get("exact_quote") or ref.get("exact_support_snippet") or "").strip()
+            for ref in support_refs
+            if isinstance(ref, Mapping)
+        ]
+        surface_text = " ".join(item for item in exact_quotes if item).strip()
+        claim_id = str(claim.get("claim_id") or f"claim_{len(upgraded_claims) + 1}")
+        claim.setdefault("claim_id", claim_id)
+        claim.setdefault("surface_text", surface_text or "Evidence supports this claim.")
+        claim.setdefault("facet_ids", sorted(_LEGACY_FIXTURE_FACETS))
+        claim.setdefault("support_mode", "multi_evidence_exact_quote")
+        upgraded_claims.append(claim)
+        if surface_text:
+            answer_parts.append(f"{surface_text} [[{claim_id}]]")
+    value["claims"] = upgraded_claims
+    value.setdefault("schema_version", _LEGACY_PROVIDER_SCHEMA)
+    value.setdefault("answer_text", " ".join(answer_parts).strip())
+    value.setdefault("missing_facets", [])
+    return value
 
 
 @pytest.fixture(autouse=True)
