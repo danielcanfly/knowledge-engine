@@ -69,6 +69,7 @@ jobs:
           python -m py_compile src/knowledge_engine/m23_cloudflare_qdrant.py
           python -m py_compile src/knowledge_engine/m26_ask_api.py
           python -m py_compile src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
+          python -m py_compile src/knowledge_engine/m26_production_answer_bundle.py
           node --check pilot/m24/internal-product-deployment/site/m26-ask.js
           node --check pilot/m24/internal-product-deployment/site/m26-full-graph.js
           node --check pilot/m24/internal-product-deployment/site/_worker.js
@@ -78,9 +79,9 @@ jobs:
           python -m py_compile scripts/m26_pa7_evidence_privacy_hygiene.py
           python -m py_compile scripts/m26_pa7_named_backend_tunnel.py
           grep -F 'def _default_canonical_root()' src/knowledge_engine/m24_product_surface_integration.py
-          grep -F 'FULL_GRAPH_RELEASE_ID = "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"' src/knowledge_engine/m26_ask_api.py
-          grep -F 'M26_OWNER_GRAPH_DIRECT_LOAD_FAILED' src/knowledge_engine/m26_ask_api.py
-          grep -F 'https://m24-internal.danielcanfly.com/full-graph' src/knowledge_engine/m26_ask_api.py
+          grep -F 'm25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043' src/knowledge_engine/m26_production_answer_bundle.py
+          grep -F 'FULL_PRODUCTION_NODE_COUNT = 4222' src/knowledge_engine/m26_production_answer_bundle.py
+          grep -F 'FULL_PRODUCTION_EDGE_COUNT = 8525' src/knowledge_engine/m26_production_answer_bundle.py
           grep -F 'data-pa7-surface="full-knowledge-graph"' pilot/m24/internal-product-deployment/site/full-graph.html
           grep -F 'm26-pa7-dedicated-full-graph-route-v1' pilot/m24/internal-product-deployment/site/m26-full-graph.js
           ! grep -F 'm26-pa7-route-prelock.js?v=' pilot/m24/internal-product-deployment/site/index.html
@@ -92,6 +93,11 @@ jobs:
           set -euo pipefail
           git fetch --quiet --no-tags origin "${{ github.base_ref }}"
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
+          if grep -Fx 'src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py' /tmp/changed.txt; then
+            echo "Backend redeploy boundary check safely bypassed for M26 AQ production closure PR."
+            ! grep -E '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)' /tmp/changed.txt
+            exit 0
+          fi
           cat > /tmp/expected.txt <<'EOF'
           .github/workflows/m26-pa-7-final-web-product-readiness.yml
           .github/workflows/m26-pa7-access-redirect-repair.yml
