@@ -10,9 +10,12 @@ on:
       - "src/knowledge_engine/m26_pa7_semantic_closure_runtime.py"
       - "src/knowledge_engine/m26_production_api.py"
       - "scripts/m26_aq_final_closure.py"
+      - "scripts/m26_aq_generalized_closure.py"
       - "pilot/m26/m26-aq-final-r3-questions.json"
+      - "pilot/m26/m26-aq-gpt-e-black-box-questions.json"
       - "tests/test_m26_aq_semantic_closure_runtime.py"
       - "tests/test_m26_aq_production_deploy_lock.py"
+      - "tests/test_m26_aq_production_entrypoint.py"
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
       - "src/knowledge_engine/m26_production_answer_bundle.py"
       - "src/knowledge_engine/m26_ask_api.py"
@@ -39,18 +42,24 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 50
           show-progress: false
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install test dependencies
         run: python -m pip install -e '.[dev]'
-      - name: Compile semantic closure path
+
+      - name: Compile production closure paths
         run: |
           python -m py_compile \
             src/knowledge_engine/m26_pa7_semantic_closure_runtime.py \
             src/knowledge_engine/m26_production_api.py \
             scripts/m26_aq_final_closure.py \
-            tests/test_m26_aq_semantic_closure_runtime.py
+            scripts/m26_aq_generalized_closure.py \
+            tests/test_m26_aq_semantic_closure_runtime.py \
+            tests/test_m26_aq_production_entrypoint.py
+
       - name: Run full AQ regression population
         run: |
           set -euo pipefail
@@ -64,8 +73,11 @@ jobs:
             tests/test_m26_pa_7_reconciliation.py \
             tests/test_m26_aq_semantic_closure_runtime.py \
             tests/test_m26_aq_production_deploy_lock.py \
+            tests/test_m26_aq_production_entrypoint.py \
             --junitxml=/tmp/m26-aq-regression.xml
-          python scripts/m26_aq_final_closure.py validate-junit --junit /tmp/m26-aq-regression.xml --minimum 82
+          python scripts/m26_aq_final_closure.py validate-junit \
+            --junit /tmp/m26-aq-regression.xml \
+            --minimum 86
 
   deploy_and_live_closure:
     if: >
@@ -90,6 +102,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 50
           show-progress: false
+
       - name: Verify exact-head and deployment credentials
         run: |
           set -euo pipefail
@@ -98,11 +111,12 @@ jobs:
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
           bash scripts/configure_oracle_ssh.sh
-      - name: Atomically deploy exact head, prove runtime identity, and collect live closure
+
+      - name: Atomically deploy exact head and run all live closure gates
         run: |
           set -euo pipefail
           ssh oracle-knowledge \
-            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' bash -se" <<'REMOTE_DEPLOY'
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' bash -se" <<'REMOTE'
           set -euo pipefail
           lock_file="/tmp/knowledge-engine-production-oracle.lock"
           exec 9>"$lock_file"
@@ -112,123 +126,202 @@ jobs:
             git clone https://github.com/danielcanfly/knowledge-engine.git "$DEPLOY_PATH"
           fi
 
-          KNOWLEDGE_ENGINE_DEPLOY_LOCK_HELD=1 DEPLOY_PATH="$DEPLOY_PATH" RELEASE_SHA="$RELEASE_SHA" \
+          KNOWLEDGE_ENGINE_DEPLOY_LOCK_HELD=1 \
+            DEPLOY_PATH="$DEPLOY_PATH" \
+            RELEASE_SHA="$RELEASE_SHA" \
             bash "$DEPLOY_PATH/deploy/deploy.sh"
-          echo "AQ_REMOTE_DEPLOY_PHASE_PASSED"
-          REMOTE_DEPLOY
-
-          ssh oracle-knowledge \
-            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' bash -se" <<'REMOTE_COLLECT'
-          set -euo pipefail
-          lock_file="/tmp/knowledge-engine-production-oracle.lock"
-          exec 9>"$lock_file"
-          flock -x 9
 
           cd "$DEPLOY_PATH"
           git_sha="$(git rev-parse HEAD)"
           test "$git_sha" = "$EXPECTED_DEPLOY_SHA"
 
-          # Do not re-resolve the service through compose after deploy.sh removes its
-          # release-scoped temporary env file. Identify the running Compose service
-          # directly from Docker labels, then prove the immutable runtime env.
-          container_id="$(docker ps --filter 'label=com.docker.compose.service=knowledge-engine' --filter status=running -q | head -n 1)"
+          container_id="$(docker ps \
+            --filter 'label=com.docker.compose.service=knowledge-engine' \
+            --filter status=running -q | head -n 1)"
           test -n "$container_id"
           image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
-          runtime_sha="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" | awk -F= '$1 == "M26_QUERY_BUILD_SHA" {print substr($0, index($0, "=") + 1)}' | tail -n 1)"
-          test "$runtime_sha" = "$EXPECTED_DEPLOY_SHA"
           process_cmd="$(docker inspect --format '{{json .Config.Cmd}}' "$container_id")"
 
-          remote_evidence_dir="$DEPLOY_PATH/.m26-aq-final-production-closure"
-          mkdir -p "$remote_evidence_dir"
-          chmod 700 "$remote_evidence_dir"
-          identity_path="$remote_evidence_dir/identity-$EXPECTED_DEPLOY_SHA.json"
-          closure_path="$remote_evidence_dir/live-closure-$EXPECTED_DEPLOY_SHA.json"
-          rm -f "$identity_path" "$closure_path"
+          container_env() {
+            docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" \
+              | awk -F= -v key="$1" '$1 == key {print substr($0, index($0, "=") + 1)}' \
+              | tail -n 1
+          }
 
-          set -a
-          . ./.env
-          set +a
-          : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
-          : "${KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH:?missing owner hash}"
+          runtime_sha="$(container_env M26_QUERY_BUILD_SHA)"
+          test "$runtime_sha" = "$EXPECTED_DEPLOY_SHA"
+          export M26_QUERY_BACKEND_TOKEN="$(container_env M26_QUERY_BACKEND_TOKEN)"
+          export KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH="$(container_env KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH)"
+          routed_origin="$(container_env M26_QUERY_BACKEND_ORIGIN)"
+          test -n "$M26_QUERY_BACKEND_TOKEN"
+          test -n "$KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"
+          test -n "$routed_origin"
 
-          health_code="$(curl --silent --show-error \
+          evidence_dir="$DEPLOY_PATH/.m26-aq-final-production-closure"
+          mkdir -p "$evidence_dir"
+          chmod 700 "$evidence_dir"
+          identity_path="$evidence_dir/identity-$EXPECTED_DEPLOY_SHA.json"
+          frozen_path="$evidence_dir/frozen-$EXPECTED_DEPLOY_SHA.json"
+          blackbox_path="$evidence_dir/blackbox-$EXPECTED_DEPLOY_SHA.json"
+          routed_health_path="$evidence_dir/routed-health-$EXPECTED_DEPLOY_SHA.json"
+          rm -f "$identity_path" "$frozen_path" "$blackbox_path" "$routed_health_path"
+
+          PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
+            --questions pilot/m26/m26-aq-final-r3-questions.json \
+            --output "$frozen_path" \
+            --expected-sha "$EXPECTED_DEPLOY_SHA"
+
+          PYTHONPATH=src python3 scripts/m26_aq_final_closure.py validate \
+            --input "$frozen_path" \
+            --gate pilot/m26/m26-pa-7-resolved-production-gate.json \
+            --expected-sha "$EXPECTED_DEPLOY_SHA"
+
+          PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
+            --questions pilot/m26/m26-aq-gpt-e-black-box-questions.json \
+            --output "$blackbox_path" \
+            --expected-sha "$EXPECTED_DEPLOY_SHA"
+
+          PYTHONPATH=src python3 scripts/m26_aq_generalized_closure.py \
+            --input "$blackbox_path" \
+            --expected-sha "$EXPECTED_DEPLOY_SHA" \
+            --minimum 10
+
+          routed_code="$(curl --silent --show-error \
             -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
             -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
-            -o /tmp/m26-aq-local-health.json -w '%{http_code}' \
-            http://127.0.0.1:8080/api/m26/health)"
-          test "$health_code" = "200"
+            -o "$routed_health_path" \
+            -w '%{http_code}' \
+            "${routed_origin%/}/api/m26/health")"
+          if [ "$routed_code" != "200" ]; then
+            echo "AQ_ROUTED_HEALTH_HTTP=$routed_code"
+            exit 1
+          fi
 
-          EXPECTED_DEPLOY_SHA="$EXPECTED_DEPLOY_SHA" GIT_SHA="$git_sha" CONTAINER_ID="$container_id" \
-          IMAGE_ID="$image_id" RUNTIME_SHA="$runtime_sha" PROCESS_CMD="$process_cmd" \
-          IDENTITY_PATH="$identity_path" python3 - <<'PY'
+          EXPECTED_DEPLOY_SHA="$EXPECTED_DEPLOY_SHA" \
+          GIT_SHA="$git_sha" \
+          CONTAINER_ID="$container_id" \
+          IMAGE_ID="$image_id" \
+          RUNTIME_SHA="$runtime_sha" \
+          PROCESS_CMD="$process_cmd" \
+          FROZEN_PATH="$frozen_path" \
+          ROUTED_HEALTH_PATH="$routed_health_path" \
+          IDENTITY_PATH="$identity_path" \
+          python3 - <<'PY'
           import json
           import os
           from pathlib import Path
 
-          health = json.loads(Path('/tmp/m26-aq-local-health.json').read_text(encoding='utf-8'))
-          canonical = health.get('canonical_runtime', {}) if isinstance(health, dict) else {}
-          expected = os.environ['EXPECTED_DEPLOY_SHA']
-          health_sha = canonical.get('build_sha')
-          entrypoint = canonical.get('entrypoint')
-          if health_sha != expected:
-              raise SystemExit(f'local health SHA mismatch expected={expected} actual={health_sha}')
-          if entrypoint != 'knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query':
-              raise SystemExit(f'unexpected production entrypoint: {entrypoint}')
+          expected = os.environ["EXPECTED_DEPLOY_SHA"]
+          frozen = json.loads(Path(os.environ["FROZEN_PATH"]).read_text(encoding="utf-8"))
+          local_health = frozen.get("health", {}) if isinstance(frozen, dict) else {}
+          routed_health = json.loads(
+              Path(os.environ["ROUTED_HEALTH_PATH"]).read_text(encoding="utf-8")
+          )
+          routed_canonical = (
+              routed_health.get("canonical_runtime", {})
+              if isinstance(routed_health, dict)
+              else {}
+          )
+          entrypoint = local_health.get("entrypoint")
+          expected_entrypoint = (
+              "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
+          )
+          if local_health.get("build_sha") != expected:
+              raise SystemExit("local health SHA mismatch")
+          if routed_canonical.get("build_sha") != expected:
+              raise SystemExit("routed health SHA mismatch")
+          if entrypoint != expected_entrypoint:
+              raise SystemExit("local health entrypoint mismatch")
+          if routed_canonical.get("entrypoint") != expected_entrypoint:
+              raise SystemExit("routed health entrypoint mismatch")
+          if routed_health.get("status") != "ok":
+              raise SystemExit("routed health status mismatch")
+
           evidence = {
-              'schema_version': 'm26-aq-production-identity/v1',
-              'expected_deploy_sha': expected,
-              'git_head_sha': os.environ['GIT_SHA'],
-              'container_id': os.environ['CONTAINER_ID'],
-              'image_id': os.environ['IMAGE_ID'],
-              'container_runtime_sha': os.environ['RUNTIME_SHA'],
-              'local_health_sha': health_sha,
-              'entrypoint': entrypoint,
-              'process_cmd': os.environ['PROCESS_CMD'],
-              'raw_secret_recorded': False,
+              "schema_version": "m26-aq-production-identity/v2",
+              "expected_deploy_sha": expected,
+              "git_head_sha": os.environ["GIT_SHA"],
+              "container_id": os.environ["CONTAINER_ID"],
+              "image_id": os.environ["IMAGE_ID"],
+              "container_runtime_sha": os.environ["RUNTIME_SHA"],
+              "local_health_sha": local_health.get("build_sha"),
+              "routed_health_sha": routed_canonical.get("build_sha"),
+              "routed_health_status": routed_health.get("status"),
+              "routed_route_class": "named_cloudflare_tunnel_https_origin",
+              "entrypoint": entrypoint,
+              "process_cmd": os.environ["PROCESS_CMD"],
+              "frozen_population_rows": len(frozen.get("rows", [])),
+              "raw_routed_origin_recorded": False,
+              "raw_secret_recorded": False,
           }
-          identity_path = Path(os.environ['IDENTITY_PATH'])
-          identity_path.parent.mkdir(parents=True, exist_ok=True)
-          identity_path.write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
+          Path(os.environ["IDENTITY_PATH"]).write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
           PY
 
-          PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
-            --questions pilot/m26/m26-aq-final-r3-questions.json \
-            --output "$closure_path" \
-            --expected-sha "$EXPECTED_DEPLOY_SHA"
-
           test -s "$identity_path"
-          test -s "$closure_path"
-          echo "AQ_REMOTE_COLLECT_PHASE_PASSED"
-          REMOTE_COLLECT
+          test -s "$frozen_path"
+          test -s "$blackbox_path"
+          test -s "$routed_health_path"
+          echo "AQ_ATOMIC_DEPLOY_AND_LIVE_CLOSURE_PASSED"
+          REMOTE
 
           ssh oracle-knowledge \
             "cat '$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/identity-$EXPECTED_DEPLOY_SHA.json'" \
             > /tmp/m26-aq-production-identity.json
           ssh oracle-knowledge \
-            "cat '$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/live-closure-$EXPECTED_DEPLOY_SHA.json'" \
+            "cat '$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/frozen-$EXPECTED_DEPLOY_SHA.json'" \
             > /tmp/m26-aq-final-live-closure.json
+          ssh oracle-knowledge \
+            "cat '$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/blackbox-$EXPECTED_DEPLOY_SHA.json'" \
+            > /tmp/m26-aq-gpt-e-blackbox-live-closure.json
+          ssh oracle-knowledge \
+            "cat '$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/routed-health-$EXPECTED_DEPLOY_SHA.json'" \
+            > /tmp/m26-aq-routed-health.json
 
-          test -s /tmp/m26-aq-production-identity.json
-          test -s /tmp/m26-aq-final-live-closure.json
+          for path in \
+            /tmp/m26-aq-production-identity.json \
+            /tmp/m26-aq-final-live-closure.json \
+            /tmp/m26-aq-gpt-e-blackbox-live-closure.json \
+            /tmp/m26-aq-routed-health.json; do
+            test -s "$path"
+          done
 
           python - <<'PY'
           import json
           import os
           from pathlib import Path
+
           evidence = json.loads(Path('/tmp/m26-aq-production-identity.json').read_text())
           expected = os.environ['EXPECTED_DEPLOY_SHA']
-          for key in ('git_head_sha', 'container_runtime_sha', 'local_health_sha'):
+          for key in (
+              'git_head_sha',
+              'container_runtime_sha',
+              'local_health_sha',
+              'routed_health_sha',
+          ):
               if evidence.get(key) != expected:
                   raise SystemExit(f'identity mismatch {key}={evidence.get(key)} expected={expected}')
+          if evidence.get('routed_health_status') != 'ok':
+              raise SystemExit('routed health not ok')
           if evidence.get('raw_secret_recorded') is not False:
               raise SystemExit('secret hygiene evidence failed')
-          print(json.dumps(evidence, indent=2))
+          if evidence.get('raw_routed_origin_recorded') is not False:
+              raise SystemExit('routed origin hygiene evidence failed')
+          print(json.dumps(evidence, indent=2, sort_keys=True))
           PY
 
           PYTHONPATH=src python scripts/m26_aq_final_closure.py validate \
             --input /tmp/m26-aq-final-live-closure.json \
             --gate pilot/m26/m26-pa-7-resolved-production-gate.json \
             --expected-sha "$EXPECTED_DEPLOY_SHA"
+
+          PYTHONPATH=src python scripts/m26_aq_generalized_closure.py \
+            --input /tmp/m26-aq-gpt-e-blackbox-live-closure.json \
+            --expected-sha "$EXPECTED_DEPLOY_SHA" \
+            --minimum 10
+
       - name: Upload production closure evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -237,5 +330,7 @@ jobs:
           path: |
             /tmp/m26-aq-production-identity.json
             /tmp/m26-aq-final-live-closure.json
+            /tmp/m26-aq-gpt-e-blackbox-live-closure.json
+            /tmp/m26-aq-routed-health.json
           if-no-files-found: warn
           retention-days: 14
