@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 BATCH = ROOT / "pilot" / "m25" / "m25-6-review-batch.json"
@@ -115,10 +115,12 @@ def run(output: Path) -> dict[str, Any]:
                 before = screenshots / f"{index:02d}-{scenario['scenario_id']}-before.png"
                 page.screenshot(path=str(before), full_page=True)
                 page.click("button.submit")
-                page.locator("#decision-status").wait_for(state="visible")
-                page.wait_for_function(
-                    "document.querySelector('#decision-status').textContent.includes('Recorded')"
-                )
+                status_locator = page.locator("#decision-status")
+                status_locator.wait_for(state="visible")
+                # Use Playwright's locator assertion rather than injecting a JavaScript
+                # string into the page. The review surface intentionally ships a strict
+                # CSP that blocks string evaluation.
+                expect(status_locator).to_contain_text("Recorded")
                 after = screenshots / f"{index:02d}-{scenario['scenario_id']}-after.png"
                 page.screenshot(path=str(after), full_page=True)
                 evidence.append(
