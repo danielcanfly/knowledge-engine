@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -8,6 +9,7 @@ from . import m26_ask_api
 from . import m26_pa7_arbitrary_query_runtime as legacy_runtime
 from .m26_intent_compat import classify_with_semantic_compat
 from .m26_pa7_semantic_closure_runtime import run_owner_arbitrary_query
+from .m26_production_answer_bundle import FULL_PRODUCTION_QDRANT_COLLECTION
 
 _original_named_question_entities = legacy_runtime._named_question_entities
 _original_intent_class = legacy_runtime._intent_class
@@ -32,6 +34,10 @@ def _intent_class_with_semantic_compat(question: str) -> str:
         legacy_classifier=_original_intent_class,
     )
 
+
+# Production answer serving is pinned to the accepted full-production dense collection.
+# This overrides stale server-side collection aliases without weakening the runtime identity guard.
+os.environ["M26_PA7_DENSE_COLLECTION"] = FULL_PRODUCTION_QDRANT_COLLECTION
 
 # Install semantic compatibility before the owner-only routes are registered.
 legacy_runtime._named_question_entities = _named_question_entities_with_series_shorthand
