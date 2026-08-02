@@ -7,6 +7,7 @@ on:
       - ".github/workflows/m26-pa7-explicit-pages-deploy.yml"
       - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
       - ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
+      - ".github/workflows/m26-pa7-access-redirect-repair.yml"
       - ".github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml"
       - "deploy/deploy.sh"
       - "pilot/m24/internal-product-deployment/site/_headers"
@@ -15,6 +16,7 @@ on:
       - "pilot/m24/internal-product-deployment/site/index.html"
       - "pilot/m24/internal-product-deployment/site/m26-full-graph.js"
       - "pilot/m24/internal-product-deployment/site/m26-ask.js"
+      - "scripts/m26_pa7_access_browser_session_contract.py"
       - "scripts/m26_pa7_durable_backend_origin.py"
       - "scripts/m26_pa7_evidence_privacy_hygiene.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
@@ -22,6 +24,7 @@ on:
       - "src/knowledge_engine/m26_ask_api.py"
       - "tests/test_m23_5_cloudflare_qdrant.py"
       - "tests/test_m24_internal_ask_ui_api.py"
+      - "tests/test_m26_pa7_access_browser_session_contract.py"
       - "tests/test_m26_pa7_ask_api.py"
       - "tests/test_m26_pa7_final_web_readiness.py"
 
@@ -68,6 +71,7 @@ jobs:
           from pathlib import Path
           expected = {
               ".github/workflows/m26-pa-7-final-web-product-readiness.yml",
+              ".github/workflows/m26-pa7-access-redirect-repair.yml",
               ".github/workflows/m26-pa7-explicit-backend-redeploy.yml",
               ".github/workflows/m26-pa7-explicit-pages-deploy.yml",
               ".github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml",
@@ -78,6 +82,7 @@ jobs:
               "pilot/m24/internal-product-deployment/site/index.html",
               "pilot/m24/internal-product-deployment/site/m26-full-graph.js",
               "pilot/m24/internal-product-deployment/site/m26-ask.js",
+              "scripts/m26_pa7_access_browser_session_contract.py",
               "scripts/m26_pa7_durable_backend_origin.py",
               "scripts/m26_pa7_evidence_privacy_hygiene.py",
               "scripts/m26_pa7_named_backend_tunnel.py",
@@ -85,6 +90,7 @@ jobs:
               "src/knowledge_engine/m26_ask_api.py",
               "tests/test_m23_5_cloudflare_qdrant.py",
               "tests/test_m24_internal_ask_ui_api.py",
+              "tests/test_m26_pa7_access_browser_session_contract.py",
               "tests/test_m26_pa7_ask_api.py",
               "tests/test_m26_pa7_final_web_readiness.py",
           }

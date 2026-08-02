@@ -1,0 +1,194 @@
+name: M26.PA.7 Access Redirect Repair
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-pa7-access-redirect-repair.yml"
+      - ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
+      - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
+      - ".github/workflows/m26-pa7-explicit-pages-deploy.yml"
+      - "scripts/m26_pa7_access_browser_session_contract.py"
+      - "scripts/m26_pa7_evidence_privacy_hygiene.py"
+      - "tests/test_m26_pa7_access_browser_session_contract.py"
+      - "tests/test_m26_pa7_final_web_readiness.py"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: m26-pa7-access-redirect-repair-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 50
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -e '.[dev]'
+
+      - name: Validate Access browser-session repair boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          python -m ruff check \
+            scripts/m26_pa7_access_browser_session_contract.py \
+            scripts/m26_pa7_evidence_privacy_hygiene.py \
+            tests/test_m26_pa7_access_browser_session_contract.py \
+            tests/test_m26_pa7_final_web_readiness.py
+          python -m compileall -q \
+            scripts/m26_pa7_access_browser_session_contract.py \
+            scripts/m26_pa7_evidence_privacy_hygiene.py \
+            tests/test_m26_pa7_access_browser_session_contract.py \
+            tests/test_m26_pa7_final_web_readiness.py
+          python -m pytest -q \
+            tests/test_m26_pa7_access_browser_session_contract.py \
+            tests/test_m26_pa7_final_web_readiness.py
+
+      - name: Enforce bounded changed files
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git fetch --quiet --no-tags origin "${{ github.base_ref }}"
+          git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
+          cat /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/(m26-pa7-access-redirect-repair|m26-pa-7-final-web-product-readiness|m26-pa7-explicit-backend-redeploy|m26-pa7-explicit-pages-deploy)\.yml|scripts/m26_pa7_(access_browser_session_contract|evidence_privacy_hygiene)\.py|tests/test_(m26_pa7_access_browser_session_contract|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
+
+  repair_access_redirect_contract:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: m23-r3-diagnostic
+    env:
+      WORK_DIR: /tmp/m26-pa7-access-redirect-repair
+      INTERNAL_HOSTNAME: m24-internal.danielcanfly.com
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ACCESS_READ_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_READ_TOKEN }}
+      CLOUDFLARE_ACCESS_WRITE_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 50
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Prepare bounded repair evidence
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK_DIR/evidence"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          for name in CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_ACCESS_READ_TOKEN CLOUDFLARE_ACCESS_WRITE_TOKEN INTERNAL_HOSTNAME; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          echo "::add-mask::$CLOUDFLARE_ACCOUNT_ID"
+          echo "::add-mask::$CLOUDFLARE_ACCESS_READ_TOKEN"
+          echo "::add-mask::$CLOUDFLARE_ACCESS_WRITE_TOKEN"
+          echo "::add-mask::$INTERNAL_HOSTNAME"
+
+      - name: Repair Access browser-session redirect contract
+        id: repair
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python scripts/m26_pa7_access_browser_session_contract.py repair \
+            --before-output "$WORK_DIR/evidence/access-browser-session-before.json" \
+            --repair-output "$WORK_DIR/evidence/access-browser-session-repair.json" \
+            --after-output "$WORK_DIR/evidence/access-browser-session-after.json"
+
+      - name: Scan Access repair evidence privacy hygiene
+        id: privacy_scan
+        if: always()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python scripts/m26_pa7_evidence_privacy_hygiene.py scan \
+            --path "$WORK_DIR/evidence" \
+            --output "$WORK_DIR/evidence/evidence-privacy-scan.json"
+
+      - name: Upload Access redirect repair evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-pa7-access-redirect-repair-${{ github.sha }}
+          path: /tmp/m26-pa7-access-redirect-repair/evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Record Access redirect repair result on issue 1268
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          before_summary="before unavailable"
+          repair_summary="repair unavailable"
+          after_summary="after unavailable"
+          privacy_summary="privacy scan unavailable"
+          if test -f "$WORK_DIR/evidence/access-browser-session-before.json"; then
+            before_summary="$(jq -c '{status,root_cause_classification,target_root_app_count,target_path_match_counts,path_specific_overlap_counts,same_site_cookie_attribute:.target_root_app.same_site_cookie_attribute,path_cookie_attribute:.target_root_app.path_cookie_attribute,raw_domains_recorded,raw_cookie_values_recorded,raw_login_urls_recorded,raw_tokens_recorded,target_root_app}' "$WORK_DIR/evidence/access-browser-session-before.json")"
+          fi
+          if test -f "$WORK_DIR/evidence/access-browser-session-repair.json"; then
+            repair_summary="$(jq -c '{status,mutations,mutation_kind,root_cause_classification,before_same_site_cookie_attribute,after_same_site_cookie_attribute,before_path_cookie_attribute,after_path_cookie_attribute,raw_domains_recorded,raw_tokens_recorded}' "$WORK_DIR/evidence/access-browser-session-repair.json")"
+          fi
+          if test -f "$WORK_DIR/evidence/access-browser-session-after.json"; then
+            after_summary="$(jq -c '{status,root_cause_classification,target_root_app_count,target_path_match_counts,path_specific_overlap_counts,same_site_cookie_attribute:.target_root_app.same_site_cookie_attribute,path_cookie_attribute:.target_root_app.path_cookie_attribute,raw_domains_recorded,raw_cookie_values_recorded,raw_login_urls_recorded,raw_tokens_recorded,target_root_app}' "$WORK_DIR/evidence/access-browser-session-after.json")"
+          fi
+          if test -f "$WORK_DIR/evidence/evidence-privacy-scan.json"; then
+            privacy_summary="$(jq -c '{status,violations,raw_secret_values_recorded,files_scanned}' "$WORK_DIR/evidence/evidence-privacy-scan.json")"
+          fi
+          cat > "$WORK_DIR/issue-comment.md" <<EOF
+          ## M26.PA.7 Access redirect repair result
+
+          - workflow run: \`$GITHUB_RUN_ID\`
+          - attempt: \`$GITHUB_RUN_ATTEMPT\`
+          - main SHA: \`$GITHUB_SHA\`
+          - repair step outcome: \`${{ steps.repair.outcome }}\`
+          - privacy scan outcome: \`${{ steps.privacy_scan.outcome }}\`
+          - raw domains/cookies/login URLs/tokens recorded: \`false\`
+          - protected knowledge mutations: \`0\`
+
+          Before contract:
+
+          \`$before_summary\`
+
+          Repair action:
+
+          \`$repair_summary\`
+
+          After contract:
+
+          \`$after_summary\`
+
+          Privacy scan:
+
+          \`$privacy_summary\`
+          EOF
+          gh issue comment 1268 \
+            --repo danielcanfly/knowledge-engine \
+            --body-file "$WORK_DIR/issue-comment.md"
+
+      - name: Require Access redirect repair admission preconditions
+        if: always()
+        run: |
+          set -euo pipefail
+          test "${{ steps.repair.outcome }}" = "success"
+          test "${{ steps.privacy_scan.outcome }}" = "success"
+          jq -e '.status == "pass"' "$WORK_DIR/evidence/access-browser-session-after.json"
+          jq -e '.status == "pass" and .violations == 0' "$WORK_DIR/evidence/evidence-privacy-scan.json"

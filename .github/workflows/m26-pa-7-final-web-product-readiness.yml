@@ -1,15 +1,18 @@
 name: M26.PA.7 Final Web Product Readiness
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
+      - ".github/workflows/m26-pa7-access-redirect-repair.yml"
       - ".github/workflows/m26-1-architecture-authority.yml"
       - "Dockerfile"
       - "pilot/m26/m26-pa-7-final-web-formal-test-manifest.json"
       - "pilot/m24/internal-product-deployment/site/**"
       - "deploy/deploy.sh"
       - "schemas/m26-pa-7-final-web-*.schema.json"
+      - "scripts/m26_pa7_access_browser_session_contract.py"
       - "scripts/m26_pa7_durable_backend_origin.py"
       - "scripts/m26_pa7_evidence_privacy_hygiene.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
@@ -21,18 +24,21 @@ on:
       - "tests/test_m23_5_cloudflare_qdrant.py"
       - "tests/test_m24_internal_ask_ui_api.py"
       - "tests/test_m26_pa_7_arbitrary_query_runtime.py"
+      - "tests/test_m26_pa7_access_browser_session_contract.py"
       - "tests/test_m26_pa7_ask_api.py"
       - "tests/test_m26_pa7_final_web_readiness.py"
   push:
     branches: [main]
     paths:
       - ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
+      - ".github/workflows/m26-pa7-access-redirect-repair.yml"
       - ".github/workflows/m26-1-architecture-authority.yml"
       - "Dockerfile"
       - "pilot/m26/m26-pa-7-final-web-formal-test-manifest.json"
       - "pilot/m24/internal-product-deployment/site/**"
       - "deploy/deploy.sh"
       - "schemas/m26-pa-7-final-web-*.schema.json"
+      - "scripts/m26_pa7_access_browser_session_contract.py"
       - "scripts/m26_pa7_durable_backend_origin.py"
       - "scripts/m26_pa7_evidence_privacy_hygiene.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
@@ -44,6 +50,7 @@ on:
       - "tests/test_m23_5_cloudflare_qdrant.py"
       - "tests/test_m24_internal_ask_ui_api.py"
       - "tests/test_m26_pa_7_arbitrary_query_runtime.py"
+      - "tests/test_m26_pa7_access_browser_session_contract.py"
       - "tests/test_m26_pa7_ask_api.py"
       - "tests/test_m26_pa7_final_web_readiness.py"
 
@@ -115,11 +122,13 @@ jobs:
             src/knowledge_engine/api.py \
             src/knowledge_engine/m26_ask_api.py \
             src/knowledge_engine/m26_pa7_final_web_readiness.py \
+            scripts/m26_pa7_access_browser_session_contract.py \
             scripts/m26_pa7_durable_backend_origin.py \
             scripts/m26_pa7_evidence_privacy_hygiene.py \
             scripts/m26_pa7_named_backend_tunnel.py \
             tests/test_m23_5_cloudflare_qdrant.py \
             tests/test_m24_internal_ask_ui_api.py \
+            tests/test_m26_pa7_access_browser_session_contract.py \
             tests/test_m26_pa7_ask_api.py \
             tests/test_m26_pa7_final_web_readiness.py
           python -m compileall -q \
@@ -127,16 +136,19 @@ jobs:
             src/knowledge_engine/api.py \
             src/knowledge_engine/m26_ask_api.py \
             src/knowledge_engine/m26_pa7_final_web_readiness.py \
+            scripts/m26_pa7_access_browser_session_contract.py \
             scripts/m26_pa7_durable_backend_origin.py \
             scripts/m26_pa7_evidence_privacy_hygiene.py \
             scripts/m26_pa7_named_backend_tunnel.py \
             tests/test_m23_5_cloudflare_qdrant.py \
             tests/test_m24_internal_ask_ui_api.py \
+            tests/test_m26_pa7_access_browser_session_contract.py \
             tests/test_m26_pa7_ask_api.py \
             tests/test_m26_pa7_final_web_readiness.py
           python -m pytest -q \
             tests/test_m23_5_cloudflare_qdrant.py \
             tests/test_m24_internal_ask_ui_api.py \
+            tests/test_m26_pa7_access_browser_session_contract.py \
             tests/test_m26_pa7_ask_api.py \
             tests/test_m26_pa7_final_web_readiness.py
           node --check pilot/m24/internal-product-deployment/site/_worker.js
@@ -149,11 +161,13 @@ jobs:
           git fetch --quiet --no-tags origin "${{ github.base_ref }}"
           git diff --name-only "origin/${{ github.base_ref }}"...HEAD | sort > /tmp/changed.txt
           cat /tmp/changed.txt
-          ! grep -Ev '^(\.github/workflows/(m26-pa-7-final-web-product-readiness|m26-pa7-owner-access-and-full-graph-repair|m26-pa7-explicit-pages-deploy|m26-pa7-explicit-backend-redeploy|m26-pa-4-verified-answer-citation-gate|m26-1-architecture-authority)\.yml|Dockerfile|deploy/deploy\.sh|pilot/m26/m26-pa-7-final-web-formal-test-manifest\.json|pilot/m24/internal-product-deployment/site/(index\.html|app\.js|m26-ask\.js|_worker\.js|styles\.css|data/.*)|schemas/m26-pa-7-final-web-[a-z-]+-v1\.schema\.json|scripts/m26_pa7_(durable_backend_origin|evidence_privacy_hygiene|named_backend_tunnel)\.py|src/knowledge_engine/(api|m23_cloudflare_qdrant|m26_ask_api|m26_pa7_final_web_readiness)\.py|tests/test_(m23_5_cloudflare_qdrant|m24_internal_ask_ui_api|m26_pa7_ask_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/(m26-pa-7-final-web-product-readiness|m26-pa7-access-redirect-repair|m26-pa7-owner-access-and-full-graph-repair|m26-pa7-explicit-pages-deploy|m26-pa7-explicit-backend-redeploy|m26-pa-4-verified-answer-citation-gate|m26-1-architecture-authority)\.yml|Dockerfile|deploy/deploy\.sh|pilot/m26/m26-pa-7-final-web-formal-test-manifest\.json|pilot/m24/internal-product-deployment/site/(index\.html|app\.js|m26-ask\.js|_worker\.js|styles\.css|data/.*)|schemas/m26-pa-7-final-web-[a-z-]+-v1\.schema\.json|scripts/m26_pa7_(access_browser_session_contract|durable_backend_origin|evidence_privacy_hygiene|named_backend_tunnel)\.py|src/knowledge_engine/(api|m23_cloudflare_qdrant|m26_ask_api|m26_pa7_final_web_readiness)\.py|tests/test_(m23_5_cloudflare_qdrant|m24_internal_ask_ui_api|m26_pa7_access_browser_session_contract|m26_pa7_ask_api|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
           ! grep -E '^(production/|release/production|r2/|qdrant/|foundation/|credentials/|secrets/)' /tmp/changed.txt
 
   deploy_and_runtime_formal:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -268,6 +282,8 @@ jobs:
             printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
           done < "$WORK_DIR/runtime-bindings.env"
           rm -f "$WORK_DIR/runtime-bindings.env"
+          python scripts/m26_pa7_access_browser_session_contract.py inspect \
+            --evidence-output "$WORK_DIR/evidence/access-browser-session-contract.json"
 
       - name: Deploy Oracle backend exact SHA
         if: steps.guard.outputs.authorized == 'true'
@@ -1434,6 +1450,10 @@ jobs:
           if test -f "$WORK_DIR/evidence/final-web-live-deployment-seal.json"; then
             seal_summary="$(jq -c '{status,engine_sha,pages_candidate_deployment_id,ask_url,api_query_path,runtime_row_count,browser_owner_e2e_pending,public_traffic_operations,non_owner_provider_calls,rollback_target_verified}' "$WORK_DIR/evidence/final-web-live-deployment-seal.json")"
           fi
+          access_summary="access browser-session contract unavailable"
+          if test -f "$WORK_DIR/evidence/access-browser-session-contract.json"; then
+            access_summary="$(jq -c '{status,root_cause_classification,target_root_app_count,target_path_match_counts,path_specific_overlap_counts,same_site_cookie_attribute:.target_root_app.same_site_cookie_attribute,path_cookie_attribute:.target_root_app.path_cookie_attribute,raw_domains_recorded,raw_cookie_values_recorded,raw_login_urls_recorded,raw_tokens_recorded,target_root_app}' "$WORK_DIR/evidence/access-browser-session-contract.json")"
+          fi
           cat > "$WORK_DIR/issue-comment.md" <<EOF
           ## M26.PA.7 final web live deployment result
 
@@ -1449,6 +1469,10 @@ jobs:
           Seal summary:
 
           \`$seal_summary\`
+
+          Access browser-session contract summary:
+
+          \`$access_summary\`
           EOF
           gh issue comment 1268 \
             --repo danielcanfly/knowledge-engine \
