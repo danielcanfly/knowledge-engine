@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 
-
 _COMPARISON_TERMS = {
     "boundary",
     "boundaries",
