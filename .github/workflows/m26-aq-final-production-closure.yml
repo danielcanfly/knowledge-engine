@@ -102,7 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh oracle-knowledge \
-            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' bash -se" <<'REMOTE'
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' bash -se" <<'REMOTE_DEPLOY'
           set -euo pipefail
           lock_file="/tmp/knowledge-engine-production-oracle.lock"
           exec 9>"$lock_file"
@@ -114,6 +114,15 @@ jobs:
 
           KNOWLEDGE_ENGINE_DEPLOY_LOCK_HELD=1 DEPLOY_PATH="$DEPLOY_PATH" RELEASE_SHA="$RELEASE_SHA" \
             bash "$DEPLOY_PATH/deploy/deploy.sh"
+          echo "AQ_REMOTE_DEPLOY_PHASE_PASSED"
+          REMOTE_DEPLOY
+
+          ssh oracle-knowledge \
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' bash -se" <<'REMOTE_COLLECT'
+          set -euo pipefail
+          lock_file="/tmp/knowledge-engine-production-oracle.lock"
+          exec 9>"$lock_file"
+          flock -x 9
 
           cd "$DEPLOY_PATH"
           git_sha="$(git rev-parse HEAD)"
@@ -189,7 +198,8 @@ jobs:
 
           test -s "$identity_path"
           test -s "$closure_path"
-          REMOTE
+          echo "AQ_REMOTE_COLLECT_PHASE_PASSED"
+          REMOTE_COLLECT
 
           ssh oracle-knowledge \
             "cat '$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/identity-$EXPECTED_DEPLOY_SHA.json'" \
