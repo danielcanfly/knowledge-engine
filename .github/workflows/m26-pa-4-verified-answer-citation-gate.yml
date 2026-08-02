@@ -21,6 +21,8 @@ name: M26.PA.4 Real Verified Answer and Citation Gate
 # pilot/m26/m26-pa-5-reviewer-contract-v2.json
 # pilot/m26/m26-pa-5-threshold-semantics-v2.json
 # pilot/m26/m26-pa-5-v6-exhaustion-record.json
+# schemas/m26-pa-5-success-receipt-v1.schema.json
+# tests/test_m26_pa_5_live_execution.py
 
 on:
   pull_request:
