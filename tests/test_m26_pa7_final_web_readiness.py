@@ -20,6 +20,7 @@ from scripts.m26_pa7_evidence_privacy_hygiene import (
 )
 from scripts.m26_pa7_named_backend_tunnel import _require_hostname_under_zone
 
+import knowledge_engine.m26_pa7_arbitrary_query_runtime as runtime_module
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import LocalDenseProjectionChannel
 from knowledge_engine.m26_pa7_final_web_readiness import (
     ASK_URL,
@@ -38,6 +39,7 @@ from knowledge_engine.m26_production_promotion_closure import (
     load_json,
     verify_self_digest,
 )
+from tests.m26_answer_bundle_fixture import synthetic_full_production_answer_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
 PILOT = ROOT / "pilot" / "m26"
@@ -46,6 +48,15 @@ OWNER_SUBJECT_HASH = "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf63
 FINAL_MANIFEST_SELF_SHA256 = (
     "fbedacb25b7bc9a28833d58658e6425637d990b064ea67a31451f94e7f36e91e"
 )
+
+
+@pytest.fixture(autouse=True)
+def _full_production_answer_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        runtime_module,
+        "load_production_answer_bundle",
+        lambda store=None: synthetic_full_production_answer_bundle(),
+    )
 
 
 class ExactSpanProvider:
