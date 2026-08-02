@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -16,6 +18,12 @@ EXPECTED_NODE_COUNT = 4222
 EXPECTED_EDGE_COUNT = 8525
 EXPECTED_GRAPH_EDGE = "edge_3f15206278e63ccf8981"
 ANSWER_SOURCE = "provider_verified_runtime_bound_semantic_closure"
+_TRANSIENT_REQUEST_ERRORS = (
+    ConnectionResetError,
+    TimeoutError,
+    http.client.RemoteDisconnected,
+    urllib.error.URLError,
+)
 
 
 def _request_json(
@@ -39,17 +47,23 @@ def _request_json(
         headers=headers,
         method="POST" if body else "GET",
     )
-    try:
-        with urllib.request.urlopen(request, timeout=180) as response:
-            raw = response.read()
-            return response.status, json.loads(raw)
-    except urllib.error.HTTPError as exc:
-        raw = exc.read()
+    for attempt in range(4):
         try:
-            parsed = json.loads(raw)
-        except Exception:
-            parsed = {"error": "non-json response"}
-        return exc.code, parsed
+            with urllib.request.urlopen(request, timeout=180) as response:
+                raw = response.read()
+                return response.status, json.loads(raw)
+        except urllib.error.HTTPError as exc:
+            raw = exc.read()
+            try:
+                parsed = json.loads(raw)
+            except Exception:
+                parsed = {"error": "non-json response"}
+            return exc.code, parsed
+        except _TRANSIENT_REQUEST_ERRORS:
+            if attempt == 3:
+                raise
+            time.sleep(2 * (attempt + 1))
+    raise RuntimeError("unreachable request retry state")
 
 
 def collect(
