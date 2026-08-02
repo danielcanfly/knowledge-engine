@@ -46,6 +46,8 @@ RESPONSE_SCHEMA = "knowledge-engine-m26-pa7-arbitrary-owner-query-response/v1"
 MAX_QUERY_CHARS = 2_000
 MAX_EVIDENCE_ITEMS = 3
 MAX_BUNDLE_EVIDENCE_ITEMS = 5
+MAX_CANDIDATE_POOL_ITEMS = 40
+MAX_DYNAMIC_EVIDENCE_ITEMS = 16
 MAX_PARENT_SECTIONS_PER_EVIDENCE = 3
 LOCAL_DENSE_DIMENSION = 64
 PA4_POLICY_PATH = Path("pilot/m26/m26-pa-4-verified-answer-policy.json")
@@ -438,6 +440,7 @@ def run_owner_arbitrary_query(
         lexical_result=lexical,
         dense_result=dense,
         trace_id=trace_id,
+        question=normalized_question,
         intent_class=intent_class,
     )
     if not evidence or not _has_meaningful_overlap(normalized_question, evidence):
@@ -648,6 +651,40 @@ def _retrieval_response_fields(
             if item.get("evidence_type") != "graph_edge" or item.get("source_id")
         }
     )
+    graph_derived_selected = [
+        item
+        for item in selected_evidence
+        if item.get("evidence_type") == "graph_edge"
+        or any(str(channel).startswith("graph_") for channel in item.get("channels", []))
+    ]
+    selected_relation_types = sorted(
+        {
+            str(relation)
+            for item in selected_evidence
+            for relation in _object(
+                item.get("retrieval_metadata", {})
+                if isinstance(item.get("retrieval_metadata"), Mapping)
+                else {},
+                "retrieval metadata",
+            ).get("relation_types", [])
+            if str(relation)
+        }
+        | {
+            str(item.get("relation_type", ""))
+            for item in selected_evidence
+            if item.get("relation_type")
+        }
+    )
+    selected_hops = [
+        int(meta.get("graph_hop", 0))
+        for item in selected_evidence
+        for meta in [
+            item.get("retrieval_metadata", {})
+            if isinstance(item.get("retrieval_metadata"), Mapping)
+            else {}
+        ]
+        if int(meta.get("graph_hop", 0)) > 0
+    ]
     return {
         "production_release_id": bundle.release_id,
         "production_manifest_sha256": bundle.manifest_sha256,
@@ -681,20 +718,50 @@ def _retrieval_response_fields(
             "graph": True,
             "provenance": True,
             "parent_expansion": parent_expansion["expanded_section_count"] > 0,
-            "reranking": "bounded_channel_score_then_release_identity",
+            "reranking": (
+                "dynamic_candidate_pool_graph_distance_source_diversity_redundancy_penalty"
+            ),
             "intent_class": intent_class,
             "multi_evidence_bundle": True,
+            "dynamic_evidence_budget": True,
+            "graph_expansion_default_for_ordinary_queries": True,
+            "source_diversity": True,
+            "redundancy_penalty": True,
         },
         "candidate_count_by_channel": {
             "lexical": len(lexical_results),
             "dense": len(dense_candidates),
+            "seed": len(
+                {str(item.get("section_id", "")) for item in lexical_results}
+                | {str(item.get("section_id", "")) for item in dense_candidates}
+            ),
             "combined_unique": len(
                 {str(item.get("section_id", "")) for item in lexical_results}
                 | {str(item.get("section_id", "")) for item in dense_candidates}
             ),
+            "graph_expanded_selected": len(graph_derived_selected),
+            "graph_edge_selected": len(
+                [item for item in selected_evidence if item.get("evidence_type") == "graph_edge"]
+            ),
         },
-        "graph_hops_used": len(graph_edges),
+        "graph_hops_used": max(selected_hops or [len(graph_edges) if graph_edges else 0]),
         "graph_trace": graph_edges[:4],
+        "graph_observability": {
+            "selected_graph_derived_evidence_count": len(graph_derived_selected),
+            "selected_graph_relation_types": selected_relation_types,
+            "selected_graph_hop_counts": selected_hops,
+        },
+        "rerank_diversity_summary": {
+            "selected_evidence_count": len(selected_evidence),
+            "distinct_source_count": len(source_identities),
+            "selected_source_redundancy": {
+                source: count
+                for source, count in Counter(
+                    _source_identity(item) for item in selected_evidence
+                ).items()
+                if count > 1
+            },
+        },
         "parent_expansion": parent_expansion,
         "selected_evidence_ids": [str(item["evidence_id"]) for item in selected_evidence],
         "selected_locator_ids": [str(item["locator_id"]) for item in selected_evidence],
@@ -1010,16 +1077,24 @@ def _build_multi_evidence_provider_payload(
                 "claims",
                 "abstention_reason",
             ],
+            "optional_json_keys": ["answer_text"],
             "claim_contract": (
                 "For answer_candidate, each claim must contain claim_id, claim_role, and "
                 "support_refs. Each support_ref must copy evidence_id, locator_id, and an "
-                "exact_quote byte-for-byte from one supplied evidence text. Do not invent "
-                "IDs, locators, graph edges, provenance fields, or quotations."
+                "exact_quote byte-for-byte from one supplied evidence text. You may also "
+                "return answer_text as natural prose, but every material sentence must include "
+                "one or more citation markers matching verified support refs such as "
+                "[claim_1_ref_1]. Do not invent IDs, locators, graph edges, provenance fields, "
+                "or quotations."
             ),
             "answer_candidate_json_example": {
                 "status": "answer_candidate",
                 "relation": "complements",
                 "selected_evidence_ids": [item["evidence_id"] for item in evidence_payload[:2]],
+                "answer_text": (
+                    "The evidence indicates that the first component and second component "
+                    "work together in the approved runtime path [claim_1_ref_1][claim_1_ref_2]."
+                ),
                 "claims": [
                     {
                         "claim_id": "claim_1",
@@ -1059,10 +1134,11 @@ def _build_multi_evidence_provider_payload(
         "temperature": 0,
         "stream": False,
         "system": (
-            "You are executing a bounded M26.PA.7 multi-evidence verification task. "
-            "Return one compact JSON object only. Use only supplied evidence IDs, locators, "
-            "graph/provenance identities, and exact quotations. If the evidence bundle cannot "
-            "satisfy the intent-specific rule, return status abstain."
+            "You are executing a bounded M26.PA.7 answer-quality task. Return one compact JSON "
+            "object only. Write a natural, coherent answer_text when supported, then bind every "
+            "material claim to supplied evidence IDs, locators, graph/provenance identities, and "
+            "exact quotations. If the evidence bundle cannot satisfy the intent-specific rule, "
+            "return status abstain."
         ),
         "messages": [
             {
@@ -1139,9 +1215,10 @@ def _parse_multi_provider_json(text: str) -> dict[str, Any]:
             raise _verification_failure("M26-PA7-ME-004", "provider JSON is malformed") from exc
     value = _object(parsed, "provider JSON")
     required = {"status", "relation", "selected_evidence_ids", "claims", "abstention_reason"}
+    optional = {"answer_text"}
     if not required.issubset(value):
         raise _verification_failure("M26-PA7-ME-005", "provider JSON missing required fields")
-    if set(value) - required:
+    if set(value) - required - optional:
         raise _verification_failure("M26-PA7-ME-006", "provider JSON contains unknown fields")
     return dict(value)
 
@@ -1256,6 +1333,7 @@ def _verify_multi_evidence_provider_output(
         "case_id": trace_id,
         "terminal_status": "verified_answer_ready_candidate",
         "relation": parsed.get("relation"),
+        "answer_text": str(parsed.get("answer_text") or ""),
         "selected_evidence_ids": selected_or_used,
         "selected_graph_edge_ids": sorted(used_graph_edges),
         "material_claims": claim_records,
@@ -1362,7 +1440,11 @@ def _verified_multi_evidence_answer(
                 ],
             }
         )
-    answer_text = _render_answer(intent_class, str(verified.get("relation")), claim_texts)
+    answer_text = _verified_natural_answer_text(
+        verified.get("answer_text"),
+        citations=citations,
+        fallback=_render_answer(intent_class, str(verified.get("relation")), claim_texts),
+    )
     if not answer_text:
         return _verified_abstention(
             reason_codes=["EMPTY_VERIFIED_CLAIM"],
@@ -1406,6 +1488,34 @@ def _verified_multi_evidence_answer(
         "unsupported_accepted_claims": 0,
         "repair_attempted": repair_attempted,
     }
+
+
+def _verified_natural_answer_text(
+    raw_answer: Any,
+    *,
+    citations: Sequence[Mapping[str, Any]],
+    fallback: str,
+) -> str:
+    answer = str(raw_answer or "").strip()
+    if not answer:
+        return fallback
+    if _secret_like(answer):
+        return fallback
+    citation_ids = {str(item.get("citation_id", "")) for item in citations}
+    markers = set(re.findall(r"\[([A-Za-z0-9_]+_ref_\d+)\]", answer))
+    if not markers or not markers.issubset(citation_ids):
+        return fallback
+    material_sentences = [
+        item.strip()
+        for item in re.split(r"(?<=[.!?])\s+", answer)
+        if item.strip() and not item.strip().startswith("Note:")
+    ]
+    if any(
+        not re.search(r"\[[A-Za-z0-9_]+_ref_\d+\]", sentence)
+        for sentence in material_sentences
+    ):
+        return fallback
+    return answer
 
 
 def _verified_abstention(
@@ -1500,47 +1610,24 @@ def _select_evidence(
     lexical_result: Mapping[str, Any],
     dense_result: Mapping[str, Any],
     trace_id: str,
+    question: str,
     intent_class: str,
 ) -> list[dict[str, Any]]:
     documents = {str(item["section_id"]): item for item in _release_documents(bundle)}
-    candidates: dict[str, dict[str, Any]] = {}
     lexical_results = _list(lexical_result.get("results"), "lexical results")
-    for rank, item in enumerate(lexical_results, start=1):
-        section_id = str(item.get("section_id", ""))
-        if section_id not in documents:
-            continue
-        candidates[section_id] = {
-            "section_id": section_id,
-            "lexical": dict(item),
-            "channels": {"lexical"},
-            "score": float(item.get("score", 0)) + 1.0 / rank,
-        }
-    for rank, item in enumerate(_list(dense_result.get("candidates"), "dense candidates"), start=1):
-        section_id = str(item.get("section_id", ""))
-        if section_id not in documents:
-            continue
-        candidate = candidates.setdefault(
-            section_id,
-            {
-                "section_id": section_id,
-                "lexical": {},
-                "channels": set(),
-                "score": 0.0,
-            },
-        )
-        candidate["channels"].add("dense")
-        candidate["score"] += float(item.get("score", 0.0)) + 0.5 / rank
-        candidate["dense"] = dict(item)
-    ordered = sorted(
-        candidates.values(),
-        key=lambda item: (
-            -len(item["channels"]),
-            -float(item["score"]),
-            item["section_id"],
-        ),
+    candidates = _build_candidate_pool(
+        bundle=bundle,
+        documents=documents,
+        lexical_results=lexical_results,
+        dense_candidates=_list(dense_result.get("candidates"), "dense candidates"),
+        question=question,
+        intent_class=intent_class,
     )
+    budget = _dynamic_evidence_budget(question=question, intent_class=intent_class)
+    ordered = _rerank_candidates(candidates, budget=budget)
+    selected_candidates = _select_diverse_candidates(ordered, budget=budget)
     evidence = []
-    for index, candidate in enumerate(ordered[:MAX_EVIDENCE_ITEMS], start=1):
+    for index, candidate in enumerate(selected_candidates, start=1):
         document = documents[candidate["section_id"]]
         lexical = candidate.get("lexical") if isinstance(candidate.get("lexical"), Mapping) else {}
         evidence.append(
@@ -1551,6 +1638,7 @@ def _select_evidence(
                 trace_id=trace_id,
                 ordinal=index,
                 channels=sorted(candidate["channels"]),
+                retrieval_metadata=_candidate_public_metadata(candidate),
             )
         )
     return _augment_evidence_for_intent(
@@ -1559,7 +1647,259 @@ def _select_evidence(
         lexical_results=lexical_results,
         trace_id=trace_id,
         intent_class=intent_class,
+        budget=budget,
     )
+
+
+def _build_candidate_pool(
+    *,
+    bundle: CanonicalReleaseBundle,
+    documents: Mapping[str, Mapping[str, Any]],
+    lexical_results: Sequence[Any],
+    dense_candidates: Sequence[Any],
+    question: str,
+    intent_class: str,
+) -> list[dict[str, Any]]:
+    candidates: dict[str, dict[str, Any]] = {}
+    for rank, item in enumerate(lexical_results, start=1):
+        section_id = str(item.get("section_id", ""))
+        if section_id not in documents:
+            continue
+        candidate = candidates.setdefault(section_id, _empty_candidate(section_id))
+        candidate["lexical"] = dict(item)
+        candidate["channels"].add("lexical")
+        candidate["score"] += float(item.get("score", 0)) + 1.0 / rank
+        candidate["seed_rank"] = min(int(candidate.get("seed_rank", 999)), rank)
+    for rank, item in enumerate(dense_candidates, start=1):
+        section_id = str(item.get("section_id", ""))
+        if section_id not in documents:
+            continue
+        candidate = candidates.setdefault(section_id, _empty_candidate(section_id))
+        candidate["channels"].add("dense")
+        candidate["score"] += float(item.get("score", 0.0)) + 0.5 / rank
+        candidate["dense"] = dict(item)
+        candidate["seed_rank"] = min(int(candidate.get("seed_rank", 999)), rank)
+    _add_graph_expanded_candidates(
+        bundle=bundle,
+        documents=documents,
+        candidates=candidates,
+        question=question,
+        intent_class=intent_class,
+    )
+    return sorted(
+        candidates.values(),
+        key=lambda item: (-float(item["score"]), item["section_id"]),
+    )[:MAX_CANDIDATE_POOL_ITEMS]
+
+
+def _empty_candidate(section_id: str) -> dict[str, Any]:
+    return {
+        "section_id": section_id,
+        "lexical": {},
+        "channels": set(),
+        "score": 0.0,
+        "seed_rank": 999,
+        "graph_hop": 0,
+        "graph_edges": [],
+        "relation_types": set(),
+    }
+
+
+def _add_graph_expanded_candidates(
+    *,
+    bundle: CanonicalReleaseBundle,
+    documents: Mapping[str, Mapping[str, Any]],
+    candidates: dict[str, dict[str, Any]],
+    question: str,
+    intent_class: str,
+) -> None:
+    by_concept: dict[str, list[Mapping[str, Any]]] = {}
+    for document in documents.values():
+        by_concept.setdefault(str(document.get("concept_id", "")), []).append(document)
+    doc_by_concept = {concept: docs[0] for concept, docs in by_concept.items() if docs}
+    concept_seed_scores: dict[str, float] = {}
+    for candidate in candidates.values():
+        document = documents.get(str(candidate.get("section_id", "")))
+        if not document:
+            continue
+        concept_id = str(document.get("concept_id", ""))
+        concept_seed_scores[concept_id] = max(
+            concept_seed_scores.get(concept_id, 0.0),
+            float(candidate.get("score", 0.0)),
+        )
+    if not concept_seed_scores:
+        return
+    query_terms = _meaningful_terms(question)
+    relation_index: dict[str, list[Mapping[str, Any]]] = {}
+    for edge in bundle.graph_v2.get("edges", []):
+        if not isinstance(edge, Mapping) or not _edge_has_endpoint_documents(edge, bundle):
+            continue
+        relation_index.setdefault(str(edge.get("source", "")), []).append(edge)
+        relation_index.setdefault(str(edge.get("target", "")), []).append(edge)
+    frontier = sorted(concept_seed_scores.items(), key=lambda item: (-item[1], item[0]))[:10]
+    _expand_graph_hop(
+        documents=documents,
+        doc_by_concept=doc_by_concept,
+        candidates=candidates,
+        relation_index=relation_index,
+        frontier=frontier,
+        query_terms=query_terms,
+        hop=1,
+    )
+    if _allow_second_hop(question=question, intent_class=intent_class):
+        second_frontier = [
+            (
+                str(edge.get("target" if str(edge.get("source")) == concept else "source", "")),
+                score * 0.65,
+            )
+            for concept, score in frontier[:6]
+            for edge in relation_index.get(concept, [])[:4]
+        ][:16]
+        _expand_graph_hop(
+            documents=documents,
+            doc_by_concept=doc_by_concept,
+            candidates=candidates,
+            relation_index=relation_index,
+            frontier=second_frontier,
+            query_terms=query_terms,
+            hop=2,
+        )
+
+
+def _expand_graph_hop(
+    *,
+    documents: Mapping[str, Mapping[str, Any]],
+    doc_by_concept: Mapping[str, Mapping[str, Any]],
+    candidates: dict[str, dict[str, Any]],
+    relation_index: Mapping[str, Sequence[Mapping[str, Any]]],
+    frontier: Sequence[tuple[str, float]],
+    query_terms: set[str],
+    hop: int,
+) -> None:
+    channel = f"graph_{hop}hop"
+    for seed_concept, seed_score in frontier:
+        for edge in relation_index.get(seed_concept, [])[:6]:
+            source = str(edge.get("source", ""))
+            target = str(edge.get("target", ""))
+            neighbour = target if source == seed_concept else source
+            document = doc_by_concept.get(neighbour)
+            if not document:
+                continue
+            section_id = str(document.get("section_id", ""))
+            relevance = _text_term_overlap_score(query_terms, _document_text(document))
+            confidence = float(edge.get("confidence", 0.0) or 0.0)
+            hop_weight = 0.55 if hop == 1 else 0.3
+            graph_score = seed_score * hop_weight + confidence + relevance
+            if hop == 2 and relevance <= 0 and confidence < 0.85:
+                continue
+            candidate = candidates.setdefault(section_id, _empty_candidate(section_id))
+            candidate["channels"].add(channel)
+            candidate["score"] += graph_score
+            candidate["graph_hop"] = min(
+                int(candidate.get("graph_hop") or hop),
+                hop,
+            )
+            candidate["graph_edges"].append(dict(edge))
+            candidate["relation_types"].add(str(edge.get("relation_type", "")))
+            candidate.setdefault("graph_seed_concepts", set()).add(seed_concept)
+
+
+def _dynamic_evidence_budget(*, question: str, intent_class: str) -> int:
+    terms = _meaningful_terms(question)
+    if intent_class in {
+        "graph_relationship",
+        "cross_document_comparison",
+        "complementary_synthesis",
+    }:
+        base = 10
+    elif (
+        intent_class in {"temporal_conflict", "provenance_source_trace"}
+        or len(terms) >= 8
+        or any(term in terms for term in {"explain", "how", "why"})
+    ):
+        base = 8
+    else:
+        base = 5
+    if len(terms) >= 12:
+        base += 2
+    return max(4, min(base, MAX_DYNAMIC_EVIDENCE_ITEMS))
+
+
+def _rerank_candidates(
+    candidates: Sequence[Mapping[str, Any]], *, budget: int
+) -> list[dict[str, Any]]:
+    ordered: list[dict[str, Any]] = []
+    for candidate in candidates:
+        item = dict(candidate)
+        channel_count = len(item.get("channels", []))
+        hop = int(item.get("graph_hop") or 0)
+        graph_bonus = 0.35 if hop == 1 else 0.15 if hop == 2 else 0.0
+        item["rerank_score"] = float(item.get("score", 0.0)) + channel_count * 0.35 + graph_bonus
+        ordered.append(item)
+    return sorted(
+        ordered,
+        key=lambda item: (
+            -float(item["rerank_score"]),
+            int(item.get("graph_hop") or 99),
+            int(item.get("seed_rank", 999)),
+            str(item["section_id"]),
+        ),
+    )[: max(MAX_CANDIDATE_POOL_ITEMS, budget)]
+
+
+def _select_diverse_candidates(
+    candidates: Sequence[Mapping[str, Any]],
+    *,
+    budget: int,
+) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    source_counts: Counter[str] = Counter()
+    concept_counts: Counter[str] = Counter()
+    for candidate in candidates:
+        section_id = str(candidate["section_id"])
+        source_key = section_id.split("#", 1)[0]
+        concept_key = source_key
+        if source_counts[source_key] >= 2 or concept_counts[concept_key] >= 3:
+            continue
+        selected.append(dict(candidate))
+        source_counts[source_key] += 1
+        concept_counts[concept_key] += 1
+        if len(selected) >= budget:
+            break
+    if len(selected) < min(budget, len(candidates)):
+        seen = {str(item["section_id"]) for item in selected}
+        for candidate in candidates:
+            if str(candidate["section_id"]) in seen:
+                continue
+            selected.append(dict(candidate))
+            if len(selected) >= budget:
+                break
+    return selected
+
+
+def _candidate_public_metadata(candidate: Mapping[str, Any]) -> dict[str, Any]:
+    graph_edges = [
+        {
+            "edge_id": str(edge.get("edge_id", "")),
+            "source": str(edge.get("source", "")),
+            "target": str(edge.get("target", "")),
+            "relation_type": str(edge.get("relation_type", "")),
+            "confidence": edge.get("confidence"),
+        }
+        for edge in candidate.get("graph_edges", [])
+        if isinstance(edge, Mapping)
+    ]
+    return {
+        "rerank_score": round(float(candidate.get("rerank_score", candidate.get("score", 0.0))), 6),
+        "graph_hop": int(candidate.get("graph_hop") or 0),
+        "graph_edges": graph_edges[:4],
+        "relation_types": sorted(
+            {str(item) for item in candidate.get("relation_types", set()) if item}
+        ),
+        "graph_seed_concepts": sorted(
+            {str(item) for item in candidate.get("graph_seed_concepts", set()) if item}
+        )[:6],
+    }
 
 
 def _augment_evidence_for_intent(
@@ -1569,6 +1909,7 @@ def _augment_evidence_for_intent(
     lexical_results: Sequence[Any],
     trace_id: str,
     intent_class: str,
+    budget: int,
 ) -> list[dict[str, Any]]:
     evidence = [dict(item) for item in base_evidence]
     if intent_class in {
@@ -1581,6 +1922,7 @@ def _augment_evidence_for_intent(
             evidence=evidence,
             trace_id=trace_id,
             minimum=2,
+            limit=budget,
         )
     if intent_class == "graph_relationship":
         evidence = _graph_evidence_bundle(
@@ -1588,20 +1930,23 @@ def _augment_evidence_for_intent(
             evidence=evidence,
             lexical_results=lexical_results,
             trace_id=trace_id,
+            limit=budget,
         )
     elif intent_class == "provenance_source_trace":
         evidence = _provenance_evidence_bundle(
             bundle=bundle,
             evidence=evidence,
             trace_id=trace_id,
+            limit=budget,
         )
     elif intent_class == "temporal_conflict":
         evidence = _temporal_evidence_bundle(
             bundle=bundle,
             evidence=evidence,
             trace_id=trace_id,
+            limit=budget,
         )
-    return _dedupe_evidence(evidence)[:MAX_BUNDLE_EVIDENCE_ITEMS]
+    return _dedupe_evidence(evidence)[:budget]
 
 
 def _evidence_item(
@@ -1612,6 +1957,7 @@ def _evidence_item(
     trace_id: str,
     ordinal: int,
     channels: Sequence[str],
+    retrieval_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     section_id = str(document["section_id"])
     passage = _bounded_text(str(document.get("body") or document.get("excerpt") or ""))
@@ -1656,6 +2002,7 @@ def _evidence_item(
         "relation_expansions": list(lexical_result.get("relation_expansions", []))
         if isinstance(lexical_result, Mapping)
         else [],
+        "retrieval_metadata": dict(retrieval_metadata or {}),
     }
 
 
@@ -1665,6 +2012,7 @@ def _ensure_distinct_passage_sources(
     evidence: Sequence[Mapping[str, Any]],
     trace_id: str,
     minimum: int,
+    limit: int,
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
     selected_sections = {str(item.get("section_id", "")) for item in selected}
@@ -1690,7 +2038,7 @@ def _ensure_distinct_passage_sources(
         selected_sections.add(section_id)
         source_identities.add(_source_identity(item))
         ordinal += 1
-        if len(source_identities) >= minimum or len(selected) >= MAX_BUNDLE_EVIDENCE_ITEMS:
+        if len(source_identities) >= minimum or len(selected) >= limit:
             break
     return selected
 
@@ -1701,6 +2049,7 @@ def _graph_evidence_bundle(
     evidence: Sequence[Mapping[str, Any]],
     lexical_results: Sequence[Any],
     trace_id: str,
+    limit: int,
 ) -> list[dict[str, Any]]:
     passages = [dict(item) for item in evidence if item.get("evidence_type") == "passage"]
     edge = _first_authoritative_edge(passages, lexical_results, bundle)
@@ -1719,10 +2068,10 @@ def _graph_evidence_bundle(
         trace_id=trace_id,
         ordinal=len(endpoint_passages) + 1,
     )
-    # Keep the edge visible, followed by both endpoints, while staying inside the 1-5 bound.
+    # Keep the edge visible, followed by both endpoints, while staying inside the dynamic bound.
     ordered = [graph_item, *endpoint_passages]
     for item in passages:
-        if len(ordered) >= MAX_BUNDLE_EVIDENCE_ITEMS:
+        if len(ordered) >= limit:
             break
         if str(item["evidence_id"]) not in {str(existing["evidence_id"]) for existing in ordered}:
             ordered.append(item)
@@ -1847,6 +2196,7 @@ def _provenance_evidence_bundle(
     bundle: CanonicalReleaseBundle,
     evidence: Sequence[Mapping[str, Any]],
     trace_id: str,
+    limit: int,
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
     for passage in selected:
@@ -1855,17 +2205,18 @@ def _provenance_evidence_bundle(
         record = _provenance_records_by_concept(bundle).get(str(passage.get("concept_id", "")))
         if not record:
             continue
-        selected.append(
-            _provenance_evidence_item(
-                bundle=bundle,
-                record=record,
-                passage=passage,
-                trace_id=trace_id,
-                ordinal=len(selected) + 1,
-            )
+        provenance_item = _provenance_evidence_item(
+            bundle=bundle,
+            record=record,
+            passage=passage,
+            trace_id=trace_id,
+            ordinal=len(selected) + 1,
         )
+        if len(selected) >= limit:
+            selected = selected[: max(limit - 1, 1)]
+        selected.append(provenance_item)
         break
-    return selected
+    return selected[:limit]
 
 
 def _provenance_evidence_item(
@@ -1918,20 +2269,23 @@ def _temporal_evidence_bundle(
     bundle: CanonicalReleaseBundle,
     evidence: Sequence[Mapping[str, Any]],
     trace_id: str,
+    limit: int,
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
-    for item in list(selected)[:2]:
+    passage_items = [item for item in selected if item.get("evidence_type") == "passage"][:2]
+    if len(selected) + len(passage_items) > limit:
+        selected = selected[: max(limit - len(passage_items), 1)]
+    for item in passage_items:
         if item.get("evidence_type") != "passage":
             continue
-        selected.append(
-            _temporal_record_evidence_item(
-                bundle=bundle,
-                passage=item,
-                trace_id=trace_id,
-                ordinal=len(selected) + 1,
-            )
+        temporal_item = _temporal_record_evidence_item(
+            bundle=bundle,
+            passage=item,
+            trace_id=trace_id,
+            ordinal=len(selected) + 1,
         )
-        if len(selected) >= MAX_BUNDLE_EVIDENCE_ITEMS:
+        selected.append(temporal_item)
+        if len(selected) >= limit:
             break
     return selected
 
@@ -2069,6 +2423,8 @@ def _public_evidence_summary(evidence: Mapping[str, Any]) -> dict[str, Any]:
         "text_sha256": str(evidence.get("passage_text_sha256", "")),
         "channels": list(evidence.get("channels", [])),
     }
+    if isinstance(evidence.get("retrieval_metadata"), Mapping):
+        summary["retrieval_metadata"] = dict(evidence["retrieval_metadata"])
     if evidence.get("evidence_type") == "graph_edge":
         summary.update(
             {
@@ -2239,25 +2595,37 @@ def _render_answer(intent_class: str, relation: str, claim_texts: Sequence[str])
     if not compact_claims:
         return ""
     if intent_class == "cross_document_comparison":
-        return "Comparison: " + " While ".join(compact_claims)
+        return (
+            "The strongest grounded comparison is that the selected sources describe different "
+            "parts of the same operating model: "
+            + " In contrast, ".join(compact_claims)
+        )
     if intent_class == "complementary_synthesis":
-        return "Synthesis: " + " Together, ".join(compact_claims)
+        return (
+            "Taken together, the cited evidence supports a combined reading: "
+            + " It also shows that ".join(compact_claims)
+        )
     if intent_class == "graph_relationship":
         relation_label = relation if relation and relation != "None" else "relationship"
-        return f"Graph {relation_label}: " + " ".join(compact_claims)
+        return (
+            f"The relevant graph relation is {relation_label}. The relationship is grounded by "
+            + " ".join(compact_claims)
+        )
     if intent_class == "provenance_source_trace":
-        return "Provenance trace: " + " ".join(compact_claims)
+        return (
+            "The provenance trail ties the answer back to the selected source record: "
+            + " ".join(compact_claims)
+        )
     if intent_class == "temporal_conflict":
-        return "Temporal/conflict verdict: " + " ".join(compact_claims)
-    return " ".join(compact_claims)
+        return (
+            "The temporal evidence should be read as a source/version comparison: "
+            + " ".join(compact_claims)
+        )
+    return "The available evidence supports this answer: " + " ".join(compact_claims)
 
 
 def _has_meaningful_overlap(question: str, evidence: Sequence[Mapping[str, Any]]) -> bool:
-    query_terms = {
-        term.casefold()
-        for term in TOKEN_RE.findall(question)
-        if term.casefold() not in STOP_TERMS and len(term) > 2
-    }
+    query_terms = _meaningful_terms(question)
     if not query_terms:
         return False
     evidence_text = " ".join(
@@ -2269,6 +2637,37 @@ def _has_meaningful_overlap(question: str, evidence: Sequence[Mapping[str, Any]]
     )
     evidence_terms = {term.casefold() for term in TOKEN_RE.findall(evidence_text)}
     return bool(query_terms & evidence_terms)
+
+
+def _meaningful_terms(text: str) -> set[str]:
+    return {
+        term.casefold()
+        for term in TOKEN_RE.findall(text)
+        if term.casefold() not in STOP_TERMS and len(term) > 2
+    }
+
+
+def _document_text(document: Mapping[str, Any]) -> str:
+    return " ".join(
+        str(document.get(key, ""))
+        for key in ("title", "section_title", "description", "body", "excerpt", "concept_id")
+    )
+
+
+def _text_term_overlap_score(query_terms: set[str], text: str) -> float:
+    if not query_terms:
+        return 0.0
+    text_terms = _meaningful_terms(text)
+    if not text_terms:
+        return 0.0
+    return len(query_terms & text_terms) / max(len(query_terms), 1)
+
+
+def _allow_second_hop(*, question: str, intent_class: str) -> bool:
+    if intent_class in RELATIONAL_INTENTS:
+        return True
+    terms = _meaningful_terms(question)
+    return len(terms) >= 10 or any(term in terms for term in {"explain", "connect", "combine"})
 
 
 def _calls_cost(calls: Sequence[Mapping[str, Any]]) -> str:

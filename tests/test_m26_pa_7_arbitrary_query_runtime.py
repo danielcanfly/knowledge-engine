@@ -167,6 +167,49 @@ class AbstainingProvider:
         }
 
 
+class NaturalProseProvider:
+    def __init__(self, *, uncited_answer_text: bool = False) -> None:
+        self.calls = 0
+        self.cost = Decimal("0")
+        self.uncited_answer_text = uncited_answer_text
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls += 1
+        self.cost += Decimal("0.00001")
+        task = _task(payload)
+        passage = _passage_items(task["evidence_bundle"])[0]
+        answer_text = (
+            "The selected evidence supports a natural answer about the runtime boundary "
+            "without relying on a quote-only template [claim_1_ref_1]."
+        )
+        if self.uncited_answer_text:
+            answer_text = (
+                "The selected evidence supports a natural answer without citation markers."
+            )
+        body = {
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": [passage["evidence_id"]],
+            "answer_text": answer_text,
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "direct",
+                    "support_refs": [_support_ref(passage)],
+                }
+            ],
+            "abstention_reason": None,
+        }
+        return {
+            "text": json.dumps(body),
+            "usage": {"input_tokens": 100, "output_tokens": 40},
+            "cost_usd": "0.00001",
+            "latency_ms": 5,
+            "response_id": f"natural-{self.calls}",
+            "call_class": call_class,
+        }
+
+
 def _task(payload: dict[str, Any]) -> dict[str, Any]:
     message = payload["messages"][0]["content"]
     text = message[0]["text"] if isinstance(message, list) else message
@@ -289,6 +332,59 @@ def test_varied_questions_are_not_keyword_whitelisted() -> None:
         assert response["question_sha256"]
         assert response["provider_invoked"] is True
         assert response["status"] == "owner_only_cited_answer"
+
+
+def test_ordinary_explanatory_query_uses_graph_expanded_evidence_without_graph_keywords() -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="Explain how harness acceptance components support permission-first execution.",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExactSpanProvider(),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["intent_class"] == "direct_grounded_knowledge"
+    assert response["selected_evidence_count"] > 5
+    assert response["candidate_count_by_channel"]["graph_expanded_selected"] > 0
+    assert response["graph_observability"]["selected_graph_derived_evidence_count"] > 0
+    assert response["graph_observability"]["selected_graph_relation_types"]
+    assert any(
+        any(str(channel).startswith("graph_") for channel in item["channels"])
+        for item in response["selected_evidence"]
+    )
+
+
+def test_provider_natural_cited_prose_is_preserved_after_claim_verification() -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="What should a router define for permission-first controls?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=NaturalProseProvider(),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_text"].startswith("The selected evidence supports a natural answer")
+    assert "[claim_1_ref_1]" in response["answer_text"]
+    assert response["unsupported_accepted_claims"] == 0
+
+
+def test_uncited_provider_prose_falls_back_to_verified_cited_rendering() -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="What should a router define for permission-first controls?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=NaturalProseProvider(uncited_answer_text=True),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_text"].startswith("The available evidence supports this answer:")
+    assert response["unsupported_accepted_claims"] == 0
 
 
 def test_owner_admission_blocks_retrieval_and_provider_for_public_or_non_owner() -> None:
