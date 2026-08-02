@@ -12,6 +12,8 @@ def test_production_deploy_is_serialized_and_release_scoped() -> None:
     assert "M26_RUNTIME_ENV_FILE" in deploy
     assert ".env.runtime.${RELEASE_SHA}." in deploy
     assert "DEPLOYMENT_RUNTIME_SHA_MISMATCH" in deploy
+    assert "docker compose run -T --rm --no-deps" in deploy
+    assert "</dev/null" in deploy
     assert '${M26_RUNTIME_ENV_FILE:-.env}' in compose
 
 
