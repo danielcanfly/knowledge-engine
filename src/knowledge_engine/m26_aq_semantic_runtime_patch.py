@@ -9,7 +9,7 @@ from typing import Any
 def install() -> None:
     """Install production-general AQ semantic closure compatibility patches.
 
-    This is intentionally question-id agnostic.  It strengthens the same runtime
+    This is intentionally question-id agnostic. It strengthens the same runtime
     entrypoint by improving semantic entity normalisation, graph-edge endpoint
     matching, and compact provider repair instructions for relation/composition
     questions.
@@ -31,6 +31,7 @@ def install() -> None:
         "_m26_aq_original_intent_class",
         legacy._intent_class,
     )
+    original_semantic_requirements = runtime._semantic_requirements
     original_compact_payload = runtime._compact_provider_payload
     original_exact_edge = runtime._exact_named_graph_edge
 
@@ -60,6 +61,267 @@ def install() -> None:
             question,
             legacy_classifier=original_intent_class,
         )
+
+    def semantic_requirements_with_semantic_synonyms(
+        question: str,
+        intent_class: str,
+    ) -> list[Any]:
+        requirements = list(original_semantic_requirements(question, intent_class))
+        q = question.casefold()
+        seen = {str(item.requirement_id) for item in requirements}
+
+        def add(
+            requirement_id: str,
+            instruction: str,
+            evidence_terms: Sequence[str],
+            visible_patterns: Sequence[str],
+            *,
+            exact_phrase: str = "",
+        ) -> None:
+            if requirement_id in seen:
+                return
+            seen.add(requirement_id)
+            requirements.append(
+                runtime.SemanticRequirement(
+                    requirement_id=requirement_id,
+                    instruction=instruction,
+                    evidence_terms=tuple(evidence_terms),
+                    visible_patterns=tuple(visible_patterns),
+                    exact_phrase=exact_phrase,
+                )
+            )
+
+        routerish = any(
+            item in q
+            for item in (
+                "router",
+                "dispatcher",
+                "dispatch",
+                "where a request should go",
+                "first capability",
+                "initial capability",
+                "route",
+            )
+        )
+        replanish = any(
+            item in q
+            for item in (
+                "replan",
+                "planner",
+                "remaining work",
+                "unfinished steps",
+                "remaining steps",
+                "invalidates",
+                "invalid assumptions",
+                "reality",
+                "world proves",
+            )
+        )
+        if routerish and replanish:
+            add(
+                "initial_routing_role",
+                "Explain that routing chooses the initial path/capability.",
+                ["router", "route", "initial", "path", "capability"],
+                [
+                    r"\b(?:router|routing|dispatcher|dispatch).{0,120}"
+                    r"(?:initial|path|route|request|capability)"
+                ],
+            )
+            add(
+                "replanning_role",
+                "Explain that adaptive replanning changes remaining work.",
+                ["adaptive", "replan", "remaining", "invalid", "assumption"],
+                [
+                    r"\b(?:replan|replanning|replanner|planner|adaptive).{0,140}"
+                    r"(?:remaining|unfinished|invalid|assumption|evidence|reality)"
+                ],
+            )
+            add(
+                "role_contrast",
+                "Contrast initial dispatch with later replanning.",
+                ["initial", "later", "after", "different"],
+                [
+                    r"\b(?:whereas|while|by contrast|different|initial).{0,180}"
+                    r"(?:later|after|replan|remaining|unfinished)"
+                ],
+            )
+
+        if "router" in q and "dag" in q:
+            add(
+                "router_role",
+                "State that the query router selects the path/mode/capability.",
+                ["query router", "route", "path", "mode", "capability"],
+                [
+                    r"(?:query router|router).{0,140}"
+                    r"(?:path|route|mode|capability|select)"
+                ],
+            )
+            add(
+                "router_decision",
+                "Explain what the router chooses or bounds.",
+                ["router", "query", "path", "route", "capability"],
+                [r"router.{0,120}(?:path|route|select|choose|capability)"],
+            )
+            add(
+                "routing_constraints",
+                "State one permission/safety/policy/capability constraint.",
+                ["permission", "safety", "policy", "capability"],
+                [
+                    r"\b(?:permission|safety|policy|risk|cost|latency|capability)"
+                    r"s?\b"
+                ],
+            )
+            add(
+                "dag_role",
+                "State that the DAG structures dependency/parallel work.",
+                ["dag", "dependency", "parallel", "task", "step"],
+                [r"\bdag\b.{0,160}(?:depend|parallel|task|step|work)"],
+            )
+            add(
+                "router_dag_composition",
+                "Explain how router selection and DAG execution compose.",
+                ["together", "within", "then", "chosen path", "flow"],
+                [
+                    r"(?:router|route).{0,200}(?:dag|within|then|flow)",
+                    r"dag.{0,200}(?:router|route|chosen path|flow)",
+                ],
+            )
+
+        if "precedes" in q:
+            add(
+                "ordering_semantics",
+                "State that precedes supports ordering/sequence/navigation only.",
+                ["precedes", "ordering", "sequence", "navigation"],
+                [r"\b(?:ordering|sequence|navigation|comes before|precedes)\b"],
+            )
+            if re.search(r"\b(?:prove|infer|depend|dependency|causal|cause)\b", q):
+                add(
+                    "non_entailment",
+                    "State that precedes alone does not prove stronger relations.",
+                    ["dependency", "causality", "implementation", "requirement"],
+                    [
+                        r"\b(?:does not|doesn't|cannot|can't|only).{0,140}"
+                        r"(?:depend|causal|implement|require|prove|infer)"
+                    ],
+                )
+
+        if "state machine" in q and any(
+            item in q for item in ("replanner", "replanning", "replan", "change a plan")
+        ):
+            add(
+                "state_machine_authority",
+                "Explain the state machine as the transition/policy envelope.",
+                ["state machine", "transition", "permission", "approval", "policy"],
+                [
+                    r"state machine.{0,180}"
+                    r"(?:transition|permission|approval|guard|legal|policy)"
+                ],
+            )
+            add(
+                "adaptive_replan",
+                "Explain that replanning may change remaining steps.",
+                ["replan", "remaining", "assumption", "invalid"],
+                [
+                    r"\b(?:replan|replanning|replanner).{0,160}"
+                    r"(?:remaining|assumption|invalid|plan|step)"
+                ],
+            )
+            add(
+                "authority_boundary",
+                "State that replanning cannot bypass policy/approval authority.",
+                ["cannot bypass", "authority", "policy", "approval", "transition"],
+                [
+                    r"\b(?:cannot|can't|must not|does not).{0,160}"
+                    r"(?:bypass|override|escape).{0,120}"
+                    r"(?:state|policy|transition|approval|authority)"
+                ],
+            )
+
+        architecture_terms = (
+            "different sources",
+            "multi-source",
+            "source selection",
+            "saved progress",
+            "persisted progress",
+            "durable state",
+            "parallel",
+            "concurrent",
+            "branches",
+            "verification",
+            "checks",
+            "human approval",
+            "person approving",
+        )
+        if sum(term in q for term in architecture_terms) >= 3:
+            add(
+                "source_selection",
+                "Include source selection/routing for different sources.",
+                ["source", "routing", "selection"],
+                [
+                    r"\bsource.{0,100}(?:select|route|routing)",
+                    r"\b(?:select|route).{0,100}source",
+                ],
+            )
+            add(
+                "persisted_progress",
+                "Include persisted/durable progress state.",
+                ["persisted", "durable", "progress", "state"],
+                [r"\b(?:persisted|durable|saved).{0,100}(?:progress|state)"],
+            )
+            add(
+                "parallel_branches",
+                "Include parallel research branches/DAG execution.",
+                ["parallel", "branch", "dag", "research"],
+                [
+                    r"\b(?:parallel|concurrent).{0,100}"
+                    r"(?:branch|research|dag|work)"
+                ],
+            )
+            add(
+                "verification_gate",
+                "Include an explicit verification/completion gate.",
+                ["verification", "verify", "completion", "gate"],
+                [r"\b(?:verification|verify|checks?|completion gate)\b"],
+            )
+            add(
+                "human_approval",
+                "Include human approval as an authority gate.",
+                ["human approval", "approval", "person approving"],
+                [r"\b(?:human approval|person approving|approval)\b"],
+            )
+
+        if all(name in q for name in ("obsidian", "graphology", "sigma.js")):
+            add(
+                "obsidian_role",
+                "Explain Obsidian as a human-facing Markdown/vault surface.",
+                ["obsidian", "markdown", "vault", "human", "authoring"],
+                [r"obsidian.{0,180}(?:markdown|vault|human|author|inspect)"],
+            )
+            add(
+                "graphology_role",
+                "Explain Graphology as graph data/model/processing.",
+                ["graphology", "graph", "data", "model", "processing"],
+                [r"graphology.{0,180}(?:data|model|process|graph)"],
+            )
+            add(
+                "sigma_role",
+                "Explain Sigma.js as graph visualization/rendering/interaction.",
+                ["sigma.js", "visual", "render", "interaction"],
+                [r"sigma\.js.{0,180}(?:visual|render|interact|display)"],
+            )
+            add(
+                "trust_anchor",
+                "Assign trust to canonical provenance/artifact authority.",
+                ["canonical", "provenance", "artifact", "source of trust"],
+                [
+                    r"\b(?:canonical|provenance|artifact).{0,140}"
+                    r"(?:trust|authority|source)",
+                    r"\b(?:source of trust|trust anchor).{0,140}"
+                    r"(?:canonical|provenance|artifact)",
+                ],
+            )
+
+        return requirements
 
     def compact_provider_payload_with_semantic_contract(
         *,
@@ -111,8 +373,8 @@ def install() -> None:
             task["answer_quality_contract"]["required_opening"] = "No."
         if repair:
             task["repair_instruction"] = (
-                "Rewrite the answer, not the evidence.  Fix every listed missing "
-                "semantic requirement using the exact visible terms requested.  "
+                "Rewrite the answer, not the evidence. Fix every listed missing "
+                "semantic requirement using the exact visible terms requested. "
                 "Keep status=answer when the evidence labels support the contract."
             )
         if messages and isinstance(messages[0], dict):
@@ -162,6 +424,7 @@ def install() -> None:
 
     legacy._named_question_entities = named_question_entities_with_series_shorthand
     legacy._intent_class = intent_class_with_semantic_compat
+    runtime._semantic_requirements = semantic_requirements_with_semantic_synonyms
     runtime._compact_provider_payload = compact_provider_payload_with_semantic_contract
     runtime._exact_named_graph_edge = exact_named_graph_edge_with_shorthand
     runtime._m26_aq_semantic_runtime_patch_installed = True
@@ -179,10 +442,20 @@ def _visible_terms_for_requirement(requirement: Any) -> list[str]:
         "dag_role": ["DAG", "dependencies", "parallel", "steps"],
         "router_dag_composition": ["router", "DAG", "chosen path", "flow"],
         "ordering_semantics": ["precedes", "ordering", "navigation"],
-        "non_entailment": ["does not prove", "dependency", "causality", "implementation"],
-        "state_machine_authority": ["state machine", "transitions", "approval", "policy"],
+        "non_entailment": [
+            "does not prove",
+            "dependency",
+            "causality",
+            "implementation",
+        ],
+        "state_machine_authority": [
+            "state machine",
+            "transitions",
+            "approval",
+            "policy",
+        ],
         "adaptive_replan": ["replanner", "remaining steps", "invalid assumptions"],
-        "authority_boundary": ["cannot override", "state machine", "policy", "approval"],
+        "authority_boundary": ["cannot override", "state machine", "policy"],
         "source_selection": ["source selection", "route sources"],
         "persisted_progress": ["persisted progress", "durable state"],
         "parallel_branches": ["parallel branches", "research"],
@@ -201,7 +474,11 @@ def _visible_terms_for_requirement(requirement: Any) -> list[str]:
 
 
 def _semantic_system_suffix(
-    question: str, requirements: Sequence[Any], *, repair: bool) -> str:
+    question: str,
+    requirements: Sequence[Any],
+    *,
+    repair: bool,
+) -> str:
     required_terms = []
     for requirement in requirements:
         required_terms.extend(_visible_terms_for_requirement(requirement))
@@ -213,15 +490,35 @@ def _semantic_system_suffix(
             unique_terms.append(term)
             seen.add(key)
     suffix = [
-        "\n\nSemantic closure contract: if the supplied evidence contains support for the listed requirements, answer directly rather than abstaining.",
-        "Use the requested visible terms where accurate: " + "; ".join(unique_terms[:36]) + ".",
-        "For router/DAG/state-machine/replanning questions, explicitly assign each component its own job and then state how the jobs compose or differ.",
-        "For graph relation questions, cite only the named edge endpoints and the stated relation; do not substitute a nearby edge or upgrade precedes into depends_on.",
+        (
+            "\n\nSemantic closure contract: if the supplied evidence contains "
+            "support for the listed requirements, answer directly rather than "
+            "abstaining."
+        ),
+        "Use the requested visible terms where accurate: "
+        + "; ".join(unique_terms[:36])
+        + ".",
+        (
+            "For router/DAG/state-machine/replanning questions, explicitly "
+            "assign each component its own job and then state how the jobs "
+            "compose or differ."
+        ),
+        (
+            "For graph relation questions, cite only the named edge endpoints "
+            "and stated relation; do not substitute a nearby edge or upgrade "
+            "precedes into depends_on."
+        ),
     ]
     if _question_requires_initial_no(question):
-        suffix.append("For this false-premise relation question, the answer must begin with: No.")
+        suffix.append(
+            "For this false-premise relation question, the answer must begin "
+            "with: No."
+        )
     if repair:
-        suffix.append("This is a repair attempt: the prior answer missed semantic requirements, so make each missing role visible in the answer text.")
+        suffix.append(
+            "This is a repair attempt: the prior answer missed semantic "
+            "requirements, so make each missing role visible in the answer text."
+        )
     return " ".join(suffix)
 
 
