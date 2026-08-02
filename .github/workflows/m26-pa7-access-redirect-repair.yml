@@ -79,6 +79,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_ACCESS_READ_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_READ_TOKEN }}
       CLOUDFLARE_ACCESS_WRITE_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
+      CLOUDFLARE_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -103,16 +105,60 @@ jobs:
           echo "::add-mask::$CLOUDFLARE_ACCESS_WRITE_TOKEN"
           echo "::add-mask::$INTERNAL_HOSTNAME"
           echo "::add-mask::$CLOUDFLARE_ZONE_NAME"
+          if test -n "${CLOUDFLARE_WORKERS_TOKEN:-}"; then
+            echo "::add-mask::$CLOUDFLARE_WORKERS_TOKEN"
+          fi
+          if test -n "${CLOUDFLARE_PAGES_TOKEN:-}"; then
+            echo "::add-mask::$CLOUDFLARE_PAGES_TOKEN"
+          fi
 
       - name: Repair Access browser-session redirect contract
         id: repair
         continue-on-error: true
         run: |
           set -euo pipefail
-          python scripts/m26_pa7_access_browser_session_contract.py repair \
-            --before-output "$WORK_DIR/evidence/access-browser-session-before.json" \
-            --repair-output "$WORK_DIR/evidence/access-browser-session-repair.json" \
-            --after-output "$WORK_DIR/evidence/access-browser-session-after.json"
+          success=false
+          last_label=""
+          for label in primary workers pages; do
+            case "$label" in
+              primary) token="${CLOUDFLARE_ACCESS_WRITE_TOKEN:-}" ;;
+              workers) token="${CLOUDFLARE_WORKERS_TOKEN:-}" ;;
+              pages) token="${CLOUDFLARE_PAGES_TOKEN:-}" ;;
+              *) exit 2 ;;
+            esac
+            if test -z "$token"; then
+              continue
+            fi
+            last_label="$label"
+            before="$WORK_DIR/evidence/access-browser-session-before-$label.json"
+            repair="$WORK_DIR/evidence/access-browser-session-repair-$label.json"
+            after="$WORK_DIR/evidence/access-browser-session-after-$label.json"
+            if python scripts/m26_pa7_access_browser_session_contract.py repair \
+              --write-token "$token" \
+              --before-output "$before" \
+              --repair-output "$repair" \
+              --after-output "$after"; then
+              cp "$before" "$WORK_DIR/evidence/access-browser-session-before.json"
+              cp "$repair" "$WORK_DIR/evidence/access-browser-session-repair.json"
+              cp "$after" "$WORK_DIR/evidence/access-browser-session-after.json"
+              printf 'ACCESS_REPAIR_WRITE_TOKEN_CLASS=%s\n' "$label" >> "$GITHUB_ENV"
+              success=true
+              break
+            fi
+          done
+          if test "$success" != "true"; then
+            if test -n "$last_label"; then
+              for kind in before repair after; do
+                src="$WORK_DIR/evidence/access-browser-session-$kind-$last_label.json"
+                dst="$WORK_DIR/evidence/access-browser-session-$kind.json"
+                if test -f "$src"; then
+                  cp "$src" "$dst"
+                fi
+              done
+              printf 'ACCESS_REPAIR_WRITE_TOKEN_CLASS=%s\n' "$last_label" >> "$GITHUB_ENV"
+            fi
+            exit 1
+          fi
 
       - name: Scan Access repair evidence privacy hygiene
         id: privacy_scan
@@ -163,6 +209,7 @@ jobs:
           - main SHA: \`$GITHUB_SHA\`
           - repair step outcome: \`${{ steps.repair.outcome }}\`
           - privacy scan outcome: \`${{ steps.privacy_scan.outcome }}\`
+          - write token class: \`${ACCESS_REPAIR_WRITE_TOKEN_CLASS:-unavailable}\`
           - raw domains/cookies/login URLs/tokens recorded: \`false\`
           - protected knowledge mutations: \`0\`
 
