@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -127,12 +128,15 @@ def _answer_for_task(task: dict[str, Any]) -> dict[str, Any]:
     if intent in {"cross_document_comparison", "complementary_synthesis"}:
         role = "relationship"
         relation = "contrasts_with" if intent == "cross_document_comparison" else "complements"
-        refs = [_support_ref(item) for item in passages[:2]]
+        refs = [_support_ref(item) for item in _distinct_source_items(passages, minimum=2)]
     elif intent == "graph_relationship":
         role = "relationship"
         relation = "depends_on"
         graph_edges = [item for item in evidence if item["evidence_type"] == "graph_edge"]
-        refs = [_support_ref(graph_edges[0]), *[_support_ref(item) for item in passages[:2]]]
+        refs = [
+            _support_ref(graph_edges[0]),
+            *[_support_ref(item) for item in _distinct_source_items(passages, minimum=2)],
+        ]
     elif intent == "provenance_source_trace":
         role = "provenance"
         provenance = [item for item in evidence if item["evidence_type"] == "provenance"]
@@ -141,9 +145,16 @@ def _answer_for_task(task: dict[str, Any]) -> dict[str, Any]:
         role = "temporal"
         relation = "precedes"
         temporal = [item for item in evidence if item["evidence_type"] == "temporal_record"]
-        refs = [_support_ref(item) for item in temporal[:2]]
+        refs = [_support_ref(item) for item in _distinct_source_items(temporal, minimum=2)]
     else:
-        refs = [_support_ref(passages[0])]
+        multi_ref_query = any(
+            marker in str(task.get("question", "")).casefold()
+            for marker in ("explain", "how", "compare", "connect", "relationship")
+        )
+        selected_passages = (
+            _distinct_source_items(passages, minimum=2) if multi_ref_query else passages[:1]
+        )
+        refs = [_support_ref(item) for item in selected_passages]
     return {
         "status": "answer_candidate",
         "relation": relation,
@@ -155,9 +166,7 @@ def _answer_for_task(task: dict[str, Any]) -> dict[str, Any]:
 
 def _support_ref(item: dict[str, Any]) -> dict[str, str]:
     text = item.get("text", "")
-    quote = text.split(". ", 1)[0].strip()
-    if ". " in text:
-        quote += "."
+    quote = _support_quote(str(text))
     return {
         "evidence_id": item["evidence_id"],
         "locator_id": item["locator_id"],
@@ -165,16 +174,70 @@ def _support_ref(item: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def _support_quote(text: str) -> str:
+    candidates = [line.strip() for line in text.splitlines() if len(line.strip()) >= 48]
+    if not candidates:
+        candidates = [text.strip()]
+    quote = candidates[0]
+    if len(quote) > 260:
+        quote = quote[:260].rsplit(" ", 1)[0].rstrip()
+    return quote
+
+
+def _distinct_source_items(items: list[dict[str, Any]], *, minimum: int) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        identity = _item_source_identity(item)
+        if identity in seen:
+            continue
+        selected.append(item)
+        seen.add(identity)
+        if len(selected) >= minimum:
+            return selected
+    for item in items:
+        if item in selected:
+            continue
+        selected.append(item)
+        if len(selected) >= minimum:
+            break
+    return selected
+
+
+def _item_source_identity(item: dict[str, Any]) -> str:
+    value = item.get("source_identity") or item.get("source_id") or item.get("locator_id")
+    return str(value or item.get("evidence_id", ""))
+
+
 def _natural_answer_text(body: dict[str, Any]) -> str:
     refs = body["claims"][0]["support_refs"]
-    markers = "".join(f"[claim_1_ref_{index}]" for index in range(1, len(refs) + 1))
-    return (
-        "The evidence supports a broader, connected answer by combining the selected passages "
-        f"and provenance-bearing records rather than relying on a single quote {markers}."
-    )
+    if not refs:
+        return ""
+    clauses = [_natural_clause(ref["exact_quote"]) for ref in refs]
+    if len(refs) == 1:
+        return f"In short, {clauses[0]} [claim_1_ref_1]."
+    sentences = [f"The primary evidence says {clauses[0]} [claim_1_ref_1]."]
+    for index, clause in enumerate(clauses[1:], start=2):
+        prefix = "A related source adds" if index == 2 else "Additional evidence adds"
+        sentences.append(f"{prefix} {clause} [claim_1_ref_{index}].")
+    return " ".join(sentences)
 
 
-def _run_suite(root: Path) -> dict[str, Any]:
+def _natural_clause(text: str) -> str:
+    clause = re.sub(r"\s+", " ", str(text).strip())
+    clause = re.sub(r"\[[A-Za-z0-9_]+_ref_\d+\]", "", clause).strip()
+    clause = re.sub(r"[.!?]+", ",", clause).strip(" ,;:")
+    if len(clause) > 260:
+        clause = clause[:260].rstrip(" ,;:")
+    return clause or "the selected evidence supports the answer"
+
+
+def _run_suite(
+    root: Path,
+    *,
+    provider_mode: str = "deterministic",
+    case_limit: int = 0,
+) -> dict[str, Any]:
     sys.path.insert(0, str(root / "src"))
     for name in list(sys.modules):
         if name == "knowledge_engine" or name.startswith("knowledge_engine."):
@@ -185,24 +248,34 @@ def _run_suite(root: Path) -> dict[str, Any]:
     gate = closure.load_json(gate_path)
     owner_subject_hash = gate["production_identities"]["allowlisted_owner_subject_hash"]
     rows = []
-    for case in CASES:
-        provider = BenchmarkProvider()
+    selected_cases = CASES[:case_limit] if case_limit > 0 else CASES
+    for case in selected_cases:
+        provider = None if provider_mode == "real" else BenchmarkProvider()
         start = time.monotonic()
-        response = runtime.run_owner_arbitrary_query(
-            root=root,
-            gate=gate,
-            question=case["question"],
-            owner_subject_hash=owner_subject_hash,
-            provider_client=provider,
-            dense_channel=runtime.LocalDenseProjectionChannel(),
-        )
+        kwargs = {
+            "root": root,
+            "gate": gate,
+            "question": case["question"],
+            "owner_subject_hash": owner_subject_hash,
+            "dense_channel": runtime.LocalDenseProjectionChannel(),
+        }
+        if provider is not None:
+            kwargs["provider_client"] = provider
+        response = runtime.run_owner_arbitrary_query(**kwargs)
         rows.append(_row(case, response, int((time.monotonic() - start) * 1000)))
-    return {"rows": rows, "summary": _summary(rows)}
+    return {"provider_mode": provider_mode, "rows": rows, "summary": _summary(rows)}
 
 
 def _row(case: dict[str, str], response: dict[str, Any], wall_latency_ms: int) -> dict[str, Any]:
     claims = response.get("answer_claims", [])
     citations = response.get("citations", [])
+    selected = response.get("selected_evidence", [])
+    cited_evidence_ids = {str(item.get("evidence_id", "")) for item in citations}
+    cited_source_identities = {
+        str(item.get("source_identity") or item.get("source_id") or "")
+        for item in citations
+        if item.get("source_identity") or item.get("source_id")
+    }
     return {
         "case_id": case["case_id"],
         "class": case["class"],
@@ -217,12 +290,24 @@ def _row(case: dict[str, str], response: dict[str, Any], wall_latency_ms: int) -
         ),
         "citation_count": len(citations),
         "material_claim_count": len(claims),
+        "evidence_used_by_claims": len(cited_evidence_ids),
+        "unused_selected_evidence": max(
+            int(response.get("selected_evidence_count", 0)) - len(cited_evidence_ids),
+            0,
+        ),
+        "distinct_cited_source_count": len(cited_source_identities),
         "answer_length": len(response.get("answer_text", "")),
         "latency_ms": response.get("latency_ms", wall_latency_ms),
         "provider_calls": response.get("provider_call_count", 0),
         "cost": response.get("payg_equivalent_cost_usd", "0"),
         "unsupported_claims": response.get("unsupported_accepted_claims", 0),
         "safe_abstention": response.get("safe_abstention", False),
+        "graph_universe": response.get("retrieval_backend_identity", {}).get("graph_v2", {}),
+        "graph_relation_types": response.get("graph_observability", {}).get(
+            "selected_graph_relation_types",
+            [],
+        ),
+        "selected_evidence_preview": selected[:3],
     }
 
 
@@ -245,11 +330,20 @@ def _summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
             sum(row["answer_length"] for row in answerable) / max(len(answerable), 1),
             2,
         ),
+        "avg_evidence_used_by_claims": round(
+            sum(row["evidence_used_by_claims"] for row in answerable) / max(len(answerable), 1),
+            2,
+        ),
+        "avg_distinct_cited_source_count": round(
+            sum(row["distinct_cited_source_count"] for row in answerable)
+            / max(len(answerable), 1),
+            2,
+        ),
         "unsupported_claims": sum(row["unsupported_claims"] for row in rows),
     }
 
 
-def _run_baseline(repo_root: Path, ref: str) -> dict[str, Any]:
+def _run_baseline(repo_root: Path, ref: str, *, case_limit: int = 0) -> dict[str, Any]:
     tmp = Path(tempfile.mkdtemp(prefix="m26_aq_baseline_"))
     try:
         worktree = tmp / "repo"
@@ -260,9 +354,46 @@ def _run_baseline(repo_root: Path, ref: str) -> dict[str, Any]:
             capture_output=True,
             text=True,
         )
-        return _run_suite(worktree)
+        return _run_suite(worktree, case_limit=case_limit)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _before_after_examples(result: dict[str, Any]) -> list[dict[str, Any]]:
+    baseline_rows = {
+        row["case_id"]: row for row in result.get("baseline", {}).get("rows", [])
+    }
+    examples = []
+    for row in result.get("candidate", {}).get("rows", []):
+        baseline = baseline_rows.get(row["case_id"])
+        if baseline is None:
+            continue
+        examples.append(
+            {
+                "case_id": row["case_id"],
+                "class": row["class"],
+                "question": row["question"],
+                "baseline_answer": baseline["answer"],
+                "candidate_answer": row["answer"],
+                "baseline_metrics": {
+                    "answer_length": baseline["answer_length"],
+                    "citation_count": baseline["citation_count"],
+                    "evidence_count": baseline["evidence_count"],
+                    "graph_expanded_evidence_count": baseline[
+                        "graph_expanded_evidence_count"
+                    ],
+                },
+                "candidate_metrics": {
+                    "answer_length": row["answer_length"],
+                    "citation_count": row["citation_count"],
+                    "evidence_count": row["evidence_count"],
+                    "graph_expanded_evidence_count": row["graph_expanded_evidence_count"],
+                    "evidence_used_by_claims": row["evidence_used_by_claims"],
+                    "distinct_cited_source_count": row["distinct_cited_source_count"],
+                },
+            }
+        )
+    return examples
 
 
 def main() -> None:
@@ -270,15 +401,19 @@ def main() -> None:
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--baseline-ref", default="")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--provider", choices=["deterministic", "real"], default="deterministic")
+    parser.add_argument("--case-limit", type=int, default=0)
     args = parser.parse_args()
     root = args.root.resolve()
     result = {
         "schema_version": "knowledge-engine-m26-answer-quality-benchmark/v1",
-        "candidate": _run_suite(root),
+        "candidate": _run_suite(root, provider_mode=args.provider, case_limit=args.case_limit),
     }
     if args.baseline_ref:
         result["baseline_ref"] = args.baseline_ref
-        result["baseline"] = _run_baseline(root, args.baseline_ref)
+        result["baseline"] = _run_baseline(root, args.baseline_ref, case_limit=args.case_limit)
+    if "baseline" in result:
+        result["representative_before_after"] = _before_after_examples(result)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")

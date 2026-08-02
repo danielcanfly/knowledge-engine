@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from jsonschema import Draft202012Validator
 
+from knowledge_engine import m26_pa7_arbitrary_query_runtime as runtime_module
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import (
     LocalDenseProjectionChannel,
     PA7ArbitraryQueryError,
@@ -18,12 +19,22 @@ from knowledge_engine.m26_pa7_arbitrary_query_runtime import (
 )
 from knowledge_engine.m26_production_promotion_closure import load_json
 from knowledge_engine.m26_retrieval_envelope import with_self_digest
+from tests.m26_answer_bundle_fixture import synthetic_full_production_answer_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
 PILOT = ROOT / "pilot" / "m26"
 SCHEMAS = ROOT / "schemas"
 GATE_PATH = PILOT / "m26-pa-7-resolved-production-gate.json"
 OWNER_SUBJECT_HASH = "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b"
+
+
+@pytest.fixture(autouse=True)
+def _production_answer_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        runtime_module,
+        "load_production_answer_bundle",
+        synthetic_full_production_answer_bundle,
+    )
 
 
 class ExactSpanProvider:
@@ -210,6 +221,48 @@ class NaturalProseProvider:
         }
 
 
+class GraphExpandedCitationProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.cost = Decimal("0")
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls += 1
+        self.cost += Decimal("0.00001")
+        task = _task(payload)
+        graph_passage = next(
+            item
+            for item in task["evidence_bundle"]
+            if item["evidence_type"] == "passage"
+            and any(str(channel).startswith("graph_") for channel in item.get("channels", []))
+        )
+        body = {
+            "status": "answer_candidate",
+            "relation": "supports",
+            "selected_evidence_ids": [graph_passage["evidence_id"]],
+            "answer_text": (
+                "The full production graph expands the seed into neighbour evidence outside "
+                "the old bounded concept set [claim_1_ref_1]."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "direct",
+                    "support_refs": [_support_ref(graph_passage)],
+                }
+            ],
+            "abstention_reason": None,
+        }
+        return {
+            "text": json.dumps(body),
+            "usage": {"input_tokens": 100, "output_tokens": 40},
+            "cost_usd": "0.00001",
+            "latency_ms": 5,
+            "response_id": f"graph-expanded-{self.calls}",
+            "call_class": call_class,
+        }
+
+
 def _task(payload: dict[str, Any]) -> dict[str, Any]:
     message = payload["messages"][0]["content"]
     text = message[0]["text"] if isinstance(message, list) else message
@@ -356,6 +409,47 @@ def test_ordinary_explanatory_query_uses_graph_expanded_evidence_without_graph_k
     )
 
 
+def test_runtime_binds_full_production_graph_and_cites_outside_old_20_graph_evidence() -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="Explain outside old twenty production retrieval neighbour hydration.",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=GraphExpandedCitationProvider(),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+
+    old_m24 = load_json(ROOT / "pilot/m24/canonical-release/artifacts/graph-v2.json")
+    old_concepts = {node["concept_id"] for node in old_m24["nodes"]}
+    cited_concepts = {
+        citation["concept_id"]
+        for citation in response["citations"]
+        if citation["evidence_type"] == "passage"
+    }
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["production_release_id"] == (
+        "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+    )
+    assert response["retrieval_backend_identity"]["graph_v2"]["artifact_sha256"] == (
+        "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869"
+    )
+    assert response["retrieval_backend_identity"]["graph_v2"]["node_count"] == 4222
+    assert response["retrieval_backend_identity"]["graph_v2"]["edge_count"] == 8525
+    assert response["candidate_count_by_channel"]["graph_expanded_selected"] > 0
+    assert cited_concepts
+    assert cited_concepts.isdisjoint(old_concepts)
+    assert any(
+        any(str(channel).startswith("graph_") for channel in item["channels"])
+        and item["concept_id"] in cited_concepts
+        for item in response["selected_evidence"]
+    )
+    assert response["mutations"]["r2_write_operations"] == 0
+    assert response["mutations"]["qdrant_write_operations"] == 0
+    assert response["mutations"]["production_pointer_mutations"] == 0
+    assert response["mutations"]["canonical_writes"] == 0
+
+
 def test_provider_natural_cited_prose_is_preserved_after_claim_verification() -> None:
     response = run_owner_arbitrary_query(
         root=ROOT,
@@ -383,7 +477,11 @@ def test_uncited_provider_prose_falls_back_to_verified_cited_rendering() -> None
     )
 
     assert response["status"] == "owner_only_cited_answer"
-    assert response["answer_text"].startswith("The available evidence supports this answer:")
+    assert "[claim_1_ref_1]" in response["answer_text"]
+    assert (
+        "The selected evidence supports a natural answer without citation markers"
+        not in response["answer_text"]
+    )
     assert response["unsupported_accepted_claims"] == 0
 
 

@@ -24,8 +24,15 @@ from .m23_cloudflare_qdrant import (
     SectionInput,
     embed_sections,
 )
-from .m24_product_surface_integration import CanonicalReleaseBundle, load_canonical_release
 from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
+from .m26_production_answer_bundle import (
+    FULL_PRODUCTION_ADMISSION_SHA256,
+    FULL_PRODUCTION_QDRANT_COLLECTION,
+    FULL_PRODUCTION_RELEASE_ID,
+    FULL_PRODUCTION_SOURCE_SHA,
+    ProductionAnswerBundle,
+    load_production_answer_bundle,
+)
 from .m26_production_promotion_closure import (
     ProductionPromotionClosureError,
     evaluate_owner_admission,
@@ -96,6 +103,8 @@ STOP_TERMS = {
     "which",
     "with",
 }
+_RELEASE_DOCUMENTS_CACHE: dict[int, list[dict[str, Any]]] = {}
+_RELEASE_CONCEPTS_CACHE: dict[int, set[str]] = {}
 
 INTENT_PATTERNS: tuple[tuple[str, tuple[re.Pattern[str], ...]], ...] = (
     (
@@ -158,7 +167,7 @@ class DenseChannel(Protocol):
         self,
         *,
         question: str,
-        bundle: CanonicalReleaseBundle,
+        bundle: ProductionAnswerBundle,
         top_k: int,
     ) -> dict[str, Any]: ...
 
@@ -187,7 +196,7 @@ class LocalDenseProjectionChannel:
         self,
         *,
         question: str,
-        bundle: CanonicalReleaseBundle,
+        bundle: ProductionAnswerBundle,
         top_k: int,
     ) -> dict[str, Any]:
         query_vector = _hashed_vector(question)
@@ -240,9 +249,19 @@ class RemoteQdrantDenseChannel:
         self,
         *,
         question: str,
-        bundle: CanonicalReleaseBundle,
+        bundle: ProductionAnswerBundle,
         top_k: int,
     ) -> dict[str, Any]:
+        if bundle.release_id != FULL_PRODUCTION_RELEASE_ID:
+            raise PA7ArbitraryQueryError(
+                "PA7_PRODUCTION_BUNDLE_RELEASE_MISMATCH",
+                "dense query bundle is not the accepted production release",
+            )
+        if self.config.qdrant_collection != FULL_PRODUCTION_QDRANT_COLLECTION:
+            raise PA7ArbitraryQueryError(
+                "PA7_QDRANT_COLLECTION_MISMATCH",
+                "dense query collection is not the accepted production collection",
+            )
         vector = embed_sections(
             [SectionInput(section_id="m26-pa7-owner-query", text=question, payload={})],
             CloudflareConfig(
@@ -257,7 +276,9 @@ class RemoteQdrantDenseChannel:
             json={
                 "vector": {"name": QDRANT_VECTOR_NAME, "vector": vector},
                 "limit": max(1, min(top_k, 20)),
+                "filter": _production_qdrant_filter(),
                 "with_payload": [
+                    "concept_id",
                     "section_id",
                     "source_id",
                     "release_id",
@@ -282,6 +303,7 @@ class RemoteQdrantDenseChannel:
             point_payload = raw.get("payload")
             if not isinstance(point_payload, Mapping):
                 continue
+            _validate_qdrant_payload_identity(point_payload)
             section_id = str(point_payload.get("section_id", "")).strip()
             if not section_id:
                 continue
@@ -299,6 +321,7 @@ class RemoteQdrantDenseChannel:
                         {
                             key: point_payload.get(key)
                             for key in (
+                                "concept_id",
                                 "section_id",
                                 "source_id",
                                 "release_id",
@@ -311,6 +334,8 @@ class RemoteQdrantDenseChannel:
                             if key in point_payload
                         }
                     ),
+                    "payload_release_id": str(point_payload.get("release_id", "")),
+                    "payload_text_sha256": str(point_payload.get("text_sha256", "")),
                 }
             )
         return {
@@ -324,6 +349,8 @@ class RemoteQdrantDenseChannel:
                 "manifest_sha256": bundle.manifest_sha256,
                 "remote": True,
                 "vectors_persisted": False,
+                "identity_filter": _production_qdrant_filter(),
+                "identity_checked": True,
             },
             "candidates": candidates[:top_k],
         }
@@ -373,6 +400,7 @@ def run_owner_arbitrary_query(
     require_remote_dense: bool = False,
     max_provider_calls: int = 2,
     max_cost: Decimal = Decimal("0.10"),
+    answer_bundle: ProductionAnswerBundle | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     normalized_question = _normalize_request_question(question)
@@ -418,7 +446,53 @@ def run_owner_arbitrary_query(
             reason_codes=["PROMPT_INJECTION_OR_PRIVACY_RISK"],
         )
 
-    bundle = load_canonical_release()
+    provider = provider_client
+    if provider is None:
+        try:
+            provider = MiniMaxClient(
+                os.environ.get("MINIMAX_API_KEY", ""),
+                max_calls=max_provider_calls,
+                max_cost=max_cost,
+            )
+        except LiveGateError as exc:
+            verification = _verified_abstention(
+                reason_codes=[type(exc).__name__, "PROVIDER_CONFIGURATION_MISSING"],
+                calls=[],
+                repair_attempted=False,
+            )
+            response = {
+                **_base_response(
+                    gate=validated_gate,
+                    trace_id=trace_id,
+                    question_sha=question_sha,
+                    started=started,
+                    status=verification["status"],
+                    terminal_status=verification["terminal_status"],
+                    answer_text=verification["answer_text"],
+                    safe_abstention=verification["safe_abstention"],
+                    reason_codes=verification["reason_codes"],
+                    provider_invoked=False,
+                    provider_call_count=0,
+                    payg_equivalent_cost_usd=verification["payg_equivalent_cost_usd"],
+                    material_claim_support_verified=verification[
+                        "material_claim_support_verified"
+                    ],
+                    citation_locator_valid=verification["citation_locator_valid"],
+                    unsupported_accepted_claims=verification["unsupported_accepted_claims"],
+                    repair_attempted=verification["repair_attempted"],
+                ),
+                "answer_claims": [],
+                "relationship_summary": {},
+                "multi_evidence_verification": verification["multi_evidence_verification"],
+            }
+            return response
+
+    bundle = answer_bundle or load_production_answer_bundle()
+    if bundle.release_id != FULL_PRODUCTION_RELEASE_ID:
+        raise PA7ArbitraryQueryError(
+            "PA7_PRODUCTION_BUNDLE_RELEASE_MISMATCH",
+            "answer runtime is not bound to the accepted full production release",
+        )
     dense = (dense_channel or dense_channel_from_env(require_remote=require_remote_dense)).search(
         question=normalized_question,
         bundle=bundle,
@@ -466,38 +540,14 @@ def run_owner_arbitrary_query(
             ),
         }
 
-    provider = provider_client
-    if provider is None:
-        try:
-            provider = MiniMaxClient(
-                os.environ.get("MINIMAX_API_KEY", ""),
-                max_calls=max_provider_calls,
-                max_cost=max_cost,
-            )
-        except LiveGateError as exc:
-            verification = _verified_abstention(
-                reason_codes=[type(exc).__name__, "PROVIDER_CONFIGURATION_MISSING"],
-                calls=[],
-                repair_attempted=False,
-            )
-        else:
-            verification = _synthesize_and_verify(
-                root=root,
-                question=normalized_question,
-                trace_id=trace_id,
-                intent_class=intent_class,
-                evidence=evidence,
-                provider_client=provider,
-            )
-    else:
-        verification = _synthesize_and_verify(
-            root=root,
-            question=normalized_question,
-            trace_id=trace_id,
-            intent_class=intent_class,
-            evidence=evidence,
-            provider_client=provider,
-        )
+    verification = _synthesize_and_verify(
+        root=root,
+        question=normalized_question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=evidence,
+        provider_client=provider,
+    )
     response = {
         **_base_response(
             gate=validated_gate,
@@ -611,7 +661,7 @@ def _base_response(
 def _retrieval_response_fields(
     *,
     gate: Mapping[str, Any],
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     lexical_result: Mapping[str, Any],
     dense_result: Mapping[str, Any],
     selected_evidence: Sequence[Mapping[str, Any]],
@@ -704,6 +754,8 @@ def _retrieval_response_fields(
             "graph_v2": {
                 "artifact_sha256": bundle.artifact_sha256["graph_v2"],
                 "release_id": bundle.release_id,
+                "node_count": len(_list(bundle.graph_v2.get("nodes"), "graph_v2 nodes")),
+                "edge_count": len(_list(bundle.graph_v2.get("edges"), "graph_v2 edges")),
             },
             "provenance": {
                 "artifact_sha256": bundle.artifact_sha256["provenance"],
@@ -1174,6 +1226,10 @@ def _provider_evidence_item(item: Mapping[str, Any]) -> dict[str, Any]:
         "relation_type": str(item.get("relation_type", "")),
         "provenance_record_sha256": str(item.get("provenance_record_sha256", "")),
         "retrieved_at": str(item.get("retrieved_at", "")),
+        "channels": [str(channel) for channel in item.get("channels", [])],
+        "retrieval_metadata": dict(item.get("retrieval_metadata", {}))
+        if isinstance(item.get("retrieval_metadata"), Mapping)
+        else {},
     }
 
 
@@ -1606,7 +1662,7 @@ def _pa4_case(
 
 def _select_evidence(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     lexical_result: Mapping[str, Any],
     dense_result: Mapping[str, Any],
     trace_id: str,
@@ -1653,7 +1709,7 @@ def _select_evidence(
 
 def _build_candidate_pool(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     documents: Mapping[str, Mapping[str, Any]],
     lexical_results: Sequence[Any],
     dense_candidates: Sequence[Any],
@@ -1707,7 +1763,7 @@ def _empty_candidate(section_id: str) -> dict[str, Any]:
 
 def _add_graph_expanded_candidates(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     documents: Mapping[str, Mapping[str, Any]],
     candidates: dict[str, dict[str, Any]],
     question: str,
@@ -1904,7 +1960,7 @@ def _candidate_public_metadata(candidate: Mapping[str, Any]) -> dict[str, Any]:
 
 def _augment_evidence_for_intent(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     base_evidence: Sequence[Mapping[str, Any]],
     lexical_results: Sequence[Any],
     trace_id: str,
@@ -1951,7 +2007,7 @@ def _augment_evidence_for_intent(
 
 def _evidence_item(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     document: Mapping[str, Any],
     lexical_result: Mapping[str, Any],
     trace_id: str,
@@ -1978,14 +2034,14 @@ def _evidence_item(
         }
     )[:32]
     citation = _first_citation(lexical_result, document)
-    record = _provenance_records_by_concept(bundle).get(str(document["concept_id"]), {})
+    record = _provenance_record_for_document(bundle, document)
     source_identity = _citation_source_identity(citation, section_id)
     return {
         "evidence_id": evidence_id,
         "evidence_type": "passage",
         "locator_id": locator_id,
         "release_id": bundle.release_id,
-        "artifact_key": "pilot/m24/canonical-release/artifacts/lexical-index.json",
+        "artifact_key": bundle.artifact_keys["lexical_index"],
         "artifact_sha256": bundle.artifact_sha256["lexical_index"],
         "concept_id": str(document["concept_id"]),
         "section_id": section_id,
@@ -2008,7 +2064,7 @@ def _evidence_item(
 
 def _ensure_distinct_passage_sources(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     evidence: Sequence[Mapping[str, Any]],
     trace_id: str,
     minimum: int,
@@ -2045,7 +2101,7 @@ def _ensure_distinct_passage_sources(
 
 def _graph_evidence_bundle(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     evidence: Sequence[Mapping[str, Any]],
     lexical_results: Sequence[Any],
     trace_id: str,
@@ -2081,7 +2137,7 @@ def _graph_evidence_bundle(
 def _first_authoritative_edge(
     passages: Sequence[Mapping[str, Any]],
     lexical_results: Sequence[Any],
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
 ) -> Mapping[str, Any] | None:
     for item in passages:
         for edge in item.get("relation_expansions", []):
@@ -2099,14 +2155,14 @@ def _first_authoritative_edge(
     return None
 
 
-def _edge_has_endpoint_documents(edge: Mapping[str, Any], bundle: CanonicalReleaseBundle) -> bool:
-    concepts = {str(document.get("concept_id", "")) for document in _release_documents(bundle)}
+def _edge_has_endpoint_documents(edge: Mapping[str, Any], bundle: ProductionAnswerBundle) -> bool:
+    concepts = _release_concepts(bundle)
     return str(edge.get("source", "")) in concepts and str(edge.get("target", "")) in concepts
 
 
 def _endpoint_passages(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     existing: Sequence[Mapping[str, Any]],
     edge: Mapping[str, Any],
     trace_id: str,
@@ -2145,7 +2201,7 @@ def _endpoint_passages(
 
 def _graph_edge_evidence_item(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     edge: Mapping[str, Any],
     trace_id: str,
     ordinal: int,
@@ -2171,7 +2227,7 @@ def _graph_edge_evidence_item(
         "evidence_type": "graph_edge",
         "locator_id": locator_id,
         "release_id": bundle.release_id,
-        "artifact_key": "pilot/m24/canonical-release/artifacts/graph-v2.json",
+        "artifact_key": bundle.artifact_keys["graph_v2"],
         "artifact_sha256": bundle.artifact_sha256["graph_v2"],
         "concept_id": source,
         "section_id": edge_id,
@@ -2193,7 +2249,7 @@ def _graph_edge_evidence_item(
 
 def _provenance_evidence_bundle(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     evidence: Sequence[Mapping[str, Any]],
     trace_id: str,
     limit: int,
@@ -2202,7 +2258,7 @@ def _provenance_evidence_bundle(
     for passage in selected:
         if passage.get("evidence_type") != "passage":
             continue
-        record = _provenance_records_by_concept(bundle).get(str(passage.get("concept_id", "")))
+        record = _provenance_record_for_evidence(bundle, passage)
         if not record:
             continue
         provenance_item = _provenance_evidence_item(
@@ -2221,17 +2277,24 @@ def _provenance_evidence_bundle(
 
 def _provenance_evidence_item(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     record: Mapping[str, Any],
     passage: Mapping[str, Any],
     trace_id: str,
     ordinal: int,
 ) -> dict[str, Any]:
     subject = record.get("subject") if isinstance(record.get("subject"), Mapping) else {}
+    source_id = str(record.get("source_id") or passage.get("source_id", ""))
+    origin = record.get("origin") if isinstance(record.get("origin"), Mapping) else {}
     claims = record.get("claims") if isinstance(record.get("claims"), list) else []
     first_claim = claims[0] if claims and isinstance(claims[0], Mapping) else {}
-    claim_id = str(first_claim.get("claim_id", "provenance_claim"))
-    claim_text = str(first_claim.get("text", "Provenance record is present for this concept."))
+    claim_id = str(first_claim.get("claim_id") or source_id or "provenance_claim")
+    claim_text = str(
+        first_claim.get("text")
+        or record.get("canonical_url")
+        or origin.get("path")
+        or "Provenance record is present for this production source."
+    )
     statement = (
         f"Provenance record for {subject.get('concept_id', passage.get('concept_id'))} "
         f"contains {claim_id}: {claim_text}"
@@ -2248,7 +2311,7 @@ def _provenance_evidence_item(
         "evidence_type": "provenance",
         "locator_id": locator_id,
         "release_id": bundle.release_id,
-        "artifact_key": "pilot/m24/canonical-release/artifacts/provenance.json",
+        "artifact_key": bundle.artifact_keys["provenance"],
         "artifact_sha256": bundle.artifact_sha256["provenance"],
         "concept_id": str(subject.get("concept_id", passage.get("concept_id", ""))),
         "section_id": f"provenance#{claim_id}",
@@ -2266,7 +2329,7 @@ def _provenance_evidence_item(
 
 def _temporal_evidence_bundle(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     evidence: Sequence[Mapping[str, Any]],
     trace_id: str,
     limit: int,
@@ -2292,7 +2355,7 @@ def _temporal_evidence_bundle(
 
 def _temporal_record_evidence_item(
     *,
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     passage: Mapping[str, Any],
     trace_id: str,
     ordinal: int,
@@ -2314,7 +2377,7 @@ def _temporal_record_evidence_item(
         "evidence_type": "temporal_record",
         "locator_id": locator_id,
         "release_id": bundle.release_id,
-        "artifact_key": "pilot/m24/canonical-release/artifacts/provenance.json",
+        "artifact_key": bundle.artifact_keys["provenance"],
         "artifact_sha256": bundle.artifact_sha256["provenance"],
         "concept_id": str(passage.get("concept_id", "")),
         "section_id": f"temporal#{passage.get('section_id', '')}",
@@ -2378,8 +2441,12 @@ def _first_citation(
     if isinstance(citations, list) and citations and isinstance(citations[0], Mapping):
         return dict(citations[0])
     return {
-        "source_id": str(document.get("concept_id", "unknown")),
-        "uri": str(document.get("section_id", "unknown")),
+        "source_id": str(document.get("source_id") or document.get("concept_id", "unknown")),
+        "uri": str(
+            document.get("canonical_url")
+            or document.get("path")
+            or document.get("section_id", "unknown")
+        ),
         "retrieved_at": "",
     }
 
@@ -2440,7 +2507,7 @@ def _public_evidence_summary(evidence: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _parent_expansion_summary(
-    bundle: CanonicalReleaseBundle,
+    bundle: ProductionAnswerBundle,
     selected_evidence: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     by_concept: dict[str, list[str]] = {}
@@ -2500,7 +2567,7 @@ def _graph_edges(
     return edges
 
 
-def _provenance_records_by_concept(bundle: CanonicalReleaseBundle) -> dict[str, Mapping[str, Any]]:
+def _provenance_records_by_concept(bundle: ProductionAnswerBundle) -> dict[str, Mapping[str, Any]]:
     records: dict[str, Mapping[str, Any]] = {}
     for record in bundle.provenance.get("records", []):
         if not isinstance(record, Mapping):
@@ -2511,11 +2578,58 @@ def _provenance_records_by_concept(bundle: CanonicalReleaseBundle) -> dict[str, 
     return records
 
 
-def _release_documents(bundle: CanonicalReleaseBundle) -> list[dict[str, Any]]:
+def _provenance_records_by_source(bundle: ProductionAnswerBundle) -> dict[str, Mapping[str, Any]]:
+    records: dict[str, Mapping[str, Any]] = {}
+    for record in bundle.provenance.get("records", []):
+        if not isinstance(record, Mapping):
+            continue
+        source_id = record.get("source_id")
+        if isinstance(source_id, str) and source_id:
+            records[source_id] = record
+    return records
+
+
+def _provenance_record_for_document(
+    bundle: ProductionAnswerBundle,
+    document: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    concept_record = _provenance_records_by_concept(bundle).get(str(document.get("concept_id", "")))
+    if concept_record:
+        return concept_record
+    return _provenance_records_by_source(bundle).get(str(document.get("source_id", "")), {})
+
+
+def _provenance_record_for_evidence(
+    bundle: ProductionAnswerBundle,
+    evidence: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    concept_record = _provenance_records_by_concept(bundle).get(str(evidence.get("concept_id", "")))
+    if concept_record:
+        return concept_record
+    return _provenance_records_by_source(bundle).get(str(evidence.get("source_id", "")), {})
+
+
+def _release_documents(bundle: ProductionAnswerBundle) -> list[dict[str, Any]]:
+    cache_key = id(bundle)
+    cached = _RELEASE_DOCUMENTS_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     documents = bundle.lexical_index.get("documents")
     if not isinstance(documents, list):
         raise PA7ArbitraryQueryError("PA7_LEXICAL_INDEX_INVALID", "documents missing")
-    return [dict(document) for document in documents if isinstance(document, Mapping)]
+    loaded = [dict(document) for document in documents if isinstance(document, Mapping)]
+    _RELEASE_DOCUMENTS_CACHE[cache_key] = loaded
+    return loaded
+
+
+def _release_concepts(bundle: ProductionAnswerBundle) -> set[str]:
+    cache_key = id(bundle)
+    cached = _RELEASE_CONCEPTS_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    concepts = {str(document.get("concept_id", "")) for document in _release_documents(bundle)}
+    _RELEASE_CONCEPTS_CACHE[cache_key] = concepts
+    return concepts
 
 
 def _hashed_vector(text: str) -> list[float]:
@@ -2551,17 +2665,35 @@ def _first_exact_evidence_quote(text: str, *, max_chars: int = 760) -> str:
     normalized = text.strip()
     if not normalized:
         return ""
-    for delimiter in (". ", "\n"):
-        index = normalized.find(delimiter)
-        if index >= 0:
-            end = index + (1 if delimiter == ". " else 0)
-            quote = normalized[:end].strip()
-            break
-    else:
-        quote = normalized
+    segments = _exact_quote_segments(normalized)
+    quote = next(
+        (segment for segment in segments if len(segment) >= 48 and not _thin_heading(segment)),
+        "",
+    )
+    if not quote:
+        quote = segments[0] if segments else normalized
     if len(quote) <= max_chars:
         return quote
-    return quote[:max_chars].rstrip()
+    return quote[:max_chars].rsplit(" ", 1)[0].rstrip()
+
+
+def _exact_quote_segments(text: str) -> list[str]:
+    segments: list[str] = []
+    start = 0
+    for match in re.finditer(r"(?<=[.!?])\s+", text):
+        segment = text[start : match.start()].strip()
+        if segment:
+            segments.append(segment)
+        start = match.end()
+    tail = text[start:].strip()
+    if tail:
+        segments.append(tail)
+    return segments
+
+
+def _thin_heading(text: str) -> bool:
+    stripped = text.strip()
+    return stripped.startswith("#") and len(TOKEN_RE.findall(stripped)) <= 4
 
 
 def _looks_like_prompt_injection(question: str) -> bool:
@@ -2621,7 +2753,7 @@ def _render_answer(intent_class: str, relation: str, claim_texts: Sequence[str])
             "The temporal evidence should be read as a source/version comparison: "
             + " ".join(compact_claims)
         )
-    return "The available evidence supports this answer: " + " ".join(compact_claims)
+    return " ".join(compact_claims)
 
 
 def _has_meaningful_overlap(question: str, evidence: Sequence[Mapping[str, Any]]) -> bool:
@@ -2636,7 +2768,38 @@ def _has_meaningful_overlap(question: str, evidence: Sequence[Mapping[str, Any]]
         for item in evidence
     )
     evidence_terms = {term.casefold() for term in TOKEN_RE.findall(evidence_text)}
-    return bool(query_terms & evidence_terms)
+    overlap = query_terms & evidence_terms
+    if _requires_precise_overlap(query_terms):
+        return len(overlap) >= 2
+    required_overlap = 1
+    return len(overlap) >= required_overlap
+
+
+def _requires_precise_overlap(query_terms: set[str]) -> bool:
+    exactness_terms = {
+        "checksum",
+        "digest",
+        "hash",
+        "sha",
+        "sha256",
+        "token",
+        "secret",
+    }
+    return (
+        len(query_terms) >= 6
+        and bool(query_terms & exactness_terms)
+        and any(_looks_like_random_identifier(term) for term in query_terms)
+    )
+
+
+def _looks_like_random_identifier(term: str) -> bool:
+    if len(term) < 4:
+        return False
+    letters = [char for char in term.casefold() if char.isalpha()]
+    if len(letters) < 4:
+        return False
+    vowel_count = sum(1 for char in letters if char in "aeiou")
+    return vowel_count == 0
 
 
 def _meaningful_terms(text: str) -> set[str]:
@@ -2679,6 +2842,43 @@ def _qdrant_search_url(base_url: str, collection: str) -> str:
     return f"{base_url.rstrip('/')}/collections/{quote(collection, safe='')}/points/search"
 
 
+def _production_qdrant_filter() -> dict[str, Any]:
+    return {
+        "must": [
+            {"key": "release_id", "match": {"value": FULL_PRODUCTION_RELEASE_ID}},
+            {"key": "source_commit_sha", "match": {"value": FULL_PRODUCTION_SOURCE_SHA}},
+            {
+                "key": "admission_sha256",
+                "match": {"value": FULL_PRODUCTION_ADMISSION_SHA256},
+            },
+            {"key": "candidate_release_eligible", "match": {"value": True}},
+            {"key": "production_authority", "match": {"value": False}},
+        ]
+    }
+
+
+def _validate_qdrant_payload_identity(payload: Mapping[str, Any]) -> None:
+    expected = {
+        "release_id": FULL_PRODUCTION_RELEASE_ID,
+        "source_commit_sha": FULL_PRODUCTION_SOURCE_SHA,
+        "admission_sha256": FULL_PRODUCTION_ADMISSION_SHA256,
+        "candidate_release_eligible": True,
+        "production_authority": False,
+    }
+    for key, value in expected.items():
+        if payload.get(key) != value:
+            raise PA7ArbitraryQueryError(
+                "PA7_QDRANT_PAYLOAD_IDENTITY_MISMATCH",
+                f"Qdrant dense payload identity mismatch: {key}",
+            )
+    text_sha = str(payload.get("text_sha256", ""))
+    if not re.fullmatch(r"[0-9a-f]{64}", text_sha):
+        raise PA7ArbitraryQueryError(
+            "PA7_QDRANT_PAYLOAD_IDENTITY_MISMATCH",
+            "Qdrant dense payload text digest is invalid",
+        )
+
+
 def _privacy_counters() -> dict[str, bool]:
     return {
         "raw_query_persisted": False,
@@ -2696,6 +2896,7 @@ def _mutation_counters() -> dict[str, int]:
         "corpus_index_content_mutations": 0,
         "production_pointer_mutations": 0,
         "qdrant_write_operations": 0,
+        "r2_write_operations": 0,
     }
 
 

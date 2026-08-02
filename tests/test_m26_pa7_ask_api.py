@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from knowledge_engine import m26_ask_api
+from knowledge_engine import m26_pa7_arbitrary_query_runtime as runtime_module
 from knowledge_engine.m26_ask_api import (
     WEB_GRAPH_SCHEMA,
     WEB_RESPONSE_SCHEMA,
@@ -24,12 +25,22 @@ from knowledge_engine.m26_pa7_arbitrary_query_runtime import (
     run_owner_arbitrary_query,
 )
 from knowledge_engine.m26_production_promotion_closure import load_json
+from tests.m26_answer_bundle_fixture import synthetic_full_production_answer_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
 GATE_PATH = ROOT / "pilot/m26/m26-pa-7-resolved-production-gate.json"
 OWNER_SUBJECT_HASH = "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b"
 TEST_BACKEND_TOKEN = "test-backend-token"
 AUTH_SCHEME = "Bear" + "er"
+
+
+@pytest.fixture(autouse=True)
+def _production_answer_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        runtime_module,
+        "load_production_answer_bundle",
+        synthetic_full_production_answer_bundle,
+    )
 
 
 class ExactSpanProvider:
