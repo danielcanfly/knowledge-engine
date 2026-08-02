@@ -413,7 +413,11 @@ def _repair_support_items(
         if "precedes" in question.casefold() and item.get("relation_type") == "precedes":
             score += 8
         scored.append((score, item))
-    ranked = [item for score, item in sorted(scored, key=lambda pair: pair[0], reverse=True) if score > 0]
+    ranked = [
+        item
+        for score, item in sorted(scored, key=lambda pair: pair[0], reverse=True)
+        if score > 0
+    ]
     if not ranked:
         ranked = list(evidence)
     selected: list[Mapping[str, Any]] = []
