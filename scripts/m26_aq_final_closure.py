@@ -24,6 +24,8 @@ _TRANSIENT_REQUEST_ERRORS = (
     http.client.RemoteDisconnected,
     urllib.error.URLError,
 )
+_TRANSIENT_HTTP_STATUSES = {409, 425, 429, 500, 502, 503, 504}
+_REQUEST_ATTEMPTS = 8
 
 
 def _request_json(
@@ -47,7 +49,7 @@ def _request_json(
         headers=headers,
         method="POST" if body else "GET",
     )
-    for attempt in range(4):
+    for attempt in range(_REQUEST_ATTEMPTS):
         try:
             with urllib.request.urlopen(request, timeout=180) as response:
                 raw = response.read()
@@ -58,11 +60,17 @@ def _request_json(
                 parsed = json.loads(raw)
             except Exception:
                 parsed = {"error": "non-json response"}
+            if (
+                exc.code in _TRANSIENT_HTTP_STATUSES
+                and attempt < _REQUEST_ATTEMPTS - 1
+            ):
+                time.sleep(min(30, 3 * (attempt + 1)))
+                continue
             return exc.code, parsed
         except _TRANSIENT_REQUEST_ERRORS:
-            if attempt == 3:
+            if attempt == _REQUEST_ATTEMPTS - 1:
                 raise
-            time.sleep(2 * (attempt + 1))
+            time.sleep(min(30, 3 * (attempt + 1)))
     raise RuntimeError("unreachable request retry state")
 
 
