@@ -92,6 +92,7 @@ jobs:
     environment: m23-r3-diagnostic
     env:
       EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      M26_QUERY_BACKEND_TUNNEL_HOSTNAME: ${{ vars.M26_QUERY_BACKEND_TUNNEL_HOSTNAME || secrets.M26_QUERY_BACKEND_TUNNEL_HOSTNAME || 'm26-query-backend.danielcanfly.com' }}
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
@@ -107,7 +108,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
-          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+          for name in \
+            ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH \
+            ORACLE_VM_SSH_PRIVATE_KEY M26_QUERY_BACKEND_TUNNEL_HOSTNAME; do
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
           bash scripts/configure_oracle_ssh.sh
@@ -116,7 +119,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh oracle-knowledge \
-            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' bash -se" <<'REMOTE'
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' ROUTED_BACKEND_HOSTNAME='$M26_QUERY_BACKEND_TUNNEL_HOSTNAME' bash -se" <<'REMOTE'
           set -euo pipefail
           lock_file="/tmp/knowledge-engine-production-oracle.lock"
           exec 9>"$lock_file"
@@ -149,13 +152,28 @@ jobs:
           }
 
           runtime_sha="$(container_env M26_QUERY_BUILD_SHA)"
-          test "$runtime_sha" = "$EXPECTED_DEPLOY_SHA"
           export M26_QUERY_BACKEND_TOKEN="$(container_env M26_QUERY_BACKEND_TOKEN)"
           export KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH="$(container_env KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH)"
-          routed_origin="$(container_env M26_QUERY_BACKEND_ORIGIN)"
+          routed_origin="https://${ROUTED_BACKEND_HOSTNAME}"
+
+          runtime_sha_present=false
+          backend_token_present=false
+          owner_hash_present=false
+          routed_hostname_present=false
+          [ -n "$runtime_sha" ] && runtime_sha_present=true
+          [ -n "$M26_QUERY_BACKEND_TOKEN" ] && backend_token_present=true
+          [ -n "$KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" ] && owner_hash_present=true
+          [ -n "$ROUTED_BACKEND_HOSTNAME" ] && routed_hostname_present=true
+          echo "AQ_CONTAINER_RUNTIME_SHA_PRESENT=$runtime_sha_present"
+          echo "AQ_CONTAINER_BACKEND_TOKEN_PRESENT=$backend_token_present"
+          echo "AQ_CONTAINER_OWNER_HASH_PRESENT=$owner_hash_present"
+          echo "AQ_ROUTED_HOSTNAME_PRESENT=$routed_hostname_present"
+          echo "AQ_ROUTED_ORIGIN_CLASS=named_cloudflare_tunnel_https_origin"
+
+          test "$runtime_sha" = "$EXPECTED_DEPLOY_SHA"
           test -n "$M26_QUERY_BACKEND_TOKEN"
           test -n "$KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"
-          test -n "$routed_origin"
+          test -n "$ROUTED_BACKEND_HOSTNAME"
 
           evidence_dir="$DEPLOY_PATH/.m26-aq-final-production-closure"
           mkdir -p "$evidence_dir"
