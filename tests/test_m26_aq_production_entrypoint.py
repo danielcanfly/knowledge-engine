@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import subprocess
 
-
 EXPECTED_ENTRYPOINT = (
     "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
 )
