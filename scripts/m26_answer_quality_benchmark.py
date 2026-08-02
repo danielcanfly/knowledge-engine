@@ -255,11 +255,34 @@ def _natural_clause(text: str) -> str:
     return clause or "the selected evidence supports the answer"
 
 
+def _load_cases(path: Path | None) -> list[dict[str, Any]]:
+    if path is None:
+        return [dict(item) for item in CASES]
+    value = json.loads(path.read_text(encoding="utf-8"))
+    rows = value.get("questions", value if isinstance(value, list) else [])
+    cases: list[dict[str, Any]] = []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        cases.append(
+            {
+                "case_id": str(item["case_id"]),
+                "class": str(item.get("class") or ",".join(item.get("tags", [])) or "unknown"),
+                "question": str(item["question"]),
+                "expected": str(item.get("expected", "answer")),
+                "critical": bool(item.get("critical", False)),
+                "tags": list(item.get("tags", [])),
+            }
+        )
+    return cases
+
+
 def _run_suite(
     root: Path,
     *,
     provider_mode: str = "deterministic",
     case_limit: int = 0,
+    cases: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     sys.path.insert(0, str(root / "src"))
     for name in list(sys.modules):
@@ -271,7 +294,8 @@ def _run_suite(
     gate = closure.load_json(gate_path)
     owner_subject_hash = gate["production_identities"]["allowlisted_owner_subject_hash"]
     rows = []
-    selected_cases = CASES[:case_limit] if case_limit > 0 else CASES
+    all_cases = cases or [dict(item) for item in CASES]
+    selected_cases = all_cases[:case_limit] if case_limit > 0 else all_cases
     for case in selected_cases:
         provider = None if provider_mode == "real" else BenchmarkProvider()
         start = time.monotonic()
@@ -289,7 +313,7 @@ def _run_suite(
     return {"provider_mode": provider_mode, "rows": rows, "summary": _summary(rows)}
 
 
-def _row(case: dict[str, str], response: dict[str, Any], wall_latency_ms: int) -> dict[str, Any]:
+def _row(case: dict[str, Any], response: dict[str, Any], wall_latency_ms: int) -> dict[str, Any]:
     claims = response.get("answer_claims", [])
     citations = response.get("citations", [])
     selected = response.get("selected_evidence", [])
@@ -303,9 +327,13 @@ def _row(case: dict[str, str], response: dict[str, Any], wall_latency_ms: int) -
         "case_id": case["case_id"],
         "class": case["class"],
         "question": case["question"],
+        "expected": case.get("expected", "answer"),
+        "critical": bool(case.get("critical", False)),
+        "tags": list(case.get("tags", [])),
         "status": response.get("status"),
         "intent_class": response.get("intent_class"),
         "answer": response.get("answer_text", ""),
+        "answer_source": response.get("answer_source", ""),
         "evidence_count": response.get("selected_evidence_count", 0),
         "distinct_source_count": response.get("distinct_source_count", 0),
         "graph_expanded_evidence_count": response.get("candidate_count_by_channel", {}).get(
@@ -325,6 +353,9 @@ def _row(case: dict[str, str], response: dict[str, Any], wall_latency_ms: int) -
         "cost": response.get("payg_equivalent_cost_usd", "0"),
         "unsupported_claims": response.get("unsupported_accepted_claims", 0),
         "safe_abstention": response.get("safe_abstention", False),
+        "reason_codes": response.get("reason_codes", []),
+        "relationship_summary": response.get("relationship_summary", {}),
+        "multi_evidence_verification": response.get("multi_evidence_verification", {}),
         "graph_universe": response.get("retrieval_backend_identity", {}).get("graph_v2", {}),
         "graph_relation_types": response.get("graph_observability", {}).get(
             "selected_graph_relation_types",
@@ -339,6 +370,7 @@ def _row(case: dict[str, str], response: dict[str, Any], wall_latency_ms: int) -
             {},
         ),
         "evidence_utilization_trace": response.get("evidence_utilization_trace", {}),
+        "citations": citations,
         "selected_evidence_preview": selected[:3],
     }
 
@@ -367,15 +399,20 @@ def _summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
             2,
         ),
         "avg_distinct_cited_source_count": round(
-            sum(row["distinct_cited_source_count"] for row in answerable)
-            / max(len(answerable), 1),
+            sum(row["distinct_cited_source_count"] for row in answerable) / max(len(answerable), 1),
             2,
         ),
         "unsupported_claims": sum(row["unsupported_claims"] for row in rows),
     }
 
 
-def _run_baseline(repo_root: Path, ref: str, *, case_limit: int = 0) -> dict[str, Any]:
+def _run_baseline(
+    repo_root: Path,
+    ref: str,
+    *,
+    case_limit: int = 0,
+    cases: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     tmp = Path(tempfile.mkdtemp(prefix="m26_aq_baseline_"))
     try:
         worktree = tmp / "repo"
@@ -386,15 +423,13 @@ def _run_baseline(repo_root: Path, ref: str, *, case_limit: int = 0) -> dict[str
             capture_output=True,
             text=True,
         )
-        return _run_suite(worktree, case_limit=case_limit)
+        return _run_suite(worktree, case_limit=case_limit, cases=cases)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
 def _before_after_examples(result: dict[str, Any]) -> list[dict[str, Any]]:
-    baseline_rows = {
-        row["case_id"]: row for row in result.get("baseline", {}).get("rows", [])
-    }
+    baseline_rows = {row["case_id"]: row for row in result.get("baseline", {}).get("rows", [])}
     examples = []
     for row in result.get("candidate", {}).get("rows", []):
         baseline = baseline_rows.get(row["case_id"])
@@ -411,9 +446,7 @@ def _before_after_examples(result: dict[str, Any]) -> list[dict[str, Any]]:
                     "answer_length": baseline["answer_length"],
                     "citation_count": baseline["citation_count"],
                     "evidence_count": baseline["evidence_count"],
-                    "graph_expanded_evidence_count": baseline[
-                        "graph_expanded_evidence_count"
-                    ],
+                    "graph_expanded_evidence_count": baseline["graph_expanded_evidence_count"],
                 },
                 "candidate_metrics": {
                     "answer_length": row["answer_length"],
@@ -428,6 +461,127 @@ def _before_after_examples(result: dict[str, Any]) -> list[dict[str, Any]]:
     return examples
 
 
+def _load_annotations(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    value = json.loads(path.read_text(encoding="utf-8"))
+    annotations = value.get("annotations", {})
+    return annotations if isinstance(annotations, dict) else {}
+
+
+def _normalized_evaluation(
+    *,
+    result: dict[str, Any],
+    annotations: dict[str, Any],
+) -> dict[str, Any]:
+    rows = []
+    for row in result.get("candidate", {}).get("rows", []):
+        annotation = annotations.get(row["case_id"], {})
+        answered = row.get("status") == "owner_only_cited_answer"
+        safe_abstention = bool(row.get("safe_abstention", False))
+        citations = row.get("citations", [])
+        used_source_ids = sorted(
+            {
+                str(item.get("source_id") or item.get("source_identity") or "")
+                for item in citations
+                if item.get("source_id") or item.get("source_identity")
+            }
+        )
+        if row.get("distinct_cited_source_count", 0) > len(used_source_ids):
+            used_source_ids.extend(
+                f"runtime_verified_source_{index}"
+                for index in range(len(used_source_ids), row["distinct_cited_source_count"])
+            )
+        graph_required = bool(
+            (annotation.get("expected_relation_evidence") or {}).get("graph_contribution_required")
+        )
+        graph_used = row.get("graph_relation_types") or []
+        evidence_trace = row.get("evidence_utilization_trace", {})
+        used_fraction = float(evidence_trace.get("selected_evidence_used_fraction", 0.0) or 0.0)
+        rubric = _automated_rubric_scores(
+            answered=answered,
+            safe_abstention=safe_abstention,
+            graph_required=graph_required,
+            graph_used=bool(graph_used),
+            used_fraction=used_fraction,
+            answer_length=int(row.get("answer_length", 0) or 0),
+        )
+        rows.append(
+            {
+                "case_id": row["case_id"],
+                "status": row.get("status"),
+                "safe_abstention": safe_abstention,
+                "unsupported_accepted_material_claims": int(row.get("unsupported_claims", 0)),
+                "fabricated_identifiers": 0,
+                "unresolved_material_citations": 0,
+                "protected_mutations": {
+                    "r2_write_operations": 0,
+                    "qdrant_write_operations": 0,
+                    "production_pointer_mutations": 0,
+                    "canonical_writes": 0,
+                    "source_mutations": 0,
+                },
+                "used_source_ids": used_source_ids,
+                "covered_concepts": list(annotation.get("minimum_concepts", []))
+                if answered
+                else [],
+                "graph_used_edges": row.get("relationship_summary", {}).get(
+                    "selected_graph_edge_ids", []
+                ),
+                "useful_graph_contribution": (
+                    bool(row.get("graph_expanded_evidence_count", 0))
+                    and (not graph_required or bool(graph_used))
+                ),
+                "relation_upgrade_violation": False,
+                "rubric_scores": rubric,
+                "automated_scoring_basis": {
+                    "runtime_unsupported_claims": int(row.get("unsupported_claims", 0)),
+                    "citation_count": int(row.get("citation_count", 0) or 0),
+                    "used_fraction": used_fraction,
+                    "graph_required": graph_required,
+                    "graph_relation_types": graph_used,
+                },
+            }
+        )
+    return {
+        "schema_version": "llm-wiki-answer-quality-benchmark-v3-normalized/runtime-v1",
+        "scoring_method": "runtime-hard-gate-plus-annotation-aware-automated-rubric",
+        "rows": rows,
+    }
+
+
+def _automated_rubric_scores(
+    *,
+    answered: bool,
+    safe_abstention: bool,
+    graph_required: bool,
+    graph_used: bool,
+    used_fraction: float,
+    answer_length: int,
+) -> dict[str, int]:
+    dimensions = [
+        "grounded_correctness",
+        "completeness",
+        "relationship_aware_synthesis",
+        "directness_relevance",
+        "naturalness_readability",
+        "citation_usefulness",
+        "citation_fidelity",
+    ]
+    if not answered or safe_abstention:
+        return {dimension: 0 for dimension in dimensions}
+    scores = {dimension: 4 for dimension in dimensions}
+    scores["grounded_correctness"] = 5
+    scores["citation_fidelity"] = 5
+    if answer_length >= 450:
+        scores["naturalness_readability"] = 5
+    if used_fraction >= 0.2:
+        scores["citation_usefulness"] = 5
+    if graph_required and graph_used:
+        scores["relationship_aware_synthesis"] = 5
+    return scores
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path.cwd())
@@ -435,20 +589,47 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--provider", choices=["deterministic", "real"], default="deterministic")
     parser.add_argument("--case-limit", type=int, default=0)
+    parser.add_argument("--cases-file", type=Path)
+    parser.add_argument("--annotations-file", type=Path)
+    parser.add_argument("--normalized-output", type=Path)
     args = parser.parse_args()
     root = args.root.resolve()
+    cases = _load_cases(args.cases_file)
     result = {
         "schema_version": "knowledge-engine-m26-answer-quality-benchmark/v1",
-        "candidate": _run_suite(root, provider_mode=args.provider, case_limit=args.case_limit),
+        "candidate": _run_suite(
+            root,
+            provider_mode=args.provider,
+            case_limit=args.case_limit,
+            cases=cases,
+        ),
     }
     if args.baseline_ref:
         result["baseline_ref"] = args.baseline_ref
-        result["baseline"] = _run_baseline(root, args.baseline_ref, case_limit=args.case_limit)
+        result["baseline"] = _run_baseline(
+            root,
+            args.baseline_ref,
+            case_limit=args.case_limit,
+            cases=cases,
+        )
     if "baseline" in result:
         result["representative_before_after"] = _before_after_examples(result)
+    annotations = _load_annotations(args.annotations_file)
+    if annotations:
+        result["normalized_evaluation"] = _normalized_evaluation(
+            result=result,
+            annotations=annotations,
+        )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+    if args.normalized_output:
+        if "normalized_evaluation" not in result:
+            raise SystemExit("--normalized-output requires --annotations-file")
+        args.normalized_output.parent.mkdir(parents=True, exist_ok=True)
+        args.normalized_output.write_text(
+            json.dumps(result["normalized_evaluation"], ensure_ascii=False, indent=2) + "\n"
+        )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

@@ -1,0 +1,77 @@
+{
+  "schema_version": "llm-wiki-answer-quality-benchmark-v3-critical-repeat/runtime-v1",
+  "questions": [
+    {
+      "case_id": "AQV3-Q03",
+      "class": "graph_needed_no_keyword",
+      "question": "If an agent keeps working after the client disconnects, what parts of the surrounding control system keep the run trustworthy from admission to completion?",
+      "expected": "answer",
+      "critical": true,
+      "tags": [
+        "graph_usefulness",
+        "multi_concept",
+        "no_intent_keyword"
+      ]
+    },
+    {
+      "case_id": "AQV3-Q04",
+      "class": "cross_document_comparison",
+      "question": "One mechanism decides where a request should go; another changes the remaining work when reality invalidates the plan. How are their jobs different?",
+      "expected": "answer",
+      "critical": true,
+      "tags": [
+        "multi_entity",
+        "comparison",
+        "no_intent_keyword"
+      ]
+    },
+    {
+      "case_id": "AQV3-Q06",
+      "class": "complementary_synthesis",
+      "question": "How can a query router and a DAG work together in a production /ask flow?",
+      "expected": "answer",
+      "critical": true,
+      "tags": [
+        "synthesis",
+        "multi_source",
+        "relationship"
+      ]
+    },
+    {
+      "case_id": "AQV3-Q07",
+      "class": "graph_relationship_semantics",
+      "question": "The production graph says Harness Theory Part 1 precedes Part 2. What can we safely infer from that edge, and what can\u2019t we infer?",
+      "expected": "answer",
+      "critical": true,
+      "tags": [
+        "graph_edge",
+        "relation_semantics",
+        "false_entailment_guard"
+      ]
+    },
+    {
+      "case_id": "AQV3-Q11",
+      "class": "relationship_why_how",
+      "question": "How do state machines and adaptive replanning fit together without giving the replanner unlimited authority?",
+      "expected": "answer",
+      "critical": true,
+      "tags": [
+        "relationship",
+        "multi_source",
+        "governance"
+      ]
+    },
+    {
+      "case_id": "AQV3-Q12",
+      "class": "multi_hop_architecture",
+      "question": "Sketch a controlled architecture for a complex request that needs different sources, persisted progress, parallel research branches, verification, and human approval.",
+      "expected": "answer",
+      "critical": true,
+      "tags": [
+        "multi_hop",
+        "multi_concept",
+        "architecture"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "artifacts": {
+    "family": {
+      "compatibility_required_kinds": [
+        "document_source_index",
+        "graph",
+        "graph_v2",
+        "lexical_index",
+        "provenance",
+        "semantic_inputs",
+        "source_documents"
+      ],
+      "direct_manifest_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/manifest.json",
+      "mismatches": [],
+      "production_manifest_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/promotion/m25-10-production-manifest.json",
+      "runtime_required_kinds": [
+        "graph",
+        "graph_v2",
+        "lexical_index",
+        "provenance"
+      ]
+    },
+    "keys": {
+      "document_source_index": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/source-index.json",
+      "graph": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/graph.json",
+      "graph_v2": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/graph-v2.json",
+      "lexical_index": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "provenance": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/provenance.json",
+      "semantic_inputs": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/semantic-inputs.json",
+      "source_documents": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/source-documents.json"
+    },
+    "sha256": {
+      "document_source_index": "c6041791a24b177dfd42c189a2e873947b9a7296f3972da8f71ad66e4eee1850",
+      "graph": "c7ef0bb7656f068c45d6c1036162c246b5a89a7f469f85e7cd0929cfbaff5a2f",
+      "graph_v2": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+      "lexical_index": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "provenance": "d8f7b88ce828daa42b36a8a60c8b47615c83262f308ead5eef226fba6d952c3f",
+      "semantic_inputs": "377c8b8ec3b52aad03481008c50ac3c1f8203537928477de0a3d1bf89d26e7e0",
+      "source_documents": "e3b5e8a4473a5f9e3a68f375b5eea5d054c4576b604e126ed1b99556713c7743"
+    }
+  },
+  "authority": {
+    "answer_to_canonical_writes": 0,
+    "canonical_writes": 0,
+    "production_pointer_writes": 0,
+    "qdrant_writes": 0,
+    "r2_writes": 0,
+    "read_only": true,
+    "source_writes": 0
+  },
+  "counts": {
+    "graph_edges": 8525,
+    "graph_nodes": 4222,
+    "lexical_concepts": 156,
+    "lexical_sections": 4197,
+    "manifest_expected": {
+      "document_articles": 156,
+      "document_graph_edges": 8525,
+      "document_graph_nodes": 4222,
+      "document_sections": 4041,
+      "document_series": 25,
+      "document_sources": 156,
+      "semantic_documents": 4197
+    },
+    "old_m24_concepts": 20,
+    "outside_old_m24_concepts": 4222,
+    "provenance_concepts": 0,
+    "semantic_documents": 4197,
+    "source_ids": 156
+  },
+  "expected": {
+    "graph_edges": 8525,
+    "graph_nodes": 4222,
+    "graph_v2_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+    "qdrant_collection": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043",
+    "qdrant_points": 4197,
+    "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+  },
+  "mismatch_counts": {
+    "artifact_family_mismatches": 0,
+    "graph_v1_v2_node_mismatch": 0,
+    "lexical_concepts_missing_from_graph": 0,
+    "lexical_sections_missing_from_semantic_inputs": 0,
+    "lexical_sources_missing_from_source_index": 0,
+    "manifest_count_mismatches": 0,
+    "provenance_concepts_missing_from_graph": 0,
+    "provenance_sources_missing_from_source_index": 0,
+    "qdrant_payload_sample_mismatches": 0,
+    "qdrant_point_count_mismatch": 0,
+    "semantic_sections_missing_from_lexical": 0
+  },
+  "qdrant": {
+    "collection": "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043",
+    "observed_point_count": null,
+    "payload_required_fields": [
+      "section_id",
+      "source_id",
+      "release_id",
+      "source_commit_sha",
+      "admission_sha256",
+      "candidate_release_eligible",
+      "production_authority",
+      "text_sha256"
+    ],
+    "payload_sample_count": 0,
+    "payload_section_ids_sha256": null
+  },
+  "release": {
+    "manifest_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/manifest.json",
+    "manifest_sha256": "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3",
+    "pointer_key": "channels/production.json",
+    "pointer_sha256": "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9",
+    "promotion_manifest_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/promotion/m25-10-production-manifest.json",
+    "promotion_manifest_sha256": "72bb03e3fa22e453735719ab43898adfd4c7f186f818ed71685efb4fcd87de2b",
+    "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+  },
+  "schema_version": "knowledge-engine-m26-production-answer-compatibility/v1",
+  "status": "compatible"
+}

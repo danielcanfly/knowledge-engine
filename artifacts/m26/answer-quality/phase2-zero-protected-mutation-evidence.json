@@ -1,0 +1,256 @@
+{
+  "all_protected_mutations_zero": true,
+  "artifacts_checked": [
+    "phase2-benchmark-v3-deterministic.json",
+    "phase2-benchmark-v3-real-provider.json",
+    "phase2-benchmark-v3-real-provider-critical-repeat.json",
+    "phase2-outside-old20-semantic-crosswalk-proof.json",
+    "phase2-full-graph-bounded-readonly-inventory.json"
+  ],
+  "row_count": 44,
+  "rows": [
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q01",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q02",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q03",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q04",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q05",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q06",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q07",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q08",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q09",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q10",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q11",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q12",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q13",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q14",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q15",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q16",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q17",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-deterministic.json",
+      "case_id": "AQV3-Q18",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q01",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q02",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q03",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q04",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q05",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q06",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q07",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q08",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q09",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q10",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q11",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q12",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q13",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q14",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q15",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q16",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q17",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider.json",
+      "case_id": "AQV3-Q18",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider-critical-repeat.json",
+      "case_id": "AQV3-Q03",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider-critical-repeat.json",
+      "case_id": "AQV3-Q04",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider-critical-repeat.json",
+      "case_id": "AQV3-Q06",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider-critical-repeat.json",
+      "case_id": "AQV3-Q07",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider-critical-repeat.json",
+      "case_id": "AQV3-Q11",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-benchmark-v3-real-provider-critical-repeat.json",
+      "case_id": "AQV3-Q12",
+      "mutations": {}
+    },
+    {
+      "artifact": "phase2-outside-old20-semantic-crosswalk-proof.json",
+      "case_id": "Explain outside old twenty production retrieval neighbour hydration.",
+      "mutations": {
+        "answer_to_canonical_writes": 0,
+        "canonical_writes": 0,
+        "corpus_index_content_mutations": 0,
+        "production_pointer_mutations": 0,
+        "qdrant_write_operations": 0,
+        "r2_write_operations": 0
+      }
+    },
+    {
+      "artifact": "phase2-full-graph-bounded-readonly-inventory.json",
+      "case_id": "artifact",
+      "mutations": {
+        "canonical_writes": 0,
+        "production_pointer_mutations": 0,
+        "qdrant_write_operations": 0,
+        "r2_write_operations": 0,
+        "source_mutations": 0
+      }
+    }
+  ],
+  "schema_version": "knowledge-engine-m26-aq-protected-mutation-evidence/v1",
+  "totals": {
+    "answer_to_canonical_writes": 0,
+    "canonical_writes": 0,
+    "corpus_index_content_mutations": 0,
+    "production_pointer_mutations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0,
+    "source_mutations": 0
+  }
+}

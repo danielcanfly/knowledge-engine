@@ -1,0 +1,125 @@
+{
+  "confidence_histogram": {
+    "0.90-1.00": 8525
+  },
+  "directedness_by_relation": {
+    "contains:True": 4197,
+    "part_of:True": 4197,
+    "precedes:True": 131
+  },
+  "edge_count": 8525,
+  "edge_examples_by_relation": {
+    "contains": [
+      {
+        "confidence": 1.0,
+        "edge_id": "edge_0033d8b647386b8baba9",
+        "provenance_ref": "structural-source-layout",
+        "relation_type": "contains",
+        "review_status": "approved",
+        "source": "article_b870d7d1149ac508e522",
+        "target": "section_311d82c25ff7ab46fe7d"
+      },
+      {
+        "confidence": 1.0,
+        "edge_id": "edge_004cce3c4046d592a5dd",
+        "provenance_ref": "structural-source-layout",
+        "relation_type": "contains",
+        "review_status": "approved",
+        "source": "article_a55ae678733a3b071f50",
+        "target": "section_66fa97834e6bfd1b74ac"
+      },
+      {
+        "confidence": 1.0,
+        "edge_id": "edge_005d0f7cf0a914133147",
+        "provenance_ref": "structural-source-layout",
+        "relation_type": "contains",
+        "review_status": "approved",
+        "source": "article_7fdffd1fb97e7e800bc0",
+        "target": "section_ea25b99dc205fb0c6c08"
+      }
+    ],
+    "part_of": [
+      {
+        "confidence": 1.0,
+        "edge_id": "edge_0002480f8bd189e5f7fe",
+        "provenance_ref": "structural-source-layout",
+        "relation_type": "part_of",
+        "review_status": "approved",
+        "source": "section_6cd64c4bfd38bbc6b173",
+        "target": "article_7ac1cca9b9d25d409ca5"
+      },
+      {
+        "confidence": 1.0,
+        "edge_id": "edge_00102974a8e9425d7ad0",
+        "provenance_ref": "structural-source-layout",
+        "relation_type": "part_of",
+        "review_status": "approved",
+        "source": "section_f759ee4e8b8062ddc424",
+        "target": "article_19e366642b6399741e71"
+      },
+      {
+        "confidence": 1.0,
+        "edge_id": "edge_0010f802f4d6e36828c1",
+        "provenance_ref": "structural-source-layout",
+        "relation_type": "part_of",
+        "review_status": "approved",
+        "source": "section_07270ea94f2cdfa50604",
+        "target": "article_ef516a5a964be88c581d"
+      }
+    ],
+    "precedes": [
+      {
+        "confidence": 1.0,
+        "edge_id": "edge_00d48875ef8bc9d8c2a0",
+        "provenance_ref": "structural-source-layout",
+        "relation_type": "precedes",
+        "review_status": "approved",
+        "source": "article_88f05e7883163e1cb245",
+        "target": "article_db9ac27aa856c791982b"
+      },
+      {
+        "confidence": 1.0,
+        "edge_id": "edge_019257793f5e0e1b8b76",
+        "provenance_ref": "structural-source-layout",
+        "relation_type": "precedes",
+        "review_status": "approved",
+        "source": "article_1c0cbb0d018fcd949d37",
+        "target": "article_358efdca40e354b7bd99"
+      },
+      {
+        "confidence": 1.0,
+        "edge_id": "edge_01aeaf33ca475e5493db",
+        "provenance_ref": "structural-source-layout",
+        "relation_type": "precedes",
+        "review_status": "approved",
+        "source": "article_72d41b52147733b82301",
+        "target": "article_be3f9034ffaf95533161"
+      }
+    ]
+  },
+  "edge_provenance_ref_present_count": 8525,
+  "graph_v2_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+  "mutation_counts": {
+    "canonical_writes": 0,
+    "production_pointer_mutations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0,
+    "source_mutations": 0
+  },
+  "node_count": 4222,
+  "node_type_counts": {
+    "Article": 156,
+    "Section": 4041,
+    "Series": 25
+  },
+  "relation_type_counts": {
+    "contains": 4197,
+    "part_of": 4197,
+    "precedes": 131
+  },
+  "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+  "review_status_counts": {
+    "approved": 8525
+  },
+  "schema_version": "knowledge-engine-m26-aq-graph-semantics-profile/v1"
+}

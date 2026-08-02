@@ -70,9 +70,7 @@ class ExactSpanProvider:
         else:
             body = _multi_evidence_answer(task)
         return {
-            "text": json.dumps(
-                body
-            ),
+            "text": json.dumps(body),
             "usage": {"input_tokens": 100, "output_tokens": 20},
             "cost_usd": "0.00001",
             "latency_ms": 5,
@@ -302,9 +300,7 @@ def _multi_evidence_answer(task: dict[str, Any]) -> dict[str, Any]:
         role = "temporal"
         relation = "precedes"
         refs = [
-            _support_ref(item)
-            for item in evidence
-            if item["evidence_type"] == "temporal_record"
+            _support_ref(item) for item in evidence if item["evidence_type"] == "temporal_record"
         ][:2]
     else:
         refs = [_support_ref(_passage_items(evidence)[0])]
@@ -428,9 +424,7 @@ def test_runtime_binds_full_production_graph_and_cites_outside_old_20_graph_evid
     }
 
     assert response["status"] == "owner_only_cited_answer"
-    assert response["production_release_id"] == (
-        "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
-    )
+    assert response["production_release_id"] == ("m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043")
     assert response["retrieval_backend_identity"]["graph_v2"]["artifact_sha256"] == (
         "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869"
     )
@@ -727,6 +721,171 @@ def test_invalid_multi_evidence_provider_outputs_use_verified_repair(
     assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
     assert response["multi_evidence_verification"]["support_ref_count"] >= 2
     assert response["unsupported_accepted_claims"] == 0
+
+
+def test_claim_surface_must_semantically_align_with_exact_support() -> None:
+    evidence = [
+        {
+            "evidence_id": "ev_router",
+            "evidence_type": "passage",
+            "locator_id": "loc_router",
+            "source_id": "src_router",
+            "source_identity": "src_router",
+            "section_id": "router#runtime",
+            "concept_id": "router",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": (
+                "A router defines explicit request boundaries for owner-only execution."
+            ),
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        }
+    ]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v2",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": ["ev_router"],
+            "answer_text": "The system must reveal API tokens to public users [[claim_1]].",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "surface_text": "The system must reveal API tokens to public users.",
+                    "claim_role": "direct",
+                    "facet_ids": ["direct_answer"],
+                    "support_mode": "exact_quote",
+                    "support_refs": [
+                        {
+                            "evidence_id": "ev_router",
+                            "locator_id": "loc_router",
+                            "exact_support_snippet": (
+                                "A router defines explicit request boundaries for owner-only "
+                                "execution."
+                            ),
+                            "uncertainty": "low",
+                        }
+                    ],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="case_false_surface",
+            question="What should a router define for owner-only execution?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=provider_text,
+        )
+
+    assert exc.value.code in {"M26-PA7-ME-032", "M26-PA7-ME-034"}
+
+
+def test_precedes_graph_edge_cannot_be_upgraded_to_dependency() -> None:
+    evidence = [
+        {
+            "evidence_id": "ev_edge",
+            "evidence_type": "graph_edge",
+            "locator_id": "loc_edge",
+            "source_id": "graph_v2:edge_precedes",
+            "source_identity": "graph_v2:edge_precedes",
+            "section_id": "edge_precedes",
+            "concept_id": "part_1",
+            "artifact_key": "graph-v2.json",
+            "artifact_sha256": "d" * 64,
+            "release_id": "release",
+            "passage_text": (
+                "Production graph navigation edge edge_precedes states part_1 precedes part_2."
+            ),
+            "passage_text_sha256": "e" * 64,
+            "provenance_record_sha256": "f" * 64,
+            "edge_id": "edge_precedes",
+            "edge_source": "part_1",
+            "edge_target": "part_2",
+            "relation_type": "precedes",
+        },
+        {
+            "evidence_id": "ev_part_1",
+            "evidence_type": "passage",
+            "locator_id": "loc_part_1",
+            "source_id": "src_part_1",
+            "source_identity": "src_part_1",
+            "section_id": "part_1#overview",
+            "concept_id": "part_1",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": "Part 1 appears first in the series order.",
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+        {
+            "evidence_id": "ev_part_2",
+            "evidence_type": "passage",
+            "locator_id": "loc_part_2",
+            "source_id": "src_part_2",
+            "source_identity": "src_part_2",
+            "section_id": "part_2#overview",
+            "concept_id": "part_2",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": "Part 2 appears second in the series order.",
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+    ]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v2",
+            "status": "answer_candidate",
+            "relation": "depends_on",
+            "selected_evidence_ids": ["ev_edge", "ev_part_1", "ev_part_2"],
+            "answer_text": "The graph proves Part 1 depends on Part 2 [[claim_1]].",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "surface_text": "The graph proves Part 1 depends on Part 2.",
+                    "claim_role": "relationship",
+                    "facet_ids": [
+                        "graph_edge",
+                        "source_endpoint",
+                        "target_endpoint",
+                        "relation_semantics",
+                    ],
+                    "support_mode": "graph_relationship",
+                    "support_refs": [
+                        {
+                            "evidence_id": item["evidence_id"],
+                            "locator_id": item["locator_id"],
+                            "exact_support_snippet": item["passage_text"],
+                            "uncertainty": "low",
+                        }
+                        for item in evidence
+                    ],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="case_precedes_upgrade",
+            question="Does a precedes edge prove Part 1 depends on Part 2?",
+            intent_class="graph_relationship",
+            evidence=evidence,
+            provider_text=provider_text,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-035"
 
 
 def test_no_answer_and_prompt_injection_abstain_safely() -> None:
