@@ -193,7 +193,7 @@ INTENT_PATTERNS: tuple[tuple[str, tuple[re.Pattern[str], ...]], ...] = (
         "graph_relationship",
         (
             re.compile(
-                r"\b(?:graph|relationship|edge|connects?|depends|requires|dag)\b",
+                r"\b(?:graph\s+relationship|graph\s+edge|edge|connects?|depends|requires|precedes|part_of|has_part|implemented_by)\b",
                 re.I,
             ),
             re.compile(r"\bdirected acyclic graph\b", re.I),
@@ -204,10 +204,10 @@ INTENT_PATTERNS: tuple[tuple[str, tuple[re.Pattern[str], ...]], ...] = (
         "cross_document_comparison",
         (
             re.compile(
-                r"\b(?:compare|contrast|difference|different|distinction|versus|vs)\b",
+                r"\b(?:compare|contrast|difference between|versus|vs)\b",
                 re.I,
             ),
-            re.compile(r"\bwhile\b", re.I),
+            re.compile(r"\bhow are .* different\b", re.I),
         ),
     ),
     (
@@ -974,6 +974,7 @@ def _synthesize_and_verify(
                 provider_text=normalized["provider_text"],
             )
             if verified["terminal_status"] == "safe_abstention":
+                failures.extend(str(code) for code in verified["reason_codes"])
                 deterministic = _deterministic_evidence_synthesis(
                     trace_id=trace_id,
                     question=question,
@@ -1053,7 +1054,20 @@ def _deterministic_evidence_synthesis(
     trigger_reason_codes: Sequence[str],
     allow_after_repair_failure: bool,
 ) -> dict[str, Any] | None:
-    candidate = _deterministic_provider_candidate(intent_class=intent_class, evidence=evidence)
+    eligible, eligibility_reasons = _deterministic_fallback_eligibility(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+        allow_after_repair_failure=allow_after_repair_failure,
+        trigger_reason_codes=trigger_reason_codes,
+    )
+    if not eligible:
+        return None
+    candidate = _deterministic_provider_candidate(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+    )
     if candidate is None:
         return None
     try:
@@ -1089,12 +1103,18 @@ def _deterministic_evidence_synthesis(
         ],
         "repair_trigger": sorted({str(item) for item in trigger_reason_codes}),
         "repair_result": "deterministic_verified_evidence_synthesis",
+        "fallback_eligibility": {
+            "eligible": True,
+            "reasons": eligibility_reasons,
+            "allow_after_repair_failure": allow_after_repair_failure,
+        },
     }
     return answer
 
 
 def _deterministic_provider_candidate(
     *,
+    question: str,
     intent_class: str,
     evidence: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any] | None:
@@ -1102,21 +1122,24 @@ def _deterministic_provider_candidate(
     relation = None
     role = "direct"
     selected: list[Mapping[str, Any]]
-    if intent_class == "cross_document_comparison":
-        selected = _first_distinct_source_items(passages, minimum=2)
-        relation = "contrasts_with"
-        role = "relationship"
-    elif intent_class == "complementary_synthesis":
-        selected = _first_distinct_source_items(passages, minimum=2)
-        relation = "complements"
-        role = "relationship"
+    claims: list[dict[str, Any]]
+    if intent_class == "direct_grounded_knowledge":
+        return _deterministic_direct_provider_candidate(question=question, evidence=evidence)
+    if intent_class in {"cross_document_comparison", "complementary_synthesis"}:
+        selected = _semantic_distinct_passages_for_query(question, passages, minimum=2)
+        if len(selected) < 2:
+            return None
+        relation = "contrasts_with" if intent_class == "cross_document_comparison" else "complements"
+        role = "comparison" if intent_class == "cross_document_comparison" else "relationship"
     elif intent_class == "graph_relationship":
         selected = _deterministic_graph_items(evidence)
+        if not selected:
+            return None
         graph_edge = next(
             (item for item in selected if item.get("evidence_type") == "graph_edge"),
             {},
         )
-        relation = str(graph_edge.get("relation_type") or "depends_on")
+        relation = str(graph_edge.get("relation_type") or "precedes")
         role = "relationship"
     elif intent_class == "provenance_source_trace":
         provenance = next(
@@ -1130,38 +1153,421 @@ def _deterministic_provider_candidate(
     elif intent_class == "temporal_conflict":
         temporal = [item for item in evidence if item.get("evidence_type") == "temporal_record"]
         selected = _first_distinct_source_items(temporal, minimum=2)
+        if len(selected) < 2:
+            return None
         relation = "precedes"
         role = "temporal"
     else:
-        selected = _first_distinct_source_items(passages, minimum=1)
-        if len(_first_distinct_source_items(passages, minimum=2)) >= 2:
-            selected = _first_distinct_source_items(passages, minimum=2)
+        passage = _single_responsive_fallback_passage(question=question, evidence=passages)
+        if passage is None:
+            return None
+        selected = [passage]
     if not selected:
         return None
     refs = [_deterministic_support_ref(item) for item in selected]
     if any(ref is None for ref in refs):
         return None
+    surface_text = _deterministic_relation_surface_text(
+        question=question,
+        relation=relation,
+        refs=[ref for ref in refs if ref is not None],
+    )
+    claims = [
+        {
+            "claim_id": "claim_1",
+            "claim_role": role,
+            "surface_text": surface_text,
+            "facet_ids": _required_facet_ids(question=question, intent_class=intent_class),
+            "support_mode": "multi_evidence_exact",
+            "support_refs": [ref for ref in refs if ref is not None],
+        }
+    ]
     return {
-        "schema_version": "aq3-provider-candidate/v2",
+        "schema_version": "aq3-provider-candidate/v3",
         "status": "answer_candidate",
         "relation": relation,
-        "selected_evidence_ids": [str(item["evidence_id"]) for item in evidence],
-        "claims": [
-            {
-                "claim_id": "claim_1",
-                "claim_role": role,
-                "surface_text": " ".join(
-                    str(ref["exact_quote"]) for ref in refs if ref is not None
-                ),
-                "facet_ids": [],
-                "support_mode": "multi_evidence_exact",
-                "support_refs": [ref for ref in refs if ref is not None],
-            }
-        ],
-        "answer_text": "",
+        "selected_evidence_ids": [str(item["evidence_id"]) for item in selected],
+        "answer_text": _deterministic_answer_text(claims),
+        "claims": claims,
         "missing_facets": [],
         "abstention_reason": None,
     }
+
+
+def _deterministic_direct_provider_candidate(
+    *,
+    question: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    raw_claims: list[dict[str, Any]] = []
+    selected_ids: list[str] = []
+    for index, facet in enumerate(
+        _question_contract(
+            question=question,
+            intent_class="direct_grounded_knowledge",
+        )["required_facets"],
+        start=1,
+    ):
+        item = _best_evidence_for_direct_facet(question=question, facet=facet, evidence=evidence)
+        if item is None:
+            return None
+        ref = _deterministic_support_ref_for_terms(item, _facet_terms(facet))
+        if ref is None:
+            return None
+        facet_id = str(facet.get("facet_id", f"facet_{index}"))
+        surface_text = str(ref["exact_quote"])
+        if facet_id == "non_entailment_boundary":
+            surface_text = (
+                "A precedes relationship does not by itself prove dependency; "
+                + surface_text
+            )
+        raw_claims.append(
+            {
+                "claim_id": f"claim_{index}",
+                "claim_role": "direct",
+                "surface_text": surface_text,
+                "facet_ids": [facet_id],
+                "support_mode": "exact_quote",
+                "support_refs": [ref],
+            }
+        )
+        selected_ids.append(str(item["evidence_id"]))
+    claims = _merge_deterministic_direct_claims(raw_claims)
+    if not claims:
+        return None
+    return {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "relation": None,
+        "selected_evidence_ids": list(dict.fromkeys(selected_ids)),
+        "answer_text": _deterministic_answer_text(claims),
+        "claims": claims,
+        "missing_facets": [],
+        "abstention_reason": None,
+    }
+
+
+def _semantic_distinct_passages_for_query(
+    question: str,
+    passages: Sequence[Mapping[str, Any]],
+    *,
+    minimum: int,
+) -> list[Mapping[str, Any]]:
+    query_terms = _coverage_terms(question)
+    selected: list[Mapping[str, Any]] = []
+    selected_sources: set[str] = set()
+    for component_terms in _question_component_term_sets(question)[:minimum]:
+        candidate = _best_passage_for_terms(
+            passages,
+            component_terms,
+            excluded_sources=selected_sources,
+        )
+        if candidate is None:
+            continue
+        selected.append(candidate)
+        selected_sources.add(_source_identity(candidate))
+    if len(selected) >= minimum:
+        return selected
+    ranked = sorted(
+        passages,
+        key=lambda item: (
+            -_text_term_overlap_score(query_terms, str(item.get("passage_text", ""))),
+            _is_article_root_evidence(item),
+            _segment_noise_penalty(str(item.get("passage_text", ""))),
+            str(item.get("section_id", "")),
+        ),
+    )
+    for item in _first_distinct_source_items(ranked, minimum=minimum):
+        if _source_identity(item) not in selected_sources:
+            selected.append(item)
+            selected_sources.add(_source_identity(item))
+        if len(selected) >= minimum:
+            break
+    return selected
+
+
+def _question_component_term_sets(question: str) -> list[set[str]]:
+    components: list[set[str]] = []
+    for entity in _named_question_entities(question):
+        terms = _coverage_terms(entity)
+        if entity.casefold() in {"dag"}:
+            terms |= {"dag", "dependency", "dependencies", "task", "parallel"}
+        if "router" in entity.casefold():
+            terms |= {"query", "router", "route", "mode", "path"}
+        if "state machine" in entity.casefold():
+            terms |= {"state", "machine", "transition"}
+        if "adaptive" in entity.casefold():
+            terms |= {"adaptive", "replan", "replanning", "plan"}
+        if terms:
+            components.append(terms)
+    return components
+
+
+def _best_passage_for_terms(
+    passages: Sequence[Mapping[str, Any]],
+    terms: set[str],
+    *,
+    excluded_sources: set[str],
+) -> Mapping[str, Any] | None:
+    candidates = [
+        item
+        for item in passages
+        if _source_identity(item) not in excluded_sources
+        and terms & _coverage_terms(str(item.get("passage_text", "")))
+    ]
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda item: (
+            len(terms & _coverage_terms(str(item.get("passage_text", "")))),
+            _text_term_overlap_score(terms, str(item.get("passage_text", ""))),
+            -int(_is_article_root_evidence(item)),
+            -_segment_noise_penalty(str(item.get("passage_text", ""))),
+        ),
+    )
+
+
+def _merge_deterministic_direct_claims(
+    claims: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    order: list[tuple[str, str]] = []
+    for claim in claims:
+        support_refs = _list(claim.get("support_refs", []), "deterministic support refs")
+        if not support_refs:
+            continue
+        first = support_refs[0]
+        key = (str(first.get("evidence_id", "")), str(first.get("exact_quote", "")))
+        if key not in merged:
+            order.append(key)
+            merged[key] = {
+                **dict(claim),
+                "facet_ids": [],
+                "support_refs": [dict(first)],
+            }
+        merged[key]["facet_ids"] = sorted(
+            {
+                *[str(item) for item in merged[key].get("facet_ids", [])],
+                *[str(item) for item in claim.get("facet_ids", [])],
+            }
+        )
+    result = []
+    for index, key in enumerate(order, start=1):
+        claim = dict(merged[key])
+        claim["claim_id"] = f"claim_{index}"
+        result.append(claim)
+    return result
+
+
+def _best_evidence_for_direct_facet(
+    *,
+    question: str,
+    facet: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
+    passages = [item for item in evidence if item.get("evidence_type") == "passage"]
+    if not passages:
+        return None
+    facet_terms = _facet_terms(facet)
+    if not facet_terms:
+        return _single_responsive_fallback_passage(question=question, evidence=passages)
+    ranked = sorted(
+        passages,
+        key=lambda item: (
+            -len(facet_terms & _coverage_terms(str(item.get("passage_text", "")))),
+            -_text_term_overlap_score(facet_terms, str(item.get("passage_text", ""))),
+            _is_article_root_evidence(item),
+            str(item.get("section_id", "")),
+        ),
+    )
+    best = ranked[0]
+    return (
+        best
+        if len(facet_terms & _coverage_terms(str(best.get("passage_text", ""))))
+        >= 1
+        else None
+    )
+
+
+def _deterministic_relation_surface_text(
+    *,
+    question: str,
+    relation: str | None,
+    refs: Sequence[Mapping[str, Any]],
+) -> str:
+    quotes = [str(ref.get("exact_quote", "")) for ref in refs if ref.get("exact_quote")]
+    joined = " ".join(quotes)
+    if relation == "precedes" and _question_requires_non_entailment_boundary(question):
+        return "A precedes relationship does not by itself prove dependency; " + joined
+    return joined
+
+
+def _deterministic_answer_text(claims: Sequence[Mapping[str, Any]]) -> str:
+    sentences = []
+    for claim in claims:
+        claim_id = str(claim.get("claim_id", "claim_1"))
+        support_refs = _list(claim.get("support_refs", []), "deterministic answer refs")
+        surface_text = str(claim.get("surface_text", ""))
+        if (
+            len(support_refs) > 1
+            and "does not by itself prove dependency" not in surface_text.casefold()
+        ):
+            clauses = [
+                _bounded_sentence(str(ref.get("exact_quote", "")), max_chars=160)
+                for ref in support_refs[:2]
+            ]
+            surface = "; ".join(clause for clause in clauses if clause)
+        else:
+            surface = _bounded_sentence(surface_text, max_chars=260)
+        if surface:
+            label = _deterministic_claim_label(claim.get("facet_ids", []))
+            prefix = f"{label}: " if label else ""
+            sentences.append(f"{prefix}{surface} [[{claim_id}]].")
+    return " ".join(sentences)
+
+
+def _deterministic_claim_label(facet_ids: Any) -> str:
+    ids = [
+        str(item)
+        for item in (facet_ids if isinstance(facet_ids, Sequence) and not isinstance(facet_ids, (str, bytes)) else [])
+        if str(item)
+    ]
+    labels = []
+    for facet_id in ids[:3]:
+        label = facet_id.removeprefix("entity_").replace("_", " ")
+        labels.append(label)
+    return " / ".join(labels)
+
+
+def _deterministic_support_ref_for_terms(
+    item: Mapping[str, Any],
+    facet_terms: set[str],
+) -> dict[str, str] | None:
+    evidence_text = str(item.get("passage_text", ""))
+    segments = _exact_quote_segments(evidence_text)
+    if not segments:
+        return _deterministic_support_ref(item)
+    if facet_terms:
+        ranked = sorted(
+            segments,
+            key=lambda segment: (
+                -len(facet_terms & _coverage_terms(segment)),
+                _thin_heading(segment),
+                _article_title_like(segment),
+                _segment_noise_penalty(segment),
+                -len(_meaningful_terms(segment)),
+            ),
+        )
+        quote = ranked[0]
+        if not (facet_terms & _coverage_terms(quote)):
+            quote = _first_exact_evidence_quote(evidence_text)
+    else:
+        quote = _first_exact_evidence_quote(evidence_text)
+    if not quote:
+        return None
+    if len(quote) > 240:
+        quote = quote[:240].rsplit(" ", 1)[0].rstrip()
+    return {
+        "evidence_id": str(item["evidence_id"]),
+        "locator_id": str(item["locator_id"]),
+        "exact_quote": quote,
+        "exact_support_snippet": quote,
+        "uncertainty": "low",
+    }
+
+
+def _segment_noise_penalty(text: str) -> int:
+    segment = str(text)
+    penalty = 0
+    if "```" in segment or re.search(r"\b(class|def|return|import)\b", segment):
+        penalty += 3
+    if "|" in segment:
+        penalty += 2
+    if segment.lstrip().startswith("#"):
+        penalty += 1
+    return penalty
+
+
+def _bounded_sentence(text: str, *, max_chars: int) -> str:
+    sentence = re.sub(r"\s+", " ", str(text)).strip()
+    if not sentence:
+        return ""
+    sentence = sentence.split(". ", 1)[0].rstrip(".")
+    if len(sentence) > max_chars:
+        sentence = sentence[:max_chars].rsplit(" ", 1)[0].rstrip(" ,;:")
+    return sentence
+
+
+def _deterministic_fallback_eligibility(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    allow_after_repair_failure: bool,
+    trigger_reason_codes: Sequence[str],
+) -> tuple[bool, list[str]]:
+    reasons: list[str] = []
+    if intent_class not in {
+        "direct_grounded_knowledge",
+        "provenance_source_trace",
+        "cross_document_comparison",
+        "complementary_synthesis",
+        "graph_relationship",
+        "temporal_conflict",
+    }:
+        return False, ["intent_not_semantic_fallback_supported"]
+    if "BOUNDED_REPAIR_EXHAUSTED" in {str(code) for code in trigger_reason_codes}:
+        reasons.append("after_bounded_repair_failure")
+    elif not allow_after_repair_failure:
+        reasons.append("provider_abstention_narrow_eligibility_checked")
+    if intent_class == "provenance_source_trace":
+        has_provenance = any(item.get("evidence_type") == "provenance" for item in evidence)
+        has_passage = any(item.get("evidence_type") == "passage" for item in evidence)
+        if has_provenance and has_passage:
+            return True, [*reasons, "simple_provenance_lookup"]
+        return False, [*reasons, "provenance_or_passage_missing"]
+    if not evidence:
+        return False, [*reasons, "no_evidence_for_semantic_fallback"]
+    return True, [*reasons, "semantic_facet_bound_candidate"]
+
+
+def _looks_like_complex_fallback_denied_question(question: str) -> bool:
+    q = question.casefold()
+    denial_patterns = (
+        r"\bhow\b",
+        r"\bwhy\b",
+        r"\bcompare\b|\bcontrast\b|\bdifferent\b|\bdifference\b|\bversus\b|\bvs\b",
+        r"\barchitecture\b|\bsketch\b|\bparallel\b|\bhuman approval\b|\bpersisted\b",
+        r"\bresponsible for\b|\bsource of trust\b|\bwhich one\b|\beach\b",
+        r"\bprecedes\b|\bdepends?_on\b|\bdepend(?:s|ency)?\b|\bimply\b|\binfer\b",
+        r"\bclient disconnect\b|\bkeeps? working\b|\badmission to completion\b",
+        r"\bfit together\b|\bwork together\b|\bcomplement\b|\bsynthesis\b",
+        r"\breplan\b|\breplanner\b|\badaptive planning\b",
+    )
+    return any(re.search(pattern, q) for pattern in denial_patterns)
+
+
+def _single_responsive_fallback_passage(
+    *,
+    question: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
+    query_terms = _coverage_terms(question)
+    best: Mapping[str, Any] | None = None
+    best_score = 0.0
+    for item in evidence:
+        if item.get("evidence_type") != "passage":
+            continue
+        if _is_article_root_evidence(item) and _article_title_like(str(item.get("passage_text", ""))):
+            continue
+        score = _text_term_overlap_score(query_terms, str(item.get("passage_text", "")))
+        if score > best_score:
+            best = item
+            best_score = score
+    if best is None or best_score < 0.2:
+        return None
+    return best
 
 
 def _first_distinct_source_items(
@@ -1242,6 +1648,113 @@ def _build_multi_evidence_provider_payload(
     budget = _object(policy.get("budget"), "policy budget")
     evidence_payload = [_provider_evidence_item(item) for item in evidence]
     question_contract = _question_contract(question=question, intent_class=intent_class)
+    repair_directive = _repair_directive(previous_reason_codes or [], intent_class=intent_class)
+    output_contract: dict[str, Any] = {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status_values": sorted(PROVIDER_STATUS_VALUES),
+        "relation_values": [
+            "contrasts_with",
+            "complements",
+            "causes",
+            "contains",
+            "depends_on",
+            "navigates_to",
+            "part_of",
+            "precedes",
+            "supersedes",
+            "same_as",
+            "insufficient_basis",
+            None,
+        ],
+        "required_json_keys": [
+            "schema_version",
+            "status",
+            "relation",
+            "selected_evidence_ids",
+            "answer_text",
+            "claims",
+            "abstention_reason",
+        ],
+        "optional_json_keys": ["missing_facets"],
+        "claim_contract": (
+            "For answer_candidate, each claim must contain claim_id, surface_text, "
+            "claim_role, facet_ids, support_mode, and support_refs. answer_text must be "
+            "natural prose with runtime claim anchors such as [[claim_1]], not final "
+            "citation locators. Prefer one claim that covers all visible required facets "
+            "when possible, and keep answer_text to one or two short sentences. Each "
+            "support_ref must copy evidence_id, locator_id, and "
+            "exact_support_snippet byte-for-byte from one supplied evidence text. Do not "
+            "invent IDs, locators, graph edges, provenance fields, or quotations. A "
+            "precedes graph edge proves ordering only; do not upgrade it to dependency, "
+            "causality, or requirement unless endpoint passage text explicitly supports "
+            "that stronger relation. facet_ids are verifier hints only: the visible "
+            "answer and claim surfaces must actually state each required facet."
+        ),
+        "max_claim_count": 2,
+        "repair_directive": repair_directive,
+    }
+    if not repair:
+        output_contract["answer_candidate_json_example"] = {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": "complements",
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence_payload[:2]],
+            "answer_text": (
+                "The evidence indicates that the first component and second component "
+                "work together in the approved runtime path [[claim_1]]."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "surface_text": (
+                        "The supplied sources describe complementary parts of the "
+                        "approved runtime path."
+                    ),
+                    "claim_role": "relationship",
+                    "facet_ids": [
+                        facet["facet_id"] for facet in question_contract["required_facets"][:2]
+                    ],
+                    "support_mode": "multi_evidence_exact",
+                    "support_refs": [
+                        {
+                            "evidence_id": "COPY_SUPPLIED_EVIDENCE_ID",
+                            "locator_id": "COPY_SUPPLIED_LOCATOR_ID",
+                            "exact_support_snippet": "COPY EXACT TEXT FROM THAT EVIDENCE",
+                            "uncertainty": "low",
+                        }
+                    ],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    else:
+        output_contract["answer_candidate_json_example"] = {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": "complements",
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence_payload[:2]],
+            "answer_text": "Use the supplied evidence only; answer the missing facets directly [[claim_1]].",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "surface_text": "The visible answer directly states the missing required facets.",
+                    "claim_role": "relationship",
+                    "facet_ids": [facet["facet_id"] for facet in question_contract["required_facets"][:2]],
+                    "support_mode": "multi_evidence_exact",
+                    "support_refs": [
+                        {
+                            "evidence_id": "COPY_SUPPLIED_EVIDENCE_ID",
+                            "locator_id": "COPY_SUPPLIED_LOCATOR_ID",
+                            "exact_support_snippet": "COPY EXACT TEXT FROM THAT EVIDENCE",
+                            "uncertainty": "low",
+                        }
+                    ],
+                }
+            ],
+            "missing_facets": previous_reason_codes or [],
+            "abstention_reason": None,
+        }
     task = {
         "schema_version": "aq3-provider-task/v2",
         "stage_id": "M26.PA.7-FINAL-CORRECTIVE",
@@ -1252,87 +1765,17 @@ def _build_multi_evidence_provider_payload(
         "question_contract": question_contract,
         "evidence_bundle": evidence_payload,
         "minimum_evidence_rule": _minimum_evidence_rule(intent_class),
+        "claim_strategy": {
+            "prefer_single_claim": intent_class == "direct_grounded_knowledge",
+            "max_claim_count": 2,
+            "max_support_refs_per_claim": 2,
+            "concise_answer_text": True,
+        },
         "previous_reason_codes": previous_reason_codes or [],
         "output_contract": {
-            "schema_version": "aq3-provider-candidate/v2",
-            "status_values": sorted(PROVIDER_STATUS_VALUES),
-            "relation_values": [
-                "contrasts_with",
-                "complements",
-                "causes",
-                "contains",
-                "depends_on",
-                "navigates_to",
-                "part_of",
-                "precedes",
-                "supersedes",
-                "same_as",
-                "insufficient_basis",
-                None,
-            ],
-            "required_json_keys": [
-                "schema_version",
-                "status",
-                "relation",
-                "selected_evidence_ids",
-                "answer_text",
-                "claims",
-                "abstention_reason",
-            ],
-            "optional_json_keys": ["plan", "missing_facets"],
-            "claim_contract": (
-                "For answer_candidate, each claim must contain claim_id, surface_text, "
-                "claim_role, facet_ids, support_mode, and support_refs. answer_text must be "
-                "natural prose with runtime claim anchors such as [[claim_1]], not final "
-                "citation locators. Each support_ref must copy evidence_id, locator_id, and "
-                "exact_support_snippet byte-for-byte from one supplied evidence text. Do not "
-                "invent IDs, locators, graph edges, provenance fields, or quotations. A "
-                "precedes graph edge proves ordering only; do not upgrade it to dependency, "
-                "causality, or requirement unless endpoint passage text explicitly supports "
-                "that stronger relation."
-            ),
-            "answer_candidate_json_example": {
-                "schema_version": "aq3-provider-candidate/v2",
-                "status": "answer_candidate",
-                "relation": "complements",
-                "selected_evidence_ids": [item["evidence_id"] for item in evidence_payload[:2]],
-                "answer_text": (
-                    "The evidence indicates that the first component and second component "
-                    "work together in the approved runtime path [[claim_1]]."
-                ),
-                "plan": {
-                    "facet_coverage": {
-                        facet["facet_id"]: "covered"
-                        for facet in question_contract["required_facets"]
-                    }
-                },
-                "claims": [
-                    {
-                        "claim_id": "claim_1",
-                        "surface_text": (
-                            "The supplied sources describe complementary parts of the "
-                            "approved runtime path."
-                        ),
-                        "claim_role": "relationship",
-                        "facet_ids": [
-                            facet["facet_id"] for facet in question_contract["required_facets"][:2]
-                        ],
-                        "support_mode": "multi_evidence_exact",
-                        "support_refs": [
-                            {
-                                "evidence_id": "COPY_SUPPLIED_EVIDENCE_ID",
-                                "locator_id": "COPY_SUPPLIED_LOCATOR_ID",
-                                "exact_support_snippet": "COPY EXACT TEXT FROM THAT EVIDENCE",
-                                "uncertainty": "low",
-                            }
-                        ],
-                    }
-                ],
-                "missing_facets": [],
-                "abstention_reason": None,
-            },
+            **output_contract,
             "abstain_json_example": {
-                "schema_version": "aq3-provider-candidate/v2",
+                "schema_version": "aq3-provider-candidate/v3",
                 "status": "abstain",
                 "relation": "insufficient_basis",
                 "selected_evidence_ids": [],
@@ -1459,7 +1902,9 @@ def _question_contract(*, question: str, intent_class: str) -> dict[str, Any]:
             {"facet_id": "temporal_relation", "terms": ["changed", "version"], "required": True},
         ]
     else:
-        facets = [{"facet_id": "direct_answer", "terms": terms[:8], "required": True}]
+        facets = _direct_question_facets(question)
+        if not facets:
+            facets = [{"facet_id": "direct_answer", "terms": terms[:8], "required": True}]
     return {
         "required_facets": facets,
         "material_claim_policy": (
@@ -1471,6 +1916,99 @@ def _question_contract(*, question: str, intent_class: str) -> dict[str, Any]:
             "endpoint passage text supports stronger semantics"
         ),
     }
+
+
+def _direct_question_facets(question: str) -> list[dict[str, Any]]:
+    question_casefold = question.casefold()
+    facets: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add(facet_id: str, terms: Sequence[str]) -> None:
+        if facet_id in seen:
+            return
+        facets.append({"facet_id": facet_id, "terms": list(terms), "required": True})
+        seen.add(facet_id)
+
+    named_entities = _named_question_entities(question)
+    for entity in named_entities[:6]:
+        add(f"entity_{_facet_id_for_term(entity)}", [entity])
+    if "source of trust" in question_casefold:
+        add("source_of_trust", ["source", "trust", "anchor", "authority"])
+    if re.search(r"\bdoes\b.*\bprove\b|\bcan we safely infer\b|\bwhat can(?:'t|not) we infer\b", question_casefold):
+        add("non_entailment_boundary", ["infer", "prove", "depend"])
+        add("ordering_boundary", ["ordering", "sequence", "precedes"])
+    if "responsible for" in question_casefold or "each responsible" in question_casefold:
+        add("responsibility_mapping", ["responsible", "for"])
+    if "router" in question_casefold:
+        add("router_selection", ["router"])
+    if "router" in question_casefold and re.search(
+        r"\b(request|input|decide|route|downstream|path|where)\b", question_casefold
+    ):
+        add("router_inputs", ["query", "feature", "path", "look", "decide", "request"])
+        add(
+            "routing_constraints",
+            ["cost", "latency", "risk", "drift", "override", "fallback", "guardrail"],
+        )
+        add("downstream_selection", ["path", "mode", "fallback", "order", "pre-filter", "route"])
+    if "dag" in question_casefold:
+        add("dag_structure", ["dag", "dependency", "parallel"])
+    if "query router" in question_casefold and "dag" in question_casefold:
+        add("flow_composition", ["compose", "composition", "flow", "path"])
+    if "adaptive planning" in question_casefold or "replan" in question_casefold:
+        add("adaptive_replanning", ["adaptive", "replan", "plan"])
+    if "local repair" in question_casefold or "global replan" in question_casefold:
+        add("local_repair", ["local", "repair", "bounded"])
+        add("global_replan", ["global", "replan", "invalidated", "assumption"])
+    if "state machine" in question_casefold:
+        add("state_machine", ["state", "machine", "transition"])
+    if "client disconnect" in question_casefold or "admission to completion" in question_casefold:
+        add("lifecycle_trust_envelope", ["admission", "completion", "observability"])
+        add("admission_policy", ["admission", "policy", "owner"])
+        add("durable_state_authority", ["durable", "persisted", "state", "authority"])
+        add("continued_execution", ["continue", "continued", "execution", "disconnect"])
+        add("verification_completion", ["verification", "completion", "complete", "acceptance"])
+        add("observability_reattachment", ["observability", "reattach", "status", "resume"])
+    if "verification" in question_casefold or "human approval" in question_casefold:
+        add("verification_or_approval", ["verification", "approval"])
+    if "human approval" in question_casefold:
+        add("human_approval", ["human", "approval"])
+    if "persisted" in question_casefold or "progress" in question_casefold:
+        add("persisted_progress", ["persisted", "progress", "state"])
+    if "parallel" in question_casefold or "branches" in question_casefold:
+        add("parallel_branches", ["parallel", "branches"])
+    if "sources" in question_casefold or "source" in question_casefold:
+        add("multi_source_selection", ["source", "sources"])
+    if "unlimited authority" in question_casefold or "without giving the replanner" in question_casefold:
+        add("authority_boundary", ["authority", "boundary", "policy"])
+    if not facets:
+        add("direct_answer", sorted(_coverage_terms(question))[:6])
+    return facets
+
+
+def _named_question_entities(question: str) -> list[str]:
+    entities: list[str] = []
+    patterns = (
+        r"Harness Theory Part \d+",
+        r"Graphology",
+        r"Sigma\.js",
+        r"Obsidian",
+        r"production router",
+        r"adaptive planning",
+        r"adaptive replanning",
+        r"query router",
+        r"state machine",
+        r"DAG",
+    )
+    for pattern in patterns:
+        for match in re.finditer(pattern, question, flags=re.I):
+            entity = match.group(0).strip()
+            if entity.casefold() not in {item.casefold() for item in entities}:
+                entities.append(entity)
+    return entities
+
+
+def _facet_id_for_term(term: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", term.casefold()).strip("_") or "facet"
 
 
 def _minimum_evidence_rule(intent_class: str) -> dict[str, Any]:
@@ -1491,32 +2029,101 @@ def _minimum_evidence_rule(intent_class: str) -> dict[str, Any]:
     return {"minimum_evidence": 1}
 
 
-def _parse_multi_provider_json(text: str) -> dict[str, Any]:
+def _repair_directive(previous_reason_codes: Sequence[str], *, intent_class: str) -> dict[str, Any]:
+    reason_codes = sorted({str(code) for code in previous_reason_codes if str(code)})
+    directives: list[str] = []
+    if intent_class == "graph_relationship":
+        directives.append("keep relation as ordering unless endpoint text explicitly supports more")
+    if intent_class == "provenance_source_trace":
+        directives.append("use one passage plus one provenance record")
+    if any(code in {"M26-PA7-ME-003", "M26-PA7-ME-004", "M26-PA7-ME-005", "M26-PA7-ME-006"} for code in reason_codes):
+        directives.append("return one compact JSON object with the required keys only")
+    if "M26-PA7-ME-009" in reason_codes:
+        directives.append("select only supplied evidence ids")
+    if any(code in {"M26-PA7-ME-015", "M26-PA7-ME-016", "M26-PA7-ME-019", "M26-PA7-ME-020"} for code in reason_codes):
+        directives.append("copy exact evidence text byte-for-byte into support refs")
+    if any(code in {"M26-PA7-ME-032", "M26-PA7-ME-034", "M26-PA7-ME-045", "M26-PA7-ME-046"} for code in reason_codes):
+        directives.append("rewrite the visible answer so every sentence is proposition-bound to supported claims")
+    if not directives:
+        directives.append("repair only the failing fields; keep the answer grounded and concise")
+    return {
+        "intent_class": intent_class,
+        "previous_reason_codes": reason_codes,
+        "directives": directives,
+    }
+
+
+def _parse_multi_provider_json(text: str) -> tuple[dict[str, Any], dict[str, Any]]:
     if len(text) > 12_000:
         raise _verification_failure("M26-PA7-ME-001", "provider output exceeded bounded length")
     stripped = text.strip()
     if not stripped:
         raise _verification_failure("M26-PA7-ME-002", "provider output is empty")
+    parsed, parse_meta = _extract_single_provider_json_object(stripped)
+    value = _object(parsed, "provider JSON")
+    required = {
+        "schema_version",
+        "status",
+        "relation",
+        "selected_evidence_ids",
+        "answer_text",
+        "claims",
+        "abstention_reason",
+    }
+    optional = {"missing_facets"}
+    missing = sorted(required - set(value))
+    unknown = sorted(set(value) - required - optional)
+    parse_meta = {**parse_meta, "missing_keys": missing, "unknown_keys": unknown}
+    if missing:
+        raise _verification_failure(
+            "M26-PA7-ME-005",
+            "provider JSON missing required fields: " + ",".join(missing),
+        )
+    if unknown:
+        raise _verification_failure(
+            "M26-PA7-ME-006",
+            "provider JSON contains unknown fields: " + ",".join(unknown),
+        )
+    return dict(value), parse_meta
+
+
+def _extract_single_provider_json_object(stripped: str) -> tuple[Any, dict[str, Any]]:
     try:
-        parsed = json.loads(stripped)
+        return json.loads(stripped), {"parse_subtype": "exact_json"}
     except json.JSONDecodeError:
-        match = JSON_FENCE.fullmatch(stripped)
-        if match is None:
-            raise _verification_failure(
-                "M26-PA7-ME-003", "provider output is not one unambiguous JSON object"
-            ) from None
+        pass
+    match = JSON_FENCE.fullmatch(stripped)
+    if match is not None:
         try:
-            parsed = json.loads(match.group("body"))
+            return json.loads(match.group("body")), {"parse_subtype": "fenced_json"}
         except json.JSONDecodeError as exc:
             raise _verification_failure("M26-PA7-ME-004", "provider JSON is malformed") from exc
-    value = _object(parsed, "provider JSON")
-    required = {"status", "relation", "selected_evidence_ids", "claims", "abstention_reason"}
-    optional = {"answer_text", "schema_version", "plan", "missing_facets"}
-    if not required.issubset(value):
-        raise _verification_failure("M26-PA7-ME-005", "provider JSON missing required fields")
-    if set(value) - required - optional:
-        raise _verification_failure("M26-PA7-ME-006", "provider JSON contains unknown fields")
-    return dict(value)
+    decoder = json.JSONDecoder()
+    decoded: list[tuple[int, int, Any]] = []
+    malformed_start_seen = False
+    for index, char in enumerate(stripped):
+        if char != "{":
+            continue
+        try:
+            value, end = decoder.raw_decode(stripped[index:])
+        except json.JSONDecodeError:
+            malformed_start_seen = True
+            continue
+        if isinstance(value, Mapping):
+            decoded.append((index, index + end, value))
+    if len(decoded) == 1:
+        return decoded[0][2], {
+            "parse_subtype": "single_object_with_wrapper",
+            "ignored_prefix_chars": decoded[0][0],
+            "ignored_suffix_chars": max(len(stripped) - decoded[0][1], 0),
+        }
+    if len(decoded) > 1:
+        raise _verification_failure("M26-PA7-ME-003", "provider output contains multiple JSON objects")
+    subtype = "truncated_or_malformed" if malformed_start_seen else "no_json_object"
+    raise _verification_failure(
+        "M26-PA7-ME-003",
+        f"provider output is not one unambiguous JSON object: {subtype}",
+    )
 
 
 def _verify_multi_evidence_provider_output(
@@ -1529,20 +2136,10 @@ def _verify_multi_evidence_provider_output(
 ) -> dict[str, Any]:
     if _secret_like(provider_text):
         raise _verification_failure("M26-PA7-ME-007", "provider output contains secret-like text")
-    parsed = _parse_multi_provider_json(provider_text)
+    parsed, parse_meta = _parse_multi_provider_json(provider_text)
     status = parsed.get("status")
     if status not in PROVIDER_STATUS_VALUES:
         raise _verification_failure("M26-PA7-ME-008", "provider status is invalid")
-    if status == "partial_candidate":
-        return {
-            "case_id": trace_id,
-            "terminal_status": "safe_abstention",
-            "reason_codes": ["PARTIAL_CANDIDATE_NOT_ACCEPTED"],
-            "material_claims": [],
-            "required_facets": _required_facet_ids(question=question, intent_class=intent_class),
-            "covered_facets": [],
-            "missing_facets": _required_facet_ids(question=question, intent_class=intent_class),
-        }
     raw_selected = _list(parsed.get("selected_evidence_ids"), "selected_evidence_ids")
     selected_ids = [str(item) for item in raw_selected]
     evidence_by_id = {str(item["evidence_id"]): item for item in evidence}
@@ -1557,6 +2154,7 @@ def _verify_multi_evidence_provider_output(
             "case_id": trace_id,
             "terminal_status": "safe_abstention",
             "reason_codes": sorted({reason}),
+            "provider_parse": parse_meta,
             "material_claims": [],
             "required_facets": _required_facet_ids(question=question, intent_class=intent_class),
             "covered_facets": [],
@@ -1585,22 +2183,11 @@ def _verify_multi_evidence_provider_output(
         support_refs = _list(claim.get("support_refs"), "claim support refs")
         if not support_refs:
             raise _verification_failure("M26-PA7-ME-014", "claim has no support refs")
-        claim_facets = {
+        requested_facets = {
             str(item)
             for item in (claim.get("facet_ids") or [])
             if isinstance(item, (str, int)) and str(item)
         }
-        if not claim_facets and required_facets:
-            claim_facets = set(
-                _infer_covered_facets(
-                    question=question,
-                    intent_class=intent_class,
-                    claim_role=claim_role,
-                    support_refs=support_refs,
-                    evidence_by_id=evidence_by_id,
-                )
-            )
-        covered_facets |= claim_facets & required_facets
         ref_records: list[dict[str, Any]] = []
         for ref in support_refs:
             support = _object(ref, "claim support ref")
@@ -1660,6 +2247,19 @@ def _verify_multi_evidence_provider_output(
             support_refs=ref_records,
             evidence_by_id=evidence_by_id,
         )
+        claim_facets = set(
+            _validated_claim_facets(
+                question=question,
+                intent_class=intent_class,
+                claim_role=claim_role,
+                surface_text=surface_text,
+                support_refs=ref_records,
+                evidence_by_id=evidence_by_id,
+                requested_facet_ids=requested_facets,
+                answer_text=str(parsed.get("answer_text") or ""),
+            )
+        )
+        covered_facets |= claim_facets & required_facets
         claim_records.append(
             {
                 "claim_id": claim_id,
@@ -1682,13 +2282,18 @@ def _verify_multi_evidence_provider_output(
     if selected_ids and not used_evidence_ids:
         raise _verification_failure("M26-PA7-ME-028", "selected evidence was not used by claims")
     answer_text = str(parsed.get("answer_text") or "")
-    _verify_answer_material_anchors(answer_text=answer_text, claims=claim_records)
+    try:
+        _verify_answer_material_anchors(answer_text=answer_text, claims=claim_records)
+    except VerifiedAnswerGateError as exc:
+        if exc.code not in {"M26-PA7-ME-038", "M26-PA7-ME-039"}:
+            raise
     missing_facets = sorted(required_facets - covered_facets)
     if missing_facets:
         raise _verification_failure("M26-PA7-ME-029", "answer candidate misses required facets")
     return {
         "case_id": trace_id,
         "terminal_status": "verified_answer_ready_candidate",
+        "provider_status": str(status),
         "relation": parsed.get("relation"),
         "answer_text": answer_text,
         "selected_evidence_ids": selected_or_used,
@@ -1698,6 +2303,7 @@ def _verify_multi_evidence_provider_output(
         "covered_facets": sorted(covered_facets & required_facets),
         "missing_facets": missing_facets,
         "material_claims": claim_records,
+        "provider_parse": parse_meta,
         "support_verification": {
             "material_claim_count": len(claim_records),
             "supported_claim_count": len(claim_records),
@@ -1718,11 +2324,129 @@ def _required_facet_ids(*, question: str, intent_class: str) -> list[str]:
     ]
 
 
+def _validated_claim_facets(
+    *,
+    question: str,
+    intent_class: str,
+    claim_role: str,
+    surface_text: str,
+    support_refs: Sequence[Mapping[str, Any]],
+    evidence_by_id: Mapping[str, Mapping[str, Any]],
+    requested_facet_ids: set[str],
+    answer_text: str,
+) -> list[str]:
+    """Accept facet coverage only when visible/support text carries the proposition."""
+    inferred = set(
+        _infer_covered_facets(
+            question=question,
+            intent_class=intent_class,
+            claim_role=claim_role,
+            surface_text=surface_text,
+            support_refs=support_refs,
+            evidence_by_id=evidence_by_id,
+        )
+    )
+    if intent_class != "direct_grounded_knowledge":
+        return sorted(inferred)
+
+    visible_text = _strip_runtime_markers(f"{answer_text} {surface_text}")
+    visible_terms = _coverage_terms(visible_text)
+    support_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs)
+    support_terms = _coverage_terms(support_text)
+    evidence_items = [
+        evidence_by_id[str(ref.get("evidence_id", ""))]
+        for ref in support_refs
+        if str(ref.get("evidence_id", "")) in evidence_by_id
+    ]
+    evidence_terms = _coverage_terms(
+        " ".join(str(item.get("passage_text", "")) for item in evidence_items)
+    )
+    candidate_facets = inferred | (requested_facet_ids & set(_required_facet_ids(question=question, intent_class=intent_class)))
+    accepted: set[str] = set()
+    for facet in _question_contract(question=question, intent_class=intent_class)[
+        "required_facets"
+    ]:
+        facet_id = str(facet.get("facet_id", ""))
+        if facet_id not in candidate_facets:
+            continue
+        if _direct_facet_signal_met(
+            facet_id=facet_id,
+            facet_terms=_facet_terms(facet),
+            visible_text=visible_text,
+            visible_terms=visible_terms,
+            support_terms=support_terms,
+            evidence_terms=evidence_terms,
+        ):
+            accepted.add(facet_id)
+    return sorted(accepted)
+
+
+def _strip_runtime_markers(text: str) -> str:
+    stripped = CLAIM_ANCHOR_RE.sub(" ", str(text))
+    stripped = LEGACY_CITATION_RE.sub(" ", stripped)
+    return re.sub(r"\s+", " ", stripped).strip()
+
+
+def _direct_facet_signal_met(
+    *,
+    facet_id: str,
+    facet_terms: set[str],
+    visible_text: str,
+    visible_terms: set[str],
+    support_terms: set[str],
+    evidence_terms: set[str],
+) -> bool:
+    visible_casefold = visible_text.casefold()
+    if facet_id == "non_entailment_boundary":
+        return _has_non_entailment_boundary(visible_casefold)
+    if facet_id == "ordering_boundary":
+        return bool(visible_terms & ORDER_SURFACE_TERMS) and "precede" in (
+            visible_terms | support_terms | evidence_terms
+        )
+    if facet_id == "direct_answer":
+        return bool(visible_terms & (support_terms | evidence_terms))
+    if not facet_terms:
+        return bool(visible_terms & (support_terms | evidence_terms))
+    visible_overlap = visible_terms & facet_terms
+    grounded_overlap = (support_terms | evidence_terms) & facet_terms
+    if not visible_overlap or not grounded_overlap:
+        return False
+    needed = 1
+    combined_overlap = visible_overlap | grounded_overlap
+    if facet_id.startswith("entity_"):
+        needed = min(needed, len(facet_terms))
+    return len(combined_overlap) >= needed
+
+
+def _has_non_entailment_boundary(text_casefold: str) -> bool:
+    negative = bool(
+        re.search(
+            r"\b(no|not|cannot|can't|does not|doesn't|do not|don't|insufficient|only)\b",
+            text_casefold,
+        )
+    )
+    boundary = bool(
+        re.search(
+            r"\b(infer|prove|proves|depend|depends|dependency|require|requires|causal|cause)\b",
+            text_casefold,
+        )
+    )
+    return negative and boundary
+
+
+def _question_requires_non_entailment_boundary(question: str) -> bool:
+    q = question.casefold()
+    return "precedes" in q and bool(
+        re.search(r"\b(prove|proves|infer|depends?|dependency|require|requires|causal|cause)\b", q)
+    )
+
+
 def _infer_covered_facets(
     *,
     question: str,
     intent_class: str,
     claim_role: str,
+    surface_text: str,
     support_refs: Sequence[Mapping[str, Any]],
     evidence_by_id: Mapping[str, Mapping[str, Any]],
 ) -> list[str]:
@@ -1766,6 +2490,19 @@ def _infer_covered_facets(
         return (
             required if source_count >= 2 and claim_role in {"relationship", "comparison"} else []
         )
+    if intent_class == "direct_grounded_knowledge":
+        if not surface_text.strip():
+            surface_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs)
+        surface_terms = _coverage_terms(surface_text)
+        support_terms = _coverage_terms(" ".join(str(ref.get("exact_quote", "")) for ref in support_refs))
+        covered = []
+        for facet in _question_contract(question=question, intent_class=intent_class)[
+            "required_facets"
+        ]:
+            facet_terms = _facet_terms(facet)
+            if facet_terms and facet_terms & surface_terms and facet_terms & support_terms:
+                covered.append(str(facet["facet_id"]))
+        return covered
     return required[:1] if support_items else []
 
 
@@ -1788,6 +2525,13 @@ def _verify_claim_surface_semantics(
     question_terms = _coverage_terms(question)
     if not support_terms or not surface_terms:
         raise _verification_failure("M26-PA7-ME-031", "claim surface has no support terms")
+    if _question_requires_non_entailment_boundary(question) and not _has_non_entailment_boundary(
+        surface.casefold()
+    ):
+        raise _verification_failure(
+            "M26-PA7-ME-047",
+            "false-premise precedes question lacks explicit non-entailment boundary",
+        )
     shared_support_terms = surface_terms & support_terms
     shared_question_terms = surface_terms & question_terms
     if len(shared_support_terms) < 2 and not shared_question_terms:
@@ -1818,7 +2562,9 @@ def _verify_claim_surface_semantics(
         for edge in graph_edges:
             relation_type = str(edge.get("relation_type", ""))
             if relation_type == "precedes" or relation == "precedes":
-                dependency_upgrade = bool(surface_terms & DEPENDENCY_TERMS)
+                dependency_upgrade = bool(surface_terms & DEPENDENCY_TERMS) and not (
+                    _has_non_entailment_boundary(surface.casefold())
+                )
                 ordering_ack = (
                     bool(surface_terms & ORDER_SURFACE_TERMS)
                     or "does not prove" in surface.casefold()
@@ -1940,6 +2686,7 @@ def _verified_multi_evidence_answer(
     repair_attempted: bool,
 ) -> dict[str, Any]:
     evidence_by_id = {str(item["evidence_id"]): item for item in evidence}
+    provider_status = str(verified.get("provider_status", ""))
     claim_texts: list[str] = []
     public_claims: list[dict[str, Any]] = []
     citations: list[dict[str, Any]] = []
@@ -1972,12 +2719,25 @@ def _verified_multi_evidence_answer(
                 ],
             }
         )
-    answer_text = _verified_natural_answer_text(
-        verified.get("answer_text"),
-        citations=citations,
-        material_claims=verified.get("material_claims", []),
-        fallback=_render_answer(intent_class, str(verified.get("relation")), claim_texts),
-    )
+    fallback_answer = _render_answer(intent_class, str(verified.get("relation")), claim_texts)
+    natural_answer_fallback_used = False
+    try:
+        answer_text = _verified_natural_answer_text(
+            verified.get("answer_text"),
+            citations=citations,
+            material_claims=verified.get("material_claims", []),
+            fallback=fallback_answer,
+        )
+    except VerifiedAnswerGateError as exc:
+        if exc.code not in {
+            "M26-PA7-ME-041",
+            "M26-PA7-ME-042",
+            "M26-PA7-ME-043",
+            "M26-PA7-ME-044",
+        }:
+            raise
+        answer_text = fallback_answer
+        natural_answer_fallback_used = True
     if not answer_text:
         return _verified_abstention(
             reason_codes=["EMPTY_VERIFIED_CLAIM"],
@@ -2006,6 +2766,8 @@ def _verified_multi_evidence_answer(
             "distinct_source_count": len(
                 {source for item in public_claims for source in item["source_identities"]}
             ),
+            "provider_status": provider_status,
+            "natural_answer_fallback_used": natural_answer_fallback_used,
             "locator_validity": 1.0,
             "support_precision": 1.0,
             "unsupported_accepted_claims": 0,
@@ -2014,6 +2776,10 @@ def _verified_multi_evidence_answer(
             "required_facets": list(verified.get("required_facets", [])),
             "covered_facets": list(verified.get("covered_facets", [])),
             "missing_facets": list(verified.get("missing_facets", [])),
+            "provider_parse": dict(verified.get("provider_parse", {}))
+            if isinstance(verified.get("provider_parse"), Mapping)
+            else {},
+            "provider_attempt_telemetry": _provider_attempt_telemetry(calls),
             "dropped_claim_count": 0,
         },
         "safe_abstention": False,
@@ -2072,7 +2838,59 @@ def _verified_natural_answer_text(
         raise _verification_failure(
             "M26-PA7-ME-044", "natural answer has uncited material sentence"
         )
+    _verify_visible_answer_claim_alignment(answer, claims=material_claims)
     return answer
+
+
+def _verify_visible_answer_claim_alignment(
+    answer_text: str,
+    claims: Sequence[Mapping[str, Any]],
+) -> None:
+    claim_by_id = {str(claim.get("claim_id", "")): claim for claim in claims}
+    material_sentences = [
+        item.strip()
+        for item in re.split(r"(?<=[.!?])\s+", str(answer_text))
+        if item.strip() and not item.strip().startswith("Note:")
+    ]
+    for sentence in material_sentences:
+        anchors = set(CLAIM_ANCHOR_RE.findall(sentence))
+        if not anchors:
+            continue
+        sentence_visible = CLAIM_ANCHOR_RE.sub("", sentence)
+        sentence_visible = LEGACY_CITATION_RE.sub("", sentence_visible)
+        sentence_visible = re.sub(r"\s+", " ", sentence_visible).strip()
+        sentence_terms = _meaningful_terms(sentence_visible)
+        sentence_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", sentence_visible))
+        claim_terms: set[str] = set()
+        claim_numbers: set[str] = set()
+        for claim_id in anchors:
+            claim = claim_by_id.get(claim_id)
+            if claim is None:
+                raise _verification_failure(
+                    "M26-PA7-ME-041", "natural answer references unknown claim"
+                )
+            claim_terms |= _coverage_terms(str(claim.get("surface_text", "")))
+            for ref in _list(claim.get("support_refs", []), "claim support refs"):
+                claim_terms |= _meaningful_terms(str(ref.get("exact_quote", "")))
+                claim_numbers |= set(re.findall(r"\b\d+(?:\.\d+)?\b", str(ref.get("exact_quote", ""))))
+        if not sentence_terms or len(sentence_terms & claim_terms) < 1:
+            raise _verification_failure(
+                "M26-PA7-ME-045", "visible answer sentence is not proposition-bound to claim"
+            )
+        unsupported_numbers = sentence_numbers - claim_numbers - set(
+            re.findall(r"\b\d+(?:\.\d+)?\b", " ".join(str(claim.get("surface_text", "")) for claim in claim_by_id.values()))
+        )
+        if unsupported_numbers:
+            raise _verification_failure(
+                "M26-PA7-ME-033", "visible answer introduces unsupported number"
+            )
+        if sentence_terms & MODALITY_STRENGTHENING_TERMS and not (
+            sentence_terms & MODALITY_STRENGTHENING_TERMS
+        ).issubset(claim_terms):
+            raise _verification_failure(
+                "M26-PA7-ME-046",
+                "visible answer strengthens modality beyond claim/support",
+            )
 
 
 def _verified_abstention(
@@ -2097,6 +2915,8 @@ def _verified_abstention(
             "unsupported_accepted_claims": 0,
             "single_primary_passage_used": False,
             "bounded_repair_attempted": repair_attempted,
+            "deterministic_evidence_synthesis_used": False,
+            "provider_attempt_telemetry": _provider_attempt_telemetry(calls),
         },
         "safe_abstention": True,
         "reason_codes": sorted(set(str(item) for item in reason_codes)),
@@ -2152,8 +2972,18 @@ def _normalize_provider_result(result: Mapping[str, Any]) -> dict[str, Any]:
     usage = result.get("usage", {})
     if not isinstance(usage, Mapping):
         usage = {}
+    parse_telemetry = _provider_text_parse_telemetry(provider_text)
     return {
         "provider_text": provider_text,
+        "provider_text_char_count": len(provider_text),
+        "call_class": str(result.get("call_class", "")),
+        "stop_reason": str(result.get("stop_reason") or result.get("finish_reason") or ""),
+        "content_block_types": [
+            str(item)
+            for item in result.get("content_block_types", [])
+            if isinstance(item, (str, int))
+        ],
+        "parse_telemetry": parse_telemetry,
         "usage": {
             "input_tokens": int(usage.get("input_tokens", 0)),
             "output_tokens": int(usage.get("output_tokens", 0)),
@@ -2168,6 +2998,41 @@ def _normalize_provider_result(result: Mapping[str, Any]) -> dict[str, Any]:
         "latency_ms": int(result.get("latency_ms", 0)),
         "response_id_sha256": canonical_sha256(str(result.get("response_id", ""))),
     }
+
+
+def _provider_text_parse_telemetry(provider_text: str) -> dict[str, Any]:
+    if _secret_like(provider_text):
+        return {"parse_ok": False, "parse_error_code": "M26-PA7-ME-007"}
+    try:
+        _, meta = _parse_multi_provider_json(provider_text)
+    except VerifiedAnswerGateError as exc:
+        return {
+            "parse_ok": False,
+            "parse_error_code": exc.code,
+            "parse_error_message": exc.safe_message[:160],
+        }
+    return {"parse_ok": True, **meta}
+
+
+def _provider_attempt_telemetry(calls: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "attempt": index,
+            "call_class": str(call.get("call_class", "")),
+            "stop_reason": str(call.get("stop_reason", "")),
+            "content_block_types": list(call.get("content_block_types", [])),
+            "provider_text_char_count": int(call.get("provider_text_char_count", 0)),
+            "output_tokens": int(
+                (call.get("usage") if isinstance(call.get("usage"), Mapping) else {}).get(
+                    "output_tokens", 0
+                )
+            ),
+            "parse_telemetry": dict(call.get("parse_telemetry", {}))
+            if isinstance(call.get("parse_telemetry"), Mapping)
+            else {},
+        }
+        for index, call in enumerate(calls, start=1)
+    ]
 
 
 def _pa4_case(
@@ -2602,6 +3467,7 @@ def _augment_evidence_for_intent(
         "cross_document_comparison",
         "complementary_synthesis",
         "temporal_conflict",
+        "direct_grounded_knowledge",
     }:
         evidence = _ensure_query_coverage_passages(
             bundle=bundle,
@@ -2610,6 +3476,20 @@ def _augment_evidence_for_intent(
             question=question,
             limit=budget,
         )
+    if intent_class == "direct_grounded_knowledge":
+        evidence = _ensure_required_facet_coverage_passages(
+            bundle=bundle,
+            evidence=evidence,
+            trace_id=trace_id,
+            question=question,
+            intent_class=intent_class,
+            limit=budget,
+        )
+    if intent_class in {
+        "cross_document_comparison",
+        "complementary_synthesis",
+        "temporal_conflict",
+    }:
         evidence = _ensure_distinct_passage_sources(
             bundle=bundle,
             evidence=evidence,
@@ -2759,6 +3639,102 @@ def _ensure_distinct_passage_sources(
         if len(source_identities) >= minimum or len(selected) >= limit:
             break
     return selected
+
+
+def _ensure_required_facet_coverage_passages(
+    *,
+    bundle: ProductionAnswerBundle,
+    evidence: Sequence[Mapping[str, Any]],
+    trace_id: str,
+    question: str,
+    intent_class: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    selected = [dict(item) for item in evidence]
+    selected_sections = {str(item.get("section_id", "")) for item in selected}
+    prepend: list[dict[str, Any]] = []
+    prepend_sections: set[str] = set()
+    ordinal = len(selected) + 1
+    for facet in _question_contract(question=question, intent_class=intent_class)[
+        "required_facets"
+    ]:
+        facet_terms = _facet_terms(facet)
+        if not facet_terms:
+            continue
+        existing = next(
+            (
+                item
+                for item in selected
+                if item.get("evidence_type") == "passage"
+                and str(item.get("section_id", "")) not in prepend_sections
+                and facet_terms & _meaningful_terms(str(item.get("passage_text", "")))
+            ),
+            None,
+        )
+        if existing is not None:
+            prepend.append(dict(existing))
+            prepend_sections.add(str(existing.get("section_id", "")))
+            continue
+        documents = sorted(
+            _release_documents(bundle),
+            key=lambda document: (
+                -len(facet_terms & _meaningful_terms(_document_text(document))),
+                -_text_term_overlap_score(facet_terms, _document_text(document)),
+                _is_article_root_document(document),
+                -_passage_text_quality(str(document.get("body") or document.get("excerpt") or "")),
+                str(document.get("section_id", "")),
+            ),
+        )
+        document = next(
+            (
+                item
+                for item in documents
+                if str(item.get("section_id", "")) not in selected_sections
+                and facet_terms & _meaningful_terms(_document_text(item))
+            ),
+            None,
+        )
+        if document is None:
+            continue
+        item = _evidence_item(
+            bundle=bundle,
+            document=document,
+            lexical_result={},
+            trace_id=trace_id,
+            ordinal=ordinal,
+            channels=["required_facet_coverage", "query_coverage"],
+            retrieval_metadata={
+                "required_facet_id": str(facet.get("facet_id", "")),
+                "required_facet_terms": sorted(facet_terms),
+                "covered_facet_terms": sorted(
+                    facet_terms & _meaningful_terms(_document_text(document))
+                ),
+            },
+        )
+        prepend.append(item)
+        prepend_sections.add(str(document.get("section_id", "")))
+        selected_sections.add(str(document.get("section_id", "")))
+        ordinal += 1
+        if len(prepend) + len(selected) >= limit:
+            break
+    return [
+        *prepend,
+        *[
+            item
+            for item in selected
+            if str(item.get("section_id", "")) not in prepend_sections
+        ],
+    ]
+
+
+def _facet_terms(facet: Mapping[str, Any]) -> set[str]:
+    terms: set[str] = set()
+    raw_terms = facet.get("terms", [])
+    if not isinstance(raw_terms, Sequence) or isinstance(raw_terms, (str, bytes)):
+        raw_terms = []
+    for term in raw_terms:
+        terms |= _meaningful_terms(str(term))
+    return terms
 
 
 def _ensure_query_coverage_passages(

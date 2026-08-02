@@ -49,9 +49,11 @@ class ExactSpanProvider:
         task = _task(payload)
         if self.fail_first and self.calls == 1:
             body = {
+                "schema_version": "aq3-provider-candidate/v3",
                 "status": "answer_candidate",
                 "relation": None,
                 "selected_evidence_ids": [task["evidence_bundle"][0]["evidence_id"]],
+                "answer_text": "",
                 "claims": [
                     {
                         "claim_id": "claim_1",
@@ -65,6 +67,7 @@ class ExactSpanProvider:
                         ],
                     }
                 ],
+                "missing_facets": [],
                 "abstention_reason": None,
             }
         else:
@@ -113,9 +116,11 @@ class InvalidMultiEvidenceProvider:
             body["claims"][0]["support_refs"][0]["exact_quote"] = "not an exact quote"
         elif self.mode == "one_source_comparison":
             body = {
+                "schema_version": "aq3-provider-candidate/v3",
                 "status": "answer_candidate",
                 "relation": "contrasts_with",
                 "selected_evidence_ids": [first["evidence_id"]],
+                "answer_text": "",
                 "claims": [
                     {
                         "claim_id": "claim_1",
@@ -123,14 +128,17 @@ class InvalidMultiEvidenceProvider:
                         "support_refs": [_support_ref(first), _support_ref(first)],
                     }
                 ],
+                "missing_facets": [],
                 "abstention_reason": None,
             }
         elif self.mode == "missing_graph_edge":
             passages = _passage_items(evidence)[:2]
             body = {
+                "schema_version": "aq3-provider-candidate/v3",
                 "status": "answer_candidate",
                 "relation": "depends_on",
                 "selected_evidence_ids": [item["evidence_id"] for item in passages],
+                "answer_text": "",
                 "claims": [
                     {
                         "claim_id": "claim_1",
@@ -138,6 +146,7 @@ class InvalidMultiEvidenceProvider:
                         "support_refs": [_support_ref(item) for item in passages],
                     }
                 ],
+                "missing_facets": [],
                 "abstention_reason": None,
             }
         return {
@@ -161,10 +170,13 @@ class AbstainingProvider:
         return {
             "text": json.dumps(
                 {
+                    "schema_version": "aq3-provider-candidate/v3",
                     "status": "abstain",
                     "relation": "insufficient_basis",
                     "selected_evidence_ids": [],
+                    "answer_text": "",
                     "claims": [],
+                    "missing_facets": [],
                     "abstention_reason": "INSUFFICIENT_SUPPORT",
                 }
             ),
@@ -196,6 +208,7 @@ class NaturalProseProvider:
                 "The selected evidence supports a natural answer without citation markers."
             )
         body = {
+            "schema_version": "aq3-provider-candidate/v3",
             "status": "answer_candidate",
             "relation": None,
             "selected_evidence_ids": [passage["evidence_id"]],
@@ -207,6 +220,7 @@ class NaturalProseProvider:
                     "support_refs": [_support_ref(passage)],
                 }
             ],
+            "missing_facets": [],
             "abstention_reason": None,
         }
         return {
@@ -235,6 +249,7 @@ class GraphExpandedCitationProvider:
             and any(str(channel).startswith("graph_") for channel in item.get("channels", []))
         )
         body = {
+            "schema_version": "aq3-provider-candidate/v3",
             "status": "answer_candidate",
             "relation": "supports",
             "selected_evidence_ids": [graph_passage["evidence_id"]],
@@ -249,6 +264,7 @@ class GraphExpandedCitationProvider:
                     "support_refs": [_support_ref(graph_passage)],
                 }
             ],
+            "missing_facets": [],
             "abstention_reason": None,
         }
         return {
@@ -257,6 +273,51 @@ class GraphExpandedCitationProvider:
             "cost_usd": "0.00001",
             "latency_ms": 5,
             "response_id": f"graph-expanded-{self.calls}",
+            "call_class": call_class,
+        }
+
+
+class PartialCandidateProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.cost = Decimal("0")
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls += 1
+        self.cost += Decimal("0.00001")
+        task = _task(payload)
+        passage = _passage_items(task["evidence_bundle"])[0]
+        body = {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "partial_candidate",
+            "relation": None,
+            "selected_evidence_ids": [passage["evidence_id"]],
+            "answer_text": (
+                "A router should define permission-first controls before execution [[claim_1]]."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "direct",
+                    "surface_text": (
+                        "A router should define permission-first controls before execution."
+                    ),
+                    "facet_ids": [
+                        task["question_contract"]["required_facets"][0]["facet_id"],
+                    ],
+                    "support_mode": "exact_quote",
+                    "support_refs": [_support_ref(passage)],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+        return {
+            "text": json.dumps(body),
+            "usage": {"input_tokens": 100, "output_tokens": 40},
+            "cost_usd": "0.00001",
+            "latency_ms": 5,
+            "response_id": f"partial-{self.calls}",
             "call_class": call_class,
         }
 
@@ -305,10 +366,13 @@ def _multi_evidence_answer(task: dict[str, Any]) -> dict[str, Any]:
     else:
         refs = [_support_ref(_passage_items(evidence)[0])]
     return {
+        "schema_version": "aq3-provider-candidate/v3",
         "status": "answer_candidate",
         "relation": relation,
         "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+        "answer_text": "",
         "claims": [{"claim_id": "claim_1", "claim_role": role, "support_refs": refs}],
+        "missing_facets": [],
         "abstention_reason": None,
     }
 
@@ -460,6 +524,22 @@ def test_provider_natural_cited_prose_is_preserved_after_claim_verification() ->
     assert response["unsupported_accepted_claims"] == 0
 
 
+def test_partial_candidate_is_verified_and_preserved() -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="What should a router define for permission-first controls?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=PartialCandidateProvider(),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["multi_evidence_verification"]["provider_status"] == "partial_candidate"
+    assert response["multi_evidence_verification"]["provider_parse"]["parse_subtype"] == "exact_json"
+    assert response["unsupported_accepted_claims"] == 0
+
+
 def test_uncited_provider_prose_falls_back_to_verified_cited_rendering() -> None:
     response = run_owner_arbitrary_query(
         root=ROOT,
@@ -552,13 +632,19 @@ def test_direct_repair_exhaustion_uses_deterministic_evidence_synthesis() -> Non
     assert response["repair_attempted"] is True
     assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
     assert "M26-PA7-ME-021" in response["multi_evidence_verification"]["trigger_reason_codes"]
-    assert response["multi_evidence_verification"]["support_ref_count"] >= 2
-    assert len(response["citations"]) >= 2
+    assert response["multi_evidence_verification"]["support_ref_count"] == 1
+    assert len(response["citations"]) == 1
     assert response["unsupported_accepted_claims"] == 0
 
 
 @pytest.mark.parametrize(
-    ("question", "expected_intent", "required_citation_types", "minimum_support_refs"),
+    (
+        "question",
+        "expected_intent",
+        "required_citation_types",
+        "minimum_support_refs",
+        "expect_deterministic",
+    ),
     [
         (
             "How do routers and directed acyclic graphs complement each other "
@@ -566,26 +652,30 @@ def test_direct_repair_exhaustion_uses_deterministic_evidence_synthesis() -> Non
             "complementary_synthesis",
             {"passage"},
             2,
+            True,
         ),
         (
             "Which provenance source supports router abstention controls?",
             "provenance_source_trace",
             {"passage", "provenance"},
             2,
+            True,
         ),
         (
             "What changed between source records about request boundary and steering controls?",
             "temporal_conflict",
             {"temporal_record"},
             2,
+            True,
         ),
     ],
 )
-def test_answerable_provider_abstention_uses_deterministic_evidence_synthesis(
+def test_answerable_provider_abstention_is_narrowly_constrained(
     question: str,
     expected_intent: str,
     required_citation_types: set[str],
     minimum_support_refs: int,
+    expect_deterministic: bool,
 ) -> None:
     response = run_owner_arbitrary_query(
         root=ROOT,
@@ -596,18 +686,27 @@ def test_answerable_provider_abstention_uses_deterministic_evidence_synthesis(
         dense_channel=LocalDenseProjectionChannel(),
     )
 
-    assert response["status"] == "owner_only_cited_answer"
     assert response["intent_class"] == expected_intent
     assert response["provider_call_count"] == 1
     assert response["repair_attempted"] is False
-    assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
-    assert response["multi_evidence_verification"]["trigger_reason_codes"] == [
-        "INSUFFICIENT_SUPPORT"
-    ]
-    assert response["multi_evidence_verification"]["support_ref_count"] >= minimum_support_refs
-    assert required_citation_types.issubset(
-        {item["evidence_type"] for item in response["citations"]}
-    )
+    if expect_deterministic:
+        assert response["status"] == "owner_only_cited_answer"
+        assert (
+            response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"]
+            is True
+        )
+        assert response["multi_evidence_verification"]["trigger_reason_codes"] == [
+            "INSUFFICIENT_SUPPORT"
+        ]
+        assert response["multi_evidence_verification"]["support_ref_count"] >= minimum_support_refs
+        assert required_citation_types.issubset(
+            {item["evidence_type"] for item in response["citations"]}
+        )
+    else:
+        assert response["status"] == "owner_only_safe_abstention"
+        assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is False
+        assert response["reason_codes"] == ["INSUFFICIENT_SUPPORT"]
+        assert response["citations"] == []
     assert response["unsupported_accepted_claims"] == 0
 
 
@@ -702,7 +801,7 @@ def test_provenance_and_temporal_intents_use_required_evidence_types() -> None:
         ),
     ],
 )
-def test_invalid_multi_evidence_provider_outputs_use_verified_repair(
+def test_invalid_complex_multi_evidence_provider_outputs_abstain_after_bounded_repair(
     mode: str,
     question: str,
 ) -> None:
@@ -719,7 +818,12 @@ def test_invalid_multi_evidence_provider_outputs_use_verified_repair(
     assert response["provider_call_count"] == 2
     assert response["repair_attempted"] is True
     assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
-    assert response["multi_evidence_verification"]["support_ref_count"] >= 2
+    assert response["citations"]
+    assert "BOUNDED_REPAIR_EXHAUSTED" in response["multi_evidence_verification"]["trigger_reason_codes"]
+    assert any(
+        str(code).startswith("M26-PA7-ME-")
+        for code in response["multi_evidence_verification"]["trigger_reason_codes"]
+    )
     assert response["unsupported_accepted_claims"] == 0
 
 
@@ -745,7 +849,7 @@ def test_claim_surface_must_semantically_align_with_exact_support() -> None:
     ]
     provider_text = json.dumps(
         {
-            "schema_version": "aq3-provider-candidate/v2",
+            "schema_version": "aq3-provider-candidate/v3",
             "status": "answer_candidate",
             "relation": None,
             "selected_evidence_ids": ["ev_router"],
@@ -843,7 +947,7 @@ def test_precedes_graph_edge_cannot_be_upgraded_to_dependency() -> None:
     ]
     provider_text = json.dumps(
         {
-            "schema_version": "aq3-provider-candidate/v2",
+            "schema_version": "aq3-provider-candidate/v3",
             "status": "answer_candidate",
             "relation": "depends_on",
             "selected_evidence_ids": ["ev_edge", "ev_part_1", "ev_part_2"],
@@ -885,7 +989,204 @@ def test_precedes_graph_edge_cannot_be_upgraded_to_dependency() -> None:
             provider_text=provider_text,
         )
 
-    assert exc.value.code == "M26-PA7-ME-035"
+    assert exc.value.code == "M26-PA7-ME-047"
+
+
+def test_provider_facet_ids_do_not_bypass_direct_semantic_coverage() -> None:
+    evidence = [_direct_semantic_evidence()]
+    provider_text = json.dumps(
+        _direct_semantic_provider_body(
+            evidence[0],
+            question="If a client disconnects, what keeps an admitted task trustworthy from admission to completion?",
+            surface_text="The runtime has an admission policy only.",
+        )
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="case_semantic_nc_01",
+            question=(
+                "If a client disconnects, what keeps an admitted task trustworthy "
+                "from admission to completion?"
+            ),
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=provider_text,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-029"
+
+
+def test_source_of_trust_answer_must_name_required_entities() -> None:
+    evidence = [
+        {
+            **_direct_semantic_evidence(),
+            "passage_text": (
+                "Obsidian is the authoring source of trust; Graphology stores the graph "
+                "model, and Sigma.js renders the visualization view."
+            ),
+        }
+    ]
+    provider_text = json.dumps(
+        _direct_semantic_provider_body(
+            evidence[0],
+            question=(
+                "What are Obsidian, Graphology, and Sigma.js each responsible for, "
+                "and which one is the source of trust?"
+            ),
+            surface_text="The stack has a source of trust and a visualization path.",
+        )
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="case_semantic_nc_02",
+            question=(
+                "What are Obsidian, Graphology, and Sigma.js each responsible for, "
+                "and which one is the source of trust?"
+            ),
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=provider_text,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-029"
+
+
+def test_precedes_false_premise_requires_visible_non_entailment() -> None:
+    evidence = [
+        {
+            "evidence_id": "ev_edge",
+            "evidence_type": "graph_edge",
+            "locator_id": "loc_edge",
+            "source_id": "graph_v2:edge_precedes",
+            "source_identity": "graph_v2:edge_precedes",
+            "section_id": "edge_precedes",
+            "concept_id": "part_1",
+            "artifact_key": "graph-v2.json",
+            "artifact_sha256": "d" * 64,
+            "release_id": "release",
+            "passage_text": "Production graph navigation edge edge_precedes states part_1 precedes part_2.",
+            "passage_text_sha256": "e" * 64,
+            "provenance_record_sha256": "f" * 64,
+            "edge_id": "edge_precedes",
+            "edge_source": "part_1",
+            "edge_target": "part_2",
+            "relation_type": "precedes",
+        },
+        {
+            "evidence_id": "ev_part_1",
+            "evidence_type": "passage",
+            "locator_id": "loc_part_1",
+            "source_id": "src_part_1",
+            "source_identity": "src_part_1",
+            "section_id": "part_1#overview",
+            "concept_id": "part_1",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": "Part 1 appears first in the series order.",
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+        {
+            "evidence_id": "ev_part_2",
+            "evidence_type": "passage",
+            "locator_id": "loc_part_2",
+            "source_id": "src_part_2",
+            "source_identity": "src_part_2",
+            "section_id": "part_2#overview",
+            "concept_id": "part_2",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": "Part 2 appears second in the series order.",
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+    ]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": "precedes",
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": "Part 1 precedes Part 2 in graph order [[claim_1]].",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "surface_text": "Part 1 precedes Part 2 in graph order.",
+                    "claim_role": "relationship",
+                    "facet_ids": [
+                        "graph_edge",
+                        "source_endpoint",
+                        "target_endpoint",
+                        "relation_semantics",
+                    ],
+                    "support_mode": "graph_relationship",
+                    "support_refs": [
+                        {
+                            "evidence_id": item["evidence_id"],
+                            "locator_id": item["locator_id"],
+                            "exact_support_snippet": item["passage_text"],
+                            "uncertainty": "low",
+                        }
+                        for item in evidence
+                    ],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="case_semantic_nc_03",
+            question="Does a precedes edge prove Part 1 depends on Part 2?",
+            intent_class="graph_relationship",
+            evidence=evidence,
+            provider_text=provider_text,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-047"
+
+
+def test_architecture_answer_must_cover_persisted_parallel_verification_facets() -> None:
+    evidence = [
+        {
+            **_direct_semantic_evidence(),
+            "passage_text": (
+                "A trustworthy architecture maps sources, persisted progress state, "
+                "parallel branches, final verification, human approval, and constrained "
+                "state-machine transitions."
+            ),
+        }
+    ]
+    provider_text = json.dumps(
+        _direct_semantic_provider_body(
+            evidence[0],
+            question=(
+                "Sketch an architecture that combines multiple sources, persisted progress, "
+                "parallel branches, verification, human approval, and constrained transitions."
+            ),
+            surface_text="The architecture maps sources and constrained transitions.",
+        )
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="case_semantic_nc_04",
+            question=(
+                "Sketch an architecture that combines multiple sources, persisted progress, "
+                "parallel branches, verification, human approval, and constrained transitions."
+            ),
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=provider_text,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-029"
 
 
 def test_no_answer_and_prompt_injection_abstain_safely() -> None:
@@ -991,3 +1292,63 @@ def test_cli_defaults_to_public_runtime_and_health_status_is_explicit() -> None:
     cli_source = (ROOT / "src/knowledge_engine/m26_pa7_query_cli.py").read_text(encoding="utf-8")
     assert "run_owner_arbitrary_query(" in cli_source
     assert "if args.health_status:" in cli_source
+
+
+def _direct_semantic_evidence() -> dict[str, Any]:
+    return {
+        "evidence_id": "ev_semantic",
+        "evidence_type": "passage",
+        "locator_id": "loc_semantic",
+        "source_id": "src_semantic",
+        "source_identity": "src_semantic",
+        "section_id": "semantic#overview",
+        "concept_id": "semantic",
+        "artifact_key": "lexical.json",
+        "artifact_sha256": "a" * 64,
+        "release_id": "release",
+        "passage_text": (
+            "An admitted task remains trustworthy through admission policy, durable "
+            "persisted state authority, continued execution after disconnect, completion "
+            "verification, and observability for reattachment status."
+        ),
+        "passage_text_sha256": "b" * 64,
+        "provenance_record_sha256": "c" * 64,
+    }
+
+
+def _direct_semantic_provider_body(
+    evidence: dict[str, Any],
+    *,
+    question: str,
+    surface_text: str,
+) -> dict[str, Any]:
+    required_facets = runtime_module._required_facet_ids(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+    )
+    return {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "relation": None,
+        "selected_evidence_ids": [evidence["evidence_id"]],
+        "answer_text": f"{surface_text} [[claim_1]].",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "surface_text": surface_text,
+                "claim_role": "direct",
+                "facet_ids": required_facets,
+                "support_mode": "exact_quote",
+                "support_refs": [
+                    {
+                        "evidence_id": evidence["evidence_id"],
+                        "locator_id": evidence["locator_id"],
+                        "exact_support_snippet": evidence["passage_text"],
+                        "uncertainty": "low",
+                    }
+                ],
+            }
+        ],
+        "missing_facets": [],
+        "abstention_reason": None,
+    }

@@ -94,7 +94,7 @@ class BenchmarkProvider:
         self.cost += Decimal("0.00001")
         task = _task(payload)
         body = _answer_for_task(task)
-        if _supports_natural_answer_text(task):
+        if _supports_natural_answer_text(task) and not body.get("answer_text"):
             body["answer_text"] = _natural_answer_text(task, body)
         return {
             "text": json.dumps(body, ensure_ascii=False, sort_keys=True),
@@ -115,7 +115,8 @@ def _task(payload: dict[str, Any]) -> dict[str, Any]:
 def _supports_natural_answer_text(task: dict[str, Any]) -> bool:
     contract = task.get("output_contract", {})
     optional = contract.get("optional_json_keys", []) if isinstance(contract, dict) else []
-    return "answer_text" in optional
+    required = contract.get("required_json_keys", []) if isinstance(contract, dict) else []
+    return "answer_text" in optional or "answer_text" in required
 
 
 def _answer_for_task(task: dict[str, Any]) -> dict[str, Any]:
@@ -146,6 +147,20 @@ def _answer_for_task(task: dict[str, Any]) -> dict[str, Any]:
         relation = "precedes"
         temporal = [item for item in evidence if item["evidence_type"] == "temporal_record"]
         refs = [_support_ref(item) for item in _distinct_source_items(temporal, minimum=2)]
+    elif intent == "direct_grounded_knowledge":
+        claims = _direct_facet_claims(task, passages)
+        if not claims:
+            return _abstain_body(task, missing_facets=_required_facet_ids(task))
+        return {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": _direct_facet_answer_text(claims),
+            "claims": claims,
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
     else:
         multi_ref_query = any(
             marker in str(task.get("question", "")).casefold()
@@ -156,12 +171,112 @@ def _answer_for_task(task: dict[str, Any]) -> dict[str, Any]:
         )
         refs = [_support_ref(item) for item in selected_passages]
     return {
+        "schema_version": "aq3-provider-candidate/v3",
         "status": "answer_candidate",
         "relation": relation,
         "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+        "answer_text": "",
         "claims": [{"claim_id": "claim_1", "claim_role": role, "support_refs": refs}],
+        "missing_facets": [],
         "abstention_reason": None,
     }
+
+
+def _abstain_body(task: dict[str, Any], *, missing_facets: list[str]) -> dict[str, Any]:
+    return {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "abstain",
+        "relation": "insufficient_basis",
+        "selected_evidence_ids": [],
+        "answer_text": "",
+        "claims": [],
+        "missing_facets": missing_facets,
+        "abstention_reason": "INSUFFICIENT_SUPPORT",
+    }
+
+
+def _direct_facet_claims(task: dict[str, Any], passages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    required_facets = [
+        item
+        for item in task.get("question_contract", {}).get("required_facets", [])
+        if isinstance(item, dict)
+    ]
+    if not required_facets and passages:
+        required_facets = [{"facet_id": "direct_answer", "terms": []}]
+    claims: list[dict[str, Any]] = []
+    for index, facet in enumerate(required_facets, start=1):
+        best = _best_passage_for_facet(passages, facet)
+        if best is None:
+            return []
+        support = _support_ref(best)
+        surface = _surface_for_facet(str(facet.get("facet_id", "")), support["exact_quote"])
+        claims.append(
+            {
+                "claim_id": f"claim_{index}",
+                "claim_role": "direct",
+                "surface_text": surface,
+                "facet_ids": [str(facet.get("facet_id", ""))],
+                "support_mode": "exact_quote",
+                "support_refs": [support],
+            }
+        )
+    return claims
+
+
+def _best_passage_for_facet(
+    passages: list[dict[str, Any]], facet: dict[str, Any]
+) -> dict[str, Any] | None:
+    if not passages:
+        return None
+    facet_terms = _terms(" ".join(str(item) for item in facet.get("terms", [])))
+    if not facet_terms:
+        return passages[0]
+    ranked = sorted(
+        passages,
+        key=lambda item: (
+            -len(facet_terms & _terms(str(item.get("text", "")))),
+            -len(_terms(str(item.get("text", "")))),
+            str(item.get("evidence_id", "")),
+        ),
+    )
+    best = ranked[0]
+    return best if facet_terms & _terms(str(best.get("text", ""))) else None
+
+
+def _surface_for_facet(facet_id: str, quote: str) -> str:
+    if facet_id == "non_entailment_boundary":
+        return f"A precedes relationship does not by itself prove dependency; {quote}"
+    return quote
+
+
+def _direct_facet_answer_text(claims: list[dict[str, Any]]) -> str:
+    sentences = []
+    for index, claim in enumerate(claims, start=1):
+        clause = _natural_clause(str(claim.get("surface_text", "")))
+        sentences.append(f"{clause} [[claim_{index}]].")
+    return " ".join(sentences)
+
+
+def _required_facet_ids(task: dict[str, Any]) -> list[str]:
+    return [
+        str(item.get("facet_id", ""))
+        for item in task.get("question_contract", {}).get("required_facets", [])
+        if isinstance(item, dict) and str(item.get("facet_id", ""))
+    ]
+
+
+def _terms(text: str) -> set[str]:
+    terms = {
+        term.casefold()
+        for term in re.findall(r"[A-Za-z][A-Za-z0-9_.-]+", text)
+        if len(term) > 2
+    }
+    singulars = {
+        term[:-1]
+        for term in terms
+        if len(term) > 4 and term.endswith("s") and not term.endswith("ss")
+    }
+    return terms | singulars
 
 
 def _support_ref(item: dict[str, Any]) -> dict[str, str]:
@@ -522,9 +637,22 @@ def _normalized_evaluation(
                     "source_mutations": 0,
                 },
                 "used_source_ids": used_source_ids,
-                "covered_concepts": list(annotation.get("minimum_concepts", []))
+                "covered_concepts": list(
+                    dict.fromkeys(
+                        str(item)
+                        for item in (
+                            row.get("relationship_summary", {}).get("covered_facets", [])
+                            if isinstance(row.get("relationship_summary"), dict)
+                            else []
+                        )
+                    )
+                )
                 if answered
                 else [],
+                "annotation_reference": {
+                    "expected_relation_evidence": annotation.get("expected_relation_evidence", {}),
+                    "minimum_concepts": annotation.get("minimum_concepts", []),
+                },
                 "graph_used_edges": row.get("relationship_summary", {}).get(
                     "selected_graph_edge_ids", []
                 ),
@@ -545,7 +673,7 @@ def _normalized_evaluation(
         )
     return {
         "schema_version": "llm-wiki-answer-quality-benchmark-v3-normalized/runtime-v1",
-        "scoring_method": "runtime-hard-gate-plus-annotation-aware-automated-rubric",
+        "scoring_method": "runtime-hard-gate-plus-raw-answer-rubric",
         "rows": rows,
     }
 
