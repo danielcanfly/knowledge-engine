@@ -31,8 +31,14 @@ WRITE_TOKEN = "write-token-hidden"
 
 
 class FakeRequester:
-    def __init__(self, apps: list[dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        apps: list[dict[str, Any]],
+        *,
+        fail_read_detail: bool = False,
+    ) -> None:
         self.apps = apps
+        self.fail_read_detail = fail_read_detail
         self.calls: list[dict[str, Any]] = []
 
     def __call__(
@@ -64,6 +70,12 @@ class FakeRequester:
                 None,
             )
         if method == "GET" and f"/access/apps/{ROOT_APP_ID}" in url:
+            if token == READ_TOKEN and self.fail_read_detail:
+                return (
+                    403,
+                    {"success": False, "errors": [{"code": 1010}]},
+                    None,
+                )
             return 200, {"success": True, "result": dict(self.apps[0])}, None
         if method == "PUT" and f"/access/apps/{ROOT_APP_ID}" in url:
             payload = json.loads(data.decode("utf-8")) if data else {}
@@ -231,6 +243,7 @@ def test_repair_updates_strict_root_app_to_lax_without_raw_evidence(tmp_path: Pa
     assert repair["status"] == "access_browser_session_contract_repaired"
     assert repair["mutations"] == 1
     assert repair["mutation_kind"] == "cloudflare_access_application_update"
+    assert repair["detail_read_token_class"] == "read_token"
     assert repair["before_same_site_cookie_attribute"] == "strict"
     assert repair["after_same_site_cookie_attribute"] == "lax"
     assert repair["before_path_cookie_attribute"] is True
@@ -238,3 +251,32 @@ def test_repair_updates_strict_root_app_to_lax_without_raw_evidence(tmp_path: Pa
 
     for name in ("before.json", "repair.json", "after.json"):
         evidence_text_does_not_leak_raw_identity(tmp_path / name)
+
+
+def test_repair_retries_detail_read_with_write_token_before_update(tmp_path: Path) -> None:
+    requester = FakeRequester([root_app(path_cookie=True)], fail_read_detail=True)
+    after = access_contract.repair_contract(
+        account_id=ACCOUNT_ID,
+        read_token=READ_TOKEN,
+        write_token=WRITE_TOKEN,
+        target_hostname=HOSTNAME,
+        before_output=tmp_path / "before.json",
+        repair_output=tmp_path / "repair.json",
+        after_output=tmp_path / "after.json",
+        requester=requester,
+    )
+
+    detail_calls = [
+        call
+        for call in requester.calls
+        if call["method"] == "GET" and f"/access/apps/{ROOT_APP_ID}" in call["url"]
+    ]
+    assert [call["token"] for call in detail_calls] == [READ_TOKEN, WRITE_TOKEN]
+    assert after["status"] == "pass"
+
+    repair = json.loads((tmp_path / "repair.json").read_text(encoding="utf-8"))
+    assert repair["status"] == "access_browser_session_contract_repaired"
+    assert repair["detail_read_token_class"] == "write_token"
+    assert repair["before_path_cookie_attribute"] is True
+    assert repair["after_path_cookie_attribute"] is False
+    evidence_text_does_not_leak_raw_identity(tmp_path / "repair.json")
