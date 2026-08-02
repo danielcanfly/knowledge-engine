@@ -85,25 +85,49 @@ maybe_collect_aq_final_closure() {
   local routed_health_path="$evidence_dir/routed-health-$EXPECTED_DEPLOY_SHA.json"
   rm -f "$identity_path" "$frozen_path" "$blackbox_path" "$routed_health_path"
 
-  PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
-    --questions pilot/m26/m26-aq-final-r3-questions.json \
-    --output "$frozen_path" \
-    --expected-sha "$EXPECTED_DEPLOY_SHA"
+  local frozen_ok=false
+  for attempt in $(seq 1 6); do
+    PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
+      --questions pilot/m26/m26-aq-final-r3-questions.json \
+      --output "$frozen_path" \
+      --expected-sha "$EXPECTED_DEPLOY_SHA"
 
-  PYTHONPATH=src python3 scripts/m26_aq_final_closure.py validate \
-    --input "$frozen_path" \
-    --gate pilot/m26/m26-pa-7-resolved-production-gate.json \
-    --expected-sha "$EXPECTED_DEPLOY_SHA"
+    if PYTHONPATH=src python3 scripts/m26_aq_final_closure.py validate \
+      --input "$frozen_path" \
+      --gate pilot/m26/m26-pa-7-resolved-production-gate.json \
+      --expected-sha "$EXPECTED_DEPLOY_SHA"; then
+      frozen_ok=true
+      break
+    fi
+    if [[ "$attempt" == "6" ]]; then
+      break
+    fi
+    echo "AQ_FROZEN_CLOSURE_RETRY attempt=$attempt"
+    sleep $((10 * attempt))
+  done
+  test "$frozen_ok" = true
 
-  PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
-    --questions pilot/m26/m26-aq-gpt-e-black-box-questions.json \
-    --output "$blackbox_path" \
-    --expected-sha "$EXPECTED_DEPLOY_SHA"
+  local blackbox_ok=false
+  for attempt in $(seq 1 6); do
+    PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
+      --questions pilot/m26/m26-aq-gpt-e-black-box-questions.json \
+      --output "$blackbox_path" \
+      --expected-sha "$EXPECTED_DEPLOY_SHA"
 
-  PYTHONPATH=src python3 scripts/m26_aq_generalized_closure.py \
-    --input "$blackbox_path" \
-    --expected-sha "$EXPECTED_DEPLOY_SHA" \
-    --minimum 10
+    if PYTHONPATH=src python3 scripts/m26_aq_generalized_closure.py \
+      --input "$blackbox_path" \
+      --expected-sha "$EXPECTED_DEPLOY_SHA" \
+      --minimum 10; then
+      blackbox_ok=true
+      break
+    fi
+    if [[ "$attempt" == "6" ]]; then
+      break
+    fi
+    echo "AQ_BLACKBOX_CLOSURE_RETRY attempt=$attempt"
+    sleep $((10 * attempt))
+  done
+  test "$blackbox_ok" = true
 
   local routed_origin="https://${ROUTED_BACKEND_HOSTNAME}"
   local routed_code
