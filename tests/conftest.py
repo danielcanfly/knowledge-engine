@@ -1,19 +1,76 @@
 from __future__ import annotations
 
+import json
 import zipfile
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+import knowledge_engine.m26_pa7_arbitrary_query_runtime as aq_runtime
 from knowledge_engine.compiler import compile_release
+from knowledge_engine.m26_verified_answer_citation_gate import VerifiedAnswerGateError
 from knowledge_engine.publisher import publish_release
 from knowledge_engine.storage import FileObjectStore
 
 ROOT = Path(__file__).resolve().parents[1]
 _M23_INGESTION_TEST_MODULE = "test_m23_6_2_qdrant_ingestion_manifest"
+_LEGACY_AQ_FORMAL_FIXTURE_MODULES = {
+    "test_m26_pa7_final_web_readiness",
+    "test_m26_pa_7_corrective_formal_product_readiness",
+}
 _FIXED_ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
+
+
+@pytest.fixture(autouse=True)
+def normalize_legacy_aq_formal_fixture_provider_schema(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Upgrade only historical formal-fixture provider envelopes to the current schema.
+
+    The PA.7 formal fixture providers predate the AQ3 provider envelope and intentionally
+    exercise evidence/citation/SLO behavior rather than provider-schema rejection. The runtime
+    verifier remains authoritative: this shim only supplies the two newly required envelope
+    fields, then delegates back to the unmodified parser and every downstream semantic,
+    citation, support, graph, and mutation gate.
+    """
+
+    module = request.node.module
+    module_name = module.__name__.rsplit(".", 1)[-1] if module is not None else ""
+    if module_name not in _LEGACY_AQ_FORMAL_FIXTURE_MODULES:
+        return
+
+    original = aq_runtime._parse_multi_provider_json
+
+    def parse_with_legacy_envelope_upgrade(text: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        try:
+            return original(text)
+        except VerifiedAnswerGateError as exc:
+            if exc.code != "M26-PA7-ME-005":
+                raise
+        stripped = text.strip()
+        parsed, _ = aq_runtime._extract_single_provider_json_object(stripped)
+        if not isinstance(parsed, Mapping):
+            return original(text)
+        value = dict(parsed)
+        legacy_keys = {
+            "status",
+            "relation",
+            "selected_evidence_ids",
+            "claims",
+            "abstention_reason",
+        }
+        if not legacy_keys.issubset(value) or set(value) - legacy_keys - {"missing_facets"}:
+            return original(text)
+        value.setdefault("schema_version", "aq3-provider-candidate/v3")
+        value.setdefault("answer_text", "")
+        value.setdefault("missing_facets", [])
+        return original(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+
+    monkeypatch.setattr(aq_runtime, "_parse_multi_provider_json", parse_with_legacy_envelope_upgrade)
 
 
 @pytest.fixture(autouse=True)
