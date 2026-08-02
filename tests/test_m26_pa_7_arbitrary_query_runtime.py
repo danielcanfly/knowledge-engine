@@ -708,7 +708,10 @@ def test_provenance_and_temporal_intents_use_required_evidence_types() -> None:
         ),
     ],
 )
-def test_invalid_multi_evidence_provider_outputs_fail_closed(mode: str, question: str) -> None:
+def test_invalid_multi_evidence_provider_outputs_use_verified_repair(
+    mode: str,
+    question: str,
+) -> None:
     response = run_owner_arbitrary_query(
         root=ROOT,
         gate=load_json(GATE_PATH),
@@ -718,9 +721,11 @@ def test_invalid_multi_evidence_provider_outputs_fail_closed(mode: str, question
         dense_channel=LocalDenseProjectionChannel(),
     )
 
-    assert response["status"] == "owner_only_safe_abstention"
+    assert response["status"] == "owner_only_cited_answer"
     assert response["provider_call_count"] == 2
     assert response["repair_attempted"] is True
+    assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
+    assert response["multi_evidence_verification"]["support_ref_count"] >= 2
     assert response["unsupported_accepted_claims"] == 0
 
 

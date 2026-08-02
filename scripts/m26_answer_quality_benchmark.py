@@ -95,7 +95,7 @@ class BenchmarkProvider:
         task = _task(payload)
         body = _answer_for_task(task)
         if _supports_natural_answer_text(task):
-            body["answer_text"] = _natural_answer_text(body)
+            body["answer_text"] = _natural_answer_text(task, body)
         return {
             "text": json.dumps(body, ensure_ascii=False, sort_keys=True),
             "usage": {"input_tokens": 100, "output_tokens": 40},
@@ -209,14 +209,37 @@ def _item_source_identity(item: dict[str, Any]) -> str:
     return str(value or item.get("evidence_id", ""))
 
 
-def _natural_answer_text(body: dict[str, Any]) -> str:
+def _natural_answer_text(task: dict[str, Any], body: dict[str, Any]) -> str:
     refs = body["claims"][0]["support_refs"]
     if not refs:
         return ""
+    intent = str(task.get("intent_class", "direct_grounded_knowledge"))
     clauses = [_natural_clause(ref["exact_quote"]) for ref in refs]
     if len(refs) == 1:
-        return f"In short, {clauses[0]} [claim_1_ref_1]."
-    sentences = [f"The primary evidence says {clauses[0]} [claim_1_ref_1]."]
+        return f"For this question, the supported answer is narrow: {clauses[0]} [claim_1_ref_1]."
+    if intent == "cross_document_comparison":
+        return (
+            "The grounded comparison is that the first source frames one side of the control "
+            f"choice: {clauses[0]} [claim_1_ref_1]. The second source supplies the contrasting "
+            f"or complementary side: {clauses[1]} [claim_1_ref_2]."
+        )
+    if intent == "complementary_synthesis":
+        return (
+            "The components complement each other as structure plus control: "
+            f"{clauses[0]} [claim_1_ref_1]. A second source adds the paired role: "
+            f"{clauses[1]} [claim_1_ref_2]."
+        )
+    if intent == "graph_relationship":
+        sentences = [
+            "The production graph gives a navigation relationship first, then the endpoint "
+            f"passages explain what that relationship is about: {clauses[0]} [claim_1_ref_1]."
+        ]
+        for index, clause in enumerate(clauses[1:], start=2):
+            sentences.append(f"Endpoint evidence adds {clause} [claim_1_ref_{index}].")
+        return " ".join(sentences)
+    sentences = [
+        f"The direct answer is supported by the first evidence span: {clauses[0]} [claim_1_ref_1]."
+    ]
     for index, clause in enumerate(clauses[1:], start=2):
         prefix = "A related source adds" if index == 2 else "Additional evidence adds"
         sentences.append(f"{prefix} {clause} [claim_1_ref_{index}].")
@@ -307,6 +330,15 @@ def _row(case: dict[str, str], response: dict[str, Any], wall_latency_ms: int) -
             "selected_graph_relation_types",
             [],
         ),
+        "graph_relation_type_counts": response.get("graph_observability", {}).get(
+            "selected_graph_relation_type_counts",
+            {},
+        ),
+        "structural_relation_type_counts": response.get("graph_observability", {}).get(
+            "structural_relation_type_counts",
+            {},
+        ),
+        "evidence_utilization_trace": response.get("evidence_utilization_trace", {}),
         "selected_evidence_preview": selected[:3],
     }
 

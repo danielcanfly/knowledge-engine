@@ -105,6 +105,37 @@ STOP_TERMS = {
 }
 _RELEASE_DOCUMENTS_CACHE: dict[int, list[dict[str, Any]]] = {}
 _RELEASE_CONCEPTS_CACHE: dict[int, set[str]] = {}
+STRUCTURAL_RELATION_TYPES = {"contains", "part_of", "precedes"}
+ORDER_QUERY_TERMS = {
+    "after",
+    "before",
+    "changed",
+    "older",
+    "newer",
+    "order",
+    "precede",
+    "precedes",
+    "sequence",
+    "temporal",
+    "version",
+}
+GENERIC_RELATIONAL_TERMS = {
+    "compare",
+    "comparison",
+    "complement",
+    "connect",
+    "connects",
+    "different",
+    "execution",
+    "explain",
+    "first",
+    "graph",
+    "how",
+    "permission",
+    "relationship",
+    "support",
+    "supports",
+}
 
 INTENT_PATTERNS: tuple[tuple[str, tuple[re.Pattern[str], ...]], ...] = (
     (
@@ -580,6 +611,7 @@ def run_owner_arbitrary_query(
         "relationship_summary": verification.get("relationship_summary", {}),
         "multi_evidence_verification": verification.get("multi_evidence_verification", {}),
     }
+    response["evidence_utilization_trace"] = _evidence_utilization_trace(response)
     response["latency_ms"] = max(
         int(response["latency_ms"]),
         int((time.monotonic() - started) * 1000),
@@ -735,6 +767,20 @@ def _retrieval_response_fields(
         ]
         if int(meta.get("graph_hop", 0)) > 0
     ]
+    selected_type_counts = Counter(
+        str(item.get("evidence_type", "passage")) for item in selected_evidence
+    )
+    selected_channel_counts = Counter(
+        str(channel)
+        for item in selected_evidence
+        for channel in item.get("channels", [])
+    )
+    selected_relation_counts = Counter(
+        str(relation)
+        for item in selected_evidence
+        for relation in _selected_item_relation_types(item)
+        if str(relation)
+    )
     return {
         "production_release_id": bundle.release_id,
         "production_manifest_sha256": bundle.manifest_sha256,
@@ -802,10 +848,18 @@ def _retrieval_response_fields(
             "selected_graph_derived_evidence_count": len(graph_derived_selected),
             "selected_graph_relation_types": selected_relation_types,
             "selected_graph_hop_counts": selected_hops,
+            "selected_graph_relation_type_counts": dict(sorted(selected_relation_counts.items())),
+            "structural_relation_type_counts": {
+                relation: count
+                for relation, count in sorted(selected_relation_counts.items())
+                if relation in STRUCTURAL_RELATION_TYPES
+            },
         },
         "rerank_diversity_summary": {
             "selected_evidence_count": len(selected_evidence),
             "distinct_source_count": len(source_identities),
+            "selected_evidence_type_counts": dict(sorted(selected_type_counts.items())),
+            "selected_channel_counts": dict(sorted(selected_channel_counts.items())),
             "selected_source_redundancy": {
                 source: count
                 for source, count in Counter(
@@ -823,6 +877,20 @@ def _retrieval_response_fields(
         "distinct_source_identities": source_identities,
         "intent_class": intent_class,
     }
+
+
+def _selected_item_relation_types(item: Mapping[str, Any]) -> list[str]:
+    relation_types: list[str] = []
+    if item.get("relation_type"):
+        relation_types.append(str(item.get("relation_type")))
+    metadata = item.get("retrieval_metadata")
+    if isinstance(metadata, Mapping):
+        for relation in metadata.get("relation_types", []):
+            relation_types.append(str(relation))
+        for edge in metadata.get("graph_edges", []):
+            if isinstance(edge, Mapping) and edge.get("relation_type"):
+                relation_types.append(str(edge.get("relation_type")))
+    return relation_types
 
 
 def _synthesize_and_verify(
@@ -929,8 +997,6 @@ def _deterministic_evidence_synthesis(
     trigger_reason_codes: Sequence[str],
     allow_after_repair_failure: bool,
 ) -> dict[str, Any] | None:
-    if allow_after_repair_failure and intent_class != "direct_grounded_knowledge":
-        return None
     candidate = _deterministic_provider_candidate(intent_class=intent_class, evidence=evidence)
     if candidate is None:
         return None
@@ -1063,11 +1129,15 @@ def _deterministic_graph_items(
         str(graph_edge.get("edge_target", "")),
     }
     endpoints: list[Mapping[str, Any]] = []
-    for item in evidence:
-        if item.get("evidence_type") != "passage":
-            continue
-        if str(item.get("concept_id", "")) in endpoint_concepts:
-            endpoints.append(item)
+    for concept_id in sorted(endpoint_concepts):
+        concept_items = [
+            item
+            for item in evidence
+            if item.get("evidence_type") == "passage"
+            and str(item.get("concept_id", "")) == concept_id
+        ]
+        if concept_items:
+            endpoints.append(max(concept_items, key=_passage_answer_quality_score))
     if {str(item.get("concept_id", "")) for item in endpoints} != endpoint_concepts:
         return []
     return [graph_edge, *endpoints[:2]]
@@ -1115,7 +1185,10 @@ def _build_multi_evidence_provider_payload(
                 "contrasts_with",
                 "complements",
                 "causes",
+                "contains",
                 "depends_on",
+                "navigates_to",
+                "part_of",
                 "precedes",
                 "supersedes",
                 "same_as",
@@ -1392,6 +1465,7 @@ def _verify_multi_evidence_provider_output(
         "answer_text": str(parsed.get("answer_text") or ""),
         "selected_evidence_ids": selected_or_used,
         "selected_graph_edge_ids": sorted(used_graph_edges),
+        "used_evidence_ids": sorted(used_evidence_ids),
         "material_claims": claim_records,
         "support_verification": {
             "material_claim_count": len(claim_records),
@@ -1518,6 +1592,7 @@ def _verified_multi_evidence_answer(
             "relation": str(verified.get("relation") or "null"),
             "selected_evidence_ids": list(verified.get("selected_evidence_ids", [])),
             "selected_graph_edge_ids": list(verified.get("selected_graph_edge_ids", [])),
+            "used_evidence_ids": list(verified.get("used_evidence_ids", [])),
         },
         "multi_evidence_verification": {
             "claim_count": len(public_claims),
@@ -1605,6 +1680,44 @@ def _verified_abstention(
         "citation_locator_valid": True,
         "unsupported_accepted_claims": 0,
         "repair_attempted": repair_attempted,
+    }
+
+
+def _evidence_utilization_trace(response: Mapping[str, Any]) -> dict[str, Any]:
+    selected = _list(response.get("selected_evidence", []), "selected evidence")
+    citations = _list(response.get("citations", []), "citations")
+    selected_ids = [str(item.get("evidence_id", "")) for item in selected]
+    used_ids = sorted(
+        {
+            str(item.get("evidence_id", ""))
+            for item in citations
+            if str(item.get("evidence_id", ""))
+        }
+    )
+    selected_set = set(selected_ids)
+    used_set = set(used_ids)
+    return {
+        "selected_evidence_count": len(selected_ids),
+        "used_evidence_count": len(used_set),
+        "unused_selected_evidence_count": len(selected_set - used_set),
+        "used_evidence_ids": used_ids,
+        "unused_selected_evidence_ids": sorted(selected_set - used_set),
+        "used_evidence_type_counts": dict(
+            sorted(
+                Counter(
+                    str(item.get("evidence_type", "passage"))
+                    for item in citations
+                    if str(item.get("evidence_id", "")) in used_set
+                ).items()
+            )
+        ),
+        "used_source_identities": sorted(
+            {
+                str(item.get("source_identity") or item.get("source_id") or "")
+                for item in citations
+                if item.get("source_identity") or item.get("source_id")
+            }
+        ),
     }
 
 
@@ -1704,6 +1817,7 @@ def _select_evidence(
         trace_id=trace_id,
         intent_class=intent_class,
         budget=budget,
+        question=question,
     )
 
 
@@ -1758,6 +1872,7 @@ def _empty_candidate(section_id: str) -> dict[str, Any]:
         "graph_hop": 0,
         "graph_edges": [],
         "relation_types": set(),
+        "graph_relevance_scores": [],
     }
 
 
@@ -1786,6 +1901,7 @@ def _add_graph_expanded_candidates(
     if not concept_seed_scores:
         return
     query_terms = _meaningful_terms(question)
+    order_query = bool(query_terms & ORDER_QUERY_TERMS)
     relation_index: dict[str, list[Mapping[str, Any]]] = {}
     for edge in bundle.graph_v2.get("edges", []):
         if not isinstance(edge, Mapping) or not _edge_has_endpoint_documents(edge, bundle):
@@ -1800,6 +1916,7 @@ def _add_graph_expanded_candidates(
         relation_index=relation_index,
         frontier=frontier,
         query_terms=query_terms,
+        order_query=order_query,
         hop=1,
     )
     if _allow_second_hop(question=question, intent_class=intent_class):
@@ -1818,6 +1935,7 @@ def _add_graph_expanded_candidates(
             relation_index=relation_index,
             frontier=second_frontier,
             query_terms=query_terms,
+            order_query=order_query,
             hop=2,
         )
 
@@ -1830,11 +1948,22 @@ def _expand_graph_hop(
     relation_index: Mapping[str, Sequence[Mapping[str, Any]]],
     frontier: Sequence[tuple[str, float]],
     query_terms: set[str],
+    order_query: bool,
     hop: int,
 ) -> None:
     channel = f"graph_{hop}hop"
     for seed_concept, seed_score in frontier:
-        for edge in relation_index.get(seed_concept, [])[:6]:
+        ranked_edges = sorted(
+            relation_index.get(seed_concept, []),
+            key=lambda edge: -_edge_navigation_score(
+                edge=edge,
+                seed_concept=seed_concept,
+                doc_by_concept=doc_by_concept,
+                query_terms=query_terms,
+                order_query=order_query,
+            ),
+        )
+        for edge in ranked_edges[:6]:
             source = str(edge.get("source", ""))
             target = str(edge.get("target", ""))
             neighbour = target if source == seed_concept else source
@@ -1845,8 +1974,16 @@ def _expand_graph_hop(
             relevance = _text_term_overlap_score(query_terms, _document_text(document))
             confidence = float(edge.get("confidence", 0.0) or 0.0)
             hop_weight = 0.55 if hop == 1 else 0.3
-            graph_score = seed_score * hop_weight + confidence + relevance
-            if hop == 2 and relevance <= 0 and confidence < 0.85:
+            relation_weight = _relation_navigation_weight(
+                str(edge.get("relation_type", "")),
+                order_query=order_query,
+                relevance=relevance,
+            )
+            if relation_weight < 0 and relevance <= 0:
+                continue
+            graph_score = seed_score * hop_weight + confidence * 0.25 + relevance * 2.0
+            graph_score += relation_weight
+            if hop == 2 and relevance < 0.15:
                 continue
             candidate = candidates.setdefault(section_id, _empty_candidate(section_id))
             candidate["channels"].add(channel)
@@ -1857,7 +1994,44 @@ def _expand_graph_hop(
             )
             candidate["graph_edges"].append(dict(edge))
             candidate["relation_types"].add(str(edge.get("relation_type", "")))
+            candidate["graph_relevance_scores"].append(round(relevance, 6))
             candidate.setdefault("graph_seed_concepts", set()).add(seed_concept)
+
+
+def _edge_navigation_score(
+    *,
+    edge: Mapping[str, Any],
+    seed_concept: str,
+    doc_by_concept: Mapping[str, Mapping[str, Any]],
+    query_terms: set[str],
+    order_query: bool,
+) -> float:
+    source = str(edge.get("source", ""))
+    target = str(edge.get("target", ""))
+    neighbour = target if source == seed_concept else source
+    document = doc_by_concept.get(neighbour, {})
+    relevance = _text_term_overlap_score(query_terms, _document_text(document))
+    confidence = float(edge.get("confidence", 0.0) or 0.0)
+    return relevance * 3.0 + confidence * 0.25 + _relation_navigation_weight(
+        str(edge.get("relation_type", "")),
+        order_query=order_query,
+        relevance=relevance,
+    )
+
+
+def _relation_navigation_weight(
+    relation_type: str,
+    *,
+    order_query: bool,
+    relevance: float,
+) -> float:
+    if relation_type == "precedes":
+        return 0.45 if order_query else -0.6
+    if relation_type in {"contains", "part_of"}:
+        return 0.25 if relevance > 0 else -0.05
+    if relation_type:
+        return 0.5
+    return 0.0
 
 
 def _dynamic_evidence_budget(*, question: str, intent_class: str) -> int:
@@ -1890,7 +2064,12 @@ def _rerank_candidates(
         channel_count = len(item.get("channels", []))
         hop = int(item.get("graph_hop") or 0)
         graph_bonus = 0.35 if hop == 1 else 0.15 if hop == 2 else 0.0
-        item["rerank_score"] = float(item.get("score", 0.0)) + channel_count * 0.35 + graph_bonus
+        item["rerank_score"] = (
+            float(item.get("score", 0.0))
+            + channel_count * 0.35
+            + graph_bonus
+            - _candidate_structural_relation_penalty(item)
+        )
         ordered.append(item)
     return sorted(
         ordered,
@@ -1955,7 +2134,27 @@ def _candidate_public_metadata(candidate: Mapping[str, Any]) -> dict[str, Any]:
         "graph_seed_concepts": sorted(
             {str(item) for item in candidate.get("graph_seed_concepts", set()) if item}
         )[:6],
+        "graph_relevance_scores": list(candidate.get("graph_relevance_scores", []))[:4],
+        "structural_relation_only": _candidate_structural_relation_penalty(candidate) > 0,
     }
+
+
+def _candidate_structural_relation_penalty(candidate: Mapping[str, Any]) -> float:
+    relation_types = {
+        str(item) for item in candidate.get("relation_types", set()) if str(item)
+    }
+    if not relation_types or not relation_types.issubset(STRUCTURAL_RELATION_TYPES):
+        return 0.0
+    relevance_scores = [
+        float(score)
+        for score in candidate.get("graph_relevance_scores", [])
+        if isinstance(score, (int, float))
+    ]
+    if max(relevance_scores or [0.0]) >= 0.25:
+        return 0.0
+    if relation_types == {"precedes"}:
+        return 0.45
+    return 0.15
 
 
 def _augment_evidence_for_intent(
@@ -1966,6 +2165,7 @@ def _augment_evidence_for_intent(
     trace_id: str,
     intent_class: str,
     budget: int,
+    question: str,
 ) -> list[dict[str, Any]]:
     evidence = [dict(item) for item in base_evidence]
     if intent_class in {
@@ -1973,10 +2173,18 @@ def _augment_evidence_for_intent(
         "complementary_synthesis",
         "temporal_conflict",
     }:
+        evidence = _ensure_query_coverage_passages(
+            bundle=bundle,
+            evidence=evidence,
+            trace_id=trace_id,
+            question=question,
+            limit=budget,
+        )
         evidence = _ensure_distinct_passage_sources(
             bundle=bundle,
             evidence=evidence,
             trace_id=trace_id,
+            question=question,
             minimum=2,
             limit=budget,
         )
@@ -1986,6 +2194,7 @@ def _augment_evidence_for_intent(
             evidence=evidence,
             lexical_results=lexical_results,
             trace_id=trace_id,
+            question=question,
             limit=budget,
         )
     elif intent_class == "provenance_source_trace":
@@ -2067,6 +2276,7 @@ def _ensure_distinct_passage_sources(
     bundle: ProductionAnswerBundle,
     evidence: Sequence[Mapping[str, Any]],
     trace_id: str,
+    question: str,
     minimum: int,
     limit: int,
 ) -> list[dict[str, Any]]:
@@ -2076,7 +2286,16 @@ def _ensure_distinct_passage_sources(
     if len(source_identities) >= minimum:
         return selected
     ordinal = len(selected) + 1
-    for document in _release_documents(bundle):
+    query_terms = _meaningful_terms(question)
+    documents = sorted(
+        _release_documents(bundle),
+        key=lambda document: (
+            -_text_term_overlap_score(query_terms, _document_text(document)),
+            _is_article_root_document(document),
+            str(document.get("section_id", "")),
+        ),
+    )
+    for document in documents:
         section_id = str(document.get("section_id", ""))
         if section_id in selected_sections:
             continue
@@ -2086,7 +2305,14 @@ def _ensure_distinct_passage_sources(
             lexical_result={},
             trace_id=trace_id,
             ordinal=ordinal,
-            channels=["release_distinct_source"],
+            channels=["release_distinct_source", "query_coverage"],
+            retrieval_metadata={
+                "query_overlap_score": _text_term_overlap_score(
+                    query_terms,
+                    _document_text(document),
+                ),
+                "coverage_terms": sorted(query_terms & _meaningful_terms(_document_text(document))),
+            },
         )
         if _source_identity(item) in source_identities:
             continue
@@ -2099,16 +2325,81 @@ def _ensure_distinct_passage_sources(
     return selected
 
 
+def _ensure_query_coverage_passages(
+    *,
+    bundle: ProductionAnswerBundle,
+    evidence: Sequence[Mapping[str, Any]],
+    trace_id: str,
+    question: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    selected = [dict(item) for item in evidence]
+    selected_sections = {str(item.get("section_id", "")) for item in selected}
+    query_terms = _coverage_terms(question)
+    if not query_terms:
+        return selected
+    covered_terms: set[str] = set()
+    ordinal = len(selected) + 1
+    coverage_items: list[dict[str, Any]] = []
+    documents = sorted(
+        _release_documents(bundle),
+        key=lambda document: (
+            -len((query_terms - covered_terms) & _meaningful_terms(_document_text(document))),
+            -_text_term_overlap_score(query_terms, _document_text(document)),
+            _is_article_root_document(document),
+            str(document.get("section_id", "")),
+        ),
+    )
+    for document in documents:
+        if len(coverage_items) >= max(2, min(4, limit // 2)):
+            break
+        section_id = str(document.get("section_id", ""))
+        if section_id in selected_sections:
+            continue
+        document_terms = _meaningful_terms(_document_text(document))
+        gained = (query_terms - covered_terms) & document_terms
+        if not gained:
+            continue
+        item = _evidence_item(
+            bundle=bundle,
+            document=document,
+            lexical_result={},
+            trace_id=trace_id,
+            ordinal=ordinal,
+            channels=["query_coverage"],
+            retrieval_metadata={
+                "query_overlap_score": _text_term_overlap_score(
+                    query_terms,
+                    _document_text(document),
+                ),
+                "coverage_terms": sorted(gained),
+            },
+        )
+        coverage_items.append(item)
+        selected_sections.add(section_id)
+        covered_terms |= gained
+        ordinal += 1
+        if query_terms.issubset(covered_terms):
+            break
+    return [*coverage_items, *selected]
+
+
 def _graph_evidence_bundle(
     *,
     bundle: ProductionAnswerBundle,
     evidence: Sequence[Mapping[str, Any]],
     lexical_results: Sequence[Any],
     trace_id: str,
+    question: str,
     limit: int,
 ) -> list[dict[str, Any]]:
     passages = [dict(item) for item in evidence if item.get("evidence_type") == "passage"]
-    edge = _first_authoritative_edge(passages, lexical_results, bundle)
+    edge = _first_authoritative_edge(
+        passages,
+        lexical_results,
+        bundle,
+        question=question,
+    )
     if edge is None:
         return passages
     endpoint_passages = _endpoint_passages(
@@ -2116,6 +2407,7 @@ def _graph_evidence_bundle(
         existing=passages,
         edge=edge,
         trace_id=trace_id,
+        question=question,
         start_ordinal=len(passages) + 1,
     )
     graph_item = _graph_edge_evidence_item(
@@ -2138,21 +2430,76 @@ def _first_authoritative_edge(
     passages: Sequence[Mapping[str, Any]],
     lexical_results: Sequence[Any],
     bundle: ProductionAnswerBundle,
+    *,
+    question: str,
 ) -> Mapping[str, Any] | None:
+    query_terms = _meaningful_terms(question)
+    order_query = bool(query_terms & ORDER_QUERY_TERMS)
+    candidates: list[Mapping[str, Any]] = []
     for item in passages:
         for edge in item.get("relation_expansions", []):
             if isinstance(edge, Mapping) and _edge_has_endpoint_documents(edge, bundle):
-                return edge
+                candidates.append(edge)
     for result in lexical_results:
         if not isinstance(result, Mapping):
             continue
         for edge in result.get("relation_expansions", []):
             if isinstance(edge, Mapping) and _edge_has_endpoint_documents(edge, bundle):
-                return edge
+                candidates.append(edge)
     for edge in bundle.graph_v2.get("edges", []):
         if isinstance(edge, Mapping) and _edge_has_endpoint_documents(edge, bundle):
-            return edge
-    return None
+            candidates.append(edge)
+    if not candidates:
+        return None
+    docs = _documents_by_concept(bundle)
+    return max(
+        candidates,
+        key=lambda edge: _edge_endpoint_relevance_score(
+            edge=edge,
+            docs_by_concept=docs,
+            query_terms=query_terms,
+            order_query=order_query,
+        ),
+    )
+
+
+def _edge_endpoint_relevance_score(
+    *,
+    edge: Mapping[str, Any],
+    docs_by_concept: Mapping[str, Sequence[Mapping[str, Any]]],
+    query_terms: set[str],
+    order_query: bool,
+) -> float:
+    source_docs = docs_by_concept.get(str(edge.get("source", "")), [])
+    target_docs = docs_by_concept.get(str(edge.get("target", "")), [])
+    source_docs = sorted(
+        source_docs,
+        key=lambda document: (
+            -_text_term_overlap_score(query_terms, _document_text(document)),
+            _is_article_root_document(document),
+        ),
+    )
+    target_docs = sorted(
+        target_docs,
+        key=lambda document: (
+            -_text_term_overlap_score(query_terms, _document_text(document)),
+            _is_article_root_document(document),
+        ),
+    )
+    endpoint_text = " ".join(
+        _document_text(document) for document in [*source_docs[:4], *target_docs[:4]]
+    )
+    relevance = _text_term_overlap_score(query_terms, endpoint_text)
+    coverage = len(query_terms & _meaningful_terms(endpoint_text))
+    return (
+        relevance * 5.0
+        + coverage * 0.2
+        + _relation_navigation_weight(
+            str(edge.get("relation_type", "")),
+            order_query=order_query,
+            relevance=relevance,
+        )
+    )
 
 
 def _edge_has_endpoint_documents(edge: Mapping[str, Any], bundle: ProductionAnswerBundle) -> bool:
@@ -2166,11 +2513,11 @@ def _endpoint_passages(
     existing: Sequence[Mapping[str, Any]],
     edge: Mapping[str, Any],
     trace_id: str,
+    question: str,
     start_ordinal: int,
 ) -> list[dict[str, Any]]:
-    by_concept: dict[str, list[Mapping[str, Any]]] = {}
-    for document in _release_documents(bundle):
-        by_concept.setdefault(str(document.get("concept_id", "")), []).append(document)
+    by_concept = _documents_by_concept(bundle)
+    query_terms = _meaningful_terms(question)
     existing_by_concept = {
         str(item.get("concept_id", "")): dict(item)
         for item in existing
@@ -2182,7 +2529,15 @@ def _endpoint_passages(
         if concept_id in existing_by_concept:
             endpoint_items.append(existing_by_concept[concept_id])
             continue
-        documents = by_concept.get(concept_id, [])
+        documents = sorted(
+            by_concept.get(concept_id, []),
+            key=lambda document: (
+                -_text_term_overlap_score(query_terms, _document_text(document)),
+                _is_article_root_document(document),
+                -_passage_text_quality(str(document.get("body") or document.get("excerpt") or "")),
+                str(document.get("section_id", "")),
+            ),
+        )
         if not documents:
             continue
         endpoint_items.append(
@@ -2192,7 +2547,16 @@ def _endpoint_passages(
                 lexical_result={},
                 trace_id=trace_id,
                 ordinal=ordinal,
-                channels=["graph_endpoint"],
+                channels=["graph_endpoint", "query_coverage"],
+                retrieval_metadata={
+                    "query_overlap_score": _text_term_overlap_score(
+                        query_terms,
+                        _document_text(documents[0]),
+                    ),
+                    "coverage_terms": sorted(
+                        query_terms & _meaningful_terms(_document_text(documents[0]))
+                    ),
+                },
             )
         )
         ordinal += 1
@@ -2211,7 +2575,7 @@ def _graph_edge_evidence_item(
     target = str(edge.get("target", ""))
     relation_type = str(edge.get("relation_type", "related_to"))
     statement = (
-        f"Graph edge {edge_id} states {source} {relation_type} {target} "
+        f"Production graph navigation edge {edge_id} states {source} {relation_type} {target} "
         f"with confidence {edge.get('confidence')} and review "
         f"{edge.get('review_status', 'approved')}."
     )
@@ -2244,6 +2608,10 @@ def _graph_edge_evidence_item(
         "relation_type": relation_type,
         "provenance_record_sha256": canonical_sha256(str(edge.get("provenance_ref", ""))),
         "retrieved_at": "",
+        "retrieval_metadata": {
+            "graph_edge_role": "navigation_identity",
+            "structural_relation": relation_type in STRUCTURAL_RELATION_TYPES,
+        },
     }
 
 
@@ -2622,6 +2990,15 @@ def _release_documents(bundle: ProductionAnswerBundle) -> list[dict[str, Any]]:
     return loaded
 
 
+def _documents_by_concept(
+    bundle: ProductionAnswerBundle,
+) -> dict[str, list[Mapping[str, Any]]]:
+    by_concept: dict[str, list[Mapping[str, Any]]] = {}
+    for document in _release_documents(bundle):
+        by_concept.setdefault(str(document.get("concept_id", "")), []).append(document)
+    return by_concept
+
+
 def _release_concepts(bundle: ProductionAnswerBundle) -> set[str]:
     cache_key = id(bundle)
     cached = _RELEASE_CONCEPTS_CACHE.get(cache_key)
@@ -2667,7 +3044,13 @@ def _first_exact_evidence_quote(text: str, *, max_chars: int = 760) -> str:
         return ""
     segments = _exact_quote_segments(normalized)
     quote = next(
-        (segment for segment in segments if len(segment) >= 48 and not _thin_heading(segment)),
+        (
+            segment
+            for segment in segments
+            if len(segment) >= 48
+            and not _thin_heading(segment)
+            and not _article_title_like(segment)
+        ),
         "",
     )
     if not quote:
@@ -2694,6 +3077,36 @@ def _exact_quote_segments(text: str) -> list[str]:
 def _thin_heading(text: str) -> bool:
     stripped = text.strip()
     return stripped.startswith("#") and len(TOKEN_RE.findall(stripped)) <= 4
+
+
+def _article_title_like(text: str) -> bool:
+    stripped = re.sub(r"\s+", " ", text).strip()
+    if len(stripped) > 320:
+        return False
+    title_markers = (
+        " | ",
+        " Series Part ",
+        " Theory Part ",
+        " Part 0",
+        " Part 1",
+        " Part 2",
+        " Part 3",
+        " Part 4",
+        " Part 5",
+        " Part 6",
+        " Part 7",
+        " Part 8",
+        " Part 9",
+    )
+    if any(marker in stripped for marker in title_markers):
+        return True
+    words = TOKEN_RE.findall(stripped)
+    prose_verbs = r"\b(is|are|should|can|must|does|do|keeps|records|limits|connects)\b"
+    return (
+        len(words) <= 16
+        and stripped[:1].isupper()
+        and not re.search(prose_verbs, stripped, re.I)
+    )
 
 
 def _looks_like_prompt_injection(question: str) -> bool:
@@ -2770,7 +3183,9 @@ def _has_meaningful_overlap(question: str, evidence: Sequence[Mapping[str, Any]]
     evidence_terms = {term.casefold() for term in TOKEN_RE.findall(evidence_text)}
     overlap = query_terms & evidence_terms
     if _requires_precise_overlap(query_terms):
-        return len(overlap) >= 2
+        return len(overlap) >= 2 and any(
+            term in overlap and _looks_like_random_identifier(term) for term in query_terms
+        )
     required_overlap = 1
     return len(overlap) >= required_overlap
 
@@ -2803,11 +3218,17 @@ def _looks_like_random_identifier(term: str) -> bool:
 
 
 def _meaningful_terms(text: str) -> set[str]:
-    return {
+    terms = {
         term.casefold()
         for term in TOKEN_RE.findall(text)
         if term.casefold() not in STOP_TERMS and len(term) > 2
     }
+    singulars = {
+        term[:-1]
+        for term in terms
+        if len(term) > 4 and term.endswith("s") and not term.endswith("ss")
+    }
+    return terms | singulars
 
 
 def _document_text(document: Mapping[str, Any]) -> str:
@@ -2815,6 +3236,37 @@ def _document_text(document: Mapping[str, Any]) -> str:
         str(document.get(key, ""))
         for key in ("title", "section_title", "description", "body", "excerpt", "concept_id")
     )
+
+
+def _coverage_terms(text: str) -> set[str]:
+    return _meaningful_terms(text) - GENERIC_RELATIONAL_TERMS
+
+
+def _is_article_root_document(document: Mapping[str, Any]) -> bool:
+    section_id = str(document.get("section_id", ""))
+    concept_id = str(document.get("concept_id", ""))
+    section_title = str(document.get("section_title", "")).casefold()
+    return section_id == concept_id or section_title in {"article overview", "overview"}
+
+
+def _passage_answer_quality_score(item: Mapping[str, Any]) -> float:
+    text = str(item.get("passage_text") or item.get("body") or item.get("excerpt") or "")
+    score = _passage_text_quality(text)
+    if _is_article_root_document(item):
+        score -= 0.75
+    return score
+
+
+def _passage_text_quality(text: str) -> float:
+    segments = _exact_quote_segments(str(text))
+    meaningful = [
+        segment
+        for segment in segments
+        if len(segment) >= 48
+        and not _thin_heading(segment)
+        and not _article_title_like(segment)
+    ]
+    return len(meaningful) + min(len(str(text)), 1200) / 1200.0
 
 
 def _text_term_overlap_score(query_terms: set[str], text: str) -> float:
