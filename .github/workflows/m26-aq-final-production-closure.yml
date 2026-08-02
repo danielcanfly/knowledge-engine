@@ -252,6 +252,13 @@ jobs:
           routed_health_path="$evidence_dir/routed-health-$EXPECTED_DEPLOY_SHA.json"
           rm -f "$identity_path" "$frozen_path" "$blackbox_path" "$routed_health_path"
 
+          venv_dir="$evidence_dir/venv"
+          python3 -m venv "$venv_dir"
+          . "$venv_dir/bin/activate"
+          python -m pip install --upgrade pip >/dev/null
+          python -m pip install -e . >/dev/null
+          echo "AQ_STAGE=host_python_runtime_ready"
+
           PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
             --questions pilot/m26/m26-aq-final-r3-questions.json \
             --output "$frozen_path" \
