@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from knowledge_engine import m26_production_api as _production_patch  # noqa: F401
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _parse_compact_provider_result,
     _requirement_support_failures,
@@ -51,8 +50,8 @@ def test_nc02_generic_multi_entity_answer_is_rejected() -> None:
 
 def test_nc03_precedes_without_non_entailment_is_rejected() -> None:
     question = (
-        "Does the precedes edge between Harness Theory Part 1 and Part 2 prove that Part 1 "
-        "depends on Part 2?"
+        "Does the precedes edge between Harness Theory Part 1 and Harness Theory Part 2 prove "
+        "that Part 1 depends on Part 2?"
     )
     answer = "Harness Theory Part 1 precedes Harness Theory Part 2 in the production graph."
     failures = _failures(question, answer, intent="graph_relationship")
@@ -108,10 +107,10 @@ def test_compact_provider_contract_rejects_extra_keys() -> None:
         raise AssertionError("extra provider key should fail closed")
 
 
-def test_graph_false_premise_contract_binds_named_entities() -> None:
+def test_graph_false_premise_contract_binds_full_named_entities() -> None:
     question = (
-        "The production graph says Harness Theory Part 1 precedes Part 2. What can we safely "
-        "infer from that edge, and what can't we infer?"
+        "The production graph says Harness Theory Part 1 precedes Harness Theory Part 2. "
+        "What can we safely infer from that edge, and what can't we infer?"
     )
     requirements = _semantic_requirements(question, "graph_relationship")
     ids = {item.requirement_id for item in requirements}
