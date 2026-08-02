@@ -4,6 +4,8 @@ set -euo pipefail
 : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
 : "${RELEASE_SHA:?RELEASE_SHA is required}"
 
+CANONICAL_M26_QDRANT_COLLECTION="m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043"
+
 # Production deployment is sometimes invoked from `ssh ... bash -s`. Isolate the
 # entire deploy subprocess from that caller's stdin so no Docker/BuildKit child
 # can consume the remaining remote acceptance program.
@@ -39,21 +41,33 @@ deploy_locked() {
   fi
 
   runtime_env="$(mktemp "$DEPLOY_PATH/.env.runtime.${RELEASE_SHA}.XXXXXX")"
-  BASE_ENV="$DEPLOY_PATH/.env" RUNTIME_ENV="$runtime_env" RELEASE_SHA="$RELEASE_SHA" python3 - <<'PY'
+  BASE_ENV="$DEPLOY_PATH/.env" \
+  RUNTIME_ENV="$runtime_env" \
+  RELEASE_SHA="$RELEASE_SHA" \
+  CANONICAL_M26_QDRANT_COLLECTION="$CANONICAL_M26_QDRANT_COLLECTION" \
+  python3 - <<'PY'
 import os
 from pathlib import Path
 
 base = Path(os.environ["BASE_ENV"])
 runtime = Path(os.environ["RUNTIME_ENV"])
 release_sha = os.environ["RELEASE_SHA"]
+canonical_collection = os.environ["CANONICAL_M26_QDRANT_COLLECTION"]
 lines = base.read_text(encoding="utf-8").splitlines()
 out = []
 for line in lines:
     stripped = line.lstrip()
-    if stripped.startswith("M26_QUERY_BUILD_SHA=") or stripped.startswith("export M26_QUERY_BUILD_SHA="):
+    if stripped.startswith("M26_QUERY_BUILD_SHA=") or stripped.startswith(
+        "export M26_QUERY_BUILD_SHA="
+    ):
+        continue
+    if stripped.startswith("M26_PA7_DENSE_COLLECTION=") or stripped.startswith(
+        "export M26_PA7_DENSE_COLLECTION="
+    ):
         continue
     out.append(line)
 out.append(f"M26_QUERY_BUILD_SHA={release_sha}")
+out.append(f"M26_PA7_DENSE_COLLECTION={canonical_collection}")
 runtime.write_text("\n".join(out) + "\n", encoding="utf-8")
 os.chmod(runtime, 0o600)
 PY
