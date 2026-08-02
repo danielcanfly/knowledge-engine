@@ -13,6 +13,7 @@ on:
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
       - "src/knowledge_engine/m26_production_answer_bundle.py"
       - "src/knowledge_engine/m26_ask_api.py"
+      - "tests/conftest.py"
   push:
     branches:
       - "gpt/aq-final-closure-run"
@@ -54,7 +55,7 @@ jobs:
       - name: Run full AQ regression population
         run: |
           set -euo pipefail
-          python -m pytest \
+          python -m pytest --showlocals \
             tests/test_m26_production_answer_bundle.py \
             tests/test_m26_pa_7_arbitrary_query_runtime.py \
             tests/test_m26_pa7_ask_api.py \
@@ -146,9 +147,10 @@ jobs:
             --expected-sha "$EXPECTED_DEPLOY_SHA"
 
       - name: Upload production closure evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: m26-aq-final-production-closure-${{ github.event.pull_request.head.sha || github.sha }}
           path: /tmp/m26-aq-final-live-closure.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
