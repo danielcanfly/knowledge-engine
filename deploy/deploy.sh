@@ -57,8 +57,12 @@ PY
   docker compose rm -f -s -v knowledge-engine >/dev/null 2>&1 || true
   docker compose config >/dev/null
 
-  docker compose run --rm --no-deps knowledge-engine \
-    python -c 'from knowledge_engine.config import Settings; Settings.from_env(); print("CONFIG_OK")'
+  # Never let the one-shot config probe inherit a caller's stdin. Production
+  # closure executes this script inside `ssh ... bash -s`; an attached compose
+  # run can otherwise consume the remaining remote acceptance program.
+  docker compose run -T --rm --no-deps knowledge-engine \
+    python -c 'from knowledge_engine.config import Settings; Settings.from_env(); print("CONFIG_OK")' \
+    </dev/null
 
   docker compose up -d --remove-orphans
 
