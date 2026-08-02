@@ -430,31 +430,75 @@ def repair_contract(
         raise AccessContractFailure("target_access_root_application_not_unique")
     target_app = root_apps[0]
     app_id = str(target_app["id"])
-    detailed = get_access_app(
-        account_id=account_id,
-        token=read_token,
-        app_id=app_id,
-        requester=requester,
-        timeout=timeout,
-    )
+    try:
+        detailed = get_access_app(
+            account_id=account_id,
+            token=read_token,
+            app_id=app_id,
+            requester=requester,
+            timeout=timeout,
+        )
+        detail_read_token_class = "read_token"
+    except CloudflareApiFailure as read_exc:
+        try:
+            detailed = get_access_app(
+                account_id=account_id,
+                token=write_token,
+                app_id=app_id,
+                requester=requester,
+                timeout=timeout,
+            )
+            detail_read_token_class = "write_token"
+        except CloudflareApiFailure as write_exc:
+            repair = {
+                "schema_version": SCHEMA,
+                "status": "blocked_access_application_detail_read_failed",
+                "mutations": 0,
+                "root_cause_classification": reason,
+                "read_detail_error_class": str(read_exc),
+                "write_detail_error_class": str(write_exc),
+                "raw_domains_recorded": False,
+                "raw_tokens_recorded": False,
+            }
+            write_evidence(repair_output, repair)
+            raise
     update_payload = _update_payload(
         detailed,
         same_site=preferred_same_site,
         path_cookie=False,
     )
-    request_json(
-        method="PUT",
-        url=f"{API_ROOT}/accounts/{account_id}/access/apps/{urllib.parse.quote(app_id, safe='')}",
-        token=write_token,
-        requester=requester,
-        timeout=timeout,
-        payload=update_payload,
-    )
+    try:
+        request_json(
+            method="PUT",
+            url=(
+                f"{API_ROOT}/accounts/{account_id}/access/apps/"
+                f"{urllib.parse.quote(app_id, safe='')}"
+            ),
+            token=write_token,
+            requester=requester,
+            timeout=timeout,
+            payload=update_payload,
+        )
+    except CloudflareApiFailure as exc:
+        repair = {
+            "schema_version": SCHEMA,
+            "status": "blocked_access_application_update_failed",
+            "mutations": 0,
+            "root_cause_classification": reason,
+            "update_error_class": str(exc),
+            "detail_read_token_class": detail_read_token_class,
+            "target_app_id_sha256": sha256_text(app_id),
+            "raw_domains_recorded": False,
+            "raw_tokens_recorded": False,
+        }
+        write_evidence(repair_output, repair)
+        raise
     repair = {
         "schema_version": SCHEMA,
         "status": "access_browser_session_contract_repaired",
         "mutations": 1,
         "mutation_kind": "cloudflare_access_application_update",
+        "detail_read_token_class": detail_read_token_class,
         "target_app_id_sha256": sha256_text(app_id),
         "before_same_site_cookie_attribute": root.get("same_site_cookie_attribute"),
         "after_same_site_cookie_attribute": preferred_same_site,
