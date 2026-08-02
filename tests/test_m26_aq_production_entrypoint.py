@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import pathlib
 import subprocess
-import sys
 
 
 EXPECTED_ENTRYPOINT = (
@@ -12,7 +10,7 @@ EXPECTED_ENTRYPOINT = (
 
 def _assert_import_order(code: str) -> None:
     result = subprocess.run(
-        [sys.executable, "-c", code],
+        ["python", "-c", code],
         check=False,
         capture_output=True,
         text=True,
@@ -20,8 +18,13 @@ def _assert_import_order(code: str) -> None:
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def _read(path: str) -> str:
+    with open(path, encoding="utf-8") as handle:
+        return handle.read()
+
+
 def test_docker_has_one_canonical_production_app() -> None:
-    dockerfile = pathlib.Path("Dockerfile").read_text(encoding="utf-8")
+    dockerfile = _read("Dockerfile")
     assert "knowledge_engine.m26_production_api:app" in dockerfile
     assert dockerfile.count("knowledge_engine.m26_production_api:app") == 1
 
@@ -51,7 +54,7 @@ def test_production_runtime_identity_survives_wrapper_first_import() -> None:
 
 
 def test_production_wrapper_declares_bounded_compatibility_layer() -> None:
-    source = pathlib.Path("src/knowledge_engine/m26_production_api.py").read_text(encoding="utf-8")
+    source = _read("src/knowledge_engine/m26_production_api.py")
     assert "classify_with_semantic_compat" in source
     assert "run_owner_arbitrary_query" in source
     assert "m26_ask_api.RUNTIME_ENTRYPOINT" in source
