@@ -1,12 +1,31 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any
 
 from . import m26_ask_api
+from . import m26_pa7_arbitrary_query_runtime as legacy_runtime
 from .m26_pa7_semantic_closure_runtime import run_owner_arbitrary_query
 
-# Patch the owner-only M26 adapter before the main FastAPI application registers routes.
+_original_named_question_entities = legacy_runtime._named_question_entities
+
+
+def _named_question_entities_with_series_shorthand(question: str) -> list[str]:
+    entities = list(_original_named_question_entities(question))
+    harness_parts = re.findall(r"Harness Theory Part (\d+)", question, flags=re.I)
+    if harness_parts:
+        existing = {item.casefold() for item in entities}
+        for part in re.findall(r"\bPart (\d+)\b", question, flags=re.I):
+            entity = f"Harness Theory Part {part}"
+            if entity.casefold() not in existing:
+                entities.append(entity)
+                existing.add(entity.casefold())
+    return entities
+
+
+# Install the normalized entity parser before the owner-only routes are registered.
+legacy_runtime._named_question_entities = _named_question_entities_with_series_shorthand
 m26_ask_api.run_owner_arbitrary_query = run_owner_arbitrary_query
 m26_ask_api.RUNTIME_ENTRYPOINT = (
     "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
