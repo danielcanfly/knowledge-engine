@@ -369,6 +369,8 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "Access browser-session contract summary" in workflow
     assert "same_site_cookie_attribute" in workflow
     assert "path_cookie_attribute" in workflow
+    assert "path_cookie_attribute_effective" in workflow
+    assert "path_cookie_attribute_raw_class" in workflow
     assert "path_specific_overlap_counts" in workflow
     assert "src/knowledge_engine/m23_cloudflare_qdrant.py" in workflow
     assert "tests/test_m23_5_cloudflare_qdrant.py" in workflow
@@ -496,6 +498,8 @@ def test_access_redirect_repair_workflow_enforces_cookie_contract() -> None:
     assert "path_specific_overlap_counts" in workflow
     assert "same_site_cookie_attribute" in workflow
     assert "path_cookie_attribute" in workflow
+    assert "path_cookie_attribute_effective" in workflow
+    assert "path_cookie_attribute_raw_class" in workflow
     assert "update_scope" in workflow
     assert "zone_name_recorded" in workflow
     assert "CF_Authorization" not in workflow

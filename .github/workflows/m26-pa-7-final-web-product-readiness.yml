@@ -1452,7 +1452,7 @@ jobs:
           fi
           access_summary="access browser-session contract unavailable"
           if test -f "$WORK_DIR/evidence/access-browser-session-contract.json"; then
-            access_summary="$(jq -c '{status,root_cause_classification,target_root_app_count,target_path_match_counts,path_specific_overlap_counts,same_site_cookie_attribute:.target_root_app.same_site_cookie_attribute,path_cookie_attribute:.target_root_app.path_cookie_attribute,raw_domains_recorded,raw_cookie_values_recorded,raw_login_urls_recorded,raw_tokens_recorded,target_root_app}' "$WORK_DIR/evidence/access-browser-session-contract.json")"
+            access_summary="$(jq -c '{status,root_cause_classification,target_root_app_count,target_path_match_counts,path_specific_overlap_counts,same_site_cookie_attribute:.target_root_app.same_site_cookie_attribute,path_cookie_attribute:.target_root_app.path_cookie_attribute,path_cookie_attribute_effective:.target_root_app.path_cookie_attribute_effective,path_cookie_attribute_raw_class:.target_root_app.path_cookie_attribute_raw_class,raw_domains_recorded,raw_cookie_values_recorded,raw_login_urls_recorded,raw_tokens_recorded,target_root_app}' "$WORK_DIR/evidence/access-browser-session-contract.json")"
           fi
           cat > "$WORK_DIR/issue-comment.md" <<EOF
           ## M26.PA.7 final web live deployment result

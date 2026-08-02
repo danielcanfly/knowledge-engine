@@ -131,6 +131,12 @@ def root_app(
     }
 
 
+def root_app_with_omitted_path_cookie() -> dict[str, Any]:
+    app = root_app()
+    app.pop("path_cookie_attribute")
+    return app
+
+
 def evidence_text_does_not_leak_raw_identity(path: Path) -> None:
     rendered = path.read_text(encoding="utf-8")
     assert HOSTNAME not in rendered
@@ -157,12 +163,33 @@ def test_contract_passes_for_single_lax_root_app_without_path_cookie(tmp_path: P
     assert evidence["path_specific_overlap_counts"] == {"/ask": 0, "/full-graph": 0}
     assert evidence["target_root_app"]["same_site_cookie_attribute"] == "lax"
     assert evidence["target_root_app"]["path_cookie_attribute"] is False
+    assert evidence["target_root_app"]["path_cookie_attribute_effective"] is False
+    assert evidence["target_root_app"]["path_cookie_attribute_raw_class"] == "boolean"
     assert evidence["raw_domains_recorded"] is False
     assert evidence["raw_cookie_values_recorded"] is False
     assert evidence["raw_login_urls_recorded"] is False
     assert evidence["raw_tokens_recorded"] is False
     assert len(evidence["evidence_sha256"]) == 64
     evidence_text_does_not_leak_raw_identity(output)
+
+
+def test_contract_treats_omitted_path_cookie_attribute_as_effectively_disabled(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "access-contract.json"
+    evidence = access_contract.inspect_contract(
+        account_id=ACCOUNT_ID,
+        access_token=READ_TOKEN,
+        target_hostname=HOSTNAME,
+        evidence_output=output,
+        requester=FakeRequester([root_app_with_omitted_path_cookie()]),
+    )
+
+    assert evidence["status"] == "pass"
+    assert evidence["root_cause_classification"] == "access_browser_session_contract_pass"
+    assert evidence["target_root_app"]["path_cookie_attribute"] is None
+    assert evidence["target_root_app"]["path_cookie_attribute_effective"] is False
+    assert evidence["target_root_app"]["path_cookie_attribute_raw_class"] == "omitted_or_null"
 
 
 @pytest.mark.parametrize(
