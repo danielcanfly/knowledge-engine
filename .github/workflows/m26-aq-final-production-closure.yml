@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: m26-aq-final-production-closure-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   regression:
