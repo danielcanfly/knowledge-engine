@@ -129,6 +129,13 @@ jobs:
           test "$runtime_sha" = "$EXPECTED_DEPLOY_SHA"
           process_cmd="$(docker inspect --format '{{json .Config.Cmd}}' "$container_id")"
 
+          remote_evidence_dir="$DEPLOY_PATH/.m26-aq-final-production-closure"
+          mkdir -p "$remote_evidence_dir"
+          chmod 700 "$remote_evidence_dir"
+          identity_path="$remote_evidence_dir/identity-$EXPECTED_DEPLOY_SHA.json"
+          closure_path="$remote_evidence_dir/live-closure-$EXPECTED_DEPLOY_SHA.json"
+          rm -f "$identity_path" "$closure_path"
+
           set -a
           . ./.env
           set +a
@@ -143,7 +150,8 @@ jobs:
           test "$health_code" = "200"
 
           EXPECTED_DEPLOY_SHA="$EXPECTED_DEPLOY_SHA" GIT_SHA="$git_sha" CONTAINER_ID="$container_id" \
-          IMAGE_ID="$image_id" RUNTIME_SHA="$runtime_sha" PROCESS_CMD="$process_cmd" python3 - <<'PY'
+          IMAGE_ID="$image_id" RUNTIME_SHA="$runtime_sha" PROCESS_CMD="$process_cmd" \
+          IDENTITY_PATH="$identity_path" python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -169,17 +177,29 @@ jobs:
               'process_cmd': os.environ['PROCESS_CMD'],
               'raw_secret_recorded': False,
           }
-          Path('/tmp/m26-aq-production-identity.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
+          identity_path = Path(os.environ['IDENTITY_PATH'])
+          identity_path.parent.mkdir(parents=True, exist_ok=True)
+          identity_path.write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
           PY
 
           PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
             --questions pilot/m26/m26-aq-final-r3-questions.json \
-            --output /tmp/m26-aq-final-live-closure.json \
+            --output "$closure_path" \
             --expected-sha "$EXPECTED_DEPLOY_SHA"
+
+          test -s "$identity_path"
+          test -s "$closure_path"
           REMOTE
 
-          scp oracle-knowledge:/tmp/m26-aq-production-identity.json /tmp/m26-aq-production-identity.json
-          scp oracle-knowledge:/tmp/m26-aq-final-live-closure.json /tmp/m26-aq-final-live-closure.json
+          ssh oracle-knowledge \
+            "cat '$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/identity-$EXPECTED_DEPLOY_SHA.json'" \
+            > /tmp/m26-aq-production-identity.json
+          ssh oracle-knowledge \
+            "cat '$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/live-closure-$EXPECTED_DEPLOY_SHA.json'" \
+            > /tmp/m26-aq-final-live-closure.json
+
+          test -s /tmp/m26-aq-production-identity.json
+          test -s /tmp/m26-aq-final-live-closure.json
 
           python - <<'PY'
           import json
