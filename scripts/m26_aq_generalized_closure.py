@@ -113,7 +113,10 @@ def validate(*, input_path: Path, expected_sha: str, minimum: int) -> None:
         failures.append("graph_release_mismatch")
     if graph.get("graph_v2_sha256") != EXPECTED_GRAPH_SHA256:
         failures.append("graph_sha_mismatch")
-    if graph.get("node_count") != EXPECTED_NODE_COUNT or graph.get("edge_count") != EXPECTED_EDGE_COUNT:
+    if (
+        graph.get("node_count") != EXPECTED_NODE_COUNT
+        or graph.get("edge_count") != EXPECTED_EDGE_COUNT
+    ):
         failures.append("graph_population_mismatch")
 
     rows = artifact.get("rows", [])
