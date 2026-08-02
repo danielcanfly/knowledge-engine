@@ -1,5 +1,7 @@
 """Knowledge Engine package."""
 
+import os
+
 __version__ = "0.2.0"
 
 # Install production-general AQ semantic closure compatibility before callers
@@ -12,11 +14,12 @@ try:
     )
 
     _install_aq_semantic_patch()
-    from . import m26_ask_api as _m26_ask_api
+    if os.environ.get("M26_QUERY_BUILD_SHA"):
+        from . import m26_ask_api as _m26_ask_api
 
-    _m26_ask_api.run_owner_arbitrary_query = _semantic_run_owner_arbitrary_query
-    _m26_ask_api.RUNTIME_ENTRYPOINT = (
-        "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
-    )
+        _m26_ask_api.run_owner_arbitrary_query = _semantic_run_owner_arbitrary_query
+        _m26_ask_api.RUNTIME_ENTRYPOINT = (
+            "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
+        )
 except Exception:  # pragma: no cover - runtime modules expose concrete failures later
     pass
