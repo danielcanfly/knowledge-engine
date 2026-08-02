@@ -184,7 +184,10 @@ def _augment_final_requirements(runtime: Any, question: str, items: list[Any]) -
             "non_entailment",
             "State that precedes does not prove dependency or causality.",
             ["does not prove", "dependency", "causality"],
-            r"(?:does not|cannot|can't|only).{0,180}(?:depend|causal|prove|implementation|requirement)",
+            (
+                r"(?:does not|cannot|can't|only).{0,180}"
+                r"(?:depend|causal|prove|implementation|requirement)"
+            ),
         )
 
 
@@ -234,6 +237,10 @@ def _runtime_bound_semantic_repair_v2(
     if not support_refs:
         return None
     provider_calls = max(1, min(2, int(previous_answer.get("provider_call_count", 1) or 1)))
+    claim_role = "relationship"
+    if intent_class == "direct_grounded_knowledge":
+        claim_role = "direct"
+    facet_ids = legacy._required_facet_ids(question=question, intent_class=intent_class)
     verification = {
         "status": "owner_only_cited_answer",
         "terminal_status": "accepted",
@@ -250,9 +257,9 @@ def _runtime_bound_semantic_repair_v2(
         "answer_claims": [
             {
                 "claim_id": "claim_1",
-                "claim_role": "relationship" if intent_class != "direct_grounded_knowledge" else "direct",
+                "claim_role": claim_role,
                 "surface_text": text,
-                "facet_ids": legacy._required_facet_ids(question=question, intent_class=intent_class),
+                "facet_ids": facet_ids,
                 "support_mode": "runtime_bound_semantic_support",
                 "support_refs": support_refs,
             }
