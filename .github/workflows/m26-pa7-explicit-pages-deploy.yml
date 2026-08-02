@@ -24,6 +24,8 @@ on:
       - "scripts/m26_pa7_evidence_privacy_hygiene.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
       - "src/knowledge_engine/**"
+      - "tests/test_m26_pa7_access_browser_session_contract.py"
+      - "tests/test_m26_pa7_final_web_readiness.py"
       - "tests/**"
 
 permissions:
