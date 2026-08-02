@@ -58,9 +58,9 @@ PY
   docker compose config >/dev/null
 
   # Never let the one-shot config probe inherit a caller's stdin. Production
-  # closure executes this script inside `ssh ... bash -s`; an attached compose
-  # run can otherwise consume the remaining remote acceptance program.
-  docker compose run -T --rm --no-deps knowledge-engine \
+  # closure executes this script inside `ssh ... bash -s`; redirecting stdin
+  # prevents compose from consuming the remaining remote acceptance program.
+  docker compose run --rm --no-deps knowledge-engine \
     python -c 'from knowledge_engine.config import Settings; Settings.from_env(); print("CONFIG_OK")' \
     </dev/null
 
