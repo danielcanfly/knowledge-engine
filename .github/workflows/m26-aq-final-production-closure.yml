@@ -1,0 +1,149 @@
+name: M26 AQ Final Production Closure
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".github/workflows/m26-aq-final-production-closure.yml"
+      - "src/knowledge_engine/m26_pa7_semantic_closure_runtime.py"
+      - "src/knowledge_engine/m26_production_api.py"
+      - "scripts/m26_aq_final_closure.py"
+      - "pilot/m26/m26-aq-final-r3-questions.json"
+      - "tests/test_m26_aq_semantic_closure_runtime.py"
+      - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
+      - "src/knowledge_engine/m26_production_answer_bundle.py"
+      - "src/knowledge_engine/m26_ask_api.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-aq-final-production-closure-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 50
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Compile semantic closure path
+        run: |
+          python -m py_compile \
+            src/knowledge_engine/m26_pa7_semantic_closure_runtime.py \
+            src/knowledge_engine/m26_production_api.py \
+            scripts/m26_aq_final_closure.py \
+            tests/test_m26_aq_semantic_closure_runtime.py
+
+      - name: Run full AQ regression population
+        run: |
+          set -euo pipefail
+          python -m pytest \
+            tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_pa_7_arbitrary_query_runtime.py \
+            tests/test_m26_pa7_ask_api.py \
+            tests/test_m26_pa7_final_web_readiness.py \
+            tests/test_m26_pa_7_corrective_formal_product_readiness.py \
+            tests/test_m26_pa_7_production_promotion_closure.py \
+            tests/test_m26_pa_7_reconciliation.py \
+            tests/test_m26_aq_semantic_closure_runtime.py \
+            --junitxml=/tmp/m26-aq-regression.xml
+          python scripts/m26_aq_final_closure.py validate-junit \
+            --junit /tmp/m26-aq-regression.xml \
+            --minimum 82
+
+  deploy_and_live_closure:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.number == 1325 &&
+      github.head_ref == 'codex/answer-quality-aq-runtime'
+    needs: regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: m23-r3-diagnostic
+    env:
+      EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha }}
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 50
+          show-progress: false
+
+      - name: Verify exact-head and deployment credentials
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+
+      - name: Deploy exact repaired head to owner-only production
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          deploy_path = Path(os.environ['DEPLOY_PATH'])
+          release_sha = os.environ['RELEASE_SHA']
+          env_path = deploy_path / '.env'
+          if not env_path.exists():
+              raise SystemExit('missing server-side .env')
+          lines = env_path.read_text(encoding='utf-8').splitlines()
+          out = []
+          seen = False
+          for line in lines:
+              if line.startswith('M26_QUERY_BUILD_SHA='):
+                  out.append(f'M26_QUERY_BUILD_SHA={release_sha}')
+                  seen = True
+              else:
+                  out.append(line)
+          if not seen:
+              out.append(f'M26_QUERY_BUILD_SHA={release_sha}')
+          tmp = env_path.with_suffix('.env.next')
+          tmp.write_text('\n'.join(out) + '\n', encoding='utf-8')
+          tmp.replace(env_path)
+          os.chmod(env_path, 0o600)
+          PY"
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'"
+
+      - name: Run frozen real-provider R3 against deployed exact head
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "cd '$ORACLE_VM_DEPLOY_PATH' && set -a && . ./.env && set +a && PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
+            --questions pilot/m26/m26-aq-final-r3-questions.json \
+            --output /tmp/m26-aq-final-live-closure.json \
+            --expected-sha '$EXPECTED_DEPLOY_SHA'"
+          scp oracle-knowledge:/tmp/m26-aq-final-live-closure.json /tmp/m26-aq-final-live-closure.json
+          PYTHONPATH=src python scripts/m26_aq_final_closure.py validate \
+            --input /tmp/m26-aq-final-live-closure.json \
+            --gate pilot/m26/m26-pa-7-resolved-production-gate.json \
+            --expected-sha "$EXPECTED_DEPLOY_SHA"
+
+      - name: Upload production closure evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-aq-final-production-closure-${{ github.event.pull_request.head.sha }}
+          path: /tmp/m26-aq-final-live-closure.json
+          if-no-files-found: error
+          retention-days: 14
