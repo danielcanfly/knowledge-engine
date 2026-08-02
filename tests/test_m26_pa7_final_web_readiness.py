@@ -478,6 +478,10 @@ def test_access_redirect_repair_workflow_enforces_cookie_contract() -> None:
     assert "CLOUDFLARE_ACCESS_READ_TOKEN" in workflow
     assert "CLOUDFLARE_ACCESS_WRITE_TOKEN" in workflow
     assert "CLOUDFLARE_ZONE_NAME" in workflow
+    assert "CLOUDFLARE_WORKERS_TOKEN" in workflow
+    assert "CLOUDFLARE_PAGES_TOKEN" in workflow
+    assert "for label in primary workers pages" in workflow
+    assert "ACCESS_REPAIR_WRITE_TOKEN_CLASS" in workflow
     assert "scripts/m26_pa7_access_browser_session_contract.py repair" in workflow
     assert "access-browser-session-before.json" in workflow
     assert "access-browser-session-repair.json" in workflow
