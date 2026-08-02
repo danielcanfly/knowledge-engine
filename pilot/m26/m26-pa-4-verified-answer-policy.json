@@ -36,7 +36,7 @@
     "stream": false
   },
   "schema_version": "knowledge-engine-m26-pa-4-verified-answer-policy/v1",
-  "self_sha256": "c6c6119c42eb240e414a7f8f837d575995a10fd522c86b8e98e96c66590177dc",
+  "self_sha256": "7fa355ef75bd5f9987bc6fdc4d96adbe3a9d1dae4a0f87381a1b06bd60fe2d60",
   "stage_id": "M26.PA.4",
   "verification": {
     "allow_unsupported_material_claims": false,
