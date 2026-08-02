@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from knowledge_engine import m26_production_api as _production_patch  # noqa: F401
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _parse_compact_provider_result,
     _requirement_support_failures,
