@@ -6,9 +6,11 @@ from typing import Any
 
 from . import m26_ask_api
 from . import m26_pa7_arbitrary_query_runtime as legacy_runtime
+from .m26_intent_compat import classify_with_semantic_compat
 from .m26_pa7_semantic_closure_runtime import run_owner_arbitrary_query
 
 _original_named_question_entities = legacy_runtime._named_question_entities
+_original_intent_class = legacy_runtime._intent_class
 
 
 def _named_question_entities_with_series_shorthand(question: str) -> list[str]:
@@ -24,8 +26,16 @@ def _named_question_entities_with_series_shorthand(question: str) -> list[str]:
     return entities
 
 
-# Install the normalized entity parser before the owner-only routes are registered.
+def _intent_class_with_semantic_compat(question: str) -> str:
+    return classify_with_semantic_compat(
+        question,
+        legacy_classifier=_original_intent_class,
+    )
+
+
+# Install semantic compatibility before the owner-only routes are registered.
 legacy_runtime._named_question_entities = _named_question_entities_with_series_shorthand
+legacy_runtime._intent_class = _intent_class_with_semantic_compat
 m26_ask_api.run_owner_arbitrary_query = run_owner_arbitrary_query
 m26_ask_api.RUNTIME_ENTRYPOINT = (
     "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
