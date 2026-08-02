@@ -7,6 +7,7 @@ on:
       - ".github/workflows/m26-aq-final-production-closure.yml"
       - "src/knowledge_engine/m26_pa7_semantic_closure_runtime.py"
       - "src/knowledge_engine/m26_production_api.py"
+      - "src/knowledge_engine/m26_intent_compat.py"
       - "scripts/m26_aq_final_closure.py"
       - "pilot/m26/m26-aq-final-r3-questions.json"
       - "tests/test_m26_aq_semantic_closure_runtime.py"
@@ -14,9 +15,6 @@ on:
       - "src/knowledge_engine/m26_production_answer_bundle.py"
       - "src/knowledge_engine/m26_ask_api.py"
       - "tests/conftest.py"
-  push:
-    branches:
-      - "gpt/aq-final-closure-run"
   workflow_dispatch:
 
 permissions:
@@ -49,6 +47,7 @@ jobs:
           python -m py_compile \
             src/knowledge_engine/m26_pa7_semantic_closure_runtime.py \
             src/knowledge_engine/m26_production_api.py \
+            src/knowledge_engine/m26_intent_compat.py \
             scripts/m26_aq_final_closure.py \
             tests/test_m26_aq_semantic_closure_runtime.py
 
@@ -71,17 +70,14 @@ jobs:
 
   deploy_and_live_closure:
     if: >
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.number == 1325 &&
-       github.head_ref == 'codex/answer-quality-aq-runtime') ||
-      (github.event_name == 'push' &&
-       github.ref == 'refs/heads/gpt/aq-final-closure-run')
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'gpt/aq-final-production-closure-isolated'
     needs: regression
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: m23-r3-diagnostic
     env:
-      EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha }}
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
@@ -89,7 +85,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 50
           show-progress: false
 
@@ -150,7 +146,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m26-aq-final-production-closure-${{ github.event.pull_request.head.sha || github.sha }}
+          name: m26-aq-final-production-closure-${{ github.event.pull_request.head.sha }}
           path: /tmp/m26-aq-final-live-closure.json
           if-no-files-found: warn
           retention-days: 14
