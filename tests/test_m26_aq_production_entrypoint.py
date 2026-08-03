@@ -52,9 +52,23 @@ def test_production_runtime_identity_survives_wrapper_first_import() -> None:
     )
 
 
+def test_production_wrapper_keeps_complete_aq_surface_stack_installed() -> None:
+    _assert_import_order(
+        "import knowledge_engine.m26_production_api; "
+        "import knowledge_engine.m26_aq_semantic_runtime_patch_v3 as v3; "
+        "import knowledge_engine.m26_aq_semantic_runtime_patch_v3_lifecycle as lifecycle; "
+        "import knowledge_engine.m26_aq_semantic_runtime_patch_v3_surface as surface; "
+        "assert v3._verification_candidate is surface._verification_candidate_with_surface_guard; "
+        "assert lifecycle._soften_unsupported_modality is "
+        "surface._soften_complete_unsupported_modality"
+    )
+
+
 def test_production_wrapper_declares_bounded_compatibility_layer() -> None:
     source = _read("src/knowledge_engine/m26_production_api.py")
     assert "classify_with_semantic_compat" in source
     assert "run_owner_arbitrary_query" in source
     assert "m26_ask_api.RUNTIME_ENTRYPOINT" in source
+    assert "install_aq_lifecycle_runtime_patch()" in source
+    assert "install_aq_surface_runtime_patch()" in source
     assert "from .api import app" in source
