@@ -281,4 +281,5 @@ def _fake_runtime(documents: list[dict[str, str]]) -> SimpleNamespace:
         def _document_text(document: dict[str, str]) -> str:
             return str(document.get("body", ""))
 
+    FakeLegacy.documents = documents
     return SimpleNamespace(legacy=FakeLegacy, documents=documents)
