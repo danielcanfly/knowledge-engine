@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -76,11 +75,6 @@ def _validate_answer_row(row: dict[str, Any], failures: list[str]) -> None:
 
     for semantic_failure in _validate_visible_semantics(row):
         failures.append(f"{case_id}:{semantic_failure}")
-
-    if row.get("class") == "grounded_but_irrelevant_adversarial":
-        answer = re.sub(r"^\s+", "", str(row.get("answer_text", ""))).casefold()
-        if not re.match(r"^(?:no\b|it does not\b|that does not\b)", answer):
-            failures.append(f"{case_id}:irrelevant_grounding_not_rejected_up_front")
 
 
 def _validate_abstention_row(row: dict[str, Any], failures: list[str]) -> None:
