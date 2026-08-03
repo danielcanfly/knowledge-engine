@@ -82,6 +82,8 @@ def _abstention_row(case_id: str) -> dict[str, object]:
         "http_status": 200,
         "status": "owner_only_safe_abstention",
         "safe_abstention": True,
+        "answer_text": "",
+        "citations": [],
         "accounting": {"provider_call_count": 0},
         "collector": {
             "deadline_exceeded": False,
@@ -178,3 +180,38 @@ def test_blackbox_false_premise_answer_need_not_begin_with_no(
         failures,
     )
     assert failures == []
+
+
+def test_blackbox_safe_abstention_may_use_one_bounded_provider_call() -> None:
+    module = _load_generalized_module()
+    failures: list[str] = []
+    module._validate_abstention_row(
+        {
+            "case_id": "GPT-E-BB18",
+            "safe_abstention": True,
+            "status": "owner_only_safe_abstention",
+            "answer_text": "",
+            "citations": [],
+            "accounting": {"provider_call_count": 1},
+        },
+        failures,
+    )
+    assert failures == []
+
+
+def test_blackbox_abstention_still_rejects_answer_text_or_excess_calls() -> None:
+    module = _load_generalized_module()
+    failures: list[str] = []
+    module._validate_abstention_row(
+        {
+            "case_id": "GPT-E-BB18",
+            "safe_abstention": True,
+            "status": "owner_only_safe_abstention",
+            "answer_text": "unsupported prose",
+            "citations": [],
+            "accounting": {"provider_call_count": 3},
+        },
+        failures,
+    )
+    assert "GPT-E-BB18:provider_call_count" in failures
+    assert "GPT-E-BB18:abstention_has_answer_text" in failures
