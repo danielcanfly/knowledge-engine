@@ -7,6 +7,8 @@ from typing import Any
 
 from . import (
     m26_aq_semantic_runtime_patch as base_patch,
+)
+from . import (
     m26_aq_semantic_runtime_patch_v2 as v2_patch,
 )
 
