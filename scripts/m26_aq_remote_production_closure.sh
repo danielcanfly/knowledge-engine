@@ -152,7 +152,7 @@ echo "AQ_STAGE=blackbox_population_collected"
 PYTHONPATH=src python3 scripts/m26_aq_generalized_closure.py \
   --input "$blackbox_path" \
   --expected-sha "$EXPECTED_DEPLOY_SHA" \
-  --minimum 10
+  --minimum 20
 echo "AQ_STAGE=blackbox_population_validated"
 
 routed_code="$(curl --silent --show-error \
