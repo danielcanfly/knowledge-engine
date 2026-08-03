@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Any
 
 from . import m26_aq_semantic_runtime_patch_v3 as v3_patch
@@ -77,12 +77,12 @@ def _bound_candidate_support_refs(candidate: Mapping[str, Any]) -> dict[str, Any
 
 
 def _verification_candidate_bounded(**kwargs: Any) -> dict[str, Any]:
-    original = getattr(v3_patch, "_m26_aq_v3_unbounded_verification_candidate")
+    original = v3_patch._m26_aq_v3_unbounded_verification_candidate
     return _bound_candidate_support_refs(original(**kwargs))
 
 
 def _material_sentences_without_discourse(answer: str) -> list[str]:
-    original = getattr(v3_patch, "_m26_aq_v3_original_material_sentences")
+    original = v3_patch._m26_aq_v3_original_material_sentences
     sentences = list(original(answer))
     if len(sentences) <= 1:
         return sentences
@@ -141,7 +141,7 @@ def _compact_provider_payload_safe(**kwargs: Any) -> tuple[
 ]:
     from . import m26_pa7_semantic_closure_runtime as runtime
 
-    original = getattr(runtime, "_m26_aq_v3_original_compact_provider_payload")
+    original = runtime._m26_aq_v3_original_compact_provider_payload
     payload, label_map, snippet_map = original(**kwargs)
     safe_payload = copy.deepcopy(payload)
     messages = safe_payload.get("messages", [])
