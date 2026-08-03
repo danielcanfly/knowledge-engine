@@ -5,11 +5,13 @@ import json
 import knowledge_engine.m26_aq_semantic_runtime_patch as base_patch
 import knowledge_engine.m26_aq_semantic_runtime_patch_v3 as patch_v3
 import knowledge_engine.m26_aq_semantic_runtime_patch_v3_lifecycle as boundary_patch
+import knowledge_engine.m26_aq_semantic_runtime_patch_v3_surface as surface_patch
 import knowledge_engine.m26_pa7_arbitrary_query_runtime as legacy
 import knowledge_engine.m26_pa7_semantic_closure_runtime as runtime
 
 patch_v3.install()
 boundary_patch.install()
+surface_patch.install()
 
 
 def _requirement_ids(question: str) -> set[str]:
@@ -296,6 +298,28 @@ def test_unsupported_modality_is_softened_before_hard_verification() -> None:
     assert "may not" in lowered
 
 
+def test_never_and_requires_are_softened_when_unsupported() -> None:
+    answer = "Adaptive planning never repairs locally and requires global replanning."
+    softened = boundary_patch._soften_unsupported_modality(
+        answer,
+        question="When should adaptive planning replan globally?",
+        used_items=[
+            {
+                "passage_text": (
+                    "Adaptive planning can replan globally when local repair no longer "
+                    "resolves the broader execution problem."
+                )
+            }
+        ],
+        legacy=legacy,
+    )
+    lowered = softened.casefold()
+    assert "never" not in lowered
+    assert "requires" not in lowered
+    assert "not necessarily" in lowered
+    assert "can involve" in lowered
+
+
 def test_supported_strong_modality_is_not_weakened() -> None:
     answer = "The policy must reject the request."
     softened = boundary_patch._soften_unsupported_modality(
@@ -305,6 +329,44 @@ def test_supported_strong_modality_is_not_weakened() -> None:
         legacy=legacy,
     )
     assert softened == answer
+
+
+def test_unsupported_numeric_sentence_is_dropped_but_question_numbers_remain() -> None:
+    candidate = {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "answer_text": "old",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "surface_text": (
+                    "Harness Theory Part 1 precedes Part 2. "
+                    "That edge creates 3 independent guarantees."
+                ),
+                "facet_ids": ["ordering_semantics"],
+                "support_refs": [
+                    {
+                        "evidence_id": "evidence_graph",
+                        "locator_id": "locator_graph",
+                        "exact_quote": "Harness Theory Part 1 precedes Part 2.",
+                    }
+                ],
+            }
+        ],
+    }
+    normalized, natural = surface_patch._normalize_candidate_unsupported_numbers(
+        candidate,
+        question="Does Harness Theory Part 1 precede Part 2?",
+        natural_answer=(
+            "Harness Theory Part 1 precedes Part 2. "
+            "That edge creates 3 independent guarantees."
+        ),
+    )
+    assert "Part 1" in normalized["claims"][0]["surface_text"]
+    assert "Part 2" in normalized["claims"][0]["surface_text"]
+    assert "3" not in normalized["claims"][0]["surface_text"]
+    assert "Part 1" in natural and "Part 2" in natural
+    assert "3" not in natural
 
 
 def test_provider_task_hides_runtime_ids_and_explains_repair_semantics() -> None:
@@ -323,6 +385,7 @@ def test_provider_task_hides_runtime_ids_and_explains_repair_semantics() -> None
         ],
         "repair": [
             "USER_VISIBLE_INTERNAL_REFERENCE_LEAK:article_f8573ff5ee10182a3f6c",
+            "M26-PA7-ME-033",
             "M26-PA7-ME-034",
         ],
     }
@@ -333,4 +396,5 @@ def test_provider_task_hides_runtime_ids_and_explains_repair_semantics() -> None
     assert safe["evidence"][0]["source"] == "relation graph"
     assert safe["evidence"][0]["id"] == "e1"
     assert any("Do not expose internal runtime identifiers" in item for item in safe["repair"])
+    assert any("Do not introduce numeric values" in item for item in safe["repair"])
     assert any("Do not strengthen modality beyond evidence" in item for item in safe["repair"])
