@@ -180,7 +180,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--expected-sha", required=True)
-    parser.add_argument("--minimum", type=int, default=10)
+    parser.add_argument("--minimum", type=int, default=20)
     args = parser.parse_args()
     validate(input_path=args.input, expected_sha=args.expected_sha, minimum=args.minimum)
 
