@@ -13,6 +13,47 @@ _ORIGINAL_REPAIR_GUIDANCE = lifecycle_patch._repair_guidance
 _ORIGINAL_VERIFICATION_CANDIDATE = lifecycle_patch._verification_candidate_bounded
 _NUMBER_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+_MODALITY_REPLACEMENTS = {
+    "always": "typically",
+    "cannot": "may not",
+    "guarantee": "support",
+    "guarantees": "supports",
+    "must": "should",
+    "never": "not necessarily",
+    "requires": "can involve",
+}
+
+
+def _normalize_text_unsupported_modality(
+    text: str,
+    *,
+    allowed_terms: set[str],
+    legacy: Any,
+) -> str:
+    """Monotonically weaken only hard-gate modality not licensed by question/support."""
+    normalized = str(text)
+    strengthening = set(
+        getattr(
+            legacy,
+            "MODALITY_STRENGTHENING_TERMS",
+            set(_MODALITY_REPLACEMENTS),
+        )
+    )
+    remaining = legacy._meaningful_terms(normalized) & strengthening - allowed_terms
+    for term in sorted(remaining, key=len, reverse=True):
+        replacement = _MODALITY_REPLACEMENTS.get(term)
+        if replacement is None:
+            continue
+        normalized = re.sub(
+            rf"\b{re.escape(term)}\b",
+            lambda match, value=replacement: lifecycle_patch._case_preserving_replacement(
+                match,
+                value,
+            ),
+            normalized,
+            flags=re.I,
+        )
+    return " ".join(normalized.split())
 
 
 def _soften_complete_unsupported_modality(
@@ -29,36 +70,14 @@ def _soften_complete_unsupported_modality(
         used_items=used_items,
         legacy=legacy,
     )
-    meaningful_terms = legacy._meaningful_terms
-    support_terms = meaningful_terms(lifecycle_patch._support_text(used_items))
-    question_terms = meaningful_terms(question)
-    allowed = support_terms | question_terms
-    strengthening = set(
-        getattr(
-            legacy,
-            "MODALITY_STRENGTHENING_TERMS",
-            {"always", "cannot", "guarantee", "guarantees", "must", "never", "requires"},
-        )
+    allowed = legacy._meaningful_terms(question) | legacy._meaningful_terms(
+        lifecycle_patch._support_text(used_items)
     )
-    remaining = meaningful_terms(softened) & strengthening - allowed
-    replacements = {
-        "never": "not necessarily",
-        "requires": "can involve",
-    }
-    for term in sorted(remaining, key=len, reverse=True):
-        replacement = replacements.get(term)
-        if replacement is None:
-            continue
-        softened = re.sub(
-            rf"\b{re.escape(term)}\b",
-            lambda match, value=replacement: lifecycle_patch._case_preserving_replacement(
-                match,
-                value,
-            ),
-            softened,
-            flags=re.I,
-        )
-    return softened
+    return _normalize_text_unsupported_modality(
+        softened,
+        allowed_terms=allowed,
+        legacy=legacy,
+    )
 
 
 def _surface_repair_guidance(code: str) -> str:
@@ -75,6 +94,69 @@ def _surface_repair_guidance(code: str) -> str:
             "explicitly supports that term."
         )
     return _ORIGINAL_REPAIR_GUIDANCE(value)
+
+
+def _claim_support_text(claim: Mapping[str, Any]) -> str:
+    refs = claim.get("support_refs", [])
+    if not isinstance(refs, list):
+        return ""
+    return " ".join(
+        str(ref.get("exact_quote", ref.get("exact_support_snippet", "")))
+        for ref in refs
+        if isinstance(ref, Mapping)
+    )
+
+
+def _candidate_support_text(candidate: Mapping[str, Any]) -> str:
+    claims = candidate.get("claims", [])
+    if not isinstance(claims, list):
+        return ""
+    return " ".join(
+        _claim_support_text(claim)
+        for claim in claims
+        if isinstance(claim, Mapping)
+    )
+
+
+def _normalize_candidate_unsupported_modality(
+    candidate: Mapping[str, Any],
+    *,
+    question: str,
+    natural_answer: str,
+) -> tuple[dict[str, Any], str]:
+    """Normalize claim surfaces at the final boundary immediately before hard verification."""
+    from . import m26_pa7_arbitrary_query_runtime as legacy
+
+    normalized = copy.deepcopy(dict(candidate))
+    question_terms = legacy._meaningful_terms(question)
+    claims = normalized.get("claims", [])
+    changed = False
+    if isinstance(claims, list):
+        for claim in claims:
+            if not isinstance(claim, dict):
+                continue
+            allowed = question_terms | legacy._meaningful_terms(_claim_support_text(claim))
+            surface = str(claim.get("surface_text", ""))
+            cleaned = _normalize_text_unsupported_modality(
+                surface,
+                allowed_terms=allowed,
+                legacy=legacy,
+            )
+            if cleaned != surface:
+                claim["surface_text"] = cleaned
+                changed = True
+    if changed:
+        lifecycle_patch._rebuild_anchored_answer(normalized)
+
+    natural_allowed = question_terms | legacy._meaningful_terms(
+        _candidate_support_text(normalized)
+    )
+    cleaned_natural = _normalize_text_unsupported_modality(
+        natural_answer,
+        allowed_terms=natural_allowed,
+        legacy=legacy,
+    )
+    return normalized, cleaned_natural
 
 
 def _candidate_allowed_numbers(
@@ -157,6 +239,11 @@ def _verification_candidate_with_surface_guard(**kwargs: Any) -> dict[str, Any]:
     candidate = _ORIGINAL_VERIFICATION_CANDIDATE(**kwargs)
     natural_answer = lifecycle_patch._VERIFIED_NATURAL_SURFACE.get() or str(
         kwargs.get("answer", "")
+    )
+    candidate, natural_answer = _normalize_candidate_unsupported_modality(
+        candidate,
+        question=str(kwargs.get("question", "")),
+        natural_answer=natural_answer,
     )
     candidate, natural_answer = _normalize_candidate_unsupported_numbers(
         candidate,
