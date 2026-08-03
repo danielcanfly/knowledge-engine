@@ -260,17 +260,16 @@ def _variance_repair_kind(
         return "route_replan_contrast"
     if {"sigma_role", "trust_anchor"}.issubset(ids):
         return "visual_source_authority"
-    if "ordering_semantics" in ids and len(
-        [item for item in ids if item.startswith("entity_")]
-    ) >= 2:
-        if (
-            endpoint_proof.get("required") is True
-            and endpoint_proof.get("matched") is True
-            and str(endpoint_proof.get("relation_type", "")) == "precedes"
-            and endpoint_proof.get("edge_source")
-            and endpoint_proof.get("edge_target")
-        ):
-            return "exact_precedes_endpoint"
+    if (
+        "ordering_semantics" in ids
+        and len([item for item in ids if item.startswith("entity_")]) >= 2
+        and endpoint_proof.get("required") is True
+        and endpoint_proof.get("matched") is True
+        and str(endpoint_proof.get("relation_type", "")) == "precedes"
+        and endpoint_proof.get("edge_source")
+        and endpoint_proof.get("edge_target")
+    ):
+        return "exact_precedes_endpoint"
     return ""
 
 
