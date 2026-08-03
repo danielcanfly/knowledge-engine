@@ -122,6 +122,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
       CLOUDFLARE_WORKERS_TOKEN_DNS: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN_DNS }}
+      CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
@@ -142,12 +143,13 @@ jobs:
             ORACLE_VM_SSH_PRIVATE_KEY M26_QUERY_BACKEND_TUNNEL_HOSTNAME \
             M26_QUERY_BACKEND_TUNNEL_NAME CLOUDFLARE_ACCOUNT_ID \
             CLOUDFLARE_API_TOKEN CLOUDFLARE_WORKERS_TOKEN \
-            CLOUDFLARE_WORKERS_TOKEN_DNS; do
+            CLOUDFLARE_WORKERS_TOKEN_DNS CLOUDFLARE_TUNNEL_TOKEN; do
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
           echo "::add-mask::$CLOUDFLARE_WORKERS_TOKEN"
           echo "::add-mask::$CLOUDFLARE_WORKERS_TOKEN_DNS"
+          echo "::add-mask::$CLOUDFLARE_TUNNEL_TOKEN"
           bash scripts/configure_oracle_ssh.sh
 
       - name: Restore and verify named Cloudflare tunnel route
@@ -190,6 +192,7 @@ jobs:
               ("api", os.environ["CLOUDFLARE_API_TOKEN"]),
           ]
           tunnel_token_candidates = [
+              ("tunnel", os.environ["CLOUDFLARE_TUNNEL_TOKEN"]),
               ("api", os.environ["CLOUDFLARE_API_TOKEN"]),
               ("workers", os.environ["CLOUDFLARE_WORKERS_TOKEN"]),
           ]
