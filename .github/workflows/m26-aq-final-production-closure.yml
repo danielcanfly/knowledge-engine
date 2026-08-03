@@ -65,6 +65,7 @@ jobs:
             tests/test_m26_aq_final_closure_harness.py \
             tests/test_m26_aq_simplified_product_contract.py
           bash -n scripts/m26_aq_remote_production_closure.sh
+          bash -n deploy/deploy.sh
 
       - name: Run full AQ regression population
         run: |
@@ -127,12 +128,14 @@ jobs:
         run: |
           set -euo pipefail
           chmod 700 scripts/m26_aq_remote_production_closure.sh
+          scp deploy/deploy.sh \
+            oracle-knowledge:/tmp/m26-aq-exact-head-deploy.sh
           scp scripts/m26_aq_remote_production_closure.sh \
             oracle-knowledge:/tmp/m26-aq-remote-production-closure.sh
 
           set +e
           ssh oracle-knowledge \
-            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' ROUTED_BACKEND_HOSTNAME='$M26_QUERY_BACKEND_TUNNEL_HOSTNAME' bash /tmp/m26-aq-remote-production-closure.sh"
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' ROUTED_BACKEND_HOSTNAME='$M26_QUERY_BACKEND_TUNNEL_HOSTNAME' AQ_EXACT_HEAD_DEPLOY_SCRIPT='/tmp/m26-aq-exact-head-deploy.sh' bash /tmp/m26-aq-remote-production-closure.sh"
           remote_status=$?
           set -e
 
