@@ -159,8 +159,10 @@ jobs:
           import json
           import os
           from pathlib import Path
+          from typing import Callable, TypeVar
 
           from scripts.m26_pa7_named_backend_tunnel import (
+              CloudflareApiError,
               _active_tunnel_by_name,
               _create_tunnel,
               _put_tunnel_config,
@@ -173,25 +175,57 @@ jobs:
               _zone_id,
           )
 
+          T = TypeVar("T")
+
           account_id = os.environ["CLOUDFLARE_ACCOUNT_ID"]
           hostname = os.environ["M26_QUERY_BACKEND_TUNNEL_HOSTNAME"]
           tunnel_name = os.environ["M26_QUERY_BACKEND_TUNNEL_NAME"]
           zone_name = os.environ["CLOUDFLARE_ZONE_NAME"]
+          token_candidates = [
+              ("workers", os.environ["CLOUDFLARE_WORKERS_TOKEN"]),
+              ("api", os.environ["CLOUDFLARE_API_TOKEN"]),
+          ]
+          tunnel_control_label = "api"
           tunnel_control_token = os.environ["CLOUDFLARE_API_TOKEN"]
-          dns_control_token = os.environ["CLOUDFLARE_WORKERS_TOKEN"]
           service = "http://127.0.0.1:8080"
 
           _require_hostname_under_zone(hostname, zone_name)
 
-          zone_id = _zone_id(token=dns_control_token, zone_name=zone_name)
-          records = _request(
-              method="GET",
-              token=dns_control_token,
-              path=_query(
-                  f"/zones/{zone_id}/dns_records",
-                  {"name": hostname, "per_page": "100"},
-              ),
-          ).get("result", [])
+          def first_success(
+              purpose: str,
+              operation: Callable[[str], T],
+          ) -> tuple[str, str, T, list[dict[str, str]]]:
+              errors = []
+              for label, token in token_candidates:
+                  try:
+                      return label, token, operation(token), errors
+                  except Exception as exc:  # pragma: no cover - live infra only.
+                      errors.append(
+                          {"token_class": label, "error_class": type(exc).__name__}
+                      )
+              raise CloudflareApiError(
+                  f"no configured Cloudflare token can perform {purpose}: {errors}"
+              )
+
+          zone_token_label, _, zone_id, zone_probe_errors = first_success(
+              "active-zone lookup",
+              lambda token: _zone_id(token=token, zone_name=zone_name),
+          )
+
+          def read_records(token: str) -> list[dict[str, object]]:
+              return _request(
+                  method="GET",
+                  token=token,
+                  path=_query(
+                      f"/zones/{zone_id}/dns_records",
+                      {"name": hostname, "per_page": "100"},
+                  ),
+              ).get("result", [])
+
+          dns_control_label, dns_control_token, records, dns_probe_errors = first_success(
+              "DNS record read/write",
+              read_records,
+          )
           conflicts = [item for item in records if item.get("type") != "CNAME"]
           cnames = [item for item in records if item.get("type") == "CNAME"]
 
@@ -222,7 +256,7 @@ jobs:
           )
 
           prestate = {
-              "schema_version": "m26-aq-cloudflare-split-control-prestate/v1",
+              "schema_version": "m26-aq-cloudflare-token-probed-prestate/v1",
               "status": "pass",
               "exact_hostname_record_count": len(records),
               "cname_record_count": len(cnames),
@@ -232,8 +266,11 @@ jobs:
               ),
               "named_tunnel_duplicate_count": duplicate_count,
               "named_tunnel_reused": tunnel_reused,
-              "tunnel_control_token_class": "api",
-              "dns_control_token_class": "workers",
+              "zone_token_class": zone_token_label,
+              "dns_control_token_class": dns_control_label,
+              "tunnel_control_token_class": tunnel_control_label,
+              "zone_probe_error_classes": zone_probe_errors,
+              "dns_probe_error_classes": dns_probe_errors,
               "raw_hostname_recorded": False,
               "raw_record_content_recorded": False,
               "raw_record_id_recorded": False,
@@ -264,7 +301,7 @@ jobs:
 
           origin = f"https://{hostname}"
           evidence = {
-              "schema_version": "knowledge-engine-m26-aq-split-control-named-tunnel/v1",
+              "schema_version": "knowledge-engine-m26-aq-token-probed-named-tunnel/v1",
               "backend_hostname_sha256": _sha256(hostname),
               "backend_origin_sha256": _sha256(origin),
               "config_src": "cloudflare",
@@ -280,8 +317,9 @@ jobs:
               "status": "pass",
               "target_suffix": "cfargotunnel.com",
               "trycloudflare_rejected": True,
-              "tunnel_control_token_class": "api",
-              "dns_control_token_class": "workers",
+              "zone_token_class": zone_token_label,
+              "dns_control_token_class": dns_control_label,
+              "tunnel_control_token_class": tunnel_control_label,
               "tunnel_id_sha256": _sha256(tunnel_id),
               "tunnel_name_sha256": _sha256(tunnel_name),
               "tunnel_reused": tunnel_reused,
@@ -424,8 +462,8 @@ jobs:
           print("AQ_NAMED_TUNNEL_REPAIR=pass")
           print(f"AQ_NAMED_TUNNEL_DNS_ACTION={tunnel.get('dns_record_action')}")
           print(f"AQ_NAMED_TUNNEL_REUSED={str(tunnel.get('tunnel_reused')).lower()}")
-          print("AQ_TUNNEL_CONTROL_TOKEN_CLASS=api")
-          print("AQ_DNS_CONTROL_TOKEN_CLASS=workers")
+          print(f"AQ_TUNNEL_CONTROL_TOKEN_CLASS={tunnel.get('tunnel_control_token_class')}")
+          print(f"AQ_DNS_CONTROL_TOKEN_CLASS={tunnel.get('dns_control_token_class')}")
           print(f"AQ_ROUTED_DNS_RUNNER_ATTEMPT={runner_dns.get('attempt')}")
           print(f"AQ_ROUTED_DNS_ORACLE_ATTEMPT={oracle_dns.get('attempt')}")
           print(f"AQ_ROUTED_DNS_RUNNER_ADDRESS_COUNT={runner_dns.get('address_count')}")
