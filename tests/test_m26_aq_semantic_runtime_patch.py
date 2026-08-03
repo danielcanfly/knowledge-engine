@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 from knowledge_engine import m26_aq_semantic_runtime_patch as base_patch
+from knowledge_engine import m26_pa7_arbitrary_query_runtime as legacy_runtime
+from knowledge_engine import m26_pa7_semantic_closure_runtime as semantic_runtime
 from knowledge_engine.m26_aq_semantic_runtime_patch_v2 import (
     _best_exact_edge,
     _canonical_named_concepts,
+    _provider_integrity_safe_synthesize,
     _runtime_bound_semantic_repair_v2,
+    _semantic_answer_text_v2,
 )
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _compact_provider_payload,
@@ -145,6 +150,72 @@ def test_named_part_resolution_fails_closed_without_canonical_identity() -> None
     assert _canonical_named_concepts(runtime, bundle, "Harness Theory Part 1") == set()
 
 
+def test_background_run_semantic_repair_covers_full_control_lifecycle() -> None:
+    question = (
+        "If an agent keeps working after the client disconnects, what parts of the "
+        "surrounding control system keep the run trustworthy from admission to completion?"
+    )
+    requirements = _semantic_requirements(question, "complementary_synthesis")
+    assert {
+        "admission_policy",
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }.issubset({item.requirement_id for item in requirements})
+
+    answer = _semantic_answer_text_v2(question, requirements)
+
+    assert "R3-Q" not in answer
+    assert not _visible_semantic_failures(answer, requirements, question)
+
+
+def test_provider_integrity_safe_repair_avoids_malformed_second_attempt() -> None:
+    question = (
+        "Sketch a controlled architecture for a complex request that needs different "
+        "sources, persisted progress, parallel research branches, verification, and "
+        "human approval."
+    )
+    requirements = _semantic_requirements(question, "complementary_synthesis")
+    evidence = [
+        {
+            "evidence_id": "ev_control_architecture",
+            "evidence_type": "passage",
+            "source_identity": "source-control-architecture",
+            "source_id": "source-control-architecture",
+            "locator_id": "loc_control_architecture",
+            "title": "Controlled architecture",
+            "section_title": "Control loop",
+            "concept_id": "concept_control_architecture",
+            "passage_text": (
+                "Source selection routes work to different sources. Persisted progress "
+                "is durable state. Parallel research branches join at a verification "
+                "gate. Human approval is the final authority gate."
+            ),
+        }
+    ]
+    provider = _OneShotIncompleteProvider()
+
+    answer, closure = _provider_integrity_safe_synthesize(
+        runtime=semantic_runtime,
+        legacy=legacy_runtime,
+        question=question,
+        trace_id="trace_provider_integrity",
+        intent_class="complementary_synthesis",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    attempts = answer["multi_evidence_verification"]["provider_attempt_telemetry"]
+    assert provider.calls == 1
+    assert len(attempts) == 1
+    assert attempts[0]["parse_telemetry"]["parse_ok"] is True
+    assert answer["status"] == "owner_only_cited_answer"
+    assert closure["failures"] == []
+    assert not _visible_semantic_failures(answer["answer_text"], requirements, question)
+
+
 def test_heldout_router_replanner_contrast_terms_are_visible() -> None:
     question = (
         "A dispatcher picks the first capability, but a planner later changes unfinished "
@@ -268,6 +339,32 @@ def test_compact_payload_exposes_semantic_contract_without_case_ids() -> None:
     assert "semantic_requirement_contract" in content
     assert "does not prove" in content
     assert "R3-Q" not in content
+
+
+class _OneShotIncompleteProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def call(self, payload: object, call_class: str) -> dict[str, object]:
+        del payload
+        self.calls += 1
+        assert call_class == "aq_semantic_closure"
+        return {
+            "text": json.dumps(
+                {
+                    "status": "answer",
+                    "answer": "Use source selection for the request.",
+                    "used": ["e1"],
+                }
+            ),
+            "call_class": call_class,
+            "stop_reason": "end_turn",
+            "content_block_types": ["text"],
+            "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
+            "cost_usd": "0",
+            "latency_ms": 1,
+            "response_id": "fake-response-id",
+        }
 
 
 def _doc(concept_id: str, source_identity: str, title: str, body: str) -> dict[str, str]:
