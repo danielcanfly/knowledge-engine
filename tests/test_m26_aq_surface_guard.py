@@ -214,7 +214,9 @@ def test_persistence_false_premise_uses_narrow_three_facet_partition() -> None:
 
 
 def test_non_lifecycle_adaptive_planning_preserves_known_good_fallthrough() -> None:
-    question = "When should adaptive planning replan globally instead of repairing one step locally?"
+    question = (
+        "When should adaptive planning replan globally instead of repairing one step locally?"
+    )
     original_contract = surface_patch._ORIGINAL_QUESTION_CONTRACT(
         question=question,
         intent_class="direct_grounded_knowledge",
