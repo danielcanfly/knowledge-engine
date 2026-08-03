@@ -18,6 +18,7 @@ on:
       - "tests/test_m26_aq_production_deploy_lock.py"
       - "tests/test_m26_aq_production_entrypoint.py"
       - "tests/test_m26_aq_final_closure_harness.py"
+      - "tests/test_m26_aq_simplified_product_contract.py"
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
       - "src/knowledge_engine/m26_production_answer_bundle.py"
       - "src/knowledge_engine/m26_ask_api.py"
@@ -61,7 +62,8 @@ jobs:
             scripts/m26_aq_generalized_closure.py \
             tests/test_m26_aq_semantic_closure_runtime.py \
             tests/test_m26_aq_production_entrypoint.py \
-            tests/test_m26_aq_final_closure_harness.py
+            tests/test_m26_aq_final_closure_harness.py \
+            tests/test_m26_aq_simplified_product_contract.py
           bash -n scripts/m26_aq_remote_production_closure.sh
 
       - name: Run full AQ regression population
@@ -79,6 +81,7 @@ jobs:
             tests/test_m26_aq_production_deploy_lock.py \
             tests/test_m26_aq_production_entrypoint.py \
             tests/test_m26_aq_final_closure_harness.py \
+            tests/test_m26_aq_simplified_product_contract.py \
             --junitxml=/tmp/m26-aq-regression.xml
           python scripts/m26_aq_final_closure.py validate-junit \
             --junit /tmp/m26-aq-regression.xml \
@@ -200,7 +203,7 @@ jobs:
           PYTHONPATH=src python scripts/m26_aq_generalized_closure.py \
             --input /tmp/m26-aq-gpt-e-blackbox-live-closure.json \
             --expected-sha "$EXPECTED_DEPLOY_SHA" \
-            --minimum 10
+            --minimum 20
 
       - name: Upload production closure evidence
         if: always()
