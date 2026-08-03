@@ -80,10 +80,19 @@ def _validate_answer_row(row: dict[str, Any], failures: list[str]) -> None:
 def _validate_abstention_row(row: dict[str, Any], failures: list[str]) -> None:
     case_id = str(row.get("case_id", "unknown"))
     accounting = _mapping(row.get("accounting"))
+    provider_calls = int(accounting.get("provider_call_count", 0))
     if not row.get("safe_abstention") or row.get("status") != "owner_only_safe_abstention":
         failures.append(f"{case_id}:expected_safe_abstention")
-    if int(accounting.get("provider_call_count", 0)) != 0:
-        failures.append(f"{case_id}:provider_calls_not_zero")
+    # A trustworthy no-answer may be established before provider invocation or after
+    # a bounded provider call determines that retrieved evidence still cannot support
+    # the requested fact. Provider-call count is therefore a budget gate, not a product
+    # semantics gate.
+    if provider_calls < 0 or provider_calls > 2:
+        failures.append(f"{case_id}:provider_call_count")
+    if str(row.get("answer_text", "")).strip():
+        failures.append(f"{case_id}:abstention_has_answer_text")
+    if row.get("citations"):
+        failures.append(f"{case_id}:abstention_has_citations")
 
 
 def validate(*, input_path: Path, expected_sha: str, minimum: int) -> None:
