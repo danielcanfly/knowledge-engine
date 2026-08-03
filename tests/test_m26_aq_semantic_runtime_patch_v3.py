@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 from knowledge_engine import m26_aq_semantic_runtime_patch as base_patch
+from knowledge_engine import m26_aq_semantic_runtime_patch_v3 as patch_v3
 from knowledge_engine import m26_pa7_arbitrary_query_runtime as legacy
 from knowledge_engine import m26_pa7_semantic_closure_runtime as runtime
-from knowledge_engine.m26_aq_semantic_runtime_patch_v3 import (
-    _clean_entity_text_v3,
-    _material_sentences,
-    install,
-)
 
 
-install()
+patch_v3.install()
 
 
 def _requirement_ids(question: str) -> set[str]:
@@ -33,11 +29,11 @@ def test_false_premise_prompt_does_not_require_prescribed_opening() -> None:
 
 def test_natural_graph_prefixes_do_not_become_entity_names() -> None:
     assert (
-        _clean_entity_text_v3("A true graph fact says Harness Theory Part 1")
+        patch_v3._clean_entity_text_v3("A true graph fact says Harness Theory Part 1")
         == "Harness Theory Part 1"
     )
     assert (
-        _clean_entity_text_v3(
+        patch_v3._clean_entity_text_v3(
             "If the relation graph records Harness Theory Part 1 as preceding"
         )
         == "Harness Theory Part 1"
@@ -96,6 +92,6 @@ def test_long_natural_surface_is_partitioned_before_claim_verification() -> None
         f"{long_clause.strip()}. "
         "Verification separately checks whether the completed result is supported."
     )
-    sentences = _material_sentences(answer)
+    sentences = patch_v3._material_sentences(answer)
     assert len(sentences) >= 2
     assert all(len(sentence) <= 900 for sentence in sentences)
