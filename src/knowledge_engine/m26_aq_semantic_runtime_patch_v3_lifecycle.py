@@ -3,8 +3,8 @@ from __future__ import annotations
 import copy
 import json
 import re
-from contextvars import ContextVar
 from collections.abc import Mapping
+from contextvars import ContextVar
 from typing import Any
 
 from . import m26_aq_semantic_runtime_patch_v2 as v2_patch
