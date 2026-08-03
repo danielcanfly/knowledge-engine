@@ -148,8 +148,47 @@ def test_direct_facet_candidate_support_is_bounded_for_hard_parser_limit() -> No
     bounded = boundary_patch._bound_candidate_support_refs(candidate)
     refs = [claim["support_refs"][0] for claim in bounded["claims"]]
     assert all(len(ref["exact_quote"]) <= 780 for ref in refs)
-    assert all(ref["exact_support_snippet"] == ref["exact_quote"] for ref in refs)
+    assert all("exact_support_snippet" not in ref for ref in refs)
     assert len(json.dumps(bounded, separators=(",", ":"))) < 12_000
+
+
+def test_oversized_direct_candidate_uses_exact_support_verification_surfaces() -> None:
+    long_answer = "Natural provider explanation about the surrounding controls. " * 35
+    quote = "Admission durable state verification observability remain evidence bound. " * 20
+    candidate = {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "answer_text": long_answer,
+        "claims": [
+            {
+                "claim_id": f"claim_{index}",
+                "claim_role": "direct",
+                "surface_text": long_answer,
+                "facet_ids": [f"facet_{index}"],
+                "support_mode": "exact_quote",
+                "support_refs": [
+                    {
+                        "evidence_id": f"evidence_{index}",
+                        "locator_id": f"locator_{index}",
+                        "exact_quote": quote,
+                        "exact_support_snippet": quote,
+                    }
+                ],
+            }
+            for index in range(1, 9)
+        ],
+    }
+    compact = boundary_patch._fit_direct_candidate_budget(
+        candidate,
+        intent_class="direct_grounded_knowledge",
+    )
+    serialized = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
+    assert len(serialized) < 11_000
+    for claim in compact["claims"]:
+        ref = claim["support_refs"][0]
+        assert len(ref["exact_quote"]) <= 360
+        assert claim["surface_text"] == ref["exact_quote"]
+        assert "exact_support_snippet" not in ref
 
 
 def test_lifecycle_verification_surfaces_do_not_repeat_long_natural_answer() -> None:
@@ -227,6 +266,45 @@ def test_false_premise_claims_merge_for_answer_level_non_entailment() -> None:
     assert claim["facet_ids"] == ["ordering_semantics", "non_entailment"]
     assert len(claim["support_refs"]) == 2
     assert "[[claim_1]]" in merged["answer_text"]
+
+
+def test_unsupported_modality_is_softened_before_hard_verification() -> None:
+    answer = (
+        "Adaptive planning must always replan globally, and that guarantee cannot fail."
+    )
+    softened = boundary_patch._soften_unsupported_modality(
+        answer,
+        question="When should adaptive planning replan globally?",
+        used_items=[
+            {
+                "passage_text": (
+                    "Adaptive planning can replan when local repair no longer resolves "
+                    "the broader execution problem."
+                )
+            }
+        ],
+        legacy=legacy,
+    )
+    lowered = softened.casefold()
+    assert "must" not in lowered
+    assert "always" not in lowered
+    assert "guarantee" not in lowered
+    assert "cannot" not in lowered
+    assert "should" in lowered
+    assert "typically" in lowered
+    assert "support" in lowered
+    assert "may not" in lowered
+
+
+def test_supported_strong_modality_is_not_weakened() -> None:
+    answer = "The policy must reject the request."
+    softened = boundary_patch._soften_unsupported_modality(
+        answer,
+        question="What does the policy do?",
+        used_items=[{"passage_text": "The policy must reject the request."}],
+        legacy=legacy,
+    )
+    assert softened == answer
 
 
 def test_provider_task_hides_runtime_ids_and_explains_repair_semantics() -> None:
