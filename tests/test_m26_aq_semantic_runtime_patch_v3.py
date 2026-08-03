@@ -152,6 +152,83 @@ def test_direct_facet_candidate_support_is_bounded_for_hard_parser_limit() -> No
     assert len(json.dumps(bounded, separators=(",", ":"))) < 12_000
 
 
+def test_lifecycle_verification_surfaces_do_not_repeat_long_natural_answer() -> None:
+    long_answer = "Natural provider lifecycle explanation " * 100
+    facet_ids = [
+        "admission_policy",
+        "durable_state",
+        "completion_verification",
+        "observability",
+    ]
+    candidate = {
+        "answer_text": long_answer,
+        "claims": [
+            {
+                "claim_id": f"claim_{index}",
+                "surface_text": long_answer,
+                "facet_ids": [facet_id],
+                "support_refs": [],
+            }
+            for index, facet_id in enumerate(facet_ids, start=1)
+        ],
+    }
+    compact = boundary_patch._compact_lifecycle_facet_surfaces(candidate)
+    surfaces = [claim["surface_text"] for claim in compact["claims"]]
+    assert all(long_answer not in surface for surface in surfaces)
+    assert "Admission" in surfaces[0]
+    assert "Durable" in surfaces[1]
+    assert "Completion" in surfaces[2]
+    assert "Observability" in surfaces[3]
+    assert len(json.dumps(compact, separators=(",", ":"))) < 4_000
+
+
+def test_false_premise_claims_merge_for_answer_level_non_entailment() -> None:
+    candidate = {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "relation": "precedes",
+        "selected_evidence_ids": ["evidence_graph", "evidence_boundary"],
+        "answer_text": "old",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "surface_text": "The edge records ordering.",
+                "facet_ids": ["ordering_semantics"],
+                "support_refs": [
+                    {
+                        "evidence_id": "evidence_graph",
+                        "locator_id": "locator_graph",
+                        "exact_quote": "Part 1 precedes Part 2.",
+                    }
+                ],
+            },
+            {
+                "claim_id": "claim_2",
+                "surface_text": "It does not prove dependency.",
+                "facet_ids": ["non_entailment"],
+                "support_refs": [
+                    {
+                        "evidence_id": "evidence_boundary",
+                        "locator_id": "locator_boundary",
+                        "exact_quote": "Ordering alone does not establish dependency.",
+                    }
+                ],
+            },
+        ],
+    }
+    merged = boundary_patch._merge_false_premise_claims(
+        candidate,
+        answer="The edge records ordering. It does not prove dependency.",
+    )
+    assert len(merged["claims"]) == 1
+    claim = merged["claims"][0]
+    assert "ordering" in claim["surface_text"].casefold()
+    assert "does not prove dependency" in claim["surface_text"].casefold()
+    assert claim["facet_ids"] == ["ordering_semantics", "non_entailment"]
+    assert len(claim["support_refs"]) == 2
+    assert "[[claim_1]]" in merged["answer_text"]
+
+
 def test_provider_task_hides_runtime_ids_and_explains_repair_semantics() -> None:
     task = {
         "question": "What does the graph edge mean?",
