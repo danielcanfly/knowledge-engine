@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from knowledge_engine import m26_aq_semantic_runtime_patch as base_patch
+from knowledge_engine.m26_aq_semantic_runtime_patch_v2 import (
+    _runtime_bound_semantic_repair_v2,
+)
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _compact_provider_payload,
     _semantic_requirements,
@@ -9,6 +13,12 @@ from knowledge_engine.m26_pa7_semantic_closure_runtime import (
 
 def _ids(question: str, intent: str = "direct_grounded_knowledge") -> set[str]:
     return {item.requirement_id for item in _semantic_requirements(question, intent)}
+
+
+def test_runtime_bound_semantic_repair_v2_preserves_base_repair() -> None:
+    original = getattr(base_patch, "_m26_aq_original_runtime_bound_semantic_repair")
+    assert original is not _runtime_bound_semantic_repair_v2
+    assert base_patch._runtime_bound_semantic_repair is _runtime_bound_semantic_repair_v2
 
 
 def test_heldout_router_replanner_contrast_terms_are_visible() -> None:
