@@ -4,8 +4,8 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from . import m26_ask_api
 from . import m26_aq_semantic_runtime_patch_v3_lifecycle as aq_lifecycle_patch
+from . import m26_ask_api
 from . import m26_pa7_arbitrary_query_runtime as legacy_runtime
 from .m26_aq_semantic_runtime_patch_v3 import install as install_aq_semantic_runtime_patch
 from .m26_aq_semantic_runtime_patch_v3_lifecycle import (
