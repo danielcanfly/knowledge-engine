@@ -44,13 +44,19 @@ def test_named_part_endpoint_resolution_prefers_canonical_identity_over_mentions
                 "article_part_9",
                 "daniel_blog_en__harness-theory-part-9",
                 "Harness Theory Part 9: Later operational notes",
-                "This later article merely mentions Harness Theory Part 1 and Harness Theory Part 2.",
+                (
+                    "This later article merely mentions Harness Theory Part 1 "
+                    "and Harness Theory Part 2."
+                ),
             ),
             _doc(
                 "article_part_10",
                 "daniel_blog_en__harness-theory-part-10",
                 "Harness Theory Part 10: Later closure notes",
-                "Another distractor mention of Harness Theory Part 1 and Harness Theory Part 2.",
+                (
+                    "Another distractor mention of Harness Theory Part 1 "
+                    "and Harness Theory Part 2."
+                ),
             ),
         ]
     )
@@ -67,8 +73,18 @@ def test_named_part_endpoint_resolution_prefers_canonical_identity_over_mentions
 def test_named_part_exact_edge_binding_uses_canonical_endpoints() -> None:
     runtime = _fake_runtime(
         [
-            _doc("article_part_1", "daniel_blog_en__harness-theory-part-1", "Harness Theory Part 1", ""),
-            _doc("article_part_2", "daniel_blog_en__harness-theory-part-2", "Harness Theory Part 2", ""),
+            _doc(
+                "article_part_1",
+                "daniel_blog_en__harness-theory-part-1",
+                "Harness Theory Part 1",
+                "",
+            ),
+            _doc(
+                "article_part_2",
+                "daniel_blog_en__harness-theory-part-2",
+                "Harness Theory Part 2",
+                "",
+            ),
             _doc(
                 "article_part_9",
                 "daniel_blog_en__harness-theory-part-9",
