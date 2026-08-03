@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
+
 import knowledge_engine.m26_aq_semantic_runtime_patch as base_patch
 import knowledge_engine.m26_aq_semantic_runtime_patch_v3 as patch_v3
+import knowledge_engine.m26_aq_semantic_runtime_patch_v3_lifecycle as boundary_patch
 import knowledge_engine.m26_pa7_arbitrary_query_runtime as legacy
 import knowledge_engine.m26_pa7_semantic_closure_runtime as runtime
 
 patch_v3.install()
+boundary_patch.install()
 
 
 def _requirement_ids(question: str) -> set[str]:
@@ -77,6 +81,20 @@ def test_explicit_end_to_end_lifecycle_still_requires_full_control_chain() -> No
     }.issubset(ids)
 
 
+def test_end_to_end_lifecycle_paraphrase_keeps_full_control_chain() -> None:
+    question = (
+        "When a browser drops while a server job continues, which controls preserve "
+        "trust from intake through final status reattachment?"
+    )
+    ids = _requirement_ids(question)
+    assert {
+        "admission_policy",
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }.issubset(ids)
+
+
 def test_comes_before_graph_question_is_classified_as_graph_relationship() -> None:
     question = (
         "Harness Theory Part 1 comes before Part 2 in the relation graph. "
@@ -94,3 +112,70 @@ def test_long_natural_surface_is_partitioned_before_claim_verification() -> None
     sentences = patch_v3._material_sentences(answer)
     assert len(sentences) >= 2
     assert all(len(sentence) <= 900 for sentence in sentences)
+
+
+def test_standalone_yes_no_is_not_promoted_to_material_claim() -> None:
+    sentences = patch_v3._material_sentences(
+        "No. The precedes edge does not prove dependency or causality."
+    )
+    assert sentences == [
+        "The precedes edge does not prove dependency or causality"
+    ]
+
+
+def test_direct_facet_candidate_support_is_bounded_for_hard_parser_limit() -> None:
+    quote = "durable state verification observability admission " * 80
+    candidate = {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "answer_text": "A concise natural answer.",
+        "claims": [
+            {
+                "claim_id": f"claim_{index}",
+                "surface_text": "A bounded claim.",
+                "support_refs": [
+                    {
+                        "evidence_id": f"evidence_{index}",
+                        "locator_id": f"locator_{index}",
+                        "exact_quote": quote,
+                        "exact_support_snippet": quote,
+                    }
+                ],
+            }
+            for index in range(1, 5)
+        ],
+    }
+    bounded = boundary_patch._bound_candidate_support_refs(candidate)
+    refs = [claim["support_refs"][0] for claim in bounded["claims"]]
+    assert all(len(ref["exact_quote"]) <= 780 for ref in refs)
+    assert all(ref["exact_support_snippet"] == ref["exact_quote"] for ref in refs)
+    assert len(json.dumps(bounded, separators=(",", ":"))) < 12_000
+
+
+def test_provider_task_hides_runtime_ids_and_explains_repair_semantics() -> None:
+    task = {
+        "question": "What does the graph edge mean?",
+        "evidence": [
+            {
+                "id": "e1",
+                "type": "graph_edge",
+                "source": "graph_v2:edge_3f15206278e63ccf8981",
+                "concept": "article_f8573ff5ee10182a3f6c",
+                "from": "article_f8573ff5ee10182a3f6c",
+                "to": "article_71b9d92dad73c6d1fa18",
+                "text": "Harness Theory Part 1 precedes Harness Theory Part 2.",
+            }
+        ],
+        "repair": [
+            "USER_VISIBLE_INTERNAL_REFERENCE_LEAK:article_f8573ff5ee10182a3f6c",
+            "M26-PA7-ME-034",
+        ],
+    }
+    safe = boundary_patch._sanitize_provider_task(task)
+    serialized = json.dumps(safe, ensure_ascii=False)
+    assert "article_f8573ff5ee10182a3f6c" not in serialized
+    assert "article_71b9d92dad73c6d1fa18" not in serialized
+    assert safe["evidence"][0]["source"] == "relation graph"
+    assert safe["evidence"][0]["id"] == "e1"
+    assert any("Do not expose internal runtime identifiers" in item for item in safe["repair"])
+    assert any("Do not strengthen modality beyond evidence" in item for item in safe["repair"])
