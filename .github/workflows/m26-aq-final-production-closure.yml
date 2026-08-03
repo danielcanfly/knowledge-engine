@@ -121,6 +121,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
+      CLOUDFLARE_WORKERS_TOKEN_DNS: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN_DNS }}
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
@@ -140,11 +141,13 @@ jobs:
             ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH \
             ORACLE_VM_SSH_PRIVATE_KEY M26_QUERY_BACKEND_TUNNEL_HOSTNAME \
             M26_QUERY_BACKEND_TUNNEL_NAME CLOUDFLARE_ACCOUNT_ID \
-            CLOUDFLARE_API_TOKEN CLOUDFLARE_WORKERS_TOKEN; do
+            CLOUDFLARE_API_TOKEN CLOUDFLARE_WORKERS_TOKEN \
+            CLOUDFLARE_WORKERS_TOKEN_DNS; do
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
           echo "::add-mask::$CLOUDFLARE_API_TOKEN"
           echo "::add-mask::$CLOUDFLARE_WORKERS_TOKEN"
+          echo "::add-mask::$CLOUDFLARE_WORKERS_TOKEN_DNS"
           bash scripts/configure_oracle_ssh.sh
 
       - name: Restore and verify named Cloudflare tunnel route
@@ -182,6 +185,7 @@ jobs:
           tunnel_name = os.environ["M26_QUERY_BACKEND_TUNNEL_NAME"]
           zone_name = os.environ["CLOUDFLARE_ZONE_NAME"]
           token_candidates = [
+              ("workers_dns", os.environ["CLOUDFLARE_WORKERS_TOKEN_DNS"]),
               ("workers", os.environ["CLOUDFLARE_WORKERS_TOKEN"]),
               ("api", os.environ["CLOUDFLARE_API_TOKEN"]),
           ]
@@ -256,7 +260,7 @@ jobs:
           )
 
           prestate = {
-              "schema_version": "m26-aq-cloudflare-token-probed-prestate/v1",
+              "schema_version": "m26-aq-cloudflare-dns-secret-wired-prestate/v1",
               "status": "pass",
               "exact_hostname_record_count": len(records),
               "cname_record_count": len(cnames),
@@ -301,7 +305,7 @@ jobs:
 
           origin = f"https://{hostname}"
           evidence = {
-              "schema_version": "knowledge-engine-m26-aq-token-probed-named-tunnel/v1",
+              "schema_version": "knowledge-engine-m26-aq-dns-secret-wired-named-tunnel/v1",
               "backend_hostname_sha256": _sha256(hostname),
               "backend_origin_sha256": _sha256(origin),
               "config_src": "cloudflare",
