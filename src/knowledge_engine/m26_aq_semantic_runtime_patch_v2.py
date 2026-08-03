@@ -13,6 +13,14 @@ def install() -> None:
     from . import m26_pa7_semantic_closure_runtime as runtime
 
     base_patch.install()
+    base_repair = getattr(
+        base_patch,
+        "_m26_aq_original_runtime_bound_semantic_repair",
+        None,
+    )
+    if base_repair is None or base_repair is _runtime_bound_semantic_repair_v2:
+        base_repair = base_patch._runtime_bound_semantic_repair
+    base_patch._m26_aq_original_runtime_bound_semantic_repair = base_repair
     if getattr(runtime, "_m26_aq_semantic_runtime_patch_v2_installed", False):
         return
 
@@ -204,18 +212,25 @@ def _runtime_bound_semantic_repair_v2(
     previous_answer: Mapping[str, Any],
     previous_closure: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
-    repaired = base_patch._runtime_bound_semantic_repair(
-        runtime=runtime,
-        legacy=legacy,
-        question=question,
-        trace_id=trace_id,
-        intent_class=intent_class,
-        evidence=evidence,
-        requirements=requirements,
-        endpoint_proof=endpoint_proof,
-        previous_answer=previous_answer,
-        previous_closure=previous_closure,
+    repaired = None
+    base_repair = getattr(
+        base_patch,
+        "_m26_aq_original_runtime_bound_semantic_repair",
+        None,
     )
+    if base_repair is not None and base_repair is not _runtime_bound_semantic_repair_v2:
+        repaired = base_repair(
+            runtime=runtime,
+            legacy=legacy,
+            question=question,
+            trace_id=trace_id,
+            intent_class=intent_class,
+            evidence=evidence,
+            requirements=requirements,
+            endpoint_proof=endpoint_proof,
+            previous_answer=previous_answer,
+            previous_closure=previous_closure,
+        )
     if repaired is not None:
         return repaired
     text = base_patch._semantic_answer_text(question, requirements)
