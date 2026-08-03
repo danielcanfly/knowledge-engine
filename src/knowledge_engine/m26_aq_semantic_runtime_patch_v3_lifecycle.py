@@ -3,9 +3,11 @@ from __future__ import annotations
 import copy
 import json
 import re
+from contextvars import ContextVar
 from collections.abc import Mapping
 from typing import Any
 
+from . import m26_aq_semantic_runtime_patch_v2 as v2_patch
 from . import m26_aq_semantic_runtime_patch_v3 as v3_patch
 
 _ORIGINAL_EXPLICIT_FULL_LIFECYCLE = v3_patch._explicit_full_lifecycle
@@ -16,6 +18,12 @@ _INTERNAL_REF_RE = re.compile(
 )
 _DISCOURSE_ONLY = {"no", "yes", "correct", "incorrect"}
 _MAX_VERIFIER_QUOTE_CHARS = 780
+_DIRECT_CANDIDATE_BUDGET = 11_000
+_COMPACT_DIRECT_QUOTE_CHARS = 360
+_VERIFIED_NATURAL_SURFACE: ContextVar[str | None] = ContextVar(
+    "m26_aq_v3_verified_natural_surface",
+    default=None,
+)
 _LIFECYCLE_VERIFICATION_SURFACES = {
     "admission_policy": (
         "Admission and intake policy gates decide whether the run may start."
@@ -59,16 +67,20 @@ def _explicit_full_lifecycle_with_span(question: str) -> bool:
     return has_start_boundary and has_progression and has_terminal_boundary
 
 
-def _bounded_quote(value: str) -> str:
+def _bounded_quote(value: str, *, limit: int = _MAX_VERIFIER_QUOTE_CHARS) -> str:
     quote = " ".join(str(value).split())
-    if len(quote) <= _MAX_VERIFIER_QUOTE_CHARS:
+    if len(quote) <= limit:
         return quote
-    prefix = quote[:_MAX_VERIFIER_QUOTE_CHARS]
+    prefix = quote[:limit]
     return prefix.rsplit(" ", 1)[0].rstrip() or prefix
 
 
-def _bound_candidate_support_refs(candidate: Mapping[str, Any]) -> dict[str, Any]:
-    """Keep exact verifier support while respecting its bounded provider JSON contract."""
+def _bound_candidate_support_refs(
+    candidate: Mapping[str, Any],
+    *,
+    limit: int = _MAX_VERIFIER_QUOTE_CHARS,
+) -> dict[str, Any]:
+    """Keep exact verifier support while removing redundant provider-only duplication."""
     bounded = copy.deepcopy(dict(candidate))
     claims = bounded.get("claims", [])
     if not isinstance(claims, list):
@@ -82,12 +94,28 @@ def _bound_candidate_support_refs(candidate: Mapping[str, Any]) -> dict[str, Any
         for ref in refs:
             if not isinstance(ref, dict):
                 continue
-            exact = _bounded_quote(str(ref.get("exact_quote", "")))
+            exact = _bounded_quote(
+                str(ref.get("exact_quote", ref.get("exact_support_snippet", ""))),
+                limit=limit,
+            )
             if exact:
                 ref["exact_quote"] = exact
-                if "exact_support_snippet" in ref:
-                    ref["exact_support_snippet"] = exact
+                ref.pop("exact_support_snippet", None)
     return bounded
+
+
+def _rebuild_anchored_answer(candidate: dict[str, Any]) -> None:
+    claims = candidate.get("claims", [])
+    if not isinstance(claims, list):
+        return
+    candidate["answer_text"] = " ".join(
+        f"{str(claim.get('surface_text', '')).rstrip('.')} "
+        f"[[{str(claim.get('claim_id', ''))}]]."
+        for claim in claims
+        if isinstance(claim, Mapping)
+        and claim.get("claim_id")
+        and claim.get("surface_text")
+    )
 
 
 def _compact_lifecycle_facet_surfaces(candidate: Mapping[str, Any]) -> dict[str, Any]:
@@ -109,14 +137,46 @@ def _compact_lifecycle_facet_surfaces(candidate: Mapping[str, Any]) -> dict[str,
         claim["surface_text"] = surface
         changed = True
     if changed:
-        compact["answer_text"] = " ".join(
-            f"{str(claim.get('surface_text', '')).rstrip('.')} "
-            f"[[{str(claim.get('claim_id', ''))}]]."
-            for claim in claims
-            if isinstance(claim, Mapping)
-            and claim.get("claim_id")
-            and claim.get("surface_text")
+        _rebuild_anchored_answer(compact)
+    return compact
+
+
+def _fit_direct_candidate_budget(
+    candidate: Mapping[str, Any],
+    *,
+    intent_class: str,
+) -> dict[str, Any]:
+    """Fit oversized direct verification JSON without weakening exact-support checks."""
+    compact = _bound_candidate_support_refs(candidate)
+    serialized = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
+    if len(serialized) <= _DIRECT_CANDIDATE_BUDGET:
+        return compact
+    if intent_class != "direct_grounded_knowledge":
+        return compact
+
+    claims = compact.get("claims", [])
+    if not isinstance(claims, list):
+        return compact
+    for claim in claims:
+        if not isinstance(claim, dict):
+            continue
+        refs = claim.get("support_refs", [])
+        if not isinstance(refs, list) or not refs:
+            continue
+        first = refs[0]
+        if not isinstance(first, dict):
+            continue
+        support_surface = _bounded_quote(
+            str(first.get("exact_quote", "")),
+            limit=_COMPACT_DIRECT_QUOTE_CHARS,
         )
+        if support_surface:
+            claim["surface_text"] = support_surface
+    compact = _bound_candidate_support_refs(
+        compact,
+        limit=_COMPACT_DIRECT_QUOTE_CHARS,
+    )
+    _rebuild_anchored_answer(compact)
     return compact
 
 
@@ -190,16 +250,94 @@ def _merge_false_premise_claims(
     return merged
 
 
+def _support_text(used_items: Any) -> str:
+    if not isinstance(used_items, (list, tuple)):
+        return ""
+    fields = ("passage_text", "title", "section_title", "relation_type")
+    return " ".join(
+        str(item.get(field, ""))
+        for item in used_items
+        if isinstance(item, Mapping)
+        for field in fields
+        if item.get(field)
+    )
+
+
+def _case_preserving_replacement(match: re.Match[str], replacement: str) -> str:
+    original = match.group(0)
+    if original and original[0].isupper():
+        return replacement[0].upper() + replacement[1:]
+    return replacement
+
+
+def _soften_unsupported_modality(
+    answer: str,
+    *,
+    question: str,
+    used_items: Any,
+    legacy: Any,
+) -> str:
+    """Monotonically weaken only modality terms not licensed by question/evidence."""
+    meaningful_terms = legacy._meaningful_terms
+    support_terms = meaningful_terms(_support_text(used_items))
+    question_terms = meaningful_terms(question)
+    allowed = support_terms | question_terms
+    answer_terms = meaningful_terms(answer)
+    strengthening = set(
+        getattr(
+            legacy,
+            "MODALITY_STRENGTHENING_TERMS",
+            {"always", "cannot", "guarantee", "guarantees", "must"},
+        )
+    )
+    unsupported = answer_terms & strengthening - allowed
+    if not unsupported:
+        return answer
+
+    replacements = {
+        "always": "typically",
+        "cannot": "may not",
+        "guarantee": "support",
+        "guarantees": "supports",
+        "must": "should",
+    }
+    softened = answer
+    for term in sorted(unsupported, key=len, reverse=True):
+        replacement = replacements.get(term)
+        if replacement is None:
+            continue
+        softened = re.sub(
+            rf"\b{re.escape(term)}\b",
+            lambda match, value=replacement: _case_preserving_replacement(match, value),
+            softened,
+            flags=re.I,
+        )
+    return softened
+
+
 def _verification_candidate_bounded(**kwargs: Any) -> dict[str, Any]:
     original = v3_patch._m26_aq_v3_unbounded_verification_candidate
-    candidate = original(**kwargs)
+    safe_kwargs = dict(kwargs)
+    answer = _soften_unsupported_modality(
+        str(kwargs.get("answer", "")),
+        question=str(kwargs.get("question", "")),
+        used_items=kwargs.get("used_items", []),
+        legacy=kwargs.get("legacy"),
+    )
+    safe_kwargs["answer"] = answer
+    _VERIFIED_NATURAL_SURFACE.set(answer)
+
+    candidate = original(**safe_kwargs)
     candidate = _compact_lifecycle_facet_surfaces(candidate)
     if _requires_non_entailment_boundary_question(str(kwargs.get("question", ""))):
         candidate = _merge_false_premise_claims(
             candidate,
-            answer=str(kwargs.get("answer", "")),
+            answer=answer,
         )
-    return _bound_candidate_support_refs(candidate)
+    return _fit_direct_candidate_budget(
+        candidate,
+        intent_class=str(kwargs.get("intent_class", "")),
+    )
 
 
 def _material_sentences_without_discourse(answer: str) -> list[str]:
@@ -213,6 +351,15 @@ def _material_sentences_without_discourse(answer: str) -> list[str]:
     return sentences
 
 
+def _use_verified_natural_surface_safe(
+    answer: dict[str, Any],
+    surface: str,
+) -> None:
+    original = v2_patch._m26_aq_v3_original_use_verified_natural_surface
+    verified_surface = _VERIFIED_NATURAL_SURFACE.get() or surface
+    original(answer, verified_surface)
+
+
 def _strip_internal_refs(value: str) -> str:
     return " ".join(_INTERNAL_REF_RE.sub("", str(value)).split())
 
@@ -224,8 +371,8 @@ def _repair_guidance(code: str) -> str:
     if value == "M26-PA7-ME-034":
         return (
             "Do not strengthen modality beyond evidence; prefer can, may, or typically "
-            "unless supplied evidence explicitly supports must, always, never, requires, "
-            "cannot, or guarantees."
+            "unless supplied evidence explicitly supports must, always, cannot, or "
+            "guarantees."
         )
     if value == "M26-PA7-ME-031":
         return "State the grounded proposition instead of a standalone yes/no claim."
@@ -288,7 +435,7 @@ def _compact_provider_payload_safe(**kwargs: Any) -> tuple[
         "e1/e2, article_ ids, m26pa7 ids, claim_ ids, or graph edge ids in answer prose. "
         "Use the human-readable names in the question and evidence text. Do not strengthen "
         "modality beyond supplied evidence: avoid always, cannot, guarantee, guarantees, "
-        "must, never, or requires unless the question or exact evidence supports that word."
+        "or must unless the question or exact evidence supports that word."
     )
     return safe_payload, label_map, snippet_map
 
@@ -308,6 +455,12 @@ def install() -> None:
     if not hasattr(v3_patch, "_m26_aq_v3_original_material_sentences"):
         v3_patch._m26_aq_v3_original_material_sentences = v3_patch._material_sentences
     v3_patch._material_sentences = _material_sentences_without_discourse
+
+    if not hasattr(v2_patch, "_m26_aq_v3_original_use_verified_natural_surface"):
+        v2_patch._m26_aq_v3_original_use_verified_natural_surface = (
+            v2_patch._use_verified_natural_surface
+        )
+    v2_patch._use_verified_natural_surface = _use_verified_natural_surface_safe
 
     if not hasattr(runtime, "_m26_aq_v3_original_compact_provider_payload"):
         runtime._m26_aq_v3_original_compact_provider_payload = (
