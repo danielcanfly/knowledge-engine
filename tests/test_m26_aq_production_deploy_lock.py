@@ -31,30 +31,45 @@ def test_final_closure_holds_host_lock_through_live_collection() -> None:
     workflow = Path(
         ".github/workflows/m26-aq-final-production-closure.yml"
     ).read_text(encoding="utf-8")
+    remote = Path("scripts/m26_aq_remote_production_closure.sh").read_text(
+        encoding="utf-8"
+    )
 
+    # Workflow owns runner-level serialization and delegates the atomic remote
+    # deploy/live-collection critical section to the canonical remote script.
     assert "group: m26-owner-production-oracle" in workflow
     assert "cancel-in-progress: false" in workflow
-    assert 'lock_file="/tmp/knowledge-engine-production-oracle.lock"' in workflow
-    assert "flock -x 9" in workflow
-    assert "KNOWLEDGE_ENGINE_DEPLOY_LOCK_HELD=1" in workflow
-    assert "container_runtime_sha" in workflow
-    assert "local_health_sha" in workflow
+    assert "scripts/m26_aq_remote_production_closure.sh" in workflow
 
-    deploy_position = workflow.index("KNOWLEDGE_ENGINE_DEPLOY_LOCK_HELD=1")
-    collect_position = workflow.index("scripts/m26_aq_final_closure.py collect")
-    remote_end_position = workflow.index("          REMOTE", collect_position)
-    assert deploy_position < collect_position < remote_end_position
+    # The remote script owns the host lock and must retain it while both deploy
+    # and live collection execute in the same shell process.
+    assert 'lock_file="/tmp/knowledge-engine-production-oracle.lock"' in remote
+    assert "flock -x 9" in remote
+    assert "KNOWLEDGE_ENGINE_DEPLOY_LOCK_HELD=1" in remote
+    assert "container_runtime_sha" in remote
+    assert "local_health_sha" in remote
+
+    lock_position = remote.index("flock -x 9")
+    deploy_position = remote.index("KNOWLEDGE_ENGINE_DEPLOY_LOCK_HELD=1")
+    collect_position = remote.index("scripts/m26_aq_final_closure.py collect")
+    assert lock_position < deploy_position < collect_position
 
 
 def test_final_closure_uses_canonical_named_tunnel_without_recording_it() -> None:
     workflow = Path(
         ".github/workflows/m26-aq-final-production-closure.yml"
     ).read_text(encoding="utf-8")
+    remote = Path("scripts/m26_aq_remote_production_closure.sh").read_text(
+        encoding="utf-8"
+    )
 
+    # Workflow owns credential/environment binding; the remote script owns
+    # routed-origin construction and sanitized production identity evidence.
     assert "M26_QUERY_BACKEND_TUNNEL_HOSTNAME" in workflow
-    assert 'routed_origin="https://${ROUTED_BACKEND_HOSTNAME}"' in workflow
-    assert "container_env M26_QUERY_BACKEND_ORIGIN" not in workflow
-    assert '"raw_routed_origin_recorded": False' in workflow
+    assert "ROUTED_BACKEND_HOSTNAME='$M26_QUERY_BACKEND_TUNNEL_HOSTNAME'" in workflow
+    assert 'routed_origin="https://${ROUTED_BACKEND_HOSTNAME}"' in remote
+    assert "container_env M26_QUERY_BACKEND_ORIGIN" not in remote
+    assert '"raw_routed_origin_recorded": False' in remote
 
 
 def test_final_closure_does_not_mutate_shared_build_sha_before_deploy() -> None:
