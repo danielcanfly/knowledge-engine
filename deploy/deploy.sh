@@ -28,6 +28,12 @@ deploy_locked() {
   cd "$DEPLOY_PATH"
 
   git fetch --prune origin
+  # The shared production checkout is a deployment cache, not an authoring
+  # workspace. Under the production host lock, discard tracked residue from a
+  # prior diagnostic/repair before selecting the immutable release SHA. This
+  # preserves untracked/ignored server configuration such as .env while making
+  # exact-head deployment deterministic.
+  git reset --hard HEAD
   git checkout --detach "$RELEASE_SHA"
   actual_sha="$(git rev-parse HEAD)"
   if [[ "$actual_sha" != "$RELEASE_SHA" ]]; then
