@@ -16,12 +16,15 @@ if [ ! -d "$DEPLOY_PATH/.git" ]; then
   git clone https://github.com/danielcanfly/knowledge-engine.git "$DEPLOY_PATH"
 fi
 
+exact_head_deploy_script="${AQ_EXACT_HEAD_DEPLOY_SCRIPT:-/tmp/m26-aq-exact-head-deploy.sh}"
+[ -s "$exact_head_deploy_script" ] || fail "exact_head_deploy_script_missing"
+
 echo "AQ_STAGE=deploy_start"
 deploy_output="$(
   KNOWLEDGE_ENGINE_DEPLOY_LOCK_HELD=1 \
     DEPLOY_PATH="$DEPLOY_PATH" \
     RELEASE_SHA="$RELEASE_SHA" \
-    bash "$DEPLOY_PATH/deploy/deploy.sh" </dev/null
+    bash "$exact_head_deploy_script" </dev/null
 )"
 printf '%s\n' "$deploy_output"
 echo "AQ_STAGE=deploy_complete"
