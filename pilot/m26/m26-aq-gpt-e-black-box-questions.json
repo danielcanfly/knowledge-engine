@@ -106,7 +106,7 @@
     {
       "case_id": "GPT-E-BB18",
       "class": "no_answer",
-      "question": "What is the official launch date of the nonexistent Knowledge Engine lunar mobile game?",
+      "question": "What launch date was announced for the nonexistent cobalt-orchid moon-ferry ticketing protocol?",
       "expected": "abstain"
     },
     {
