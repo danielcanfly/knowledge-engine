@@ -5,8 +5,10 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from . import m26_aq_semantic_runtime_patch as base_patch
-from . import m26_aq_semantic_runtime_patch_v2 as v2_patch
+from . import (
+    m26_aq_semantic_runtime_patch as base_patch,
+    m26_aq_semantic_runtime_patch_v2 as v2_patch,
+)
 
 
 _LIFECYCLE_REQUIREMENTS = {
