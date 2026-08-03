@@ -30,6 +30,28 @@ def test_production_deploy_discards_tracked_checkout_residue_before_exact_head()
     assert "git clean" not in deploy
 
 
+def test_aq_deploy_bootstrap_comes_from_exact_head_not_shared_checkout() -> None:
+    final_workflow = Path(
+        ".github/workflows/m26-aq-final-production-closure.yml"
+    ).read_text(encoding="utf-8")
+    diagnostic_workflow = Path(
+        ".github/workflows/m26-aq-query-runtime-diagnostic.yml"
+    ).read_text(encoding="utf-8")
+    remote = Path("scripts/m26_aq_remote_production_closure.sh").read_text(
+        encoding="utf-8"
+    )
+
+    exact_head_path = "/tmp/m26-aq-exact-head-deploy.sh"
+    assert f"oracle-knowledge:{exact_head_path}" in final_workflow
+    assert f"oracle-knowledge:{exact_head_path}" in diagnostic_workflow
+    assert "bash \"$AQ_EXACT_HEAD_DEPLOY_SCRIPT\"" in diagnostic_workflow
+    assert "AQ_EXACT_HEAD_DEPLOY_SCRIPT='/tmp/m26-aq-exact-head-deploy.sh'" in diagnostic_workflow
+    assert "AQ_EXACT_HEAD_DEPLOY_SCRIPT='/tmp/m26-aq-exact-head-deploy.sh'" in final_workflow
+    assert 'exact_head_deploy_script="${AQ_EXACT_HEAD_DEPLOY_SCRIPT:-/tmp/m26-aq-exact-head-deploy.sh}"' in remote
+    assert 'bash "$exact_head_deploy_script"' in remote
+    assert 'bash "$DEPLOY_PATH/deploy/deploy.sh"' not in remote
+
+
 def test_production_deploy_binds_accepted_qdrant_collection() -> None:
     deploy = Path("deploy/deploy.sh").read_text(encoding="utf-8")
 
