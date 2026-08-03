@@ -5,7 +5,6 @@ import knowledge_engine.m26_aq_semantic_runtime_patch_v3 as patch_v3
 import knowledge_engine.m26_pa7_arbitrary_query_runtime as legacy
 import knowledge_engine.m26_pa7_semantic_closure_runtime as runtime
 
-
 patch_v3.install()
 
 
