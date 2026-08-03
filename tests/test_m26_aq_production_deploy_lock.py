@@ -19,6 +19,17 @@ def test_production_deploy_is_serialized_and_release_scoped() -> None:
     assert '${M26_RUNTIME_ENV_FILE:-.env}' in compose
 
 
+def test_production_deploy_discards_tracked_checkout_residue_before_exact_head() -> None:
+    deploy = Path("deploy/deploy.sh").read_text(encoding="utf-8")
+
+    reset_position = deploy.index("git reset --hard HEAD")
+    checkout_position = deploy.index('git checkout --detach "$RELEASE_SHA"')
+    assert reset_position < checkout_position
+    # Do not use git clean here: server-side ignored/untracked configuration
+    # such as .env must survive deployment.
+    assert "git clean" not in deploy
+
+
 def test_production_deploy_binds_accepted_qdrant_collection() -> None:
     deploy = Path("deploy/deploy.sh").read_text(encoding="utf-8")
 
