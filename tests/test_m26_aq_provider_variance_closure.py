@@ -174,7 +174,10 @@ def test_graph_variance_repair_requires_exact_precedes_endpoint_proof() -> None:
         ):
             repair_calls.clear()
             answer, closure = production._synthesize_with_bounded_provider_variance_repair(
-                question="Alpha Note comes before Beta Note in the relation graph. What is recorded?",
+                question=(
+                    "Alpha Note comes before Beta Note in the relation graph. "
+                    "What is recorded?"
+                ),
                 trace_id="trace_graph_invalid",
                 intent_class="graph_relationship",
                 evidence=[{"evidence_id": "edge"}],
