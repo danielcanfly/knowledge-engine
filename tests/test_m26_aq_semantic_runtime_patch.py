@@ -313,6 +313,31 @@ def test_heldout_router_dag_composition_requires_both_jobs() -> None:
     assert not _visible_semantic_failures(answer, requirements, question)
 
 
+def test_frozen_router_prompt_visible_surface_covers_decision_inputs() -> None:
+    question = "What should a production router look at before it chooses a downstream path?"
+    requirements = _semantic_requirements(question, "complementary_synthesis")
+    answer = _semantic_answer_text_v2(question, requirements)
+
+    assert {"router_decision", "routing_constraints"}.issubset(
+        {item.requirement_id for item in requirements}
+    )
+    assert not _visible_semantic_failures(answer, requirements, question)
+
+
+def test_frozen_state_machine_replanner_surface_preserves_authority_boundary() -> None:
+    question = (
+        "How do state machines and adaptive replanning fit together without giving the "
+        "replanner unlimited authority?"
+    )
+    requirements = _semantic_requirements(question, "complementary_synthesis")
+    answer = _semantic_answer_text_v2(question, requirements)
+
+    assert {"state_machine_authority", "adaptive_replan", "authority_boundary"}.issubset(
+        {item.requirement_id for item in requirements}
+    )
+    assert not _visible_semantic_failures(answer, requirements, question)
+
+
 def test_heldout_precedes_false_premise_preserves_relation_boundary() -> None:
     question = (
         "Can an A precedes B graph edge establish that A depends on B, or is it only an "

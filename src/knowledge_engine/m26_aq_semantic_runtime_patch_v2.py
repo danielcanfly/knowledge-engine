@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Mapping, Sequence
@@ -788,10 +789,11 @@ def _runtime_bound_semantic_repair_v2(
                 separators=(",", ":"),
             ),
         )
+        citation_evidence = _citation_ready_repair_evidence(evidence)
         final = legacy._verified_multi_evidence_answer(
             intent_class=intent_class,
             verified=verified,
-            evidence=evidence,
+            evidence=citation_evidence,
             calls=_provider_calls(previous_answer),
             repair_attempted=True,
         )
@@ -887,6 +889,64 @@ def _runtime_bound_candidate_v2(
         used_items=used_items,
         snippet_map=snippet_map,
     )
+
+
+def _citation_ready_repair_evidence(
+    evidence: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    ready: list[dict[str, Any]] = []
+    for item in evidence:
+        current = dict(item)
+        evidence_id = str(current.get("evidence_id") or current.get("locator_id") or "evidence")
+        source_identity = str(
+            current.get("source_identity")
+            or current.get("source_id")
+            or current.get("source")
+            or evidence_id
+        )
+        section_id = str(
+            current.get("section_id")
+            or current.get("concept_id")
+            or current.get("locator_id")
+            or evidence_id
+        )
+        passage_text = str(
+            current.get("passage_text")
+            or current.get("exact_quote")
+            or current.get("text")
+            or ""
+        )
+        passage_hash = str(
+            current.get("passage_text_sha256")
+            or hashlib.sha256(passage_text.encode("utf-8")).hexdigest()
+        )
+        current.setdefault("evidence_id", evidence_id)
+        current.setdefault("locator_id", evidence_id)
+        current.setdefault("source_id", source_identity)
+        current.setdefault("source_identity", source_identity)
+        current.setdefault("section_id", section_id)
+        current.setdefault("concept_id", str(current.get("concept_id") or section_id))
+        current.setdefault("release_id", str(current.get("release_id") or "runtime_repair"))
+        current.setdefault("artifact_key", str(current.get("artifact_key") or source_identity))
+        current.setdefault(
+            "artifact_sha256",
+            str(
+                current.get("artifact_sha256")
+                or hashlib.sha256(source_identity.encode("utf-8")).hexdigest()
+            ),
+        )
+        current.setdefault("passage_text_sha256", passage_hash)
+        current.setdefault(
+            "provenance_record_sha256",
+            str(
+                current.get("provenance_record_sha256")
+                or hashlib.sha256(
+                    f"{evidence_id}:{source_identity}:{passage_hash}".encode()
+                ).hexdigest()
+            ),
+        )
+        ready.append(current)
+    return ready
 
 
 
@@ -1012,7 +1072,28 @@ def _facet_terms_from_contract(facet: Mapping[str, Any]) -> set[str]:
     terms: set[str] = set()
     for term in facet.get("terms", []) if isinstance(facet.get("terms", []), Sequence) else []:
         for token in re.findall(r"[A-Za-z0-9_]+|[\u3400-\u9fff]+", str(term).casefold()):
-            if token and token not in {"a", "an", "and", "are", "by", "for", "from", "how", "in", "is", "of", "or", "the", "to", "what", "when", "where", "which", "with"}:
+            stop_words = {
+                "a",
+                "an",
+                "and",
+                "are",
+                "by",
+                "for",
+                "from",
+                "how",
+                "in",
+                "is",
+                "of",
+                "or",
+                "the",
+                "to",
+                "what",
+                "when",
+                "where",
+                "which",
+                "with",
+            }
+            if token and token not in stop_words:
                 terms.add(token)
     return terms
 
@@ -1075,7 +1156,9 @@ def _support_ref_for_terms(
         }
     if "exact_quote" not in ref and "exact_support_snippet" in ref:
         ref = {**dict(ref), "exact_quote": str(ref["exact_support_snippet"])}
-    return dict(ref) if ref.get("evidence_id") and ref.get("locator_id") and ref.get("exact_quote") else None
+    if ref.get("evidence_id") and ref.get("locator_id") and ref.get("exact_quote"):
+        return dict(ref)
+    return None
 
 
 def _direct_facet_surface_text(
@@ -1095,18 +1178,34 @@ def _direct_facet_surface_text(
         return f"{phrase} is explicitly named in the answer."
     surfaces = {
         "router_selection": "The router performs route selection for the request.",
-        "router_inputs": "The query router looks at the request, path, route, and capability inputs.",
-        "routing_constraints": "Routing constraints include policy, safety, permission, cost, latency, or capability boundaries.",
-        "downstream_selection": "Downstream selection chooses the route, path, mode, or fallback order.",
+        "router_inputs": (
+            "The query router looks at the request, path, route, and capability inputs."
+        ),
+        "routing_constraints": (
+            "Routing constraints include policy, safety, permission, cost, latency, "
+            "or capability boundaries."
+        ),
+        "downstream_selection": (
+            "Downstream selection chooses the route, path, mode, or fallback order."
+        ),
         "dag_structure": "The DAG structures dependency ordering, parallel steps, and work.",
         "flow_composition": "The query router and DAG compose the production flow together.",
-        "adaptive_replanning": "Adaptive replanning replans remaining work after invalid assumptions.",
+        "adaptive_replanning": (
+            "Adaptive replanning replans remaining work after invalid assumptions."
+        ),
         "state_machine": "The state machine owns state transitions and transition authority.",
-        "authority_boundary": "The replanner is bounded by policy, approval, and state machine authority boundaries.",
-        "source_of_trust": "The canonical source and provenance artifact authority is the source of trust.",
+        "authority_boundary": (
+            "The replanner is bounded by policy, approval, and state machine authority "
+            "boundaries."
+        ),
+        "source_of_trust": (
+            "The canonical source and provenance artifact authority is the source of trust."
+        ),
         "responsibility_mapping": "The answer maps what each component is responsible for.",
         "multi_source_selection": "The trust claim is grounded in source and provenance authority.",
-        "verification_or_approval": "Verification and approval gates check the result before release.",
+        "verification_or_approval": (
+            "Verification and approval gates check the result before release."
+        ),
         "human_approval": "Human approval is the final authority gate before release.",
         "persisted_progress": "Persisted progress is durable state.",
         "parallel_branches": "Parallel research branches keep work concurrent.",
@@ -1422,9 +1521,9 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
         )
     if {"router_decision", "routing_constraints"}.issubset(ids):
         return (
-            "A production router inspects request intent, available capabilities, "
-            "permission context, policy and safety constraints, cost or latency budget, "
-            "and downstream health before selecting the downstream route or path."
+            "A production router selects the downstream route or path only after "
+            "inspecting request intent, available capabilities, permission context, "
+            "policy and safety constraints, cost or latency budget, and downstream health."
         )
     if {"initial_routing_role", "replanning_role", "role_contrast"}.issubset(ids):
         return (
@@ -1438,9 +1537,9 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
         return (
             "The state machine defines the transition state plus policy and approval "
             "authority. Adaptive replanning can replan the remaining steps when an "
-            "assumption becomes invalid. The replanner remains bounded by the state "
-            "machine policy and approval gates, so replanning changes unfinished work "
-            "inside that authority envelope rather than bypassing the gates."
+            "assumption becomes invalid. The replanner cannot bypass or override the "
+            "state machine policy and approval authority; replanning changes unfinished "
+            "work inside that bounded authority envelope."
         )
     if {
         "source_selection",
