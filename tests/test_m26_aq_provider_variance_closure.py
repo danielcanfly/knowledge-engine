@@ -289,6 +289,8 @@ def test_unrelated_abstention_stays_fail_closed_and_hard_verifier_is_preserved()
         import knowledge_engine.m26_pa7_semantic_closure_runtime as semantic_runtime
         import knowledge_engine.m26_production_api as production
 
+        real_repair = aq_v2_patch._runtime_bound_semantic_repair_v2
+
         def fake_synthesize(**kwargs: Any):
             del kwargs
             return (
@@ -325,7 +327,7 @@ def test_unrelated_abstention_stays_fail_closed_and_hard_verifier_is_preserved()
         assert closure["broad_deterministic_fallback_used"] is False
         assert repair_calls == []
 
-        code = aq_v2_patch._runtime_bound_semantic_repair_v2.__code__
+        code = real_repair.__code__
         assert "_verify_multi_evidence_provider_output" in code.co_names
         assert "_verified_multi_evidence_answer" in code.co_names
         assert "_verified_repair_support_items" in code.co_names
