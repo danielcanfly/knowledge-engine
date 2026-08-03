@@ -15,6 +15,7 @@ on:
       - "scripts/m26_aq_final_closure.py"
       - "scripts/m26_aq_remote_production_closure.sh"
       - "scripts/m26_aq_generalized_closure.py"
+      - "scripts/m26_pa7_named_backend_tunnel.py"
       - "pilot/m26/m26-aq-final-r3-questions.json"
       - "pilot/m26/m26-aq-gpt-e-black-box-questions.json"
       - "tests/test_m26_aq_semantic_closure_runtime.py"
@@ -68,6 +69,7 @@ jobs:
             src/knowledge_engine/m26_production_api.py \
             scripts/m26_aq_final_closure.py \
             scripts/m26_aq_generalized_closure.py \
+            scripts/m26_pa7_named_backend_tunnel.py \
             tests/test_m26_aq_semantic_closure_runtime.py \
             tests/test_m26_aq_semantic_runtime_patch_v3.py \
             tests/test_m26_aq_surface_guard.py \
@@ -114,6 +116,10 @@ jobs:
     env:
       EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       M26_QUERY_BACKEND_TUNNEL_HOSTNAME: ${{ vars.M26_QUERY_BACKEND_TUNNEL_HOSTNAME || secrets.M26_QUERY_BACKEND_TUNNEL_HOSTNAME || 'm26-query-backend.danielcanfly.com' }}
+      M26_QUERY_BACKEND_TUNNEL_NAME: ${{ vars.M26_QUERY_BACKEND_TUNNEL_NAME || secrets.M26_QUERY_BACKEND_TUNNEL_NAME || 'm26-pa7-query-backend' }}
+      CLOUDFLARE_ZONE_NAME: danielcanfly.com
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_WORKERS_TOKEN }}
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
@@ -131,10 +137,271 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
           for name in \
             ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH \
-            ORACLE_VM_SSH_PRIVATE_KEY M26_QUERY_BACKEND_TUNNEL_HOSTNAME; do
+            ORACLE_VM_SSH_PRIVATE_KEY M26_QUERY_BACKEND_TUNNEL_HOSTNAME \
+            M26_QUERY_BACKEND_TUNNEL_NAME CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN; do
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
           bash scripts/configure_oracle_ssh.sh
+
+      - name: Restore and verify named Cloudflare tunnel route
+        run: |
+          set -euo pipefail
+          repair_dir=/tmp/m26-aq-named-tunnel-repair
+          mkdir -p "$repair_dir"
+          chmod 700 "$repair_dir"
+          umask 077
+
+          CLOUDFLARE_PREFLIGHT_OUTPUT=/tmp/m26-aq-cloudflare-prestate.json \
+          python - <<'PY'
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          api_base = "https://api.cloudflare.com/client/v4"
+          token = os.environ["CLOUDFLARE_API_TOKEN"]
+          account_id = os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          zone_name = os.environ["CLOUDFLARE_ZONE_NAME"]
+          hostname = os.environ["M26_QUERY_BACKEND_TUNNEL_HOSTNAME"]
+          tunnel_name = os.environ["M26_QUERY_BACKEND_TUNNEL_NAME"]
+
+          def request(path):
+              req = urllib.request.Request(
+                  f"{api_base}{path}",
+                  headers={"Authorization": f"Bearer {token}"},
+              )
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  payload = json.loads(response.read().decode("utf-8"))
+              if not payload.get("success"):
+                  raise SystemExit("Cloudflare preflight API failure")
+              return payload.get("result", [])
+
+          zones = request(
+              "/zones?"
+              + urllib.parse.urlencode(
+                  {"name": zone_name, "status": "active", "per_page": "5"}
+              )
+          )
+          if len(zones) != 1:
+              raise SystemExit("expected exactly one active Cloudflare zone")
+          zone_id = zones[0]["id"]
+          records = request(
+              f"/zones/{zone_id}/dns_records?"
+              + urllib.parse.urlencode({"name": hostname, "per_page": "100"})
+          )
+          tunnels = request(
+              f"/accounts/{account_id}/cfd_tunnel?"
+              + urllib.parse.urlencode({"is_deleted": "false", "per_page": "100"})
+          )
+          matches = [
+              item
+              for item in tunnels
+              if item.get("name") == tunnel_name and not item.get("deleted_at")
+          ]
+          cnames = [item for item in records if item.get("type") == "CNAME"]
+          conflicts = [item for item in records if item.get("type") != "CNAME"]
+
+          evidence = {
+              "schema_version": "m26-aq-cloudflare-tunnel-prestate/v1",
+              "status": "pass",
+              "active_zone_count": len(zones),
+              "exact_hostname_record_count": len(records),
+              "cname_record_count": len(cnames),
+              "conflicting_record_count": len(conflicts),
+              "conflicting_record_types": sorted(
+                  {str(item.get("type") or "") for item in conflicts}
+              ),
+              "cname_cfargotunnel_target_count": sum(
+                  1
+                  for item in cnames
+                  if str(item.get("content") or "").endswith(".cfargotunnel.com")
+              ),
+              "cname_proxied_count": sum(
+                  1 for item in cnames if item.get("proxied") is True
+              ),
+              "named_tunnel_count": len(matches),
+              "named_tunnel_statuses": sorted(
+                  {
+                      str(item.get("status"))
+                      for item in matches
+                      if item.get("status") is not None
+                  }
+              ),
+              "named_tunnel_connector_count": sum(
+                  len(item.get("connections") or [])
+                  for item in matches
+                  if isinstance(item.get("connections"), list)
+              ),
+              "raw_hostname_recorded": False,
+              "raw_record_content_recorded": False,
+              "raw_record_id_recorded": False,
+              "raw_tunnel_id_recorded": False,
+          }
+          Path(os.environ["CLOUDFLARE_PREFLIGHT_OUTPUT"]).write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+
+          if conflicts:
+              for item in conflicts:
+                  record_id = str(item.get("id") or "")
+                  if not record_id:
+                      raise SystemExit("conflicting DNS record missing id")
+                  req = urllib.request.Request(
+                      f"{api_base}/zones/{zone_id}/dns_records/{record_id}",
+                      headers={"Authorization": f"Bearer {token}"},
+                      method="DELETE",
+                  )
+                  with urllib.request.urlopen(req, timeout=60) as response:
+                      payload = json.loads(response.read().decode("utf-8"))
+                  if not payload.get("success"):
+                      raise SystemExit("failed to remove conflicting DNS record")
+          PY
+
+          python scripts/m26_pa7_named_backend_tunnel.py ensure \
+            --account-id "$CLOUDFLARE_ACCOUNT_ID" \
+            --zone-name "$CLOUDFLARE_ZONE_NAME" \
+            --hostname "$M26_QUERY_BACKEND_TUNNEL_HOSTNAME" \
+            --tunnel-name "$M26_QUERY_BACKEND_TUNNEL_NAME" \
+            --service http://127.0.0.1:8080 \
+            --evidence-output /tmp/m26-aq-named-tunnel-repair.json \
+            --runtime-env-output "$repair_dir/runtime.env"
+
+          tunnel_token=""
+          tunnel_id=""
+          while IFS='=' read -r name value; do
+            case "$name" in
+              M26_BACKEND_ORIGIN_CLASS|M26_QUERY_BACKEND_ORIGIN) ;;
+              M26_BACKEND_TUNNEL_ID)
+                tunnel_id="$value"
+                ;;
+              M26_BACKEND_TUNNEL_TOKEN)
+                tunnel_token="$value"
+                ;;
+              *)
+                echo "Unexpected tunnel runtime binding: $name" >&2
+                exit 2
+                ;;
+            esac
+            test -n "$value"
+            echo "::add-mask::$value"
+          done < "$repair_dir/runtime.env"
+          rm -f "$repair_dir/runtime.env"
+
+          test -n "$tunnel_id"
+          test -n "$tunnel_token"
+          printf '%s' "$tunnel_token" > "$repair_dir/token"
+
+          tunnel_state_dir="$ORACLE_VM_DEPLOY_PATH/.m26-pa7-final-web-tunnel"
+          ssh oracle-knowledge "mkdir -p '$tunnel_state_dir' && chmod 700 '$tunnel_state_dir'"
+          scp "$repair_dir/token" "oracle-knowledge:$tunnel_state_dir/token.next"
+          rm -f "$repair_dir/token"
+          ssh oracle-knowledge "set -euo pipefail; \
+            mv '$tunnel_state_dir/token.next' '$tunnel_state_dir/token'; \
+            chmod 600 '$tunnel_state_dir/token'; \
+            docker rm -f m26-pa7-backend-tunnel >/dev/null 2>&1 || true; \
+            docker run -d --restart unless-stopped \
+              --name m26-pa7-backend-tunnel \
+              --network host \
+              cloudflare/cloudflared:latest \
+              tunnel --no-autoupdate run \
+              --token \"\$(cat '$tunnel_state_dir/token')\" >/dev/null; \
+            test \"\$(docker inspect --format '{{.State.Running}}' m26-pa7-backend-tunnel)\" = true"
+
+          cat > "$repair_dir/dns_probe.py" <<'PY'
+          import hashlib
+          import json
+          import os
+          import socket
+          import time
+
+          hostname = os.environ["HOSTNAME_TO_RESOLVE"]
+          vantage = os.environ["DNS_VANTAGE"]
+          last_error = ""
+          address_count = 0
+          for attempt in range(1, 13):
+              try:
+                  infos = socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)
+                  addresses = {item[4][0] for item in infos if item[4]}
+                  address_count = len(addresses)
+                  if address_count:
+                      print(json.dumps({
+                          "schema_version": "m26-aq-routed-dns-resolution/v1",
+                          "status": "resolved",
+                          "vantage": vantage,
+                          "attempt": attempt,
+                          "address_count": address_count,
+                          "hostname_sha256": hashlib.sha256(hostname.encode()).hexdigest(),
+                          "raw_hostname_recorded": False,
+                          "raw_address_recorded": False,
+                      }, sort_keys=True))
+                      break
+              except OSError as exc:
+                  last_error = type(exc).__name__
+              time.sleep(5)
+          else:
+              print(json.dumps({
+                  "schema_version": "m26-aq-routed-dns-resolution/v1",
+                  "status": "unresolved",
+                  "vantage": vantage,
+                  "attempt": 12,
+                  "address_count": 0,
+                  "hostname_sha256": hashlib.sha256(hostname.encode()).hexdigest(),
+                  "error_class": last_error,
+                  "raw_hostname_recorded": False,
+                  "raw_address_recorded": False,
+              }, sort_keys=True))
+              raise SystemExit(6)
+          PY
+
+          HOSTNAME_TO_RESOLVE="$M26_QUERY_BACKEND_TUNNEL_HOSTNAME" \
+          DNS_VANTAGE=github_runner \
+            python "$repair_dir/dns_probe.py" \
+            > /tmp/m26-aq-dns-resolution-runner.json
+
+          scp "$repair_dir/dns_probe.py" oracle-knowledge:/tmp/m26-aq-dns-probe.py
+          ssh oracle-knowledge \
+            "HOSTNAME_TO_RESOLVE='$M26_QUERY_BACKEND_TUNNEL_HOSTNAME' DNS_VANTAGE=oracle_vm python3 /tmp/m26-aq-dns-probe.py" \
+            > /tmp/m26-aq-dns-resolution-oracle.json
+          rm -f "$repair_dir/dns_probe.py"
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          tunnel = json.loads(Path("/tmp/m26-aq-named-tunnel-repair.json").read_text())
+          runner_dns = json.loads(
+              Path("/tmp/m26-aq-dns-resolution-runner.json").read_text()
+          )
+          oracle_dns = json.loads(
+              Path("/tmp/m26-aq-dns-resolution-oracle.json").read_text()
+          )
+          if tunnel.get("status") != "pass":
+              raise SystemExit("named tunnel repair evidence did not pass")
+          if tunnel.get("target_suffix") != "cfargotunnel.com":
+              raise SystemExit("named tunnel target suffix mismatch")
+          for dns in (runner_dns, oracle_dns):
+              if dns.get("status") != "resolved":
+                  raise SystemExit(
+                      f"routed DNS did not resolve from {dns.get('vantage')}"
+                  )
+          print("AQ_NAMED_TUNNEL_REPAIR=pass")
+          print(f"AQ_NAMED_TUNNEL_DNS_ACTION={tunnel.get('dns_record_action')}")
+          print(f"AQ_NAMED_TUNNEL_REUSED={str(tunnel.get('tunnel_reused')).lower()}")
+          print(
+              f"AQ_ROUTED_DNS_RUNNER_ATTEMPT={runner_dns.get('attempt')}"
+          )
+          print(
+              f"AQ_ROUTED_DNS_ORACLE_ATTEMPT={oracle_dns.get('attempt')}"
+          )
+          print(
+              f"AQ_ROUTED_DNS_RUNNER_ADDRESS_COUNT={runner_dns.get('address_count')}"
+          )
+          print(
+              f"AQ_ROUTED_DNS_ORACLE_ADDRESS_COUNT={oracle_dns.get('address_count')}"
+          )
+          PY
 
       - name: Atomically deploy exact head and run all live closure gates
         run: |
@@ -226,6 +493,10 @@ jobs:
         with:
           name: m26-aq-final-production-closure-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
+            /tmp/m26-aq-cloudflare-prestate.json
+            /tmp/m26-aq-named-tunnel-repair.json
+            /tmp/m26-aq-dns-resolution-runner.json
+            /tmp/m26-aq-dns-resolution-oracle.json
             /tmp/m26-aq-production-identity.json
             /tmp/m26-aq-final-live-closure.json
             /tmp/m26-aq-gpt-e-blackbox-live-closure.json
