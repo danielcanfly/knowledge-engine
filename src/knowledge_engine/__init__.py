@@ -12,12 +12,16 @@ try:
     from .m26_aq_semantic_runtime_patch_v3_lifecycle import (
         install as _install_aq_lifecycle_patch,
     )
+    from .m26_aq_semantic_runtime_patch_v3_surface import (
+        install as _install_aq_surface_patch,
+    )
     from .m26_pa7_semantic_closure_runtime import (
         run_owner_arbitrary_query as _semantic_run_owner_arbitrary_query,
     )
 
     _install_aq_semantic_patch()
     _install_aq_lifecycle_patch()
+    _install_aq_surface_patch()
     if os.environ.get("M26_QUERY_BUILD_SHA"):
         from . import m26_ask_api as _m26_ask_api
 
