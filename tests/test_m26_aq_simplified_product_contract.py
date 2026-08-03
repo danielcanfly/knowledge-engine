@@ -9,10 +9,22 @@ from types import ModuleType
 import pytest
 
 
-def _load_module() -> ModuleType:
+def _load_module(*, name: str = "m26_aq_final_closure") -> ModuleType:
     root = Path(__file__).resolve().parents[1]
     script = root / "scripts" / "m26_aq_final_closure.py"
-    spec = importlib.util.spec_from_file_location("m26_aq_final_closure_contract", script)
+    spec = importlib.util.spec_from_file_location(name, script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_generalized_module() -> ModuleType:
+    _load_module(name="m26_aq_final_closure")
+    root = Path(__file__).resolve().parents[1]
+    script = root / "scripts" / "m26_aq_generalized_closure.py"
+    spec = importlib.util.spec_from_file_location("m26_aq_generalized_closure_contract", script)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -82,7 +94,7 @@ def test_correct_false_premise_answer_need_not_begin_with_no(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = _load_module()
+    module = _load_module(name="m26_aq_final_closure_contract")
     monkeypatch.setattr(module, "_validate_visible_semantics", lambda row: [])
 
     rows = []
@@ -131,3 +143,38 @@ def test_correct_false_premise_answer_need_not_begin_with_no(
         gate_path=gate_path,
         expected_sha="sha",
     )
+
+
+def test_blackbox_false_premise_answer_need_not_begin_with_no(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_generalized_module()
+    monkeypatch.setattr(module, "_validate_visible_semantics", lambda row: [])
+    failures: list[str] = []
+    module._validate_answer_row(
+        {
+            "case_id": "GPT-E-BB09",
+            "class": "grounded_but_irrelevant_adversarial",
+            "safe_abstention": False,
+            "status": "owner_only_cited_answer",
+            "answer_source": module.ANSWER_SOURCE,
+            "answer_text": (
+                "The precedes edge records ordering or navigation. "
+                "It does not establish dependency."
+            ),
+            "citations": [{"citation_id": "c1"}],
+            "accounting": {"provider_call_count": 1},
+            "integrity": {
+                "unsupported_accepted_claims": 0,
+                "material_claim_support_verified": True,
+                "citation_locator_valid": True,
+            },
+            "semantic_closure": {
+                "failures": [],
+                "broad_deterministic_fallback_used": False,
+            },
+            "multi_evidence_verification": {},
+        },
+        failures,
+    )
+    assert failures == []
