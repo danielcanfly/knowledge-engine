@@ -17,13 +17,17 @@ _LIFECYCLE_REQUIREMENTS = {
 }
 
 
-def install() -> None:
-    """Install the simplified product-first AQ runtime repair.
+def _never_require_initial_no(question: str) -> bool:
+    del question
+    return False
 
-    The v3 patch keeps the accepted retrieval/provenance/security gates, but removes
-    frozen-answer coupling from semantic closure. Natural provider prose is verified
-    sentence-by-sentence against exact evidence instead of being forced through one
-    monolithic claim or a deterministic template answer.
+
+def install() -> None:
+    """Install the product-first AQ semantic closure.
+
+    Retrieval, provenance, graph, privacy, and mutation gates stay strict. The repair
+    only removes frozen-answer coupling: provider prose is verified as bounded material
+    sentences and may receive one provider repair instead of deterministic template text.
     """
     from . import m26_pa7_arbitrary_query_runtime as legacy
     from . import m26_pa7_semantic_closure_runtime as runtime
@@ -32,8 +36,7 @@ def install() -> None:
     if getattr(runtime, "_m26_aq_semantic_runtime_patch_v3_installed", False):
         return
 
-    # A false premise must be rejected semantically, not by forcing the first token.
-    base_patch._needs_initial_no = lambda question: False
+    base_patch._needs_initial_no = _never_require_initial_no
     v2_patch._clean_entity_text = _clean_entity_text_v3
 
     previous_intent = legacy._intent_class
@@ -44,7 +47,7 @@ def install() -> None:
         q = question.casefold()
         if (
             "comes before" in q
-            and ("relation graph" in q or "graph" in q)
+            and "graph" in q
             and "part 1" in q
             and "part 2" in q
         ):
@@ -60,8 +63,13 @@ def install() -> None:
             items.append(
                 runtime.SemanticRequirement(
                     requirement_id="ordering_semantics",
-                    instruction="State the recorded ordering/sequence relation explicitly.",
-                    evidence_terms=("precedes", "ordering", "sequence", "comes before"),
+                    instruction="State the recorded ordering or sequence relation.",
+                    evidence_terms=(
+                        "precedes",
+                        "ordering",
+                        "sequence",
+                        "comes before",
+                    ),
                     visible_patterns=(
                         r"\b(?:precedes|ordering|sequence|comes before)\b",
                     ),
@@ -73,8 +81,12 @@ def install() -> None:
         edge = previous_edge(bundle, question)
         if edge is not None:
             return edge
-        if "comes before" in question.casefold() and "precedes" not in question.casefold():
-            return previous_edge(bundle, question + " The recorded relation is precedes.")
+        q = question.casefold()
+        if "comes before" in q and "precedes" not in q:
+            return previous_edge(
+                bundle,
+                question + " The recorded relation is precedes.",
+            )
         return None
 
     def synthesize(
@@ -149,7 +161,17 @@ def _prune_lifecycle_overreach(question: str, items: Sequence[Any]) -> list[Any]
         return list(items)
 
     requested: set[str] = set()
-    if any(term in q for term in ("disconnect", "persist", "durable", "state", "recover", "resume")):
+    if any(
+        term in q
+        for term in (
+            "disconnect",
+            "persist",
+            "durable",
+            "state",
+            "recover",
+            "resume",
+        )
+    ):
         requested.add("durable_state")
     if any(
         term in q
@@ -164,7 +186,15 @@ def _prune_lifecycle_overreach(question: str, items: Sequence[Any]) -> list[Any]
         )
     ):
         requested.add("completion_verification")
-    if any(term in q for term in ("admission", "intake", "before execution", "request boundary")):
+    if any(
+        term in q
+        for term in (
+            "admission",
+            "intake",
+            "before execution",
+            "request boundary",
+        )
+    ):
         requested.add("admission_policy")
     if any(
         term in q
@@ -179,7 +209,6 @@ def _prune_lifecycle_overreach(question: str, items: Sequence[Any]) -> list[Any]
     ):
         requested.add("observability")
 
-    # Explicit end-to-end lifecycle wording still asks for the full control chain.
     if any(
         phrase in q
         for phrase in (
@@ -222,7 +251,7 @@ def _generalized_provider_synthesize(
     final_support_proof: list[dict[str, Any]] = []
 
     for attempt in (1, 2):
-        payload, label_map, snippet_map = runtime._compact_provider_payload(
+        payload, label_map, _snippet_map = runtime._compact_provider_payload(
             question=question,
             intent_class=intent_class,
             evidence=evidence,
@@ -232,14 +261,18 @@ def _generalized_provider_synthesize(
         )
         payload["system"] = (
             str(payload.get("system", ""))
-            + " Evidence labels such as e1/e2 are internal selectors: never mention them "
-            "in the answer. On repair, fix the stated failure while preserving only "
-            "evidence-supported meaning."
+            + " Evidence labels such as e1/e2 are internal selectors and must never "
+            "appear in the answer. If the evidence is irrelevant or insufficient for "
+            "the requested fact, abstain rather than inventing support."
         )
         try:
             raw = provider_client.call(
                 payload,
-                "aq_semantic_closure_repair" if attempt == 2 else "aq_semantic_closure",
+                (
+                    "aq_semantic_closure_repair"
+                    if attempt == 2
+                    else "aq_semantic_closure"
+                ),
             )
             try:
                 parsed = runtime._parse_compact_provider_result(
@@ -267,7 +300,11 @@ def _generalized_provider_synthesize(
             )
 
         answer = str(parsed["answer"]).strip()
-        leaks = v2_patch._user_visible_internal_reference_leaks(answer, question, label_map)
+        leaks = v2_patch._user_visible_internal_reference_leaks(
+            answer,
+            question,
+            label_map,
+        )
         if leaks:
             failures.extend(
                 f"USER_VISIBLE_INTERNAL_REFERENCE_LEAK:{item}" for item in leaks
@@ -291,14 +328,18 @@ def _generalized_provider_synthesize(
             used_items=used_items,
             requirements=requirements,
         )
-        support_failures, support_proof = v2_patch._endpoint_aware_requirement_support_failures(
-            runtime=runtime,
-            requirements=requirements,
-            evidence=used_items,
-            endpoint_proof=endpoint_proof,
+        support_failures, support_proof = (
+            v2_patch._endpoint_aware_requirement_support_failures(
+                runtime=runtime,
+                requirements=requirements,
+                evidence=used_items,
+                endpoint_proof=endpoint_proof,
+            )
         )
         final_support_proof = support_proof
-        semantic_failures = sorted(set([*visible_failures, *support_failures]))
+        semantic_failures = sorted(
+            set([*visible_failures, *support_failures])
+        )
         if semantic_failures:
             failures.extend(semantic_failures)
             if attempt == 1:
@@ -307,13 +348,11 @@ def _generalized_provider_synthesize(
 
         try:
             candidate = _sentence_bound_candidate(
-                runtime=runtime,
                 legacy=legacy,
                 answer=answer,
                 question=question,
                 intent_class=intent_class,
                 used_items=used_items,
-                snippet_map=snippet_map,
             )
             verified = legacy._verify_multi_evidence_provider_output(
                 trace_id=trace_id,
@@ -357,13 +396,16 @@ def _generalized_provider_synthesize(
         )
         if final_leaks:
             failures.extend(
-                f"USER_VISIBLE_INTERNAL_REFERENCE_LEAK:{item}" for item in final_leaks
+                f"USER_VISIBLE_INTERNAL_REFERENCE_LEAK:{item}"
+                for item in final_leaks
             )
             if attempt == 1:
                 continue
             break
 
-        final_answer["answer_source"] = "provider_verified_runtime_bound_semantic_closure"
+        final_answer["answer_source"] = (
+            "provider_verified_runtime_bound_semantic_closure"
+        )
         final_answer["multi_evidence_verification"] = {
             **dict(final_answer.get("multi_evidence_verification", {})),
             "verification_failure_codes_by_attempt": list(failures),
@@ -376,7 +418,9 @@ def _generalized_provider_synthesize(
         }
         closure = {
             "schema_version": "m26-aq-semantic-closure/v1",
-            "requirements": [runtime._requirement_public(item) for item in requirements],
+            "requirements": [
+                runtime._requirement_public(item) for item in requirements
+            ],
             "support_proof": final_support_proof,
             "endpoint_proof": dict(endpoint_proof),
             "failures": [],
@@ -418,7 +462,9 @@ def _provider_abstention(
     answer["answer_source"] = "safe_abstention"
     closure = {
         "schema_version": "m26-aq-semantic-closure/v1",
-        "requirements": [runtime._requirement_public(item) for item in requirements],
+        "requirements": [
+            runtime._requirement_public(item) for item in requirements
+        ],
         "support_proof": list(support_proof),
         "endpoint_proof": dict(endpoint_proof),
         "failures": reason_codes,
@@ -431,15 +477,12 @@ def _provider_abstention(
 
 def _sentence_bound_candidate(
     *,
-    runtime: Any,
     legacy: Any,
     answer: str,
     question: str,
     intent_class: str,
     used_items: Sequence[Mapping[str, Any]],
-    snippet_map: Mapping[str, str],
 ) -> dict[str, Any]:
-    del runtime, snippet_map
     sentences = _material_sentences(answer)
     if not sentences:
         raise ValueError("natural answer has no material sentence")
@@ -455,7 +498,11 @@ def _sentence_bound_candidate(
         terms = legacy._meaningful_terms(sentence)
         ranked = sorted(
             used_items,
-            key=lambda item: _sentence_evidence_score(legacy, sentence, item),
+            key=lambda item: _sentence_evidence_score(
+                legacy,
+                sentence,
+                item,
+            ),
             reverse=True,
         )
         refs: list[dict[str, str]] = []
@@ -473,7 +520,7 @@ def _sentence_bound_candidate(
         claims.append(
             {
                 "claim_id": claim_id,
-                "claim_role": "direct",
+                "claim_role": _claim_role(intent_class, index),
                 "surface_text": sentence,
                 "facet_ids": list(required_facets),
                 "support_mode": "runtime_bound_sentence_exact_evidence",
@@ -488,20 +535,7 @@ def _sentence_bound_candidate(
         claims=claims,
         selected_ids=selected_ids,
     )
-    relation = None
-    if intent_class == "cross_document_comparison":
-        relation = "contrasts_with"
-    elif intent_class == "complementary_synthesis":
-        relation = "complements"
-    elif intent_class == "temporal_conflict":
-        relation = "precedes"
-    elif intent_class == "graph_relationship":
-        edge = next(
-            (item for item in used_items if item.get("evidence_type") == "graph_edge"),
-            None,
-        )
-        relation = str(edge.get("relation_type", "")) if edge is not None else None
-
+    relation = _relation_for_intent(intent_class, used_items)
     anchored = " ".join(
         f"{sentence.rstrip('.')} [[claim_{index}]]."
         for index, sentence in enumerate(sentences, start=1)
@@ -518,6 +552,40 @@ def _sentence_bound_candidate(
     }
 
 
+def _claim_role(intent_class: str, index: int) -> str:
+    if index != 1:
+        return "direct"
+    if intent_class == "cross_document_comparison":
+        return "comparison"
+    if intent_class == "complementary_synthesis":
+        return "relationship"
+    return "direct"
+
+
+def _relation_for_intent(
+    intent_class: str,
+    used_items: Sequence[Mapping[str, Any]],
+) -> str | None:
+    if intent_class == "cross_document_comparison":
+        return "contrasts_with"
+    if intent_class == "complementary_synthesis":
+        return "complements"
+    if intent_class == "temporal_conflict":
+        return "precedes"
+    if intent_class == "graph_relationship":
+        edge = next(
+            (
+                item
+                for item in used_items
+                if item.get("evidence_type") == "graph_edge"
+            ),
+            None,
+        )
+        if edge is not None:
+            return str(edge.get("relation_type", "")) or None
+    return None
+
+
 def _material_sentences(answer: str) -> list[str]:
     text = " ".join(str(answer).strip().split())
     if not text:
@@ -527,25 +595,46 @@ def _material_sentences(answer: str) -> list[str]:
         for item in re.split(r"(?<=[.!?])\s+", text)
         if item.strip()
     ]
-    # A provider can occasionally produce one long semicolon-heavy sentence. Split it
-    # into bounded material clauses so the verifier never treats 1,800 chars as one claim.
     bounded: list[str] = []
     for piece in pieces:
         if len(piece) <= 900:
             bounded.append(piece)
             continue
-        clauses = [item.strip() for item in re.split(r";\s+", piece) if item.strip()]
+        clauses = [
+            item.strip()
+            for item in re.split(r";\s+", piece)
+            if item.strip()
+        ]
         if len(clauses) == 1:
-            clauses = [
-                piece[start : start + 850].rsplit(" ", 1)[0].strip()
-                for start in range(0, len(piece), 850)
-                if piece[start : start + 850].strip()
-            ]
+            clauses = _word_bounded_chunks(piece, 850)
         bounded.extend(item for item in clauses if item)
     return bounded
 
 
-def _sentence_evidence_score(legacy: Any, sentence: str, item: Mapping[str, Any]) -> tuple[int, float, int, str]:
+def _word_bounded_chunks(text: str, maximum: int) -> list[str]:
+    words = text.split()
+    chunks: list[str] = []
+    current: list[str] = []
+    current_length = 0
+    for word in words:
+        added = len(word) + (1 if current else 0)
+        if current and current_length + added > maximum:
+            chunks.append(" ".join(current))
+            current = [word]
+            current_length = len(word)
+        else:
+            current.append(word)
+            current_length += added
+    if current:
+        chunks.append(" ".join(current))
+    return chunks
+
+
+def _sentence_evidence_score(
+    legacy: Any,
+    sentence: str,
+    item: Mapping[str, Any],
+) -> tuple[int, float, int, str]:
     sentence_terms = legacy._meaningful_terms(sentence)
     text = " ".join(
         str(item.get(key, ""))
@@ -561,34 +650,30 @@ def _sentence_evidence_score(legacy: Any, sentence: str, item: Mapping[str, Any]
     )
     item_terms = legacy._meaningful_terms(text)
     overlap = len(sentence_terms & item_terms)
-    graph_bonus = 2 if item.get("evidence_type") == "graph_edge" and "precedes" in sentence.casefold() else 0
+    graph_bonus = (
+        2
+        if item.get("evidence_type") == "graph_edge"
+        and "precedes" in sentence.casefold()
+        else 0
+    )
     ratio = overlap / max(len(sentence_terms), 1)
-    return (overlap + graph_bonus, ratio, -len(item_terms), str(item.get("evidence_id", "")))
+    return (
+        overlap + graph_bonus,
+        ratio,
+        -len(item_terms),
+        str(item.get("evidence_id", "")),
+    )
 
 
-def _support_ref(legacy: Any, item: Mapping[str, Any], terms: set[str]) -> dict[str, str] | None:
-    try:
-        ref = legacy._deterministic_support_ref_for_terms(item, terms)
-    except Exception:
-        ref = None
+def _support_ref(
+    legacy: Any,
+    item: Mapping[str, Any],
+    terms: set[str],
+) -> dict[str, str] | None:
+    ref = v2_patch._support_ref_for_terms(legacy, item, terms)
     if ref is None:
-        try:
-            ref = legacy._deterministic_support_ref(item)
-        except Exception:
-            ref = None
-    if ref is not None:
-        return dict(ref)
-    text = str(item.get("passage_text", ""))
-    quote = legacy._first_exact_evidence_quote(text, max_chars=360)
-    if not quote:
-        return None
-    return {
-        "evidence_id": str(item.get("evidence_id", "")),
-        "locator_id": str(item.get("locator_id", "")),
-        "exact_quote": quote,
-        "exact_support_snippet": quote,
-        "uncertainty": "low",
-    }
+        ref = v2_patch._full_passage_support_ref(item)
+    return dict(ref) if ref is not None else None
 
 
 def _ensure_intent_evidence(
@@ -608,8 +693,7 @@ def _ensure_intent_evidence(
             return
         existing = {
             str(ref.get("evidence_id", ""))
-            for claim in claims
-            for ref in claim.get("support_refs", [])
+            for ref in claims[0].get("support_refs", [])
         }
         if evidence_id in existing:
             return
@@ -618,10 +702,21 @@ def _ensure_intent_evidence(
             claims[0]["support_refs"].append(ref)
             selected_ids.append(evidence_id)
 
-    if intent_class in {"cross_document_comparison", "complementary_synthesis", "temporal_conflict"}:
-        seen_sources: set[str] = set()
+    if intent_class in {
+        "cross_document_comparison",
+        "complementary_synthesis",
+    }:
+        seen_sources = {
+            _source_identity(item)
+            for item in used_items
+            if str(item.get("evidence_id", ""))
+            in {
+                str(ref.get("evidence_id", ""))
+                for ref in claims[0].get("support_refs", [])
+            }
+        }
         for item in used_items:
-            source = str(item.get("source_identity") or item.get("source_id") or "")
+            source = _source_identity(item)
             if source and source not in seen_sources:
                 add_ref(item)
                 seen_sources.add(source)
@@ -629,7 +724,11 @@ def _ensure_intent_evidence(
                 break
     elif intent_class == "graph_relationship":
         edge = next(
-            (item for item in used_items if item.get("evidence_type") == "graph_edge"),
+            (
+                item
+                for item in used_items
+                if item.get("evidence_type") == "graph_edge"
+            ),
             None,
         )
         if edge is not None:
@@ -653,8 +752,53 @@ def _ensure_intent_evidence(
     elif intent_class == "provenance_source_trace":
         for evidence_type in ("passage", "provenance"):
             item = next(
-                (candidate for candidate in used_items if candidate.get("evidence_type") == evidence_type),
+                (
+                    candidate
+                    for candidate in used_items
+                    if candidate.get("evidence_type") == evidence_type
+                ),
                 None,
             )
             if item is not None:
                 add_ref(item)
+    elif intent_class == "temporal_conflict":
+        temporal = next(
+            (
+                item
+                for item in used_items
+                if item.get("evidence_type") == "temporal_record"
+            ),
+            None,
+        )
+        if temporal is not None:
+            add_ref(temporal)
+        first_identity = _source_or_version_identity(temporal) if temporal else ""
+        other = next(
+            (
+                item
+                for item in used_items
+                if _source_or_version_identity(item)
+                and _source_or_version_identity(item) != first_identity
+            ),
+            None,
+        )
+        if other is not None:
+            add_ref(other)
+
+
+def _source_identity(item: Mapping[str, Any]) -> str:
+    return str(
+        item.get("source_identity")
+        or item.get("source_id")
+        or item.get("source")
+        or ""
+    )
+
+
+def _source_or_version_identity(item: Mapping[str, Any] | None) -> str:
+    if item is None:
+        return ""
+    return (
+        f"{_source_identity(item)}@"
+        f"{item.get('retrieved_at') or item.get('temporal_identity') or ''}"
+    )
