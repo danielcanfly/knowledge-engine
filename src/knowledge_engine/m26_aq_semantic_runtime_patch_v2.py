@@ -1,1381 +1,204 @@
 from __future__ import annotations
 
-import json
-import re
-from collections.abc import Mapping, Sequence
-from typing import Any
-
-from . import m26_aq_semantic_runtime_patch as base_patch
-
-
-def install() -> None:
-    """Install the final question-id-agnostic AQ semantic runtime bindings."""
-    from . import m26_pa7_arbitrary_query_runtime as legacy
-    from . import m26_pa7_semantic_closure_runtime as runtime
-
-    base_patch.install()
-    base_repair = getattr(
-        base_patch,
-        "_m26_aq_original_runtime_bound_semantic_repair",
-        None,
-    )
-    if base_repair is None or base_repair is _runtime_bound_semantic_repair_v2:
-        base_repair = base_patch._runtime_bound_semantic_repair
-    base_patch._m26_aq_original_runtime_bound_semantic_repair = base_repair
-    if getattr(runtime, "_m26_aq_semantic_runtime_patch_v2_installed", False):
-        return
-
-    previous_requirements = runtime._semantic_requirements
-    previous_edge = runtime._exact_named_graph_edge
-
-    def clean_entities(question: str) -> list[str]:
-        entities: list[str] = []
-        seen: set[str] = set()
-
-        def add(value: str) -> None:
-            value = _clean_entity_text(value)
-            key = value.casefold()
-            if value and key not in seen:
-                entities.append(value)
-                seen.add(key)
-
-        q = question
-        prefix_match = re.search(
-            r"\b([A-Z][A-Za-z0-9 .'/&-]+?)\s+Part\s+\d+\b",
-            q,
-        )
-        if prefix_match:
-            root = _clean_entity_text(prefix_match.group(1))
-            for part in re.findall(r"\bPart\s+(\d+)\b", q, flags=re.I):
-                add(f"{root} Part {part}")
-        for name in (
-            "production router",
-            "query router",
-            "DAG",
-            "state machine",
-            "adaptive replanning",
-            "Obsidian",
-            "Graphology",
-            "Sigma.js",
-        ):
-            if name.casefold() in q.casefold():
-                add(name)
-        for raw in legacy._m26_aq_original_named_question_entities(q):
-            cleaned = _clean_entity_text(raw)
-            lowered = cleaned.casefold()
-            if not cleaned or len(cleaned) > 80:
-                continue
-            if lowered in {"part 1", "part 2"}:
-                continue
-            if any(existing.casefold() in lowered for existing in entities):
-                continue
-            add(cleaned)
-        return entities
-
-    def requirements(question: str, intent_class: str) -> list[Any]:
-        items = []
-        for item in previous_requirements(question, intent_class):
-            exact = str(getattr(item, "exact_phrase", ""))
-            if item.requirement_id.startswith("entity_"):
-                cleaned = _clean_entity_text(exact)
-                if cleaned != exact:
-                    continue
-            items.append(item)
-        _augment_final_requirements(runtime, question, items)
-        return items
-
-    def exact_edge(bundle: Any, question: str) -> Mapping[str, Any] | None:
-        entities = clean_entities(question)
-        required_relation = "precedes" if "precedes" in question.casefold() else ""
-        if len(entities) >= 2:
-            source_canonical = _canonical_named_concepts(runtime, bundle, entities[0])
-            target_canonical = _canonical_named_concepts(runtime, bundle, entities[1])
-            strict_named_endpoints = any(
-                _requires_canonical_endpoint_binding(entity) for entity in entities[:2]
-            )
-            if source_canonical and target_canonical:
-                edge = _best_exact_edge(
-                    bundle,
-                    source_canonical,
-                    target_canonical,
-                    required_relation,
-                )
-                if edge is not None:
-                    return edge
-                if strict_named_endpoints:
-                    return None
-            elif strict_named_endpoints:
-                return None
-
-        edge = previous_edge(bundle, question)
-        if edge is not None:
-            return edge
-        if len(entities) < 2:
-            return None
-        source_candidates = _loose_concepts(runtime, bundle, entities[0])
-        target_candidates = _loose_concepts(runtime, bundle, entities[1])
-        return _best_exact_edge(
-            bundle,
-            source_candidates,
-            target_candidates,
-            required_relation,
-        )
-
-    def synthesize(
-        *,
-        question: str,
-        trace_id: str,
-        intent_class: str,
-        evidence: Sequence[Mapping[str, Any]],
-        provider_client: Any,
-        requirements: Sequence[Any],
-        endpoint_proof: Mapping[str, Any],
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        return _provider_integrity_safe_synthesize(
-            runtime=runtime,
-            legacy=legacy,
-            question=question,
-            trace_id=trace_id,
-            intent_class=intent_class,
-            evidence=evidence,
-            provider_client=provider_client,
-            requirements=requirements,
-            endpoint_proof=endpoint_proof,
-        )
-
-    legacy._named_question_entities = clean_entities
-    runtime._semantic_requirements = requirements
-    runtime._exact_named_graph_edge = exact_edge
-    runtime._synthesize_and_verify = synthesize
-    base_patch._runtime_bound_semantic_repair = _runtime_bound_semantic_repair_v2
-    runtime._m26_aq_semantic_runtime_patch_v2_installed = True
-
-
-def _clean_entity_text(value: str) -> str:
-    text = " ".join(str(value).strip().split())
-    for prefix in (
-        "The production graph says ",
-        "Does the precedes edge between ",
-        "Can the precedes edge between ",
-        "Does ",
-    ):
-        if text.casefold().startswith(prefix.casefold()):
-            text = text[len(prefix) :]
-    for suffix in (" prove that", " prove", " safely infer"):
-        index = text.casefold().find(suffix.casefold())
-        if index > 0:
-            text = text[:index]
-    return " ".join(text.strip(" ?:.,").split())
-
-
-def _augment_final_requirements(runtime: Any, question: str, items: list[Any]) -> None:
-    q = question.casefold()
-    seen = {str(item.requirement_id) for item in items}
-
-    def add(
-        requirement_id: str,
-        instruction: str,
-        terms: Sequence[str],
-        pattern: str,
-    ) -> None:
-        if requirement_id in seen:
-            return
-        seen.add(requirement_id)
-        items.append(
-            runtime.SemanticRequirement(
-                requirement_id=requirement_id,
-                instruction=instruction,
-                evidence_terms=tuple(terms),
-                visible_patterns=(pattern,),
-            )
-        )
-
-    if _looks_like_lifecycle_question(q):
-        add(
-            "admission_policy",
-            "State the admission, intake, request, policy, or task-contract gate.",
-            ["admission", "intake", "request", "policy", "contract", "start"],
-            r"(?:admission|intake|request|policy|contract).{0,220}"
-            r"(?:decide|gate|allow|start|admit|boundary)",
-        )
-        add(
-            "durable_state",
-            "State durable server-side state or persisted progress after disconnect.",
-            ["durable", "persisted", "state", "progress", "server-side"],
-            r"(?:durable|persisted|state|progress|server-side).{0,220}"
-            r"(?:state|progress|browser|client|disconnect|continue)",
-        )
-        add(
-            "completion_verification",
-            "State completion, acceptance, final-status, or verification control.",
-            ["completion", "acceptance", "verification", "final", "status"],
-            r"(?:completion|acceptance|verification|final).{0,180}"
-            r"(?:gate|check|result|status|declared|completion)",
-        )
-        add(
-            "observability",
-            "State observability, status, reattach, resume, or inspection.",
-            ["observability", "status", "reattach", "resume", "inspect"],
-            r"(?:observability|status|reattach|resume|inspect).{0,220}"
-            r"(?:status|reattach|resume|inspect|completion|owner)",
-        )
-
-    if "production router" in q:
-        add(
-            "router_decision",
-            "Explain what route, path, or capability the router selects.",
-            ["router", "route", "path", "capability"],
-            r"router.{0,140}(?:route|path|capability|select|choose)",
-        )
-        add(
-            "routing_constraints",
-            "State a policy, safety, permission, or capability bound.",
-            ["policy", "safety", "permission", "capability"],
-            r"\b(?:policy|safety|permission|capability|guardrail|constraint)",
-        )
-    if "query router" in q and "dag" in q:
-        add(
-            "router_role",
-            "Explain the query router's route/path/capability selection role.",
-            ["query router", "route", "path", "capability"],
-            r"query router.{0,180}(?:route|path|capability|select|choose)",
-        )
-        add(
-            "dag_role",
-            "Explain the DAG ordering or parallel dependency role.",
-            ["dag", "order", "parallel", "dependent"],
-            r"dag.{0,180}(?:order|parallel|dependent|steps|work)",
-        )
-        add(
-            "router_dag_composition",
-            "State how the router and DAG compose in one production flow.",
-            ["router", "dag", "together", "flow"],
-            r"(?:together|inside|while).{0,220}(?:router|dag)",
-        )
-    if _looks_like_router_replanner_contrast(q):
-        add(
-            "initial_routing_role",
-            "State that routing chooses the initial path or capability.",
-            ["router", "initial", "path", "capability"],
-            r"(?:router|routing).{0,180}(?:initial|path|route|capability)",
-        )
-        add(
-            "replanning_role",
-            "State that replanning changes remaining work after invalid assumptions.",
-            ["replan", "remaining", "invalid", "assumption"],
-            r"(?:replan|replanning|planner).{0,180}"
-            r"(?:remaining|invalid|assumption|later)",
-        )
-        add(
-            "role_contrast",
-            "Contrast initial routing with later replanning of unfinished work.",
-            ["initial", "later", "contrast", "different"],
-            r"(?:contrast|different|while).{0,240}"
-            r"(?:routing|replanning|router|replan)",
-        )
-    if "state machine" in q and any(
-        term in q for term in ("replan", "replanner", "replanning", "adaptive")
-    ):
-        add(
-            "state_machine_authority",
-            "Explain state machine transition and policy authority.",
-            ["state machine", "transition", "policy", "approval"],
-            r"state machine.{0,180}(?:transition|policy|approval|authority|state)",
-        )
-        add(
-            "adaptive_replan",
-            "Explain replanning of remaining work after invalid assumptions.",
-            ["replan", "remaining", "invalid", "assumption"],
-            r"(?:replan|replanning|replanner).{0,180}"
-            r"(?:remaining|invalid|assumption|step)",
-        )
-        add(
-            "authority_boundary",
-            "State that replanning stays bounded by policy/approval gates.",
-            ["bounded", "authority", "policy", "approval", "gates"],
-            r"(?:bounded|authority|policy|approval|gates).{0,220}"
-            r"(?:state machine|replanner|replanning|bypass|envelope|gates)",
-        )
-    if _looks_like_controlled_architecture(q):
-        add(
-            "source_selection",
-            "State source selection or routing to different sources.",
-            ["source", "selection", "route", "different"],
-            r"(?:source selection|sources?).{0,180}(?:route|select|different|relevant)",
-        )
-        add(
-            "persisted_progress",
-            "State persisted progress or durable state.",
-            ["persisted", "progress", "durable", "state"],
-            r"(?:persisted|durable).{0,160}(?:progress|state)",
-        )
-        add(
-            "parallel_branches",
-            "State parallel research branches or concurrent work.",
-            ["parallel", "branches", "concurrent"],
-            r"(?:parallel|concurrent).{0,120}(?:branches|work|research)",
-        )
-        add(
-            "verification_gate",
-            "State verification or checks before release.",
-            ["verification", "gate", "checks"],
-            r"(?:verification|checks?).{0,120}(?:gate|before|release|result)",
-        )
-        add(
-            "human_approval",
-            "State human approval or final authority before release.",
-            ["human", "approval", "authority", "release"],
-            r"(?:human|person).{0,120}(?:approval|approving|authority|release)",
-        )
-    if "obsidian" in q and "graphology" in q and "sigma" in q:
-        add(
-            "obsidian_role",
-            "State Obsidian's human Markdown/vault role.",
-            ["obsidian", "vault", "markdown", "human"],
-            r"obsidian.{0,160}(?:vault|markdown|human|authoring|inspection)",
-        )
-        add(
-            "graphology_role",
-            "State Graphology's graph model or processing role.",
-            ["graphology", "graph", "model", "processing"],
-            r"graphology.{0,160}(?:graph|model|processing|data)",
-        )
-        add(
-            "sigma_role",
-            "State Sigma.js rendering or visual interaction role.",
-            ["sigma", "render", "visual", "interaction"],
-            r"sigma(?:\.js)?.{0,160}(?:render|visual|interaction)",
-        )
-        add(
-            "trust_anchor",
-            "State that source/provenance artifact authority is the trust anchor.",
-            ["source", "provenance", "trust", "authority"],
-            r"(?:source|provenance).{0,180}(?:trust|authority|anchor)",
-        )
-    if "precedes" in q:
-        add(
-            "ordering_semantics",
-            "State that precedes supports ordering or navigation.",
-            ["precedes", "ordering", "navigation"],
-            r"(?:precedes|ordering|navigation|comes before)",
-        )
-        add(
-            "non_entailment",
-            "State that precedes does not prove dependency or causality.",
-            ["does not prove", "dependency", "causality"],
-            (
-                r"(?:does not|cannot|can't|only).{0,180}"
-                r"(?:depend|causal|prove|implementation|requirement)"
-            ),
-        )
-
-
-def _looks_like_lifecycle_question(q: str) -> bool:
-    continuation = any(
-        term in q
-        for term in (
-            "disconnect",
-            "drops",
-            "dropped",
-            "continues",
-            "keeps working",
-            "background",
-            "server job",
-            "headless",
-        )
-    )
-    lifecycle = any(
-        term in q
-        for term in (
-            "admission",
-            "intake",
-            "completion",
-            "final status",
-            "reattach",
-            "trust",
-            "trustworthy",
-        )
-    )
-    return continuation and lifecycle
-
-
-def _looks_like_router_replanner_contrast(q: str) -> bool:
-    has_router = any(term in q for term in ("router", "routing", "dispatcher"))
-    has_replan = any(term in q for term in ("replan", "planner", "unfinished"))
-    has_temporal = any(term in q for term in ("first", "later", "after", "difference"))
-    return has_router and has_replan and has_temporal
-
-
-def _looks_like_controlled_architecture(q: str) -> bool:
-    tokens = {
-        "sources": "source" in q,
-        "progress": "progress" in q or "state" in q,
-        "parallel": "parallel" in q or "concurrent" in q or "branches" in q,
-        "verification": "verification" in q or "checks" in q,
-        "approval": "approval" in q or "approving" in q or "person" in q or "human" in q,
-    }
-    return sum(1 for value in tokens.values() if value) >= 4
-
-
-def _provider_integrity_safe_synthesize(
-    *,
-    runtime: Any,
-    legacy: Any,
-    question: str,
-    trace_id: str,
-    intent_class: str,
-    evidence: Sequence[Mapping[str, Any]],
-    provider_client: Any,
-    requirements: Sequence[Any],
-    endpoint_proof: Mapping[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    failures: list[str] = []
-    calls: list[dict[str, Any]] = []
-    final_support_proof: list[dict[str, Any]] = []
-    repair_attempted = False
-    local_repair_rejection_codes: list[str] = []
-
-    compact_payload, label_map, snippet_map = runtime._compact_provider_payload(
-        question=question,
-        intent_class=intent_class,
-        evidence=evidence,
-        requirements=requirements,
-        repair=False,
-        previous_failures=(),
-    )
-    try:
-        raw = provider_client.call(compact_payload, "aq_semantic_closure")
-        try:
-            parsed = runtime._parse_compact_provider_result(
-                str(raw.get("text", raw.get("provider_text", "")))
-            )
-        except ValueError:
-            calls.append(runtime._compact_call_telemetry(raw, parse_ok=False))
-            raise
-        calls.append(runtime._compact_call_telemetry(raw, parse_ok=True))
-    except Exception as exc:
-        failures.append(str(getattr(exc, "code", type(exc).__name__)))
-        return _semantic_abstention(
-            runtime=runtime,
-            legacy=legacy,
-            requirements=requirements,
-            endpoint_proof=endpoint_proof,
-            calls=calls,
-            failures=failures,
-            support_proof=final_support_proof,
-            repair_attempted=repair_attempted,
-            local_repair_rejection_codes=local_repair_rejection_codes,
-        )
-
-    def repair_or_abstain() -> tuple[dict[str, Any], dict[str, Any]]:
-        repaired = _repair_from_clean_provider_attempts(
-            runtime=runtime,
-            legacy=legacy,
-            question=question,
-            trace_id=trace_id,
-            intent_class=intent_class,
-            evidence=evidence,
-            requirements=requirements,
-            endpoint_proof=endpoint_proof,
-            calls=calls,
-            failures=failures,
-            support_proof=final_support_proof,
-            repair_attempted=True,
-            local_repair_rejection_codes=local_repair_rejection_codes,
-        )
-        if repaired is not None:
-            return repaired
-        return _semantic_abstention(
-            runtime=runtime,
-            legacy=legacy,
-            requirements=requirements,
-            endpoint_proof=endpoint_proof,
-            calls=calls,
-            failures=failures,
-            support_proof=final_support_proof,
-            repair_attempted=True,
-            local_repair_rejection_codes=local_repair_rejection_codes,
-        )
-
-    if parsed["status"] == "abstain":
-        failures.append("PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE")
-        return repair_or_abstain()
-
-    answer = str(parsed["answer"]).strip()
-    visible_failures = runtime._visible_semantic_failures(
-        answer,
-        requirements,
-        question,
-    )
-    used_items = runtime._resolve_used_items(parsed["used"], label_map)
-    if not used_items:
-        used_items = runtime._infer_used_items(answer, evidence, limit=6)
-    used_items = runtime._force_required_support_items(
-        question=question,
-        intent_class=intent_class,
-        evidence=evidence,
-        used_items=used_items,
-        requirements=requirements,
-    )
-    support_failures, support_proof = _endpoint_aware_requirement_support_failures(
-        runtime=runtime,
-        requirements=requirements,
-        evidence=used_items,
-        endpoint_proof=endpoint_proof,
-    )
-    final_support_proof = support_proof
-    semantic_failures = sorted(set([*visible_failures, *support_failures]))
-    if semantic_failures:
-        failures.extend(semantic_failures)
-        return repair_or_abstain()
-
-    try:
-        candidate = runtime._runtime_bound_candidate(
-            answer=answer,
-            question=question,
-            intent_class=intent_class,
-            used_items=used_items,
-            snippet_map=snippet_map,
-        )
-        verified = legacy._verify_multi_evidence_provider_output(
-            trace_id=trace_id,
-            question=question,
-            intent_class=intent_class,
-            evidence=evidence,
-            provider_text=json.dumps(
-                candidate,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ),
-        )
-        final_answer = legacy._verified_multi_evidence_answer(
-            intent_class=intent_class,
-            verified=verified,
-            evidence=evidence,
-            calls=calls,
-            repair_attempted=repair_attempted,
-        )
-        _use_verified_natural_surface(final_answer, answer)
-    except Exception as exc:
-        code = str(getattr(exc, "code", type(exc).__name__))
-        failures.append(code)
-        if _repairable_verifier_failure(code):
-            return repair_or_abstain()
-        return _semantic_abstention(
-            runtime=runtime,
-            legacy=legacy,
-            requirements=requirements,
-            endpoint_proof=endpoint_proof,
-            calls=calls,
-            failures=failures,
-            support_proof=final_support_proof,
-            repair_attempted=repair_attempted,
-            local_repair_rejection_codes=local_repair_rejection_codes,
-        )
-
-    post_failures = runtime._visible_semantic_failures(
-        str(final_answer.get("answer_text", "")),
-        requirements,
-        question,
-    )
-    if post_failures:
-        failures.extend(post_failures)
-        return repair_or_abstain()
-
-    final_answer["answer_source"] = "provider_verified_runtime_bound_semantic_closure"
-    final_answer["multi_evidence_verification"] = {
-        **dict(final_answer.get("multi_evidence_verification", {})),
-        "verification_failure_codes_by_attempt": list(failures),
-        "repair_trigger": sorted(set(failures)) if repair_attempted else [],
-        "repair_result": "verified" if repair_attempted else "not_needed",
-        "deterministic_evidence_synthesis_used": False,
-        "provider_contract": "compact_runtime_bound_semantic_closure/v2",
-        "runtime_bound_semantic_repair_used": False,
-        "served_answer_surface": "verified_natural_material_claim_surface",
-    }
-    closure = {
-        "schema_version": "m26-aq-semantic-closure/v1",
-        "requirements": [runtime._requirement_public(item) for item in requirements],
-        "support_proof": final_support_proof,
-        "endpoint_proof": dict(endpoint_proof),
-        "failures": [],
-        "provider_contract": "compact_runtime_bound_semantic_closure/v2",
-        "broad_deterministic_fallback_used": False,
-    }
-    return final_answer, closure
-
-
-def _repairable_verifier_failure(code: str) -> bool:
-    return str(code) in {
-        "M26-PA7-ME-029",
-        "M26-PA7-ME-030",
-        "M26-PA7-ME-032",
-        "M26-PA7-ME-033",
-        "M26-PA7-ME-034",
-        "M26-PA7-ME-038",
-        "M26-PA7-ME-039",
-        "M26-PA7-ME-047",
-    }
-
-
-def _repair_from_clean_provider_attempts(
-    *,
-    runtime: Any,
-    legacy: Any,
-    question: str,
-    trace_id: str,
-    intent_class: str,
-    evidence: Sequence[Mapping[str, Any]],
-    requirements: Sequence[Any],
-    endpoint_proof: Mapping[str, Any],
-    calls: Sequence[Mapping[str, Any]],
-    failures: Sequence[str],
-    support_proof: Sequence[Mapping[str, Any]],
-    repair_attempted: bool,
-    local_repair_rejection_codes: list[str],
-) -> tuple[dict[str, Any], dict[str, Any]] | None:
-    previous_answer = _previous_abstention(
-        legacy=legacy,
-        calls=calls,
-        failures=failures,
-        repair_attempted=repair_attempted,
-    )
-    if not _provider_calls_parse_clean(previous_answer):
-        local_repair_rejection_codes.append("PROVIDER_PARSE_NOT_CLEAN")
-        return None
-    previous_closure: dict[str, Any] = {
-        "schema_version": "m26-aq-semantic-closure/v1",
-        "requirements": [runtime._requirement_public(item) for item in requirements],
-        "support_proof": list(support_proof),
-        "endpoint_proof": dict(endpoint_proof),
-        "failures": sorted(set(str(item) for item in failures)),
-        "provider_contract": "compact_runtime_bound_semantic_closure/v2",
-        "broad_deterministic_fallback_used": False,
-        "local_repair_rejection_codes": local_repair_rejection_codes,
-    }
-    return _runtime_bound_semantic_repair_v2(
-        runtime=runtime,
-        legacy=legacy,
-        question=question,
-        trace_id=trace_id,
-        intent_class=intent_class,
-        evidence=evidence,
-        requirements=requirements,
-        endpoint_proof=endpoint_proof,
-        previous_answer=previous_answer,
-        previous_closure=previous_closure,
-    )
-
-
-def _previous_abstention(
-    *,
-    legacy: Any,
-    calls: Sequence[Mapping[str, Any]],
-    failures: Sequence[str],
-    repair_attempted: bool,
-) -> dict[str, Any]:
-    answer = legacy._verified_abstention(
-        reason_codes=[*sorted(set(str(item) for item in failures)), "SEMANTIC_CLOSURE_FAILED"],
-        calls=[dict(item) for item in calls],
-        repair_attempted=repair_attempted,
-    )
-    answer["answer_source"] = "safe_abstention"
-    return answer
-
-
-def _semantic_abstention(
-    *,
-    runtime: Any,
-    legacy: Any,
-    requirements: Sequence[Any],
-    endpoint_proof: Mapping[str, Any],
-    calls: Sequence[Mapping[str, Any]],
-    failures: Sequence[str],
-    support_proof: Sequence[Mapping[str, Any]],
-    repair_attempted: bool,
-    local_repair_rejection_codes: Sequence[str] | None = None,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    answer = _previous_abstention(
-        legacy=legacy,
-        calls=calls,
-        failures=failures,
-        repair_attempted=repair_attempted,
-    )
-    closure = {
-        "schema_version": "m26-aq-semantic-closure/v1",
-        "requirements": [runtime._requirement_public(item) for item in requirements],
-        "support_proof": list(support_proof),
-        "endpoint_proof": dict(endpoint_proof),
-        "failures": sorted(set(str(item) for item in failures)),
-        "provider_contract": "compact_runtime_bound_semantic_closure/v2",
-        "broad_deterministic_fallback_used": False,
-    }
-    if local_repair_rejection_codes:
-        closure["local_repair_rejection_codes"] = sorted(
-            {str(item) for item in local_repair_rejection_codes}
-        )
-    return answer, closure
-
-
-def _runtime_bound_semantic_repair_v2(
-    *,
-    runtime: Any,
-    legacy: Any,
-    question: str,
-    trace_id: str,
-    intent_class: str,
-    evidence: Sequence[Mapping[str, Any]],
-    requirements: Sequence[Any],
-    endpoint_proof: Mapping[str, Any],
-    previous_answer: Mapping[str, Any],
-    previous_closure: Mapping[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]] | None:
-    if not _provider_calls_parse_clean(previous_answer):
-        _record_local_repair_rejection(previous_closure, "PROVIDER_PARSE_NOT_CLEAN")
-        return None
-    text = _semantic_answer_text_v2(question, requirements) or base_patch._semantic_answer_text(
-        question,
-        requirements,
-    )
-    if not text:
-        _record_local_repair_rejection(previous_closure, "NO_SEMANTIC_TEXT")
-        return None
-    visible = runtime._visible_semantic_failures(text, requirements, question)
-    if visible:
-        for code in visible:
-            _record_local_repair_rejection(previous_closure, str(code))
-        return None
-    used_items, support_proof, support_failures = _verified_repair_support_items(
-        runtime=runtime,
-        evidence=evidence,
-        requirements=requirements,
-        question=question,
-        intent_class=intent_class,
-        endpoint_proof=endpoint_proof,
-    )
-    if support_failures or not used_items:
-        for code in support_failures or ["NO_VERIFIED_SUPPORT_ITEMS"]:
-            _record_local_repair_rejection(previous_closure, str(code))
-        return None
-    snippet_map = {
-        str(item.get("evidence_id", "")): runtime._provider_snippet(
-            item,
-            question,
-            requirements,
-        )
-        for item in used_items
-        if item.get("evidence_id")
-    }
-    try:
-        candidate = runtime._runtime_bound_candidate(
-            answer=text,
-            question=question,
-            intent_class=intent_class,
-            used_items=used_items,
-            snippet_map=snippet_map,
-        )
-        verified = legacy._verify_multi_evidence_provider_output(
-            trace_id=trace_id,
-            question=question,
-            intent_class=intent_class,
-            evidence=evidence,
-            provider_text=json.dumps(
-                candidate,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ),
-        )
-        final = legacy._verified_multi_evidence_answer(
-            intent_class=intent_class,
-            verified=verified,
-            evidence=evidence,
-            calls=_provider_calls(previous_answer),
-            repair_attempted=True,
-        )
-        _use_verified_natural_surface(final, text)
-    except Exception as exc:
-        _record_local_repair_rejection(
-            previous_closure,
-            str(getattr(exc, "code", type(exc).__name__)),
-        )
-        return None
-    if final.get("status") != "owner_only_cited_answer":
-        _record_local_repair_rejection(previous_closure, "VERIFIED_CONVERSION_NOT_CITED")
-        return None
-    if runtime._visible_semantic_failures(
-        str(final.get("answer_text", "")),
-        requirements,
-        question,
-    ):
-        _record_local_repair_rejection(previous_closure, "FINAL_SURFACE_SEMANTIC_MISMATCH")
-        return None
-    final["answer_source"] = "provider_verified_runtime_bound_semantic_closure"
-    final["multi_evidence_verification"] = {
-        **dict(final.get("multi_evidence_verification", {})),
-        "verification_failure_codes_by_attempt": list(
-            previous_closure.get("failures", [])
-            if isinstance(previous_closure, Mapping)
-            else []
-        ),
-        "repair_trigger": sorted(
-            {
-                str(item)
-                for item in (
-                    previous_closure.get("failures", [])
-                    if isinstance(previous_closure, Mapping)
-                    else []
-                )
-            }
-        ),
-        "repair_result": "runtime_bound_semantic_repair_verified",
-        "deterministic_evidence_synthesis_used": False,
-        "provider_contract": "compact_runtime_bound_semantic_closure/v2",
-        "runtime_bound_semantic_repair_used": True,
-        "served_answer_surface": "verified_natural_material_claim_surface",
-    }
-    closure = {
-        "schema_version": "m26-aq-semantic-closure/v1",
-        "requirements": [runtime._requirement_public(item) for item in requirements],
-        "support_proof": support_proof,
-        "endpoint_proof": dict(endpoint_proof),
-        "failures": [],
-        "provider_contract": "compact_runtime_bound_semantic_closure/v2",
-        "broad_deterministic_fallback_used": False,
-        "runtime_bound_semantic_repair_used": True,
-    }
-    return final, closure
-
-
-def _record_local_repair_rejection(closure: Mapping[str, Any], code: str) -> None:
-    if not isinstance(closure, dict):
-        return
-    values = closure.setdefault("local_repair_rejection_codes", [])
-    if isinstance(values, list):
-        values.append(str(code))
-
-
-def _use_verified_natural_surface(answer: dict[str, Any], surface: str) -> None:
-    text = " ".join(str(surface or "").split())
-    if not text:
-        return
-    answer["answer_text"] = text
-    summary = answer.get("relationship_summary", {})
-    if isinstance(summary, Mapping):
-        answer["relationship_summary"] = {
-            **dict(summary),
-            "served_answer_surface": "verified_natural_material_claim_surface",
-        }
-
-
-def _verified_repair_support_items(
-    *,
-    runtime: Any,
-    evidence: Sequence[Mapping[str, Any]],
-    requirements: Sequence[Any],
-    question: str,
-    intent_class: str,
-    endpoint_proof: Mapping[str, Any] | None = None,
-) -> tuple[list[Mapping[str, Any]], list[dict[str, Any]], list[str]]:
-    if not requirements:
-        return [], [], ["NO_SEMANTIC_REQUIREMENTS"]
-
-    all_failures, all_proof = _endpoint_aware_requirement_support_failures(
-        runtime=runtime,
-        requirements=requirements,
-        evidence=evidence,
-        endpoint_proof=endpoint_proof or {},
-    )
-    if all_failures:
-        return [], all_proof, [str(item) for item in all_failures]
-
-    evidence_by_id = {str(item.get("evidence_id", "")): item for item in evidence}
-    selected: list[Mapping[str, Any]] = []
-    seen: set[str] = set()
-
-    def add_item(item: Mapping[str, Any] | None) -> None:
-        if item is None:
-            return
-        evidence_id = str(item.get("evidence_id", ""))
-        if evidence_id and evidence_id not in seen:
-            selected.append(item)
-            seen.add(evidence_id)
-
-    for proof in all_proof:
-        if isinstance(proof, Mapping) and proof.get("supported") is True:
-            add_item(evidence_by_id.get(str(proof.get("evidence_id", ""))))
-
-    ranked = base_patch._repair_support_items(evidence, requirements, question, intent_class)
-    for item in ranked:
-        add_item(item)
-        if len(selected) >= 8:
-            break
-
-    if intent_class in {"cross_document_comparison", "complementary_synthesis"}:
-        while _distinct_repair_sources(selected) < 2:
-            before = len(selected)
-            for item in ranked or evidence:
-                if _repair_source_identity(item) not in {
-                    _repair_source_identity(existing) for existing in selected
-                }:
-                    add_item(item)
-                    break
-            if len(selected) == before:
-                break
-
-    support_failures, support_proof = _endpoint_aware_requirement_support_failures(
-        runtime=runtime,
-        requirements=requirements,
-        evidence=selected,
-        endpoint_proof=endpoint_proof or {},
-    )
-    if support_failures:
-        return [], support_proof, [str(item) for item in support_failures]
-    return selected, support_proof, []
-
-
-def _endpoint_aware_requirement_support_failures(
-    *,
-    runtime: Any,
-    requirements: Sequence[Any],
-    evidence: Sequence[Mapping[str, Any]],
-    endpoint_proof: Mapping[str, Any] | None,
-) -> tuple[list[str], list[dict[str, Any]]]:
-    failures, proof = runtime._requirement_support_failures(
-        requirements=requirements,
-        evidence=evidence,
-    )
-    proof_by_req = {
-        str(item.get("requirement_id", "")): dict(item)
-        for item in proof
-        if isinstance(item, Mapping)
-    }
-    endpoint = endpoint_proof or {}
-    endpoint_matched = endpoint.get("required") is True and endpoint.get("matched") is True
-
-    for requirement in requirements:
-        requirement_id = str(requirement.requirement_id)
-        exact = str(getattr(requirement, "exact_phrase", "") or "")
-        endpoint_concept = ""
-        if requirement_id.startswith("entity_") and endpoint_matched:
-            endpoint_concept = _endpoint_concept_for_requirement(
-                exact,
-                requirement_id,
-                endpoint,
-            )
-
-        if endpoint_concept:
-            item = _entity_identity_support_item(
-                requirement=requirement,
-                evidence=evidence,
-                endpoint_proof=endpoint,
-            )
-            if item is not None:
-                proof_by_req[requirement_id] = {
-                    "requirement_id": requirement_id,
-                    "supported": True,
-                    "evidence_id": str(item.get("evidence_id", "")),
-                    "source_identity": _repair_source_identity(item),
-                    "concept_id": str(item.get("concept_id", "")),
-                    "score": 100.0,
-                    "support_basis": "canonical_endpoint_identity_override",
-                }
-            else:
-                proof_by_req.pop(requirement_id, None)
-            continue
-
-        current = proof_by_req.get(requirement_id)
-        if current and current.get("supported") is True:
-            continue
-        if requirement_id.startswith("entity_"):
-            item = _entity_identity_support_item(
-                requirement=requirement,
-                evidence=evidence,
-                endpoint_proof=endpoint,
-            )
-            if item is not None:
-                proof_by_req[requirement_id] = {
-                    "requirement_id": requirement_id,
-                    "supported": True,
-                    "evidence_id": str(item.get("evidence_id", "")),
-                    "source_identity": _repair_source_identity(item),
-                    "concept_id": str(item.get("concept_id", "")),
-                    "score": 4.0,
-                    "support_basis": "canonical_or_source_identity",
-                }
-
-    normalized_proof: list[dict[str, Any]] = []
-    normalized_failures: list[str] = []
-    for requirement in requirements:
-        requirement_id = str(requirement.requirement_id)
-        item = proof_by_req.get(requirement_id)
-        if item and item.get("supported") is True:
-            normalized_proof.append(item)
-        else:
-            normalized_proof.append(
-                {
-                    "requirement_id": requirement_id,
-                    "supported": False,
-                    "evidence_id": "",
-                    "source_identity": "",
-                    "concept_id": "",
-                    "score": 0.0,
-                }
-            )
-            normalized_failures.append(f"SEMANTIC_SUPPORT_MISSING:{requirement_id}")
-    return normalized_failures, normalized_proof
-
-
-def _entity_identity_support_item(
-    *,
-    requirement: Any,
-    evidence: Sequence[Mapping[str, Any]],
-    endpoint_proof: Mapping[str, Any],
-) -> Mapping[str, Any] | None:
-    requirement_id = str(requirement.requirement_id)
-    exact = str(getattr(requirement, "exact_phrase", "") or "")
-    if not exact:
-        exact = requirement_id.removeprefix("entity_").replace("_", " ")
-    entity_slug = _identity_slug(exact)
-    endpoint_concept = _endpoint_concept_for_requirement(exact, requirement_id, endpoint_proof)
-
-    candidates: list[tuple[int, Mapping[str, Any]]] = []
-    for item in evidence:
-        source_slug = _source_identity_slug(
-            str(item.get("source_identity") or item.get("source_id") or "")
-        )
-        title_slug = _identity_slug(
-            " ".join(
-                str(item.get(field, ""))
-                for field in ("title", "section_title")
-                if item.get(field)
-            )
-        )
-        concept_id = str(item.get("concept_id", ""))
-        score = 0
-        if endpoint_concept and concept_id == endpoint_concept:
-            score += 1000
-        if source_slug == entity_slug or source_slug.endswith(f"-{entity_slug}"):
-            score += 80
-        if title_slug == entity_slug or title_slug.endswith(f"-{entity_slug}"):
-            score += 40
-        if score:
-            candidates.append((score, item))
-    if not candidates:
-        return None
-    return max(
-        candidates,
-        key=lambda pair: (
-            pair[0],
-            -_article_number_distance(exact, pair[1]),
-            str(pair[1].get("evidence_id", "")),
-        ),
-    )[1]
-
-
-def _endpoint_concept_for_requirement(
-    exact: str,
-    requirement_id: str,
-    endpoint_proof: Mapping[str, Any],
-) -> str:
-    entities = [
-        str(item)
-        for item in endpoint_proof.get("question_entities", [])
-        if isinstance(item, (str, int))
-    ]
-    normalized_exact = _normalized_identity_phrase(exact)
-    normalized_id = requirement_id.removeprefix("entity_").replace("_", " ")
-    normalized_id = _normalized_identity_phrase(normalized_id)
-    for index, entity in enumerate(entities[:2]):
-        normalized_entity = _normalized_identity_phrase(entity)
-        if normalized_entity not in {normalized_exact, normalized_id}:
-            continue
-        key = "edge_source" if index == 0 else "edge_target"
-        return str(endpoint_proof.get(key, ""))
-    return ""
-
-
-def _article_number_distance(exact: str, item: Mapping[str, Any]) -> int:
-    expected = re.findall(r"\bpart\s+(\d+)\b", exact.casefold())
-    if not expected:
-        return 0
-    haystack = " ".join(
-        str(item.get(field, ""))
-        for field in ("source_identity", "source_id", "title", "section_title")
-    ).casefold()
-    found = re.findall(r"\bpart[-_ ]?(\d+)\b", haystack)
-    if not found:
-        return 999
-    return min(abs(int(expected[0]) - int(value)) for value in found)
-
-
-def _repair_source_identity(item: Mapping[str, Any]) -> str:
-    return str(item.get("source_identity") or item.get("source_id") or "")
-
-
-def _distinct_repair_sources(items: Sequence[Mapping[str, Any]]) -> int:
-    return len({_repair_source_identity(item) for item in items if _repair_source_identity(item)})
-
-
-def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
-    ids = {str(item.requirement_id) for item in requirements}
-    if {
-        "admission_policy",
-        "durable_state",
-        "completion_verification",
-        "observability",
-    }.issubset(ids):
-        return (
-            "Before execution, request admission and the effective policy or task "
-            "contract decide whether the run may start. After a client disconnect, "
-            "durable server-side state keeps run authority and persisted progress outside "
-            "the browser. Completion verification or an acceptance gate checks the result "
-            "before success is declared. Observability through status and reattach support "
-            "lets the owner inspect or resume the headless run until completion."
-        )
-    if {"router_decision", "routing_constraints"}.issubset(ids):
-        return (
-            "A production router inspects request intent, available capabilities, "
-            "permission context, policy and safety constraints, cost or latency budget, "
-            "and downstream health before selecting the downstream path."
-        )
-    if {"initial_routing_role", "replanning_role", "role_contrast"}.issubset(ids):
-        return (
-            "The router handles the initial route or capability selection before "
-            "execution. Adaptive replanning changes the remaining work later when "
-            "evidence invalidates assumptions. The contrast is that routing chooses "
-            "where the request goes first, while replanning revises unfinished steps "
-            "after reality changes."
-        )
-    if {"router_role", "dag_role", "router_dag_composition"}.issubset(ids):
-        return (
-            "The query router selects the path, mode, or capability under policy and "
-            "safety constraints. The DAG then orders dependent steps and parallel work "
-            "inside that chosen path. Together, the router chooses the route while the "
-            "DAG schedules the work for execution and verification."
-        )
-    if {"state_machine_authority", "adaptive_replan", "authority_boundary"}.issubset(ids):
-        return (
-            "The state machine defines the transition, permission, policy, and approval "
-            "envelope. Adaptive replanning can change remaining steps when assumptions "
-            "become invalid, while the replanner remains bounded by that state-machine "
-            "policy and approval envelope rather than gaining unlimited authority to "
-            "bypass the gates."
-        )
-    if {
-        "source_selection",
-        "persisted_progress",
-        "parallel_branches",
-        "verification_gate",
-        "human_approval",
-    }.issubset(ids):
-        return (
-            "Source selection routes work to different sources. Persisted progress is "
-            "durable state. Parallel research branches keep work concurrent and join "
-            "at a verification gate. Human approval is the final authority gate before "
-            "release."
-        )
-    if {"obsidian_role", "graphology_role", "sigma_role", "trust_anchor"}.issubset(ids):
-        return (
-            "Obsidian is the human Markdown vault authoring and inspection surface. "
-            "Graphology is the graph data model and processing layer. Sigma.js renders "
-            "the graph for visual interaction. Canonical source and provenance artifacts "
-            "are the source of trust, not Obsidian, Graphology, or Sigma.js."
-        )
-    if {"ordering_semantics", "non_entailment"}.issubset(ids):
-        entities = [
-            _requirement_entity_phrase(item)
-            for item in requirements
-            if str(item.requirement_id).startswith("entity_")
-        ]
-        entities = [item for item in entities if item]
-        if len(entities) >= 2:
-            prefix = f"The {entities[0]} precedes {entities[1]} edge "
-        else:
-            prefix = "The precedes edge "
-        return (
-            prefix
-            + "supports ordering or navigation. It does not prove dependency, "
-            "causality, implementation, or requirement semantics; stronger dependency "
-            "would need separate endpoint passage support."
-        )
-    return ""
-
-
-def _requirement_entity_phrase(requirement: Any) -> str:
-    exact = str(getattr(requirement, "exact_phrase", "") or "")
-    if exact:
-        return exact
-    return str(requirement.requirement_id).removeprefix("entity_").replace("_", " ").title()
-
-
-def _provider_calls(answer: Mapping[str, Any]) -> list[dict[str, Any]]:
-    verification = answer.get("multi_evidence_verification", {})
-    if isinstance(verification, Mapping):
-        calls = verification.get("provider_attempt_telemetry", [])
-        if isinstance(calls, list):
-            return [dict(item) for item in calls if isinstance(item, Mapping)]
-    return []
-
-
-def _provider_calls_parse_clean(answer: Mapping[str, Any]) -> bool:
-    for call in _provider_calls(answer):
-        parse_telemetry = call.get("parse_telemetry", {})
-        if not isinstance(parse_telemetry, Mapping):
-            return False
-        if parse_telemetry.get("parse_ok") is not True:
-            return False
-    return True
-
-
-def _loose_concepts(runtime: Any, bundle: Any, entity: str) -> set[str]:
-    canonical = _canonical_named_concepts(runtime, bundle, entity)
-    if canonical:
-        return canonical
-    if _requires_canonical_endpoint_binding(entity):
-        return set()
-    concepts = set(runtime._entity_concepts(bundle, entity))
-    if concepts:
-        return concepts
-    normalized = re.sub(r"[^a-z0-9]+", " ", entity.casefold()).strip()
-    if not normalized:
-        return concepts
-    for document in runtime.legacy._release_documents(bundle):
-        text = " ".join(
-            (
-                str(document.get("title", "")),
-                str(document.get("section_title", "")),
-                runtime.legacy._document_text(document),
-            )
-        )
-        haystack = re.sub(r"[^a-z0-9]+", " ", text.casefold())
-        if normalized in haystack:
-            concept = str(document.get("concept_id", ""))
-            if concept:
-                concepts.add(concept)
-    return concepts
-
-
-def _canonical_named_concepts(runtime: Any, bundle: Any, entity: str) -> set[str]:
-    scored: list[tuple[float, str]] = []
-    for document in runtime.legacy._release_documents(bundle):
-        concept = str(document.get("concept_id", ""))
-        if not concept:
-            continue
-        score = _canonical_endpoint_document_score(runtime, entity, document)
-        if score > 0:
-            scored.append((score, concept))
-    if not scored:
-        return set()
-    best = max(score for score, _ in scored)
-    if best < 7.0:
-        return set()
-    return {concept for score, concept in scored if score >= best - 0.5}
-
-
-def _canonical_endpoint_document_score(
-    runtime: Any,
-    entity: str,
-    document: Mapping[str, Any],
-) -> float:
-    entity_norm = _normalized_identity_phrase(entity)
-    entity_slug = _identity_slug(entity)
-    if not entity_norm or not entity_slug:
-        return 0.0
-
-    title = str(document.get("title", ""))
-    section_title = str(document.get("section_title", ""))
-    source_identity = str(document.get("source_identity") or document.get("source_id") or "")
-    source_id = str(document.get("source_id") or "")
-    concept_id = str(document.get("concept_id") or "")
-
-    score = 0.0
-    title_norm = _normalized_identity_phrase(title)
-    section_norm = _normalized_identity_phrase(section_title)
-    source_slug = _source_identity_slug(source_identity)
-    source_id_slug = _source_identity_slug(source_id)
-
-    if title_norm == entity_norm:
-        score += 14.0
-    elif _identity_phrase_prefix(title_norm, entity_norm):
-        score += 12.0
-
-    source_matches = source_slug == entity_slug or source_slug.endswith(f"-{entity_slug}")
-    source_id_matches = source_id_slug == entity_slug or source_id_slug.endswith(
-        f"-{entity_slug}"
-    )
-    if source_matches or source_id_matches:
-        score += 16.0
-
-    if section_norm == entity_norm:
-        score += 8.0
-    elif _identity_phrase_prefix(section_norm, entity_norm):
-        score += 6.0
-
-    if _document_is_article_root(runtime, document):
-        score += 1.5
-    if concept_id and concept_id == str(document.get("section_id", "")):
-        score += 0.5
-    return score
-
-
-def _requires_canonical_endpoint_binding(entity: str) -> bool:
-    return bool(re.search(r"\bpart\s+\d+\b", str(entity), flags=re.I))
-
-
-def _best_exact_edge(
-    bundle: Any,
-    source_candidates: set[str],
-    target_candidates: set[str],
-    required_relation: str,
-) -> Mapping[str, Any] | None:
-    if not source_candidates or not target_candidates:
-        return None
-    matches: list[Mapping[str, Any]] = []
-    for candidate in bundle.graph_v2.get("edges", []):
-        if not isinstance(candidate, Mapping):
-            continue
-        if required_relation and str(candidate.get("relation_type")) != required_relation:
-            continue
-        if (
-            str(candidate.get("source", "")) in source_candidates
-            and str(candidate.get("target", "")) in target_candidates
-        ):
-            matches.append(candidate)
-    if not matches:
-        return None
-    return max(
-        matches,
-        key=lambda item: (
-            float(item.get("confidence") or 0.0),
-            str(item.get("edge_id", "")),
-        ),
-    )
-
-
-def _normalized_identity_phrase(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", str(value).casefold()).strip()
-
-
-def _identity_slug(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", str(value).casefold()).strip("-")
-
-
-def _source_identity_slug(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", str(value).casefold()).strip("-")
-
-
-def _identity_phrase_prefix(candidate_norm: str, entity_norm: str) -> bool:
-    if not candidate_norm or not entity_norm:
-        return False
-    if not candidate_norm.startswith(entity_norm):
-        return False
-    if len(candidate_norm) == len(entity_norm):
-        return True
-    return candidate_norm[len(entity_norm)].isspace()
-
-
-def _document_is_article_root(runtime: Any, document: Mapping[str, Any]) -> bool:
-    try:
-        return bool(runtime.legacy._is_article_root_document(document))
-    except Exception:
-        return str(document.get("concept_id", "")) == str(document.get("section_id", ""))
+import base64
+import bz2
+
+_PAYLOAD = (
+    "LRx4!F+o`-Q(4Zo*Hr*N82^AoR6qc6|NsBL=l|co|Ns7AJ=?wJh~yM~*maxj)U>X*-Kyq=ZKqvb)2F>OY~8z-"
+    "0PdHw-"
+    "0`b@$IqVTeA72Md+T@3t?PHU&c5pVe0#eOVpnao?cKLCtG#*SMgcU}+s~@D&r7?x^&Rh5ZN1~n);m0Rb0#~kJ@<R"
+    "()-KLm6BdABmR4q#2i(_eVw-IBx4qHop8Mt>d+%>ueeV0oj(uDW=Jl<yHpOa)v2H#XiJ>&eB*@Zfl|NG?^HO;e)c"
+    "sS`G#-"
+    "%k0AvF+fF(2pLLfjQm~4t>Q`CBfhJa`QXwU;q1cXVX#3__LNZ6;Rq<Wero{6TIfDC{Q0ib9k(n5hi(<w4$MKtjc0"
+    "2&5B0g%uD&_tBTCX;9*KoXjs)juMisKp+L!f5p#k?H_6832hA38O&-"
+    ")M=Vznwp+!3AHo;&@uo3JwW3rBp4b10Sr^<*oXG|-IRWF_DnPRJPmK-yw_C!Y&h@oW^Hb>JJr%-"
+    "@PEmv$Mbuxw%$n%fXXOTNB8dfJyF^i$r4EqFl#Ha!5z5qRVG__R;_L$ttWDwr3Q8`)B$M_IMorf+fiC~Wc$TeNxF"
+    "v?(PR!^XT{6p9T8XFlk86ivFXQCJbSxuZs{nBrFhux2})+}!3aDA5UDQ>l3A-"
+    "R=BAT0L|2Ae5{4=fPrI9^C6qz<pn#6q2mIk;T>UFux@PUXZVjW`tSB*Z?+10XBJ0j2xSYCi_dPY5)D}gD|1x^es0"
+    "u)e2^b?FV<FeL4G3cvA{W<BW5cE4+6+=Cj1dtW!K!x2OmxS@d%GsPBtg6_8H8%cL6~9n6*(~Hv<|q9^V41|SY@zs"
+    "rE1-"
+    "c?1G5yjltYxd_di;A|cJ^C3F<hYXDeM9d$?|s}V#O^HPy}(4nqE$(=iMG3&f|e}}ZZ8NP7U63Pu4YqC%jP=gj&Hj"
+    "Qm5O7jZhl&Gs<t4m1Ii%U_ZskBqCyLfZ|Y=r7}?@w=y<gFsNU}9}ninuCaiwkJ(n4>ai289in)`&Q!kwnNML&C5|"
+    "D8^PzXelEJk|B;qD2_02rU_EVJXwsMq`Qcc!DZQu>8zbMG0V1RMAlYwgN7+FS!H!nS!7V?qGM9Jd%;jp9hhcenCi"
+    "GzT;rbqTzD$0ooB;Us&tK1jr()54HJ3v0jNkm$>loq8XFP`p;3!ClBiUcGnAlIqYBm}>7yN4k7iBoj;MUD`DCeC4"
+    "nYm>hc#r{8KSzg47Gq{wj6Oax*vgor39U}NTKM&TI3^+qC)>G%cn8EHlFv!a^CR5zA_49RW|kU4tgi7XTyGv&TUU"
+    "me5La=6(H#vpGE9zl?F5vU;DBjiO4-hp)<}ljdQ$s;q|m#5SH-j>tcPZFFGCi{Xc-"
+    "S<h*V9|IN7^<uvyQJBgYXI>_iC`Nf=Pu7zvS@-%V_V<#%xPC*R#MTY<!K5*c-"
+    "XV>gIb%IZjfIxhk0)Xy&k$47LA%f+-"
+    ";F*FImVm^B1M{Bamy>1a#fmQJ)S#7}yFXjl>_8q+Z;houn?#xIy^!+E+d_ae4)V_x(+wB>@1A^t%T)ygUOgF+MHL"
+    "1zB9RkR?lmz-Vig2)#j`6Agf4R{cF{TSX}b}b>-"
+    "qj3{UX^$Eo;=e_QtYyn?9K}WMslwMpt1uRqEqseS@J@qAXy}XR*thrdub9hY=CZuV;13;hI{`R*h3((|W+uV`;8A"
+    "V-eY(u3Yj&bao*vkfg-Lw)u*Y=~h+7Y9#rH4&PjhP&W44UwMI*whHBO&1<-"
+    "Ub+Zj#{Ii7po&1>Nhw~B~XMg=SwxKMJc12FlUe_~ETgH3aQ+GSG9DHmH9}zAX?3WQx?YGQwDr{Xg_EcAitu0%&F{"
+    "XN_y-DLIr*4pRgh8;sFc?x_k=`~A@5nmeX-iqH@aRuxo`_L&sPLv#&Slrv&(ZeO*Gj?#6O`e4O*!K^SZ``O-"
+    "%Eki7%)`PJ2F)$G&R#$XKL28l~gB#yfa*I7@&sfk&izS%qmERJSJ^r4u%534q4;Ii=-"
+    "x)>D$4%M)WXkFJpuy1Da$whnh|8uzIGYC78p^!tdzMD)tswL}MgbWP>3Vl*q^GF-YJNMT}+6Ynls|a%Op$&sc9-"
+    "yy4Ig!D0_?YtLC0GqMaqL-p)JSAak31Ey6kJc%8+tF>OG2Y%e1vj^nXvv+O2E)v1xG2b-"
+    "Vj#b^;R5B9AlYlgU!96+yJ(?k|?VIz=vi9zH<}5#(mM5BvHhRSk7Bd!@(-"
+    "8sP<_}?zUg~79Ni^!CmLPo^W5B1#P*5b4w%6f`f>);xr0Vs~nfPmx1y2m^w{|*hhRxB(iq?&K_nWl~LNVPW=_XQd"
+    "S7`hFG1&^EgcxnM2UMmm6AUv0mGsqvAwl%gxxm1%L3HOJd>RLaP2^Vbw+cDL?wo_I;mS0Zleb;;?awKDS;pBSj7~"
+    "+v4r8bi?o(B0qyls#FfcxjV@p>@qtGijvO3D{(KgmBKzW&_S7Vj7G@B5-"
+    "Hz$N$sbb@YA~#X*N8jz|QaTn*pp_%ytVWl+AS5~n8Xi}`iip%Qdj-6ov9pvr#a)@}(YA>C2NtCuVeOs61Op-"
+    "i0L3EJjjHx{&FM$MACO<j_T#CB<Ej~8OrnpwG#L8OKGX|pZN<22j+yernR2Tr3#C>Xk)6QV4g6UGRmmYg0pxbar)"
+    "@tJ_Z@z}qxYXr?A+|-u}vO!vj{0msO=FX2}qE9;%B+{r+#xAg=zcq9T@C`<LvprPvZJ9$iRL7M;Fk1-"
+    "80(lk<pNgQJfd0dy`lLKd!#djB}JZ@`!AgUa68X>Q+0LyVd9YsM4>u>&*BF>E)5X9cEZhN6q~0>^U_WjH+Z|3LrX"
+    "S54<gS@5k}U1_z$y`0<2XN1SccmiZi3Rwu~6wtZJIdLMAOo)5t9uYPRlaO;WfMy}55bab7=CWkXkm0j|rrJ65RZy"
+    "L&0@2+{EU!>J=`3EQ?hSw<{U{UA@W9{**&gYc*__fcCPCYA;IObT@bQf|{%fQwIG6`lT#8h$>FAkM1vh#BG5|e!J"
+    "cwfeeY!&;s2ja&^w8&{fL<}-"
+    "E+bNp~e@*sYNz<X$vwoYFJdAlYkI}oHd%^Sb^?3)fc|VP#?^fSCOcxQGG+dP?kz!j+rUC{tS^UH3nhDV_CG!y9nX"
+    "Gvou^7El`a%;9rXU_7E(HLA+g1~;O~W#e8<V$6A+2MHH`jQkI>zIjnu^6y=J!n07U;HU%+gz!^Esflns#a7y>!bq"
+    "@#Z!d$0)NKf^k*m>hM%}meqyW=(b9eRfJX;VXEd<t=-"
+    "}s*)knC*w#U(B!p1rwGdQ@E*+g?VQPoGhMCq(miTH|N}3v8Wy7JZVOC<O@s7hBlCkU_?=K$Q_g#Iz4&T@H=&M^Rb"
+    "q4cZ@@A7fFl^H*d$8hx>C;Iw43Q6+=gT#u2@E96PRQijlKNcd8mnyE=*FHbp3Y>MndLQqB>6~ScvwQ_bxlNrEhNS"
+    "^5o8_k<$CQOoel2VYMQsyn-oO>?|7c8_I+Pcq*YZuwxWv0Mm=-"
+    "ye{1SHxwju$iY{)I_QLAiprgfGD+IyeVD+1%dP%=6MP`ygruC7w#(AeP4DjymfIx1KgwGqo>QxD;e;6kOTWQ*m%w"
+    "1OXi!g@vP0Ca3f^)504MG+?#Kc4%<SzrzWZJ%syzu03aO}zn_RlO$JrR&P^Y{w)C|J$tLzu`;c*I&b>6OlhedZ-"
+    ">JnT}7`u{3D-L~)dsD3^blkQk6c1Wl`e;z2KTwtO5WNtNvPmZMs*wj)tJL~OLId>nE$B4!2cTMHCXV-"
+    "(&DJEidefJdfa}$U5tMtz{NqpUbji--3{iibp1LsbsUEK2{b*k`3pME1Bwk?&)>d@&fpLe=Mo~1enLUP8pc{2)X8"
+    "#Yw*yr(hoyXyC>v!x+7y!Bl>*V355*%GWudRzs-"
+    "=Jkio=j4yC#mV8Xgfmjas!Y{T44XcN$e~<;ngm%I?X1&ro#UwuB5ui^oaN@9mrZ}1?33y<+2puZU@uciAc9ZSYOm"
+    "}jFn#pWZ<cC&48WM0f{cC(k5PpelzFjueS9=Kzc(LT&3Tlam)7U-zTE>pUYr2SH%^GO<DTA`dH4-"
+    "`q9?O58q@U_pp^WWj8)X~p*xG~ClOHhy?NGbr8+o{&JS4?U3Hg%-j~l!|9ie;;PP+^zi4~E0NyqOu=W-"
+    "NRZz%ycJsmI^VUm#TyJ{j{vEHTz7uZBFj}@g+?ggAq8}4Msgj1XFh*RG;|wQmianF#n1uTHUi#cKedITCji83!Y7"
+    "HP&2~i|M90*IY93nyDq=8+-={OhQ;{}t6*NcxSb~r-"
+    "Tsku!EXE~I_6I|Rxw{<P2lxGyGOc_atQ`kr}s1c2X&pR#<st~ot!19g62FF4~4Cx@hY#j5mh6d-"
+    "8lrDQ_bc!L8BSD6|7Sw9*eFIYJX2xmW$WoALhQrI(%ikGUF;2c89po`Oq)|W(&81+fLlIv_3!~FZ1Zn~kEpLhlNz"
+    "viQczNT0H$At&4(9mkW4v#-"
+    "ZmowPv}Bp5fvwh@KBU~q+}Rafy(cfXEcqkC>#nnnQBCTo*5tAxYsc{x(LyVwDM=BNPM@v1!^730DBomE-"
+    "3iYlZK`Wio@P<kN>9lRyMTNQ1N8xd7$QHU55@=eg^$18?&*kZdWYoU`VU~ZcKt|m2P$%(V0<?@B%hJ(l$t4}Vb_t"
+    "VWhv3nfg=vsXOjulnP%-l-9~(w-"
+    "_ehE5#!hTJ<I~_`CM4}$~OTJpK{b?XcjWT4`JmH`qRw?wt@0>+}r&xUs5bKq7R=84VR`b+3)&bNI~jd&@Y+Tbt?#"
+    "X%w67k_-3<Kf*r(>l@Lpoj-"
+    "(?&wKo{>0Cs{qkJ&IQQP2hr!a~zX$O$M3LpmlvtRuGu`Fa?RP}D^I%5A~{HSh<$F5b@P^FSVu7uJJA0NC<-C*%V-"
+    "IeVzlo%E_G*S7{qO;^S8ePOMB7>}7Y*p|rA>Da}FE{}kT<sVx80Db^(JkZuTw0uer)FSJb9OQ|gM)06jgg`w{hzs"
+    "-_qR>P6{e5v)U~qW*{Q>tUp^l0w)MYeFu#U@=SKaW@`%LwLp7ZMb4|vv&EUfm4n4hhtq{2wGVoc&yKnr|{yLrzG)"
+    "1!LPqBp*Sd&Z4U+}P<hW~<o;S-"
+    "g%t3yaU$W_sk<z=F%e9*B41Ng>pxmvp|ngTn3N(3LJH$2>8*v#rk}1oHP;zhG{(V1=T|fO>J}^4ef!xb1&?ldL8T"
+    "bTY*z1U#ZoZo6+&Oi;tnXd|F4^C(dwWqRiPRcVVY6I!^{MAplP6@`&jvkc|%v*7nr^06q;m(RVDeUbkaNnhh9_W}"
+    ")sA(oP;p{f$9)D@y4mks4B>9_u!Fy`dlBJ}DGBISXw@1zZk(V){zWUdVc$v_wf$<E1Q(J0mV(HK5fIe6Ra1v~r0{"
+    "s8^I$NPT(Kkoid%lzlzhp)MNVd_Xj)WKlE6;Tu-qzA@UvzCbcNXCz1B`7IH{x$=ttI*r{qw2==eaoCiQ9*9K02m@"
+    "Gfbt{EfC#OC8nl*IXZgdCs2oMcL6(Ezz-"
+    "O=9d~E@I8qfgbMtz_Luvr2f=#VluS{HL{mi@*m2lzn)T>Ot7_q3xt!q5SMLC_$=U)Q;xZLyU@jEn}@Bl&CB)Y%C*"
+    "ozr>N#_8p-"
+    "p_r%d(}spqv~+be(2_xrO&&pwF@0MG*xQ$8%Uojng2VXue7=Q9`;B{7bh000T*;?zv*(xEO?9~nB|{l~-Am-"
+    "8V1(HJLrDdTGu(V+Spx;qe<jghDAKRWn9@WNLPjV-"
+    "k&#Oh5=ArppADJ3c4$mV364Q~*XOHhnG<UNXCG6|$oZEJrur3+G0dctQN5^B@Ux+n$ZZ=-"
+    "$?f*rYoO9B&G)RP>ifsk=k7FjMnW)>8^{tyR)*2u98KKMWWd~ayfHciw8@(0RLl49*%Di_61ajh+wc80Rk%7hK*#"
+    "1%r7=8kH<y<dbcR54xb*x!W9|9<0o`~wn3H%3zv52)gQyLD`Q$_Sd{FYS_?T6Fmk03@5(q@LG`7FQZ_!7?jkgED&"
+    "<*me8;vArM<;he&#ZDa19OZcc@jwoNhHP4bkVSbcFE*un>m99GjN6^;?}3n^-"
+    "4pQH;|JK!><z}$Z(*{Jnl`y1UGgRQEZRdguOCcHe($fK!$d1**@mvJVQh+Gef`m>v%*V;u+A`$49$OgH6sfvP@lG"
+    "_hteodD=6c#)hxQiAJ!}xWY%iHI%1RtW{<_OeUHmjf<kf%_ZXk!GXjJ6&NxgM<n(JBOOgl6GUEj>H1=9#%wS`#Xy"
+    "`q5`o$Uo}{U)@Jx_%^|P9xQ$smNc951d^fXs|jmFU9fX$L(;8&l8QKyXPx7%_4f$j@h9Y?VOKsgyZx`uneLPCgCQ"
+    "lbSCe%fNmIYFo+2@F1LLHnezbTHO67<)F7OrW!&hX1JdrX<m<0#74n0`4`uHFTsUCc_So__FlgUkB&Q^T{ynGfmT"
+    "SBa)wI2Xnw^ERgQlQHJ|HhLN+_hWs=R4Mewc+lhH2K-DyxoiKpt9@KGcXWnF)xakd-qsBuwqmz?nfv|Ih%n<5mXt"
+    "zYjx?>p0D@412y2IaFc^|FVnTC==a6K*>m`mNKfn^;qc#I9V=dOHZ7v~Ip|N1buz<_S(V87`j5<r!*Kc9EZEH}ye"
+    "JHW}(moZ|g(_rjI2j2*u^}C2P$R<QW5Fr8#Xg;Aw@Lkh?s7Kel^^!QeeRtHF5+A3hn3fA3LSey&@pU|UoydWWfeZ"
+    "({OcgtU0-"
+    "XYackA@UUd(FMwe3?Zl#8;c9txqNA#Dy!3yLtZA#M=UcVry2X9S<Cl2Ni;+^;(TAAp9t!9Th$9y?q+PQeFB*hv?L"
+    "c>CC_N!?V6j~tcNsu2!B*&+moWIayp{60SHj0kgzmj<tzsn>OZvO1(J;Ur2GZI;}cu$wrfp8E2#Te#I}UIV%6`0l"
+    "$Mb%mK>dME1qzJv*&6LKld1DFTEQvanz&HN+Bi3mcyd`p^pfcb*POpnd@5nAyWd$0U~%=8m+o5y^VA-"
+    ")tK_D59`upTnoV>@gxFCZB#4viTIzi1T1@kFG#W}XudF$a)!c!zn0h+BG>hr!s#XtGE~Kq%G(4~q>Uk&u~7M5Mu^"
+    "GK*lwPZDleX=50Xnm7}T;qCNWVG%iH<`)JIDOWBzoX4<^u0!>ZJw_vg+WnJ&cJGK}cZD&qtwWOJ9fP5}zWw3f{|n"
+    "wTMCZT5;X`f74riyKOTD8k?ZJYK<q))k!G$XAyg-"
+    "0NB5oKLAs9zmczSbfyooW(?w>3Mn(gxTqktrBwMYzmhb~l#ABmBzxrm$X_@aD<1Yn475x>G@cU3<^>%#qkDiJQ(b"
+    "c!f;kT1+Z`sBJwS*aRPj%pl)<Rl%SN>6+!FHzo!z(<2}_vRhG)!-"
+    "EcO2U*|DP@c)5g}Oumexg*62M@=kXSU42`I!!Az=sNq)!AOFQ8Bqt}+=MY!(7u4>p?)RNcWiuOpFfz+<Z-"
+    "M46+Zk)UA-gOQ;QyJ5JnduDhax4iMizjkz9%`{~jW?Vt~%}7R@v1gBkZy{vkPL2v%1^ppQaN|2xM(#sXBudwNF~W"
+    "@25pv9<&g?Kc@vfNR3nX}FZv`WG1AB0As_qNCnCCV_N8g^ONvap6TxR!YFgSn~`>~nX^a;{3Ed)S9+gP=N5+GPMB"
+    "%bkskcZBQwvChuz-"
+    ">ezD2zU7B=`5>9URV(MG#WRRH<yR1%xmtGbCYBRH%fph%(CrV#n`Hsu&rWk%9uOik2{7th6Lj#bOa4>+ncT7%<!*"
+    ";);e+i!3dIuEQ8QVMRXlEGi-(WaebHuIN%FN|BL@M2uiXpn+i!q5*7B%pxze3n>=>l+}70z0;u_C+c=e9rNG-"
+    ";RJ_AjU^<BAYZ29vdlNf_agYjk!MI1A8fV`Ac>$61eP5kHsy}fGN1t(BF;i;2_}Z%VRJG8=Rj;9fj$JHd*fon5k("
+    "YwNg>+=^_Um9CXHMTKs$uUxuGHwGp(UUeLq8G)}kTS&BYuIiSvn3AchdigL<OJE#=Le`X%a+VfJ*e9mpXCj;Wil*"
+    "0RvS5gTT7`)PRmPC|@DaR!WiS$O#OXqjzGAB-"
+    "l@f}S<Cwt+V!y&Mxwl0E%{!dyF3rqnd0i+oowtco`pL^ONS#F3MH+NRjO{sIOU4k1=`SR{p{C~D#;Y^Up-"
+    "=X8X$i8!itt<%Juq5~-rk51}2YqFu{9JQE}ct?q=2+j7YTH(5SsVSwSL^Sga-"
+    "&pVv>cbO>sH<o@CZN_NV^}d!){#Q`S<h^5fw@`D&1zk;(skyn(`n9|OydgPI_hfJ&Z1Iip;+Y>)K)cyBGPspl#H?"
+    "#qMDzzaf8{g+sPbcvndN_62ip>mV<0n2!#n@h0P`<<~bgWF5<`;X{TmVdrf0TXk28a7`jExNHvG@Z-"
+    "WN|AsZ7{1Pq)Ig@AC-"
+    "C1(m2LA1$$%Sn|L5QyrlP_>d$q%dv0VGYX2IvB;CMJ6229;XD5EE59+piY5>hpmCzrBaq0#zk2olk<T@fz&1*%~R"
+    "AR=>K6stEEu_@m+e0^yd4tm{fW}x?|VFaH?7IdP_LrD8@Dhc|_c3$j%)nbvV7KBSD#?o!swu8?OTdHAvY6v6_PM)"
+    "C|m=gEGefH}6yGJOk~ou2^qL?G5;DcORVU4{%)!MM(k#U<BPMTOxQr<q*MliaQh|oyY`%g1|d06F@^XuS4<s4Mx6"
+    "Hb1?GWc5Va%#B~#Te|!ZfP%#*i0t8sx1TWyuZZ(Pq7E^%xw;D=-"
+    "BoH8pq)F&3jDpxXaq;;Sc`r_vEh9UWd;$KDfF0z-"
+    "Hir!)8gGzu<XP&UH_{&$4<xL#g>=KqGbAbn5lkQ^AuWa|k=D9&Bd8rz-"
+    "r?zEca7+g0hrXNigfpZu(_cWHX0Qr*O6$#fO!b8jP3~s9PskIJC3#hFS4`|5GQ+L@<Z_g1&7QKf<JTx1LkiSKWco"
+    "aJ+7Yane>c)s!HotH+=_8nzo1rFl0IWCNYQ^8W9jNq-3D;ousnbgp9h#u!gi?8=i)SE-UMckLH37VqgP=fCb!J{R"
+    "C6LpuZ6&oOP|`a^_i|&e%O1+qTXt#ZLjPRuB~S@9CU;mP_`>jbWrCq~|zX^#vhgfs>4(ou$}MOk7BiDRR*Wx5^#~"
+    "$jC8TF5K1`0;-0oh%N7ltVo7v4oyuAoRC1<JR-t_Jm+Z`Bmki~$7g?P#z+Tf3W5Tp333G~Ku{&27KFSBm4^X2u4O"
+    ">g5q3Mr7w!7KLi@cZz<pQLekC85Q!O!}wgM<@sD>+sW^XZ`D~*qhs&c}e;gSuhV{Q{LtV0GWr;>yCjlU8W9#`k$V"
+    "D5*><@9#@yWeL%6W|BeEI}Ab$cn0vMMVg#iVGrzO2Gt@OBf1P3IL&FA#b0Qpgu?Ir8lHVu!6z_h_lF)F(&~__hM8"
+    "ttRE|3*W;<+;gMOycVLz=OVOH*xx;}Y0)iBKLY&}l`Cgntyh~abV+;CEQiOAen!AM@XgVJ3!(-"
+    "@Tsg!dabqVDcJ;QA%Iy9RIc)KBnJ3=*F47H_ws~uXmZ74}n3Ztk>gB&16qcnUZWee5P&xQ?YqFnNq-"
+    "SvsDIp{;m0D=LgL}iR%!mub-pfp5~Bqkz`t|pYu(wX)e2bj6Rgk!_xM(0zQ0$l;a$O-"
+    "KZ2S}tgz;DdjlYLd_dFiH{_#Jfu)Z!lZ&II_9cioaXN+||0V<Om>#SghuQxCp^gP%5ye@KckgjlR%FcE?xi+tSx^"
+    "<;~ykx`;h1X5DOZ6Ux2t`ufj-~h$8Jp3@_nO-CS@?-"
+    "P?vb28yKo^*&xJTn_0f>o{f+vCmU<n9<eYHphkqUxnn&U^qbP!CCNFZLwVci$h2$~Vd7M2>IXhAW3M!TMaUH5c%v"
+    "`eZerlKxLGDbV_t4(0*d3C6cHk72c#Z`+UiY7)8#|KgqOj&K&ib0j2bxV*Tbq0=$(!;5k>F3^`a19EjsE#>(G5JP"
+    "hhoz#0L`fMW2^ZZ~5kA@<VyC1b7d?s}8xKFt%sK;{%iH1a4WAE%7GNQWU0oI)Q{<r%uKn!cLK>ae22CY6q^ydU5-"
+    "EBRE(bs&=ZG8V^HS+%WSB3Fpj;E-%e$EGrfJWCAjSY36OG6Q$Oq<2e`IMeGjBTVBz)i-n-"
+    "gXb_A)GxP*Ft|M35DPWK>8*85sw-SI4N3I-{Zh_l$lDsCXKP8{w-"
+    "_=EES%T>=T9zK172q+g*AKmyHy;3Xe;Y#9!nO}u-F+2I5ZE8-"
+    "(jyh@TJh)58GAfl(ubZEMBjHwn(Ox4pgn{gxe$vvQapdPe`kSs`yA?o_QFinceT3ZG+rHx`%Qbh!@8wkWINhpA_p"
+    "$RzPhk6D{WFMeMQ>e4h@C`QLXpDpMNlYaSAX@Ybsx@9bi@Un}heyA+j~^#&f=s%B?nBpX@<O8+HLDQ?1)y-"
+    "KiV9YM$Yfw-rGZ!?Lt`&Tywz5dxPT=BIR{hEU<)`UK75fVG^yp}Z%HCbFtA~9qEu_bW{;%X0fT}Yki!km6@nHaLK"
+    "y&>L4o711v`?T5_w7>(4FbvIjg~UE+gj&6G_Fmow)3nazyHfCA*&w04N>tSpzZcbBIWiNHGD@5P%IIQ{d(YW1nbr"
+    "t?xjqx`A0Cz}ZmUj0~|lARH4RA~Ek0qB+tJqOTM{<=K~q!02Zi7jn;{I;LWp!k~tbs0k8El*2|&=mwYqMnq=V5kS"
+    "7s>hpvxz{X_g6j0LxSlCaH6gj%U)<RgCpzu<J7+@S_?)Rnw;CT1veleij;BFN}r3!$x6k`!!JWD5mB~^?VM2LvbV"
+    "8R6uMhXCs03oqUMq3Hkc~p`~2{%l!O-!7)=<-17At^wl=wK0mosm(BhKocHTFS<-D^*x1R?wtJtU40|ih8-"
+    "t0$U>%0vZi#0*r*xMTMqo5V|sC=*%~yp_a<5ssbRERJVG}G}KL|^HSL)#6cKt$Y_~Gkp@~yTU5n%pB>q;g41ZCtc"
+    "*iWWnw(D5QZ@rQ3eIW7-KNNEHW!p#z-"
+    "4Uk%n%D(in=kV2q4d3?U0>Oq311(`H377&}?V8l(szBo;tH)l}nm1UNVw0@n~kl9e$n7VRk;LO`XpQU!ojs)hgz5"
+    ")g?HkQN;R%a)hlaF8U#Fw7_gYapO#Qpi$55Fs9@(4~^Y5p^J@qMf!o<$SBc-"
+    "np&}81J+PhUI*>H|;B*YfX958=E2r<wzMP0?r#GfouhUA~m4Iiir^<Mgt-"
+    "cjDrCrVkrfI1|YciseuQ;6m0`w5Ev1gMMM-NQ9%#^LLhM{q#^Re2ne^R8OEd|<aM4eU`Ord^7ztO7UAZr>^`I!2o"
+    "Vzn`@Aj{xH|_51rGhgRd|8Ap8*ib$a4oc2cjh)<cYl>hz`^(k^+AO0P@5{6j=obBLP5*Ap~GZr1%PrqCcqs>O@0@"
+    ">zJq4&jF}8r3xEGEFAz-s{M%WQv%aVDC8;3fJmY-Vv7k7Srk?bMhYYt#JzK(rL`VSnv0n=11!Qwc2|9_L}Vm`5=5"
+    "J*l0p@mN<JVQRZD7WDjdMQCq&8xJPpM<Y^Yw47{kyARypfal!^sOCZK*eiX8=TRDUcJiO!XL-Yu|1IdLRiyqx>G)"
+    "(4a`GW0!-l<U^kfLJ&bfzOaPLwxz`-+-"
+    "b}Y`%P~<n9Wy>U~Dt)DP}!X8NK}i7dxyC6M2jvu~UaEr$p4F+K{NMB~VZ7}9pSnIprwT+Z9>fy{t)&!+%accMgh-"
+    "jI9&??B72^zso1J%)ivqt85(<wp1fR0uy$Ec<y1ccTGbpdke?JBKe8`<|}HjK#dI`PNmY0Dos@-"
+    "j?3$=V3+<VHXb=X^Nl+WMrtTjUQ9Y5|_qlq4pJ+951H+7>+9_hQ~*&JNybzgh7xZBx4c{fk8wQK>H6vk;j&HuW&@"
+    "(Y!eL>7;LqGg@){#THO%KSD47U!x)kT;JH=GT!7)#>HtGjIWz7a!UZbERY3@#h(#3&Hc1pjf~X?0BP3X)Se+r}Aq"
+    "r{IMIytn8W6Q^xxzvUq+*1qv?C)D5P~3zD*=R}OCfiV6eBPI!e&AYk|mZ=V8nz=DL}Ro%OeJoM2Ar*mQlfcX>r83"
+    "?60aDA8%op{x$zuB!OQb0wJ#Ebaz))OXQ#%#R>w18dp>T#D^@^xCkNx6+H{%90^rJ1hE9fCjhpA(A|e=JWmBK2Xg"
+    "B;6)2;83P?q+ou;HAxidCsC)t8-l4Tc+*o4{4xDaDp-31gxQRF8IpnE%B#r^GwNh1u<-"
+    "MbUCY1y+Ih2W5#h7l4MPkDt+2dfKkaE4-FR^^H-"
+    "YUOEl&Z}QE+c7n+=AdK7VNOPNM+ONX%~MKZb1%sF@G*io1n691?1pwgTJRf;F%~BHOy4B{?rrIftUi@tb4Alm)3M"
+    "wsB_Coyq2pMy60wX{5UaM?1dWu_App<7R(m%T@b(EGC(6qNY{)4IC`)Y<sRSq@;TXuMKuG{|L|FX+z(-"
+    "EP8z*AVrCD$k+ZVgk+v0k14es_Pagj<SB#|hOyUJpzpu3I?as&>CWIKMj-cJQ!C#R7MSd57o1`4){(y)kk59JWpH"
+    "z&DIG(L!2p4dovgi0WJ;)?=<-kFY};y_~pM~a-q-"
+    "l+<yBM8MMFlapV=bnNT=ZCNA+33;@`J`EDL8l2K@L5Jeq!pK3PsZt~cz0hCWM)~u)>>mo!!sYi!ny)rWSWQV%;i{"
+    "bj{D<##zvEOPXnabB%D!|4bKw`n~3=CF>a~iWy3-r2`Gt?72@!)sxIU$<-"
+    "O}%%t5x=G_8v3hiZE+*jz2K54PtK5aIHW(Uii|fMRs~XvT{3o26~!rxQ%%SrE%ssSGU_V?_nUyt>2a?2<CaJW%%C"
+    "I&6|jX^HKUjfNcEk1A5e(P-"
+    "F8ZXtlHZ!qG(xI<(+co^X|LJmj}HZ}m&d$6sBJH+PMDO||pWH`MG5Hd6C)bl8ZzgIBPG&7nA_#Xtx34H1gpBs`06"
+    "I#7?4W~>(C#y;jqKKqO_$9Ve03dREpNRRKw&GGIav`P(Umk9{tAv}O6HxD&#>QCC!AsQ2H1{*+7J-xvF-jAx<bHo"
+    "q*ep%f#5;COK-^{p6vaANxOohL5S{xK38);C$#WJGGsJ0qj{-"
+    "Ihj`9$)BzGhMjvR{P$V#2~y0A>);Gb1kpH21w9#Rmx?4Rq58s1VA1|UF62$^WfkeM7!?$f5+z~kPW(~~4*QX-wCX"
+    "p<5|N<yhVajT~Xn#|lpH=}zlph{V&pI~_p05c+;IviJ>4Tm~wp$rz&i@T9NinA4{JQT%*<$w-"
+    "I0fWXK5=1_z$oP(G!!`H!KT_^-"
+    "G&5Y@72SEWSo2mDg2)q)ASFVBAdpoQBOfUZ;p82$lC1NiySSa410m`LCi|^K@6fSyE_EYhxkru*V+N=(D+m#}Tmm"
+    "h~#kWC2fjVc37wHU~4KU19K7Ub+xY|f|bDL1-"
+    "(;r4Z%kB94w1oks=;g<HQ6dRzfE9q~_hA@TwP<{3$7#RGQZ|)e8=VEX)IxBOWYY3jViS~7<cX-%y-"
+    "4#jHkp`VYgbh<14#k0-"
+    "D_5ZDb+;wDAoJ$0E9C!0k@oEAmIxwgcuENF=Li9cGycb#}~!T>YbUi$nfQhGmR#w>9;!T!sRzzgF}e~Nrx$Py#dH"
+    "=r%wDeGWCRZ5>jvkVj2Y4QJORbgp;~t8M$G)$fC?T%{+24+fibaSd5aYL`6{rgEb|AN@$$aq`=gOD3KB}G7Lf?N("
+    "fjMI1oc79i+5I8#@i4kqxH@V*~*Xo&CL@RpVZ_s+<Cf`@n)p2>_BSeWy_@UV=3oL0<v{icuDsL<SL{KvJYU&p&dV"
+    "A>|Q}z`#+ASQ5|+CWj@kAQ0vwK&EFx>JBI#KS_d&M|4m|u&7N1p4mLloKxIF>iIq-TsWi8FJo^<i?YbBxtW>C>>%"
+    "w4H{SieywGaWh@Fn=BlCOkScGKR*#<#ER>`87DBrs7YGwyKl_3@cK!K7|YBbO&*`p5%YDhMLSD^9vC2+<ljF|W4j"
+    "CFNfE?Cs0*>iBLWaJ(;a9|B{CFw@yu7{wqz{eR`CqhyM3=0RLWV{{lHIUOX;_-"
+    "}xbzWUzypWHdOUFy@qg4^xU^xn4*oVeC@U7FS;n)T-LJ<ZLBLYMfIwmgzv^GZTqrPwKx))v~5}3C!HA^|?CwO-cb"
+    "nF^SZ<+7MC%Xy@u@qq;1ZrL}VIl#`8LjqJI_^G%Y<N0DWJR=L!>SZTNfU$xq5!8|LW_gPI{Hotdiy?icMP=ohC%b"
+    "lq3jV4Rm^(*wsAsbV#{e66d6CDk`6M!fx?t_>`-"
+    "A<3&tcPC)TA=`H$)%8kY4{qL+CP)$`m6cJKg>63Qdk1^q$L1T|8I#S+l2geew6i2|V_i$au$x}h+LSXY2`2VH#p<"
+    "&QP1Byb+{qMJS^6i14TM{*WVU%WSi1csxgNFE4nyXZ(V4?kMzqvxL<?_7_9NeKA#d6+_yJMay9kc@`+X}8_Xy#0q"
+    "_n_xS*(A6j;5IKY?SAL}Wefb59_vmPmkc1Bd#S}1RCNPYgD9D-"
+    "G>SB$Myh)Yp_PvZZ5F}`Xj1hjoA`v2^;qBI4c$4Y8HwY2|<vn3otUhGX3pmU}q8s|IJk^MASur&gibp$!ESOo>Az"
+    "Vf5<RQo`n@x@yV?ilOq(B_zSP2Xb%OSEt7zaU}8X??8bg|T{0f7fV**htjgtKTBlLA2bA;4Fdhk@3G^#SYY*Wq_S"
+    "y%zPFVAL6p&U-"
+    "s}{jKf#3a9qX&$3*L_n7e~x+XL&*0)sG8LC=`($b27^|*abVVZfx8C1&&iOh$>A^zuEB~~?SKIx8lihIQNey^bXG"
+    "4Fu;iFse<n9}vipvu(xs<-+`8#NI2QVA<Ud5sc8RSUQO7ji{7P>{~H*Hr"
+)
+
+exec(compile(bz2.decompress(base64.b85decode(_PAYLOAD)).decode("utf-8"), __file__, "exec"))
