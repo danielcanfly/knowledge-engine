@@ -16,7 +16,7 @@ def _ids(question: str, intent: str = "direct_grounded_knowledge") -> set[str]:
 
 
 def test_runtime_bound_semantic_repair_v2_preserves_base_repair() -> None:
-    original = getattr(base_patch, "_m26_aq_original_runtime_bound_semantic_repair")
+    original = base_patch._m26_aq_original_runtime_bound_semantic_repair
     assert original is not _runtime_bound_semantic_repair_v2
     assert base_patch._runtime_bound_semantic_repair is _runtime_bound_semantic_repair_v2
 
