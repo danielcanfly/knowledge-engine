@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
 from typing import Any
 
 import pytest
 
 import knowledge_engine.m26_aq_semantic_runtime_patch_v2 as aq_v2_patch
-import knowledge_engine.m26_pa7_arbitrary_query_runtime as legacy_runtime
 import knowledge_engine.m26_pa7_semantic_closure_runtime as semantic_runtime
 import knowledge_engine.m26_production_api as production
 
