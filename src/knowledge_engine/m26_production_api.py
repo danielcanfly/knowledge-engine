@@ -7,10 +7,18 @@ from typing import Any
 from . import m26_ask_api
 from . import m26_pa7_arbitrary_query_runtime as legacy_runtime
 from .m26_aq_semantic_runtime_patch_v3 import install as install_aq_semantic_runtime_patch
+from .m26_aq_semantic_runtime_patch_v3_lifecycle import (
+    install as install_aq_lifecycle_runtime_patch,
+)
+from .m26_aq_semantic_runtime_patch_v3_surface import (
+    install as install_aq_surface_runtime_patch,
+)
 from .m26_intent_compat import classify_with_semantic_compat
 from .m26_pa7_semantic_closure_runtime import run_owner_arbitrary_query
 
 install_aq_semantic_runtime_patch()
+install_aq_lifecycle_runtime_patch()
+install_aq_surface_runtime_patch()
 
 _original_named_question_entities = legacy_runtime._named_question_entities
 _original_intent_class = legacy_runtime._intent_class
@@ -68,18 +76,15 @@ def _build_web_query_dto_with_semantic_closure(
         else {}
     )
     dto["integrity"] = {
-        "unsupported_accepted_claims": int(
-            runtime_response.get("unsupported_accepted_claims", 0)
-        ),
         "material_claim_support_verified": bool(
-            runtime_response.get("material_claim_support_verified", True)
+            runtime_response.get("material_claim_support_verified")
         ),
-        "citation_locator_valid": bool(runtime_response.get("citation_locator_valid", True)),
+        "citation_locator_valid": bool(runtime_response.get("citation_locator_valid")),
+        "unsupported_accepted_claims": int(
+            runtime_response.get("unsupported_accepted_claims", 0) or 0
+        ),
     }
     return dto
 
 
 m26_ask_api.build_web_query_dto = _build_web_query_dto_with_semantic_closure
-
-# Import after patching so route registration sees the production closure runtime.
-from .api import app  # noqa: E402,F401
