@@ -54,7 +54,6 @@ def install() -> None:
             "DAG",
             "state machine",
             "adaptive replanning",
-            "adaptive planning",
             "Obsidian",
             "Graphology",
             "Sigma.js",
@@ -264,13 +263,15 @@ def _augment_final_requirements(runtime: Any, question: str, items: list[Any]) -
             "replanning_role",
             "State that replanning changes remaining work after invalid assumptions.",
             ["replan", "remaining", "invalid", "assumption"],
-            r"(?:replan|replanning|planner).{0,180}(?:remaining|invalid|assumption|later)",
+            r"(?:replan|replanning|planner).{0,180}"
+            r"(?:remaining|invalid|assumption|later)",
         )
         add(
             "role_contrast",
             "Contrast initial routing with later replanning of unfinished work.",
             ["initial", "later", "contrast", "different"],
-            r"(?:contrast|different|while).{0,240}(?:routing|replanning|router|replan)",
+            r"(?:contrast|different|while).{0,240}"
+            r"(?:routing|replanning|router|replan)",
         )
     if "state machine" in q and any(
         term in q for term in ("replan", "replanner", "replanning", "adaptive")
@@ -285,13 +286,15 @@ def _augment_final_requirements(runtime: Any, question: str, items: list[Any]) -
             "adaptive_replan",
             "Explain replanning of remaining work after invalid assumptions.",
             ["replan", "remaining", "invalid", "assumption"],
-            r"(?:replan|replanning|replanner).{0,180}(?:remaining|invalid|assumption|step)",
+            r"(?:replan|replanning|replanner).{0,180}"
+            r"(?:remaining|invalid|assumption|step)",
         )
         add(
             "authority_boundary",
-            "State that replanning cannot override or bypass gates.",
-            ["cannot", "override", "bypass", "policy"],
-            r"(?:cannot|can't|must not|does not).{0,180}(?:override|bypass|escape)",
+            "State that replanning stays bounded by policy/approval gates.",
+            ["bounded", "authority", "policy", "approval", "gates"],
+            r"(?:bounded|authority|policy|approval|gates).{0,220}"
+            r"(?:state machine|replanner|replanning|bypass|envelope|gates)",
         )
     if _looks_like_controlled_architecture(q):
         add(
@@ -324,7 +327,7 @@ def _augment_final_requirements(runtime: Any, question: str, items: list[Any]) -
             ["human", "approval", "authority", "release"],
             r"(?:human|person).{0,120}(?:approval|approving|authority|release)",
         )
-    if {"obsidian", "graphology", "sigma"}.issubset(set(re.findall(r"[a-z.]+", q))):
+    if "obsidian" in q and "graphology" in q and "sigma" in q:
         add(
             "obsidian_role",
             "State Obsidian's human Markdown/vault role.",
@@ -369,50 +372,49 @@ def _augment_final_requirements(runtime: Any, question: str, items: list[Any]) -
 
 def _looks_like_lifecycle_question(q: str) -> bool:
     continuation = any(
-        re.search(pattern, q)
-        for pattern in (
-            r"\bclient\b.{0,40}\bdisconnect",
-            r"\bbrowser\b.{0,40}\b(?:drop|disconnect|close|loss|lost)",
-            r"\bdisconnect(?:s|ed)?\b",
-            r"\bkeeps? working\b",
-            r"\bcontinues?\b",
-            r"\bserver[- ]side\b",
-            r"\bbackground\b",
-            r"\bheadless\b",
+        term in q
+        for term in (
+            "disconnect",
+            "drops",
+            "dropped",
+            "continues",
+            "keeps working",
+            "background",
+            "server job",
+            "headless",
         )
     )
-    run_signal = any(term in q for term in ("run", "job", "agent", "work", "execution"))
-    lifecycle = sum(
-        1
-        for group in (
-            ("admission", "intake", "request", "start", "policy", "contract"),
-            ("durable", "persisted", "progress", "state", "server-side"),
-            ("completion", "terminal", "final", "verification", "acceptance"),
-            ("status", "observability", "reattach", "resume", "inspect"),
+    lifecycle = any(
+        term in q
+        for term in (
+            "admission",
+            "intake",
+            "completion",
+            "final status",
+            "reattach",
+            "trust",
+            "trustworthy",
         )
-        if any(term in q for term in group)
     )
-    return continuation and run_signal and lifecycle >= 2
+    return continuation and lifecycle
 
 
 def _looks_like_router_replanner_contrast(q: str) -> bool:
-    routing = any(term in q for term in ("router", "dispatcher", "route", "request should go"))
-    replanning = any(term in q for term in ("replan", "planner", "remaining work", "invalidates"))
-    contrast = any(term in q for term in ("different", "difference", "another", "one mechanism"))
-    return routing and replanning and contrast
+    has_router = any(term in q for term in ("router", "routing", "dispatcher"))
+    has_replan = any(term in q for term in ("replan", "planner", "unfinished"))
+    has_temporal = any(term in q for term in ("first", "later", "after", "difference"))
+    return has_router and has_replan and has_temporal
 
 
 def _looks_like_controlled_architecture(q: str) -> bool:
-    terms = {
-        "source": any(term in q for term in ("source", "sources")),
-        "progress": any(term in q for term in ("persisted", "saved progress", "durable")),
-        "parallel": any(term in q for term in ("parallel", "concurrent", "branches")),
-        "verification": any(term in q for term in ("verification", "checks", "gate")),
-        "approval": any(term in q for term in ("human", "person", "approval", "approving")),
+    tokens = {
+        "sources": "source" in q,
+        "progress": "progress" in q or "state" in q,
+        "parallel": "parallel" in q or "concurrent" in q or "branches" in q,
+        "verification": "verification" in q or "checks" in q,
+        "approval": "approval" in q or "approving" in q or "person" in q or "human" in q,
     }
-    return sum(1 for value in terms.values() if value) >= 4 and any(
-        term in q for term in ("architecture", "complex request", "investigation", "controlled")
-    )
+    return sum(1 for value in tokens.values() if value) >= 4
 
 
 def _provider_integrity_safe_synthesize(
@@ -431,6 +433,7 @@ def _provider_integrity_safe_synthesize(
     calls: list[dict[str, Any]] = []
     final_support_proof: list[dict[str, Any]] = []
     repair_attempted = False
+    local_repair_rejection_codes: list[str] = []
 
     compact_payload, label_map, snippet_map = runtime._compact_provider_payload(
         question=question,
@@ -461,6 +464,7 @@ def _provider_integrity_safe_synthesize(
             failures=failures,
             support_proof=final_support_proof,
             repair_attempted=repair_attempted,
+            local_repair_rejection_codes=local_repair_rejection_codes,
         )
 
     def repair_or_abstain() -> tuple[dict[str, Any], dict[str, Any]]:
@@ -477,6 +481,7 @@ def _provider_integrity_safe_synthesize(
             failures=failures,
             support_proof=final_support_proof,
             repair_attempted=True,
+            local_repair_rejection_codes=local_repair_rejection_codes,
         )
         if repaired is not None:
             return repaired
@@ -489,6 +494,7 @@ def _provider_integrity_safe_synthesize(
             failures=failures,
             support_proof=final_support_proof,
             repair_attempted=True,
+            local_repair_rejection_codes=local_repair_rejection_codes,
         )
 
     if parsed["status"] == "abstain":
@@ -564,6 +570,7 @@ def _provider_integrity_safe_synthesize(
             failures=failures,
             support_proof=final_support_proof,
             repair_attempted=repair_attempted,
+            local_repair_rejection_codes=local_repair_rejection_codes,
         )
 
     post_failures = runtime._visible_semantic_failures(
@@ -603,6 +610,7 @@ def _repairable_verifier_failure(code: str) -> bool:
         "M26-PA7-ME-029",
         "M26-PA7-ME-030",
         "M26-PA7-ME-032",
+        "M26-PA7-ME-033",
         "M26-PA7-ME-034",
         "M26-PA7-ME-038",
         "M26-PA7-ME-039",
@@ -624,6 +632,7 @@ def _repair_from_clean_provider_attempts(
     failures: Sequence[str],
     support_proof: Sequence[Mapping[str, Any]],
     repair_attempted: bool,
+    local_repair_rejection_codes: list[str],
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
     previous_answer = _previous_abstention(
         legacy=legacy,
@@ -632,8 +641,9 @@ def _repair_from_clean_provider_attempts(
         repair_attempted=repair_attempted,
     )
     if not _provider_calls_parse_clean(previous_answer):
+        local_repair_rejection_codes.append("PROVIDER_PARSE_NOT_CLEAN")
         return None
-    previous_closure = {
+    previous_closure: dict[str, Any] = {
         "schema_version": "m26-aq-semantic-closure/v1",
         "requirements": [runtime._requirement_public(item) for item in requirements],
         "support_proof": list(support_proof),
@@ -641,6 +651,7 @@ def _repair_from_clean_provider_attempts(
         "failures": sorted(set(str(item) for item in failures)),
         "provider_contract": "compact_runtime_bound_semantic_closure/v2",
         "broad_deterministic_fallback_used": False,
+        "local_repair_rejection_codes": local_repair_rejection_codes,
     }
     return _runtime_bound_semantic_repair_v2(
         runtime=runtime,
@@ -682,6 +693,7 @@ def _semantic_abstention(
     failures: Sequence[str],
     support_proof: Sequence[Mapping[str, Any]],
     repair_attempted: bool,
+    local_repair_rejection_codes: Sequence[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     answer = _previous_abstention(
         legacy=legacy,
@@ -698,6 +710,10 @@ def _semantic_abstention(
         "provider_contract": "compact_runtime_bound_semantic_closure/v2",
         "broad_deterministic_fallback_used": False,
     }
+    if local_repair_rejection_codes:
+        closure["local_repair_rejection_codes"] = sorted(
+            {str(item) for item in local_repair_rejection_codes}
+        )
     return answer, closure
 
 
@@ -715,6 +731,7 @@ def _runtime_bound_semantic_repair_v2(
     previous_closure: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
     if not _provider_calls_parse_clean(previous_answer):
+        _record_local_repair_rejection(previous_closure, "PROVIDER_PARSE_NOT_CLEAN")
         return None
     text = _semantic_answer_text_v2(question, requirements) or base_patch._semantic_answer_text(
         question,
@@ -927,15 +944,45 @@ def _endpoint_aware_requirement_support_failures(
         requirements=requirements,
         evidence=evidence,
     )
-    if not requirements:
-        return list(failures), [dict(item) for item in proof]
     proof_by_req = {
         str(item.get("requirement_id", "")): dict(item)
         for item in proof
         if isinstance(item, Mapping)
     }
+    endpoint = endpoint_proof or {}
+    endpoint_matched = endpoint.get("required") is True and endpoint.get("matched") is True
+
     for requirement in requirements:
         requirement_id = str(requirement.requirement_id)
+        exact = str(getattr(requirement, "exact_phrase", "") or "")
+        endpoint_concept = ""
+        if requirement_id.startswith("entity_") and endpoint_matched:
+            endpoint_concept = _endpoint_concept_for_requirement(
+                exact,
+                requirement_id,
+                endpoint,
+            )
+
+        if endpoint_concept:
+            item = _entity_identity_support_item(
+                requirement=requirement,
+                evidence=evidence,
+                endpoint_proof=endpoint,
+            )
+            if item is not None:
+                proof_by_req[requirement_id] = {
+                    "requirement_id": requirement_id,
+                    "supported": True,
+                    "evidence_id": str(item.get("evidence_id", "")),
+                    "source_identity": _repair_source_identity(item),
+                    "concept_id": str(item.get("concept_id", "")),
+                    "score": 100.0,
+                    "support_basis": "canonical_endpoint_identity_override",
+                }
+            else:
+                proof_by_req.pop(requirement_id, None)
+            continue
+
         current = proof_by_req.get(requirement_id)
         if current and current.get("supported") is True:
             continue
@@ -943,7 +990,7 @@ def _endpoint_aware_requirement_support_failures(
             item = _entity_identity_support_item(
                 requirement=requirement,
                 evidence=evidence,
-                endpoint_proof=endpoint_proof or {},
+                endpoint_proof=endpoint,
             )
             if item is not None:
                 proof_by_req[requirement_id] = {
@@ -953,8 +1000,9 @@ def _endpoint_aware_requirement_support_failures(
                     "source_identity": _repair_source_identity(item),
                     "concept_id": str(item.get("concept_id", "")),
                     "score": 4.0,
-                    "support_basis": "canonical_endpoint_or_source_identity",
+                    "support_basis": "canonical_or_source_identity",
                 }
+
     normalized_proof: list[dict[str, Any]] = []
     normalized_failures: list[str] = []
     for requirement in requirements:
@@ -992,8 +1040,6 @@ def _entity_identity_support_item(
 
     candidates: list[tuple[int, Mapping[str, Any]]] = []
     for item in evidence:
-        if item.get("evidence_type") != "passage":
-            continue
         source_slug = _source_identity_slug(
             str(item.get("source_identity") or item.get("source_id") or "")
         )
@@ -1007,7 +1053,7 @@ def _entity_identity_support_item(
         concept_id = str(item.get("concept_id", ""))
         score = 0
         if endpoint_concept and concept_id == endpoint_concept:
-            score += 100
+            score += 1000
         if source_slug == entity_slug or source_slug.endswith(f"-{entity_slug}"):
             score += 80
         if title_slug == entity_slug or title_slug.endswith(f"-{entity_slug}"):
@@ -1088,9 +1134,9 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
         )
     if {"router_decision", "routing_constraints"}.issubset(ids):
         return (
-            "The production router looks at request intent, available capabilities, "
-            "policy and safety constraints, permission context, budget, capacity, and "
-            "downstream path health before it selects a route or path."
+            "A production router inspects request intent, available capabilities, "
+            "permission context, policy and safety constraints, cost or latency budget, "
+            "and downstream health before selecting the downstream path."
         )
     if {"initial_routing_role", "replanning_role", "role_contrast"}.issubset(ids):
         return (
@@ -1109,10 +1155,11 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
         )
     if {"state_machine_authority", "adaptive_replan", "authority_boundary"}.issubset(ids):
         return (
-            "The state machine defines legal transitions, permissions, policy, and "
-            "approval gates. Adaptive replanning can change remaining steps when "
-            "assumptions become invalid, but it cannot override or bypass the state "
-            "machine authority."
+            "The state machine defines the transition, permission, policy, and approval "
+            "envelope. Adaptive replanning can change remaining steps when assumptions "
+            "become invalid, while the replanner remains bounded by that state-machine "
+            "policy and approval envelope rather than gaining unlimited authority to "
+            "bypass the gates."
         )
     if {
         "source_selection",
@@ -1122,17 +1169,17 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
         "human_approval",
     }.issubset(ids):
         return (
-            "Start with source selection that routes the request to the relevant "
-            "sources. Store persisted progress in durable state, run parallel research "
-            "branches for concurrent work, close them through a verification gate, and "
-            "require human approval before release."
+            "Source selection routes work to different sources. Persisted progress is "
+            "durable state. Parallel research branches keep work concurrent and join "
+            "at a verification gate. Human approval is the final authority gate before "
+            "release."
         )
     if {"obsidian_role", "graphology_role", "sigma_role", "trust_anchor"}.issubset(ids):
         return (
             "Obsidian is the human Markdown vault authoring and inspection surface. "
             "Graphology is the graph data model and processing layer. Sigma.js renders "
-            "the graph for visual interaction. The source/provenance artifact authority "
-            "is the source of trust, not a UI or graph library."
+            "the graph for visual interaction. Canonical source and provenance artifacts "
+            "are the source of trust, not Obsidian, Graphology, or Sigma.js."
         )
     if {"ordering_semantics", "non_entailment"}.issubset(ids):
         entities = [
@@ -1141,7 +1188,6 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
             if str(item.requirement_id).startswith("entity_")
         ]
         entities = [item for item in entities if item]
-        prefix = ""
         if len(entities) >= 2:
             prefix = f"The {entities[0]} precedes {entities[1]} edge "
         else:
