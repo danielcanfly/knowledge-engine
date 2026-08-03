@@ -184,13 +184,15 @@ jobs:
           hostname = os.environ["M26_QUERY_BACKEND_TUNNEL_HOSTNAME"]
           tunnel_name = os.environ["M26_QUERY_BACKEND_TUNNEL_NAME"]
           zone_name = os.environ["CLOUDFLARE_ZONE_NAME"]
-          token_candidates = [
+          dns_token_candidates = [
               ("workers_dns", os.environ["CLOUDFLARE_WORKERS_TOKEN_DNS"]),
               ("workers", os.environ["CLOUDFLARE_WORKERS_TOKEN"]),
               ("api", os.environ["CLOUDFLARE_API_TOKEN"]),
           ]
-          tunnel_control_label = "api"
-          tunnel_control_token = os.environ["CLOUDFLARE_API_TOKEN"]
+          tunnel_token_candidates = [
+              ("api", os.environ["CLOUDFLARE_API_TOKEN"]),
+              ("workers", os.environ["CLOUDFLARE_WORKERS_TOKEN"]),
+          ]
           service = "http://127.0.0.1:8080"
 
           _require_hostname_under_zone(hostname, zone_name)
@@ -198,9 +200,10 @@ jobs:
           def first_success(
               purpose: str,
               operation: Callable[[str], T],
+              candidates: list[tuple[str, str]],
           ) -> tuple[str, str, T, list[dict[str, str]]]:
               errors = []
-              for label, token in token_candidates:
+              for label, token in candidates:
                   try:
                       return label, token, operation(token), errors
                   except Exception as exc:  # pragma: no cover - live infra only.
@@ -214,6 +217,7 @@ jobs:
           zone_token_label, _, zone_id, zone_probe_errors = first_success(
               "active-zone lookup",
               lambda token: _zone_id(token=token, zone_name=zone_name),
+              dns_token_candidates,
           )
 
           def read_records(token: str) -> list[dict[str, object]]:
@@ -229,22 +233,38 @@ jobs:
           dns_control_label, dns_control_token, records, dns_probe_errors = first_success(
               "DNS record read/write",
               read_records,
+              dns_token_candidates,
           )
           conflicts = [item for item in records if item.get("type") != "CNAME"]
           cnames = [item for item in records if item.get("type") == "CNAME"]
 
-          tunnel, duplicate_count = _active_tunnel_by_name(
-              token=tunnel_control_token,
-              account_id=account_id,
-              tunnel_name=tunnel_name,
-          )
-          tunnel_reused = tunnel is not None
-          if tunnel is None:
-              tunnel = _create_tunnel(
-                  token=tunnel_control_token,
+          def find_or_create_tunnel(token: str) -> tuple[dict[str, object], int, bool]:
+              tunnel, duplicate_count = _active_tunnel_by_name(
+                  token=token,
                   account_id=account_id,
                   tunnel_name=tunnel_name,
               )
+              tunnel_reused = tunnel is not None
+              if tunnel is None:
+                  tunnel = _create_tunnel(
+                      token=token,
+                      account_id=account_id,
+                      tunnel_name=tunnel_name,
+                  )
+                  duplicate_count = 0
+              return tunnel, duplicate_count, tunnel_reused
+
+          (
+              tunnel_control_label,
+              tunnel_control_token,
+              tunnel_result,
+              tunnel_probe_errors,
+          ) = first_success(
+              "Cloudflare tunnel read/create",
+              find_or_create_tunnel,
+              tunnel_token_candidates,
+          )
+          tunnel, duplicate_count, tunnel_reused = tunnel_result
           tunnel_id = str(tunnel["id"])
           _put_tunnel_config(
               token=tunnel_control_token,
@@ -260,7 +280,7 @@ jobs:
           )
 
           prestate = {
-              "schema_version": "m26-aq-cloudflare-dns-secret-wired-prestate/v1",
+              "schema_version": "m26-aq-cloudflare-dns-and-tunnel-token-probed-prestate/v1",
               "status": "pass",
               "exact_hostname_record_count": len(records),
               "cname_record_count": len(cnames),
@@ -275,6 +295,7 @@ jobs:
               "tunnel_control_token_class": tunnel_control_label,
               "zone_probe_error_classes": zone_probe_errors,
               "dns_probe_error_classes": dns_probe_errors,
+              "tunnel_probe_error_classes": tunnel_probe_errors,
               "raw_hostname_recorded": False,
               "raw_record_content_recorded": False,
               "raw_record_id_recorded": False,
@@ -305,7 +326,7 @@ jobs:
 
           origin = f"https://{hostname}"
           evidence = {
-              "schema_version": "knowledge-engine-m26-aq-dns-secret-wired-named-tunnel/v1",
+              "schema_version": "knowledge-engine-m26-aq-dns-and-tunnel-token-probed-named-tunnel/v1",
               "backend_hostname_sha256": _sha256(hostname),
               "backend_origin_sha256": _sha256(origin),
               "config_src": "cloudflare",
