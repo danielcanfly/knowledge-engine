@@ -359,11 +359,11 @@ def _loose_concepts(runtime: Any, bundle: Any, entity: str) -> set[str]:
     canonical = _canonical_named_concepts(runtime, bundle, entity)
     if canonical:
         return canonical
+    if _requires_canonical_endpoint_binding(entity):
+        return set()
     concepts = set(runtime._entity_concepts(bundle, entity))
     if concepts:
         return concepts
-    if _requires_canonical_endpoint_binding(entity):
-        return set()
     normalized = re.sub(r"[^a-z0-9]+", " ", entity.casefold()).strip()
     if not normalized:
         return concepts
@@ -427,9 +427,11 @@ def _canonical_endpoint_document_score(
     elif _identity_phrase_prefix(title_norm, entity_norm):
         score += 12.0
 
-    if source_slug == entity_slug or source_slug.endswith(f"-{entity_slug}"):
-        score += 16.0
-    elif source_id_slug == entity_slug or source_id_slug.endswith(f"-{entity_slug}"):
+    source_matches = source_slug == entity_slug or source_slug.endswith(f"-{entity_slug}")
+    source_id_matches = source_id_slug == entity_slug or source_id_slug.endswith(
+        f"-{entity_slug}"
+    )
+    if source_matches or source_id_matches:
         score += 16.0
 
     if section_norm == entity_norm:
