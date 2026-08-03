@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from . import m26_ask_api
+from . import m26_aq_semantic_runtime_patch_v3_lifecycle as aq_lifecycle_patch
 from . import m26_pa7_arbitrary_query_runtime as legacy_runtime
 from .m26_aq_semantic_runtime_patch_v3 import install as install_aq_semantic_runtime_patch
 from .m26_aq_semantic_runtime_patch_v3_lifecycle import (
@@ -19,6 +20,69 @@ from .m26_pa7_semantic_closure_runtime import run_owner_arbitrary_query
 install_aq_semantic_runtime_patch()
 install_aq_lifecycle_runtime_patch()
 install_aq_surface_runtime_patch()
+
+_production_question_contract = legacy_runtime._question_contract
+_production_repair_guidance = aq_lifecycle_patch._repair_guidance
+
+
+def _question_explicitly_requests_persisted_progress(question: str) -> bool:
+    q = " ".join(str(question).casefold().split())
+    return bool(
+        re.search(r"\bpersist(?:ed|ence|ing)?\b", q)
+        or any(
+            marker in q
+            for marker in (
+                "durable",
+                "disconnect",
+                "recover",
+                "resume",
+                "saved state",
+                "server-side state",
+                "progress survives",
+                "state survives",
+            )
+        )
+    )
+
+
+def _question_contract_without_progress_substring_false_positive(
+    *, question: str, intent_class: str
+) -> dict[str, Any]:
+    """Do not treat ordinary in-progress wording as a persisted-progress request."""
+    contract = dict(
+        _production_question_contract(
+            question=question,
+            intent_class=intent_class,
+        )
+    )
+    if _question_explicitly_requests_persisted_progress(question):
+        return contract
+    facets = contract.get("required_facets")
+    if not isinstance(facets, list):
+        return contract
+    contract["required_facets"] = [
+        item
+        for item in facets
+        if not isinstance(item, Mapping)
+        or str(item.get("facet_id", "")) != "persisted_progress"
+    ]
+    return contract
+
+
+def _production_variance_repair_guidance(code: str) -> str:
+    if str(code) == "M26-PA7-ME-036":
+        return (
+            "The selected graph evidence records a precedes relation. State that exact "
+            "ordering or sequence relationship explicitly, using comes before or precedes; "
+            "do not replace it with dependency or causal semantics."
+        )
+    return _production_repair_guidance(str(code))
+
+
+legacy_runtime._question_contract = (
+    _question_contract_without_progress_substring_false_positive
+)
+aq_lifecycle_patch._repair_guidance = _production_variance_repair_guidance
 
 _original_named_question_entities = legacy_runtime._named_question_entities
 _original_intent_class = legacy_runtime._intent_class
