@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-from knowledge_engine import (
-    m26_aq_semantic_runtime_patch as base_patch,
-)
-from knowledge_engine import (
-    m26_pa7_arbitrary_query_runtime as legacy,
-)
-from knowledge_engine import (
-    m26_pa7_semantic_closure_runtime as runtime,
-)
+import knowledge_engine.m26_aq_semantic_runtime_patch as base_patch
+import knowledge_engine.m26_pa7_arbitrary_query_runtime as legacy
+import knowledge_engine.m26_pa7_semantic_closure_runtime as runtime
 from knowledge_engine.m26_aq_semantic_runtime_patch_v3 import (
     _clean_entity_text_v3,
     _material_sentences,
