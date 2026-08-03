@@ -8,7 +8,6 @@ from typing import Any
 import knowledge_engine.m26_aq_semantic_runtime_patch as base_patch
 import knowledge_engine.m26_aq_semantic_runtime_patch_v2 as v2_patch
 
-
 _LIFECYCLE_REQUIREMENTS = {
     "admission_policy",
     "durable_state",
@@ -23,25 +22,22 @@ def _never_require_initial_no(question: str) -> bool:
 
 
 def install() -> None:
-    """Install the product-first AQ semantic closure.
-
-    Retrieval, provenance, graph, privacy, and mutation gates stay strict. The repair
-    only removes frozen-answer coupling: provider prose is verified as bounded material
-    sentences and may receive one provider repair instead of deterministic template text.
-    """
+    """Install product-first semantic closure without frozen-answer coupling."""
     from . import m26_pa7_arbitrary_query_runtime as legacy
     from . import m26_pa7_semantic_closure_runtime as runtime
 
     v2_patch.install()
-    if getattr(runtime, "_m26_aq_semantic_runtime_patch_v3_installed", False):
-        return
 
-    base_patch._needs_initial_no = _never_require_initial_no
-    v2_patch._clean_entity_text = _clean_entity_text_v3
+    if not hasattr(runtime, "_m26_aq_v3_base_intent"):
+        runtime._m26_aq_v3_base_intent = legacy._intent_class
+    if not hasattr(runtime, "_m26_aq_v3_base_requirements"):
+        runtime._m26_aq_v3_base_requirements = runtime._semantic_requirements
+    if not hasattr(runtime, "_m26_aq_v3_base_edge"):
+        runtime._m26_aq_v3_base_edge = runtime._exact_named_graph_edge
 
-    previous_intent = legacy._intent_class
-    previous_requirements = runtime._semantic_requirements
-    previous_edge = runtime._exact_named_graph_edge
+    base_intent = runtime._m26_aq_v3_base_intent
+    base_requirements = runtime._m26_aq_v3_base_requirements
+    base_edge = runtime._m26_aq_v3_base_edge
 
     def intent(question: str) -> str:
         q = question.casefold()
@@ -52,11 +48,13 @@ def install() -> None:
             and "part 2" in q
         ):
             return "graph_relationship"
-        return previous_intent(question)
+        return base_intent(question)
 
     def requirements(question: str, intent_class: str) -> list[Any]:
-        items = list(previous_requirements(question, intent_class))
+        items = list(base_requirements(question, intent_class))
         items = _prune_lifecycle_overreach(question, items)
+        if _explicit_full_lifecycle(question):
+            _ensure_full_lifecycle(runtime, items)
         if "comes before" in question.casefold() and not any(
             str(item.requirement_id) == "ordering_semantics" for item in items
         ):
@@ -78,12 +76,12 @@ def install() -> None:
         return items
 
     def exact_edge(bundle: Any, question: str) -> Mapping[str, Any] | None:
-        edge = previous_edge(bundle, question)
+        edge = base_edge(bundle, question)
         if edge is not None:
             return edge
         q = question.casefold()
         if "comes before" in q and "precedes" not in q:
-            return previous_edge(
+            return base_edge(
                 bundle,
                 question + " The recorded relation is precedes.",
             )
@@ -111,6 +109,8 @@ def install() -> None:
             endpoint_proof=endpoint_proof,
         )
 
+    base_patch._needs_initial_no = _never_require_initial_no
+    v2_patch._clean_entity_text = _clean_entity_text_v3
     legacy._intent_class = intent
     runtime._semantic_requirements = requirements
     runtime._exact_named_graph_edge = exact_edge
@@ -150,8 +150,20 @@ def _clean_entity_text_v3(value: str) -> str:
     return " ".join(text.strip(" ?:.,").split())
 
 
-def _prune_lifecycle_overreach(question: str, items: Sequence[Any]) -> list[Any]:
+def _explicit_full_lifecycle(question: str) -> bool:
     q = question.casefold()
+    return any(
+        phrase in q
+        for phrase in (
+            "from admission to completion",
+            "from intake to completion",
+            "surrounding control system",
+            "keep the run trustworthy",
+        )
+    )
+
+
+def _prune_lifecycle_overreach(question: str, items: Sequence[Any]) -> list[Any]:
     lifecycle_ids = {
         str(item.requirement_id)
         for item in items
@@ -159,7 +171,10 @@ def _prune_lifecycle_overreach(question: str, items: Sequence[Any]) -> list[Any]
     }
     if not lifecycle_ids:
         return list(items)
+    if _explicit_full_lifecycle(question):
+        return list(items)
 
+    q = question.casefold()
     requested: set[str] = set()
     if any(
         term in q
@@ -209,29 +224,54 @@ def _prune_lifecycle_overreach(question: str, items: Sequence[Any]) -> list[Any]
     ):
         requested.add("observability")
 
-    if any(
-        phrase in q
-        for phrase in (
-            "from admission to completion",
-            "from intake to completion",
-            "surrounding control system",
-            "keep the run trustworthy",
-        )
-    ):
-        requested |= _LIFECYCLE_REQUIREMENTS
-
-    if not requested:
-        return [
-            item
-            for item in items
-            if str(item.requirement_id) not in _LIFECYCLE_REQUIREMENTS
-        ]
     return [
         item
         for item in items
         if str(item.requirement_id) not in _LIFECYCLE_REQUIREMENTS
         or str(item.requirement_id) in requested
     ]
+
+
+def _ensure_full_lifecycle(runtime: Any, items: list[Any]) -> None:
+    seen = {str(item.requirement_id) for item in items}
+    specs = (
+        (
+            "admission_policy",
+            "Cover request admission or effective policy before execution.",
+            ("admission", "request", "policy", "contract"),
+            r"\b(?:admission|request|policy|contract)\b",
+        ),
+        (
+            "durable_state",
+            "Cover durable or persisted server-side run state after disconnect.",
+            ("durable", "persisted", "state", "disconnect"),
+            r"\b(?:durable|persisted|state|disconnect)\b",
+        ),
+        (
+            "completion_verification",
+            "Cover verification or acceptance before declaring completion.",
+            ("verification", "completion", "acceptance", "final"),
+            r"\b(?:verification|completion|acceptance|final)\b",
+        ),
+        (
+            "observability",
+            "Cover status, observability, reattachment, resume, or inspection.",
+            ("observability", "status", "reattach", "resume", "inspect"),
+            r"\b(?:observability|status|reattach|resume|inspect)\b",
+        ),
+    )
+    for requirement_id, instruction, terms, pattern in specs:
+        if requirement_id in seen:
+            continue
+        items.append(
+            runtime.SemanticRequirement(
+                requirement_id=requirement_id,
+                instruction=instruction,
+                evidence_terms=terms,
+                visible_patterns=(pattern,),
+            )
+        )
+        seen.add(requirement_id)
 
 
 def _generalized_provider_synthesize(
@@ -262,8 +302,8 @@ def _generalized_provider_synthesize(
         payload["system"] = (
             str(payload.get("system", ""))
             + " Evidence labels such as e1/e2 are internal selectors and must never "
-            "appear in the answer. If the evidence is irrelevant or insufficient for "
-            "the requested fact, abstain rather than inventing support."
+            "appear in the answer. If evidence is irrelevant or insufficient for the "
+            "requested fact, abstain rather than inventing support."
         )
         try:
             raw = provider_client.call(
@@ -337,9 +377,7 @@ def _generalized_provider_synthesize(
             )
         )
         final_support_proof = support_proof
-        semantic_failures = sorted(
-            set([*visible_failures, *support_failures])
-        )
+        semantic_failures = sorted(set([*visible_failures, *support_failures]))
         if semantic_failures:
             failures.extend(semantic_failures)
             if attempt == 1:
@@ -347,12 +385,13 @@ def _generalized_provider_synthesize(
             break
 
         try:
-            candidate = _sentence_bound_candidate(
+            candidate = _verification_candidate(
                 legacy=legacy,
                 answer=answer,
                 question=question,
                 intent_class=intent_class,
                 used_items=used_items,
+                requirements=requirements,
             )
             verified = legacy._verify_multi_evidence_provider_output(
                 trace_id=trace_id,
@@ -475,6 +514,35 @@ def _provider_abstention(
     return answer, closure
 
 
+def _verification_candidate(
+    *,
+    legacy: Any,
+    answer: str,
+    question: str,
+    intent_class: str,
+    used_items: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+) -> dict[str, Any]:
+    if intent_class == "direct_grounded_knowledge":
+        candidate = v2_patch._direct_facet_partition_candidate(
+            legacy=legacy,
+            answer=answer,
+            question=question,
+            intent_class=intent_class,
+            used_items=used_items,
+            requirements=requirements,
+        )
+        if candidate is not None:
+            return candidate
+    return _sentence_bound_candidate(
+        legacy=legacy,
+        answer=answer,
+        question=question,
+        intent_class=intent_class,
+        used_items=used_items,
+    )
+
+
 def _sentence_bound_candidate(
     *,
     legacy: Any,
@@ -516,10 +584,9 @@ def _sentence_bound_candidate(
                 break
         if not refs:
             raise ValueError("natural answer sentence has no exact evidence support")
-        claim_id = f"claim_{index}"
         claims.append(
             {
-                "claim_id": claim_id,
+                "claim_id": f"claim_{index}",
                 "claim_role": _claim_role(intent_class, index),
                 "surface_text": sentence,
                 "facet_ids": list(required_facets),
@@ -535,7 +602,6 @@ def _sentence_bound_candidate(
         claims=claims,
         selected_ids=selected_ids,
     )
-    relation = _relation_for_intent(intent_class, used_items)
     anchored = " ".join(
         f"{sentence.rstrip('.')} [[claim_{index}]]."
         for index, sentence in enumerate(sentences, start=1)
@@ -543,7 +609,7 @@ def _sentence_bound_candidate(
     return {
         "schema_version": "aq3-provider-candidate/v3",
         "status": "answer_candidate",
-        "relation": relation,
+        "relation": _relation_for_intent(intent_class, used_items),
         "selected_evidence_ids": list(dict.fromkeys(selected_ids)),
         "answer_text": anchored,
         "claims": claims,
@@ -673,7 +739,15 @@ def _support_ref(
     ref = v2_patch._support_ref_for_terms(legacy, item, terms)
     if ref is None:
         ref = v2_patch._full_passage_support_ref(item)
-    return dict(ref) if ref is not None else None
+    if ref is None:
+        return None
+    bounded = dict(ref)
+    quote = str(bounded.get("exact_quote", ""))
+    if len(quote) > 780:
+        quote = quote[:780].rsplit(" ", 1)[0].rstrip() or quote[:780]
+        bounded["exact_quote"] = quote
+        bounded["exact_support_snippet"] = quote
+    return bounded
 
 
 def _ensure_intent_evidence(
@@ -733,11 +807,10 @@ def _ensure_intent_evidence(
         )
         if edge is not None:
             add_ref(edge)
-            endpoint_concepts = {
+            for concept_id in {
                 str(edge.get("edge_source", "")),
                 str(edge.get("edge_target", "")),
-            }
-            for concept_id in endpoint_concepts:
+            }:
                 item = next(
                     (
                         candidate
