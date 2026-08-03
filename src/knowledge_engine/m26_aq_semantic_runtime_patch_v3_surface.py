@@ -227,7 +227,7 @@ def _question_has_ordering_semantics(question: str) -> bool:
 
 
 def _product_question_contract(*, question: str, intent_class: str) -> dict[str, Any]:
-    """Align the legacy hard verifier with the product-first semantic lifecycle contract."""
+    """Align only narrow lifecycle questions with the product-first verifier contract."""
     if _ORIGINAL_QUESTION_CONTRACT is None:
         raise RuntimeError("AQ product question contract installed without original contract")
     contract = copy.deepcopy(
@@ -239,19 +239,21 @@ def _product_question_contract(*, question: str, intent_class: str) -> dict[str,
     if intent_class != "direct_grounded_knowledge":
         return contract
 
+    requested_lifecycle = _lifecycle_contract_facets(question)
+    if requested_lifecycle is None:
+        return contract
+
     facets = contract.get("required_facets", [])
     if not isinstance(facets, list):
         return contract
 
-    requested_lifecycle = _lifecycle_contract_facets(question)
-    if requested_lifecycle is not None:
-        facets = [
-            facet
-            for facet in facets
-            if not isinstance(facet, Mapping)
-            or str(facet.get("facet_id", "")) not in _LEGACY_LIFECYCLE_FACETS
-            or str(facet.get("facet_id", "")) in requested_lifecycle
-        ]
+    facets = [
+        facet
+        for facet in facets
+        if not isinstance(facet, Mapping)
+        or str(facet.get("facet_id", "")) not in _LEGACY_LIFECYCLE_FACETS
+        or str(facet.get("facet_id", "")) in requested_lifecycle
+    ]
     if not _question_has_ordering_semantics(question):
         facets = [
             facet
@@ -272,7 +274,7 @@ def _direct_facet_partition_candidate_any(
     used_items: Any,
     requirements: Any,
 ) -> dict[str, Any] | None:
-    """Extend exact-evidence direct verification partition from >=4 facets down to 1-3."""
+    """Extend 1-3 facet partition only for narrow lifecycle questions."""
     candidate = _ORIGINAL_DIRECT_FACET_PARTITION(
         legacy=legacy,
         answer=answer,
@@ -284,6 +286,8 @@ def _direct_facet_partition_candidate_any(
     if candidate is not None:
         return candidate
     if intent_class != "direct_grounded_knowledge" or not used_items:
+        return None
+    if _lifecycle_contract_facets(question) is None:
         return None
 
     required_facets = legacy._question_contract(
