@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from knowledge_engine import m26_aq_semantic_runtime_patch as base_patch
 from knowledge_engine.m26_aq_semantic_runtime_patch_v2 import (
+    _best_exact_edge,
+    _canonical_named_concepts,
     _runtime_bound_semantic_repair_v2,
 )
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
@@ -19,6 +23,110 @@ def test_runtime_bound_semantic_repair_v2_preserves_base_repair() -> None:
     original = base_patch._m26_aq_original_runtime_bound_semantic_repair
     assert original is not _runtime_bound_semantic_repair_v2
     assert base_patch._runtime_bound_semantic_repair is _runtime_bound_semantic_repair_v2
+
+
+def test_named_part_endpoint_resolution_prefers_canonical_identity_over_mentions() -> None:
+    runtime = _fake_runtime(
+        [
+            _doc(
+                "article_part_1",
+                "daniel_blog_en__harness-theory-part-1",
+                "Harness Theory Part 1: Evidence first",
+                "The article itself does not need to mention its own title in body.",
+            ),
+            _doc(
+                "article_part_2",
+                "daniel_blog_en__harness-theory-part-2",
+                "Harness Theory Part 2: Audit before claims",
+                "The article itself does not need to mention its own title in body.",
+            ),
+            _doc(
+                "article_part_9",
+                "daniel_blog_en__harness-theory-part-9",
+                "Harness Theory Part 9: Later operational notes",
+                "This later article merely mentions Harness Theory Part 1 and Harness Theory Part 2.",
+            ),
+            _doc(
+                "article_part_10",
+                "daniel_blog_en__harness-theory-part-10",
+                "Harness Theory Part 10: Later closure notes",
+                "Another distractor mention of Harness Theory Part 1 and Harness Theory Part 2.",
+            ),
+        ]
+    )
+    bundle = SimpleNamespace(documents=runtime.legacy.documents, graph_v2={"edges": []})
+
+    assert _canonical_named_concepts(runtime, bundle, "Harness Theory Part 1") == {
+        "article_part_1"
+    }
+    assert _canonical_named_concepts(runtime, bundle, "Harness Theory Part 2") == {
+        "article_part_2"
+    }
+
+
+def test_named_part_exact_edge_binding_uses_canonical_endpoints() -> None:
+    runtime = _fake_runtime(
+        [
+            _doc("article_part_1", "daniel_blog_en__harness-theory-part-1", "Harness Theory Part 1", ""),
+            _doc("article_part_2", "daniel_blog_en__harness-theory-part-2", "Harness Theory Part 2", ""),
+            _doc(
+                "article_part_9",
+                "daniel_blog_en__harness-theory-part-9",
+                "Harness Theory Part 9",
+                "Mentions Harness Theory Part 1 and Harness Theory Part 2 only as references.",
+            ),
+            _doc(
+                "article_part_10",
+                "daniel_blog_en__harness-theory-part-10",
+                "Harness Theory Part 10",
+                "Mentions Harness Theory Part 1 and Harness Theory Part 2 only as references.",
+            ),
+        ]
+    )
+    bundle = SimpleNamespace(
+        documents=runtime.legacy.documents,
+        graph_v2={
+            "edges": [
+                {
+                    "edge_id": "edge_wrong_mentions",
+                    "source": "article_part_9",
+                    "target": "article_part_10",
+                    "relation_type": "precedes",
+                    "confidence": 1.0,
+                },
+                {
+                    "edge_id": "edge_canonical_part_1_to_2",
+                    "source": "article_part_1",
+                    "target": "article_part_2",
+                    "relation_type": "precedes",
+                    "confidence": 1.0,
+                },
+            ]
+        },
+    )
+
+    source = _canonical_named_concepts(runtime, bundle, "Harness Theory Part 1")
+    target = _canonical_named_concepts(runtime, bundle, "Harness Theory Part 2")
+    edge = _best_exact_edge(bundle, source, target, "precedes")
+
+    assert edge is not None
+    assert edge["edge_id"] == "edge_canonical_part_1_to_2"
+
+
+def test_named_part_resolution_fails_closed_without_canonical_identity() -> None:
+    runtime = _fake_runtime(
+        [
+            _doc(
+                "article_part_9",
+                "daniel_blog_en__harness-theory-part-9",
+                "Harness Theory Part 9",
+                "This text mentions Harness Theory Part 1 without being that canonical article.",
+            )
+        ]
+    )
+    bundle = SimpleNamespace(documents=runtime.legacy.documents, graph_v2={"edges": []})
+
+    assert _canonical_named_concepts(runtime, bundle, "Harness Theory Part 1") == set()
 
 
 def test_heldout_router_replanner_contrast_terms_are_visible() -> None:
@@ -144,3 +252,33 @@ def test_compact_payload_exposes_semantic_contract_without_case_ids() -> None:
     assert "semantic_requirement_contract" in content
     assert "does not prove" in content
     assert "R3-Q" not in content
+
+
+def _doc(concept_id: str, source_identity: str, title: str, body: str) -> dict[str, str]:
+    return {
+        "concept_id": concept_id,
+        "section_id": concept_id,
+        "source_identity": source_identity,
+        "source_id": source_identity,
+        "title": title,
+        "section_title": title,
+        "body": body,
+        "excerpt": body,
+    }
+
+
+def _fake_runtime(documents: list[dict[str, str]]) -> SimpleNamespace:
+    class FakeLegacy:
+        @staticmethod
+        def _release_documents(bundle: SimpleNamespace) -> list[dict[str, str]]:
+            return list(bundle.documents)
+
+        @staticmethod
+        def _is_article_root_document(document: dict[str, str]) -> bool:
+            return document.get("section_id") == document.get("concept_id")
+
+        @staticmethod
+        def _document_text(document: dict[str, str]) -> str:
+            return str(document.get("body", ""))
+
+    return SimpleNamespace(legacy=FakeLegacy, documents=documents)
