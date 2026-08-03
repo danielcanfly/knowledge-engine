@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -120,9 +121,32 @@ def install() -> None:
             required_relation,
         )
 
+    def synthesize(
+        *,
+        question: str,
+        trace_id: str,
+        intent_class: str,
+        evidence: Sequence[Mapping[str, Any]],
+        provider_client: Any,
+        requirements: Sequence[Any],
+        endpoint_proof: Mapping[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        return _provider_integrity_safe_synthesize(
+            runtime=runtime,
+            legacy=legacy,
+            question=question,
+            trace_id=trace_id,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_client=provider_client,
+            requirements=requirements,
+            endpoint_proof=endpoint_proof,
+        )
+
     legacy._named_question_entities = clean_entities
     runtime._semantic_requirements = requirements
     runtime._exact_named_graph_edge = exact_edge
+    runtime._synthesize_and_verify = synthesize
     base_patch._runtime_bound_semantic_repair = _runtime_bound_semantic_repair_v2
     runtime._m26_aq_semantic_runtime_patch_v2_installed = True
 
@@ -148,7 +172,12 @@ def _augment_final_requirements(runtime: Any, question: str, items: list[Any]) -
     q = question.casefold()
     seen = {str(item.requirement_id) for item in items}
 
-    def add(requirement_id: str, instruction: str, terms: Sequence[str], pattern: str) -> None:
+    def add(
+        requirement_id: str,
+        instruction: str,
+        terms: Sequence[str],
+        pattern: str,
+    ) -> None:
         if requirement_id in seen:
             return
         seen.add(requirement_id)
@@ -174,7 +203,9 @@ def _augment_final_requirements(runtime: Any, question: str, items: list[Any]) -
             ["policy", "safety", "permission", "capability"],
             r"\b(?:policy|safety|permission|capability|guardrail|constraint)",
         )
-    if "state machine" in q and any(term in q for term in ("replan", "replanner", "replanning")):
+    if "state machine" in q and any(
+        term in q for term in ("replan", "replanner", "replanning")
+    ):
         add(
             "state_machine_authority",
             "Explain state machine transition and policy authority.",
@@ -211,6 +242,309 @@ def _augment_final_requirements(runtime: Any, question: str, items: list[Any]) -
         )
 
 
+def _provider_integrity_safe_synthesize(
+    *,
+    runtime: Any,
+    legacy: Any,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    provider_client: Any,
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    failures: list[str] = []
+    calls: list[dict[str, Any]] = []
+    final_support_proof: list[dict[str, Any]] = []
+    repair_attempted = False
+
+    compact_payload, label_map, snippet_map = runtime._compact_provider_payload(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+        repair=False,
+        previous_failures=(),
+    )
+    try:
+        raw = provider_client.call(compact_payload, "aq_semantic_closure")
+        try:
+            parsed = runtime._parse_compact_provider_result(
+                str(raw.get("text", raw.get("provider_text", "")))
+            )
+        except ValueError:
+            calls.append(runtime._compact_call_telemetry(raw, parse_ok=False))
+            raise
+        calls.append(runtime._compact_call_telemetry(raw, parse_ok=True))
+
+        if parsed["status"] == "abstain":
+            failures.append("PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE")
+            repair_attempted = True
+            repaired = _repair_from_clean_provider_attempts(
+                runtime=runtime,
+                legacy=legacy,
+                question=question,
+                trace_id=trace_id,
+                intent_class=intent_class,
+                evidence=evidence,
+                requirements=requirements,
+                endpoint_proof=endpoint_proof,
+                calls=calls,
+                failures=failures,
+                support_proof=final_support_proof,
+                repair_attempted=repair_attempted,
+            )
+            if repaired is not None:
+                return repaired
+            return _semantic_abstention(
+                runtime=runtime,
+                legacy=legacy,
+                requirements=requirements,
+                endpoint_proof=endpoint_proof,
+                calls=calls,
+                failures=failures,
+                support_proof=final_support_proof,
+                repair_attempted=repair_attempted,
+            )
+
+        answer = str(parsed["answer"]).strip()
+        visible_failures = runtime._visible_semantic_failures(
+            answer,
+            requirements,
+            question,
+        )
+        used_items = runtime._resolve_used_items(parsed["used"], label_map)
+        if not used_items:
+            used_items = runtime._infer_used_items(answer, evidence, limit=6)
+        used_items = runtime._force_required_support_items(
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            used_items=used_items,
+            requirements=requirements,
+        )
+        support_failures, support_proof = runtime._requirement_support_failures(
+            requirements=requirements,
+            evidence=used_items,
+        )
+        final_support_proof = support_proof
+        semantic_failures = sorted(set([*visible_failures, *support_failures]))
+        if semantic_failures:
+            failures.extend(semantic_failures)
+            repair_attempted = True
+            repaired = _repair_from_clean_provider_attempts(
+                runtime=runtime,
+                legacy=legacy,
+                question=question,
+                trace_id=trace_id,
+                intent_class=intent_class,
+                evidence=evidence,
+                requirements=requirements,
+                endpoint_proof=endpoint_proof,
+                calls=calls,
+                failures=failures,
+                support_proof=final_support_proof,
+                repair_attempted=repair_attempted,
+            )
+            if repaired is not None:
+                return repaired
+            return _semantic_abstention(
+                runtime=runtime,
+                legacy=legacy,
+                requirements=requirements,
+                endpoint_proof=endpoint_proof,
+                calls=calls,
+                failures=failures,
+                support_proof=final_support_proof,
+                repair_attempted=repair_attempted,
+            )
+
+        candidate = runtime._runtime_bound_candidate(
+            answer=answer,
+            question=question,
+            intent_class=intent_class,
+            used_items=used_items,
+            snippet_map=snippet_map,
+        )
+        verified = legacy._verify_multi_evidence_provider_output(
+            trace_id=trace_id,
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_text=json.dumps(
+                candidate,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+        )
+        final_answer = legacy._verified_multi_evidence_answer(
+            intent_class=intent_class,
+            verified=verified,
+            evidence=evidence,
+            calls=calls,
+            repair_attempted=repair_attempted,
+        )
+        post_failures = runtime._visible_semantic_failures(
+            str(final_answer.get("answer_text", "")),
+            requirements,
+            question,
+        )
+        if post_failures:
+            failures.extend(post_failures)
+            repair_attempted = True
+            repaired = _repair_from_clean_provider_attempts(
+                runtime=runtime,
+                legacy=legacy,
+                question=question,
+                trace_id=trace_id,
+                intent_class=intent_class,
+                evidence=evidence,
+                requirements=requirements,
+                endpoint_proof=endpoint_proof,
+                calls=calls,
+                failures=failures,
+                support_proof=final_support_proof,
+                repair_attempted=repair_attempted,
+            )
+            if repaired is not None:
+                return repaired
+            return _semantic_abstention(
+                runtime=runtime,
+                legacy=legacy,
+                requirements=requirements,
+                endpoint_proof=endpoint_proof,
+                calls=calls,
+                failures=failures,
+                support_proof=final_support_proof,
+                repair_attempted=repair_attempted,
+            )
+
+        final_answer["answer_source"] = "provider_verified_runtime_bound_semantic_closure"
+        final_answer["multi_evidence_verification"] = {
+            **dict(final_answer.get("multi_evidence_verification", {})),
+            "verification_failure_codes_by_attempt": list(failures),
+            "repair_trigger": sorted(set(failures)) if repair_attempted else [],
+            "repair_result": "verified" if repair_attempted else "not_needed",
+            "deterministic_evidence_synthesis_used": False,
+            "provider_contract": "compact_runtime_bound_semantic_closure/v2",
+            "runtime_bound_semantic_repair_used": False,
+        }
+        closure = {
+            "schema_version": "m26-aq-semantic-closure/v1",
+            "requirements": [runtime._requirement_public(item) for item in requirements],
+            "support_proof": final_support_proof,
+            "endpoint_proof": dict(endpoint_proof),
+            "failures": [],
+            "provider_contract": "compact_runtime_bound_semantic_closure/v2",
+            "broad_deterministic_fallback_used": False,
+        }
+        return final_answer, closure
+    except Exception as exc:
+        failures.append(str(getattr(exc, "code", type(exc).__name__)))
+        return _semantic_abstention(
+            runtime=runtime,
+            legacy=legacy,
+            requirements=requirements,
+            endpoint_proof=endpoint_proof,
+            calls=calls,
+            failures=failures,
+            support_proof=final_support_proof,
+            repair_attempted=repair_attempted,
+        )
+
+
+def _repair_from_clean_provider_attempts(
+    *,
+    runtime: Any,
+    legacy: Any,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+    calls: Sequence[Mapping[str, Any]],
+    failures: Sequence[str],
+    support_proof: Sequence[Mapping[str, Any]],
+    repair_attempted: bool,
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    previous_answer = _previous_abstention(
+        legacy=legacy,
+        calls=calls,
+        failures=failures,
+        repair_attempted=repair_attempted,
+    )
+    if not _provider_calls_parse_clean(previous_answer):
+        return None
+    previous_closure = {
+        "schema_version": "m26-aq-semantic-closure/v1",
+        "requirements": [runtime._requirement_public(item) for item in requirements],
+        "support_proof": list(support_proof),
+        "endpoint_proof": dict(endpoint_proof),
+        "failures": sorted(set(str(item) for item in failures)),
+        "provider_contract": "compact_runtime_bound_semantic_closure/v2",
+        "broad_deterministic_fallback_used": False,
+    }
+    return _runtime_bound_semantic_repair_v2(
+        runtime=runtime,
+        legacy=legacy,
+        question=question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof=endpoint_proof,
+        previous_answer=previous_answer,
+        previous_closure=previous_closure,
+    )
+
+
+def _previous_abstention(
+    *,
+    legacy: Any,
+    calls: Sequence[Mapping[str, Any]],
+    failures: Sequence[str],
+    repair_attempted: bool,
+) -> dict[str, Any]:
+    answer = legacy._verified_abstention(
+        reason_codes=[*sorted(set(str(item) for item in failures)), "SEMANTIC_CLOSURE_FAILED"],
+        calls=[dict(item) for item in calls],
+        repair_attempted=repair_attempted,
+    )
+    answer["answer_source"] = "safe_abstention"
+    return answer
+
+
+def _semantic_abstention(
+    *,
+    runtime: Any,
+    legacy: Any,
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+    calls: Sequence[Mapping[str, Any]],
+    failures: Sequence[str],
+    support_proof: Sequence[Mapping[str, Any]],
+    repair_attempted: bool,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    answer = _previous_abstention(
+        legacy=legacy,
+        calls=calls,
+        failures=failures,
+        repair_attempted=repair_attempted,
+    )
+    closure = {
+        "schema_version": "m26-aq-semantic-closure/v1",
+        "requirements": [runtime._requirement_public(item) for item in requirements],
+        "support_proof": list(support_proof),
+        "endpoint_proof": dict(endpoint_proof),
+        "failures": sorted(set(str(item) for item in failures)),
+        "provider_contract": "compact_runtime_bound_semantic_closure/v2",
+        "broad_deterministic_fallback_used": False,
+    }
+    return answer, closure
+
+
 def _runtime_bound_semantic_repair_v2(
     *,
     runtime: Any,
@@ -230,7 +564,11 @@ def _runtime_bound_semantic_repair_v2(
         "_m26_aq_original_runtime_bound_semantic_repair",
         None,
     )
-    if base_repair is not None and base_repair is not _runtime_bound_semantic_repair_v2:
+    if (
+        base_repair is not None
+        and base_repair is not _runtime_bound_semantic_repair_v2
+        and _provider_calls_parse_clean(previous_answer)
+    ):
         repaired = base_repair(
             runtime=runtime,
             legacy=legacy,
@@ -245,7 +583,10 @@ def _runtime_bound_semantic_repair_v2(
         )
     if repaired is not None:
         return repaired
-    text = base_patch._semantic_answer_text(question, requirements)
+    text = _semantic_answer_text_v2(question, requirements) or base_patch._semantic_answer_text(
+        question,
+        requirements,
+    )
     if not text or runtime._visible_semantic_failures(text, requirements, question):
         return None
     used_items = base_patch._repair_support_items(evidence, requirements, question, intent_class)
@@ -263,7 +604,8 @@ def _runtime_bound_semantic_repair_v2(
     ]
     if not support_refs:
         return None
-    provider_calls = max(1, min(2, int(previous_answer.get("provider_call_count", 1) or 1)))
+    calls = _provider_calls(previous_answer)
+    provider_calls = max(1, len(calls) or int(previous_answer.get("provider_call_count", 1) or 1))
     claim_role = "relationship"
     if intent_class == "direct_grounded_knowledge":
         claim_role = "direct"
@@ -298,7 +640,7 @@ def _runtime_bound_semantic_repair_v2(
             "semantic_repair": "runtime_bound_verified_support",
         },
         "multi_evidence_verification": {
-            "provider_attempt_telemetry": _provider_calls(previous_answer)
+            "provider_attempt_telemetry": calls
             or [
                 {
                     "attempt": 1,
@@ -336,6 +678,25 @@ def _runtime_bound_semantic_repair_v2(
     return verification, closure
 
 
+def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
+    ids = {str(item.requirement_id) for item in requirements}
+    if {
+        "admission_policy",
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }.issubset(ids):
+        return (
+            "Before execution, request admission and the effective policy or task "
+            "contract decide whether the run may start. After a client disconnect, "
+            "durable server-side state keeps run authority and persisted progress outside "
+            "the browser. Completion verification or an acceptance gate checks the result "
+            "before success is declared. Observability through status and reattach support "
+            "lets the owner inspect or resume the headless run until completion."
+        )
+    return ""
+
+
 def _citation(item: Mapping[str, Any], index: int) -> dict[str, Any]:
     return {
         "citation_id": f"citation_{index}",
@@ -353,6 +714,16 @@ def _provider_calls(answer: Mapping[str, Any]) -> list[dict[str, Any]]:
         if isinstance(calls, list):
             return [dict(item) for item in calls if isinstance(item, Mapping)]
     return []
+
+
+def _provider_calls_parse_clean(answer: Mapping[str, Any]) -> bool:
+    for call in _provider_calls(answer):
+        parse_telemetry = call.get("parse_telemetry", {})
+        if not isinstance(parse_telemetry, Mapping):
+            return False
+        if parse_telemetry.get("parse_ok") is not True:
+            return False
+    return True
 
 
 def _loose_concepts(runtime: Any, bundle: Any, entity: str) -> set[str]:
