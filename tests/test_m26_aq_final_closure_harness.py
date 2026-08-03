@@ -29,7 +29,7 @@ class FakeResponse:
         self.status = status
         self._payload = payload
 
-    def __enter__(self) -> "FakeResponse":
+    def __enter__(self) -> FakeResponse:
         return self
 
     def __exit__(self, *_: object) -> None:
