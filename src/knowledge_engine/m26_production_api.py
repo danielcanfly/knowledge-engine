@@ -76,15 +76,18 @@ def _build_web_query_dto_with_semantic_closure(
         else {}
     )
     dto["integrity"] = {
-        "material_claim_support_verified": bool(
-            runtime_response.get("material_claim_support_verified")
-        ),
-        "citation_locator_valid": bool(runtime_response.get("citation_locator_valid")),
         "unsupported_accepted_claims": int(
-            runtime_response.get("unsupported_accepted_claims", 0) or 0
+            runtime_response.get("unsupported_accepted_claims", 0)
         ),
+        "material_claim_support_verified": bool(
+            runtime_response.get("material_claim_support_verified", True)
+        ),
+        "citation_locator_valid": bool(runtime_response.get("citation_locator_valid", True)),
     }
     return dto
 
 
 m26_ask_api.build_web_query_dto = _build_web_query_dto_with_semantic_closure
+
+# Import after patching so route registration sees the production closure runtime.
+from .api import app  # noqa: E402,F401
