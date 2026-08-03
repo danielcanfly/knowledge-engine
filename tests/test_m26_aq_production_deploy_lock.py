@@ -45,9 +45,19 @@ def test_aq_deploy_bootstrap_comes_from_exact_head_not_shared_checkout() -> None
     assert f"oracle-knowledge:{exact_head_path}" in final_workflow
     assert f"oracle-knowledge:{exact_head_path}" in diagnostic_workflow
     assert "bash \"$AQ_EXACT_HEAD_DEPLOY_SCRIPT\"" in diagnostic_workflow
-    assert "AQ_EXACT_HEAD_DEPLOY_SCRIPT='/tmp/m26-aq-exact-head-deploy.sh'" in diagnostic_workflow
-    assert "AQ_EXACT_HEAD_DEPLOY_SCRIPT='/tmp/m26-aq-exact-head-deploy.sh'" in final_workflow
-    assert 'exact_head_deploy_script="${AQ_EXACT_HEAD_DEPLOY_SCRIPT:-/tmp/m26-aq-exact-head-deploy.sh}"' in remote
+    assert (
+        "AQ_EXACT_HEAD_DEPLOY_SCRIPT='/tmp/m26-aq-exact-head-deploy.sh'"
+        in diagnostic_workflow
+    )
+    assert (
+        "AQ_EXACT_HEAD_DEPLOY_SCRIPT='/tmp/m26-aq-exact-head-deploy.sh'"
+        in final_workflow
+    )
+    expected_remote_binding = (
+        'exact_head_deploy_script="${AQ_EXACT_HEAD_DEPLOY_SCRIPT:'
+        '-/tmp/m26-aq-exact-head-deploy.sh}"'
+    )
+    assert expected_remote_binding in remote
     assert 'bash "$exact_head_deploy_script"' in remote
     assert 'bash "$DEPLOY_PATH/deploy/deploy.sh"' not in remote
 
