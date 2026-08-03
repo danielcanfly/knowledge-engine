@@ -100,13 +100,13 @@
     {
       "case_id": "GPT-E-BB17",
       "class": "ambiguous_underspecified",
-      "question": "A user asks only, 'Should the system replan here?' without saying what evidence changed or which step failed. How should a trustworthy answer handle that ambiguity?",
-      "expected": "answer"
+      "question": "What should I use for this workflow?",
+      "expected": "abstain"
     },
     {
       "case_id": "GPT-E-BB18",
       "class": "no_answer",
-      "question": "What exact millisecond SLA guarantees that every production knowledge-engine query completes within the same fixed latency?",
+      "question": "What is the official launch date of the nonexistent Knowledge Engine lunar mobile game?",
       "expected": "abstain"
     },
     {
