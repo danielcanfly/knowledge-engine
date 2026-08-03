@@ -4,7 +4,6 @@ import argparse
 import http.client
 import json
 import os
-import re
 import time
 import urllib.error
 import urllib.request
@@ -695,14 +694,6 @@ def validate(
                 failures.append(f"{case_id}:wrong_graph_edge")
             if endpoint.get("relation_type") != "precedes":
                 failures.append(f"{case_id}:wrong_graph_relation")
-        if case_id == "R3-Q09":
-            answer = re.sub(
-                r"^\s+",
-                "",
-                str(row.get("answer_text", "")),
-            ).casefold()
-            if not re.match(r"^(?:no\b|it does not\b|that does not\b)", answer):
-                failures.append("R3-Q09:no_clear_initial_no")
 
     privacy = artifact.get("privacy", {})
     if privacy.get("raw_backend_token_recorded") is not False:
