@@ -55,10 +55,11 @@ jobs:
           exec 9>/tmp/knowledge-engine-production-oracle.lock
           flock -x 9
 
+          test -s "$AQ_EXACT_HEAD_DEPLOY_SCRIPT"
           KNOWLEDGE_ENGINE_DEPLOY_LOCK_HELD=1 \
             DEPLOY_PATH="$DEPLOY_PATH" \
             RELEASE_SHA="$EXPECTED_DEPLOY_SHA" \
-            bash "$DEPLOY_PATH/deploy/deploy.sh" </dev/null
+            bash "$AQ_EXACT_HEAD_DEPLOY_SCRIPT" </dev/null
 
           cd "$DEPLOY_PATH"
           test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
@@ -169,9 +170,10 @@ jobs:
           REMOTE
 
           chmod 700 /tmp/m26-aq-query-diagnostic.sh
+          scp deploy/deploy.sh oracle-knowledge:/tmp/m26-aq-exact-head-deploy.sh
           scp /tmp/m26-aq-query-diagnostic.sh oracle-knowledge:/tmp/m26-aq-query-diagnostic.sh
           ssh oracle-knowledge \
-            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' bash /tmp/m26-aq-query-diagnostic.sh" \
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' AQ_EXACT_HEAD_DEPLOY_SCRIPT='/tmp/m26-aq-exact-head-deploy.sh' bash /tmp/m26-aq-query-diagnostic.sh" \
             | tee /tmp/m26-aq-query-runtime-diagnostic.json
 
       - name: Upload sanitized diagnostic
