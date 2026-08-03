@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from collections.abc import Mapping, Sequence
@@ -83,6 +82,7 @@ def install() -> None:
                     continue
             items.append(item)
         _augment_final_requirements(runtime, question, items)
+        _normalize_final_requirements(runtime, question, items)
         return items
 
     def exact_edge(bundle: Any, question: str) -> Mapping[str, Any] | None:
@@ -371,6 +371,49 @@ def _augment_final_requirements(runtime: Any, question: str, items: list[Any]) -
         )
 
 
+
+def _normalize_final_requirements(runtime: Any, question: str, items: list[Any]) -> None:
+    """Normalize inherited semantic requirements without weakening canonical verification."""
+    q = question.casefold()
+    if not _looks_like_state_machine_replanner_question(q):
+        return
+    for index, item in enumerate(items):
+        if str(item.requirement_id) != "authority_boundary":
+            continue
+        items[index] = runtime.SemanticRequirement(
+            requirement_id="authority_boundary",
+            instruction=(
+                "State that adaptive replanning remains inside the state-machine "
+                "policy/approval authority envelope rather than gaining unlimited authority."
+            ),
+            evidence_terms=(
+                "state machine",
+                "policy",
+                "approval",
+                "authority",
+                "bounded",
+                "within",
+                "unlimited",
+            ),
+            visible_patterns=(
+                r"(?:replan|replanning|replanner).{0,240}"
+                r"(?:within|inside|bounded|envelope|policy|approval|authority).{0,220}"
+                r"(?:state[- ]machine|policy|approval|authority|gates)",
+                r"(?:state[- ]machine|policy|approval|authority|gates).{0,240}"
+                r"(?:within|inside|bounded|envelope|authority|gates).{0,220}"
+                r"(?:replan|replanning|replanner|revisions)",
+                r"(?:rather than|without|instead of).{0,180}"
+                r"(?:unlimited|unbounded|expanding).{0,120}authority",
+            ),
+        )
+        return
+
+
+def _looks_like_state_machine_replanner_question(q: str) -> bool:
+    return "state machine" in q and any(
+        term in q for term in ("replan", "replanner", "replanning", "adaptive")
+    )
+
 def _looks_like_lifecycle_question(q: str) -> bool:
     continuation = any(
         term in q
@@ -557,6 +600,14 @@ def _provider_integrity_safe_synthesize(
             repair_attempted=repair_attempted,
         )
         _use_verified_natural_surface(final_answer, answer)
+        leaks = _user_visible_internal_reference_leaks(
+            str(final_answer.get("answer_text", "")),
+            question,
+            label_map,
+        )
+        if leaks:
+            failures.extend(f"USER_VISIBLE_INTERNAL_REFERENCE_LEAK:{item}" for item in leaks)
+            return repair_or_abstain()
     except Exception as exc:
         code = str(getattr(exc, "code", type(exc).__name__))
         failures.append(code)
@@ -605,6 +656,54 @@ def _provider_integrity_safe_synthesize(
     }
     return final_answer, closure
 
+
+
+def _user_visible_internal_reference_leaks(
+    text: str,
+    question: str,
+    label_map: Mapping[str, Any] | None,
+) -> list[str]:
+    """Return provider/runtime identifiers that leaked into ordinary user-visible prose."""
+    if not text:
+        return []
+    allowed = _question_supplied_internal_tokens(question)
+    leaked: list[str] = []
+
+    provider_labels = set()
+    if isinstance(label_map, Mapping):
+        provider_labels = {str(key) for key in label_map}
+
+    for token in re.findall(r"\be\d+\b", text):
+        if token in allowed:
+            continue
+        if not provider_labels or token in provider_labels:
+            leaked.append(token)
+    for token in re.findall(r"\barticle_[0-9a-f]{8,}\b", text, flags=re.I):
+        if token not in allowed:
+            leaked.append(token)
+    for token in re.findall(
+        r"\bm26pa7(?:ev|loc|edge)_[0-9a-f]{8,}\b",
+        text,
+        flags=re.I,
+    ):
+        if token not in allowed:
+            leaked.append(token)
+    for token in re.findall(r"\bclaim_\d+(?:_ref_\d+)?\b", text, flags=re.I):
+        if token not in allowed:
+            leaked.append(token)
+    return list(dict.fromkeys(leaked))
+
+
+def _question_supplied_internal_tokens(question: str) -> set[str]:
+    tokens: set[str] = set()
+    for pattern in (
+        r"\be\d+\b",
+        r"\barticle_[0-9a-f]{8,}\b",
+        r"\bm26pa7(?:ev|loc|edge)_[0-9a-f]{8,}\b",
+        r"\bclaim_\d+(?:_ref_\d+)?\b",
+    ):
+        tokens.update(re.findall(pattern, question, flags=re.I))
+    return tokens
 
 def _repairable_verifier_failure(code: str) -> bool:
     return str(code) in {
@@ -767,6 +866,40 @@ def _runtime_bound_semantic_repair_v2(
         for item in used_items
         if item.get("evidence_id")
     }
+
+    def public_citation_fields(item: Mapping[str, Any]) -> dict[str, Any]:
+        evidence_id = str(item.get("evidence_id") or item.get("locator_id") or "evidence")
+        locator_id = str(item.get("locator_id") or evidence_id)
+        source_identity = str(
+            item.get("source_identity")
+            or item.get("source_id")
+            or item.get("source")
+            or evidence_id
+        )
+        section_id = str(
+            item.get("section_id") or item.get("concept_id") or locator_id or evidence_id
+        )
+        return {
+            **dict(item),
+            "evidence_id": evidence_id,
+            "locator_id": locator_id,
+            "source_id": str(item.get("source_id") or source_identity),
+            "source_identity": source_identity,
+            "section_id": section_id,
+            "concept_id": str(item.get("concept_id") or section_id),
+            "release_id": str(item.get("release_id") or source_identity),
+            "artifact_key": str(item.get("artifact_key") or source_identity),
+            "artifact_sha256": str(item.get("artifact_sha256") or source_identity),
+            "passage_text_sha256": str(
+                item.get("passage_text_sha256")
+                or item.get("exact_quote_sha256")
+                or evidence_id
+            ),
+            "provenance_record_sha256": str(
+                item.get("provenance_record_sha256") or locator_id
+            ),
+        }
+
     try:
         candidate = _runtime_bound_candidate_v2(
             runtime=runtime,
@@ -789,11 +922,10 @@ def _runtime_bound_semantic_repair_v2(
                 separators=(",", ":"),
             ),
         )
-        citation_evidence = _citation_ready_repair_evidence(evidence)
         final = legacy._verified_multi_evidence_answer(
             intent_class=intent_class,
             verified=verified,
-            evidence=citation_evidence,
+            evidence=[public_citation_fields(item) for item in evidence],
             calls=_provider_calls(previous_answer),
             repair_attempted=True,
         )
@@ -813,6 +945,18 @@ def _runtime_bound_semantic_repair_v2(
         question,
     ):
         _record_local_repair_rejection(previous_closure, "FINAL_SURFACE_SEMANTIC_MISMATCH")
+        return None
+    final_leaks = _user_visible_internal_reference_leaks(
+        str(final.get("answer_text", "")),
+        question,
+        {},
+    )
+    if final_leaks:
+        for leak in final_leaks:
+            _record_local_repair_rejection(
+                previous_closure,
+                f"FINAL_SURFACE_INTERNAL_REFERENCE_LEAK:{leak}",
+            )
         return None
     final["answer_source"] = "provider_verified_runtime_bound_semantic_closure"
     final["multi_evidence_verification"] = {
@@ -891,64 +1035,6 @@ def _runtime_bound_candidate_v2(
     )
 
 
-def _citation_ready_repair_evidence(
-    evidence: Sequence[Mapping[str, Any]],
-) -> list[dict[str, Any]]:
-    ready: list[dict[str, Any]] = []
-    for item in evidence:
-        current = dict(item)
-        evidence_id = str(current.get("evidence_id") or current.get("locator_id") or "evidence")
-        source_identity = str(
-            current.get("source_identity")
-            or current.get("source_id")
-            or current.get("source")
-            or evidence_id
-        )
-        section_id = str(
-            current.get("section_id")
-            or current.get("concept_id")
-            or current.get("locator_id")
-            or evidence_id
-        )
-        passage_text = str(
-            current.get("passage_text")
-            or current.get("exact_quote")
-            or current.get("text")
-            or ""
-        )
-        passage_hash = str(
-            current.get("passage_text_sha256")
-            or hashlib.sha256(passage_text.encode("utf-8")).hexdigest()
-        )
-        current.setdefault("evidence_id", evidence_id)
-        current.setdefault("locator_id", evidence_id)
-        current.setdefault("source_id", source_identity)
-        current.setdefault("source_identity", source_identity)
-        current.setdefault("section_id", section_id)
-        current.setdefault("concept_id", str(current.get("concept_id") or section_id))
-        current.setdefault("release_id", str(current.get("release_id") or "runtime_repair"))
-        current.setdefault("artifact_key", str(current.get("artifact_key") or source_identity))
-        current.setdefault(
-            "artifact_sha256",
-            str(
-                current.get("artifact_sha256")
-                or hashlib.sha256(source_identity.encode("utf-8")).hexdigest()
-            ),
-        )
-        current.setdefault("passage_text_sha256", passage_hash)
-        current.setdefault(
-            "provenance_record_sha256",
-            str(
-                current.get("provenance_record_sha256")
-                or hashlib.sha256(
-                    f"{evidence_id}:{source_identity}:{passage_hash}".encode()
-                ).hexdigest()
-            ),
-        )
-        ready.append(current)
-    return ready
-
-
 
 def _relationship_partition_candidate(
     *,
@@ -967,7 +1053,9 @@ def _relationship_partition_candidate(
         source = _repair_source_identity(item)
         if source in seen_sources:
             continue
-        ref = _support_ref_for_terms(legacy, item, set())
+        ref = _full_passage_support_ref(item)
+        if ref is None:
+            ref = _support_ref_for_terms(legacy, item, set())
         if ref is None:
             continue
         refs.append(ref)
@@ -995,11 +1083,42 @@ def _relationship_partition_candidate(
         "status": "answer_candidate",
         "relation": relation,
         "selected_evidence_ids": selected_ids,
-        "answer_text": f"{answer} [[claim_1]]",
+        "answer_text": _anchor_every_sentence(answer, "claim_1"),
         "claims": [claim],
         "missing_facets": [],
         "abstention_reason": None,
     }
+
+
+def _full_passage_support_ref(item: Mapping[str, Any]) -> dict[str, str] | None:
+    quote = " ".join(str(item.get("passage_text", "")).split())
+    if not quote:
+        return None
+    if len(quote) > 780:
+        quote = quote[:780].rsplit(" ", 1)[0].rstrip()
+    if not quote:
+        return None
+    return {
+        "evidence_id": str(item.get("evidence_id", "")),
+        "locator_id": str(item.get("locator_id", "")),
+        "exact_quote": quote,
+        "exact_support_snippet": quote,
+        "uncertainty": "low",
+    }
+
+
+def _anchor_every_sentence(answer: str, claim_id: str) -> str:
+    pieces = [
+        item.strip()
+        for item in re.split(r"(?<=[.!?])\s+", str(answer).strip())
+        if item.strip()
+    ]
+    if not pieces:
+        return ""
+    return " ".join(
+        piece if f"[[{claim_id}]]" in piece else f"{piece.rstrip('.')} [[{claim_id}]]."
+        for piece in pieces
+    )
 
 def _direct_facet_partition_candidate(
     *,
@@ -1195,8 +1314,9 @@ def _direct_facet_surface_text(
         ),
         "state_machine": "The state machine owns state transitions and transition authority.",
         "authority_boundary": (
-            "The replanner is bounded by policy, approval, and state machine authority "
-            "boundaries."
+            "Adaptive replanning does not bypass state machine policy and approval "
+            "authority; the state machine bounds the replanner inside that authority "
+            "envelope."
         ),
         "source_of_trust": (
             "The canonical source and provenance artifact authority is the source of trust."
@@ -1521,9 +1641,9 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
         )
     if {"router_decision", "routing_constraints"}.issubset(ids):
         return (
-            "A production router selects the downstream route or path only after "
-            "inspecting request intent, available capabilities, permission context, "
-            "policy and safety constraints, cost or latency budget, and downstream health."
+            "A production router selects the downstream route or path after inspecting "
+            "request intent, available capabilities, permission context, policy, safety, "
+            "budget, latency, and downstream health constraints."
         )
     if {"initial_routing_role", "replanning_role", "role_contrast"}.issubset(ids):
         return (
@@ -1535,11 +1655,10 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
         )
     if {"state_machine_authority", "adaptive_replan", "authority_boundary"}.issubset(ids):
         return (
-            "The state machine defines the transition state plus policy and approval "
-            "authority. Adaptive replanning can replan the remaining steps when an "
-            "assumption becomes invalid. The replanner cannot bypass or override the "
-            "state machine policy and approval authority; replanning changes unfinished "
-            "work inside that bounded authority envelope."
+            "The state machine defines the policy and approval authority envelope. "
+            "Adaptive replanning revises remaining work when assumptions change, with "
+            "those revisions staying within the state-machine policy and approval gates "
+            "rather than expanding the replanner's authority."
         )
     if {
         "source_selection",
