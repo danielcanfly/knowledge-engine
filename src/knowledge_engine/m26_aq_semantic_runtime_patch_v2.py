@@ -84,29 +84,41 @@ def install() -> None:
         return items
 
     def exact_edge(bundle: Any, question: str) -> Mapping[str, Any] | None:
+        entities = clean_entities(question)
+        required_relation = "precedes" if "precedes" in question.casefold() else ""
+        if len(entities) >= 2:
+            source_canonical = _canonical_named_concepts(runtime, bundle, entities[0])
+            target_canonical = _canonical_named_concepts(runtime, bundle, entities[1])
+            strict_named_endpoints = any(
+                _requires_canonical_endpoint_binding(entity) for entity in entities[:2]
+            )
+            if source_canonical and target_canonical:
+                edge = _best_exact_edge(
+                    bundle,
+                    source_canonical,
+                    target_canonical,
+                    required_relation,
+                )
+                if edge is not None:
+                    return edge
+                if strict_named_endpoints:
+                    return None
+            elif strict_named_endpoints:
+                return None
+
         edge = previous_edge(bundle, question)
         if edge is not None:
             return edge
-        entities = clean_entities(question)
         if len(entities) < 2:
             return None
-        required_relation = "precedes" if "precedes" in question.casefold() else ""
         source_candidates = _loose_concepts(runtime, bundle, entities[0])
         target_candidates = _loose_concepts(runtime, bundle, entities[1])
-        matches: list[Mapping[str, Any]] = []
-        for candidate in bundle.graph_v2.get("edges", []):
-            if not isinstance(candidate, Mapping):
-                continue
-            if required_relation and str(candidate.get("relation_type")) != required_relation:
-                continue
-            if (
-                str(candidate.get("source", "")) in source_candidates
-                and str(candidate.get("target", "")) in target_candidates
-            ):
-                matches.append(candidate)
-        if not matches:
-            return None
-        return max(matches, key=lambda item: float(item.get("confidence") or 0.0))
+        return _best_exact_edge(
+            bundle,
+            source_candidates,
+            target_candidates,
+            required_relation,
+        )
 
     legacy._named_question_entities = clean_entities
     runtime._semantic_requirements = requirements
@@ -344,9 +356,14 @@ def _provider_calls(answer: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _loose_concepts(runtime: Any, bundle: Any, entity: str) -> set[str]:
+    canonical = _canonical_named_concepts(runtime, bundle, entity)
+    if canonical:
+        return canonical
     concepts = set(runtime._entity_concepts(bundle, entity))
     if concepts:
         return concepts
+    if _requires_canonical_endpoint_binding(entity):
+        return set()
     normalized = re.sub(r"[^a-z0-9]+", " ", entity.casefold()).strip()
     if not normalized:
         return concepts
@@ -364,3 +381,127 @@ def _loose_concepts(runtime: Any, bundle: Any, entity: str) -> set[str]:
             if concept:
                 concepts.add(concept)
     return concepts
+
+
+def _canonical_named_concepts(runtime: Any, bundle: Any, entity: str) -> set[str]:
+    scored: list[tuple[float, str]] = []
+    for document in runtime.legacy._release_documents(bundle):
+        concept = str(document.get("concept_id", ""))
+        if not concept:
+            continue
+        score = _canonical_endpoint_document_score(runtime, entity, document)
+        if score > 0:
+            scored.append((score, concept))
+    if not scored:
+        return set()
+    best = max(score for score, _ in scored)
+    if best < 7.0:
+        return set()
+    return {concept for score, concept in scored if score >= best - 0.5}
+
+
+def _canonical_endpoint_document_score(
+    runtime: Any,
+    entity: str,
+    document: Mapping[str, Any],
+) -> float:
+    entity_norm = _normalized_identity_phrase(entity)
+    entity_slug = _identity_slug(entity)
+    if not entity_norm or not entity_slug:
+        return 0.0
+
+    title = str(document.get("title", ""))
+    section_title = str(document.get("section_title", ""))
+    source_identity = str(document.get("source_identity") or document.get("source_id") or "")
+    source_id = str(document.get("source_id") or "")
+    concept_id = str(document.get("concept_id") or "")
+
+    score = 0.0
+    title_norm = _normalized_identity_phrase(title)
+    section_norm = _normalized_identity_phrase(section_title)
+    source_slug = _source_identity_slug(source_identity)
+    source_id_slug = _source_identity_slug(source_id)
+
+    if title_norm == entity_norm:
+        score += 14.0
+    elif _identity_phrase_prefix(title_norm, entity_norm):
+        score += 12.0
+
+    if source_slug == entity_slug or source_slug.endswith(f"-{entity_slug}"):
+        score += 16.0
+    elif source_id_slug == entity_slug or source_id_slug.endswith(f"-{entity_slug}"):
+        score += 16.0
+
+    if section_norm == entity_norm:
+        score += 8.0
+    elif _identity_phrase_prefix(section_norm, entity_norm):
+        score += 6.0
+
+    if _document_is_article_root(runtime, document):
+        score += 1.5
+    if concept_id and concept_id == str(document.get("section_id", "")):
+        score += 0.5
+    return score
+
+
+def _requires_canonical_endpoint_binding(entity: str) -> bool:
+    return bool(re.search(r"\bpart\s+\d+\b", str(entity), flags=re.I))
+
+
+def _best_exact_edge(
+    bundle: Any,
+    source_candidates: set[str],
+    target_candidates: set[str],
+    required_relation: str,
+) -> Mapping[str, Any] | None:
+    if not source_candidates or not target_candidates:
+        return None
+    matches: list[Mapping[str, Any]] = []
+    for candidate in bundle.graph_v2.get("edges", []):
+        if not isinstance(candidate, Mapping):
+            continue
+        if required_relation and str(candidate.get("relation_type")) != required_relation:
+            continue
+        if (
+            str(candidate.get("source", "")) in source_candidates
+            and str(candidate.get("target", "")) in target_candidates
+        ):
+            matches.append(candidate)
+    if not matches:
+        return None
+    return max(
+        matches,
+        key=lambda item: (
+            float(item.get("confidence") or 0.0),
+            str(item.get("edge_id", "")),
+        ),
+    )
+
+
+def _normalized_identity_phrase(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(value).casefold()).strip()
+
+
+def _identity_slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", str(value).casefold()).strip("-")
+
+
+def _source_identity_slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", str(value).casefold()).strip("-")
+
+
+def _identity_phrase_prefix(candidate_norm: str, entity_norm: str) -> bool:
+    if not candidate_norm or not entity_norm:
+        return False
+    if not candidate_norm.startswith(entity_norm):
+        return False
+    if len(candidate_norm) == len(entity_norm):
+        return True
+    return candidate_norm[len(entity_norm)].isspace()
+
+
+def _document_is_article_root(runtime: Any, document: Mapping[str, Any]) -> bool:
+    try:
+        return bool(runtime.legacy._is_article_root_document(document))
+    except Exception:
+        return str(document.get("concept_id", "")) == str(document.get("section_id", ""))
