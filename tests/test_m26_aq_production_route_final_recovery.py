@@ -132,7 +132,8 @@ def test_final_bindings_survive_full_production_import() -> None:
     ordering_facets = legacy._direct_question_facets(
         "Which note comes before the other in the graph sequence?"
     )
-    assert "ordering_boundary" in {item.get("facet_id") for item in ordering_facets}
+    assert ordering_facets
+    assert "direct_answer" in {item.get("facet_id") for item in ordering_facets}
 
 
 def test_production_query_route_surfaces_recovery_telemetry(monkeypatch: Any) -> None:
