@@ -58,6 +58,38 @@ def test_precise_facets_remove_ordering_from_generic_prove_question() -> None:
     }
 
 
+def test_final_recovery_passes_runtime_and_legacy_into_original_v3_path() -> None:
+    captured: dict[str, Any] = {}
+
+    def original(**kwargs: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        captured.update(kwargs)
+        return (
+            {
+                "status": "owner_only_cited_answer",
+                "multi_evidence_verification": {},
+                "reason_codes": [],
+            },
+            {"failures": []},
+        )
+
+    verification, closure = patch._synthesize_with_final_recovery(
+        legacy=legacy,
+        runtime=runtime,
+        original=original,
+        question="What should a production router inspect?",
+        trace_id="trace-wrapper",
+        intent_class="direct_grounded_knowledge",
+        evidence=[],
+        provider_client=object(),
+        requirements=[],
+        endpoint_proof={},
+    )
+    assert captured["legacy"] is legacy
+    assert captured["runtime"] is runtime
+    assert verification["status"] == "owner_only_cited_answer"
+    assert closure["failures"] == []
+
+
 def test_final_recovery_builds_verified_direct_propositions() -> None:
     question = (
         "Why does evidence of demand still not prove that there is a viable business? "
