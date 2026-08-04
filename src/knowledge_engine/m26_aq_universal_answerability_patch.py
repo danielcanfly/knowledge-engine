@@ -9,7 +9,13 @@ _ORIGINAL_SYNTHESIZE_AND_VERIFY: Any | None = None
 
 
 def install() -> None:
-    """Install question-agnostic answerability repair hooks."""
+    """Install universal answerability repair hooks.
+
+    The hooks are intentionally question-id agnostic:
+    - evidence admission may use dense/semantic channel strength when lexical overlap is weak;
+    - semantic closure may recover only by building a candidate from already selected evidence
+      and then re-running the existing hard verifier.
+    """
     from . import m26_pa7_arbitrary_query_runtime as legacy
     from . import m26_pa7_semantic_closure_runtime as runtime
 
@@ -20,7 +26,7 @@ def install() -> None:
     _ORIGINAL_HAS_MEANINGFUL_OVERLAP = legacy._has_meaningful_overlap
     _ORIGINAL_SYNTHESIZE_AND_VERIFY = runtime._synthesize_and_verify
 
-    def semantic_overlap(
+    def semantic_admission_overlap(
         question: str,
         evidence: Sequence[Mapping[str, Any]],
     ) -> bool:
@@ -32,7 +38,7 @@ def install() -> None:
             original=_ORIGINAL_HAS_MEANINGFUL_OVERLAP,
         )
 
-    def synthesize(
+    def synthesize_with_evidence_recovery(
         *,
         question: str,
         trace_id: str,
@@ -56,8 +62,8 @@ def install() -> None:
             endpoint_proof=endpoint_proof,
         )
 
-    legacy._has_meaningful_overlap = semantic_overlap
-    runtime._synthesize_and_verify = synthesize
+    legacy._has_meaningful_overlap = semantic_admission_overlap
+    runtime._synthesize_and_verify = synthesize_with_evidence_recovery
     runtime._m26_aq_universal_answerability_patch_installed = True
 
 
@@ -68,7 +74,12 @@ def _semantic_admission_overlap(
     evidence: Sequence[Mapping[str, Any]],
     original: Callable[[str, Sequence[Mapping[str, Any]]], bool],
 ) -> bool:
-    """Let semantically strong selected evidence reach synthesis without lexical overlap."""
+    """Permit semantically strong evidence to reach synthesis without lexical overlap.
+
+    This keeps precise identifier questions strict and does not accept an answer by itself;
+    it only allows selected, identity-bound evidence to be checked by the provider and
+    verifier.
+    """
     try:
         if original(question, evidence):
             return True
@@ -79,32 +90,33 @@ def _semantic_admission_overlap(
     if not query_terms or legacy._requires_precise_overlap(query_terms):
         return False
 
-    passages = [item for item in evidence if item.get("evidence_type", "passage") == "passage"]
-    if len(passages) < 2 or not _has_semantic_signal(passages):
+    passages = [
+        item for item in evidence if str(item.get("evidence_type", "passage")) == "passage"
+    ]
+    if len(passages) < 2:
         return False
+
+    if not _has_semantic_admission_signal(passages):
+        return False
+
     if _distinct_sources(legacy, passages) < 2 and len(passages) < 3:
         return False
 
     quality = sum(
-        legacy._passage_text_quality(str(item.get("passage_text", "")))
-        for item in passages
+        legacy._passage_text_quality(str(item.get("passage_text", ""))) for item in passages
     )
+    # This is an admission decision only. Final answering still requires the existing
+    # provider/verifier path to prove exact quote support and citation validity.
     return quality > 0
 
 
-def _has_semantic_signal(evidence: Sequence[Mapping[str, Any]]) -> bool:
+def _has_semantic_admission_signal(evidence: Sequence[Mapping[str, Any]]) -> bool:
     semantic_channels = {
         "dense",
         "query_coverage",
         "required_facet_coverage",
         "release_distinct_source",
         "semantic_requirement_recovery",
-    }
-    metadata_keys = {
-        "coverage_terms",
-        "graph_relevance_scores",
-        "query_overlap_score",
-        "semantic_requirement_score",
     }
     for item in evidence:
         channels = {str(channel) for channel in item.get("channels", [])}
@@ -113,7 +125,15 @@ def _has_semantic_signal(evidence: Sequence[Mapping[str, Any]]) -> bool:
         if any(channel.startswith("graph_") for channel in channels):
             return True
         metadata = item.get("retrieval_metadata", {})
-        if isinstance(metadata, Mapping) and bool(metadata_keys & set(metadata)):
+        if isinstance(metadata, Mapping) and any(
+            key in metadata
+            for key in (
+                "semantic_requirement_score",
+                "query_overlap_score",
+                "graph_relevance_scores",
+                "coverage_terms",
+            )
+        ):
             return True
     return False
 
@@ -215,22 +235,30 @@ def _should_attempt_evidence_recovery(
     closure: Mapping[str, Any],
     evidence: Sequence[Mapping[str, Any]],
 ) -> bool:
-    if verification.get("status") != "owner_only_safe_abstention" or not evidence:
+    if verification.get("status") != "owner_only_safe_abstention":
         return False
-    combined = {str(item) for item in verification.get("reason_codes", [])}
-    combined |= {str(item) for item in closure.get("failures", [])}
+    if not evidence:
+        return False
+    reason_codes = {str(item) for item in verification.get("reason_codes", [])}
+    failures = {str(item) for item in closure.get("failures", [])}
+    combined = reason_codes | failures
     hard_stop = {
-        "LOW_RETRIEVAL_SUPPORT",
-        "NO_AUTHORIZED_PRODUCTION_EVIDENCE",
-        "PROMPT_INJECTION_OR_PRIVACY_RISK",
         "PROVIDER_ABSTAINED",
+        "PROMPT_INJECTION_OR_PRIVACY_RISK",
+        "NO_AUTHORIZED_PRODUCTION_EVIDENCE",
+        "LOW_RETRIEVAL_SUPPORT",
         "QUESTION_UNDERSPECIFIED_CLARIFICATION_REQUIRED",
     }
     if combined & hard_stop:
         return False
     recoverable = any(
         item == "SEMANTIC_CLOSURE_FAILED"
-        or item in {"M26-PA7-ME-029", "M26-PA7-ME-032"}
+        or item in {
+            "M26-PA7-ME-029",
+            "M26-PA7-ME-032",
+            "M26-PA7-ME-033",
+            "ValueError",
+        }
         or item.startswith("USER_VISIBLE_INTERNAL_REFERENCE_LEAK:")
         for item in combined
     )
@@ -261,7 +289,27 @@ def _evidence_bound_recovery_candidate(
     if not used_items:
         return None
 
-    role, relation = _claim_role_and_relation(intent_class, used_items)
+    role = "direct"
+    relation: str | None = None
+    if intent_class == "cross_document_comparison":
+        role = "comparison"
+        relation = "contrasts_with"
+    elif intent_class == "complementary_synthesis":
+        role = "relationship"
+        relation = "complements"
+    elif intent_class == "graph_relationship":
+        role = "relationship"
+        edge = next(
+            (item for item in used_items if item.get("evidence_type") == "graph_edge"),
+            None,
+        )
+        relation = str(edge.get("relation_type", "")) if edge is not None else None
+    elif intent_class == "provenance_source_trace":
+        role = "provenance"
+    elif intent_class == "temporal_conflict":
+        role = "temporal"
+        relation = "precedes"
+
     required_facets = legacy._required_facet_ids(question=question, intent_class=intent_class)
     claims: list[dict[str, Any]] = []
     selected_ids: list[str] = []
@@ -271,18 +319,19 @@ def _evidence_bound_recovery_candidate(
             continue
         evidence_id = str(item.get("evidence_id", ""))
         selected_ids.append(evidence_id)
+        facet_ids = required_facets if index == 1 else ["direct_answer"]
         claims.append(
             {
                 "claim_id": f"claim_{index}",
                 "claim_role": role,
-                "facet_ids": required_facets if index == 1 else ["direct_answer"],
                 "surface_text": quote,
+                "facet_ids": facet_ids,
                 "support_mode": "selected_evidence_exact_quote_recovery",
                 "support_refs": [
                     {
                         "evidence_id": evidence_id,
-                        "exact_quote": quote,
                         "locator_id": str(item.get("locator_id", "")),
+                        "exact_quote": quote,
                         "uncertainty": "low",
                     }
                 ],
@@ -336,22 +385,30 @@ def _recovery_items(
     evidence: Sequence[Mapping[str, Any]],
     requirements: Sequence[Any],
 ) -> list[Mapping[str, Any]]:
-    passages = [item for item in evidence if item.get("evidence_type", "passage") == "passage"]
+    passages = [
+        item for item in evidence if str(item.get("evidence_type", "passage")) == "passage"
+    ]
     if intent_class == "graph_relationship":
-        graph_items = [item for item in evidence if item.get("evidence_type") == "graph_edge"]
+        graph_items = [
+            item for item in evidence if str(item.get("evidence_type", "")) == "graph_edge"
+        ]
         passages = [*graph_items, *passages]
     if not passages:
         return []
 
     query_terms = legacy._meaningful_terms(question)
+
+    def recovery_text(item: Mapping[str, Any]) -> str:
+        return _recovery_text(runtime, item, question, requirements)
+
     ranked = sorted(
         passages,
         key=lambda item: (
             -_requirement_score(runtime, item, requirements),
-            -legacy._text_term_overlap_score(query_terms, str(item.get("passage_text", ""))),
+            -legacy._text_term_overlap_score(query_terms, recovery_text(item)),
             -_channel_strength(item),
             legacy._is_article_root_evidence(item),
-            -legacy._passage_text_quality(str(item.get("passage_text", ""))),
+            -legacy._passage_text_quality(recovery_text(item)),
             str(item.get("evidence_id", "")),
         ),
     )
@@ -359,7 +416,7 @@ def _recovery_items(
     selected: list[Mapping[str, Any]] = []
     seen_sources: set[str] = set()
     for item in ranked:
-        if legacy._passage_text_quality(str(item.get("passage_text", ""))) <= 0:
+        if legacy._passage_text_quality(recovery_text(item)) <= 0:
             continue
         source = legacy._source_identity(item)
         if source in seen_sources and len(selected) >= 2:
@@ -378,16 +435,40 @@ def _exact_recovery_quote(
     question: str,
     requirements: Sequence[Any],
 ) -> str:
-    text = str(item.get("passage_text", ""))
+    text = _recovery_text(runtime, item, question, requirements)
     if not text:
         return ""
-    quote = runtime._provider_snippet(item, question, requirements)
-    if quote and quote in text and len(quote) <= 800:
+    quote = _provider_recovery_snippet(runtime, item, question, requirements)
+    if quote and len(quote) <= 800:
         return quote
     fallback = legacy._first_exact_evidence_quote(text, max_chars=360)
-    if fallback and fallback in text and len(fallback) <= 800:
+    if fallback and len(fallback) <= 800:
         return fallback
     return ""
+
+
+def _recovery_text(
+    runtime: Any,
+    item: Mapping[str, Any],
+    question: str,
+    requirements: Sequence[Any],
+) -> str:
+    text = str(item.get("passage_text", ""))
+    if text:
+        return text
+    return _provider_recovery_snippet(runtime, item, question, requirements)
+
+
+def _provider_recovery_snippet(
+    runtime: Any,
+    item: Mapping[str, Any],
+    question: str,
+    requirements: Sequence[Any],
+) -> str:
+    try:
+        return str(runtime._provider_snippet(item, question, requirements))
+    except Exception:
+        return ""
 
 
 def _requirement_score(
