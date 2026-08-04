@@ -3,19 +3,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from . import m26_aq_semantic_runtime_patch_v2 as canonical_aq_runtime
+from . import m26_aq_semantic_contract as canonical_aq_runtime
 from . import m26_ask_api
+from .m26_aq_semantic_contract import run_owner_arbitrary_query
 
 CANONICAL_RUNTIME_ENTRYPOINT = (
-    "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
+    "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
 )
-
-# Compose the canonical AQ runtime once before route registration. This keeps the
-# production wrapper on one public serving path while restoring verified semantic
-# repair behavior without installing the final universal recovery patch tower.
-canonical_aq_runtime.install()
-
-from .m26_pa7_semantic_closure_runtime import run_owner_arbitrary_query  # noqa: E402
 
 m26_ask_api.run_owner_arbitrary_query = run_owner_arbitrary_query
 m26_ask_api.RUNTIME_ENTRYPOINT = CANONICAL_RUNTIME_ENTRYPOINT
@@ -27,6 +21,13 @@ def _build_web_query_dto_with_semantic_closure(
     runtime_response: Mapping[str, Any],
 ) -> dict[str, Any]:
     dto = _original_build_web_query_dto(runtime_response)
+    dto["canonical_runtime"] = {
+        **dict(dto.get("canonical_runtime", {})),
+        "semantic_contract_schema": canonical_aq_runtime.CONTRACT_SCHEMA_VERSION,
+        "semantic_contract_fingerprint": (
+            canonical_aq_runtime.semantic_contract_fingerprint()
+        ),
+    }
     dto["answer_source"] = str(runtime_response.get("answer_source", ""))
     dto["semantic_closure"] = dict(
         runtime_response.get("semantic_closure", {})
