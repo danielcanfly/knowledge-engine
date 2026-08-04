@@ -74,8 +74,18 @@ def test_named_part_endpoint_resolution_prefers_canonical_identity_over_mentions
 def test_named_part_exact_edge_binding_uses_canonical_endpoints() -> None:
     runtime = _fake_runtime(
         [
-            _doc("article_part_1", "daniel_blog_en__harness-theory-part-1", "Harness Theory Part 1", ""),
-            _doc("article_part_2", "daniel_blog_en__harness-theory-part-2", "Harness Theory Part 2", ""),
+            _doc(
+                "article_part_1",
+                "daniel_blog_en__harness-theory-part-1",
+                "Harness Theory Part 1",
+                "",
+            ),
+            _doc(
+                "article_part_2",
+                "daniel_blog_en__harness-theory-part-2",
+                "Harness Theory Part 2",
+                "",
+            ),
             _doc(
                 "article_part_9",
                 "daniel_blog_en__harness-theory-part-9",
@@ -172,7 +182,10 @@ def test_explicit_install_covers_control_architecture_and_precedes_boundary() ->
         }.issubset({item.requirement_id for item in controlled})
 
         precedes = runtime._semantic_requirements(
-            "Can an A precedes B graph edge establish that A depends on B, or is it only an ordering signal?",
+            (
+                "Can an A precedes B graph edge establish that A depends on B, "
+                "or is it only an ordering signal?"
+            ),
             "graph_relationship",
         )
         assert {"ordering_semantics", "non_entailment"}.issubset(
