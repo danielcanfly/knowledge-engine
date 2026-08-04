@@ -120,7 +120,10 @@ def test_final_bindings_survive_full_production_import() -> None:
         )
         == "direct_grounded_knowledge"
     )
-    assert legacy._intent_class("Which source version is newer and no longer stale?") == "temporal_conflict"
+    assert (
+        legacy._intent_class("Which source version is newer and no longer stale?")
+        == "temporal_conflict"
+    )
 
     generic_facets = legacy._direct_question_facets(
         "Why does demand not prove a viable business?"
