@@ -63,10 +63,10 @@ def install() -> None:
     def synthesize(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], dict[str, Any]]:
         assert _ORIGINAL_SYNTHESIZE is not None
         return _synthesize_with_final_recovery(
+            *args,
             legacy=legacy,
             runtime=runtime,
             original=_ORIGINAL_SYNTHESIZE,
-            *args,
             **kwargs,
         )
 
@@ -399,7 +399,10 @@ def _best_item(
         items,
         key=lambda item: (
             -_coverage_score(item, term_set),
-            -legacy._text_term_overlap_score(term_set, _text(runtime, item, question, requirements)),
+            -legacy._text_term_overlap_score(
+                term_set,
+                _text(runtime, item, question, requirements),
+            ),
             str(item.get("evidence_id", "")),
         ),
     )
