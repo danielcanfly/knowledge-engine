@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, MutableMapping, Sequence
+from contextlib import suppress
 from typing import Any
 
 from . import m26_aq_final_universal_recovery_patch as patch
@@ -27,10 +28,8 @@ def apply() -> None:
     deterministic verified evidence recovery when the original serving path already selected
     authorized evidence.
     """
-    try:
+    with suppress(Exception):
         patch._PROVIDER_ABSTAIN_EXTERNAL_STOPWORDS.update({"compare", "dag"})
-    except Exception:
-        pass
     patch._unsupported_external_markers = _unsupported_external_markers
     patch._candidate = _candidate
     patch._synthesize_with_final_recovery = _synthesize_with_final_recovery
@@ -325,11 +324,12 @@ def _unsupported_external_markers(
         if not marker:
             continue
         marker_key = marker.casefold().replace(".", "").replace("-", "")
+        marker_compact = marker.casefold().replace(".", "")
         if marker_key in patch._PROVIDER_ABSTAIN_EXTERNAL_STOPWORDS:
             continue
         if len(marker_key) <= 2 and not marker_key.isdigit():
             continue
-        if marker_key not in evidence_space and marker.casefold().replace(".", "") not in evidence_space:
+        if marker_key not in evidence_space and marker_compact not in evidence_space:
             markers.append(marker)
     q = str(question).casefold()
     if "nonexistent" in q and "nonexistent" not in evidence_space:
