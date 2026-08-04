@@ -124,8 +124,20 @@ chmod 700 "$evidence_dir"
 identity_path="$evidence_dir/identity-$EXPECTED_DEPLOY_SHA.json"
 frozen_path="$evidence_dir/frozen-$EXPECTED_DEPLOY_SHA.json"
 blackbox_path="$evidence_dir/blackbox-$EXPECTED_DEPLOY_SHA.json"
+targeted_path="$evidence_dir/targeted-$EXPECTED_DEPLOY_SHA.json"
+targeted_summary_path="$evidence_dir/targeted-summary-$EXPECTED_DEPLOY_SHA.json"
+targeted_csv_path="$evidence_dir/targeted-results-$EXPECTED_DEPLOY_SHA.csv"
+targeted_raw_answers_path="$evidence_dir/targeted-raw-answers-$EXPECTED_DEPLOY_SHA.md"
 routed_health_path="$evidence_dir/routed-health-$EXPECTED_DEPLOY_SHA.json"
-rm -f "$identity_path" "$frozen_path" "$blackbox_path" "$routed_health_path"
+rm -f \
+  "$identity_path" \
+  "$frozen_path" \
+  "$blackbox_path" \
+  "$targeted_path" \
+  "$targeted_summary_path" \
+  "$targeted_csv_path" \
+  "$targeted_raw_answers_path" \
+  "$routed_health_path"
 
 venv_dir="$evidence_dir/venv"
 python3 -m venv "$venv_dir"
@@ -157,6 +169,23 @@ PYTHONPATH=src python3 scripts/m26_aq_generalized_closure.py \
   --expected-sha "$EXPECTED_DEPLOY_SHA" \
   --minimum 20
 echo "AQ_STAGE=blackbox_population_validated"
+
+targeted_questions="pilot/m26/m26-aq-universal-answerability-targeted-questions.json"
+[ -s "$targeted_questions" ] || fail "targeted_questions_missing"
+PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
+  --questions "$targeted_questions" \
+  --output "$targeted_path" \
+  --expected-sha "$EXPECTED_DEPLOY_SHA"
+echo "AQ_STAGE=targeted_population_collected"
+
+PYTHONPATH=src python3 scripts/m26_aq_targeted_answerability_closure.py \
+  --input "$targeted_path" \
+  --questions "$targeted_questions" \
+  --expected-sha "$EXPECTED_DEPLOY_SHA" \
+  --summary "$targeted_summary_path" \
+  --csv "$targeted_csv_path" \
+  --raw-answers "$targeted_raw_answers_path"
+echo "AQ_STAGE=targeted_population_validated"
 
 routed_code="$(curl --silent --show-error \
   -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
@@ -239,5 +268,9 @@ echo "AQ_STAGE=production_identity_written"
 [ -s "$identity_path" ] || fail "identity_evidence_missing"
 [ -s "$frozen_path" ] || fail "frozen_evidence_missing"
 [ -s "$blackbox_path" ] || fail "blackbox_evidence_missing"
+[ -s "$targeted_path" ] || fail "targeted_evidence_missing"
+[ -s "$targeted_summary_path" ] || fail "targeted_summary_missing"
+[ -s "$targeted_csv_path" ] || fail "targeted_csv_missing"
+[ -s "$targeted_raw_answers_path" ] || fail "targeted_raw_answers_missing"
 [ -s "$routed_health_path" ] || fail "routed_health_evidence_missing"
 echo "AQ_ATOMIC_DEPLOY_AND_LIVE_CLOSURE_PASSED"
