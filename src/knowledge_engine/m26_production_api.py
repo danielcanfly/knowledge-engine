@@ -4,16 +4,19 @@ from collections.abc import Mapping
 from typing import Any
 
 from . import m26_ask_api
-from .m26_pa7_semantic_closure_runtime import run_owner_arbitrary_query
+from . import m26_aq_semantic_runtime_patch_v3 as canonical_aq_runtime
 
 CANONICAL_RUNTIME_ENTRYPOINT = (
     "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
 )
 
-# Bind the owner-only web adapter to the canonical AQ runtime before routes are
-# registered. This is a public adapter binding only; it does not mutate legacy,
-# semantic, or patch-module private callables and it does not install stacked
-# monkey patches.
+# Compose the canonical AQ runtime once before route registration. This keeps the
+# production wrapper on one public serving path while restoring the semantic AQ
+# synthesis behavior that is still centralized in the v3 runtime extension.
+canonical_aq_runtime.install()
+
+from .m26_pa7_semantic_closure_runtime import run_owner_arbitrary_query  # noqa: E402
+
 m26_ask_api.run_owner_arbitrary_query = run_owner_arbitrary_query
 m26_ask_api.RUNTIME_ENTRYPOINT = CANONICAL_RUNTIME_ENTRYPOINT
 
