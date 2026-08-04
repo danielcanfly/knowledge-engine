@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from typing import Any
 
 _RECOVERY_KEY = "universal_answerability_recovery"
+_FINAL_MARKER = "_m26_aq_final_universal_recovery_callable"
 _ORIGINAL_INTENT: Callable[[str], str] | None = None
 _ORIGINAL_DIRECT_FACETS: Callable[[str], list[dict[str, Any]]] | None = None
 _ORIGINAL_GENERALIZED_SYNTHESIZE: Any | None = None
@@ -39,24 +40,39 @@ _TEMPORAL_TERMS = {
 }
 
 
-def install() -> None:
-    """Install final universal recovery repair hooks on the serving synthesize path."""
+def install(*, force_rebind: bool = False) -> None:
+    """Install final recovery hooks on the effective serving synthesis path.
+
+    The production wrapper composes v3, lifecycle, surface, and compatibility layers
+    before calling this installer. Package import may call it earlier as a safe default,
+    so this installer must be rebindable instead of relying on import-order luck.
+    """
     from . import m26_aq_semantic_runtime_patch_v3 as v3_patch
     from . import m26_pa7_arbitrary_query_runtime as legacy
     from . import m26_pa7_semantic_closure_runtime as runtime
 
-    already_installed = getattr(
-        v3_patch,
-        "_m26_aq_final_universal_recovery_patch_installed",
-        False,
-    )
-    if already_installed:
+    current_intent = legacy._intent_class
+    current_facets = legacy._direct_question_facets
+    current_synthesize = v3_patch._generalized_provider_synthesize
+    if (
+        not force_rebind
+        and _is_final_callable(current_intent)
+        and _is_final_callable(current_facets)
+        and _is_final_callable(current_synthesize)
+    ):
         return
 
     global _ORIGINAL_INTENT, _ORIGINAL_DIRECT_FACETS, _ORIGINAL_GENERALIZED_SYNTHESIZE
-    _ORIGINAL_INTENT = legacy._intent_class
-    _ORIGINAL_DIRECT_FACETS = legacy._direct_question_facets
-    _ORIGINAL_GENERALIZED_SYNTHESIZE = v3_patch._generalized_provider_synthesize
+    if _is_final_callable(current_intent) and _ORIGINAL_INTENT is not None:
+        current_intent = _ORIGINAL_INTENT
+    if _is_final_callable(current_facets) and _ORIGINAL_DIRECT_FACETS is not None:
+        current_facets = _ORIGINAL_DIRECT_FACETS
+    if _is_final_callable(current_synthesize) and _ORIGINAL_GENERALIZED_SYNTHESIZE is not None:
+        current_synthesize = _ORIGINAL_GENERALIZED_SYNTHESIZE
+
+    _ORIGINAL_INTENT = current_intent
+    _ORIGINAL_DIRECT_FACETS = current_facets
+    _ORIGINAL_GENERALIZED_SYNTHESIZE = current_synthesize
 
     def intent_class(question: str) -> str:
         assert _ORIGINAL_INTENT is not None
@@ -81,11 +97,31 @@ def install() -> None:
             **kwargs,
         )
 
+    _mark_final_callable(intent_class)
+    _mark_final_callable(direct_question_facets)
+    _mark_final_callable(generalized_synthesize)
     legacy._intent_class = intent_class
     legacy._direct_question_facets = direct_question_facets
     v3_patch._generalized_provider_synthesize = generalized_synthesize
     v3_patch._m26_aq_final_universal_recovery_patch_installed = True
     runtime._m26_aq_final_universal_recovery_patch_installed = True
+    runtime._m26_aq_final_universal_recovery_patch_binding = {
+        "intent": "legacy._intent_class",
+        "facets": "legacy._direct_question_facets",
+        "synthesize": "v3_patch._generalized_provider_synthesize",
+        "force_rebind": bool(force_rebind),
+    }
+
+
+def _mark_final_callable(value: Any) -> None:
+    try:
+        setattr(value, _FINAL_MARKER, True)
+    except Exception:
+        pass
+
+
+def _is_final_callable(value: Any) -> bool:
+    return bool(getattr(value, _FINAL_MARKER, False))
 
 
 def _precise_intent(question: str, original: Callable[[str], str]) -> str:
@@ -159,6 +195,7 @@ def _synthesize_with_final_recovery(
             question=question,
             evidence=evidence,
             requirements=requirements,
+            telemetry=telemetry,
         )
         if candidate is None:
             telemetry["first_broken_stage"] = "candidate_none"
@@ -244,6 +281,7 @@ def _telemetry(
             "QUESTION_UNDERSPECIFIED_CLARIFICATION_REQUIRED",
         }
     ]
+    passage_items = [item for item in evidence if item.get("evidence_type", "passage") == "passage"]
     should_attempt = _should_attempt(verification, closure, evidence, hard_stop)
     return {
         "schema_version": "m26-aq-final-universal-recovery-telemetry/v1",
@@ -253,8 +291,10 @@ def _telemetry(
         "universal_recovery_trigger_codes": codes,
         "universal_recovery_hard_stop_codes": hard_stop,
         "recovery_input_evidence_count": len(evidence),
-        "recovery_items_count": 0,
-        "recovery_text_available_count": 0,
+        "recovery_items_count": len(passage_items),
+        "recovery_text_available_count": sum(
+            1 for item in passage_items if str(item.get("passage_text", ""))
+        ),
         "candidate_built": False,
         "candidate_claim_count": 0,
         "candidate_verify_result": "not_attempted",
@@ -320,8 +360,14 @@ def _candidate(
     question: str,
     evidence: Sequence[Mapping[str, Any]],
     requirements: Sequence[Any],
+    telemetry: MutableMapping[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     items = _ranked_items(legacy, runtime, question, evidence, requirements)
+    if telemetry is not None:
+        telemetry["recovery_items_count"] = len(items)
+        telemetry["recovery_text_available_count"] = sum(
+            1 for item in items if _text(runtime, item, question, requirements)
+        )
     if not items:
         return None
     original_facets = _ORIGINAL_DIRECT_FACETS or legacy._direct_question_facets
