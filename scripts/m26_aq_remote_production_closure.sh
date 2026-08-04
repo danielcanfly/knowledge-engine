@@ -129,6 +129,7 @@ targeted_summary_path="$evidence_dir/targeted-summary-$EXPECTED_DEPLOY_SHA.json"
 targeted_csv_path="$evidence_dir/targeted-results-$EXPECTED_DEPLOY_SHA.csv"
 targeted_raw_answers_path="$evidence_dir/targeted-raw-answers-$EXPECTED_DEPLOY_SHA.md"
 routed_health_path="$evidence_dir/routed-health-$EXPECTED_DEPLOY_SHA.json"
+local_health_preflight_path="$evidence_dir/local-health-preflight-$EXPECTED_DEPLOY_SHA.json"
 rm -f \
   "$identity_path" \
   "$frozen_path" \
@@ -137,7 +138,8 @@ rm -f \
   "$targeted_summary_path" \
   "$targeted_csv_path" \
   "$targeted_raw_answers_path" \
-  "$routed_health_path"
+  "$routed_health_path" \
+  "$local_health_preflight_path"
 
 venv_dir="$evidence_dir/venv"
 python3 -m venv "$venv_dir"
@@ -146,31 +148,50 @@ python -m pip install --upgrade pip >/dev/null
 python -m pip install -e . >/dev/null
 echo "AQ_STAGE=host_python_runtime_ready"
 
-collect_with_retry() {
+local_health_code="$(curl --silent --show-error \
+  -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
+  -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
+  -o "$local_health_preflight_path" \
+  -w '%{http_code}' \
+  http://127.0.0.1:8080/api/m26/health)"
+echo "AQ_LOCAL_PREFLIGHT_HEALTH_HTTP=$local_health_code"
+[ "$local_health_code" = "200" ] || fail "local_health_preflight_http_not_200"
+EXPECTED_DEPLOY_SHA="$EXPECTED_DEPLOY_SHA" \
+LOCAL_HEALTH_PREFLIGHT_PATH="$local_health_preflight_path" \
+python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+expected = os.environ["EXPECTED_DEPLOY_SHA"]
+health = json.loads(Path(os.environ["LOCAL_HEALTH_PREFLIGHT_PATH"]).read_text(encoding="utf-8"))
+canonical = health.get("canonical_runtime", {}) if isinstance(health, dict) else {}
+entrypoint = canonical.get("entrypoint")
+expected_entrypoint = "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
+if health.get("status") != "ok":
+    raise SystemExit("local health status mismatch")
+if canonical.get("build_sha") != expected:
+    raise SystemExit("local health SHA mismatch before query")
+if entrypoint != expected_entrypoint:
+    raise SystemExit("local health entrypoint mismatch before query")
+PY
+echo "AQ_STAGE=local_health_identity_preflight_passed"
+
+collect_once() {
   local label="$1"
   local questions_path="$2"
   local output_path="$3"
-  local attempt
-  for attempt in 1 2 3; do
-    echo "AQ_COLLECT_POPULATION_START=$label"
-    echo "AQ_COLLECT_POPULATION_ATTEMPT=$attempt"
-    rm -f "$output_path"
-    if PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
-      --questions "$questions_path" \
-      --output "$output_path" \
-      --expected-sha "$EXPECTED_DEPLOY_SHA"; then
-      echo "AQ_COLLECT_POPULATION_RESULT=success"
-      return 0
-    fi
-    echo "AQ_COLLECT_POPULATION_RESULT=failure"
-    if [ "$attempt" -lt 3 ]; then
-      sleep "$((attempt * 10))"
-    fi
-  done
-  return 1
+  echo "AQ_COLLECT_POPULATION_START=$label"
+  echo "AQ_COLLECT_POPULATION_ATTEMPT=1"
+  rm -f "$output_path"
+  PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
+    --questions "$questions_path" \
+    --output "$output_path" \
+    --expected-sha "$EXPECTED_DEPLOY_SHA"
+  echo "AQ_COLLECT_POPULATION_RESULT=success"
 }
 
-collect_with_retry \
+collect_once \
   frozen \
   pilot/m26/m26-aq-final-r3-questions.json \
   "$frozen_path"
@@ -182,7 +203,7 @@ PYTHONPATH=src python3 scripts/m26_aq_final_closure.py validate \
   --expected-sha "$EXPECTED_DEPLOY_SHA"
 echo "AQ_STAGE=frozen_population_validated"
 
-collect_with_retry \
+collect_once \
   blackbox \
   pilot/m26/m26-aq-gpt-e-black-box-questions.json \
   "$blackbox_path"
@@ -196,7 +217,7 @@ echo "AQ_STAGE=blackbox_population_validated"
 
 targeted_questions="pilot/m26/m26-aq-universal-answerability-targeted-questions.json"
 [ -s "$targeted_questions" ] || fail "targeted_questions_missing"
-collect_with_retry \
+collect_once \
   targeted \
   "$targeted_questions" \
   "$targeted_path"
@@ -241,18 +262,10 @@ from pathlib import Path
 expected = os.environ["EXPECTED_DEPLOY_SHA"]
 frozen = json.loads(Path(os.environ["FROZEN_PATH"]).read_text(encoding="utf-8"))
 local_health = frozen.get("health", {}) if isinstance(frozen, dict) else {}
-routed_health = json.loads(
-    Path(os.environ["ROUTED_HEALTH_PATH"]).read_text(encoding="utf-8")
-)
-routed_canonical = (
-    routed_health.get("canonical_runtime", {})
-    if isinstance(routed_health, dict)
-    else {}
-)
+routed_health = json.loads(Path(os.environ["ROUTED_HEALTH_PATH"]).read_text(encoding="utf-8"))
+routed_canonical = routed_health.get("canonical_runtime", {}) if isinstance(routed_health, dict) else {}
 entrypoint = local_health.get("entrypoint")
-expected_entrypoint = (
-    "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
-)
+expected_entrypoint = "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
 if local_health.get("build_sha") != expected:
     raise SystemExit("local health SHA mismatch")
 if routed_canonical.get("build_sha") != expected:
@@ -282,10 +295,7 @@ evidence = {
     "raw_routed_origin_recorded": False,
     "raw_secret_recorded": False,
 }
-Path(os.environ["IDENTITY_PATH"]).write_text(
-    json.dumps(evidence, indent=2, sort_keys=True) + "\n",
-    encoding="utf-8",
-)
+Path(os.environ["IDENTITY_PATH"]).write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 echo "AQ_STAGE=production_identity_written"
 
