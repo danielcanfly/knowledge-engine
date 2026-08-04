@@ -8,7 +8,7 @@ from typing import Any
 _RECOVERY_KEY = "universal_answerability_recovery"
 _ORIGINAL_INTENT: Callable[[str], str] | None = None
 _ORIGINAL_DIRECT_FACETS: Callable[[str], list[dict[str, Any]]] | None = None
-_ORIGINAL_SYNTHESIZE: Any | None = None
+_ORIGINAL_GENERALIZED_SYNTHESIZE: Any | None = None
 
 _ORDER_TERMS = {
     "after",
@@ -40,17 +40,23 @@ _TEMPORAL_TERMS = {
 
 
 def install() -> None:
-    """Install final universal recovery repair hooks."""
+    """Install final universal recovery repair hooks on the serving synthesize path."""
+    from . import m26_aq_semantic_runtime_patch_v3 as v3_patch
     from . import m26_pa7_arbitrary_query_runtime as legacy
     from . import m26_pa7_semantic_closure_runtime as runtime
 
-    if getattr(runtime, "_m26_aq_final_universal_recovery_patch_installed", False):
+    already_installed = getattr(
+        v3_patch,
+        "_m26_aq_final_universal_recovery_patch_installed",
+        False,
+    )
+    if already_installed:
         return
 
-    global _ORIGINAL_INTENT, _ORIGINAL_DIRECT_FACETS, _ORIGINAL_SYNTHESIZE
+    global _ORIGINAL_INTENT, _ORIGINAL_DIRECT_FACETS, _ORIGINAL_GENERALIZED_SYNTHESIZE
     _ORIGINAL_INTENT = legacy._intent_class
     _ORIGINAL_DIRECT_FACETS = legacy._direct_question_facets
-    _ORIGINAL_SYNTHESIZE = runtime._synthesize_and_verify
+    _ORIGINAL_GENERALIZED_SYNTHESIZE = v3_patch._generalized_provider_synthesize
 
     def intent_class(question: str) -> str:
         assert _ORIGINAL_INTENT is not None
@@ -60,19 +66,23 @@ def install() -> None:
         assert _ORIGINAL_DIRECT_FACETS is not None
         return _precise_direct_facets(question, _ORIGINAL_DIRECT_FACETS)
 
-    def synthesize(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], dict[str, Any]]:
-        assert _ORIGINAL_SYNTHESIZE is not None
+    def generalized_synthesize(
+        *args: Any,
+        **kwargs: Any,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        assert _ORIGINAL_GENERALIZED_SYNTHESIZE is not None
         return _synthesize_with_final_recovery(
             *args,
             legacy=legacy,
             runtime=runtime,
-            original=_ORIGINAL_SYNTHESIZE,
+            original=_ORIGINAL_GENERALIZED_SYNTHESIZE,
             **kwargs,
         )
 
     legacy._intent_class = intent_class
     legacy._direct_question_facets = direct_question_facets
-    runtime._synthesize_and_verify = synthesize
+    v3_patch._generalized_provider_synthesize = generalized_synthesize
+    v3_patch._m26_aq_final_universal_recovery_patch_installed = True
     runtime._m26_aq_final_universal_recovery_patch_installed = True
 
 
@@ -120,6 +130,17 @@ def _synthesize_with_final_recovery(
         requirements=requirements,
         endpoint_proof=endpoint_proof,
     )
+    if verification.get("status") == "owner_only_cited_answer" and not closure.get("failures"):
+        return _attach(
+            verification,
+            closure,
+            {
+                **_telemetry(verification, closure, evidence),
+                "first_broken_stage": "not_needed",
+            },
+            preserve_existing=True,
+        )
+
     telemetry = _telemetry(verification, closure, evidence)
     if not telemetry["universal_recovery_should_attempt"]:
         return _attach(verification, closure, telemetry)
@@ -262,6 +283,7 @@ def _should_attempt(
         "M26-PA7-ME-032",
         "M26-PA7-ME-033",
         "SEMANTIC_CLOSURE_FAILED",
+        "ValueError",
     }
     return bool(codes & recoverable)
 
@@ -270,14 +292,20 @@ def _attach(
     verification: Mapping[str, Any],
     closure: Mapping[str, Any],
     telemetry: Mapping[str, Any],
+    *,
+    preserve_existing: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     patched_verification = dict(verification)
+    previous_mve = dict(patched_verification.get("multi_evidence_verification", {}))
+    if preserve_existing and _RECOVERY_KEY in previous_mve:
+        return patched_verification, dict(closure)
     patched_verification["multi_evidence_verification"] = {
-        **dict(patched_verification.get("multi_evidence_verification", {})),
+        **previous_mve,
         _RECOVERY_KEY: dict(telemetry),
     }
     patched_closure = dict(closure)
-    patched_closure[_RECOVERY_KEY] = dict(telemetry)
+    if not (preserve_existing and _RECOVERY_KEY in patched_closure):
+        patched_closure[_RECOVERY_KEY] = dict(telemetry)
     return patched_verification, patched_closure
 
 
