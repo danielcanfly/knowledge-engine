@@ -59,15 +59,74 @@ _PROVIDER_ABSTAIN_EXTERNAL_STOPWORDS = {
     "which",
     "why",
 }
+_QUESTION_CONTRACT_STOPWORDS = {
+    "about",
+    "again",
+    "also",
+    "answer",
+    "around",
+    "because",
+    "between",
+    "briefly",
+    "case",
+    "cite",
+    "cited",
+    "compare",
+    "cover",
+    "covering",
+    "describe",
+    "determine",
+    "does",
+    "explain",
+    "from",
+    "give",
+    "grounded",
+    "help",
+    "into",
+    "more",
+    "only",
+    "question",
+    "rather",
+    "should",
+    "show",
+    "source",
+    "sources",
+    "structured",
+    "than",
+    "that",
+    "their",
+    "there",
+    "through",
+    "using",
+    "what",
+    "when",
+    "where",
+    "which",
+    "while",
+    "with",
+    "without",
+    "why",
+}
+_CONTRACT_MARKERS = (
+    "covering",
+    "including",
+    "include",
+    "separating",
+    "separate",
+    "distinguishing",
+    "distinguish",
+    "through",
+    "across",
+    "cover",
+    "covers",
+)
+_MIN_ITEM_RELEVANCE_SCORE = 2.5
+_MIN_QUOTE_RELEVANCE_SCORE = 2.0
+_MAX_RECOVERY_FACETS = 12
 
 
 def install(*, force_rebind: bool = False) -> None:
-    """Install final recovery hooks on the effective serving synthesis path.
-
-    The production wrapper composes v3, lifecycle, surface, and compatibility layers
-    before calling this installer. Package import may call it earlier as a safe default,
-    so this installer must be rebindable instead of relying on import-order luck.
-    """
+    """Install final recovery hooks on the effective serving synthesis path."""
     from . import m26_aq_semantic_runtime_patch_v3 as v3_patch
     from . import m26_pa7_arbitrary_query_runtime as legacy
     from . import m26_pa7_semantic_closure_runtime as runtime
@@ -253,6 +312,12 @@ def _synthesize_with_final_recovery(
         telemetry["first_broken_stage"] = "final_answer_status"
         return _attach(verification, closure, telemetry)
 
+    post = _post_render_alignment(legacy, question, answer, telemetry)
+    telemetry.update(post)
+    if not post["post_render_alignment_passed"]:
+        telemetry["first_broken_stage"] = "post_render_question_alignment"
+        return _attach(verification, closure, telemetry)
+
     previous_mve = verification.get("multi_evidence_verification", {})
     previous_mve = previous_mve if isinstance(previous_mve, Mapping) else {}
     failures = sorted({str(item) for item in closure.get("failures", [])})
@@ -292,10 +357,12 @@ def _telemetry(
         | {str(item) for item in closure.get("failures", [])}
     )
     hard_stop = _hard_stop_codes(question, codes, evidence)
-    passage_items = [item for item in evidence if item.get("evidence_type", "passage") == "passage"]
+    passage_items = [
+        item for item in evidence if item.get("evidence_type", "passage") == "passage"
+    ]
     should_attempt = _should_attempt(question, verification, closure, evidence, hard_stop)
     return {
-        "schema_version": "m26-aq-final-universal-recovery-telemetry/v1",
+        "schema_version": "m26-aq-final-universal-recovery-telemetry/v2",
         "case_specific": False,
         "universal_recovery_attempted": should_attempt,
         "universal_recovery_should_attempt": should_attempt,
@@ -307,6 +374,19 @@ def _telemetry(
             1 for item in passage_items if str(item.get("passage_text", ""))
         ),
         "unsupported_external_markers": _unsupported_external_markers(question, evidence),
+        "question_alignment_checked": False,
+        "question_alignment_passed": False,
+        "question_alignment_failure_codes": [],
+        "required_question_facets": [],
+        "covered_question_facets": [],
+        "missing_question_facets": [],
+        "post_render_alignment_checked": False,
+        "post_render_alignment_passed": False,
+        "post_render_alignment_failure_codes": [],
+        "quote_facet_support_checked": False,
+        "quote_facet_support_passed": False,
+        "recovery_selected_evidence_relevance": [],
+        "recovery_relevance_threshold_met": False,
         "candidate_built": False,
         "candidate_claim_count": 0,
         "candidate_verify_result": "not_attempted",
@@ -431,39 +511,101 @@ def _candidate(
     telemetry: MutableMapping[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     items = _ranked_items(legacy, runtime, question, evidence, requirements)
+    original_facets = _ORIGINAL_DIRECT_FACETS or legacy._direct_question_facets
+    base_facets = _precise_direct_facets(question, original_facets)
+    contract = _question_contract(legacy, question, base_facets)
+    required = contract["required_question_facets"][:_MAX_RECOVERY_FACETS]
+
     if telemetry is not None:
         telemetry["recovery_items_count"] = len(items)
         telemetry["recovery_text_available_count"] = sum(
             1 for item in items if _text(runtime, item, question, requirements)
         )
-    if not items:
+        telemetry["question_alignment_checked"] = True
+        telemetry["required_question_facets"] = [facet["label"] for facet in required]
+        telemetry["covered_question_facets"] = []
+        telemetry["missing_question_facets"] = []
+        telemetry["question_alignment_failure_codes"] = []
+        telemetry["recovery_selected_evidence_relevance"] = []
+        telemetry["quote_facet_support_checked"] = True
+
+    if not items or not required:
+        _fail_alignment(telemetry, "no_recoverable_question_contract")
         return None
-    original_facets = _ORIGINAL_DIRECT_FACETS or legacy._direct_question_facets
-    facets = _precise_direct_facets(question, original_facets)
-    if not facets:
-        facets = [{"facet_id": "direct_answer", "terms": _ordered_terms(legacy, question)}]
-    claims = []
+
+    claims: list[dict[str, Any]] = []
+    covered: list[str] = []
+    relevance_records: list[dict[str, Any]] = []
     used_terms: set[str] = set()
-    for facet in facets[:6]:
-        facet_id = str(facet.get("facet_id", "direct_answer"))
-        terms = _facet_terms(legacy, facet) or _ordered_terms(legacy, question)[:8]
-        item = _best_item(legacy, runtime, items, terms, question, requirements)
+    for facet in required:
+        terms = list(facet["terms"])
+        item, item_record = _best_item(
+            legacy,
+            runtime,
+            items,
+            terms,
+            question,
+            requirements,
+        )
+        relevance_records.append({**item_record, "facet": facet["label"]})
         if item is None:
+            _fail_alignment(telemetry, "evidence_relevance_below_threshold")
+            if telemetry is not None:
+                telemetry["missing_question_facets"].append(facet["label"])
+                telemetry["recovery_selected_evidence_relevance"] = relevance_records
             return None
-        quote = _support_quote(legacy, runtime, item, terms, question, requirements)
+        quote, quote_record = _support_quote(
+            legacy,
+            runtime,
+            item,
+            terms,
+            question,
+            requirements,
+        )
+        relevance_records[-1]["quote_support"] = quote_record
         if not quote:
+            _fail_alignment(telemetry, "quote_facet_support_below_threshold")
+            if telemetry is not None:
+                telemetry["missing_question_facets"].append(facet["label"])
+                telemetry["recovery_selected_evidence_relevance"] = relevance_records
+            return None
+        surface = _surface(
+            legacy,
+            question,
+            str(facet["facet_id"]),
+            terms,
+            used_terms,
+            quote,
+            facet_label=str(facet["label"]),
+        )
+        if not _surface_question_aligned(surface, facet):
+            _fail_alignment(telemetry, "claim_question_alignment_failed")
+            if telemetry is not None:
+                telemetry["missing_question_facets"].append(facet["label"])
             return None
         claims.append(
             _claim(
                 len(claims) + 1,
-                facet_id,
-                _surface(legacy, question, facet_id, terms, used_terms, quote),
+                str(facet["facet_id"]),
+                surface,
                 item,
                 quote,
             )
         )
+        covered.append(str(facet["label"]))
+
     if not claims:
+        _fail_alignment(telemetry, "no_recovery_claims")
         return None
+
+    if telemetry is not None:
+        telemetry["covered_question_facets"] = covered
+        telemetry["missing_question_facets"] = []
+        telemetry["question_alignment_passed"] = True
+        telemetry["quote_facet_support_passed"] = True
+        telemetry["recovery_relevance_threshold_met"] = True
+        telemetry["recovery_selected_evidence_relevance"] = relevance_records
+
     selected = [
         str(ref.get("evidence_id", ""))
         for claim in claims
@@ -481,6 +623,17 @@ def _candidate(
         "missing_facets": [],
         "abstention_reason": None,
     }
+
+
+def _fail_alignment(telemetry: MutableMapping[str, Any] | None, code: str) -> None:
+    if telemetry is None:
+        return
+    failures = list(telemetry.get("question_alignment_failure_codes", []))
+    if code not in failures:
+        failures.append(code)
+    telemetry["question_alignment_failure_codes"] = failures
+    telemetry["question_alignment_passed"] = False
+    telemetry["recovery_relevance_threshold_met"] = False
 
 
 def _claim(
@@ -531,7 +684,7 @@ def _ranked_items(
         item
         for item in ranked
         if legacy._passage_text_quality(_text(runtime, item, question, requirements)) > 0
-    ][:8]
+    ][:12]
 
 
 def _best_item(
@@ -541,20 +694,25 @@ def _best_item(
     terms: Sequence[str],
     question: str,
     requirements: Sequence[Any],
-) -> Mapping[str, Any] | None:
-    term_set = {str(term).casefold() for term in terms if str(term)}
+) -> tuple[Mapping[str, Any] | None, dict[str, Any]]:
+    term_set = _distinctive_terms(terms)
+    records: list[tuple[float, Mapping[str, Any], dict[str, Any]]] = []
+    for item in items:
+        text = _text(runtime, item, question, requirements)
+        score, record = _relevance_score(item, text, term_set)
+        records.append((score, item, record))
     ranked = sorted(
-        items,
-        key=lambda item: (
-            -_coverage_score(item, term_set),
-            -legacy._text_term_overlap_score(
-                term_set,
-                _text(runtime, item, question, requirements),
-            ),
-            str(item.get("evidence_id", "")),
-        ),
+        records,
+        key=lambda entry: (-entry[0], str(entry[1].get("evidence_id", ""))),
     )
-    return ranked[0] if ranked else None
+    if not ranked:
+        return None, {"eligible": False, "score": 0.0, "evidence_id": ""}
+    score, item, record = ranked[0]
+    eligible = record["eligible"] and score >= _MIN_ITEM_RELEVANCE_SCORE
+    record = {**record, "eligible": bool(eligible)}
+    if not eligible:
+        return None, record
+    return item, record
 
 
 def _support_quote(
@@ -564,27 +722,43 @@ def _support_quote(
     terms: Sequence[str],
     question: str,
     requirements: Sequence[Any],
-) -> str:
+) -> tuple[str, dict[str, Any]]:
     text = _text(runtime, item, question, requirements)
     if not text:
-        return ""
-    term_set = {str(term).casefold() for term in terms if str(term)}
+        return "", {"eligible": False, "score": 0.0, "evidence_id": item.get("evidence_id", "")}
+    term_set = _distinctive_terms(terms)
     segments = legacy._exact_quote_segments(text)
     if not segments:
-        quote = legacy._first_exact_evidence_quote(text, max_chars=360)
-        return quote if len(quote) <= 800 else ""
-    ranked = sorted(
-        segments,
-        key=lambda segment: (
-            -legacy._text_term_overlap_score(term_set, segment),
-            legacy._segment_noise_penalty(segment),
-            legacy._thin_heading(segment),
-            legacy._article_title_like(segment),
-            -len(segment),
-        ),
+        segments = [legacy._first_exact_evidence_quote(text, max_chars=360)]
+    ranked: list[tuple[float, str, dict[str, Any]]] = []
+    for segment in segments:
+        if not segment:
+            continue
+        score, record = _quote_relevance_score(segment, term_set)
+        ranked.append((score, segment, record))
+    ranked.sort(
+        key=lambda entry: (
+            -entry[0],
+            legacy._segment_noise_penalty(entry[1]),
+            legacy._thin_heading(entry[1]),
+            legacy._article_title_like(entry[1]),
+            -len(entry[1]),
+        )
     )
-    quote = next((segment for segment in ranked if len(segment) >= 30), ranked[0])
-    return quote if len(quote) <= 800 else quote[:800].rsplit(" ", 1)[0].rstrip()
+    if not ranked:
+        return "", {"eligible": False, "score": 0.0, "evidence_id": item.get("evidence_id", "")}
+    score, quote, record = ranked[0]
+    eligible = record["eligible"] and score >= _MIN_QUOTE_RELEVANCE_SCORE
+    record = {
+        **record,
+        "eligible": bool(eligible),
+        "evidence_id": str(item.get("evidence_id", "")),
+    }
+    if not eligible:
+        return "", record
+    if len(quote) > 800:
+        quote = quote[:800].rsplit(" ", 1)[0].rstrip()
+    return quote, record
 
 
 def _text(runtime: Any, item: Mapping[str, Any], question: str, requirements: Sequence[Any]) -> str:
@@ -604,6 +778,8 @@ def _surface(
     terms: Sequence[str],
     used_terms: set[str],
     quote: str,
+    *,
+    facet_label: str = "",
 ) -> str:
     if facet_id == "non_entailment_boundary":
         return (
@@ -614,7 +790,8 @@ def _surface(
         return "The evidence supports ordering or sequence only; " + _bounded_surface(quote)
     visible = [term for term in _ordered_terms(legacy, " ".join(terms)) if term not in used_terms]
     used_terms.update(visible)
-    return _bounded_surface(quote)
+    label = facet_label or _phrase(visible or terms)
+    return f"For {label}, the evidence supports this point: {_bounded_surface(quote)}"
 
 
 def _bounded_surface(text: str) -> str:
@@ -627,10 +804,10 @@ def _bounded_surface(text: str) -> str:
 def _ordered_terms(legacy: Any, text: str) -> list[str]:
     meaningful = legacy._meaningful_terms(text)
     ordered: list[str] = []
-    for token in re.findall(r"[A-Za-z0-9_]+|[\u3400-\u9fff]+", text):
-        term = token.casefold()
-        if term in meaningful and term not in ordered:
-            ordered.append(term)
+    for token in re.findall(r"[A-Za-z0-9_+/-]+|[\u3400-\u9fff]+", text):
+        for part in re.findall(r"[a-z0-9]+|[\u3400-\u9fff]+", token.casefold()):
+            if part in meaningful and part not in ordered:
+                ordered.append(part)
     return ordered
 
 
@@ -639,7 +816,7 @@ def _facet_terms(legacy: Any, facet: Mapping[str, Any]) -> list[str]:
         terms = legacy._facet_terms(facet)
     except Exception:
         terms = {str(item) for item in facet.get("terms", []) if str(item)}
-    return sorted(terms)
+    return sorted(_distinctive_terms(terms))
 
 
 def _coverage_score(item: Mapping[str, Any], terms: set[str]) -> float:
@@ -660,6 +837,192 @@ def _channel_score(item: Mapping[str, Any]) -> float:
         + (1.0 if "lexical" in channels else 0.0)
         + (0.75 if any(channel.startswith("graph_") for channel in channels) else 0.0)
     )
+
+
+def _question_contract(
+    legacy: Any,
+    question: str,
+    facets: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    explicit = _explicit_question_facets(legacy, question)
+    required: list[dict[str, Any]] = []
+    if explicit:
+        required.extend(explicit)
+    for facet in facets:
+        facet_id = str(facet.get("facet_id", "direct_answer"))
+        terms = _facet_terms(legacy, facet)
+        if facet_id == "direct_answer" and explicit:
+            continue
+        if not terms:
+            continue
+        required.append(
+            {
+                "facet_id": facet_id,
+                "label": _phrase(terms),
+                "terms": terms,
+            }
+        )
+    if not required:
+        terms = _distinctive_terms(_ordered_terms(legacy, question))[:8]
+        if terms:
+            required.append(
+                {"facet_id": "direct_answer", "label": _phrase(terms), "terms": terms}
+            )
+    return {"required_question_facets": _dedupe_facets(required)}
+
+
+def _explicit_question_facets(legacy: Any, question: str) -> list[dict[str, Any]]:
+    normalized = re.sub(r"[?!.]", ",", question)
+    pieces: list[str] = []
+    for raw_piece in re.split(r"[,;:]", normalized):
+        piece = raw_piece.strip(" -—\t\n")
+        if not piece:
+            continue
+        lowered = piece.casefold()
+        for marker in _CONTRACT_MARKERS:
+            marker_with_space = f"{marker} "
+            if marker_with_space in lowered:
+                piece = piece[lowered.rfind(marker_with_space) + len(marker_with_space) :]
+                break
+        pieces.extend(re.split(r"\s+(?:and|or)\s+", piece, flags=re.IGNORECASE))
+    facets: list[dict[str, Any]] = []
+    for piece in pieces:
+        label = _clean_label(piece)
+        terms = _distinctive_terms(_ordered_terms(legacy, label))
+        if not terms:
+            continue
+        if len(terms) == 1 and len(terms[0]) < 3:
+            continue
+        facets.append({"facet_id": "direct_answer", "label": label, "terms": terms})
+    return _dedupe_facets(facets)
+
+
+def _clean_label(value: str) -> str:
+    label = re.sub(r"\s+", " ", value).strip(" ,.;:!?()[]{}\"'")
+    label = re.sub(
+        r"^(?:walk|explain|show|tell|give|list|cover|include)\s+",
+        "",
+        label,
+        flags=re.IGNORECASE,
+    )
+    words = [word for word in label.split() if word.casefold() not in _QUESTION_CONTRACT_STOPWORDS]
+    return " ".join(words).strip() or label
+
+
+def _distinctive_terms(terms: Sequence[str]) -> list[str]:
+    result: list[str] = []
+    for term in terms:
+        for part in re.findall(r"[a-z0-9]+|[\u3400-\u9fff]+", str(term).casefold()):
+            if part in _QUESTION_CONTRACT_STOPWORDS:
+                continue
+            if len(part) < 2 and not part.isdigit():
+                continue
+            if part not in result:
+                result.append(part)
+    return result
+
+
+def _dedupe_facets(facets: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, ...]] = set()
+    for facet in facets:
+        terms = _distinctive_terms([str(item) for item in facet.get("terms", [])])
+        if not terms:
+            continue
+        key = tuple(terms)
+        if key in seen:
+            continue
+        seen.add(key)
+        label = str(facet.get("label") or _phrase(terms))
+        deduped.append(
+            {
+                "facet_id": str(facet.get("facet_id", "direct_answer")),
+                "label": label,
+                "terms": terms,
+            }
+        )
+    return deduped
+
+
+def _term_space(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+|[\u3400-\u9fff]+", text.casefold()))
+
+
+def _term_hits(terms: Sequence[str], text: str) -> set[str]:
+    space = _term_space(text)
+    text_folded = text.casefold()
+    hits: set[str] = set()
+    for term in _distinctive_terms(terms):
+        if term in space or (len(term) >= 4 and term in text_folded):
+            hits.add(term)
+    return hits
+
+
+def _relevance_score(
+    item: Mapping[str, Any],
+    text: str,
+    terms: Sequence[str],
+) -> tuple[float, dict[str, Any]]:
+    hit_terms = _term_hits(terms, text)
+    coverage = _coverage_score(item, set(terms))
+    score = float(len(hit_terms) * 2) + coverage + min(_channel_score(item), 3.0) * 0.25
+    needed = 1 if len(terms) <= 2 else 2
+    eligible = len(hit_terms) >= needed or (len(hit_terms) >= 1 and coverage >= 1.0)
+    return score, {
+        "evidence_id": str(item.get("evidence_id", "")),
+        "score": round(score, 3),
+        "term_hits": sorted(hit_terms),
+        "required_terms": list(terms),
+        "coverage_score": coverage,
+        "eligible": bool(eligible),
+    }
+
+
+def _quote_relevance_score(segment: str, terms: Sequence[str]) -> tuple[float, dict[str, Any]]:
+    hit_terms = _term_hits(terms, segment)
+    score = float(len(hit_terms) * 2)
+    needed = 1 if len(terms) <= 2 else 2
+    eligible = len(hit_terms) >= needed
+    return score, {
+        "score": round(score, 3),
+        "term_hits": sorted(hit_terms),
+        "required_terms": list(terms),
+        "eligible": bool(eligible),
+    }
+
+
+def _surface_question_aligned(surface: str, facet: Mapping[str, Any]) -> bool:
+    text = surface.casefold()
+    label = str(facet.get("label", "")).casefold()
+    terms = _distinctive_terms([str(item) for item in facet.get("terms", [])])
+    return bool(label and label in text) or bool(_term_hits(terms, surface))
+
+
+def _post_render_alignment(
+    legacy: Any,
+    question: str,
+    answer: Mapping[str, Any],
+    telemetry: Mapping[str, Any],
+) -> dict[str, Any]:
+    del legacy, question
+    answer_text = str(answer.get("answer_text", ""))
+    required = [str(item) for item in telemetry.get("required_question_facets", [])]
+    covered = []
+    missing = []
+    for label in required:
+        terms = _distinctive_terms([label])
+        if label.casefold() in answer_text.casefold() or _term_hits(terms, answer_text):
+            covered.append(label)
+        else:
+            missing.append(label)
+    failure_codes = [] if not missing else ["missing_required_facet_after_render"]
+    return {
+        "post_render_alignment_checked": True,
+        "post_render_alignment_passed": not missing,
+        "post_render_alignment_failure_codes": failure_codes,
+        "covered_question_facets": covered,
+        "missing_question_facets": missing,
+    }
 
 
 def _phrase(terms: Sequence[str]) -> str:
