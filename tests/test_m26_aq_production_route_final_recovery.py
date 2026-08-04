@@ -8,9 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 RECOVERY_KEY = "universal_answerability_recovery"
-EXPECTED_ENTRYPOINT = (
-    "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
-)
+EXPECTED_ENTRYPOINT = "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
 
 
 @pytest.fixture(autouse=True)
@@ -114,14 +112,14 @@ def _base_runtime_response(
 
 def test_production_import_uses_canonical_runtime_without_final_patch_binding() -> None:
     import knowledge_engine.m26_aq_final_universal_recovery_patch as final_patch
+    import knowledge_engine.m26_aq_semantic_contract as semantic_contract
     import knowledge_engine.m26_aq_semantic_runtime_patch_v3 as v3_patch
     import knowledge_engine.m26_ask_api as ask_api
     import knowledge_engine.m26_pa7_arbitrary_query_runtime as legacy
-    import knowledge_engine.m26_pa7_semantic_closure_runtime as semantic_runtime
     import knowledge_engine.m26_production_api  # noqa: F401
 
     assert ask_api.RUNTIME_ENTRYPOINT == EXPECTED_ENTRYPOINT
-    assert ask_api.run_owner_arbitrary_query is semantic_runtime.run_owner_arbitrary_query
+    assert ask_api.run_owner_arbitrary_query is semantic_contract.run_owner_arbitrary_query
     assert not getattr(legacy._intent_class, final_patch._FINAL_MARKER, False)
     assert not getattr(legacy._direct_question_facets, final_patch._FINAL_MARKER, False)
     assert not getattr(v3_patch._generalized_provider_synthesize, final_patch._FINAL_MARKER, False)
