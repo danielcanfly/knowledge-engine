@@ -16,6 +16,41 @@ _RECOVERABLE_INTENTS = {
 }
 _ORIGINAL_CANDIDATE = patch._candidate
 _ORIGINAL_SYNTHESIZE = patch._synthesize_with_final_recovery
+_ORIGINAL_PRECISE_DIRECT_FACETS = patch._precise_direct_facets
+_ORIGINAL_SURFACE = patch._surface
+
+_SOURCE_MARKER_PHRASES = (
+    "multiple sources",
+    "compare sources",
+    "compare source",
+    "source a",
+    "source b",
+    "source record",
+    "source records",
+    "source version",
+    "source versions",
+)
+_GRAPH_ORDER_MARKER_PHRASES = (
+    "relation graph",
+    "precedes relation",
+    "preceding relation",
+    "ordering relation",
+    "causality relation",
+    "dependency relation",
+    "ordering imply",
+    "order imply",
+)
+_GRAPH_ORDER_TOKENS = {
+    "precedes",
+    "preceding",
+    "causality",
+    "causal",
+    "dependency",
+    "dependencies",
+    "relation",
+    "graph",
+}
+_GENERIC_PROVE_MARKERS = {"prove", "proves", "proven", "proof", "imply", "implies"}
 
 
 def apply() -> None:
@@ -23,14 +58,17 @@ def apply() -> None:
 
     This module deliberately patches the already-loaded final recovery module instead of
     introducing another serving wrapper. The goal is to keep a single canonical hook while
-    tightening two live boundaries observed in closure artifacts: provider-abstain recovery
-    must not answer invented external protocols, and non-direct internal comparisons may use
-    deterministic verified evidence recovery when the original serving path already selected
-    authorized evidence.
+    tightening live and regression boundaries: provider-abstain recovery must not answer
+    invented external protocols, token-like words such as ``resources`` must not trigger
+    ``source`` facets, generic non-entailment must not inherit graph/precedes semantics,
+    and direct deterministic recovery must pass the stricter question-contract path before
+    publication.
     """
     with suppress(Exception):
         patch._PROVIDER_ABSTAIN_EXTERNAL_STOPWORDS.update({"compare", "dag"})
     patch._unsupported_external_markers = _unsupported_external_markers
+    patch._precise_direct_facets = _precise_direct_facets
+    patch._surface = _surface
     patch._candidate = _candidate
     patch._synthesize_with_final_recovery = _synthesize_with_final_recovery
 
@@ -120,6 +158,12 @@ def _synthesize_with_final_recovery(
         telemetry["first_broken_stage"] = "final_answer_status"
         return patch._attach(verification, closure, telemetry)
 
+    post = patch._post_render_alignment(legacy, question, answer, telemetry)
+    telemetry.update(post)
+    if not post.get("post_render_alignment_passed"):
+        telemetry["first_broken_stage"] = "post_render_question_alignment"
+        return patch._attach(verification, closure, telemetry)
+
     previous_mve = verification.get("multi_evidence_verification", {})
     previous_mve = previous_mve if isinstance(previous_mve, Mapping) else {}
     failures = sorted({str(item) for item in closure.get("failures", [])})
@@ -186,14 +230,11 @@ def _candidate(
         )
         if graph_premise is not None:
             return graph_premise
-    if intent in _RECOVERABLE_INTENTS:
-        candidate = _legacy_candidate(legacy, question, intent, evidence)
-        if candidate is not None:
-            return candidate
-    direct = _legacy_candidate(legacy, question, "direct_grounded_knowledge", evidence)
-    if direct is not None:
-        return direct
-    return _ORIGINAL_CANDIDATE(
+
+    # Direct questions are the defect surface: never bypass the stricter question
+    # contract with the older deterministic provider candidate. The old path can
+    # cite a true passage while answering a different facet.
+    contract_candidate = _ORIGINAL_CANDIDATE(
         legacy=legacy,
         runtime=runtime,
         question=question,
@@ -201,6 +242,21 @@ def _candidate(
         requirements=requirements,
         telemetry=telemetry,
     )
+    if contract_candidate is not None:
+        return contract_candidate
+
+    if intent in _RECOVERABLE_INTENTS and intent != "direct_grounded_knowledge":
+        candidate = _legacy_candidate(legacy, question, intent, evidence)
+        if candidate is not None and _legacy_candidate_respects_question(
+            candidate,
+            legacy=legacy,
+            runtime=runtime,
+            question=question,
+            evidence=evidence,
+            requirements=requirements,
+        ):
+            return candidate
+    return None
 
 
 def _legacy_candidate(
@@ -223,6 +279,121 @@ def _legacy_candidate(
     if not isinstance(claims, Sequence) or isinstance(claims, (str, bytes)) or not claims:
         return None
     return dict(candidate)
+
+
+def _legacy_candidate_respects_question(
+    candidate: Mapping[str, Any],
+    *,
+    legacy: Any,
+    runtime: Any,
+    question: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+) -> bool:
+    del evidence
+    original_facets = patch._ORIGINAL_DIRECT_FACETS or legacy._direct_question_facets
+    facets = patch._question_contract(
+        legacy,
+        question,
+        patch._precise_direct_facets(question, original_facets),
+    ).get("required_question_facets", [])
+    if not facets:
+        return False
+    claims = candidate.get("claims", [])
+    if not isinstance(claims, Sequence) or isinstance(claims, (str, bytes)):
+        return False
+    answer_text = str(candidate.get("answer_text", ""))
+    for facet in facets[: patch._MAX_RECOVERY_FACETS]:
+        terms = [str(term) for term in facet.get("terms", [])]
+        if not terms:
+            return False
+        if not patch._term_hits(terms, answer_text):
+            return False
+        supported = False
+        for claim in claims:
+            if not isinstance(claim, Mapping):
+                continue
+            for ref in claim.get("support_refs", []):
+                if not isinstance(ref, Mapping):
+                    continue
+                quote = str(
+                    ref.get("exact_quote") or ref.get("exact_support_snippet") or ""
+                )
+                if quote and patch._quote_relevance_score(quote, terms)[1]["eligible"]:
+                    supported = True
+                    break
+            if supported:
+                break
+        if not supported:
+            return False
+    return bool(runtime or requirements or True)
+
+
+def _precise_direct_facets(
+    question: str,
+    original: Any,
+) -> list[dict[str, Any]]:
+    facets = [dict(item) for item in _ORIGINAL_PRECISE_DIRECT_FACETS(question, original)]
+    if not _has_graph_order_marker(question):
+        facets = [item for item in facets if item.get("facet_id") != "ordering_boundary"]
+    if not _has_source_marker(question):
+        facets = [item for item in facets if item.get("facet_id") != "multi_source_selection"]
+    return facets
+
+
+def _surface(
+    legacy: Any,
+    question: str,
+    facet_id: str,
+    terms: Sequence[str],
+    used_terms: set[str],
+    quote: str,
+    *,
+    facet_label: str = "",
+) -> str:
+    if facet_id == "non_entailment_boundary" and not _has_graph_order_marker(question):
+        visible = [
+            term
+            for term in patch._ordered_terms(legacy, " ".join(terms))
+            if term not in used_terms
+        ]
+        used_terms.update(visible)
+        label = facet_label or patch._phrase(visible or terms)
+        return f"For {label}, the evidence supports this point: {patch._bounded_surface(quote)}"
+    return _ORIGINAL_SURFACE(
+        legacy,
+        question,
+        facet_id,
+        terms,
+        used_terms,
+        quote,
+        facet_label=facet_label,
+    )
+
+
+def _tokens(value: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+|[\u3400-\u9fff]+", str(value).casefold()))
+
+
+def _has_phrase(value: str, phrases: Sequence[str]) -> bool:
+    padded = f" {' '.join(str(value).casefold().split())} "
+    return any(f" {phrase} " in padded for phrase in phrases)
+
+
+def _has_source_marker(question: str) -> bool:
+    q = str(question).casefold()
+    tokens = _tokens(q)
+    return "source" in tokens or "sources" in tokens or _has_phrase(q, _SOURCE_MARKER_PHRASES)
+
+
+def _has_graph_order_marker(question: str) -> bool:
+    q = str(question).casefold()
+    tokens = _tokens(q)
+    if _has_phrase(q, _GRAPH_ORDER_MARKER_PHRASES):
+        return True
+    if "precedes" in tokens or "preceding" in tokens:
+        return True
+    return bool((tokens & _GRAPH_ORDER_TOKENS) and (tokens & _GENERIC_PROVE_MARKERS))
 
 
 def _looks_like_graph_premise_boundary(question: str) -> bool:
@@ -249,10 +420,19 @@ def _graph_premise_candidate(
     selected: list[str] = []
     for facet in facets[:4]:
         terms = patch._facet_terms(legacy, facet)
-        item = patch._best_item(legacy, runtime, evidence, terms, question, requirements)
+        item, _item_record = patch._best_item(
+            legacy, runtime, evidence, terms, question, requirements
+        )
         if item is None:
             continue
-        quote = patch._support_quote(legacy, runtime, item, terms, question, requirements)
+        quote, _quote_record = patch._support_quote(
+            legacy,
+            runtime,
+            item,
+            terms,
+            question,
+            requirements,
+        )
         if not quote:
             continue
         refs.append(
