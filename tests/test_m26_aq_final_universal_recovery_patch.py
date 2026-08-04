@@ -90,7 +90,7 @@ def test_final_recovery_passes_runtime_and_legacy_into_original_v3_path() -> Non
     assert closure["failures"] == []
 
 
-def test_final_recovery_builds_verified_direct_propositions() -> None:
+def test_final_recovery_rejects_benchmark_shaped_generic_business_fallback() -> None:
     question = (
         "Why does evidence of demand still not prove that there is a viable business? "
         "Walk through value capture, economics, delivery and repeatability."
@@ -113,28 +113,29 @@ def test_final_recovery_builds_verified_direct_propositions() -> None:
             source="source-b",
         ),
     ]
+    telemetry = patch._telemetry(
+        question,
+        {
+            "status": "owner_only_safe_abstention",
+            "reason_codes": ["SEMANTIC_CLOSURE_FAILED"],
+            "unsupported_accepted_claims": 0,
+            "citation_locator_valid": True,
+        },
+        {"failures": ["SEMANTIC_CLOSURE_FAILED"]},
+        evidence,
+    )
     candidate = patch._candidate(
         legacy=legacy,
         runtime=runtime,
         question=question,
         evidence=evidence,
         requirements=[],
+        telemetry=telemetry,
     )
-    assert candidate is not None
-    assert "e1" not in candidate["answer_text"]
-    assert "For" in candidate["answer_text"]
-    assert "ordering_boundary" not in {
-        facet_id for claim in candidate["claims"] for facet_id in claim["facet_ids"]
-    }
-    verified = legacy._verify_multi_evidence_provider_output(
-        trace_id="trace-final-recovery",
-        question=question,
-        intent_class="direct_grounded_knowledge",
-        evidence=evidence,
-        provider_text=json.dumps(candidate),
-    )
-    assert verified["terminal_status"] == "verified_answer_ready_candidate"
-    assert verified["missing_facets"] == []
+    assert candidate is None
+    assert telemetry["question_alignment_checked"] is True
+    assert telemetry["question_alignment_passed"] is False
+    assert telemetry["published_verified_answer"] is False
 
 
 def test_final_recovery_rejects_irrelevant_true_evidence() -> None:
