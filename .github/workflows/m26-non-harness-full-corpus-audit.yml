@@ -1,0 +1,121 @@
+name: M26 Non-Harness Full Corpus Audit
+
+on:
+  push:
+    branches:
+      - "gpt/non-harness-full-corpus-audit"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-non-harness-full-corpus-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    environment: m23-r3-diagnostic
+    env:
+      EXPECTED_RUNTIME_SHA: "c48bee8e3e4ae94923e862aad8c9a814078c5e13"
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 20
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}"
+          done
+          bash scripts/configure_oracle_ssh.sh
+
+      - name: Copy frozen audit questions
+        run: |
+          scp pilot/m26/m26-aq-non-harness-full-corpus-questions.json oracle-knowledge:/tmp/m26-aq-non-harness-full-corpus-questions.json
+
+      - name: Collect from already deployed production runtime
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "EXPECTED_RUNTIME_SHA='$EXPECTED_RUNTIME_SHA' DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+
+          checkout_sha="$(git rev-parse HEAD)"
+          test "$checkout_sha" = "$EXPECTED_RUNTIME_SHA" || {
+            echo "AUDIT_STOP=deployed_checkout_sha_mismatch"
+            exit 20
+          }
+
+          container_ids="$(docker compose ps -q knowledge-engine || true)"
+          container_count="$(printf '%s\n' "$container_ids" | sed '/^$/d' | wc -l | tr -d ' ')"
+          test "$container_count" = "1"
+          container_id="$(printf '%s\n' "$container_ids" | sed '/^$/d' | head -n 1)"
+
+          container_env() {
+            docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" \
+              | awk -F= -v key="$1" '$1 == key {print substr($0, index($0, "=") + 1)}' \
+              | tail -n 1
+          }
+
+          runtime_sha="$(container_env M26_QUERY_BUILD_SHA)"
+          backend_token="$(container_env M26_QUERY_BACKEND_TOKEN)"
+          owner_hash="$(container_env KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH)"
+
+          test "$runtime_sha" = "$EXPECTED_RUNTIME_SHA" || {
+            echo "AUDIT_STOP=container_runtime_sha_mismatch"
+            exit 21
+          }
+          test -n "$backend_token"
+          test -n "$owner_hash"
+
+          echo "AUDIT_RUNTIME_SHA_MATCH=true"
+          echo "AUDIT_BACKEND_TOKEN_PRESENT=true"
+          echo "AUDIT_OWNER_HASH_PRESENT=true"
+
+          out="/tmp/m26-aq-non-harness-full-corpus-audit.json"
+          rm -f "$out"
+
+          M26_QUERY_BACKEND_TOKEN="$backend_token" \
+          KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH="$owner_hash" \
+          PYTHONPATH=src \
+            python3 scripts/m26_aq_final_closure.py collect \
+              --questions /tmp/m26-aq-non-harness-full-corpus-questions.json \
+              --output "$out" \
+              --expected-sha "$EXPECTED_RUNTIME_SHA"
+
+          test -s "$out"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("/tmp/m26-aq-non-harness-full-corpus-audit.json")
+          x = json.loads(p.read_text())
+          assert x["health"]["build_sha"]
+          assert len(x["rows"]) == 30
+          assert x["privacy"]["raw_backend_token_recorded"] is False
+          assert x["privacy"]["raw_owner_hash_recorded"] is False
+          print("AUDIT_COLLECTION_ROWS=30")
+          print("AUDIT_COLLECTION_COMPLETE=true")
+          PY
+          REMOTE
+
+      - name: Copy sanitized raw audit artifact
+        if: always()
+        run: |
+          scp oracle-knowledge:/tmp/m26-aq-non-harness-full-corpus-audit.json /tmp/m26-aq-non-harness-full-corpus-audit.json || true
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-non-harness-full-corpus-audit-c48bee8e3e4ae94923e862aad8c9a814078c5e13
+          path: /tmp/m26-aq-non-harness-full-corpus-audit.json
+          if-no-files-found: error
+          retention-days: 14
