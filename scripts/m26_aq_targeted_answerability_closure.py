@@ -17,6 +17,8 @@ EXPECTED_GROUP_COUNTS = {
     "C_known_good_control": 5,
     "D_ood_control": 4,
 }
+RECOVERY_KEY = "universal_answerability_recovery"
+RECOVERY_SCHEMA = "m26-aq-final-universal-recovery-telemetry/v1"
 
 
 def _json(path: Path) -> dict[str, Any]:
@@ -106,6 +108,81 @@ def _graph_selected_count(row: Mapping[str, Any]) -> int:
     return 0
 
 
+def _recovery_telemetry(row: Mapping[str, Any]) -> dict[str, Any]:
+    verification = row.get("multi_evidence_verification", {})
+    if isinstance(verification, Mapping):
+        telemetry = verification.get(RECOVERY_KEY)
+        if isinstance(telemetry, Mapping):
+            return dict(telemetry)
+    semantic = row.get("semantic_closure", {})
+    if isinstance(semantic, Mapping):
+        telemetry = semantic.get(RECOVERY_KEY)
+        if isinstance(telemetry, Mapping):
+            return dict(telemetry)
+    return {}
+
+
+def _validate_recovery_telemetry(
+    row: Mapping[str, Any],
+    *,
+    expected: str,
+    group: str,
+) -> list[str]:
+    failures: list[str] = []
+    telemetry = _recovery_telemetry(row)
+    if group == "A_original_reproduction" and not telemetry:
+        return ["recovery:missing_group_a_telemetry"]
+    if not telemetry:
+        return failures
+
+    if telemetry.get("schema_version") != RECOVERY_SCHEMA:
+        failures.append("recovery:schema_version_mismatch")
+    if telemetry.get("case_specific") is not False:
+        failures.append("recovery:case_specific_not_false")
+    try:
+        evidence_count = int(telemetry.get("recovery_input_evidence_count", 0))
+        item_count = int(telemetry.get("recovery_items_count", 0))
+        text_count = int(telemetry.get("recovery_text_available_count", 0))
+    except (TypeError, ValueError):
+        evidence_count = item_count = text_count = -1
+    if expected == "answer" and group == "A_original_reproduction" and evidence_count <= 0:
+        failures.append("recovery:missing_input_evidence_count")
+    if item_count < 0 or text_count < 0:
+        failures.append("recovery:invalid_item_or_text_count")
+
+    answer_source = str(row.get("answer_source", ""))
+    first_stage = str(telemetry.get("first_broken_stage", ""))
+    hard_stop_codes = telemetry.get("universal_recovery_hard_stop_codes", [])
+    hard_stop_present = isinstance(hard_stop_codes, list) and bool(hard_stop_codes)
+    published = telemetry.get("published_verified_answer") is True
+    should_attempt = telemetry.get("universal_recovery_should_attempt") is True
+
+    if expected == "answer" and group == "A_original_reproduction":
+        natural_provider_ok = (
+            first_stage in {"not_needed", "none"}
+            and not hard_stop_present
+            and answer_source != "deterministic_verified_evidence_recovery"
+        )
+        recovery_ok = (
+            should_attempt
+            and telemetry.get("candidate_built") is True
+            and telemetry.get("candidate_verify_result") == "verified"
+            and published
+            and first_stage == "none"
+            and answer_source == "deterministic_verified_evidence_recovery"
+        )
+        if not (natural_provider_ok or recovery_ok):
+            failures.append("recovery:group_a_hook_outcome_invalid")
+        if telemetry.get("candidate_verify_result") == "exception":
+            failures.append("recovery:candidate_exception")
+    if expected == "abstain":
+        if published or answer_source == "deterministic_verified_evidence_recovery":
+            failures.append("recovery:ood_published_answer")
+        if should_attempt and not hard_stop_present:
+            failures.append("recovery:ood_attempt_without_hard_stop")
+    return failures
+
+
 def _validate_answerable(row: Mapping[str, Any]) -> list[str]:
     failures: list[str] = []
     answer_text = str(row.get("answer_text", ""))
@@ -162,6 +239,7 @@ def _validate_abstain(row: Mapping[str, Any]) -> list[str]:
 
 def _case_summary(row: Mapping[str, Any], expected: str, group: str) -> dict[str, Any]:
     accounting = row.get("accounting", {})
+    telemetry = _recovery_telemetry(row)
     return {
         "case_id": row.get("case_id", ""),
         "group": group,
@@ -189,6 +267,15 @@ def _case_summary(row: Mapping[str, Any], expected: str, group: str) -> dict[str
             "",
         ),
         "mutation_zero": _is_zero_mutation(row.get("mutations")),
+        "recovery_telemetry_present": bool(telemetry),
+        "recovery_should_attempt": telemetry.get("universal_recovery_should_attempt", ""),
+        "recovery_candidate_built": telemetry.get("candidate_built", ""),
+        "recovery_verify_result": telemetry.get("candidate_verify_result", ""),
+        "recovery_first_broken_stage": telemetry.get("first_broken_stage", ""),
+        "recovery_published_verified_answer": telemetry.get(
+            "published_verified_answer",
+            "",
+        ),
         "runtime_sha": (row.get("canonical_runtime", {}) or {}).get("build_sha", "")
         if isinstance(row.get("canonical_runtime", {}), Mapping)
         else "",
@@ -220,6 +307,8 @@ def _write_raw_answers(path: Path, summaries: Sequence[Mapping[str, Any]]) -> No
                 f"- actual_status: `{summary['actual_status']}`",
                 f"- answer_source: `{summary['answer_source']}`",
                 f"- citation_count: `{summary['citation_count']}`",
+                f"- recovery_telemetry_present: `{summary['recovery_telemetry_present']}`",
+                f"- recovery_first_broken_stage: `{summary['recovery_first_broken_stage']}`",
                 "",
                 str(summary.get("answer_text", "")).strip() or "[empty answer]",
                 "",
@@ -279,10 +368,18 @@ def validate(
             failures.extend(f"{case_id}:{item}" for item in _validate_abstain(row))
         else:
             failures.append(f"{case_id}:unknown_expected:{expected}")
+        failures.extend(
+            f"{case_id}:{item}"
+            for item in _validate_recovery_telemetry(
+                row,
+                expected=expected,
+                group=group,
+            )
+        )
         summaries.append(_case_summary(row, expected, group))
 
     summary = {
-        "schema_version": "m26-aq-targeted-answerability-validation/v1",
+        "schema_version": "m26-aq-targeted-answerability-validation/v2",
         "status": "PASS" if not failures else "FAIL",
         "failures": failures,
         "expected_deploy_sha": expected_sha,
@@ -292,6 +389,7 @@ def validate(
         "answerable_expected": 15,
         "abstain_expected": 4,
         "group_counts": dict(group_counts),
+        "recovery_telemetry_required_for_group_a": True,
         "case_summaries": summaries,
     }
     summary_path.write_text(
