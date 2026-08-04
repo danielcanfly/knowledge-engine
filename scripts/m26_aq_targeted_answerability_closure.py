@@ -1,0 +1,329 @@
+from __future__ import annotations
+
+import argparse
+import csv
+import hashlib
+import json
+import re
+from collections import Counter
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any
+
+INTERNAL_LABEL_RE = re.compile(r"(?:\[\[?e\d+\]?\]|\be\d+\b)", re.IGNORECASE)
+EXPECTED_GROUP_COUNTS = {
+    "A_original_reproduction": 5,
+    "B_new_variant": 5,
+    "C_known_good_control": 5,
+    "D_ood_control": 4,
+}
+
+
+def _json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _is_zero_mutation(value: Any) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    for item in value.values():
+        if isinstance(item, bool):
+            return False
+        try:
+            if int(item) != 0:
+                return False
+        except (TypeError, ValueError):
+            return False
+    return True
+
+
+def _source_identities(row: Mapping[str, Any], *, used: bool) -> list[str]:
+    trace = row.get("evidence_utilization_trace", {})
+    if isinstance(trace, Mapping):
+        key = "used_source_identities" if used else "selected_source_identities"
+        identities = trace.get(key, [])
+        if isinstance(identities, Sequence) and not isinstance(identities, str):
+            return sorted({str(item) for item in identities if str(item)})
+
+    key = "used_evidence_ids" if used else "selected_evidence"
+    if key == "selected_evidence":
+        selected = row.get("selected_evidence", [])
+        if isinstance(selected, Sequence) and not isinstance(selected, str):
+            identities = []
+            for item in selected:
+                if isinstance(item, Mapping):
+                    identity = item.get("source_identity") or item.get("source_id")
+                    if identity:
+                        identities.append(str(identity))
+            return sorted(set(identities))
+    return []
+
+
+def _integrity(row: Mapping[str, Any], key: str, default: Any = None) -> Any:
+    integrity = row.get("integrity", {})
+    if isinstance(integrity, Mapping) and key in integrity:
+        return integrity.get(key)
+    verification = row.get("multi_evidence_verification", {})
+    if isinstance(verification, Mapping) and key in verification:
+        return verification.get(key)
+    return default
+
+
+def _selected_evidence_count(row: Mapping[str, Any]) -> int:
+    trace = row.get("evidence_utilization_trace", {})
+    if isinstance(trace, Mapping):
+        value = trace.get("selected_evidence_count")
+        if isinstance(value, int):
+            return value
+    selected = row.get("selected_evidence", [])
+    return len(selected) if isinstance(selected, Sequence) and not isinstance(selected, str) else 0
+
+
+def _used_evidence_count(row: Mapping[str, Any]) -> int:
+    trace = row.get("evidence_utilization_trace", {})
+    if isinstance(trace, Mapping):
+        value = trace.get("used_evidence_count")
+        if isinstance(value, int):
+            return value
+    relationship = row.get("relationship_summary", {})
+    if isinstance(relationship, Mapping):
+        used = relationship.get("used_evidence_ids", [])
+        if isinstance(used, Sequence) and not isinstance(used, str):
+            return len(used)
+    return 0
+
+
+def _graph_selected_count(row: Mapping[str, Any]) -> int:
+    graph = row.get("graph_observability", {})
+    if isinstance(graph, Mapping):
+        value = graph.get("selected_graph_derived_evidence_count")
+        if isinstance(value, int):
+            return value
+    return 0
+
+
+def _validate_answerable(row: Mapping[str, Any]) -> list[str]:
+    failures: list[str] = []
+    answer_text = str(row.get("answer_text", ""))
+    citations = row.get("citations", [])
+    claims = row.get("answer_claims", [])
+    status = str(row.get("status", ""))
+
+    if status != "owner_only_cited_answer":
+        failures.append("answerable:not_owner_only_cited_answer")
+    if row.get("safe_abstention") is True:
+        failures.append("answerable:safe_abstention_true")
+    if not answer_text.strip():
+        failures.append("answerable:empty_answer")
+    if INTERNAL_LABEL_RE.search(answer_text):
+        failures.append("answerable:visible_internal_evidence_label")
+    if not isinstance(citations, list) or not citations:
+        failures.append("answerable:missing_citations")
+    if not isinstance(claims, list) or not claims:
+        failures.append("answerable:missing_answer_claims")
+    if _integrity(row, "unsupported_accepted_claims", 1) != 0:
+        failures.append("answerable:unsupported_accepted_claims")
+    if _integrity(row, "citation_locator_valid", False) is not True:
+        failures.append("answerable:citation_locator_invalid")
+    if _integrity(row, "material_claim_support_verified", False) is not True:
+        failures.append("answerable:material_support_not_verified")
+    if not _is_zero_mutation(row.get("mutations")):
+        failures.append("answerable:mutation_detected")
+    return failures
+
+
+def _validate_abstain(row: Mapping[str, Any]) -> list[str]:
+    failures: list[str] = []
+    citations = row.get("citations", [])
+    claims = row.get("answer_claims", [])
+    status = str(row.get("status", ""))
+
+    safe = (
+        row.get("safe_abstention") is True
+        or status == "owner_only_safe_abstention"
+        or row.get("answer_source") == "safe_abstention"
+    )
+    if not safe:
+        failures.append("abstain:not_safe_abstention")
+    if isinstance(citations, list) and citations:
+        failures.append("abstain:fabricated_or_unexpected_citations")
+    if isinstance(claims, list) and claims:
+        failures.append("abstain:unexpected_answer_claims")
+    if _integrity(row, "unsupported_accepted_claims", 0) != 0:
+        failures.append("abstain:unsupported_accepted_claims")
+    if not _is_zero_mutation(row.get("mutations")):
+        failures.append("abstain:mutation_detected")
+    return failures
+
+
+def _case_summary(row: Mapping[str, Any], expected: str, group: str) -> dict[str, Any]:
+    accounting = row.get("accounting", {})
+    return {
+        "case_id": row.get("case_id", ""),
+        "group": group,
+        "expected": expected,
+        "actual_status": row.get("status", ""),
+        "terminal_status": row.get("terminal_status", ""),
+        "answer_source": row.get("answer_source", ""),
+        "safe_abstention": row.get("safe_abstention", False),
+        "provider_call_count": accounting.get("provider_call_count", "")
+        if isinstance(accounting, Mapping)
+        else "",
+        "selected_evidence_count": _selected_evidence_count(row),
+        "used_evidence_count": _used_evidence_count(row),
+        "graph_selected_count": _graph_selected_count(row),
+        "selected_source_identities": ";".join(_source_identities(row, used=False)),
+        "used_source_identities": ";".join(_source_identities(row, used=True)),
+        "citation_count": len(row.get("citations", []))
+        if isinstance(row.get("citations", []), list)
+        else 0,
+        "unsupported_accepted_claims": _integrity(row, "unsupported_accepted_claims", ""),
+        "citation_locator_valid": _integrity(row, "citation_locator_valid", ""),
+        "material_claim_support_verified": _integrity(
+            row,
+            "material_claim_support_verified",
+            "",
+        ),
+        "mutation_zero": _is_zero_mutation(row.get("mutations")),
+        "runtime_sha": (row.get("canonical_runtime", {}) or {}).get("build_sha", "")
+        if isinstance(row.get("canonical_runtime", {}), Mapping)
+        else "",
+        "answer_text": str(row.get("answer_text", "")),
+    }
+
+
+def _write_csv(path: Path, summaries: Sequence[Mapping[str, Any]]) -> None:
+    if not summaries:
+        path.write_text("", encoding="utf-8")
+        return
+    fieldnames = [key for key in summaries[0] if key != "answer_text"]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for summary in summaries:
+            writer.writerow({key: summary.get(key, "") for key in fieldnames})
+
+
+def _write_raw_answers(path: Path, summaries: Sequence[Mapping[str, Any]]) -> None:
+    lines = ["# Targeted Universal Answerability Raw Answers", ""]
+    for summary in summaries:
+        lines.extend(
+            [
+                f"## {summary['case_id']}",
+                "",
+                f"- group: `{summary['group']}`",
+                f"- expected: `{summary['expected']}`",
+                f"- actual_status: `{summary['actual_status']}`",
+                f"- answer_source: `{summary['answer_source']}`",
+                f"- citation_count: `{summary['citation_count']}`",
+                "",
+                str(summary.get("answer_text", "")).strip() or "[empty answer]",
+                "",
+            ]
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def validate(
+    *,
+    input_path: Path,
+    questions_path: Path,
+    expected_sha: str,
+    summary_path: Path,
+    csv_path: Path,
+    raw_answers_path: Path,
+) -> None:
+    artifact = _json(input_path)
+    questions = _json(questions_path)
+    question_rows = questions.get("questions", [])
+    artifact_rows = artifact.get("rows", [])
+    failures: list[str] = []
+
+    if len(question_rows) != 19:
+        failures.append(f"question_count:{len(question_rows)}")
+    if len(artifact_rows) != 19:
+        failures.append(f"row_count:{len(artifact_rows)}")
+    if artifact.get("expected_deploy_sha") != expected_sha:
+        failures.append("artifact_expected_sha_mismatch")
+    collection = artifact.get("collection", {})
+    if not isinstance(collection, Mapping) or collection.get("status") != "complete":
+        failures.append("collection_not_complete")
+
+    group_counts = Counter(str(item.get("group", "")) for item in question_rows)
+    if dict(group_counts) != EXPECTED_GROUP_COUNTS:
+        failures.append(f"group_counts:{dict(group_counts)}")
+    expected_counts = Counter(str(item.get("expected", "")) for item in question_rows)
+    if expected_counts != {"answer": 15, "abstain": 4}:
+        failures.append(f"expected_counts:{dict(expected_counts)}")
+
+    rows_by_id = {str(row.get("case_id", "")): row for row in artifact_rows}
+    summaries: list[dict[str, Any]] = []
+    for question in question_rows:
+        case_id = str(question.get("case_id", ""))
+        expected = str(question.get("expected", ""))
+        group = str(question.get("group", ""))
+        row = rows_by_id.get(case_id)
+        if row is None:
+            failures.append(f"{case_id}:missing_row")
+            continue
+        runtime = row.get("canonical_runtime", {})
+        if not isinstance(runtime, Mapping) or runtime.get("build_sha") != expected_sha:
+            failures.append(f"{case_id}:runtime_sha_mismatch")
+        if expected == "answer":
+            failures.extend(f"{case_id}:{item}" for item in _validate_answerable(row))
+        elif expected == "abstain":
+            failures.extend(f"{case_id}:{item}" for item in _validate_abstain(row))
+        else:
+            failures.append(f"{case_id}:unknown_expected:{expected}")
+        summaries.append(_case_summary(row, expected, group))
+
+    summary = {
+        "schema_version": "m26-aq-targeted-answerability-validation/v1",
+        "status": "PASS" if not failures else "FAIL",
+        "failures": failures,
+        "expected_deploy_sha": expected_sha,
+        "question_file_sha256": _sha256(questions_path),
+        "input_file_sha256": _sha256(input_path),
+        "rows": len(artifact_rows),
+        "answerable_expected": 15,
+        "abstain_expected": 4,
+        "group_counts": dict(group_counts),
+        "case_summaries": summaries,
+    }
+    summary_path.write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    _write_csv(csv_path, summaries)
+    _write_raw_answers(raw_answers_path, summaries)
+
+    print(json.dumps({k: summary[k] for k in ("status", "rows", "failures")}, indent=2))
+    if failures:
+        raise SystemExit(1)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", type=Path, required=True)
+    parser.add_argument("--questions", type=Path, required=True)
+    parser.add_argument("--expected-sha", required=True)
+    parser.add_argument("--summary", type=Path, required=True)
+    parser.add_argument("--csv", type=Path, required=True)
+    parser.add_argument("--raw-answers", type=Path, required=True)
+    args = parser.parse_args()
+    validate(
+        input_path=args.input,
+        questions_path=args.questions,
+        expected_sha=args.expected_sha,
+        summary_path=args.summary,
+        csv_path=args.csv,
+        raw_answers_path=args.raw_answers,
+    )
+
+
+if __name__ == "__main__":
+    main()
