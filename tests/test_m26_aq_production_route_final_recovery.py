@@ -4,12 +4,24 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 RECOVERY_KEY = "universal_answerability_recovery"
 EXPECTED_ENTRYPOINT = (
     "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
 )
+
+
+@pytest.fixture(autouse=True)
+def restore_ask_api_runtime_binding() -> Any:
+    import knowledge_engine.m26_ask_api as ask_api
+
+    original_run_owner_arbitrary_query = ask_api.run_owner_arbitrary_query
+    original_runtime_entrypoint = ask_api.RUNTIME_ENTRYPOINT
+    yield
+    ask_api.run_owner_arbitrary_query = original_run_owner_arbitrary_query
+    ask_api.RUNTIME_ENTRYPOINT = original_runtime_entrypoint
 
 
 def _headers() -> dict[str, str]:
