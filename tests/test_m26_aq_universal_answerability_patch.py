@@ -38,54 +38,86 @@ def _evidence(
     }
 
 
-def _base_evidence() -> list[dict[str, Any]]:
-    return [
+def test_semantic_admission_allows_nonlexical_semantic_evidence() -> None:
+    evidence = [
         _evidence(
             "ev1",
-            "A founder should compare the strength of the problem with current constraints, "
-            "including regulation, trust, capital intensity, timing, and market education.",
+            (
+                "Customers may recognize the problem but still avoid adoption when "
+                "switching cost, trust, timing, and incentives are unresolved."
+            ),
             source="source-a",
+            channels=["dense"],
         ),
         _evidence(
             "ev2",
-            "A decision to continue or pause should separate conviction in the problem from "
-            "runway, people, timing, resources, and the cost of changing the market.",
+            (
+                "A useful market signal is not only pain, but willingness to change "
+                "behavior under real constraints."
+            ),
             source="source-b",
+            channels=["semantic_requirement_recovery"],
         ),
     ]
 
-
-def test_semantic_admission_allows_nonlexical_semantic_evidence() -> None:
-    question = "如果客戶承認問題存在，為什麼市場仍然可能不動？"
-    assert not legacy._requires_precise_overlap(legacy._meaningful_terms(question))
     assert patch._semantic_admission_overlap(
         legacy=legacy,
-        question=question,
-        evidence=_base_evidence(),
-        original=lambda _question, _evidence: False,
+        question="為什麼大家承認問題存在卻仍然不願意採用？",
+        evidence=evidence,
+        original=lambda question, evidence: False,
     )
 
 
 def test_semantic_admission_keeps_precise_identifier_questions_strict() -> None:
-    question = "Which artifact has sha256 token xqzprtvbnm 838561e6bc4f1fd74ea98f024b16da19815087cd?"
-    assert legacy._requires_precise_overlap(legacy._meaningful_terms(question))
+    evidence = [
+        _evidence(
+            "ev1",
+            "This unrelated paragraph has hydrated section identity but no requested digest.",
+            source="source-a",
+            channels=["dense"],
+        ),
+        _evidence(
+            "ev2",
+            "Another unrelated paragraph should not admit exact token questions.",
+            source="source-b",
+            channels=["dense"],
+        ),
+    ]
+
     assert not patch._semantic_admission_overlap(
         legacy=legacy,
-        question=question,
-        evidence=_base_evidence(),
-        original=lambda _question, _evidence: False,
+        question="What is the sha256 token BCDFGHJKLMNPQRST for this release digest?",
+        evidence=evidence,
+        original=lambda question, evidence: False,
     )
 
 
 def test_evidence_bound_recovery_candidate_verifies_without_internal_labels() -> None:
-    question = (
-        "Why does evidence of demand still not prove that there is a viable business?"
-    )
-    evidence = _base_evidence()
+    evidence = [
+        _evidence(
+            "ev1",
+            (
+                "Evidence-driven learning is shown by a changed constraint, a changed "
+                "problem frame, and a changed market reality."
+            ),
+            source="source-a",
+            channels=["query_coverage"],
+        ),
+        _evidence(
+            "ev2",
+            (
+                "Aimless drift is weaker when the decision cannot be tied back to new "
+                "evidence about the problem or constraints."
+            ),
+            source="source-b",
+            channels=["dense"],
+        ),
+    ]
+
     candidate = patch._evidence_bound_recovery_candidate(
         runtime=runtime,
         legacy=legacy,
-        question=question,
+        question="How can a builder distinguish evidence-driven learning from aimless drift?",
         intent_class="direct_grounded_knowledge",
         evidence=evidence,
         requirements=[],
@@ -94,10 +126,10 @@ def test_evidence_bound_recovery_candidate_verifies_without_internal_labels() ->
     assert "e1" not in candidate["answer_text"]
     verified = legacy._verify_multi_evidence_provider_output(
         trace_id="trace-test",
-        question=question,
+        question="How can a builder distinguish evidence-driven learning from aimless drift?",
         intent_class="direct_grounded_knowledge",
         evidence=evidence,
-        provider_text=json.dumps(candidate, ensure_ascii=False),
+        provider_text=json.dumps(candidate),
     )
     answer = legacy._verified_multi_evidence_answer(
         intent_class="direct_grounded_knowledge",
@@ -113,13 +145,16 @@ def test_evidence_bound_recovery_candidate_verifies_without_internal_labels() ->
 
 
 def test_recovery_does_not_trigger_for_provider_abstention() -> None:
+    verification = {
+        "status": "owner_only_safe_abstention",
+        "reason_codes": ["PROVIDER_ABSTAINED"],
+        "unsupported_accepted_claims": 0,
+        "citation_locator_valid": True,
+    }
+    closure = {"failures": ["PROVIDER_ABSTAINED"]}
+
     assert not patch._should_attempt_evidence_recovery(
-        {
-            "status": "owner_only_safe_abstention",
-            "reason_codes": ["PROVIDER_ABSTAINED", "SEMANTIC_CLOSURE_FAILED"],
-            "unsupported_accepted_claims": 0,
-            "citation_locator_valid": True,
-        },
-        {"failures": ["PROVIDER_ABSTAINED", "SEMANTIC_CLOSURE_FAILED"]},
-        _base_evidence(),
+        verification,
+        closure,
+        [_evidence("ev1", "A supported passage exists.", source="source-a")],
     )
