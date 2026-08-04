@@ -71,6 +71,8 @@ def install() -> None:
         **kwargs: Any,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         assert _ORIGINAL_GENERALIZED_SYNTHESIZE is not None
+        kwargs.pop("legacy", None)
+        kwargs.pop("runtime", None)
         return _synthesize_with_final_recovery(
             *args,
             legacy=legacy,
@@ -122,6 +124,8 @@ def _synthesize_with_final_recovery(
     endpoint_proof: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     verification, closure = original(
+        runtime=runtime,
+        legacy=legacy,
         question=question,
         trace_id=trace_id,
         intent_class=intent_class,
@@ -320,7 +324,8 @@ def _candidate(
     items = _ranked_items(legacy, runtime, question, evidence, requirements)
     if not items:
         return None
-    facets = _precise_direct_facets(question, legacy._direct_question_facets)
+    original_facets = _ORIGINAL_DIRECT_FACETS or legacy._direct_question_facets
+    facets = _precise_direct_facets(question, original_facets)
     if not facets:
         facets = [{"facet_id": "direct_answer", "terms": _ordered_terms(legacy, question)}]
     claims = []
