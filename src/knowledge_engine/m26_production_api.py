@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from . import m26_ask_api
 from . import m26_aq_semantic_runtime_patch_v3 as canonical_aq_runtime
+from . import m26_ask_api
 
 CANONICAL_RUNTIME_ENTRYPOINT = (
     "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
