@@ -136,9 +136,10 @@ def test_final_recovery_builds_verified_direct_propositions() -> None:
     assert verified["missing_facets"] == []
 
 
-def test_final_recovery_telemetry_preserves_hard_stop() -> None:
+def test_final_recovery_telemetry_preserves_external_hard_stop() -> None:
     evidence = [_evidence("ev1", "A supported passage exists.")]
     telemetry = patch._telemetry(
+        "Give Toyota 2025 audited quarterly revenue.",
         {
             "status": "owner_only_safe_abstention",
             "reason_codes": ["PROVIDER_ABSTAINED"],
@@ -150,3 +151,4 @@ def test_final_recovery_telemetry_preserves_hard_stop() -> None:
     )
     assert telemetry["universal_recovery_should_attempt"] is False
     assert telemetry["universal_recovery_hard_stop_codes"] == ["PROVIDER_ABSTAINED"]
+    assert telemetry["unsupported_external_markers"] == ["2025", "Toyota"]
