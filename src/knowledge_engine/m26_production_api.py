@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from . import m26_aq_semantic_runtime_patch_v3 as canonical_aq_runtime
+from . import m26_aq_semantic_runtime_patch_v2 as canonical_aq_runtime
 from . import m26_ask_api
 
 CANONICAL_RUNTIME_ENTRYPOINT = (
@@ -11,8 +11,8 @@ CANONICAL_RUNTIME_ENTRYPOINT = (
 )
 
 # Compose the canonical AQ runtime once before route registration. This keeps the
-# production wrapper on one public serving path while restoring the semantic AQ
-# synthesis behavior that is still centralized in the v3 runtime extension.
+# production wrapper on one public serving path while restoring verified semantic
+# repair behavior without installing the final universal recovery patch tower.
 canonical_aq_runtime.install()
 
 from .m26_pa7_semantic_closure_runtime import run_owner_arbitrary_query  # noqa: E402
