@@ -11,15 +11,19 @@ on:
       - "src/knowledge_engine/m26_aq_semantic_runtime_patch_v3.py"
       - "src/knowledge_engine/m26_aq_semantic_runtime_patch_v3_lifecycle.py"
       - "src/knowledge_engine/m26_aq_semantic_runtime_patch_v3_surface.py"
+      - "src/knowledge_engine/m26_aq_universal_answerability_patch.py"
       - "src/knowledge_engine/m26_production_api.py"
       - "scripts/m26_aq_final_closure.py"
       - "scripts/m26_aq_remote_production_closure.sh"
       - "scripts/m26_aq_generalized_closure.py"
+      - "scripts/m26_aq_targeted_answerability_closure.py"
       - "scripts/m26_pa7_named_backend_tunnel.py"
       - "pilot/m26/m26-aq-final-r3-questions.json"
       - "pilot/m26/m26-aq-gpt-e-black-box-questions.json"
+      - "pilot/m26/m26-aq-universal-answerability-targeted-questions.json"
       - "tests/test_m26_aq_semantic_closure_runtime.py"
       - "tests/test_m26_aq_semantic_runtime_patch_v3.py"
+      - "tests/test_m26_aq_universal_answerability_patch.py"
       - "tests/test_m26_aq_surface_guard.py"
       - "tests/test_m26_aq_production_deploy_lock.py"
       - "tests/test_m26_aq_production_entrypoint.py"
@@ -66,18 +70,24 @@ jobs:
             src/knowledge_engine/m26_aq_semantic_runtime_patch_v3.py \
             src/knowledge_engine/m26_aq_semantic_runtime_patch_v3_lifecycle.py \
             src/knowledge_engine/m26_aq_semantic_runtime_patch_v3_surface.py \
+            src/knowledge_engine/m26_aq_universal_answerability_patch.py \
             src/knowledge_engine/m26_production_api.py \
             scripts/m26_aq_final_closure.py \
             scripts/m26_aq_generalized_closure.py \
+            scripts/m26_aq_targeted_answerability_closure.py \
             scripts/m26_pa7_named_backend_tunnel.py \
             tests/test_m26_aq_semantic_closure_runtime.py \
             tests/test_m26_aq_semantic_runtime_patch_v3.py \
+            tests/test_m26_aq_universal_answerability_patch.py \
             tests/test_m26_aq_surface_guard.py \
             tests/test_m26_aq_production_entrypoint.py \
             tests/test_m26_aq_final_closure_harness.py \
             tests/test_m26_aq_simplified_product_contract.py
           bash -n scripts/m26_aq_remote_production_closure.sh
           bash -n deploy/deploy.sh
+          python -m json.tool \
+            pilot/m26/m26-aq-universal-answerability-targeted-questions.json \
+            >/dev/null
 
       - name: Run full AQ regression population
         run: |
@@ -92,6 +102,7 @@ jobs:
             tests/test_m26_pa_7_reconciliation.py \
             tests/test_m26_aq_semantic_closure_runtime.py \
             tests/test_m26_aq_semantic_runtime_patch_v3.py \
+            tests/test_m26_aq_universal_answerability_patch.py \
             tests/test_m26_aq_surface_guard.py \
             tests/test_m26_aq_production_deploy_lock.py \
             tests/test_m26_aq_production_entrypoint.py \
@@ -133,6 +144,13 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 50
           show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install runtime validation dependencies
+        run: python -m pip install -e .
 
       - name: Verify exact-head and deployment credentials
         run: |
@@ -530,6 +548,18 @@ jobs:
             "$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/blackbox-$EXPECTED_DEPLOY_SHA.json" \
             /tmp/m26-aq-gpt-e-blackbox-live-closure.json
           copy_remote_artifact \
+            "$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/targeted-$EXPECTED_DEPLOY_SHA.json" \
+            /tmp/m26-aq-targeted-live-closure.json
+          copy_remote_artifact \
+            "$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/targeted-summary-$EXPECTED_DEPLOY_SHA.json" \
+            /tmp/m26-aq-targeted-summary.json
+          copy_remote_artifact \
+            "$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/targeted-results-$EXPECTED_DEPLOY_SHA.csv" \
+            /tmp/m26-aq-targeted-results.csv
+          copy_remote_artifact \
+            "$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/targeted-raw-answers-$EXPECTED_DEPLOY_SHA.md" \
+            /tmp/m26-aq-targeted-raw-answers.md
+          copy_remote_artifact \
             "$ORACLE_VM_DEPLOY_PATH/.m26-aq-final-production-closure/routed-health-$EXPECTED_DEPLOY_SHA.json" \
             /tmp/m26-aq-routed-health.json
 
@@ -542,6 +572,10 @@ jobs:
             /tmp/m26-aq-production-identity.json \
             /tmp/m26-aq-final-live-closure.json \
             /tmp/m26-aq-gpt-e-blackbox-live-closure.json \
+            /tmp/m26-aq-targeted-live-closure.json \
+            /tmp/m26-aq-targeted-summary.json \
+            /tmp/m26-aq-targeted-results.csv \
+            /tmp/m26-aq-targeted-raw-answers.md \
             /tmp/m26-aq-routed-health.json; do
             test -s "$path"
           done
@@ -572,15 +606,23 @@ jobs:
           print(json.dumps(evidence, indent=2, sort_keys=True))
           PY
 
-          PYTHONPATH=src python scripts/m26_aq_final_closure.py validate \
+          python scripts/m26_aq_final_closure.py validate \
             --input /tmp/m26-aq-final-live-closure.json \
             --gate pilot/m26/m26-pa-7-resolved-production-gate.json \
             --expected-sha "$EXPECTED_DEPLOY_SHA"
 
-          PYTHONPATH=src python scripts/m26_aq_generalized_closure.py \
+          python scripts/m26_aq_generalized_closure.py \
             --input /tmp/m26-aq-gpt-e-blackbox-live-closure.json \
             --expected-sha "$EXPECTED_DEPLOY_SHA" \
             --minimum 20
+
+          python scripts/m26_aq_targeted_answerability_closure.py \
+            --input /tmp/m26-aq-targeted-live-closure.json \
+            --questions pilot/m26/m26-aq-universal-answerability-targeted-questions.json \
+            --expected-sha "$EXPECTED_DEPLOY_SHA" \
+            --summary /tmp/m26-aq-targeted-summary.json \
+            --csv /tmp/m26-aq-targeted-results.csv \
+            --raw-answers /tmp/m26-aq-targeted-raw-answers.md
 
       - name: Upload production closure evidence
         if: always()
@@ -595,6 +637,10 @@ jobs:
             /tmp/m26-aq-production-identity.json
             /tmp/m26-aq-final-live-closure.json
             /tmp/m26-aq-gpt-e-blackbox-live-closure.json
+            /tmp/m26-aq-targeted-live-closure.json
+            /tmp/m26-aq-targeted-summary.json
+            /tmp/m26-aq-targeted-results.csv
+            /tmp/m26-aq-targeted-raw-answers.md
             /tmp/m26-aq-routed-health.json
           if-no-files-found: warn
           retention-days: 14
