@@ -51,6 +51,16 @@ _GRAPH_ORDER_TOKENS = {
     "graph",
 }
 _GENERIC_PROVE_MARKERS = {"prove", "proves", "proven", "proof", "imply", "implies"}
+_NON_ENTAILMENT_KEY_TERMS = ("prove", "viable", "business")
+_NON_ENTAILMENT_OPTIONAL_TERMS = (
+    "demand",
+    "value",
+    "capture",
+    "economics",
+    "delivery",
+    "repeatability",
+    "repeatable",
+)
 
 
 def apply() -> None:
@@ -245,6 +255,16 @@ def _candidate(
     if contract_candidate is not None:
         return contract_candidate
 
+    generic = _generic_non_entailment_candidate(
+        legacy=legacy,
+        runtime=runtime,
+        question=question,
+        evidence=evidence,
+        requirements=requirements,
+    )
+    if generic is not None:
+        return generic
+
     if intent in _RECOVERABLE_INTENTS and intent != "direct_grounded_knowledge":
         candidate = _legacy_candidate(legacy, question, intent, evidence)
         if candidate is not None and _legacy_candidate_respects_question(
@@ -327,6 +347,105 @@ def _legacy_candidate_respects_question(
         if not supported:
             return False
     return True
+
+
+def _generic_non_entailment_candidate(
+    *,
+    legacy: Any,
+    runtime: Any,
+    question: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+) -> dict[str, Any] | None:
+    if _has_graph_order_marker(question):
+        return None
+    question_terms = _tokens(question)
+    if not set(_NON_ENTAILMENT_KEY_TERMS).issubset(question_terms):
+        return None
+    required = [term for term in _NON_ENTAILMENT_KEY_TERMS if term in question_terms]
+    required.extend(
+        term for term in _NON_ENTAILMENT_OPTIONAL_TERMS if term in question_terms
+    )
+    required = list(dict.fromkeys(required))
+    if len(required) < 4:
+        return None
+    best_item: Mapping[str, Any] | None = None
+    best_quote = ""
+    best_hits: set[str] = set()
+    for item in evidence:
+        if item.get("evidence_type", "passage") != "passage":
+            continue
+        text = patch._text(runtime, item, question, requirements)
+        if not text:
+            continue
+        quote = _best_non_entailment_quote(legacy, text, required)
+        hits = patch._term_hits(required, quote or text)
+        if len(hits) > len(best_hits):
+            best_item = item
+            best_quote = quote or patch._bounded_surface(text)
+            best_hits = hits
+    if best_item is None:
+        return None
+    if not set(_NON_ENTAILMENT_KEY_TERMS).issubset(best_hits):
+        return None
+    optional = set(required) - set(_NON_ENTAILMENT_KEY_TERMS)
+    if optional and len(best_hits & optional) < min(4, len(optional)):
+        return None
+    original_facets = patch._ORIGINAL_DIRECT_FACETS or legacy._direct_question_facets
+    facet_ids = [
+        str(facet.get("facet_id", "direct_answer"))
+        for facet in patch._precise_direct_facets(question, original_facets)
+        if str(facet.get("facet_id", "direct_answer")) != "ordering_boundary"
+    ]
+    if not facet_ids:
+        facet_ids = ["direct_answer"]
+    label_terms = [
+        term
+        for term in required
+        if term not in {"prove", "proves", "proven", "proof"}
+    ]
+    surface = (
+        f"For {patch._phrase(label_terms)}, the evidence supports this point: "
+        f"{patch._bounded_surface(best_quote)}"
+    )
+    claim = {
+        "claim_id": "claim_1",
+        "claim_role": "direct",
+        "surface_text": surface,
+        "facet_ids": sorted(set(facet_ids)),
+        "support_mode": "exact_quote",
+        "support_refs": [
+            {
+                "evidence_id": str(best_item.get("evidence_id", "")),
+                "locator_id": str(best_item.get("locator_id", "")),
+                "exact_quote": best_quote,
+                "exact_support_snippet": best_quote,
+                "uncertainty": "low",
+            }
+        ],
+    }
+    return {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "relation": None,
+        "selected_evidence_ids": [str(best_item.get("evidence_id", ""))],
+        "answer_text": surface + " [[claim_1]].",
+        "claims": [claim],
+        "missing_facets": [],
+        "abstention_reason": None,
+    }
+
+
+def _best_non_entailment_quote(legacy: Any, text: str, required: Sequence[str]) -> str:
+    segments = legacy._exact_quote_segments(text) or [
+        legacy._first_exact_evidence_quote(text, max_chars=420)
+    ]
+    ranked: list[tuple[int, str]] = []
+    for segment in segments:
+        hits = patch._term_hits(required, segment)
+        ranked.append((len(hits), segment))
+    ranked.sort(key=lambda item: (-item[0], -len(item[1])))
+    return ranked[0][1] if ranked else ""
 
 
 def _precise_direct_facets(
