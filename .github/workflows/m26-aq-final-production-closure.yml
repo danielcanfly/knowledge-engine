@@ -12,6 +12,7 @@ on:
       - "src/knowledge_engine/m26_aq_semantic_runtime_patch_v3_lifecycle.py"
       - "src/knowledge_engine/m26_aq_semantic_runtime_patch_v3_surface.py"
       - "src/knowledge_engine/m26_aq_universal_answerability_patch.py"
+      - "src/knowledge_engine/m26_aq_final_universal_recovery_patch.py"
       - "src/knowledge_engine/m26_production_api.py"
       - "scripts/m26_aq_final_closure.py"
       - "scripts/m26_aq_remote_production_closure.sh"
@@ -24,6 +25,8 @@ on:
       - "tests/test_m26_aq_semantic_closure_runtime.py"
       - "tests/test_m26_aq_semantic_runtime_patch_v3.py"
       - "tests/test_m26_aq_universal_answerability_patch.py"
+      - "tests/test_m26_aq_final_universal_recovery_patch.py"
+      - "tests/test_m26_aq_production_route_final_recovery.py"
       - "tests/test_m26_aq_surface_guard.py"
       - "tests/test_m26_aq_production_deploy_lock.py"
       - "tests/test_m26_aq_production_entrypoint.py"
@@ -71,6 +74,7 @@ jobs:
             src/knowledge_engine/m26_aq_semantic_runtime_patch_v3_lifecycle.py \
             src/knowledge_engine/m26_aq_semantic_runtime_patch_v3_surface.py \
             src/knowledge_engine/m26_aq_universal_answerability_patch.py \
+            src/knowledge_engine/m26_aq_final_universal_recovery_patch.py \
             src/knowledge_engine/m26_production_api.py \
             scripts/m26_aq_final_closure.py \
             scripts/m26_aq_generalized_closure.py \
@@ -79,6 +83,8 @@ jobs:
             tests/test_m26_aq_semantic_closure_runtime.py \
             tests/test_m26_aq_semantic_runtime_patch_v3.py \
             tests/test_m26_aq_universal_answerability_patch.py \
+            tests/test_m26_aq_final_universal_recovery_patch.py \
+            tests/test_m26_aq_production_route_final_recovery.py \
             tests/test_m26_aq_surface_guard.py \
             tests/test_m26_aq_production_entrypoint.py \
             tests/test_m26_aq_final_closure_harness.py \
@@ -103,6 +109,8 @@ jobs:
             tests/test_m26_aq_semantic_closure_runtime.py \
             tests/test_m26_aq_semantic_runtime_patch_v3.py \
             tests/test_m26_aq_universal_answerability_patch.py \
+            tests/test_m26_aq_final_universal_recovery_patch.py \
+            tests/test_m26_aq_production_route_final_recovery.py \
             tests/test_m26_aq_surface_guard.py \
             tests/test_m26_aq_production_deploy_lock.py \
             tests/test_m26_aq_production_entrypoint.py \
