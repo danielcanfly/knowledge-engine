@@ -1,32 +1,50 @@
 from __future__ import annotations
 
+import subprocess
+import sys
+import textwrap
+
 from knowledge_engine import m26_aq_semantic_runtime_patch_v2 as patch_v2
 from knowledge_engine.m26_aq_semantic_runtime_patch_v2 import (
-    _semantic_answer_text_v2,
     _user_visible_internal_reference_leaks,
 )
-from knowledge_engine.m26_pa7_semantic_closure_runtime import (
-    _semantic_requirements,
-    _visible_semantic_failures,
-)
+
+
+def _run_isolated(code: str) -> None:
+    completed = subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(code)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
 def test_frozen_q06_uses_calibrated_authority_surface_without_absolute_modality() -> None:
-    question = (
-        "How do state machines and adaptive replanning fit together without giving the "
-        "replanner unlimited authority?"
-    )
-    requirements = _semantic_requirements(question, "complementary_synthesis")
-    answer = _semantic_answer_text_v2(question, requirements)
+    _run_isolated(
+        """
+        from knowledge_engine import m26_aq_semantic_runtime_patch_v2 as patch_v2
+        from knowledge_engine import m26_pa7_semantic_closure_runtime as runtime
+        from knowledge_engine.m26_aq_semantic_runtime_patch_v2 import _semantic_answer_text_v2
 
-    assert "cannot" not in answer.casefold()
-    assert "bypass" not in answer.casefold()
-    assert "override" not in answer.casefold()
-    assert "state machine" in answer.casefold()
-    assert "adaptive replanning" in answer.casefold()
-    assert "policy and approval" in answer.casefold()
-    assert "rather than expanding" in answer.casefold()
-    assert not _visible_semantic_failures(answer, requirements, question)
+        patch_v2.install()
+        question = (
+            "How do state machines and adaptive replanning fit together without giving the "
+            "replanner unlimited authority?"
+        )
+        requirements = runtime._semantic_requirements(question, "complementary_synthesis")
+        answer = _semantic_answer_text_v2(question, requirements)
+
+        assert "cannot" not in answer.casefold()
+        assert "bypass" not in answer.casefold()
+        assert "override" not in answer.casefold()
+        assert "state machine" in answer.casefold()
+        assert "adaptive replanning" in answer.casefold()
+        assert "policy and approval" in answer.casefold()
+        assert "rather than expanding" in answer.casefold()
+        assert not runtime._visible_semantic_failures(answer, requirements, question)
+        """
+    )
 
 
 def test_internal_reference_leak_detector_catches_provider_and_runtime_aliases() -> None:
