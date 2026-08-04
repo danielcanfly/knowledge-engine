@@ -64,10 +64,13 @@ def _authority_boundary_requirement() -> SemanticRequirement:
             r"(?:replan|replanning|replanner|revisions)",
             r"(?:rather than|without|instead of).{0,180}"
             r"(?:unlimited|unbounded|expanding|expand).{0,120}authority",
-            r"(?:replan|replanning|replanner).{0,180}(?:cannot|can't|must not|does not).{0,120}"
-            r"(?:bypass|override|expand).{0,120}(?:state[- ]machine|policy|approval|authority)",
+            r"(?:replan|replanning|replanner).{0,180}"
+            r"(?:cannot|can't|must not|does not).{0,120}"
+            r"(?:bypass|override|expand).{0,120}"
+            r"(?:state[- ]machine|policy|approval|authority)",
             r"(?:policy|approval|authority|state[- ]machine).{0,180}"
-            r"(?:constrain|constrains|bounds|limits|retains).{0,180}(?:replan|replanning|replanner|allowed to change)",
+            r"(?:constrain|constrains|bounds|limits|retains).{0,180}"
+            r"(?:replan|replanning|replanner|allowed to change)",
         ),
     )
 
@@ -162,7 +165,10 @@ def semantic_contract_manifest() -> dict[str, Any]:
         },
         "generic_non_entailment": {
             "delegated_to": "m26_pa7_arbitrary_query_runtime._has_non_entailment_boundary",
-            "question_gate": "m26_pa7_arbitrary_query_runtime._question_requires_non_entailment_boundary",
+            "question_gate": (
+                "m26_pa7_arbitrary_query_runtime."
+                "_question_requires_non_entailment_boundary"
+            ),
         },
         "publication_policy": {
             "attempts": 1,
