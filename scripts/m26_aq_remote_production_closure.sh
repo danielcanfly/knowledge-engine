@@ -146,10 +146,34 @@ python -m pip install --upgrade pip >/dev/null
 python -m pip install -e . >/dev/null
 echo "AQ_STAGE=host_python_runtime_ready"
 
-PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
-  --questions pilot/m26/m26-aq-final-r3-questions.json \
-  --output "$frozen_path" \
-  --expected-sha "$EXPECTED_DEPLOY_SHA"
+collect_with_retry() {
+  local label="$1"
+  local questions_path="$2"
+  local output_path="$3"
+  local attempt
+  for attempt in 1 2 3; do
+    echo "AQ_COLLECT_POPULATION_START=$label"
+    echo "AQ_COLLECT_POPULATION_ATTEMPT=$attempt"
+    rm -f "$output_path"
+    if PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
+      --questions "$questions_path" \
+      --output "$output_path" \
+      --expected-sha "$EXPECTED_DEPLOY_SHA"; then
+      echo "AQ_COLLECT_POPULATION_RESULT=success"
+      return 0
+    fi
+    echo "AQ_COLLECT_POPULATION_RESULT=failure"
+    if [ "$attempt" -lt 3 ]; then
+      sleep "$((attempt * 10))"
+    fi
+  done
+  return 1
+}
+
+collect_with_retry \
+  frozen \
+  pilot/m26/m26-aq-final-r3-questions.json \
+  "$frozen_path"
 echo "AQ_STAGE=frozen_population_collected"
 
 PYTHONPATH=src python3 scripts/m26_aq_final_closure.py validate \
@@ -158,10 +182,10 @@ PYTHONPATH=src python3 scripts/m26_aq_final_closure.py validate \
   --expected-sha "$EXPECTED_DEPLOY_SHA"
 echo "AQ_STAGE=frozen_population_validated"
 
-PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
-  --questions pilot/m26/m26-aq-gpt-e-black-box-questions.json \
-  --output "$blackbox_path" \
-  --expected-sha "$EXPECTED_DEPLOY_SHA"
+collect_with_retry \
+  blackbox \
+  pilot/m26/m26-aq-gpt-e-black-box-questions.json \
+  "$blackbox_path"
 echo "AQ_STAGE=blackbox_population_collected"
 
 PYTHONPATH=src python3 scripts/m26_aq_generalized_closure.py \
@@ -172,10 +196,10 @@ echo "AQ_STAGE=blackbox_population_validated"
 
 targeted_questions="pilot/m26/m26-aq-universal-answerability-targeted-questions.json"
 [ -s "$targeted_questions" ] || fail "targeted_questions_missing"
-PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
-  --questions "$targeted_questions" \
-  --output "$targeted_path" \
-  --expected-sha "$EXPECTED_DEPLOY_SHA"
+collect_with_retry \
+  targeted \
+  "$targeted_questions" \
+  "$targeted_path"
 echo "AQ_STAGE=targeted_population_collected"
 
 PYTHONPATH=src python3 scripts/m26_aq_targeted_answerability_closure.py \
