@@ -19,13 +19,13 @@ def test_production_wrapper_no_longer_exports_variance_patch_helpers() -> None:
     _run_isolated(
         """
         import knowledge_engine.m26_ask_api as ask_api
-        import knowledge_engine.m26_pa7_semantic_closure_runtime as semantic_runtime
+        import knowledge_engine.m26_aq_semantic_contract as semantic_contract
         import knowledge_engine.m26_production_api as production
 
         assert ask_api.RUNTIME_ENTRYPOINT == (
-            "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
+            "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
         )
-        assert ask_api.run_owner_arbitrary_query is semantic_runtime.run_owner_arbitrary_query
+        assert ask_api.run_owner_arbitrary_query is semantic_contract.run_owner_arbitrary_query
         for name in (
             "_question_contract_without_progress_substring_false_positive",
             "_production_variance_semantic_requirements",
