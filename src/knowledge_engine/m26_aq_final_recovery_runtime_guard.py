@@ -290,7 +290,7 @@ def _legacy_candidate_respects_question(
     evidence: Sequence[Mapping[str, Any]],
     requirements: Sequence[Any],
 ) -> bool:
-    del evidence
+    del evidence, runtime, requirements
     original_facets = patch._ORIGINAL_DIRECT_FACETS or legacy._direct_question_facets
     facets = patch._question_contract(
         legacy,
@@ -326,7 +326,7 @@ def _legacy_candidate_respects_question(
                 break
         if not supported:
             return False
-    return bool(runtime or requirements or True)
+    return True
 
 
 def _precise_direct_facets(
