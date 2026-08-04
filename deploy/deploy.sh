@@ -103,7 +103,18 @@ PY
         docker compose logs --tail=200 knowledge-engine >&2
         return 1
       fi
-      image_id="$(docker compose images -q knowledge-engine | head -n 1)"
+      image_id="$(docker compose images -q knowledge-engine 2>/dev/null | head -n 1 || true)"
+      if [[ -z "$image_id" ]]; then
+        container_id="$(docker compose ps -q knowledge-engine 2>/dev/null | head -n 1 || true)"
+        if [[ -n "$container_id" ]]; then
+          image_id="$(docker inspect --format '{{.Image}}' "$container_id" 2>/dev/null || true)"
+        fi
+      fi
+      if [[ -z "$image_id" ]]; then
+        echo "DEPLOYMENT_IMAGE_RECEIPT_MISSING" >&2
+        docker compose ps >&2 || true
+        return 1
+      fi
       echo "DEPLOYMENT_HEAD_SHA=$actual_sha"
       echo "DEPLOYMENT_RUNTIME_SHA=$container_build_sha"
       echo "DEPLOYMENT_IMAGE_ID=$image_id"
