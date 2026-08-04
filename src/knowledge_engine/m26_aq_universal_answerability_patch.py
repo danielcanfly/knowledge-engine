@@ -4,19 +4,12 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-
 _ORIGINAL_HAS_MEANINGFUL_OVERLAP: Callable[[str, Sequence[Mapping[str, Any]]], bool] | None = None
 _ORIGINAL_SYNTHESIZE_AND_VERIFY: Any | None = None
 
 
 def install() -> None:
-    """Install universal answerability repair hooks.
-
-    The hooks are intentionally question-id agnostic:
-    - evidence admission may use dense/semantic channel strength when lexical overlap is weak;
-    - semantic closure may recover only by building a candidate from already selected evidence
-      and then re-running the existing hard verifier.
-    """
+    """Install question-agnostic answerability repair hooks."""
     from . import m26_pa7_arbitrary_query_runtime as legacy
     from . import m26_pa7_semantic_closure_runtime as runtime
 
@@ -27,7 +20,7 @@ def install() -> None:
     _ORIGINAL_HAS_MEANINGFUL_OVERLAP = legacy._has_meaningful_overlap
     _ORIGINAL_SYNTHESIZE_AND_VERIFY = runtime._synthesize_and_verify
 
-    def semantic_admission_overlap(
+    def semantic_overlap(
         question: str,
         evidence: Sequence[Mapping[str, Any]],
     ) -> bool:
@@ -39,7 +32,7 @@ def install() -> None:
             original=_ORIGINAL_HAS_MEANINGFUL_OVERLAP,
         )
 
-    def synthesize_with_evidence_recovery(
+    def synthesize(
         *,
         question: str,
         trace_id: str,
@@ -63,8 +56,8 @@ def install() -> None:
             endpoint_proof=endpoint_proof,
         )
 
-    legacy._has_meaningful_overlap = semantic_admission_overlap
-    runtime._synthesize_and_verify = synthesize_with_evidence_recovery
+    legacy._has_meaningful_overlap = semantic_overlap
+    runtime._synthesize_and_verify = synthesize
     runtime._m26_aq_universal_answerability_patch_installed = True
 
 
@@ -75,12 +68,7 @@ def _semantic_admission_overlap(
     evidence: Sequence[Mapping[str, Any]],
     original: Callable[[str, Sequence[Mapping[str, Any]]], bool],
 ) -> bool:
-    """Permit semantically strong evidence to reach synthesis without lexical overlap.
-
-    This keeps precise identifier questions strict and does not accept an answer by itself;
-    it only allows selected, identity-bound evidence to be checked by the provider and
-    verifier.
-    """
+    """Let semantically strong selected evidence reach synthesis without lexical overlap."""
     try:
         if original(question, evidence):
             return True
@@ -91,34 +79,32 @@ def _semantic_admission_overlap(
     if not query_terms or legacy._requires_precise_overlap(query_terms):
         return False
 
-    passages = [
-        item for item in evidence if str(item.get("evidence_type", "passage")) == "passage"
-    ]
-    if len(passages) < 2:
+    passages = [item for item in evidence if item.get("evidence_type", "passage") == "passage"]
+    if len(passages) < 2 or not _has_semantic_signal(passages):
         return False
-
-    if not _has_semantic_admission_signal(passages):
-        return False
-
     if _distinct_sources(legacy, passages) < 2 and len(passages) < 3:
         return False
 
     quality = sum(
-        legacy._passage_text_quality(str(item.get("passage_text", ""))) for item in passages
+        legacy._passage_text_quality(str(item.get("passage_text", "")))
+        for item in passages
     )
-    if quality <= 0:
-        return False
-
-    return True
+    return quality > 0
 
 
-def _has_semantic_admission_signal(evidence: Sequence[Mapping[str, Any]]) -> bool:
+def _has_semantic_signal(evidence: Sequence[Mapping[str, Any]]) -> bool:
     semantic_channels = {
         "dense",
         "query_coverage",
         "required_facet_coverage",
         "release_distinct_source",
         "semantic_requirement_recovery",
+    }
+    metadata_keys = {
+        "coverage_terms",
+        "graph_relevance_scores",
+        "query_overlap_score",
+        "semantic_requirement_score",
     }
     for item in evidence:
         channels = {str(channel) for channel in item.get("channels", [])}
@@ -127,15 +113,7 @@ def _has_semantic_admission_signal(evidence: Sequence[Mapping[str, Any]]) -> boo
         if any(channel.startswith("graph_") for channel in channels):
             return True
         metadata = item.get("retrieval_metadata", {})
-        if isinstance(metadata, Mapping) and any(
-            key in metadata
-            for key in (
-                "semantic_requirement_score",
-                "query_overlap_score",
-                "graph_relevance_scores",
-                "coverage_terms",
-            )
-        ):
+        if isinstance(metadata, Mapping) and bool(metadata_keys & set(metadata)):
             return True
     return False
 
@@ -197,42 +175,39 @@ def _synthesize_with_evidence_recovery(
     if final_answer.get("status") != "owner_only_cited_answer":
         return verification, closure
 
-    prior_mver = (
-        verification.get("multi_evidence_verification", {})
-        if isinstance(verification.get("multi_evidence_verification"), Mapping)
-        else {}
-    )
-    prior_closure = dict(closure) if isinstance(closure, Mapping) else {}
+    previous_checks = _verification_map(verification)
+    previous_closure = dict(closure) if isinstance(closure, Mapping) else {}
+    failures = sorted(set(str(item) for item in previous_closure.get("failures", [])))
     final_answer["provider_call_count"] = int(verification.get("provider_call_count", 0))
     final_answer["payg_equivalent_cost_usd"] = str(
         verification.get("payg_equivalent_cost_usd", "0")
     )
     final_answer["repair_attempted"] = True
     final_answer["answer_source"] = "deterministic_verified_evidence_recovery"
-
     final_answer["multi_evidence_verification"] = {
         **dict(final_answer.get("multi_evidence_verification", {})),
-        "provider_attempt_telemetry": list(prior_mver.get("provider_attempt_telemetry", [])),
-        "verification_failure_codes_by_attempt": list(prior_closure.get("failures", [])),
-        "repair_trigger": sorted(set(str(item) for item in prior_closure.get("failures", []))),
+        "provider_attempt_telemetry": list(previous_checks.get("provider_attempt_telemetry", [])),
         "repair_result": "deterministic_verified_evidence_recovery",
-        "deterministic_evidence_synthesis_used": True,
+        "repair_trigger": failures,
         "universal_answerability_recovery": True,
+        "verification_failure_codes_by_attempt": failures,
     }
-    recovered_closure = {
-        **prior_closure,
-        "failures": [],
-        "pre_recovery_failures": sorted(
-            set(str(item) for item in prior_closure.get("failures", []))
-        ),
+    return final_answer, {
+        **previous_closure,
         "broad_deterministic_fallback_used": True,
+        "failures": [],
+        "pre_recovery_failures": failures,
         "universal_answerability_recovery": {
-            "used": True,
-            "mechanism": "selected_evidence_exact_quote_reverification",
             "case_specific": False,
+            "mechanism": "selected_evidence_exact_quote_reverification",
+            "used": True,
         },
     }
-    return final_answer, recovered_closure
+
+
+def _verification_map(verification: Mapping[str, Any]) -> Mapping[str, Any]:
+    value = verification.get("multi_evidence_verification", {})
+    return value if isinstance(value, Mapping) else {}
 
 
 def _should_attempt_evidence_recovery(
@@ -240,18 +215,15 @@ def _should_attempt_evidence_recovery(
     closure: Mapping[str, Any],
     evidence: Sequence[Mapping[str, Any]],
 ) -> bool:
-    if verification.get("status") != "owner_only_safe_abstention":
+    if verification.get("status") != "owner_only_safe_abstention" or not evidence:
         return False
-    if not evidence:
-        return False
-    reason_codes = {str(item) for item in verification.get("reason_codes", [])}
-    failures = {str(item) for item in closure.get("failures", [])}
-    combined = reason_codes | failures
+    combined = {str(item) for item in verification.get("reason_codes", [])}
+    combined |= {str(item) for item in closure.get("failures", [])}
     hard_stop = {
-        "PROVIDER_ABSTAINED",
-        "PROMPT_INJECTION_OR_PRIVACY_RISK",
-        "NO_AUTHORIZED_PRODUCTION_EVIDENCE",
         "LOW_RETRIEVAL_SUPPORT",
+        "NO_AUTHORIZED_PRODUCTION_EVIDENCE",
+        "PROMPT_INJECTION_OR_PRIVACY_RISK",
+        "PROVIDER_ABSTAINED",
         "QUESTION_UNDERSPECIFIED_CLARIFICATION_REQUIRED",
     }
     if combined & hard_stop:
@@ -266,9 +238,7 @@ def _should_attempt_evidence_recovery(
         return False
     if int(verification.get("unsupported_accepted_claims", 0)) != 0:
         return False
-    if not bool(verification.get("citation_locator_valid", True)):
-        return False
-    return True
+    return bool(verification.get("citation_locator_valid", True))
 
 
 def _evidence_bound_recovery_candidate(
@@ -291,27 +261,7 @@ def _evidence_bound_recovery_candidate(
     if not used_items:
         return None
 
-    role = "direct"
-    relation: str | None = None
-    if intent_class == "cross_document_comparison":
-        role = "comparison"
-        relation = "contrasts_with"
-    elif intent_class == "complementary_synthesis":
-        role = "relationship"
-        relation = "complements"
-    elif intent_class == "graph_relationship":
-        role = "relationship"
-        edge = next(
-            (item for item in used_items if item.get("evidence_type") == "graph_edge"),
-            None,
-        )
-        relation = str(edge.get("relation_type", "")) if edge is not None else None
-    elif intent_class == "provenance_source_trace":
-        role = "provenance"
-    elif intent_class == "temporal_conflict":
-        role = "temporal"
-        relation = "precedes"
-
+    role, relation = _claim_role_and_relation(intent_class, used_items)
     required_facets = legacy._required_facet_ids(question=question, intent_class=intent_class)
     claims: list[dict[str, Any]] = []
     selected_ids: list[str] = []
@@ -321,19 +271,18 @@ def _evidence_bound_recovery_candidate(
             continue
         evidence_id = str(item.get("evidence_id", ""))
         selected_ids.append(evidence_id)
-        facet_ids = required_facets if index == 1 else ["direct_answer"]
         claims.append(
             {
                 "claim_id": f"claim_{index}",
                 "claim_role": role,
+                "facet_ids": required_facets if index == 1 else ["direct_answer"],
                 "surface_text": quote,
-                "facet_ids": facet_ids,
                 "support_mode": "selected_evidence_exact_quote_recovery",
                 "support_refs": [
                     {
                         "evidence_id": evidence_id,
-                        "locator_id": str(item.get("locator_id", "")),
                         "exact_quote": quote,
+                        "locator_id": str(item.get("locator_id", "")),
                         "uncertainty": "low",
                     }
                 ],
@@ -356,6 +305,25 @@ def _evidence_bound_recovery_candidate(
     }
 
 
+def _claim_role_and_relation(
+    intent_class: str,
+    used_items: Sequence[Mapping[str, Any]],
+) -> tuple[str, str | None]:
+    if intent_class == "cross_document_comparison":
+        return "comparison", "contrasts_with"
+    if intent_class == "complementary_synthesis":
+        return "relationship", "complements"
+    if intent_class == "graph_relationship":
+        edge = next((item for item in used_items if item.get("evidence_type") == "graph_edge"), None)
+        relation = str(edge.get("relation_type", "")) if edge is not None else None
+        return "relationship", relation
+    if intent_class == "provenance_source_trace":
+        return "provenance", None
+    if intent_class == "temporal_conflict":
+        return "temporal", "precedes"
+    return "direct", None
+
+
 def _recovery_items(
     *,
     runtime: Any,
@@ -365,13 +333,9 @@ def _recovery_items(
     evidence: Sequence[Mapping[str, Any]],
     requirements: Sequence[Any],
 ) -> list[Mapping[str, Any]]:
-    passages = [
-        item for item in evidence if str(item.get("evidence_type", "passage")) == "passage"
-    ]
+    passages = [item for item in evidence if item.get("evidence_type", "passage") == "passage"]
     if intent_class == "graph_relationship":
-        graph_items = [
-            item for item in evidence if str(item.get("evidence_type", "")) == "graph_edge"
-        ]
+        graph_items = [item for item in evidence if item.get("evidence_type") == "graph_edge"]
         passages = [*graph_items, *passages]
     if not passages:
         return []
@@ -423,8 +387,15 @@ def _exact_recovery_quote(
     return ""
 
 
-def _requirement_score(runtime: Any, item: Mapping[str, Any], requirements: Sequence[Any]) -> float:
-    scores = [runtime._requirement_evidence_score(requirement, item) for requirement in requirements]
+def _requirement_score(
+    runtime: Any,
+    item: Mapping[str, Any],
+    requirements: Sequence[Any],
+) -> float:
+    scores = [
+        runtime._requirement_evidence_score(requirement, item)
+        for requirement in requirements
+    ]
     return max(scores or [0.0])
 
 
