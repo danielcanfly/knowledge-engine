@@ -5,11 +5,6 @@ import sys
 import textwrap
 
 
-EXPECTED_ENTRYPOINT = (
-    "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
-)
-
-
 def _run_isolated(code: str) -> None:
     completed = subprocess.run(
         [sys.executable, "-c", textwrap.dedent(code)],
