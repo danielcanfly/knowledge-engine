@@ -38,6 +38,27 @@ _TEMPORAL_TERMS = {
     "temporal",
     "version",
 }
+_PROVIDER_ABSTAIN_EXTERNAL_STOPWORDS = {
+    "according",
+    "answer",
+    "cite",
+    "daniel",
+    "evidence",
+    "explain",
+    "founder",
+    "give",
+    "how",
+    "list",
+    "only",
+    "separate",
+    "the",
+    "using",
+    "walk",
+    "what",
+    "when",
+    "which",
+    "why",
+}
 
 
 def install(*, force_rebind: bool = False) -> None:
@@ -175,13 +196,13 @@ def _synthesize_with_final_recovery(
             verification,
             closure,
             {
-                **_telemetry(verification, closure, evidence),
+                **_telemetry(question, verification, closure, evidence),
                 "first_broken_stage": "not_needed",
             },
             preserve_existing=True,
         )
 
-    telemetry = _telemetry(verification, closure, evidence)
+    telemetry = _telemetry(question, verification, closure, evidence)
     if not telemetry["universal_recovery_should_attempt"]:
         return _attach(verification, closure, telemetry)
     if intent_class != "direct_grounded_knowledge":
@@ -261,6 +282,7 @@ def _synthesize_with_final_recovery(
 
 
 def _telemetry(
+    question: str,
     verification: Mapping[str, Any],
     closure: Mapping[str, Any],
     evidence: Sequence[Mapping[str, Any]],
@@ -269,20 +291,9 @@ def _telemetry(
         {str(item) for item in verification.get("reason_codes", [])}
         | {str(item) for item in closure.get("failures", [])}
     )
-    hard_stop = [
-        code
-        for code in codes
-        if code
-        in {
-            "PROVIDER_ABSTAINED",
-            "PROMPT_INJECTION_OR_PRIVACY_RISK",
-            "NO_AUTHORIZED_PRODUCTION_EVIDENCE",
-            "LOW_RETRIEVAL_SUPPORT",
-            "QUESTION_UNDERSPECIFIED_CLARIFICATION_REQUIRED",
-        }
-    ]
+    hard_stop = _hard_stop_codes(question, codes, evidence)
     passage_items = [item for item in evidence if item.get("evidence_type", "passage") == "passage"]
-    should_attempt = _should_attempt(verification, closure, evidence, hard_stop)
+    should_attempt = _should_attempt(question, verification, closure, evidence, hard_stop)
     return {
         "schema_version": "m26-aq-final-universal-recovery-telemetry/v1",
         "case_specific": False,
@@ -295,6 +306,7 @@ def _telemetry(
         "recovery_text_available_count": sum(
             1 for item in passage_items if str(item.get("passage_text", ""))
         ),
+        "unsupported_external_markers": _unsupported_external_markers(question, evidence),
         "candidate_built": False,
         "candidate_claim_count": 0,
         "candidate_verify_result": "not_attempted",
@@ -306,7 +318,25 @@ def _telemetry(
     }
 
 
+def _hard_stop_codes(
+    question: str,
+    codes: Sequence[str],
+    evidence: Sequence[Mapping[str, Any]],
+) -> list[str]:
+    hard_stop_codes = {
+        "PROMPT_INJECTION_OR_PRIVACY_RISK",
+        "NO_AUTHORIZED_PRODUCTION_EVIDENCE",
+        "LOW_RETRIEVAL_SUPPORT",
+        "QUESTION_UNDERSPECIFIED_CLARIFICATION_REQUIRED",
+    }
+    result = [code for code in codes if code in hard_stop_codes]
+    if "PROVIDER_ABSTAINED" in codes and _unsupported_external_markers(question, evidence):
+        result.append("PROVIDER_ABSTAINED")
+    return sorted(set(result))
+
+
 def _should_attempt(
+    question: str,
     verification: Mapping[str, Any],
     closure: Mapping[str, Any],
     evidence: Sequence[Mapping[str, Any]],
@@ -326,10 +356,48 @@ def _should_attempt(
         "M26-PA7-ME-029",
         "M26-PA7-ME-032",
         "M26-PA7-ME-033",
+        "PROVIDER_ABSTAINED",
         "SEMANTIC_CLOSURE_FAILED",
         "ValueError",
     }
+    if "PROVIDER_ABSTAINED" in codes and _unsupported_external_markers(question, evidence):
+        return False
     return bool(codes & recoverable)
+
+
+def _unsupported_external_markers(
+    question: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> list[str]:
+    evidence_space = _evidence_marker_space(evidence)
+    markers: list[str] = []
+    for raw in re.findall(r"\b[A-Z][A-Za-z0-9]*(?:\.[A-Za-z]+)?\b|\b\d{3,4}\b", question):
+        marker = raw.strip(".,;:!?()[]{}\"")
+        if not marker:
+            continue
+        marker_key = marker.casefold().replace(".", "")
+        if marker_key in _PROVIDER_ABSTAIN_EXTERNAL_STOPWORDS:
+            continue
+        if len(marker_key) <= 2 and not marker_key.isdigit():
+            continue
+        if marker_key not in evidence_space:
+            markers.append(marker)
+    return sorted(dict.fromkeys(markers), key=str.casefold)
+
+
+def _evidence_marker_space(evidence: Sequence[Mapping[str, Any]]) -> set[str]:
+    parts: list[str] = []
+    for item in evidence:
+        for key in ("source_id", "source_identity", "concept_id", "section_id"):
+            parts.append(str(item.get(key, "")))
+        metadata = item.get("retrieval_metadata", {})
+        if isinstance(metadata, Mapping):
+            for term in metadata.get("coverage_terms", []):
+                parts.append(str(term))
+            for term in metadata.get("graph_seed_concepts", []):
+                parts.append(str(term))
+    text = " ".join(parts).casefold().replace(".", "")
+    return {token for token in re.findall(r"[a-z0-9]+", text) if token}
 
 
 def _attach(
@@ -389,7 +457,7 @@ def _candidate(
             _claim(
                 len(claims) + 1,
                 facet_id,
-                _surface(legacy, question, facet_id, terms, used_terms),
+                _surface(legacy, question, facet_id, terms, used_terms, quote),
                 item,
                 quote,
             )
@@ -427,12 +495,13 @@ def _claim(
         "claim_role": "direct",
         "surface_text": surface,
         "facet_ids": [facet_id],
-        "support_mode": "selected_evidence_supported_proposition",
+        "support_mode": "exact_quote",
         "support_refs": [
             {
                 "evidence_id": str(item.get("evidence_id", "")),
                 "locator_id": str(item.get("locator_id", "")),
                 "exact_quote": quote,
+                "exact_support_snippet": quote,
                 "uncertainty": "low",
             }
         ],
@@ -534,21 +603,25 @@ def _surface(
     facet_id: str,
     terms: Sequence[str],
     used_terms: set[str],
+    quote: str,
 ) -> str:
-    visible = [term for term in _ordered_terms(legacy, " ".join(terms)) if term not in used_terms]
-    if not visible:
-        visible = _ordered_terms(legacy, question)[:8]
-    visible = [term for term in visible if not re.fullmatch(r"\d+(?:\.\d+)?", term)][:10]
-    used_terms.update(visible)
-    phrase = _phrase(visible or ["the requested distinction"])
     if facet_id == "non_entailment_boundary":
         return (
             "The evidence does not by itself prove dependency or viability; "
-            f"it supports checking {phrase}."
+            + _bounded_surface(quote)
         )
-    if facet_id == "direct_answer":
-        return f"The supported answer turns on {phrase}."
-    return f"For {facet_id.replace('_', ' ')}, the cited evidence supports {phrase}."
+    if facet_id == "ordering_boundary":
+        return "The evidence supports ordering or sequence only; " + _bounded_surface(quote)
+    visible = [term for term in _ordered_terms(legacy, " ".join(terms)) if term not in used_terms]
+    used_terms.update(visible)
+    return _bounded_surface(quote)
+
+
+def _bounded_surface(text: str) -> str:
+    surface = re.sub(r"\s+", " ", str(text)).strip()
+    if len(surface) <= 900:
+        return surface
+    return surface[:900].rsplit(" ", 1)[0].rstrip(" ,;:")
 
 
 def _ordered_terms(legacy: Any, text: str) -> list[str]:
