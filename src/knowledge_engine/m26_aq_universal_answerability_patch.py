@@ -314,7 +314,10 @@ def _claim_role_and_relation(
     if intent_class == "complementary_synthesis":
         return "relationship", "complements"
     if intent_class == "graph_relationship":
-        edge = next((item for item in used_items if item.get("evidence_type") == "graph_edge"), None)
+        edge = next(
+            (item for item in used_items if item.get("evidence_type") == "graph_edge"),
+            None,
+        )
         relation = str(edge.get("relation_type", "")) if edge is not None else None
         return "relationship", relation
     if intent_class == "provenance_source_trace":
