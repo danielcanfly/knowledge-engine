@@ -9,6 +9,9 @@ from . import m26_aq_semantic_runtime_patch_v3_lifecycle as aq_lifecycle_patch
 from . import m26_ask_api
 from . import m26_pa7_arbitrary_query_runtime as legacy_runtime
 from . import m26_pa7_semantic_closure_runtime as semantic_runtime
+from .m26_aq_final_universal_recovery_patch import (
+    install as install_aq_final_universal_recovery_patch,
+)
 from .m26_aq_semantic_runtime_patch_v3 import install as install_aq_semantic_runtime_patch
 from .m26_aq_semantic_runtime_patch_v3_lifecycle import (
     install as install_aq_lifecycle_runtime_patch,
@@ -363,6 +366,12 @@ m26_ask_api.run_owner_arbitrary_query = run_owner_arbitrary_query
 m26_ask_api.RUNTIME_ENTRYPOINT = (
     "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
 )
+
+# This is the canonical final serving-path binding. All upstream AQ layers and the
+# production semantic compatibility wrapper are composed above; the final recovery
+# patch is deliberately rebound here so package-init sentinels cannot mask the
+# production classifier/facet/synthesis callables.
+install_aq_final_universal_recovery_patch(force_rebind=True)
 
 _original_build_web_query_dto = m26_ask_api.build_web_query_dto
 
