@@ -18,7 +18,9 @@ EXPECTED_GROUP_COUNTS = {
     "D_ood_control": 4,
 }
 RECOVERY_KEY = "universal_answerability_recovery"
-RECOVERY_SCHEMA = "m26-aq-final-universal-recovery-telemetry/v1"
+RECOVERY_SCHEMAS = {
+    "m26-aq-final-universal-recovery-telemetry/v2",
+}
 
 
 def _json(path: Path) -> dict[str, Any]:
@@ -122,6 +124,56 @@ def _recovery_telemetry(row: Mapping[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _list_field(telemetry: Mapping[str, Any], key: str) -> list[Any]:
+    value = telemetry.get(key, [])
+    return list(value) if isinstance(value, list) else []
+
+
+def _validate_alignment_telemetry(telemetry: Mapping[str, Any]) -> list[str]:
+    failures: list[str] = []
+    required = _list_field(telemetry, "required_question_facets")
+    covered = _list_field(telemetry, "covered_question_facets")
+    missing = _list_field(telemetry, "missing_question_facets")
+    relevance = _list_field(telemetry, "recovery_selected_evidence_relevance")
+
+    if telemetry.get("question_alignment_checked") is not True:
+        failures.append("recovery:question_alignment_not_checked")
+    if telemetry.get("question_alignment_passed") is not True:
+        failures.append("recovery:question_alignment_not_passed")
+    if telemetry.get("question_alignment_failure_codes") not in ([], None):
+        failures.append("recovery:question_alignment_failures_present")
+    if not required:
+        failures.append("recovery:required_question_facets_empty")
+    if not covered:
+        failures.append("recovery:covered_question_facets_empty")
+    if missing:
+        failures.append("recovery:missing_question_facets_present")
+    if telemetry.get("post_render_alignment_checked") is not True:
+        failures.append("recovery:post_render_alignment_not_checked")
+    if telemetry.get("post_render_alignment_passed") is not True:
+        failures.append("recovery:post_render_alignment_not_passed")
+    if telemetry.get("post_render_alignment_failure_codes") not in ([], None):
+        failures.append("recovery:post_render_alignment_failures_present")
+    if telemetry.get("quote_facet_support_checked") is not True:
+        failures.append("recovery:quote_facet_support_not_checked")
+    if telemetry.get("quote_facet_support_passed") is not True:
+        failures.append("recovery:quote_facet_support_not_passed")
+    if telemetry.get("recovery_relevance_threshold_met") is not True:
+        failures.append("recovery:relevance_threshold_not_met")
+    if not relevance:
+        failures.append("recovery:missing_relevance_records")
+    else:
+        for record in relevance:
+            if not isinstance(record, Mapping) or record.get("eligible") is not True:
+                failures.append("recovery:ineligible_relevance_record")
+                break
+            quote = record.get("quote_support", {})
+            if not isinstance(quote, Mapping) or quote.get("eligible") is not True:
+                failures.append("recovery:ineligible_quote_support_record")
+                break
+    return failures
+
+
 def _validate_recovery_telemetry(
     row: Mapping[str, Any],
     *,
@@ -135,7 +187,7 @@ def _validate_recovery_telemetry(
     if not telemetry:
         return failures
 
-    if telemetry.get("schema_version") != RECOVERY_SCHEMA:
+    if telemetry.get("schema_version") not in RECOVERY_SCHEMAS:
         failures.append("recovery:schema_version_mismatch")
     if telemetry.get("case_specific") is not False:
         failures.append("recovery:case_specific_not_false")
@@ -171,6 +223,8 @@ def _validate_recovery_telemetry(
             and first_stage == "none"
             and answer_source == "deterministic_verified_evidence_recovery"
         )
+        if recovery_ok:
+            failures.extend(_validate_alignment_telemetry(telemetry))
         if not (natural_provider_ok or recovery_ok):
             failures.append("recovery:group_a_hook_outcome_invalid")
         if telemetry.get("candidate_verify_result") == "exception":
@@ -276,6 +330,29 @@ def _case_summary(row: Mapping[str, Any], expected: str, group: str) -> dict[str
             "published_verified_answer",
             "",
         ),
+        "question_alignment_checked": telemetry.get("question_alignment_checked", ""),
+        "question_alignment_passed": telemetry.get("question_alignment_passed", ""),
+        "required_question_facets": ";".join(
+            str(item) for item in _list_field(telemetry, "required_question_facets")
+        ),
+        "covered_question_facets": ";".join(
+            str(item) for item in _list_field(telemetry, "covered_question_facets")
+        ),
+        "missing_question_facets": ";".join(
+            str(item) for item in _list_field(telemetry, "missing_question_facets")
+        ),
+        "post_render_alignment_checked": telemetry.get(
+            "post_render_alignment_checked",
+            "",
+        ),
+        "post_render_alignment_passed": telemetry.get(
+            "post_render_alignment_passed",
+            "",
+        ),
+        "recovery_relevance_threshold_met": telemetry.get(
+            "recovery_relevance_threshold_met",
+            "",
+        ),
         "runtime_sha": (row.get("canonical_runtime", {}) or {}).get("build_sha", "")
         if isinstance(row.get("canonical_runtime", {}), Mapping)
         else "",
@@ -309,6 +386,11 @@ def _write_raw_answers(path: Path, summaries: Sequence[Mapping[str, Any]]) -> No
                 f"- citation_count: `{summary['citation_count']}`",
                 f"- recovery_telemetry_present: `{summary['recovery_telemetry_present']}`",
                 f"- recovery_first_broken_stage: `{summary['recovery_first_broken_stage']}`",
+                f"- question_alignment_passed: `{summary['question_alignment_passed']}`",
+                f"- required_question_facets: `{summary['required_question_facets']}`",
+                f"- covered_question_facets: `{summary['covered_question_facets']}`",
+                f"- missing_question_facets: `{summary['missing_question_facets']}`",
+                f"- post_render_alignment_passed: `{summary['post_render_alignment_passed']}`",
                 "",
                 str(summary.get("answer_text", "")).strip() or "[empty answer]",
                 "",
@@ -379,7 +461,7 @@ def validate(
         summaries.append(_case_summary(row, expected, group))
 
     summary = {
-        "schema_version": "m26-aq-targeted-answerability-validation/v2",
+        "schema_version": "m26-aq-targeted-answerability-validation/v3",
         "status": "PASS" if not failures else "FAIL",
         "failures": failures,
         "expected_deploy_sha": expected_sha,
@@ -390,6 +472,7 @@ def validate(
         "abstain_expected": 4,
         "group_counts": dict(group_counts),
         "recovery_telemetry_required_for_group_a": True,
+        "recovery_question_alignment_required": True,
         "case_summaries": summaries,
     }
     summary_path.write_text(
