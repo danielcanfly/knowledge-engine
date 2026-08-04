@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import subprocess
 
-EXPECTED_ENTRYPOINT = (
-    "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
-)
+EXPECTED_ENTRYPOINT = "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
 
 
 def _assert_import_order(code: str) -> None:
@@ -33,7 +31,7 @@ def test_production_runtime_identity_survives_core_api_preimport() -> None:
         "import knowledge_engine.api as core; "
         "import knowledge_engine.m26_production_api as prod; "
         "import knowledge_engine.m26_ask_api as ask; "
-        "import knowledge_engine.m26_pa7_semantic_closure_runtime as semantic; "
+        "import knowledge_engine.m26_aq_semantic_contract as semantic; "
         f"assert ask.RUNTIME_ENTRYPOINT == {EXPECTED_ENTRYPOINT!r}; "
         "assert ask.run_owner_arbitrary_query is semantic.run_owner_arbitrary_query; "
         "assert prod.app is core.app"
@@ -45,7 +43,7 @@ def test_production_runtime_identity_survives_wrapper_first_import() -> None:
         "import knowledge_engine.m26_production_api as prod; "
         "import knowledge_engine.api as core; "
         "import knowledge_engine.m26_ask_api as ask; "
-        "import knowledge_engine.m26_pa7_semantic_closure_runtime as semantic; "
+        "import knowledge_engine.m26_aq_semantic_contract as semantic; "
         f"assert ask.RUNTIME_ENTRYPOINT == {EXPECTED_ENTRYPOINT!r}; "
         "assert ask.run_owner_arbitrary_query is semantic.run_owner_arbitrary_query; "
         "assert prod.app is core.app"
