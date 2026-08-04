@@ -122,6 +122,7 @@ def test_final_recovery_builds_verified_direct_propositions() -> None:
     )
     assert candidate is not None
     assert "e1" not in candidate["answer_text"]
+    assert "For" in candidate["answer_text"]
     assert "ordering_boundary" not in {
         facet_id for claim in candidate["claims"] for facet_id in claim["facet_ids"]
     }
@@ -134,6 +135,116 @@ def test_final_recovery_builds_verified_direct_propositions() -> None:
     )
     assert verified["terminal_status"] == "verified_answer_ready_candidate"
     assert verified["missing_facets"] == []
+
+
+def test_final_recovery_rejects_irrelevant_true_evidence() -> None:
+    question = (
+        "When is pausing a venture rational survival rather than loss of conviction? "
+        "Separate conviction, runway, timing, people, and resources."
+    )
+    evidence = [
+        _evidence(
+            "ev1",
+            (
+                "The build side shows how documents come in Station 1: data source. "
+                "This is not an AI problem."
+            ),
+        )
+    ]
+    telemetry = patch._telemetry(
+        question,
+        {
+            "status": "owner_only_safe_abstention",
+            "reason_codes": ["SEMANTIC_CLOSURE_FAILED"],
+            "unsupported_accepted_claims": 0,
+            "citation_locator_valid": True,
+        },
+        {"failures": ["SEMANTIC_CLOSURE_FAILED"]},
+        evidence,
+    )
+    candidate = patch._candidate(
+        legacy=legacy,
+        runtime=runtime,
+        question=question,
+        evidence=evidence,
+        requirements=[],
+        telemetry=telemetry,
+    )
+    assert candidate is None
+    assert telemetry["question_alignment_checked"] is True
+    assert telemetry["question_alignment_passed"] is False
+    assert "evidence_relevance_below_threshold" in telemetry[
+        "question_alignment_failure_codes"
+    ]
+    assert telemetry["published_verified_answer"] is False
+
+
+def test_final_recovery_rejects_best_of_bad_evidence() -> None:
+    question = "Walk through checkpoints, LoRAs, VAE, and missing requirements."
+    evidence = [
+        _evidence("ev1", "SDXL is a balanced starting point for a 16GB Mac."),
+        _evidence("ev2", "Flux is visually strong but heavier than SDXL."),
+    ]
+    assert (
+        patch._candidate(
+            legacy=legacy,
+            runtime=runtime,
+            question=question,
+            evidence=evidence,
+            requirements=[],
+        )
+        is None
+    )
+
+
+def test_final_recovery_rejects_partial_multifacet_support() -> None:
+    question = (
+        "Give a ComfyUI debugging order covering red nodes, OOM, checkpoints, "
+        "LoRAs, VAE, CLIP/T5XXL, GGUF/FP8, missing requirements, and memory pressure."
+    )
+    evidence = [
+        _evidence(
+            "ev1",
+            "If ComfyUI runs out of memory, reduce batch size and close other apps.",
+        )
+    ]
+    telemetry = patch._telemetry(
+        question,
+        {
+            "status": "owner_only_safe_abstention",
+            "reason_codes": ["PROVIDER_ABSTAINED"],
+            "unsupported_accepted_claims": 0,
+            "citation_locator_valid": True,
+        },
+        {"failures": ["PROVIDER_ABSTAINED"]},
+        evidence,
+    )
+    candidate = patch._candidate(
+        legacy=legacy,
+        runtime=runtime,
+        question=question,
+        evidence=evidence,
+        requirements=[],
+        telemetry=telemetry,
+    )
+    assert candidate is None
+    assert telemetry["missing_question_facets"]
+    assert telemetry["question_alignment_passed"] is False
+
+
+def test_post_render_alignment_rejects_removed_required_semantics() -> None:
+    telemetry = {
+        "required_question_facets": ["red nodes", "OOM", "checkpoints"],
+    }
+    result = patch._post_render_alignment(
+        legacy,
+        "Give a debugging order covering red nodes, OOM, and checkpoints.",
+        {"answer_text": "ComfyUI can use GPU memory."},
+        telemetry,
+    )
+    assert result["post_render_alignment_checked"] is True
+    assert result["post_render_alignment_passed"] is False
+    assert result["missing_question_facets"] == ["red nodes", "OOM", "checkpoints"]
 
 
 def test_final_recovery_telemetry_preserves_external_hard_stop() -> None:
