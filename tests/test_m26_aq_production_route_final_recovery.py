@@ -112,7 +112,7 @@ def _base_runtime_response(
     }
 
 
-def test_final_bindings_survive_full_production_import() -> None:
+def test_production_import_uses_canonical_runtime_without_final_patch_binding() -> None:
     import knowledge_engine.m26_aq_final_universal_recovery_patch as final_patch
     import knowledge_engine.m26_aq_semantic_runtime_patch_v3 as v3_patch
     import knowledge_engine.m26_ask_api as ask_api
@@ -122,30 +122,9 @@ def test_final_bindings_survive_full_production_import() -> None:
 
     assert ask_api.RUNTIME_ENTRYPOINT == EXPECTED_ENTRYPOINT
     assert ask_api.run_owner_arbitrary_query is semantic_runtime.run_owner_arbitrary_query
-    assert getattr(legacy._intent_class, final_patch._FINAL_MARKER) is True
-    assert getattr(legacy._direct_question_facets, final_patch._FINAL_MARKER) is True
-    assert getattr(v3_patch._generalized_provider_synthesize, final_patch._FINAL_MARKER) is True
-
-    assert (
-        legacy._intent_class(
-            "A startup changes direction twice; is that learning or founder drift?"
-        )
-        == "direct_grounded_knowledge"
-    )
-    assert (
-        legacy._intent_class("Which source version is newer and no longer stale?")
-        == "temporal_conflict"
-    )
-
-    generic_facets = legacy._direct_question_facets(
-        "Why does demand not prove a viable business?"
-    )
-    assert "ordering_boundary" not in {item.get("facet_id") for item in generic_facets}
-    ordering_facets = legacy._direct_question_facets(
-        "Which note comes before the other in the graph sequence?"
-    )
-    assert ordering_facets
-    assert "direct_answer" in {item.get("facet_id") for item in ordering_facets}
+    assert not getattr(legacy._intent_class, final_patch._FINAL_MARKER, False)
+    assert not getattr(legacy._direct_question_facets, final_patch._FINAL_MARKER, False)
+    assert not getattr(v3_patch._generalized_provider_synthesize, final_patch._FINAL_MARKER, False)
 
 
 def test_production_query_route_surfaces_recovery_telemetry(monkeypatch: Any) -> None:
