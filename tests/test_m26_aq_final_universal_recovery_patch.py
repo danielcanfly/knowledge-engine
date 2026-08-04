@@ -85,7 +85,6 @@ def test_final_recovery_builds_verified_direct_propositions() -> None:
         legacy=legacy,
         runtime=runtime,
         question=question,
-        intent_class="direct_grounded_knowledge",
         evidence=evidence,
         requirements=[],
     )
