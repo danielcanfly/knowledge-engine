@@ -7,7 +7,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "configure_oracle_ssh.sh"
-PRIVATE_KEY = "-----BEGIN TEST PRIVATE KEY-----\nnever-print-this-key\n-----END TEST PRIVATE KEY-----"
+PRIVATE_KEY = (
+    "-----BEGIN TEST PRIVATE KEY-----\n"
+    "never-print-this-key\n"
+    "-----END TEST PRIVATE KEY-----"
+)
 
 
 def _write_executable(path: Path, content: str) -> None:
