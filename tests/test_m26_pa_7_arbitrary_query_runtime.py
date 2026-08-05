@@ -776,6 +776,22 @@ def test_precedes_deterministic_surface_uses_named_entities_and_boundary() -> No
     assert "does not by itself prove dependency" in surface.casefold()
 
 
+def test_temporal_deterministic_surface_uses_source_version_comparison() -> None:
+    surface = runtime_module._deterministic_relation_surface_text(
+        question="What changed between source records about request boundary and steering controls?",
+        relation="precedes",
+        refs=[
+            {"exact_quote": "The first temporal record states request boundary controls."},
+            {"exact_quote": "The second temporal record states steering controls."},
+        ],
+    )
+
+    assert "source/version comparison" in surface.casefold()
+    assert "first source/version record" in surface.casefold()
+    assert "second source/version record" in surface.casefold()
+    assert "changed between records" in surface.casefold()
+
+
 def test_provenance_and_temporal_intents_use_required_evidence_types() -> None:
     provenance = run_owner_arbitrary_query(
         root=ROOT,

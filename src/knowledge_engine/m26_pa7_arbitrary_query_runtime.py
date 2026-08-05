@@ -1402,6 +1402,23 @@ def _deterministic_relation_surface_text(
         entities = _named_question_entities(question)
         left = entities[0] if len(entities) >= 1 else "the first item"
         right = entities[1] if len(entities) >= 2 else "the second item"
+        q = question.casefold()
+        if any(
+            marker in q
+            for marker in (
+                "source record",
+                "source records",
+                "temporal",
+                "version",
+                "changed between",
+                "what changed",
+                "retrieved",
+            )
+        ):
+            return (
+                "The first source/version record precedes the second source/version record, "
+                "so this is a source/version comparison about what changed between records."
+            )
         surface = f"{left} precedes {right} in ordering or sequence."
         if _question_requires_non_entailment_boundary(question):
             surface += (
