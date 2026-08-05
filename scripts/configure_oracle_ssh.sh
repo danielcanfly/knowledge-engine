@@ -14,6 +14,7 @@ ssh_dir="$HOME/.ssh"
 key_path="$ssh_dir/id_oracle"
 known_hosts_path="$ssh_dir/known_hosts"
 config_path="$ssh_dir/config"
+control_path="$ssh_dir/oracle-%r@%h:%p"
 scan_dir="$(mktemp -d)"
 trap 'rm -rf "$scan_dir"' EXIT
 
@@ -58,6 +59,9 @@ Host oracle-knowledge
   TCPKeepAlive yes
   StrictHostKeyChecking yes
   UserKnownHostsFile $known_hosts_path
+  ControlMaster auto
+  ControlPersist 10m
+  ControlPath $control_path
 EOF
 chmod 600 "$config_path"
 
