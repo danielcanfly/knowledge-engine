@@ -754,6 +754,28 @@ def test_graph_relationship_binds_edge_and_both_endpoints() -> None:
     assert {graph_edge["edge_source"], graph_edge["edge_target"]}.issubset(endpoint_concepts)
 
 
+def test_precedes_deterministic_surface_uses_named_entities_and_boundary() -> None:
+    surface = runtime_module._deterministic_relation_surface_text(
+        question=(
+            "If the relation graph records Widget Harness Part 1 precedes Widget Harness Part 2, "
+            "what can we infer and what can we not infer from that edge?"
+        ),
+        relation="precedes",
+        refs=[
+            {
+                "exact_quote": (
+                    "Widget Harness Part 1 precedes Widget Harness Part 2 in the approved graph order."
+                )
+            }
+        ],
+    )
+
+    assert "Widget Harness Part 1" in surface
+    assert "Widget Harness Part 2" in surface
+    assert "ordering" in surface.casefold() or "sequence" in surface.casefold()
+    assert "does not by itself prove dependency" in surface.casefold()
+
+
 def test_provenance_and_temporal_intents_use_required_evidence_types() -> None:
     provenance = run_owner_arbitrary_query(
         root=ROOT,

@@ -1398,8 +1398,17 @@ def _deterministic_relation_surface_text(
 ) -> str:
     quotes = [str(ref.get("exact_quote", "")) for ref in refs if ref.get("exact_quote")]
     joined = " ".join(quotes)
-    if relation == "precedes" and _question_requires_non_entailment_boundary(question):
-        return "A precedes relationship does not by itself prove dependency; " + joined
+    if relation == "precedes":
+        entities = _named_question_entities(question)
+        left = entities[0] if len(entities) >= 1 else "the first item"
+        right = entities[1] if len(entities) >= 2 else "the second item"
+        surface = f"{left} precedes {right} in ordering or sequence."
+        if _question_requires_non_entailment_boundary(question):
+            surface += (
+                " That precedes edge supports ordering or sequence only and does not by itself "
+                "prove dependency or causality."
+            )
+        return surface
     return joined
 
 
