@@ -10,6 +10,11 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from knowledge_engine.m26_aq_semantic_contract import (
+    CANONICAL_RUNTIME_ENTRYPOINT,
+    semantic_contract_fingerprint,
+)
+
 INTERNAL_LABEL_RE = re.compile(r"(?:\[\[?e\d+\]?\]|\be\d+\b)", re.IGNORECASE)
 EXPECTED_GROUP_COUNTS = {
     "A_original_reproduction": 5,
@@ -18,9 +23,7 @@ EXPECTED_GROUP_COUNTS = {
     "D_ood_control": 4,
 }
 RECOVERY_KEY = "universal_answerability_recovery"
-RECOVERY_SCHEMAS = {
-    "m26-aq-final-universal-recovery-telemetry/v2",
-}
+RECOVERY_SCHEMAS = {"m26-aq-final-universal-recovery-telemetry/v2"}
 
 
 def _json(path: Path) -> dict[str, Any]:
@@ -29,6 +32,10 @@ def _json(path: Path) -> dict[str, Any]:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def _is_zero_mutation(value: Any) -> bool:
@@ -52,9 +59,7 @@ def _source_identities(row: Mapping[str, Any], *, used: bool) -> list[str]:
         identities = trace.get(key, [])
         if isinstance(identities, Sequence) and not isinstance(identities, str):
             return sorted({str(item) for item in identities if str(item)})
-
-    key = "used_evidence_ids" if used else "selected_evidence"
-    if key == "selected_evidence":
+    if not used:
         selected = row.get("selected_evidence", [])
         if isinstance(selected, Sequence) and not isinstance(selected, str):
             identities = []
@@ -79,20 +84,16 @@ def _integrity(row: Mapping[str, Any], key: str, default: Any = None) -> Any:
 
 def _selected_evidence_count(row: Mapping[str, Any]) -> int:
     trace = row.get("evidence_utilization_trace", {})
-    if isinstance(trace, Mapping):
-        value = trace.get("selected_evidence_count")
-        if isinstance(value, int):
-            return value
+    if isinstance(trace, Mapping) and isinstance(trace.get("selected_evidence_count"), int):
+        return int(trace["selected_evidence_count"])
     selected = row.get("selected_evidence", [])
     return len(selected) if isinstance(selected, Sequence) and not isinstance(selected, str) else 0
 
 
 def _used_evidence_count(row: Mapping[str, Any]) -> int:
     trace = row.get("evidence_utilization_trace", {})
-    if isinstance(trace, Mapping):
-        value = trace.get("used_evidence_count")
-        if isinstance(value, int):
-            return value
+    if isinstance(trace, Mapping) and isinstance(trace.get("used_evidence_count"), int):
+        return int(trace["used_evidence_count"])
     relationship = row.get("relationship_summary", {})
     if isinstance(relationship, Mapping):
         used = relationship.get("used_evidence_ids", [])
@@ -103,24 +104,18 @@ def _used_evidence_count(row: Mapping[str, Any]) -> int:
 
 def _graph_selected_count(row: Mapping[str, Any]) -> int:
     graph = row.get("graph_observability", {})
-    if isinstance(graph, Mapping):
-        value = graph.get("selected_graph_derived_evidence_count")
-        if isinstance(value, int):
-            return value
+    if isinstance(graph, Mapping) and isinstance(graph.get("selected_graph_derived_evidence_count"), int):
+        return int(graph["selected_graph_derived_evidence_count"])
     return 0
 
 
 def _recovery_telemetry(row: Mapping[str, Any]) -> dict[str, Any]:
     verification = row.get("multi_evidence_verification", {})
-    if isinstance(verification, Mapping):
-        telemetry = verification.get(RECOVERY_KEY)
-        if isinstance(telemetry, Mapping):
-            return dict(telemetry)
+    if isinstance(verification, Mapping) and isinstance(verification.get(RECOVERY_KEY), Mapping):
+        return dict(verification[RECOVERY_KEY])
     semantic = row.get("semantic_closure", {})
-    if isinstance(semantic, Mapping):
-        telemetry = semantic.get(RECOVERY_KEY)
-        if isinstance(telemetry, Mapping):
-            return dict(telemetry)
+    if isinstance(semantic, Mapping) and isinstance(semantic.get(RECOVERY_KEY), Mapping):
+        return dict(semantic[RECOVERY_KEY])
     return {}
 
 
@@ -129,13 +124,29 @@ def _list_field(telemetry: Mapping[str, Any], key: str) -> list[Any]:
     return list(value) if isinstance(value, list) else []
 
 
+def _canonical_identity_failures(row: Mapping[str, Any], expected_sha: str) -> list[str]:
+    failures: list[str] = []
+    runtime = _mapping(row.get("canonical_runtime"))
+    expected_fingerprint = semantic_contract_fingerprint()
+    if runtime.get("build_sha") != expected_sha:
+        failures.append("runtime_sha_mismatch")
+    if runtime.get("entrypoint") != CANONICAL_RUNTIME_ENTRYPOINT:
+        failures.append("runtime_entrypoint_mismatch")
+    if runtime.get("semantic_contract_fingerprint") != expected_fingerprint:
+        failures.append("runtime_fingerprint_mismatch")
+    closure = _mapping(row.get("semantic_closure"))
+    contract = _mapping(closure.get("semantic_contract"))
+    if contract and contract.get("fingerprint") != expected_fingerprint:
+        failures.append("semantic_closure_fingerprint_mismatch")
+    return failures
+
+
 def _validate_alignment_telemetry(telemetry: Mapping[str, Any]) -> list[str]:
     failures: list[str] = []
     required = _list_field(telemetry, "required_question_facets")
     covered = _list_field(telemetry, "covered_question_facets")
     missing = _list_field(telemetry, "missing_question_facets")
     relevance = _list_field(telemetry, "recovery_selected_evidence_relevance")
-
     if telemetry.get("question_alignment_checked") is not True:
         failures.append("recovery:question_alignment_not_checked")
     if telemetry.get("question_alignment_passed") is not True:
@@ -174,19 +185,13 @@ def _validate_alignment_telemetry(telemetry: Mapping[str, Any]) -> list[str]:
     return failures
 
 
-def _validate_recovery_telemetry(
-    row: Mapping[str, Any],
-    *,
-    expected: str,
-    group: str,
-) -> list[str]:
+def _validate_recovery_telemetry(row: Mapping[str, Any], *, expected: str, group: str) -> list[str]:
     failures: list[str] = []
     telemetry = _recovery_telemetry(row)
     if group == "A_original_reproduction" and not telemetry:
         return ["recovery:missing_group_a_telemetry"]
     if not telemetry:
         return failures
-
     if telemetry.get("schema_version") not in RECOVERY_SCHEMAS:
         failures.append("recovery:schema_version_mismatch")
     if telemetry.get("case_specific") is not False:
@@ -201,14 +206,12 @@ def _validate_recovery_telemetry(
         failures.append("recovery:missing_input_evidence_count")
     if item_count < 0 or text_count < 0:
         failures.append("recovery:invalid_item_or_text_count")
-
     answer_source = str(row.get("answer_source", ""))
     first_stage = str(telemetry.get("first_broken_stage", ""))
     hard_stop_codes = telemetry.get("universal_recovery_hard_stop_codes", [])
     hard_stop_present = isinstance(hard_stop_codes, list) and bool(hard_stop_codes)
     published = telemetry.get("published_verified_answer") is True
     should_attempt = telemetry.get("universal_recovery_should_attempt") is True
-
     if expected == "answer" and group == "A_original_reproduction":
         natural_provider_ok = (
             first_stage in {"not_needed", "none"}
@@ -237,13 +240,12 @@ def _validate_recovery_telemetry(
     return failures
 
 
-def _validate_answerable(row: Mapping[str, Any]) -> list[str]:
-    failures: list[str] = []
+def _validate_answerable(row: Mapping[str, Any], expected_sha: str) -> list[str]:
+    failures = _canonical_identity_failures(row, expected_sha)
     answer_text = str(row.get("answer_text", ""))
     citations = row.get("citations", [])
     claims = row.get("answer_claims", [])
     status = str(row.get("status", ""))
-
     if status != "owner_only_cited_answer":
         failures.append("answerable:not_owner_only_cited_answer")
     if row.get("safe_abstention") is True:
@@ -267,12 +269,11 @@ def _validate_answerable(row: Mapping[str, Any]) -> list[str]:
     return failures
 
 
-def _validate_abstain(row: Mapping[str, Any]) -> list[str]:
-    failures: list[str] = []
+def _validate_abstain(row: Mapping[str, Any], expected_sha: str) -> list[str]:
+    failures = _canonical_identity_failures(row, expected_sha)
     citations = row.get("citations", [])
     claims = row.get("answer_claims", [])
     status = str(row.get("status", ""))
-
     safe = (
         row.get("safe_abstention") is True
         or status == "owner_only_safe_abstention"
@@ -294,6 +295,7 @@ def _validate_abstain(row: Mapping[str, Any]) -> list[str]:
 def _case_summary(row: Mapping[str, Any], expected: str, group: str) -> dict[str, Any]:
     accounting = row.get("accounting", {})
     telemetry = _recovery_telemetry(row)
+    runtime = row.get("canonical_runtime", {}) if isinstance(row.get("canonical_runtime"), Mapping) else {}
     return {
         "case_id": row.get("case_id", ""),
         "group": group,
@@ -302,60 +304,34 @@ def _case_summary(row: Mapping[str, Any], expected: str, group: str) -> dict[str
         "terminal_status": row.get("terminal_status", ""),
         "answer_source": row.get("answer_source", ""),
         "safe_abstention": row.get("safe_abstention", False),
-        "provider_call_count": accounting.get("provider_call_count", "")
-        if isinstance(accounting, Mapping)
-        else "",
+        "provider_call_count": accounting.get("provider_call_count", "") if isinstance(accounting, Mapping) else "",
         "selected_evidence_count": _selected_evidence_count(row),
         "used_evidence_count": _used_evidence_count(row),
         "graph_selected_count": _graph_selected_count(row),
         "selected_source_identities": ";".join(_source_identities(row, used=False)),
         "used_source_identities": ";".join(_source_identities(row, used=True)),
-        "citation_count": len(row.get("citations", []))
-        if isinstance(row.get("citations", []), list)
-        else 0,
+        "citation_count": len(row.get("citations", [])) if isinstance(row.get("citations", []), list) else 0,
         "unsupported_accepted_claims": _integrity(row, "unsupported_accepted_claims", ""),
         "citation_locator_valid": _integrity(row, "citation_locator_valid", ""),
-        "material_claim_support_verified": _integrity(
-            row,
-            "material_claim_support_verified",
-            "",
-        ),
+        "material_claim_support_verified": _integrity(row, "material_claim_support_verified", ""),
         "mutation_zero": _is_zero_mutation(row.get("mutations")),
         "recovery_telemetry_present": bool(telemetry),
         "recovery_should_attempt": telemetry.get("universal_recovery_should_attempt", ""),
         "recovery_candidate_built": telemetry.get("candidate_built", ""),
         "recovery_verify_result": telemetry.get("candidate_verify_result", ""),
         "recovery_first_broken_stage": telemetry.get("first_broken_stage", ""),
-        "recovery_published_verified_answer": telemetry.get(
-            "published_verified_answer",
-            "",
-        ),
+        "recovery_published_verified_answer": telemetry.get("published_verified_answer", ""),
         "question_alignment_checked": telemetry.get("question_alignment_checked", ""),
         "question_alignment_passed": telemetry.get("question_alignment_passed", ""),
-        "required_question_facets": ";".join(
-            str(item) for item in _list_field(telemetry, "required_question_facets")
-        ),
-        "covered_question_facets": ";".join(
-            str(item) for item in _list_field(telemetry, "covered_question_facets")
-        ),
-        "missing_question_facets": ";".join(
-            str(item) for item in _list_field(telemetry, "missing_question_facets")
-        ),
-        "post_render_alignment_checked": telemetry.get(
-            "post_render_alignment_checked",
-            "",
-        ),
-        "post_render_alignment_passed": telemetry.get(
-            "post_render_alignment_passed",
-            "",
-        ),
-        "recovery_relevance_threshold_met": telemetry.get(
-            "recovery_relevance_threshold_met",
-            "",
-        ),
-        "runtime_sha": (row.get("canonical_runtime", {}) or {}).get("build_sha", "")
-        if isinstance(row.get("canonical_runtime", {}), Mapping)
-        else "",
+        "required_question_facets": ";".join(str(item) for item in _list_field(telemetry, "required_question_facets")),
+        "covered_question_facets": ";".join(str(item) for item in _list_field(telemetry, "covered_question_facets")),
+        "missing_question_facets": ";".join(str(item) for item in _list_field(telemetry, "missing_question_facets")),
+        "post_render_alignment_checked": telemetry.get("post_render_alignment_checked", ""),
+        "post_render_alignment_passed": telemetry.get("post_render_alignment_passed", ""),
+        "recovery_relevance_threshold_met": telemetry.get("recovery_relevance_threshold_met", ""),
+        "runtime_sha": runtime.get("build_sha", ""),
+        "runtime_entrypoint": runtime.get("entrypoint", ""),
+        "runtime_fingerprint": runtime.get("semantic_contract_fingerprint", ""),
         "answer_text": str(row.get("answer_text", "")),
     }
 
@@ -384,6 +360,8 @@ def _write_raw_answers(path: Path, summaries: Sequence[Mapping[str, Any]]) -> No
                 f"- actual_status: `{summary['actual_status']}`",
                 f"- answer_source: `{summary['answer_source']}`",
                 f"- citation_count: `{summary['citation_count']}`",
+                f"- runtime_entrypoint: `{summary['runtime_entrypoint']}`",
+                f"- runtime_fingerprint: `{summary['runtime_fingerprint']}`",
                 f"- recovery_telemetry_present: `{summary['recovery_telemetry_present']}`",
                 f"- recovery_first_broken_stage: `{summary['recovery_first_broken_stage']}`",
                 f"- question_alignment_passed: `{summary['question_alignment_passed']}`",
@@ -413,6 +391,7 @@ def validate(
     question_rows = questions.get("questions", [])
     artifact_rows = artifact.get("rows", [])
     failures: list[str] = []
+    expected_fingerprint = semantic_contract_fingerprint()
 
     if len(question_rows) != 19:
         failures.append(f"question_count:{len(question_rows)}")
@@ -423,6 +402,11 @@ def validate(
     collection = artifact.get("collection", {})
     if not isinstance(collection, Mapping) or collection.get("status") != "complete":
         failures.append("collection_not_complete")
+    health = _mapping(artifact.get("health"))
+    if health.get("entrypoint") != CANONICAL_RUNTIME_ENTRYPOINT:
+        failures.append("health_entrypoint_mismatch")
+    if health.get("semantic_contract_fingerprint") != expected_fingerprint:
+        failures.append("health_fingerprint_mismatch")
 
     group_counts = Counter(str(item.get("group", "")) for item in question_rows)
     if dict(group_counts) != EXPECTED_GROUP_COUNTS:
@@ -441,30 +425,22 @@ def validate(
         if row is None:
             failures.append(f"{case_id}:missing_row")
             continue
-        runtime = row.get("canonical_runtime", {})
-        if not isinstance(runtime, Mapping) or runtime.get("build_sha") != expected_sha:
-            failures.append(f"{case_id}:runtime_sha_mismatch")
         if expected == "answer":
-            failures.extend(f"{case_id}:{item}" for item in _validate_answerable(row))
+            failures.extend(f"{case_id}:{item}" for item in _validate_answerable(row, expected_sha))
         elif expected == "abstain":
-            failures.extend(f"{case_id}:{item}" for item in _validate_abstain(row))
+            failures.extend(f"{case_id}:{item}" for item in _validate_abstain(row, expected_sha))
         else:
             failures.append(f"{case_id}:unknown_expected:{expected}")
-        failures.extend(
-            f"{case_id}:{item}"
-            for item in _validate_recovery_telemetry(
-                row,
-                expected=expected,
-                group=group,
-            )
-        )
+        failures.extend(f"{case_id}:{item}" for item in _validate_recovery_telemetry(row, expected=expected, group=group))
         summaries.append(_case_summary(row, expected, group))
 
     summary = {
-        "schema_version": "m26-aq-targeted-answerability-validation/v3",
+        "schema_version": "m26-aq-targeted-answerability-validation/v4",
         "status": "PASS" if not failures else "FAIL",
         "failures": failures,
         "expected_deploy_sha": expected_sha,
+        "canonical_runtime_entrypoint": CANONICAL_RUNTIME_ENTRYPOINT,
+        "canonical_semantic_contract_fingerprint": expected_fingerprint,
         "question_file_sha256": _sha256(questions_path),
         "input_file_sha256": _sha256(input_path),
         "rows": len(artifact_rows),
@@ -475,13 +451,9 @@ def validate(
         "recovery_question_alignment_required": True,
         "case_summaries": summaries,
     }
-    summary_path.write_text(
-        json.dumps(summary, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
     _write_csv(csv_path, summaries)
     _write_raw_answers(raw_answers_path, summaries)
-
     print(json.dumps({k: summary[k] for k in ("status", "rows", "failures")}, indent=2))
     if failures:
         raise SystemExit(1)
