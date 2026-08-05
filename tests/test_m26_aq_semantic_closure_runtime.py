@@ -262,7 +262,12 @@ def test_bb02_supported_lifecycle_facets_recover_to_visible_answer() -> None:
     assert candidate is not None
     answer_text = str(candidate["answer_text"])
     assert not evaluate_visible_semantics(answer_text, requirements, question)
-    assert "admission" in answer_text.casefold()
+    assert {item.requirement_id for item in requirements} == {
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }
+    assert "admission" not in answer_text.casefold()
     assert "durable" in answer_text.casefold()
     assert "completion" in answer_text.casefold()
     assert "observability" in answer_text.casefold()

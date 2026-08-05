@@ -83,3 +83,68 @@ def test_responsive_comparison_answer_passes_alignment_guard() -> None:
     )
 
     assert failures == set()
+
+
+def test_generalized_false_negative_calibration_accepts_role_mapping_answers() -> None:
+    cases = [
+        (
+            "Explain the difference between the component that chooses an initial "
+            "request route and the component that revises a plan after execution "
+            "has already started.",
+            (
+                "The router handles the initial route or capability selection before "
+                "execution. Adaptive replanning changes the remaining work later when "
+                "evidence invalidates assumptions. The contrast is initial routing "
+                "versus later plan revision."
+            ),
+        ),
+        (
+            "For the graph product surface, distinguish the roles of Obsidian, "
+            "Graphology, Sigma.js, and the underlying source authority, including "
+            "what a trustworthy answer should cite back to.",
+            (
+                "Obsidian is responsible for the human Markdown vault surface. "
+                "Graphology is responsible for the graph model and processing layer. "
+                "Sigma.js is responsible for rendering the visual interaction layer. "
+                "The canonical source and provenance artifact authority is the source "
+                "of trust."
+            ),
+        ),
+        (
+            "A true graph fact says Harness Theory Part 1 precedes Part 2. Does "
+            "that fact by itself prove that Part 1 depends on Part 2? Answer the "
+            "inference, not merely the true graph fact.",
+            (
+                "The relation graph records Harness Theory Part 1 precedes Harness "
+                "Theory Part 2. That supports graph ordering or navigation, but it "
+                "does not prove dependency or causality."
+            ),
+        ),
+        (
+            "What role does Graphology play in the graph product surface, and why "
+            "is that role different from Obsidian and Sigma.js?",
+            (
+                "Obsidian is responsible for the human Markdown vault surface. "
+                "Graphology is responsible for the graph model and processing layer. "
+                "Sigma.js is responsible for rendering the visual interaction layer."
+            ),
+        ),
+    ]
+
+    for question, answer in cases:
+        assert _failures(question, answer) == set()
+
+
+def test_debug_boundary_labels_are_rejected() -> None:
+    failures = _failures(
+        (
+            "Persisted run state can survive a client disconnect. Does that "
+            "persistence by itself prove that the workflow output is correct and verified?"
+        ),
+        (
+            "non entailment boundary: persisted state does not prove correctness. "
+            "ordering boundary: unrelated graph fragment."
+        ),
+    )
+
+    assert "answer_alignment_debug_surface" in failures

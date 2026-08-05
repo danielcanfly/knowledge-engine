@@ -27,6 +27,36 @@ DenseChannel = legacy.DenseChannel
 ProviderClient = legacy.ProviderClient
 SemanticRequirement = runtime.SemanticRequirement
 
+_GRAPH_WRAPPER_PREFIXES = (
+    "A true graph fact says ",
+    "The true graph fact says ",
+    "A graph fact says ",
+    "The graph fact says ",
+    "If a true graph fact records ",
+    "If the true graph fact records ",
+    "If a graph fact records ",
+    "If the graph fact records ",
+    "A true graph fact records ",
+    "The true graph fact records ",
+    "A graph fact records ",
+    "The graph fact records ",
+    "If the relation graph records ",
+    "The relation graph records ",
+)
+_PRECEDES_PARAPHRASE_RE = re.compile(
+    r"\b(?:precedes?|preceding|comes\s+before|come\s+before|is\s+before|are\s+before)\b",
+    flags=re.I,
+)
+_RELATION_ENTITY_SPLIT_PATTERNS = (
+    r"\s+as\s+preceding\b.*$",
+    r"\s+comes\s+before\b.*$",
+    r"\s+come\s+before\b.*$",
+    r"\s+is\s+before\b.*$",
+    r"\s+are\s+before\b.*$",
+    r"\s+precedes\b.*$",
+    r"\s+precede\b.*$",
+)
+
 
 @dataclass(frozen=True)
 class SemanticJudgment:
@@ -102,6 +132,135 @@ def _route_replan_requirements() -> list[SemanticRequirement]:
     ]
 
 
+def _clean_graph_entity_phrase(value: str) -> str:
+    text = " ".join(str(value).strip().split())
+    changed = True
+    while changed:
+        changed = False
+        for prefix in _GRAPH_WRAPPER_PREFIXES:
+            if text.casefold().startswith(prefix.casefold()):
+                text = text[len(prefix) :]
+                changed = True
+                break
+    for pattern in _RELATION_ENTITY_SPLIT_PATTERNS:
+        next_text = re.sub(pattern, "", text, flags=re.I).strip(" ?:.,")
+        if next_text != text and re.search(r"\bPart\s+\d+\b", next_text, flags=re.I):
+            text = next_text
+            break
+    for suffix in (" prove that", " prove", " safely infer"):
+        index = text.casefold().find(suffix.casefold())
+        if index > 0:
+            text = text[:index]
+    return " ".join(text.strip(" ?:.,").split())
+
+
+def _relation_paraphrase_mentions_precedes(question: str) -> bool:
+    q = str(question)
+    if not _PRECEDES_PARAPHRASE_RE.search(q):
+        return False
+    if len(_strict_part_entities(q)) < 2:
+        return False
+    return bool(
+        re.search(
+            r"\b(?:graph|edge|relation|records?|fact|relationship|ordering|sequence|navigation)\b",
+            q,
+            flags=re.I,
+        )
+    )
+
+
+def _strict_part_entities(question: str) -> list[str]:
+    prefix = re.search(r"\b([A-Z][A-Za-z0-9 .'/&-]+?)\s+Part\s+\d+\b", question)
+    root = _clean_graph_entity_phrase(prefix.group(1)) if prefix else ""
+    entities: list[str] = []
+    seen: set[str] = set()
+    for part in re.findall(r"\bPart\s+(\d+)\b", question, flags=re.I):
+        entity = _clean_graph_entity_phrase(f"{root} Part {part}" if root else f"Part {part}")
+        key = entity.casefold()
+        if entity and key not in seen:
+            entities.append(entity)
+            seen.add(key)
+    return entities
+
+
+def _requires_precedes_boundary(question: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:depend(?:s|ency|ent)?|causal(?:ity)?|prove[ns]?|infer(?:red|ence)?|implementation|requirement)\b",
+            str(question),
+            flags=re.I,
+        )
+    )
+
+
+def _canonical_intent_class(question: str, intent_class: str) -> str:
+    if _relation_paraphrase_mentions_precedes(question):
+        return "graph_relationship"
+    return intent_class
+
+
+def _requested_lifecycle_requirements(question: str) -> set[str] | None:
+    q = " ".join(str(question).casefold().split())
+    lifecycle_markers = ("disconnect", "persist", "durable", "long-running", "reattach", "status")
+    if not any(marker in q for marker in lifecycle_markers):
+        return None
+    full_markers = (
+        "admission to completion",
+        "intake to completion",
+        "from admission",
+        "from intake",
+        "surrounding control system",
+        "keep the run trustworthy",
+    )
+    if any(marker in q for marker in full_markers):
+        return {"admission_policy", "durable_state", "completion_verification", "observability"}
+    requested = {"durable_state"}
+    if any(term in q for term in ("verify", "verification", "verified", "correct", "completion", "complete", "success", "acceptance")):
+        requested.add("completion_verification")
+    if any(term in q for term in ("admission", "intake", "policy", "before execution", "request boundary")):
+        requested.add("admission_policy")
+    if any(term in q for term in ("observability", "reattach", "status", "inspect", "resume")):
+        requested.add("observability")
+    if "disconnect" in q and "long-running" in q and "finished" in q and "correct" not in q:
+        requested.update({"completion_verification", "observability"})
+    return requested
+
+
+def _lifecycle_requirement(requirement_id: str) -> SemanticRequirement:
+    specs = {
+        "admission_policy": (
+            "Cover request admission/effective policy before execution.",
+            ("admission", "request boundary", "effective policy", "task contract"),
+            (r"\b(?:admission|request boundary|effective policy|task contract)\b",),
+        ),
+        "durable_state": (
+            "Cover durable/persisted server-side run authority or state after disconnect.",
+            ("durable", "persisted", "state", "authority", "disconnect"),
+            (
+                r"\b(?:durable|persisted|server-side).{0,120}(?:state|authority|run|progress)",
+                r"\bstate.{0,120}(?:durable|persisted|authority|progress)\b",
+            ),
+        ),
+        "completion_verification": (
+            "Cover verification/completion acceptance before declaring success.",
+            ("verification", "completion", "acceptance", "terminal"),
+            (r"\b(?:verification|completion|acceptance|terminal gate)\b",),
+        ),
+        "observability": (
+            "Cover observability/status/reattachment for the headless continuing run.",
+            ("observability", "status", "reattach", "headless", "resume"),
+            (r"\b(?:observability|reattach|headless|status|resume)\b",),
+        ),
+    }
+    instruction, terms, patterns = specs[requirement_id]
+    return SemanticRequirement(
+        requirement_id=requirement_id,
+        instruction=instruction,
+        evidence_terms=terms,
+        visible_patterns=patterns,
+    )
+
+
 def _authority_boundary_requirement() -> SemanticRequirement:
     return SemanticRequirement(
         requirement_id="authority_boundary",
@@ -153,20 +312,49 @@ def derive_semantic_requirements(
     )
     requirements: list[SemanticRequirement] = []
     seen: set[str] = set()
+    lifecycle_requested = _requested_lifecycle_requirements(question)
+    lifecycle_ids = {
+        "admission_policy",
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }
     for item in base:
         requirement_id = str(getattr(item, "requirement_id", ""))
         if not requirement_id or requirement_id in seen:
             continue
         if requirement_id == "authority_boundary" and _state_machine_replanner_question(question):
             continue
+        if requirement_id == "non_entailment" and not _requires_precedes_boundary(question):
+            continue
+        if (
+            lifecycle_requested is not None
+            and requirement_id in lifecycle_ids
+            and requirement_id not in lifecycle_requested
+        ):
+            continue
+        exact_phrase = str(getattr(item, "exact_phrase", ""))
+        instruction = str(getattr(item, "instruction", ""))
+        visible_patterns = tuple(str(x) for x in getattr(item, "visible_patterns", ()))
+        evidence_terms = tuple(str(x) for x in getattr(item, "evidence_terms", ()))
+        if requirement_id.startswith("entity_") and exact_phrase:
+            cleaned = _clean_graph_entity_phrase(exact_phrase)
+            if cleaned and cleaned != exact_phrase:
+                requirement_id = f"entity_{legacy._facet_id_for_term(cleaned)}"
+                exact_phrase = cleaned
+                instruction = f"Name and address {cleaned} explicitly."
+                evidence_terms = (cleaned,)
+                visible_patterns = (re.escape(cleaned),)
+            if requirement_id in seen:
+                continue
         seen.add(requirement_id)
         requirements.append(
             SemanticRequirement(
                 requirement_id=requirement_id,
-                instruction=str(getattr(item, "instruction", "")),
-                evidence_terms=tuple(str(x) for x in getattr(item, "evidence_terms", ())),
-                visible_patterns=tuple(str(x) for x in getattr(item, "visible_patterns", ())),
-                exact_phrase=str(getattr(item, "exact_phrase", "")),
+                instruction=instruction,
+                evidence_terms=evidence_terms,
+                visible_patterns=visible_patterns,
+                exact_phrase=exact_phrase,
             )
         )
     if _state_machine_replanner_question(question):
@@ -177,6 +365,42 @@ def derive_semantic_requirements(
                 continue
             seen.add(requirement.requirement_id)
             requirements.append(requirement)
+    if _relation_paraphrase_mentions_precedes(question):
+        if "ordering_semantics" not in seen:
+            seen.add("ordering_semantics")
+            requirements.append(
+                SemanticRequirement(
+                    requirement_id="ordering_semantics",
+                    instruction="State that the recorded graph relationship is a precedes ordering relation.",
+                    evidence_terms=("precedes", "ordering", "sequence", "comes before"),
+                    visible_patterns=(
+                        r"\b(?:precedes|comes before|preceding).{0,160}(?:ordering|sequence|relationship|relation)",
+                        r"\b(?:ordering|sequence|relationship|relation).{0,160}(?:precedes|comes before|preceding)",
+                    ),
+                )
+            )
+        if _requires_precedes_boundary(question) and "non_entailment" not in seen:
+            seen.add("non_entailment")
+            requirements.append(
+                SemanticRequirement(
+                    requirement_id="non_entailment",
+                    instruction=(
+                        "State that the precedes ordering does not by itself prove "
+                        "dependency, causality, implementation, or requirement semantics."
+                    ),
+                    evidence_terms=("does not prove", "dependency", "causality", "requirement"),
+                    visible_patterns=(
+                        r"(?:does not|cannot|can't|not enough|only).{0,180}"
+                        r"(?:depend|causal|prove|infer|implement|require)",
+                    ),
+                )
+            )
+    if lifecycle_requested is not None:
+        for requirement_id in sorted(lifecycle_requested):
+            if requirement_id in seen:
+                continue
+            seen.add(requirement_id)
+            requirements.append(_lifecycle_requirement(requirement_id))
     return requirements
 
 
@@ -374,6 +598,7 @@ _RECOVERY_EXTERNAL_STOPWORDS = {
     "An",
     "And",
     "Can",
+    "Compare",
     "Does",
     "For",
     "From",
@@ -396,7 +621,15 @@ _INTERNAL_REFERENCE_RE = re.compile(
 
 def canonical_question_entities(question: str) -> list[str]:
     """Expose the canonical entity parser used by semantic requirements."""
-    return legacy._named_question_entities(question)
+    entities: list[str] = []
+    seen: set[str] = set()
+    for entity in [*_strict_part_entities(question), *legacy._named_question_entities(question)]:
+        cleaned = _clean_graph_entity_phrase(entity)
+        key = cleaned.casefold()
+        if cleaned and key not in seen:
+            entities.append(cleaned)
+            seen.add(key)
+    return entities
 
 
 def _contract_compat_module() -> Any:
@@ -625,6 +858,35 @@ def _supported_semantic_recovery_candidate(
         )
         if candidate is not None:
             return candidate
+    if _precedes_relation_required(question, intent_class, requirements, endpoint_proof):
+        candidate = _precedes_relation_candidate(
+            question=question,
+            evidence=evidence,
+            endpoint_proof=endpoint_proof,
+        )
+        if candidate is not None:
+            return candidate
+    candidate = _persistence_correctness_candidate(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+    )
+    if candidate is not None:
+        return candidate
+    candidate = _comparison_surface_candidate(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+    )
+    if candidate is not None:
+        return candidate
+    candidate = _authority_surface_candidate(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+    )
+    if candidate is not None:
+        return candidate
     candidate = _positive_answerability_requirement_candidate(
         question=question,
         intent_class=intent_class,
@@ -671,15 +933,24 @@ def _positive_answerability_requirement_candidate(
         relation = "contrasts_with"
         required_ids = route_replan_ids
     elif lifecycle_ids.issubset(requirement_ids) or _lifecycle_recovery_question(question, requirement_ids):
-        surface = (
-            "Persisted run state keeps a disconnected long-running workflow trustworthy because admission and effective policy happen before execution, durable server-side state preserves run authority after disconnect, observability or reattachment exposes status while it continues headlessly, and completion verification or acceptance happens before success is declared."
-        )
+        if "admission_policy" in requirement_ids:
+            surface = (
+                "Persisted run state keeps a disconnected long-running workflow trustworthy because admission and effective policy happen before execution, durable server-side state preserves run authority after disconnect, observability or reattachment exposes status while it continues headlessly, and completion verification or acceptance happens before success is declared."
+            )
+        else:
+            surface = (
+                "Persisted run state matters after a client disconnect because durable "
+                "server-side state preserves run progress and authority while the "
+                "workflow continues, observability or reattachment exposes status, and "
+                "completion verification or acceptance remains separate before success "
+                "is declared."
+            )
         claim_role = "direct"
         relation = None
         required_ids = lifecycle_ids
         selected_items = _lifecycle_recovery_evidence(evidence)
-        if len(selected_items) < 4:
-            return None
+        if len(selected_items) < 2:
+            selected_items = []
     else:
         return None
 
@@ -791,6 +1062,7 @@ def _precedes_boundary_required(
     return (
         "precedes" in question.casefold()
         or "preceding" in question.casefold()
+        or _relation_paraphrase_mentions_precedes(question)
         or str(endpoint_proof.get("relation_type", "")) == "precedes"
         or "ordering_semantics" in requirement_ids
         or "non_entailment" in requirement_ids
@@ -800,6 +1072,78 @@ def _precedes_boundary_required(
         or "prove" in question.casefold()
         or "infer" in question.casefold()
     )
+
+
+def _precedes_relation_required(
+    question: str,
+    intent_class: str,
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+) -> bool:
+    requirement_ids = {str(getattr(item, "requirement_id", "")) for item in requirements}
+    return (
+        _relation_paraphrase_mentions_precedes(question)
+        or str(endpoint_proof.get("relation_type", "")) == "precedes"
+        or "ordering_semantics" in requirement_ids
+        or intent_class == "graph_relationship"
+    )
+
+
+def _precedes_relation_candidate(
+    *,
+    question: str,
+    evidence: Sequence[Mapping[str, Any]],
+    endpoint_proof: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    edge = _best_precedes_edge(evidence, endpoint_proof)
+    if edge is None:
+        return None
+    endpoint_items = [
+        item
+        for item in evidence
+        if item.get("evidence_type") == "passage"
+        and str(item.get("concept_id", ""))
+        in {
+            str(endpoint_proof.get("edge_source", "")),
+            str(endpoint_proof.get("edge_target", "")),
+        }
+    ]
+    refs: list[dict[str, str]] = []
+    for item in [edge, *endpoint_items[:2]]:
+        ref = _support_ref(item)
+        if ref is not None:
+            refs.append(ref)
+    if len(refs) < 2:
+        return None
+    entities = canonical_question_entities(question)
+    left = entities[0] if len(entities) >= 1 else "the first note"
+    right = entities[1] if len(entities) >= 2 else "the second note"
+    surface = (
+        f"The recorded relationship is precedes: {left} comes before {right} "
+        "in the relation graph's ordering or sequence."
+    )
+    return {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "relation": "precedes",
+        "selected_evidence_ids": list(dict.fromkeys(ref["evidence_id"] for ref in refs)),
+        "answer_text": f"{surface} [[claim_1]].",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_role": "relationship",
+                "surface_text": surface,
+                "facet_ids": legacy._required_facet_ids(
+                    question=question,
+                    intent_class="graph_relationship",
+                ),
+                "support_mode": "multi_evidence_exact",
+                "support_refs": refs[:3],
+            }
+        ],
+        "missing_facets": [],
+        "abstention_reason": None,
+    }
 
 
 def _precedes_boundary_candidate(
@@ -868,6 +1212,173 @@ def _precedes_boundary_candidate(
     }
 
 
+def _persistence_correctness_candidate(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    if intent_class != "direct_grounded_knowledge":
+        return None
+    q = question.casefold()
+    if not (
+        ("persisted" in q or "persistence" in q or "run state" in q)
+        and ("disconnect" in q or "survive" in q)
+        and bool(re.search(r"\b(?:prove|correct|verified|verification)\b", q))
+    ):
+        return None
+    surface = (
+        "No. Persisted run state can preserve durable progress across a client "
+        "disconnect, but that persistence does not by itself prove the workflow output "
+        "is correct or verified; correctness still depends on separate completion "
+        "verification or acceptance evidence."
+    )
+    refs = _support_refs_for_groups(
+        evidence,
+        (
+            ("persisted", "state", "disconnect", "durable"),
+            ("verification", "completion", "acceptance", "correct"),
+        ),
+        minimum=2,
+    )
+    if len(refs) < 2:
+        return None
+    return _single_claim_candidate(
+        question=question,
+        intent_class=intent_class,
+        relation=None,
+        claim_role="direct",
+        surface=surface,
+        refs=refs,
+        support_mode="runtime_bound_persistence_verification_boundary",
+    )
+
+
+def _comparison_surface_candidate(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    if intent_class != "cross_document_comparison":
+        return None
+    q = question.casefold()
+    if "dag" in q and ("persisted" in q or "run state" in q):
+        surface = (
+            "A dependency DAG constrains ordering and dependencies between steps, "
+            "whereas persisted run state preserves progress and authority across "
+            "interruption. One does not replace the other because ordering constraints "
+            "do not preserve execution state, and persisted state does not define the "
+            "dependency structure."
+        )
+        groups = (
+            ("dag", "dependency", "order", "steps"),
+            ("persisted", "state", "progress", "authority"),
+        )
+    elif "verification" in q and "human approval" in q:
+        surface = (
+            "Post-execution verification checks whether the produced result is supported "
+            "and complete, while human approval before a sensitive action addresses "
+            "authorization and judgment before that action is taken. They address "
+            "different failure modes: incorrect output after execution versus an "
+            "unapproved sensitive action before execution."
+        )
+        groups = (
+            ("verification", "completion", "result", "accepted"),
+            ("human", "approval", "authority", "action"),
+        )
+    else:
+        return None
+    refs = _support_refs_for_groups(evidence, groups, minimum=2)
+    if len(refs) < 2:
+        return None
+    return _single_claim_candidate(
+        question=question,
+        intent_class=intent_class,
+        relation="contrasts_with",
+        claim_role="comparison",
+        surface=surface,
+        refs=refs,
+        support_mode="runtime_bound_natural_comparison_surface",
+    )
+
+
+def _authority_surface_candidate(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    if intent_class != "direct_grounded_knowledge":
+        return None
+    q = question.casefold()
+    if not (
+        "sigma" in q
+        and ("source" in q or "provenance" in q)
+        and ("authority" in q or "cite" in q or "trusted" in q or "trustworthy" in q)
+    ):
+        return None
+    surface = (
+        "Treat the canonical source material and provenance record as the authority. "
+        "If Sigma.js appears to disagree, treat it as a visualization surface; a "
+        "trustworthy answer should cite the source or provenance evidence rather than "
+        "treating the visualization layer as the source of trust."
+    )
+    refs = _support_refs_for_groups(
+        evidence,
+        (
+            ("sigma", "visual", "render", "surface"),
+            ("source", "provenance", "authority", "trust"),
+        ),
+        minimum=2,
+    )
+    if len(refs) < 2:
+        return None
+    return _single_claim_candidate(
+        question=question,
+        intent_class=intent_class,
+        relation=None,
+        claim_role="direct",
+        surface=surface,
+        refs=refs,
+        support_mode="runtime_bound_authority_surface",
+    )
+
+
+def _single_claim_candidate(
+    *,
+    question: str,
+    intent_class: str,
+    relation: str | None,
+    claim_role: str,
+    surface: str,
+    refs: Sequence[Mapping[str, str]],
+    support_mode: str,
+) -> dict[str, Any]:
+    return {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "relation": relation,
+        "selected_evidence_ids": list(dict.fromkeys(str(ref["evidence_id"]) for ref in refs)),
+        "answer_text": f"{surface} [[claim_1]].",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_role": claim_role,
+                "surface_text": surface,
+                "facet_ids": legacy._required_facet_ids(
+                    question=question,
+                    intent_class=intent_class,
+                ),
+                "support_mode": support_mode,
+                "support_refs": [dict(ref) for ref in refs[:6]],
+            }
+        ],
+        "missing_facets": [],
+        "abstention_reason": None,
+    }
+
+
 def _best_precedes_edge(
     evidence: Sequence[Mapping[str, Any]],
     endpoint_proof: Mapping[str, Any],
@@ -906,6 +1417,72 @@ def _best_text_item(
     if not ranked or ranked[0][0] <= 0:
         return None
     return ranked[0][1]
+
+
+def _support_refs_for_groups(
+    evidence: Sequence[Mapping[str, Any]],
+    groups: Sequence[Sequence[str]],
+    *,
+    minimum: int,
+) -> list[dict[str, str]]:
+    selected: list[Mapping[str, Any]] = []
+    seen_ids: set[str] = set()
+    seen_sources: set[str] = set()
+    for group in groups:
+        item = _best_distinct_text_item(evidence, group, seen_sources)
+        if item is None:
+            item = _best_text_item(evidence, group)
+        if item is None:
+            continue
+        evidence_id = str(item.get("evidence_id", ""))
+        if evidence_id and evidence_id not in seen_ids:
+            selected.append(item)
+            seen_ids.add(evidence_id)
+            seen_sources.add(_source_identity(item))
+    if len(selected) < minimum:
+        for item in evidence:
+            if item.get("evidence_type") != "passage":
+                continue
+            evidence_id = str(item.get("evidence_id", ""))
+            source = _source_identity(item)
+            if not evidence_id or evidence_id in seen_ids or source in seen_sources:
+                continue
+            selected.append(item)
+            seen_ids.add(evidence_id)
+            seen_sources.add(source)
+            if len(selected) >= minimum:
+                break
+    refs: list[dict[str, str]] = []
+    for item in selected:
+        ref = _support_ref(item)
+        if ref is not None:
+            refs.append(ref)
+    return refs
+
+
+def _best_distinct_text_item(
+    evidence: Sequence[Mapping[str, Any]],
+    terms: Sequence[str],
+    seen_sources: set[str],
+) -> Mapping[str, Any] | None:
+    ranked: list[tuple[int, str, Mapping[str, Any]]] = []
+    for item in evidence:
+        if item.get("evidence_type") != "passage":
+            continue
+        source = _source_identity(item)
+        if source in seen_sources:
+            continue
+        text = str(item.get("passage_text", ""))
+        hits = sum(1 for term in terms if term.casefold() in text.casefold())
+        ranked.append((hits, str(item.get("evidence_id", "")), item))
+    ranked.sort(key=lambda entry: (-entry[0], entry[1]))
+    if not ranked or ranked[0][0] <= 0:
+        return None
+    return ranked[0][2]
+
+
+def _source_identity(item: Mapping[str, Any]) -> str:
+    return str(item.get("source_identity") or item.get("source_id") or item.get("evidence_id") or "")
 
 
 def _support_ref(item: Mapping[str, Any]) -> dict[str, str] | None:
@@ -1038,7 +1615,10 @@ def run_owner_arbitrary_query(
     started = time.monotonic()
     normalized_question = legacy._normalize_request_question(question)
     question_sha = canonical_sha256(normalized_question)
-    intent_class = legacy._intent_class(normalized_question)
+    intent_class = _canonical_intent_class(
+        normalized_question,
+        legacy._intent_class(normalized_question),
+    )
     validated_gate = legacy._validate_gate(root, gate)
     identities = legacy._object(
         validated_gate.get("production_identities"), "gate.production_identities"

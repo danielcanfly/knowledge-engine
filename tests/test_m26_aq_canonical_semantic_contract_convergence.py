@@ -328,6 +328,328 @@ def test_provider_abstention_recovers_supported_adaptive_planning_answer() -> No
     assert answer["citation_locator_valid"] is True
 
 
+def test_provider_abstention_recovers_disconnect_state_answer_without_admission_overreach() -> None:
+    from knowledge_engine.m26_aq_semantic_contract import (
+        derive_semantic_requirements,
+        synthesize_and_verify,
+    )
+
+    question = (
+        "Why is persisted run state important when a client disconnects before a "
+        "long-running workflow has finished?"
+    )
+    requirements = derive_semantic_requirements(
+        question,
+        "direct_grounded_knowledge",
+    )
+    assert {item.requirement_id for item in requirements} == {
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }
+    evidence = [
+        _passage(
+            "ev-durable",
+            (
+                "Durable persisted server-side state preserves run progress and "
+                "authority after a client disconnect while the workflow continues."
+            ),
+        ),
+        _passage(
+            "ev-status",
+            "Observability and reattachment expose status for the continuing run.",
+        ),
+        _passage(
+            "ev-complete",
+            "Completion verification or acceptance happens before success is declared.",
+        ),
+    ]
+
+    answer, closure = synthesize_and_verify(
+        question=question,
+        trace_id="trace-disconnect-recovery",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=_CompactAbstainingProvider(),
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    text = answer["answer_text"].casefold()
+    assert answer["status"] == "owner_only_cited_answer"
+    assert closure["failures"] == []
+    assert "client disconnect" in text
+    assert "observability" in text
+    assert "completion verification" in text
+    assert "admission" not in text
+
+
+def test_provider_abstention_recovers_pure_precedes_ordering_relation() -> None:
+    from knowledge_engine.m26_aq_semantic_contract import (
+        _canonical_intent_class,
+        derive_semantic_requirements,
+        synthesize_and_verify,
+    )
+    from knowledge_engine import m26_pa7_arbitrary_query_runtime as legacy
+
+    question = (
+        "Harness Theory Part 1 comes before Part 2 in the relation graph. "
+        "What relationship is actually recorded between those two notes?"
+    )
+    source = "concept-harness-part-1"
+    target = "concept-harness-part-2"
+    evidence = [
+        _graph_edge(
+            "ev-edge",
+            edge_id="edge-harness-precedes",
+            source=source,
+            target=target,
+            text=(
+                "Harness Theory Part 1 precedes Harness Theory Part 2 in the "
+                "relation graph."
+            ),
+        ),
+        _passage("ev-source", "Harness Theory Part 1 is the first note.", concept_id=source),
+        _passage("ev-target", "Harness Theory Part 2 is the second note.", concept_id=target),
+    ]
+    intent = _canonical_intent_class(question, legacy._intent_class(question))
+
+    answer, closure = synthesize_and_verify(
+        question=question,
+        trace_id="trace-pure-precedes",
+        intent_class=intent,
+        evidence=evidence,
+        provider_client=_CompactAbstainingProvider(),
+        requirements=derive_semantic_requirements(question, intent),
+        endpoint_proof={
+            "required": True,
+            "matched": True,
+            "question_entities": ["Harness Theory Part 1", "Harness Theory Part 2"],
+            "edge_id": "edge-harness-precedes",
+            "edge_source": source,
+            "edge_target": target,
+            "relation_type": "precedes",
+        },
+    )
+
+    text = answer["answer_text"]
+    assert intent == "graph_relationship"
+    assert answer["status"] == "owner_only_cited_answer"
+    assert closure["failures"] == []
+    assert "precedes" in text
+    assert "Harness Theory Part 1" in text
+    assert "Harness Theory Part 2" in text
+    assert "dependency" not in text.casefold()
+
+
+def test_provider_abstention_recovers_natural_control_comparison_surfaces() -> None:
+    from knowledge_engine.m26_aq_semantic_contract import (
+        derive_semantic_requirements,
+        synthesize_and_verify,
+    )
+
+    scenarios = [
+        (
+            "Compare a dependency DAG with persisted run state: what does each constrain or preserve, and why can one not replace the other?",
+            [
+                _passage(
+                    "ev-dag",
+                    (
+                        "A dependency DAG constrains ordering and dependencies between "
+                        "steps, so it constrains what each step can do."
+                    ),
+                ),
+                _passage(
+                    "ev-state",
+                    (
+                        "Persisted run state preserves progress and authority across "
+                        "interruption; persisted state does not replace the DAG "
+                        "dependency structure."
+                    ),
+                ),
+            ],
+            ("whereas", "dag", "persisted run state"),
+        ),
+        (
+            "Compare post-execution verification with human approval before a sensitive action. What different failure modes are those controls meant to address?",
+            [
+                _passage(
+                    "ev-verify",
+                    (
+                        "Post-execution verification checks whether the produced result "
+                        "is supported and complete, addressing incorrect output failure modes."
+                    ),
+                ),
+                _passage(
+                    "ev-human",
+                    (
+                        "Human approval is an authority gate before a sensitive action "
+                        "is taken, addressing unapproved action failure modes."
+                    ),
+                ),
+            ],
+            ("while", "verification", "human approval"),
+        ),
+    ]
+
+    for question, evidence, expected_terms in scenarios:
+        answer, closure = synthesize_and_verify(
+            question=question,
+            trace_id="trace-natural-comparison",
+            intent_class="cross_document_comparison",
+            evidence=evidence,
+            provider_client=_CompactAbstainingProvider(),
+            requirements=derive_semantic_requirements(
+                question,
+                "cross_document_comparison",
+            ),
+            endpoint_proof={"required": False, "matched": False},
+        )
+        text = answer["answer_text"].casefold()
+        assert answer["status"] == "owner_only_cited_answer"
+        assert closure["failures"] == []
+        assert all(term in text for term in expected_terms)
+        assert "compare left" not in text
+        assert "comparison relation" not in text
+
+
+def test_provider_abstention_recovers_sigma_authority_surface() -> None:
+    from knowledge_engine.m26_aq_semantic_contract import (
+        derive_semantic_requirements,
+        synthesize_and_verify,
+    )
+
+    question = (
+        "If a Sigma.js visualization appears to disagree with the underlying source "
+        "material, which layer should be treated as authority and what should a "
+        "trustworthy answer cite?"
+    )
+    evidence = [
+        _passage(
+            "ev-sigma",
+            "Sigma.js is a visualization rendering surface for graph interaction.",
+        ),
+        _passage(
+            "ev-source",
+            (
+                "The canonical source material and provenance record are the source "
+                "of trust and authority."
+            ),
+        ),
+    ]
+
+    answer, closure = synthesize_and_verify(
+        question=question,
+        trace_id="trace-sigma-authority",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=_CompactAbstainingProvider(),
+        requirements=derive_semantic_requirements(
+            question,
+            "direct_grounded_knowledge",
+        ),
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    text = answer["answer_text"].casefold()
+    assert answer["status"] == "owner_only_cited_answer"
+    assert closure["failures"] == []
+    assert "canonical source" in text
+    assert "provenance" in text
+    assert "sigma.js appears to disagree" in text
+    assert "visualization surface" in text
+    assert "sigma js:" not in text
+
+
+def test_provider_abstention_recovers_persistence_correctness_boundary() -> None:
+    from knowledge_engine.m26_aq_semantic_contract import (
+        derive_semantic_requirements,
+        synthesize_and_verify,
+    )
+
+    question = (
+        "Persisted run state can survive a client disconnect. Does that persistence "
+        "by itself prove that the workflow output is correct and verified?"
+    )
+    requirements = derive_semantic_requirements(
+        question,
+        "direct_grounded_knowledge",
+    )
+    assert {item.requirement_id for item in requirements} == {
+        "durable_state",
+        "completion_verification",
+    }
+    evidence = [
+        _passage(
+            "ev-state",
+            (
+                "Persisted run state can survive a client disconnect and preserve "
+                "durable progress, but persistence by itself does not prove correctness."
+            ),
+        ),
+        _passage(
+            "ev-verify",
+            (
+                "Completion verification and acceptance evidence are required before "
+                "the workflow output is correct and verified; verification is separate evidence."
+            ),
+        ),
+    ]
+
+    answer, closure = synthesize_and_verify(
+        question=question,
+        trace_id="trace-persistence-correctness",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=_CompactAbstainingProvider(),
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    text = answer["answer_text"].casefold()
+    assert answer["status"] == "owner_only_cited_answer"
+    assert closure["failures"] == []
+    assert text.startswith("no.")
+    assert "does not by itself prove" in text
+    assert "correct or verified" in text
+    assert "non entailment boundary" not in text
+
+
+def test_cobalt_orchid_bb18_remains_safe_abstention() -> None:
+    from knowledge_engine.m26_aq_semantic_contract import (
+        derive_semantic_requirements,
+        synthesize_and_verify,
+    )
+
+    question = (
+        "What launch date was announced for the nonexistent cobalt-orchid "
+        "moon-ferry ticketing protocol?"
+    )
+    evidence = [
+        _passage(
+            "ev-incidental",
+            "A production article discusses launch planning for an unrelated system.",
+        )
+    ]
+
+    answer, closure = synthesize_and_verify(
+        question=question,
+        trace_id="trace-bb18",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=_CompactAbstainingProvider(),
+        requirements=derive_semantic_requirements(
+            question,
+            "direct_grounded_knowledge",
+        ),
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["answer_text"] == ""
+    assert closure["failures"]
+
+
 def test_provider_abstention_does_not_recover_unsupported_external_marker_question() -> None:
     from knowledge_engine.m26_aq_semantic_contract import (
         derive_semantic_requirements,

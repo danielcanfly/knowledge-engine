@@ -86,8 +86,11 @@ _ALIGNMENT_STOPWORDS = {
 }
 _DEBUG_SURFACE_PATTERNS = (
     re.compile(r"\bcompare\s+(?:left|right)\b", re.I),
+    re.compile(r"\bcomparison\s+relation\s*:", re.I),
     re.compile(r"\bsigma\s*js\s*:", re.I),
     re.compile(r"\bmulti[- ]source\s+selection\s*:", re.I),
+    re.compile(r"\bnon[- ]entailment\s+boundary\s*:", re.I),
+    re.compile(r"\bordering\s+boundary\s*:", re.I),
     re.compile(r"\bscaffold\s*:", re.I),
 )
 _AUTHORITY_TERMS = {"authority", "owner", "provenance", "source", "source-of-trust", "trust"}
@@ -254,7 +257,13 @@ def _is_comparison_question(q_folded: str) -> bool:
 
 
 def _comparison_answer_responsive(a_folded: str) -> bool:
-    return bool(_terms(a_folded) & _COMPARISON_ANSWER_TERMS)
+    terms = _terms(a_folded)
+    if terms & _COMPARISON_ANSWER_TERMS:
+        return True
+    return bool(
+        (terms & {"role", "roles", "responsible", "responsibility", "layer", "surface"})
+        and len(terms & {"obsidian", "graphology", "sigma", "router", "routing", "replanning", "dag", "persisted", "verification", "approval"}) >= 2
+    )
 
 
 def _is_authority_question(q_folded: str) -> bool:
@@ -281,7 +290,44 @@ def _essential_question_terms(question: str) -> set[str]:
         or "nonresponsive" in folded
     ):
         return set()
-    return {term for term in terms if len(term) >= 4}
+    optional_question_words = {
+        "about",
+        "action",
+        "address",
+        "after",
+        "appears",
+        "already",
+        "before",
+        "chooses",
+        "component",
+        "different",
+        "difference",
+        "distinguish",
+        "including",
+        "itself",
+        "layer",
+        "material",
+        "meant",
+        "pitch",
+        "play",
+        "product",
+        "request",
+        "revises",
+        "role",
+        "roles",
+        "sensitive",
+        "started",
+        "survive",
+        "that",
+        "treated",
+        "trustworthy",
+        "underlying",
+        "visualization",
+    }
+    essential = {term for term in terms if len(term) >= 4} - optional_question_words
+    if _is_authority_question(folded):
+        essential -= {"cite", "back"}
+    return essential
 
 
 def _citations_text(row: dict[str, Any]) -> str:

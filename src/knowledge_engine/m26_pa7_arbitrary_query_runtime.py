@@ -1970,7 +1970,11 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
         add("source_of_trust", ["source", "trust", "anchor", "authority"])
     if re.search(r"\bdoes\b.*\bprove\b|\bcan we safely infer\b|\bwhat can(?:'t|not) we infer\b", question_casefold):
         add("non_entailment_boundary", ["infer", "prove", "depend"])
-        add("ordering_boundary", ["ordering", "sequence", "precedes"])
+        if any(
+            term in question_casefold
+            for term in ("precedes", "preceding", "comes before", "ordering", "sequence", "relation graph")
+        ):
+            add("ordering_boundary", ["ordering", "sequence", "precedes"])
     if "responsible for" in question_casefold or "each responsible" in question_casefold:
         add("responsibility_mapping", ["responsible", "for"])
     if "router" in question_casefold:
@@ -1995,12 +1999,70 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
         add("global_replan", ["global", "replan", "invalidated", "assumption"])
     if "state machine" in question_casefold:
         add("state_machine", ["state", "machine", "transition"])
-    if "client disconnect" in question_casefold or "admission to completion" in question_casefold:
+    lifecycle_context = any(
+        marker in question_casefold
+        for marker in (
+            "client disconnect",
+            "disconnect",
+            "admission to completion",
+            "intake to completion",
+            "from admission",
+            "from intake",
+        )
+    )
+    full_lifecycle = any(
+        marker in question_casefold
+        for marker in (
+            "admission to completion",
+            "intake to completion",
+            "from admission",
+            "from intake",
+            "surrounding control system",
+            "keep the run trustworthy",
+        )
+    )
+    if lifecycle_context and (full_lifecycle or any(term in question_casefold for term in ("admission", "intake", "policy"))):
         add("lifecycle_trust_envelope", ["admission", "completion", "observability"])
         add("admission_policy", ["admission", "policy", "owner"])
+    if lifecycle_context and (
+        full_lifecycle
+        or any(
+            term in question_casefold
+            for term in ("disconnect", "persisted", "persist", "durable", "recover", "resume")
+        )
+    ):
         add("durable_state_authority", ["durable", "persisted", "state", "authority"])
+    if lifecycle_context and (
+        full_lifecycle
+        or any(
+            term in question_casefold
+            for term in (
+                "keeps working",
+                "keep working",
+                "keeps running",
+                "keep running",
+                "continues",
+                "continue",
+                "long-running",
+            )
+        )
+    ):
         add("continued_execution", ["continue", "continued", "execution", "disconnect"])
+    if lifecycle_context and (
+        full_lifecycle
+        or any(
+            term in question_casefold
+            for term in ("verification", "verified", "completion", "complete", "correct", "success", "acceptance")
+        )
+    ):
         add("verification_completion", ["verification", "completion", "complete", "acceptance"])
+    if lifecycle_context and (
+        full_lifecycle
+        or any(
+            term in question_casefold
+            for term in ("observability", "reattach", "status", "headless", "inspect", "inspection", "resume")
+        )
+    ):
         add("observability_reattachment", ["observability", "reattach", "status", "resume"])
     if "verification" in question_casefold or "human approval" in question_casefold:
         add("verification_or_approval", ["verification", "approval"])
