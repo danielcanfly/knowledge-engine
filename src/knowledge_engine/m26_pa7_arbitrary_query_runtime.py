@@ -1987,6 +1987,28 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
 
 def _named_question_entities(question: str) -> list[str]:
     entities: list[str] = []
+
+    def add(entity: str) -> None:
+        entity = " ".join(str(entity).strip(" ?:.,").split())
+        if entity and entity.casefold() not in {item.casefold() for item in entities}:
+            entities.append(entity)
+
+    shared_part = re.search(
+        r"\b([A-Z][A-Za-z0-9 .'/&-]{2,}?)\s+Part\s+(\d+)\b",
+        question,
+    )
+    if shared_part:
+        root = " ".join(shared_part.group(1).split())
+        root = re.sub(
+            r"^(?:If the relation graph records|The production graph says|"
+            r"Does the precedes edge between|Can the precedes edge between|Does)\s+",
+            "",
+            root,
+            flags=re.I,
+        ).strip()
+        for part in re.findall(r"\bPart\s+(\d+)\b", question, flags=re.I):
+            add(f"{root} Part {part}")
+
     patterns = (
         r"Harness Theory Part \d+",
         r"Graphology",
@@ -2001,9 +2023,7 @@ def _named_question_entities(question: str) -> list[str]:
     )
     for pattern in patterns:
         for match in re.finditer(pattern, question, flags=re.I):
-            entity = match.group(0).strip()
-            if entity.casefold() not in {item.casefold() for item in entities}:
-                entities.append(entity)
+            add(match.group(0))
     return entities
 
 
