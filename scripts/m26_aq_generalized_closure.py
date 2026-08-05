@@ -5,6 +5,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from knowledge_engine.m26_aq_semantic_contract import (
+    CANONICAL_RUNTIME_ENTRYPOINT,
+    semantic_contract_fingerprint,
+)
 from m26_aq_final_closure import (
     ANSWER_SOURCE,
     EXPECTED_EDGE_COUNT,
@@ -16,9 +20,6 @@ from m26_aq_final_closure import (
     _zero_mutations,
 )
 
-EXPECTED_ENTRYPOINT = (
-    "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
-)
 REQUIRED_CLASSES = {
     "direct_explanatory": 2,
     "implicit_graph_relationship": 2,
@@ -34,8 +35,27 @@ def _mapping(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _validate_answer_row(row: dict[str, Any], failures: list[str]) -> None:
+def _canonical_failures(row: dict[str, Any], expected_sha: str) -> list[str]:
+    failures: list[str] = []
+    expected_fingerprint = semantic_contract_fingerprint()
+    canonical = _mapping(row.get("canonical_runtime"))
+    if canonical.get("build_sha") != expected_sha:
+        failures.append("runtime_sha_mismatch")
+    if canonical.get("entrypoint") != CANONICAL_RUNTIME_ENTRYPOINT:
+        failures.append("runtime_entrypoint_mismatch")
+    if canonical.get("semantic_contract_fingerprint") != expected_fingerprint:
+        failures.append("runtime_fingerprint_mismatch")
+    closure = _mapping(row.get("semantic_closure"))
+    contract = _mapping(closure.get("semantic_contract"))
+    if contract and contract.get("fingerprint") != expected_fingerprint:
+        failures.append("semantic_closure_fingerprint_mismatch")
+    return failures
+
+
+def _validate_answer_row(row: dict[str, Any], failures: list[str], expected_sha: str) -> None:
     case_id = str(row.get("case_id", "unknown"))
+    for failure in _canonical_failures(row, expected_sha):
+        failures.append(f"{case_id}:{failure}")
     accounting = _mapping(row.get("accounting"))
     provider_calls = int(accounting.get("provider_call_count", 0))
     if row.get("safe_abstention") or row.get("status") != "owner_only_cited_answer":
@@ -77,16 +97,14 @@ def _validate_answer_row(row: dict[str, Any], failures: list[str]) -> None:
         failures.append(f"{case_id}:{semantic_failure}")
 
 
-def _validate_abstention_row(row: dict[str, Any], failures: list[str]) -> None:
+def _validate_abstention_row(row: dict[str, Any], failures: list[str], expected_sha: str) -> None:
     case_id = str(row.get("case_id", "unknown"))
+    for failure in _canonical_failures(row, expected_sha):
+        failures.append(f"{case_id}:{failure}")
     accounting = _mapping(row.get("accounting"))
     provider_calls = int(accounting.get("provider_call_count", 0))
     if not row.get("safe_abstention") or row.get("status") != "owner_only_safe_abstention":
         failures.append(f"{case_id}:expected_safe_abstention")
-    # A trustworthy no-answer may be established before provider invocation or after
-    # a bounded provider call determines that retrieved evidence still cannot support
-    # the requested fact. Provider-call count is therefore a budget gate, not a product
-    # semantics gate.
     if provider_calls < 0 or provider_calls > 2:
         failures.append(f"{case_id}:provider_call_count")
     if str(row.get("answer_text", "")).strip():
@@ -98,6 +116,7 @@ def _validate_abstention_row(row: dict[str, Any], failures: list[str]) -> None:
 def validate(*, input_path: Path, expected_sha: str, minimum: int) -> None:
     artifact = json.loads(input_path.read_text(encoding="utf-8"))
     failures: list[str] = []
+    expected_fingerprint = semantic_contract_fingerprint()
     health = _mapping(artifact.get("health"))
     graph = _mapping(artifact.get("graph"))
 
@@ -105,8 +124,10 @@ def validate(*, input_path: Path, expected_sha: str, minimum: int) -> None:
         failures.append("health_not_ok")
     if health.get("build_sha") != expected_sha:
         failures.append("health_build_sha_mismatch")
-    if health.get("entrypoint") != EXPECTED_ENTRYPOINT:
+    if health.get("entrypoint") != CANONICAL_RUNTIME_ENTRYPOINT:
         failures.append("wrong_production_entrypoint")
+    if health.get("semantic_contract_fingerprint") != expected_fingerprint:
+        failures.append("health_semantic_fingerprint_mismatch")
 
     if graph.get("http_status") != 200 or graph.get("status") != "ok":
         failures.append("graph_not_ok")
@@ -116,10 +137,7 @@ def validate(*, input_path: Path, expected_sha: str, minimum: int) -> None:
         failures.append("graph_release_mismatch")
     if graph.get("graph_v2_sha256") != EXPECTED_GRAPH_SHA256:
         failures.append("graph_sha_mismatch")
-    if (
-        graph.get("node_count") != EXPECTED_NODE_COUNT
-        or graph.get("edge_count") != EXPECTED_EDGE_COUNT
-    ):
+    if graph.get("node_count") != EXPECTED_NODE_COUNT or graph.get("edge_count") != EXPECTED_EDGE_COUNT:
         failures.append("graph_population_mismatch")
 
     rows = artifact.get("rows", [])
@@ -140,31 +158,22 @@ def validate(*, input_path: Path, expected_sha: str, minimum: int) -> None:
         if row.get("http_status") != 200:
             failures.append(f"{case_id}:http")
             continue
-        canonical = _mapping(row.get("canonical_runtime"))
-        if canonical.get("build_sha") != expected_sha:
-            failures.append(f"{case_id}:runtime_sha_mismatch")
         if not _zero_mutations(row.get("mutations", {})):
             failures.append(f"{case_id}:protected_mutation")
         expected = str(row.get("expected", "answer"))
         if expected == "abstain":
-            _validate_abstention_row(row, failures)
+            _validate_abstention_row(row, failures, expected_sha)
         elif expected == "answer":
-            _validate_answer_row(row, failures)
+            _validate_answer_row(row, failures, expected_sha)
         else:
             failures.append(f"{case_id}:unknown_expected:{expected}")
 
     for class_name, required in REQUIRED_CLASSES.items():
         if class_counts.get(class_name, 0) < required:
-            failures.append(
-                f"class_coverage:{class_name}:{class_counts.get(class_name, 0)}<{required}"
-            )
+            failures.append(f"class_coverage:{class_name}:{class_counts.get(class_name, 0)}<{required}")
 
     privacy = _mapping(artifact.get("privacy"))
-    for key in (
-        "raw_backend_token_recorded",
-        "raw_owner_hash_recorded",
-        "provider_secret_recorded",
-    ):
+    for key in ("raw_backend_token_recorded", "raw_owner_hash_recorded", "provider_secret_recorded"):
         if privacy.get(key) is not False:
             failures.append(f"privacy:{key}")
 
@@ -173,12 +182,7 @@ def validate(*, input_path: Path, expected_sha: str, minimum: int) -> None:
         raise SystemExit(1)
     print(
         json.dumps(
-            {
-                "status": "PASS",
-                "rows": len(rows),
-                "class_counts": class_counts,
-                "deploy_sha": expected_sha,
-            },
+            {"status": "PASS", "rows": len(rows), "class_counts": class_counts, "deploy_sha": expected_sha},
             indent=2,
             sort_keys=True,
         )
