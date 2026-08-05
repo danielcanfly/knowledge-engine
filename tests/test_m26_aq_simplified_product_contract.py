@@ -32,10 +32,26 @@ def _load_generalized_module() -> ModuleType:
     return module
 
 
+def _canonical_runtime(module: ModuleType, expected_sha: str = "sha") -> dict[str, object]:
+    return {
+        "build_sha": expected_sha,
+        "entrypoint": module.CANONICAL_RUNTIME_ENTRYPOINT,
+        "semantic_contract_fingerprint": module.semantic_contract_fingerprint(),
+    }
+
+
+def _semantic_contract(module: ModuleType) -> dict[str, object]:
+    return {
+        "entrypoint": module.CANONICAL_RUNTIME_ENTRYPOINT,
+        "fingerprint": module.semantic_contract_fingerprint(),
+    }
+
+
 def _answered_row(module: ModuleType, case_id: str) -> dict[str, object]:
     closure: dict[str, object] = {
         "failures": [],
         "broad_deterministic_fallback_used": False,
+        "semantic_contract": _semantic_contract(module),
     }
     if case_id in {"R3-Q05", "R3-Q09"}:
         closure["endpoint_proof"] = {
@@ -65,6 +81,7 @@ def _answered_row(module: ModuleType, case_id: str) -> dict[str, object]:
             "citation_locator_valid": True,
         },
         "mutations": {},
+        "canonical_runtime": _canonical_runtime(module),
         "semantic_closure": closure,
         "multi_evidence_verification": {},
         "relationship_summary": {},
@@ -75,7 +92,7 @@ def _answered_row(module: ModuleType, case_id: str) -> dict[str, object]:
     }
 
 
-def _abstention_row(case_id: str) -> dict[str, object]:
+def _abstention_row(module: ModuleType, case_id: str) -> dict[str, object]:
     return {
         "case_id": case_id,
         "question": "synthetic abstention question",
@@ -85,6 +102,8 @@ def _abstention_row(case_id: str) -> dict[str, object]:
         "answer_text": "",
         "citations": [],
         "accounting": {"provider_call_count": 0},
+        "canonical_runtime": _canonical_runtime(module),
+        "semantic_closure": {"semantic_contract": _semantic_contract(module)},
         "collector": {
             "deadline_exceeded": False,
             "timeout_converted_to_answer": False,
@@ -103,7 +122,7 @@ def test_correct_false_premise_answer_need_not_begin_with_no(
     for index in range(1, 13):
         case_id = f"R3-Q{index:02d}"
         if case_id in {"R3-Q10", "R3-Q11"}:
-            rows.append(_abstention_row(case_id))
+            rows.append(_abstention_row(module, case_id))
         else:
             rows.append(_answered_row(module, case_id))
 
@@ -113,10 +132,8 @@ def test_correct_false_premise_answer_need_not_begin_with_no(
             "http_status": 200,
             "status": "ok",
             "build_sha": "sha",
-            "entrypoint": (
-                "knowledge_engine.m26_pa7_semantic_closure_runtime."
-                "run_owner_arbitrary_query"
-            ),
+            "entrypoint": module.CANONICAL_RUNTIME_ENTRYPOINT,
+            "semantic_contract_fingerprint": module.semantic_contract_fingerprint(),
         },
         "graph": {
             "http_status": 200,
@@ -153,65 +170,65 @@ def test_blackbox_false_premise_answer_need_not_begin_with_no(
     module = _load_generalized_module()
     monkeypatch.setattr(module, "_validate_visible_semantics", lambda row: [])
     failures: list[str] = []
-    module._validate_answer_row(
-        {
-            "case_id": "GPT-E-BB09",
-            "class": "grounded_but_irrelevant_adversarial",
-            "safe_abstention": False,
-            "status": "owner_only_cited_answer",
-            "answer_source": module.ANSWER_SOURCE,
-            "answer_text": (
-                "The precedes edge records ordering or navigation. "
-                "It does not establish dependency."
-            ),
-            "citations": [{"citation_id": "c1"}],
-            "accounting": {"provider_call_count": 1},
-            "integrity": {
-                "unsupported_accepted_claims": 0,
-                "material_claim_support_verified": True,
-                "citation_locator_valid": True,
-            },
-            "semantic_closure": {
-                "failures": [],
-                "broad_deterministic_fallback_used": False,
-            },
-            "multi_evidence_verification": {},
+    row = {
+        "case_id": "GPT-E-BB09",
+        "class": "grounded_but_irrelevant_adversarial",
+        "safe_abstention": False,
+        "status": "owner_only_cited_answer",
+        "answer_source": module.ANSWER_SOURCE,
+        "answer_text": (
+            "The precedes edge records ordering or navigation. "
+            "It does not establish dependency."
+        ),
+        "citations": [{"citation_id": "c1"}],
+        "accounting": {"provider_call_count": 1},
+        "integrity": {
+            "unsupported_accepted_claims": 0,
+            "material_claim_support_verified": True,
+            "citation_locator_valid": True,
         },
-        failures,
-    )
+        "canonical_runtime": _canonical_runtime(module),
+        "semantic_closure": {
+            "failures": [],
+            "broad_deterministic_fallback_used": False,
+            "semantic_contract": _semantic_contract(module),
+        },
+        "multi_evidence_verification": {},
+    }
+    module._validate_answer_row(row, failures, "sha")
     assert failures == []
 
 
 def test_blackbox_safe_abstention_may_use_one_bounded_provider_call() -> None:
     module = _load_generalized_module()
     failures: list[str] = []
-    module._validate_abstention_row(
-        {
-            "case_id": "GPT-E-BB18",
-            "safe_abstention": True,
-            "status": "owner_only_safe_abstention",
-            "answer_text": "",
-            "citations": [],
-            "accounting": {"provider_call_count": 1},
-        },
-        failures,
-    )
+    row = {
+        "case_id": "GPT-E-BB18",
+        "safe_abstention": True,
+        "status": "owner_only_safe_abstention",
+        "answer_text": "",
+        "citations": [],
+        "accounting": {"provider_call_count": 1},
+        "canonical_runtime": _canonical_runtime(module),
+        "semantic_closure": {"semantic_contract": _semantic_contract(module)},
+    }
+    module._validate_abstention_row(row, failures, "sha")
     assert failures == []
 
 
 def test_blackbox_abstention_still_rejects_answer_text_or_excess_calls() -> None:
     module = _load_generalized_module()
     failures: list[str] = []
-    module._validate_abstention_row(
-        {
-            "case_id": "GPT-E-BB18",
-            "safe_abstention": True,
-            "status": "owner_only_safe_abstention",
-            "answer_text": "unsupported prose",
-            "citations": [],
-            "accounting": {"provider_call_count": 3},
-        },
-        failures,
-    )
+    row = {
+        "case_id": "GPT-E-BB18",
+        "safe_abstention": True,
+        "status": "owner_only_safe_abstention",
+        "answer_text": "unsupported prose",
+        "citations": [],
+        "accounting": {"provider_call_count": 3},
+        "canonical_runtime": _canonical_runtime(module),
+        "semantic_closure": {"semantic_contract": _semantic_contract(module)},
+    }
+    module._validate_abstention_row(row, failures, "sha")
     assert "GPT-E-BB18:provider_call_count" in failures
     assert "GPT-E-BB18:abstention_has_answer_text" in failures
