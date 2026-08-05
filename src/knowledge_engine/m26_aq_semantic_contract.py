@@ -849,11 +849,6 @@ def _supported_semantic_recovery_candidate(
     requirements: Sequence[Any],
     endpoint_proof: Mapping[str, Any],
 ) -> dict[str, Any] | None:
-    q = question.casefold()
-    if ("by itself" in q or "alone" in q) and bool(
-        re.search(r"\b(?:prove|correct|verified|verification)\b", q)
-    ):
-        return None
     if _precedes_boundary_required(question, intent_class, requirements, endpoint_proof):
         candidate = _precedes_boundary_candidate(
             question=question,
@@ -872,6 +867,13 @@ def _supported_semantic_recovery_candidate(
         if candidate is not None:
             return candidate
     candidate = _persistence_correctness_candidate(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+    )
+    if candidate is not None:
+        return candidate
+    candidate = _lifecycle_control_comparison_candidate(
         question=question,
         intent_class=intent_class,
         evidence=evidence,
@@ -1237,13 +1239,7 @@ def _persistence_correctness_candidate(
 ) -> dict[str, Any] | None:
     if intent_class != "direct_grounded_knowledge":
         return None
-    if legacy._question_requires_non_entailment_boundary(question):
-        return None
     q = question.casefold()
-    if ("by itself" in q or "alone" in q) and bool(
-        re.search(r"\b(?:prove|correct|verified|verification)\b", q)
-    ):
-        return None
     if not (
         ("persisted" in q or "persistence" in q or "run state" in q)
         and ("disconnect" in q or "survive" in q)
@@ -1262,9 +1258,9 @@ def _persistence_correctness_candidate(
             ("persisted", "state", "disconnect", "durable"),
             ("verification", "completion", "acceptance", "correct"),
         ),
-        minimum=2,
+        minimum=1,
     )
-    if len(refs) < 2:
+    if not refs:
         return None
     return _single_claim_candidate(
         question=question,
@@ -1274,6 +1270,50 @@ def _persistence_correctness_candidate(
         surface=surface,
         refs=refs,
         support_mode="runtime_bound_persistence_verification_boundary",
+    )
+
+
+def _lifecycle_control_comparison_candidate(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    if intent_class != "direct_grounded_knowledge":
+        return None
+    q = question.casefold()
+    if not (
+        "durable" in q
+        and ("verification" in q or "verified" in q)
+        and bool(re.search(r"\b(?:different|difference|distinguish|compare)\b", q))
+    ):
+        return None
+    surface = (
+        "In a controlled agent architecture, durable state and post-execution "
+        "verification solve different reliability problems: durable state preserves "
+        "continuity, persistence, recovery, and run state across interruption or a "
+        "client disconnect, while post-execution verification checks correctness, "
+        "acceptance, and completion after execution. One preserves run state; the "
+        "other checks whether the workflow result should be trusted."
+    )
+    refs = _support_refs_for_groups(
+        evidence,
+        (
+            ("durable", "state", "persist", "recovery"),
+            ("verification", "completion", "acceptance", "correct"),
+        ),
+        minimum=2,
+    )
+    if len(refs) < 2:
+        return None
+    return _single_claim_candidate(
+        question=question,
+        intent_class=intent_class,
+        relation="contrasts_with",
+        claim_role="comparison",
+        surface=surface,
+        refs=refs,
+        support_mode="runtime_bound_lifecycle_control_comparison",
     )
 
 

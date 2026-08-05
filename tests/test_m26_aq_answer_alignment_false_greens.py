@@ -36,6 +36,41 @@ def test_reliability_control_comparison_must_distinguish_controls() -> None:
     assert "answer_alignment_missing_comparison_distinction" in failures
 
 
+def test_durable_state_verification_comparison_rejects_disconnect_only_answer() -> None:
+    failures = _failures(
+        (
+            "Why do durable state and post-execution verification solve different "
+            "reliability problems in a controlled agent architecture?"
+        ),
+        (
+            "Persisted run state matters after a client disconnect because durable "
+            "server-side state preserves run progress and authority while the workflow "
+            "continues, observability exposes status, and completion verification "
+            "remains separate before success is declared."
+        ),
+    )
+
+    assert "answer_alignment_missing_required_question_facets" in failures
+
+
+def test_durable_state_verification_comparison_answer_passes_alignment_guard() -> None:
+    failures = _failures(
+        (
+            "Why do durable state and post-execution verification solve different "
+            "reliability problems in a controlled agent architecture?"
+        ),
+        (
+            "In a controlled agent architecture, durable state and post-execution "
+            "verification solve different reliability problems: durable state preserves "
+            "continuity, persistence, recovery, and run state across interruption, while "
+            "post-execution verification checks correctness, acceptance, and completion "
+            "after execution."
+        ),
+    )
+
+    assert failures == set()
+
+
 def test_provenance_question_must_state_authority_or_source() -> None:
     failures = _failures(
         "Which provenance authority decides whether the answer is trusted?",

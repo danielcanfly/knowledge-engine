@@ -308,7 +308,10 @@ def test_bb10_supported_lifecycle_facets_recover_to_visible_answer() -> None:
     answer_text = str(candidate["answer_text"])
     assert not evaluate_visible_semantics(answer_text, requirements, question)
     assert "durable" in answer_text.casefold()
-    assert "completion" in answer_text.casefold()
+    assert "post-execution verification" in answer_text.casefold()
+    assert "different reliability problems" in answer_text.casefold()
+    assert "one preserves run state" in answer_text.casefold()
+    assert "trusted" in answer_text.casefold()
 
 
 def test_positive_answerability_recovery_still_abstains_when_support_is_insufficient() -> None:
@@ -333,7 +336,7 @@ def test_positive_answerability_recovery_still_abstains_when_support_is_insuffic
     assert candidate is None
 
 
-def test_bb18_false_premise_lifecycle_question_remains_safe_abstain() -> None:
+def test_bb19_persistence_correctness_boundary_recovers_no_answer() -> None:
     question = (
         "Persisted run state can survive a client disconnect. Does that persistence "
         "by itself prove that the workflow output is correct and verified?"
@@ -364,7 +367,12 @@ def test_bb18_false_premise_lifecycle_question_remains_safe_abstain() -> None:
         requirements=requirements,
         endpoint_proof={"required": False, "matched": False},
     )
-    assert candidate is None
+    assert candidate is not None
+    answer_text = str(candidate["answer_text"])
+    assert not evaluate_visible_semantics(answer_text, requirements, question)
+    assert answer_text.casefold().startswith("no.")
+    assert "does not by itself prove" in answer_text.casefold()
+    assert "completion verification" in answer_text.casefold()
 
 
 def test_positive_answerability_recovery_does_not_override_ood_external_marker() -> None:

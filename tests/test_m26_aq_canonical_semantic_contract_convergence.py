@@ -581,15 +581,10 @@ def test_provider_abstention_recovers_persistence_correctness_boundary() -> None
     }
     evidence = [
         _passage(
-            "ev-state",
+            "ev-state-and-verify",
             (
                 "Persisted run state can survive a client disconnect and preserve "
-                "durable progress, but persistence by itself does not prove correctness."
-            ),
-        ),
-        _passage(
-            "ev-verify",
-            (
+                "durable progress, but persistence by itself does not prove correctness. "
                 "Completion verification and acceptance evidence are required before "
                 "the workflow output is correct and verified; verification is separate evidence."
             ),
@@ -606,10 +601,15 @@ def test_provider_abstention_recovers_persistence_correctness_boundary() -> None
         endpoint_proof={"required": False, "matched": False},
     )
 
-    assert answer["status"] == "owner_only_safe_abstention"
-    assert answer["answer_source"] == "safe_abstention"
-    assert answer["answer_text"] == ""
-    assert closure["failures"]
+    text = answer["answer_text"].casefold()
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert closure["failures"] == []
+    assert text.startswith("no.")
+    assert "does not by itself prove" in text
+    assert "completion verification" in text
+    assert answer["unsupported_accepted_claims"] == 0
+    assert answer["citation_locator_valid"] is True
 
 
 def test_cobalt_orchid_bb18_remains_safe_abstention() -> None:
