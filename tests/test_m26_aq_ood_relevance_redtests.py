@@ -12,7 +12,12 @@ from knowledge_engine.m26_verified_answer_citation_gate import VerifiedAnswerGat
 EXPECTED_OOD_RELEVANCE_CODE = "M26-PA7-ME-047"
 
 
-def _evidence(evidence_id: str, text: str, *, source: str = "source-a") -> dict[str, Any]:
+def _evidence(
+    evidence_id: str,
+    text: str,
+    *,
+    source: str = "source-a",
+) -> dict[str, Any]:
     return {
         "evidence_id": evidence_id,
         "evidence_type": "passage",
@@ -74,14 +79,17 @@ def _candidate(
     )
 
 
-def test_bb18_nonexistent_protocol_provider_answer_is_rejected_as_ood_relevance() -> None:
+def test_bb18_nonexistent_protocol_provider_answer_is_rejected_as_ood_relevance(
+) -> None:
     """BB18 red line: exact citation support is not enough when the subject is OOD."""
     question = (
         "What launch date was announced for the nonexistent cobalt-orchid "
         "moon-ferry ticketing protocol?"
     )
     quote = "The team is delighted and calls the launch a win."
-    evidence = [_evidence("ev-bb18", quote, source="pm-product-data-and-experimentation")]
+    evidence = [
+        _evidence("ev-bb18", quote, source="pm-product-data-and-experimentation")
+    ]
 
     with pytest.raises(VerifiedAnswerGateError) as exc_info:
         runtime._verify_multi_evidence_provider_output(
@@ -90,7 +98,10 @@ def test_bb18_nonexistent_protocol_provider_answer_is_rejected_as_ood_relevance(
             intent_class="direct_grounded_knowledge",
             evidence=evidence,
             provider_text=_candidate(
-                answer_text="direct answer: The team is delighted and calls the launch a win [[claim_1]].",
+                answer_text=(
+                    "direct answer: The team is delighted and calls the launch "
+                    "a win [[claim_1]]."
+                ),
                 surface_text=quote,
                 evidence_id="ev-bb18",
                 locator_id="loc-ev-bb18",
@@ -102,7 +113,8 @@ def test_bb18_nonexistent_protocol_provider_answer_is_rejected_as_ood_relevance(
     assert "cobalt-orchid moon-ferry ticketing protocol" in str(exc_info.value)
 
 
-def test_nonexistent_compound_entity_not_answered_from_individual_common_terms() -> None:
+def test_nonexistent_compound_entity_not_answered_from_individual_common_terms(
+) -> None:
     """A fabricated compound entity must not be satisfied by scattered word overlap."""
     question = (
         "Which integration date did the nonexistent cobalt-orchid moon-ferry "
@@ -120,7 +132,10 @@ def test_nonexistent_compound_entity_not_answered_from_individual_common_terms()
             intent_class="direct_grounded_knowledge",
             evidence=evidence,
             provider_text=_candidate(
-                answer_text="The protocol launch date moved after the team tested the ferry booking module [[claim_1]].",
+                answer_text=(
+                    "The protocol launch date moved after the team tested the "
+                    "ferry booking module [[claim_1]]."
+                ),
                 surface_text=quote,
                 evidence_id="ev-compound",
                 locator_id="loc-ev-compound",
@@ -147,7 +162,10 @@ def test_positive_real_in_corpus_direct_answer_remains_verifiable() -> None:
         intent_class="direct_grounded_knowledge",
         evidence=evidence,
         provider_text=_candidate(
-            answer_text="Knowledge Engine turns accepted source records into cited answers [[claim_1]].",
+            answer_text=(
+                "Knowledge Engine turns accepted source records into cited answers "
+                "[[claim_1]]."
+            ),
             surface_text=quote,
             evidence_id="ev-ke",
             locator_id="loc-ev-ke",
@@ -161,12 +179,21 @@ def test_positive_real_in_corpus_direct_answer_remains_verifiable() -> None:
 
 
 @pytest.mark.parametrize("part", ["Part 1", "Part 10"])
-def test_frozen_like_part_questions_remain_answerable_when_entity_supported(part: str) -> None:
+def test_frozen_like_part_questions_remain_answerable_when_entity_supported(
+    part: str,
+) -> None:
     """Negative control: supported Part-N entities must not be over-blocked as OOD."""
     question = f"What does Harness Theory {part} say about harnesses?"
-    quote = f"Harness Theory {part} says a harness is a constraint system for repeatable work."
+    quote = (
+        f"Harness Theory {part} says a harness is a constraint system "
+        "for repeatable work."
+    )
     evidence = [
-        _evidence(f"ev-{part.lower().replace(' ', '-')}", quote, source="harness-theory")
+        _evidence(
+            f"ev-{part.lower().replace(' ', '-')}",
+            quote,
+            source="harness-theory",
+        )
     ]
 
     verified = runtime._verify_multi_evidence_provider_output(
@@ -183,7 +210,7 @@ def test_frozen_like_part_questions_remain_answerable_when_entity_supported(part
             evidence_id=f"ev-{part.lower().replace(' ', '-')}",
             locator_id=f"loc-ev-{part.lower().replace(' ', '-')}",
             exact_quote=quote,
-            facet_ids=[f"entity_harness_theory_{part.lower().replace(' ', '_')}"],
+            facet_ids=[f"entity_harness_theory_{part.lower().replace(' ', '_')}"]
         ),
     )
 
