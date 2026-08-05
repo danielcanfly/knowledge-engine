@@ -28,7 +28,7 @@ keyscan_ready=0
 for attempt in 1 2 3 4 5; do
   log_stage "keyscan_attempt_${attempt}"
   scan_file="$scan_dir/keyscan_${attempt}"
-  if ssh-keyscan -T 10 -H "$ORACLE_VM_HOST" > "$scan_file" 2>/dev/null && [ -s "$scan_file" ]; then
+  if ssh-keyscan -4 -T 10 -H "$ORACLE_VM_HOST" > "$scan_file" 2>/dev/null && [ -s "$scan_file" ]; then
     cat "$scan_file" >> "$known_hosts_path"
     chmod 600 "$known_hosts_path"
     keyscan_ready=1
@@ -49,6 +49,7 @@ cat > "$config_path" <<EOF
 Host oracle-knowledge
   HostName $ORACLE_VM_HOST
   User $ORACLE_VM_USER
+  AddressFamily inet
   IdentityFile $key_path
   BatchMode yes
   IdentitiesOnly yes
