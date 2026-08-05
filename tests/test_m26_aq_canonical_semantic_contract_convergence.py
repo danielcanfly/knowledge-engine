@@ -88,13 +88,22 @@ def test_authority_boundary_positive_and_negative_controls() -> None:
         evaluate_visible_semantics,
     )
     question = "How should the state machine and adaptive replanner handle revisions?"
-    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    requirements = derive_semantic_requirements(
+        question,
+        "direct_grounded_knowledge",
+        base_requirements=[],
+    )
+    authority = [item for item in requirements if item.requirement_id == "authority_boundary"]
+    assert requirements == authority
+    assert len(authority) == 1
     positive = (
         "Revisions stay within the state-machine policy and approval gates rather "
         "than expanding the replanner's authority."
     )
     negative = "The state machine tracks workflow state and the replanner changes future steps."
-    assert evaluate_visible_semantics(positive, requirements, question) == []
-    assert evaluate_visible_semantics(negative, requirements, question) != []
+    assert evaluate_visible_semantics(positive, authority, question) == []
+    assert evaluate_visible_semantics(negative, authority, question) == [
+        "SEMANTIC_VISIBLE_MISSING:authority_boundary"
+    ]
     """
     _run(code)
