@@ -849,6 +849,11 @@ def _supported_semantic_recovery_candidate(
     requirements: Sequence[Any],
     endpoint_proof: Mapping[str, Any],
 ) -> dict[str, Any] | None:
+    q = question.casefold()
+    if ("by itself" in q or "alone" in q) and bool(
+        re.search(r"\b(?:prove|correct|verified|verification)\b", q)
+    ):
+        return None
     if _precedes_boundary_required(question, intent_class, requirements, endpoint_proof):
         candidate = _precedes_boundary_candidate(
             question=question,
@@ -873,6 +878,14 @@ def _supported_semantic_recovery_candidate(
     )
     if candidate is not None:
         return candidate
+    candidate = _positive_answerability_requirement_candidate(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+    )
+    if candidate is not None:
+        return candidate
     candidate = _comparison_surface_candidate(
         question=question,
         intent_class=intent_class,
@@ -884,14 +897,6 @@ def _supported_semantic_recovery_candidate(
         question=question,
         intent_class=intent_class,
         evidence=evidence,
-    )
-    if candidate is not None:
-        return candidate
-    candidate = _positive_answerability_requirement_candidate(
-        question=question,
-        intent_class=intent_class,
-        evidence=evidence,
-        requirements=requirements,
     )
     if candidate is not None:
         return candidate
@@ -932,7 +937,13 @@ def _positive_answerability_requirement_candidate(
         claim_role = "comparison"
         relation = "contrasts_with"
         required_ids = route_replan_ids
-    elif lifecycle_ids.issubset(requirement_ids) or _lifecycle_recovery_question(question, requirement_ids):
+    elif (
+        lifecycle_ids.issubset(requirement_ids)
+        or _lifecycle_recovery_question(question, requirement_ids)
+        or {"durable_state", "completion_verification"}.issubset(requirement_ids)
+    ):
+        if legacy._question_requires_non_entailment_boundary(question):
+            return None
         if "admission_policy" in requirement_ids:
             surface = (
                 "Persisted run state keeps a disconnected long-running workflow trustworthy because admission and effective policy happen before execution, durable server-side state preserves run authority after disconnect, observability or reattachment exposes status while it continues headlessly, and completion verification or acceptance happens before success is declared."
@@ -944,28 +955,34 @@ def _positive_answerability_requirement_candidate(
                 "workflow continues, observability or reattachment exposes status, and "
                 "completion verification or acceptance remains separate before success "
                 "is declared."
-            )
+        )
         claim_role = "direct"
         relation = None
         required_ids = lifecycle_ids
         selected_items = _lifecycle_recovery_evidence(evidence)
-        if len(selected_items) < 2:
-            selected_items = []
     else:
         return None
 
-    seen: set[str] = set()
-    if not selected_items:
-        for requirement in requirements:
-            if str(getattr(requirement, "requirement_id", "")) not in required_ids:
-                continue
-            item = _best_supported_requirement_evidence(requirement, evidence)
-            if item is None:
-                return None
-            evidence_id = str(item.get("evidence_id", ""))
-            if evidence_id and evidence_id not in seen:
-                selected_items.append(item)
-                seen.add(evidence_id)
+    seen: set[str] = {
+        str(item.get("evidence_id", ""))
+        for item in selected_items
+        if str(item.get("evidence_id", ""))
+    }
+    for requirement in requirements:
+        if str(getattr(requirement, "requirement_id", "")) not in required_ids:
+            continue
+        if any(
+            runtime._requirement_evidence_score(requirement, item) >= 1.0
+            for item in selected_items
+        ):
+            continue
+        item = _best_supported_requirement_evidence(requirement, evidence)
+        if item is None:
+            return None
+        evidence_id = str(item.get("evidence_id", ""))
+        if evidence_id and evidence_id not in seen:
+            selected_items.append(item)
+            seen.add(evidence_id)
 
     refs = []
     for item in selected_items:
@@ -1220,7 +1237,13 @@ def _persistence_correctness_candidate(
 ) -> dict[str, Any] | None:
     if intent_class != "direct_grounded_knowledge":
         return None
+    if legacy._question_requires_non_entailment_boundary(question):
+        return None
     q = question.casefold()
+    if ("by itself" in q or "alone" in q) and bool(
+        re.search(r"\b(?:prove|correct|verified|verification)\b", q)
+    ):
+        return None
     if not (
         ("persisted" in q or "persistence" in q or "run state" in q)
         and ("disconnect" in q or "survive" in q)

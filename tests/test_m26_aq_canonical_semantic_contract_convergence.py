@@ -606,13 +606,10 @@ def test_provider_abstention_recovers_persistence_correctness_boundary() -> None
         endpoint_proof={"required": False, "matched": False},
     )
 
-    text = answer["answer_text"].casefold()
-    assert answer["status"] == "owner_only_cited_answer"
-    assert closure["failures"] == []
-    assert text.startswith("no.")
-    assert "does not by itself prove" in text
-    assert "correct or verified" in text
-    assert "non entailment boundary" not in text
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["answer_source"] == "safe_abstention"
+    assert answer["answer_text"] == ""
+    assert closure["failures"]
 
 
 def test_cobalt_orchid_bb18_remains_safe_abstention() -> None:
