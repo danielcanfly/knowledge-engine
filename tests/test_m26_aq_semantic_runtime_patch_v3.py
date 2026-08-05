@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+import textwrap
 
 import knowledge_engine.m26_aq_semantic_runtime_patch as base_patch
 import knowledge_engine.m26_aq_semantic_runtime_patch_v3 as patch_v3
@@ -12,6 +15,16 @@ import knowledge_engine.m26_pa7_semantic_closure_runtime as runtime
 patch_v3.install()
 boundary_patch.install()
 surface_patch.install()
+
+
+def _run_isolated(code: str) -> None:
+    completed = subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(code)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
 def _requirement_ids(question: str) -> set[str]:
@@ -42,6 +55,22 @@ def test_natural_graph_prefixes_do_not_become_entity_names() -> None:
             "If the relation graph records Harness Theory Part 1 as preceding"
         )
         == "Harness Theory Part 1"
+    )
+
+
+def test_v2_relation_graph_prefixes_do_not_become_entity_names() -> None:
+    _run_isolated(
+        """
+        from knowledge_engine import m26_aq_semantic_runtime_patch_v2 as patch_v2
+        from knowledge_engine import m26_pa7_arbitrary_query_runtime as legacy
+
+        patch_v2.install()
+        entities = legacy._named_question_entities(
+            "If the relation graph records Widget Harness Part 1 precedes Widget Harness Part 2, "
+            "what can we infer and what can we not infer from that edge?"
+        )
+        assert entities == ["Widget Harness Part 1", "Widget Harness Part 2"], entities
+        """
     )
 
 

@@ -156,6 +156,8 @@ def _clean_entity_text(value: str) -> str:
     text = " ".join(str(value).strip().split())
     for prefix in (
         "The production graph says ",
+        "The relation graph records ",
+        "If the relation graph records ",
         "Does the precedes edge between ",
         "Can the precedes edge between ",
         "Does ",
