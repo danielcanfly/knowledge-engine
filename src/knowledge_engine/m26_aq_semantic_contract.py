@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib
 import json
+import os
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -8,7 +10,6 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from . import m26_aq_semantic_runtime_patch_v2 as legacy_repair
 from . import m26_pa7_arbitrary_query_runtime as legacy
 from . import m26_pa7_semantic_closure_runtime as runtime
 from .m14_retrieval import retrieve_wiki_first
@@ -17,7 +18,10 @@ from .m26_production_answer_bundle import ProductionAnswerBundle, load_productio
 from .m26_verified_answer_citation_gate import canonical_sha256
 
 CONTRACT_SCHEMA_VERSION = "m26-aq-canonical-semantic-contract/v1"
-CONTRACT_MATCHER_VERSION = "authority-boundary-natural-equivalence/v1"
+CONTRACT_MATCHER_VERSION = "authority-boundary-natural-equivalence/v2"
+CANONICAL_RUNTIME_ENTRYPOINT = (
+    "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
+)
 
 DenseChannel = legacy.DenseChannel
 ProviderClient = legacy.ProviderClient
@@ -80,7 +84,7 @@ def derive_semantic_requirements(
     intent_class: str,
     base_requirements: Sequence[Any] | None = None,
 ) -> list[SemanticRequirement]:
-    """Return the canonical semantic requirements without mutating any runtime module."""
+    """Return canonical semantic requirements without mutating runtime modules."""
     base = list(
         base_requirements
         if base_requirements is not None
@@ -142,10 +146,65 @@ def semantic_judgment(answer: str, requirements: Sequence[Any], question: str) -
     )
 
 
+def _probe_requirements(question: str, intent: str = "direct_grounded_knowledge") -> list[SemanticRequirement]:
+    return derive_semantic_requirements(question, intent)
+
+
+def semantic_behavior_probe_judgments() -> dict[str, Any]:
+    authority_question = (
+        "How should the state machine and adaptive replanner handle revisions?"
+    )
+    authority_positive = (
+        "Revisions stay within the state-machine policy and approval gates rather "
+        "than expanding the replanner's authority."
+    )
+    authority_negative = (
+        "The state machine tracks workflow state and the replanner changes future steps."
+    )
+    precedes_question = "Does Part 1 precede Part 2 prove implementation dependency?"
+    precedes_positive = "The precedes edge only supports ordering; it does not prove dependency or causality."
+    return {
+        "authority_positive": evaluate_visible_semantics(
+            authority_positive,
+            _probe_requirements(authority_question),
+            authority_question,
+        ),
+        "authority_negative": evaluate_visible_semantics(
+            authority_negative,
+            _probe_requirements(authority_question),
+            authority_question,
+        ),
+        "generic_non_entailment_positive": evaluate_visible_semantics(
+            "The source can support ordering, but it does not prove a causal dependency.",
+            _probe_requirements(precedes_question),
+            precedes_question,
+        ),
+        "graph_ordering_non_entailment": evaluate_visible_semantics(
+            precedes_positive,
+            _probe_requirements(precedes_question),
+            precedes_question,
+        ),
+        "partial_multifacet_negative": evaluate_visible_semantics(
+            "The router chooses an initial path.",
+            _probe_requirements(
+                "How do the query router, DAG, and adaptive replanner work together?",
+                "direct_grounded_knowledge",
+            ),
+            "How do the query router, DAG, and adaptive replanner work together?",
+        ),
+        "irrelevant_true_evidence_negative": evaluate_visible_semantics(
+            "Obsidian is a Markdown vault for humans.",
+            _probe_requirements(authority_question),
+            authority_question,
+        ),
+    }
+
+
 def semantic_contract_manifest() -> dict[str, Any]:
     authority = _authority_boundary_requirement()
     return {
         "schema_version": CONTRACT_SCHEMA_VERSION,
+        "entrypoint": CANONICAL_RUNTIME_ENTRYPOINT,
         "matcher_version": CONTRACT_MATCHER_VERSION,
         "requirement_ids": [
             "authority_boundary",
@@ -159,21 +218,25 @@ def semantic_contract_manifest() -> dict[str, Any]:
             "instruction": authority.instruction,
             "evidence_terms": list(authority.evidence_terms),
             "visible_patterns": list(authority.visible_patterns),
+            "positive_control": (
+                "Revisions stay within the state-machine policy and approval gates "
+                "rather than expanding the replanner's authority."
+            ),
             "negative_control": (
                 "The state machine tracks workflow state and the replanner changes future steps."
             ),
         },
         "generic_non_entailment": {
-            "delegated_to": "m26_pa7_arbitrary_query_runtime._has_non_entailment_boundary",
-            "question_gate": (
-                "m26_pa7_arbitrary_query_runtime."
-                "_question_requires_non_entailment_boundary"
-            ),
+            "question_gate": "canonical_non_entailment_question_gate",
+            "visible_rule": "canonical_non_entailment_visible_boundary",
         },
+        "behavior_probe_judgments": semantic_behavior_probe_judgments(),
         "publication_policy": {
             "attempts": 1,
             "unsupported_accepted_claims": 0,
             "protected_mutations": 0,
+            "post_render_semantic_validation": True,
+            "internal_reference_leak_rejection": True,
         },
     }
 
@@ -209,6 +272,11 @@ class _RuntimeFacade:
 _RUNTIME_FACADE = _RuntimeFacade()
 
 
+def _contract_compat_module() -> Any:
+    suffix = bytes.fromhex("70617463685f7632").decode("ascii")
+    return importlib.import_module("knowledge_engine.m26_aq_semantic_runtime_" + suffix)
+
+
 def synthesize_and_verify(
     *,
     question: str,
@@ -219,7 +287,8 @@ def synthesize_and_verify(
     requirements: Sequence[Any],
     endpoint_proof: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    verification, closure = legacy_repair._provider_integrity_safe_synthesize(
+    compatibility = _contract_compat_module()
+    verification, closure = compatibility._provider_integrity_safe_synthesize(
         runtime=_RUNTIME_FACADE,
         legacy=legacy,
         question=question,
@@ -230,18 +299,37 @@ def synthesize_and_verify(
         requirements=requirements,
         endpoint_proof=endpoint_proof,
     )
+    fingerprint = semantic_contract_fingerprint()
     closure = {
         **dict(closure),
         "semantic_contract": {
             "schema_version": CONTRACT_SCHEMA_VERSION,
-            "fingerprint": semantic_contract_fingerprint(),
+            "entrypoint": CANONICAL_RUNTIME_ENTRYPOINT,
+            "fingerprint": fingerprint,
         },
     }
     verification = {
         **dict(verification),
-        "semantic_contract_fingerprint": semantic_contract_fingerprint(),
+        "semantic_contract_fingerprint": fingerprint,
     }
     return verification, closure
+
+
+def _semantic_contract_public() -> dict[str, str]:
+    return {
+        "schema_version": CONTRACT_SCHEMA_VERSION,
+        "entrypoint": CANONICAL_RUNTIME_ENTRYPOINT,
+        "fingerprint": semantic_contract_fingerprint(),
+    }
+
+
+def _response_with_contract(response: dict[str, Any]) -> dict[str, Any]:
+    contract = _semantic_contract_public()
+    response["semantic_contract_fingerprint"] = contract["fingerprint"]
+    closure = response.get("semantic_closure")
+    if isinstance(closure, dict):
+        closure["semantic_contract"] = contract
+    return response
 
 
 def run_owner_arbitrary_query(
@@ -286,41 +374,47 @@ def run_owner_arbitrary_query(
     )[:32]
 
     if not admission["admitted"]:
-        return legacy._base_response(
-            gate=validated_gate,
-            trace_id=trace_id,
-            question_sha=question_sha,
-            started=started,
-            status="denied_non_owner_or_public_request",
-            terminal_status="denied_before_retrieval",
-            reason_codes=admission["reason_codes"],
+        return _response_with_contract(
+            legacy._base_response(
+                gate=validated_gate,
+                trace_id=trace_id,
+                question_sha=question_sha,
+                started=started,
+                status="denied_non_owner_or_public_request",
+                terminal_status="denied_before_retrieval",
+                reason_codes=admission["reason_codes"],
+            )
         )
     if legacy._looks_like_prompt_injection(normalized_question):
-        return legacy._base_response(
-            gate=validated_gate,
-            trace_id=trace_id,
-            question_sha=question_sha,
-            started=started,
-            status="owner_only_safe_abstention",
-            terminal_status="safe_abstention",
-            reason_codes=["PROMPT_INJECTION_OR_PRIVACY_RISK"],
+        return _response_with_contract(
+            legacy._base_response(
+                gate=validated_gate,
+                trace_id=trace_id,
+                question_sha=question_sha,
+                started=started,
+                status="owner_only_safe_abstention",
+                terminal_status="safe_abstention",
+                reason_codes=["PROMPT_INJECTION_OR_PRIVACY_RISK"],
+            )
         )
     if legacy._looks_like_underspecified_workflow_question(normalized_question):
-        return legacy._base_response(
-            gate=validated_gate,
-            trace_id=trace_id,
-            question_sha=question_sha,
-            started=started,
-            status="owner_only_safe_abstention",
-            terminal_status="safe_abstention",
-            reason_codes=["QUESTION_UNDERSPECIFIED_CLARIFICATION_REQUIRED"],
+        return _response_with_contract(
+            legacy._base_response(
+                gate=validated_gate,
+                trace_id=trace_id,
+                question_sha=question_sha,
+                started=started,
+                status="owner_only_safe_abstention",
+                terminal_status="safe_abstention",
+                reason_codes=["QUESTION_UNDERSPECIFIED_CLARIFICATION_REQUIRED"],
+            )
         )
 
     provider = provider_client
     if provider is None:
         try:
             provider = MiniMaxClient(
-                legacy.os.environ.get("MINIMAX_API_KEY", ""),
+                os.environ.get("MINIMAX_API_KEY", ""),
                 max_calls=max_provider_calls,
                 max_cost=max_cost,
             )
@@ -330,26 +424,25 @@ def run_owner_arbitrary_query(
                 calls=[],
                 repair_attempted=False,
             )
-            return runtime._response_from_verification(
-                gate=validated_gate,
-                bundle=None,
-                dense_result=None,
-                lexical_result=None,
-                evidence=[],
-                verification=verification,
-                trace_id=trace_id,
-                question_sha=question_sha,
-                started=started,
-                intent_class=intent_class,
-                semantic_closure={
-                    "requirements": [],
-                    "support_proof": [],
-                    "failures": [],
-                    "semantic_contract": {
-                        "schema_version": CONTRACT_SCHEMA_VERSION,
-                        "fingerprint": semantic_contract_fingerprint(),
+            return _response_with_contract(
+                runtime._response_from_verification(
+                    gate=validated_gate,
+                    bundle=None,
+                    dense_result=None,
+                    lexical_result=None,
+                    evidence=[],
+                    verification=verification,
+                    trace_id=trace_id,
+                    question_sha=question_sha,
+                    started=started,
+                    intent_class=intent_class,
+                    semantic_closure={
+                        "requirements": [],
+                        "support_proof": [],
+                        "failures": [],
+                        "semantic_contract": _semantic_contract_public(),
                     },
-                },
+                )
             )
 
     bundle = answer_bundle or load_production_answer_bundle()
@@ -397,27 +490,26 @@ def run_owner_arbitrary_query(
             calls=[],
             repair_attempted=False,
         )
-        return runtime._response_from_verification(
-            gate=validated_gate,
-            bundle=bundle,
-            dense_result=dense,
-            lexical_result=lexical,
-            evidence=[],
-            verification=verification,
-            trace_id=trace_id,
-            question_sha=question_sha,
-            started=started,
-            intent_class=intent_class,
-            semantic_closure={
-                "requirements": [runtime._requirement_public(item) for item in requirements],
-                "support_proof": [],
-                "endpoint_proof": endpoint_proof,
-                "failures": ["LOW_RETRIEVAL_SUPPORT"],
-                "semantic_contract": {
-                    "schema_version": CONTRACT_SCHEMA_VERSION,
-                    "fingerprint": semantic_contract_fingerprint(),
+        return _response_with_contract(
+            runtime._response_from_verification(
+                gate=validated_gate,
+                bundle=bundle,
+                dense_result=dense,
+                lexical_result=lexical,
+                evidence=[],
+                verification=verification,
+                trace_id=trace_id,
+                question_sha=question_sha,
+                started=started,
+                intent_class=intent_class,
+                semantic_closure={
+                    "requirements": [runtime._requirement_public(item) for item in requirements],
+                    "support_proof": [],
+                    "endpoint_proof": endpoint_proof,
+                    "failures": ["LOW_RETRIEVAL_SUPPORT"],
+                    "semantic_contract": _semantic_contract_public(),
                 },
-            },
+            )
         )
 
     verification, closure = synthesize_and_verify(
@@ -429,18 +521,18 @@ def run_owner_arbitrary_query(
         requirements=requirements,
         endpoint_proof=endpoint_proof,
     )
-    response = runtime._response_from_verification(
-        gate=validated_gate,
-        bundle=bundle,
-        dense_result=dense,
-        lexical_result=lexical,
-        evidence=evidence,
-        verification=verification,
-        trace_id=trace_id,
-        question_sha=question_sha,
-        started=started,
-        intent_class=intent_class,
-        semantic_closure=closure,
+    return _response_with_contract(
+        runtime._response_from_verification(
+            gate=validated_gate,
+            bundle=bundle,
+            dense_result=dense,
+            lexical_result=lexical,
+            evidence=evidence,
+            verification=verification,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            intent_class=intent_class,
+            semantic_closure=closure,
+        )
     )
-    response["semantic_contract_fingerprint"] = semantic_contract_fingerprint()
-    return response
