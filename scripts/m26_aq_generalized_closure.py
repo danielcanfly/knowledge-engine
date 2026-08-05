@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,75 @@ REQUIRED_CLASSES = {
     "no_answer": 1,
     "prompt_injection_privacy": 1,
     "grounded_but_irrelevant_adversarial": 1,
+}
+
+_ALIGNMENT_STOPWORDS = {
+    "a",
+    "about",
+    "an",
+    "and",
+    "answer",
+    "are",
+    "between",
+    "but",
+    "by",
+    "can",
+    "compare",
+    "contrast",
+    "did",
+    "do",
+    "does",
+    "explain",
+    "for",
+    "from",
+    "how",
+    "in",
+    "is",
+    "it",
+    "of",
+    "or",
+    "should",
+    "show",
+    "tell",
+    "the",
+    "to",
+    "what",
+    "when",
+    "where",
+    "which",
+    "why",
+    "with",
+}
+_DEBUG_SURFACE_PATTERNS = (
+    re.compile(r"\bcompare\s+(?:left|right)\b", re.I),
+    re.compile(r"\bsigma\s*js\s*:", re.I),
+    re.compile(r"\bmulti[- ]source\s+selection\s*:", re.I),
+    re.compile(r"\bscaffold\s*:", re.I),
+)
+_AUTHORITY_TERMS = {"authority", "owner", "provenance", "source", "source-of-trust", "trust"}
+_AUTHORITY_ANSWER_TERMS = {
+    "artifact",
+    "authority",
+    "decision",
+    "evidence",
+    "ledger",
+    "owner",
+    "provenance",
+    "source",
+    "source-of-trust",
+    "trust",
+}
+_NEGATION_TERMS = {"cannot", "doesn't", "doesnt", "not", "no", "isn't", "isnt", "without"}
+_STATE_TERMS = {"correct", "persisted", "persistence", "saved", "state", "verified"}
+_COMPARISON_TERMS = {"compare", "comparison", "contrast", "difference", "different", "distinguish", "versus", "vs"}
+_COMPARISON_ANSWER_TERMS = {
+    "but",
+    "contrast",
+    "different",
+    "distinction",
+    "however",
+    "whereas",
+    "while",
 }
 
 
@@ -108,6 +178,135 @@ def _validate_answer_row(row: dict[str, Any], failures: list[str], expected_sha:
 
     for semantic_failure in _validate_visible_semantics(row):
         failures.append(f"{case_id}:{semantic_failure}")
+    for alignment_failure in _validate_question_answer_alignment(row):
+        failures.append(f"{case_id}:{alignment_failure}")
+
+
+def _validate_question_answer_alignment(row: dict[str, Any]) -> list[str]:
+    """Reject product false-greens where support is valid but the answer is not responsive."""
+    question = _row_question(row)
+    answer_text = _row_answer_text(row)
+    q_folded = question.casefold()
+    a_folded = answer_text.casefold()
+    failures: list[str] = []
+    if not question or not answer_text:
+        return failures
+
+    if _debug_like_surface(answer_text):
+        failures.append("answer_alignment_debug_surface")
+
+    if _is_comparison_question(q_folded) and not _comparison_answer_responsive(a_folded):
+        failures.append("answer_alignment_missing_comparison_distinction")
+
+    if _is_authority_question(q_folded) and not (_terms(a_folded) & _AUTHORITY_ANSWER_TERMS):
+        failures.append("answer_alignment_missing_authority_or_provenance")
+
+    if _is_persistence_correctness_question(q_folded) and not (
+        _terms(a_folded) & _NEGATION_TERMS
+    ):
+        failures.append("answer_alignment_persistence_implies_verification")
+
+    required_terms = _essential_question_terms(question)
+    if required_terms:
+        answer_terms = _terms(a_folded)
+        citation_terms = _terms(_citations_text(row))
+        evidence_terms = _terms(_evidence_text(row))
+        missing = sorted(
+            term
+            for term in required_terms
+            if term not in answer_terms and term not in citation_terms and term not in evidence_terms
+        )
+        if missing:
+            failures.append("answer_alignment_missing_required_question_facets")
+
+    return sorted(set(failures))
+
+
+def _row_question(row: dict[str, Any]) -> str:
+    for key in ("question", "prompt", "input_question", "user_question"):
+        value = str(row.get(key, "")).strip()
+        if value:
+            return value
+    return str(_mapping(row.get("request")).get("question", "")).strip()
+
+
+def _row_answer_text(row: dict[str, Any]) -> str:
+    return re.sub(r"\s+", " ", str(row.get("answer_text", "")).strip())
+
+
+def _debug_like_surface(answer_text: str) -> bool:
+    if any(pattern.search(answer_text) for pattern in _DEBUG_SURFACE_PATTERNS):
+        return True
+    stripped = re.sub(r"\[[^\]]+\]", "", answer_text).strip()
+    if not stripped:
+        return False
+    fragments = [piece.strip() for piece in re.split(r"[.;\n]", stripped) if piece.strip()]
+    if fragments and all(":" in piece and len(piece.split()) <= 6 for piece in fragments[:3]):
+        return True
+    return False
+
+
+def _is_comparison_question(q_folded: str) -> bool:
+    return bool(_terms(q_folded) & _COMPARISON_TERMS)
+
+
+def _comparison_answer_responsive(a_folded: str) -> bool:
+    return bool(_terms(a_folded) & _COMPARISON_ANSWER_TERMS)
+
+
+def _is_authority_question(q_folded: str) -> bool:
+    return bool(_terms(q_folded) & _AUTHORITY_TERMS)
+
+
+def _is_persistence_correctness_question(q_folded: str) -> bool:
+    terms = _terms(q_folded)
+    return "persisted" in terms and bool(terms & {"correct", "verified", "safe", "accepted"})
+
+
+def _essential_question_terms(question: str) -> set[str]:
+    folded = question.casefold()
+    terms = _terms(folded) - _ALIGNMENT_STOPWORDS
+    # The validator should not become a keyword gauntlet for ordinary direct answers. It
+    # only demands explicit facet coverage when the question asks for product-critical
+    # comparison, authority, or persistence distinctions, or when the row marks itself as
+    # adversarial/irrelevant.
+    if not (
+        _is_comparison_question(folded)
+        or _is_authority_question(folded)
+        or _is_persistence_correctness_question(folded)
+        or "irrelevant" in folded
+        or "nonresponsive" in folded
+    ):
+        return set()
+    return {term for term in terms if len(term) >= 4}
+
+
+def _citations_text(row: dict[str, Any]) -> str:
+    parts: list[str] = []
+    citations = row.get("citations", [])
+    if isinstance(citations, list):
+        for citation in citations:
+            if isinstance(citation, dict):
+                parts.extend(str(value) for value in citation.values())
+            else:
+                parts.append(str(citation))
+    return " ".join(parts)
+
+
+def _evidence_text(row: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for key in ("selected_evidence", "evidence", "material_claims"):
+        value = row.get(key, [])
+        if isinstance(value, list):
+            for item in value:
+                parts.append(json.dumps(item, ensure_ascii=False, sort_keys=True))
+        elif isinstance(value, dict):
+            parts.append(json.dumps(value, ensure_ascii=False, sort_keys=True))
+    return " ".join(parts)
+
+
+def _terms(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+|[\u3400-\u9fff]+", str(text).casefold()))
 
 
 def _validate_abstention_row(row: dict[str, Any], failures: list[str], expected_sha: str) -> None:
