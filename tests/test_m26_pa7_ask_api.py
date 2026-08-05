@@ -159,7 +159,7 @@ def _owner_headers() -> dict[str, str]:
 
 
 def test_web_dto_wraps_canonical_runtime_without_raw_question() -> None:
-    question = "Compare routers and adaptive planning for permission-first controls."
+    question = "Compare router permission-first controls and harness acceptance components."
     dto = run_owner_query_for_web(
         root=ROOT,
         gate_path=GATE_PATH,
