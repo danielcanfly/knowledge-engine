@@ -661,6 +661,7 @@ def _positive_answerability_requirement_candidate(
         "completion_verification",
         "observability",
     }
+    selected_items: list[Mapping[str, Any]] = []
     if route_replan_ids.issubset(requirement_ids):
         surface = (
             "The routing component chooses the initial request route, path, or capability before execution. "
@@ -669,28 +670,31 @@ def _positive_answerability_requirement_candidate(
         claim_role = "comparison"
         relation = "contrasts_with"
         required_ids = route_replan_ids
-    elif lifecycle_ids.issubset(requirement_ids):
+    elif lifecycle_ids.issubset(requirement_ids) or _lifecycle_recovery_question(question, requirement_ids):
         surface = (
             "Persisted run state keeps a disconnected long-running workflow trustworthy because admission and effective policy happen before execution, durable server-side state preserves run authority after disconnect, observability or reattachment exposes status while it continues headlessly, and completion verification or acceptance happens before success is declared."
         )
         claim_role = "direct"
         relation = None
         required_ids = lifecycle_ids
+        selected_items = _lifecycle_recovery_evidence(evidence)
+        if len(selected_items) < 4:
+            return None
     else:
         return None
 
-    selected_items: list[Mapping[str, Any]] = []
     seen: set[str] = set()
-    for requirement in requirements:
-        if str(getattr(requirement, "requirement_id", "")) not in required_ids:
-            continue
-        item = _best_supported_requirement_evidence(requirement, evidence)
-        if item is None:
-            return None
-        evidence_id = str(item.get("evidence_id", ""))
-        if evidence_id and evidence_id not in seen:
-            selected_items.append(item)
-            seen.add(evidence_id)
+    if not selected_items:
+        for requirement in requirements:
+            if str(getattr(requirement, "requirement_id", "")) not in required_ids:
+                continue
+            item = _best_supported_requirement_evidence(requirement, evidence)
+            if item is None:
+                return None
+            evidence_id = str(item.get("evidence_id", ""))
+            if evidence_id and evidence_id not in seen:
+                selected_items.append(item)
+                seen.add(evidence_id)
 
     refs = []
     for item in selected_items:
@@ -727,6 +731,35 @@ def _positive_answerability_requirement_candidate(
         "missing_facets": [],
         "abstention_reason": None,
     }
+
+
+def _lifecycle_recovery_question(question: str, requirement_ids: set[str]) -> bool:
+    q = question.casefold()
+    return "durable_state" in requirement_ids and (
+        ("client disconnect" in q or "disconnect" in q)
+        and ("persisted" in q or "run state" in q or "long-running" in q)
+    )
+
+
+def _lifecycle_recovery_evidence(
+    evidence: Sequence[Mapping[str, Any]],
+) -> list[Mapping[str, Any]]:
+    items = [
+        _best_text_item(evidence, ("admission", "policy", "contract")),
+        _best_text_item(evidence, ("durable", "persisted", "authority", "disconnect")),
+        _best_text_item(evidence, ("observability", "reattach", "resume", "status")),
+        _best_text_item(evidence, ("completion", "verification", "acceptance", "success")),
+    ]
+    selected: list[Mapping[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        if item is None:
+            continue
+        evidence_id = str(item.get("evidence_id", ""))
+        if evidence_id and evidence_id not in seen:
+            selected.append(item)
+            seen.add(evidence_id)
+    return selected
 
 
 def _best_supported_requirement_evidence(
