@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from knowledge_engine import m26_aq_semantic_contract as canonical_runtime_module
 from knowledge_engine import m26_ask_api
 from knowledge_engine import m26_pa7_arbitrary_query_runtime as runtime_module
 from knowledge_engine.m26_ask_api import (
@@ -38,6 +39,11 @@ AUTH_SCHEME = "Bear" + "er"
 def _production_answer_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         runtime_module,
+        "load_production_answer_bundle",
+        synthetic_full_production_answer_bundle,
+    )
+    monkeypatch.setattr(
+        canonical_runtime_module,
         "load_production_answer_bundle",
         synthetic_full_production_answer_bundle,
     )
