@@ -109,6 +109,8 @@ def test_keyscan_transient_recovery(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert _read_count(tmp_path / "state" / "keyscan_count") == 3
     assert "ORACLE_SSH_STAGE=keyscan_attempt_3" in result.stderr
+    keyscan_args = (tmp_path / "state" / "keyscan_args").read_text(encoding="utf-8")
+    assert "-4 -T 10 -H oracle.example.invalid" in keyscan_args
     assert "ORACLE_SSH_STAGE=ready" in result.stderr
 
 
@@ -130,6 +132,7 @@ def test_config_policy_and_permissions(tmp_path: Path) -> None:
     for expected in (
         "BatchMode yes",
         "IdentitiesOnly yes",
+        "AddressFamily inet",
         "ConnectTimeout 15",
         "ConnectionAttempts 3",
         "ServerAliveInterval 30",
