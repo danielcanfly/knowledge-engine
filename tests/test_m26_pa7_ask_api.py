@@ -158,7 +158,14 @@ def _owner_headers() -> dict[str, str]:
     }
 
 
-def test_web_dto_wraps_canonical_runtime_without_raw_question() -> None:
+def test_web_dto_wraps_canonical_runtime_without_raw_question(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        canonical_runtime_module.legacy,
+        "_looks_like_underspecified_workflow_question",
+        lambda question: False,
+    )
     question = "Compare router permission-first controls and harness acceptance components."
     dto = run_owner_query_for_web(
         root=ROOT,
