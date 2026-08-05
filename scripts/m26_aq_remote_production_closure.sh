@@ -29,25 +29,12 @@ deploy_output="$(
 printf '%s\n' "$deploy_output"
 echo "AQ_STAGE=deploy_complete"
 
-receipt_head="$(
-  printf '%s\n' "$deploy_output" \
-    | awk -F= '$1 == "DEPLOYMENT_HEAD_SHA" {print $2}' \
-    | tail -n 1
-)"
-receipt_runtime_sha="$(
-  printf '%s\n' "$deploy_output" \
-    | awk -F= '$1 == "DEPLOYMENT_RUNTIME_SHA" {print $2}' \
-    | tail -n 1
-)"
-receipt_image_id="$(
-  printf '%s\n' "$deploy_output" \
-    | awk -F= '$1 == "DEPLOYMENT_IMAGE_ID" {print $2}' \
-    | tail -n 1
-)"
+receipt_head="$(printf '%s\n' "$deploy_output" | awk -F= '$1 == "DEPLOYMENT_HEAD_SHA" {print $2}' | tail -n 1)"
+receipt_runtime_sha="$(printf '%s\n' "$deploy_output" | awk -F= '$1 == "DEPLOYMENT_RUNTIME_SHA" {print $2}' | tail -n 1)"
+receipt_image_id="$(printf '%s\n' "$deploy_output" | awk -F= '$1 == "DEPLOYMENT_IMAGE_ID" {print $2}' | tail -n 1)"
 
 [ "$receipt_head" = "$EXPECTED_DEPLOY_SHA" ] || fail "deploy_head_sha_mismatch"
-[ "$receipt_runtime_sha" = "$EXPECTED_DEPLOY_SHA" ] \
-  || fail "deploy_runtime_sha_mismatch"
+[ "$receipt_runtime_sha" = "$EXPECTED_DEPLOY_SHA" ] || fail "deploy_runtime_sha_mismatch"
 [ -n "$receipt_image_id" ] || fail "deploy_image_receipt_missing"
 echo "AQ_STAGE=deployment_receipt_validated"
 echo "AQ_DEPLOY_HEAD_SHA=$receipt_head"
@@ -64,12 +51,7 @@ fi
 echo "AQ_SHARED_CHECKOUT_HEAD_MATCH=true"
 
 container_ids="$(docker compose ps -q knowledge-engine || true)"
-container_count="$(
-  printf '%s\n' "$container_ids" \
-    | sed '/^$/d' \
-    | wc -l \
-    | tr -d ' '
-)"
+container_count="$(printf '%s\n' "$container_ids" | sed '/^$/d' | wc -l | tr -d ' ')"
 echo "AQ_COMPOSE_RUNNING_CONTAINER_COUNT=$container_count"
 if [ "$container_count" != "1" ]; then
   docker compose ps || true
@@ -93,9 +75,7 @@ container_env() {
 
 runtime_sha="$(container_env M26_QUERY_BUILD_SHA)"
 export M26_QUERY_BACKEND_TOKEN="$(container_env M26_QUERY_BACKEND_TOKEN)"
-export KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH="$(
-  container_env KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH
-)"
+export KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH="$(container_env KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH)"
 routed_origin="https://${ROUTED_BACKEND_HOSTNAME}"
 
 runtime_sha_present=false
@@ -130,16 +110,9 @@ targeted_csv_path="$evidence_dir/targeted-results-$EXPECTED_DEPLOY_SHA.csv"
 targeted_raw_answers_path="$evidence_dir/targeted-raw-answers-$EXPECTED_DEPLOY_SHA.md"
 routed_health_path="$evidence_dir/routed-health-$EXPECTED_DEPLOY_SHA.json"
 local_health_preflight_path="$evidence_dir/local-health-preflight-$EXPECTED_DEPLOY_SHA.json"
-rm -f \
-  "$identity_path" \
-  "$frozen_path" \
-  "$blackbox_path" \
-  "$targeted_path" \
-  "$targeted_summary_path" \
-  "$targeted_csv_path" \
-  "$targeted_raw_answers_path" \
-  "$routed_health_path" \
-  "$local_health_preflight_path"
+rm -f "$identity_path" "$frozen_path" "$blackbox_path" "$targeted_path" \
+  "$targeted_summary_path" "$targeted_csv_path" "$targeted_raw_answers_path" \
+  "$routed_health_path" "$local_health_preflight_path"
 
 venv_dir="$evidence_dir/venv"
 python3 -m venv "$venv_dir"
@@ -147,6 +120,20 @@ python3 -m venv "$venv_dir"
 python -m pip install --upgrade pip >/dev/null
 python -m pip install -e . >/dev/null
 echo "AQ_STAGE=host_python_runtime_ready"
+
+canonical_identity_json="$(PYTHONPATH=src python3 - <<'PY'
+import json
+from knowledge_engine.m26_aq_semantic_contract import (
+    CANONICAL_RUNTIME_ENTRYPOINT,
+    semantic_contract_fingerprint,
+)
+print(json.dumps({
+    "entrypoint": CANONICAL_RUNTIME_ENTRYPOINT,
+    "semantic_contract_fingerprint": semantic_contract_fingerprint(),
+}, sort_keys=True))
+PY
+)"
+export AQ_CANONICAL_IDENTITY_JSON="$canonical_identity_json"
 
 local_health_code="$(curl --silent --show-error \
   -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
@@ -164,16 +151,17 @@ import os
 from pathlib import Path
 
 expected = os.environ["EXPECTED_DEPLOY_SHA"]
+expected_identity = json.loads(os.environ["AQ_CANONICAL_IDENTITY_JSON"])
 health = json.loads(Path(os.environ["LOCAL_HEALTH_PREFLIGHT_PATH"]).read_text(encoding="utf-8"))
 canonical = health.get("canonical_runtime", {}) if isinstance(health, dict) else {}
-entrypoint = canonical.get("entrypoint")
-expected_entrypoint = "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
 if health.get("status") != "ok":
     raise SystemExit("local health status mismatch")
 if canonical.get("build_sha") != expected:
     raise SystemExit("local health SHA mismatch before query")
-if entrypoint != expected_entrypoint:
+if canonical.get("entrypoint") != expected_identity["entrypoint"]:
     raise SystemExit("local health entrypoint mismatch before query")
+if canonical.get("semantic_contract_fingerprint") != expected_identity["semantic_contract_fingerprint"]:
+    raise SystemExit("local health fingerprint mismatch before query")
 PY
 echo "AQ_STAGE=local_health_identity_preflight_passed"
 
@@ -191,10 +179,7 @@ collect_once() {
   echo "AQ_COLLECT_POPULATION_RESULT=success"
 }
 
-collect_once \
-  frozen \
-  pilot/m26/m26-aq-final-r3-questions.json \
-  "$frozen_path"
+collect_once frozen pilot/m26/m26-aq-final-r3-questions.json "$frozen_path"
 echo "AQ_STAGE=frozen_population_collected"
 
 PYTHONPATH=src python3 scripts/m26_aq_final_closure.py validate \
@@ -203,10 +188,7 @@ PYTHONPATH=src python3 scripts/m26_aq_final_closure.py validate \
   --expected-sha "$EXPECTED_DEPLOY_SHA"
 echo "AQ_STAGE=frozen_population_validated"
 
-collect_once \
-  blackbox \
-  pilot/m26/m26-aq-gpt-e-black-box-questions.json \
-  "$blackbox_path"
+collect_once blackbox pilot/m26/m26-aq-gpt-e-black-box-questions.json "$blackbox_path"
 echo "AQ_STAGE=blackbox_population_collected"
 
 PYTHONPATH=src python3 scripts/m26_aq_generalized_closure.py \
@@ -217,10 +199,7 @@ echo "AQ_STAGE=blackbox_population_validated"
 
 targeted_questions="pilot/m26/m26-aq-universal-answerability-targeted-questions.json"
 [ -s "$targeted_questions" ] || fail "targeted_questions_missing"
-collect_once \
-  targeted \
-  "$targeted_questions" \
-  "$targeted_path"
+collect_once targeted "$targeted_questions" "$targeted_path"
 echo "AQ_STAGE=targeted_population_collected"
 
 PYTHONPATH=src python3 scripts/m26_aq_targeted_answerability_closure.py \
@@ -260,25 +239,30 @@ import os
 from pathlib import Path
 
 expected = os.environ["EXPECTED_DEPLOY_SHA"]
+expected_identity = json.loads(os.environ["AQ_CANONICAL_IDENTITY_JSON"])
 frozen = json.loads(Path(os.environ["FROZEN_PATH"]).read_text(encoding="utf-8"))
 local_health = frozen.get("health", {}) if isinstance(frozen, dict) else {}
 routed_health = json.loads(Path(os.environ["ROUTED_HEALTH_PATH"]).read_text(encoding="utf-8"))
 routed_canonical = routed_health.get("canonical_runtime", {}) if isinstance(routed_health, dict) else {}
 entrypoint = local_health.get("entrypoint")
-expected_entrypoint = "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
+fingerprint = local_health.get("semantic_contract_fingerprint")
 if local_health.get("build_sha") != expected:
     raise SystemExit("local health SHA mismatch")
 if routed_canonical.get("build_sha") != expected:
     raise SystemExit("routed health SHA mismatch")
-if entrypoint != expected_entrypoint:
+if entrypoint != expected_identity["entrypoint"]:
     raise SystemExit("local health entrypoint mismatch")
-if routed_canonical.get("entrypoint") != expected_entrypoint:
+if routed_canonical.get("entrypoint") != expected_identity["entrypoint"]:
     raise SystemExit("routed health entrypoint mismatch")
+if fingerprint != expected_identity["semantic_contract_fingerprint"]:
+    raise SystemExit("local health fingerprint mismatch")
+if routed_canonical.get("semantic_contract_fingerprint") != expected_identity["semantic_contract_fingerprint"]:
+    raise SystemExit("routed health fingerprint mismatch")
 if routed_health.get("status") != "ok":
     raise SystemExit("routed health status mismatch")
 
 evidence = {
-    "schema_version": "m26-aq-production-identity/v3",
+    "schema_version": "m26-aq-production-identity/v4",
     "expected_deploy_sha": expected,
     "git_head_sha": os.environ["GIT_SHA"],
     "container_id": os.environ["CONTAINER_ID"],
@@ -290,6 +274,8 @@ evidence = {
     "routed_health_status": routed_health.get("status"),
     "routed_route_class": "named_cloudflare_tunnel_https_origin",
     "entrypoint": entrypoint,
+    "semantic_contract_fingerprint": fingerprint,
+    "routed_semantic_contract_fingerprint": routed_canonical.get("semantic_contract_fingerprint"),
     "process_cmd": os.environ["PROCESS_CMD"],
     "frozen_population_rows": len(frozen.get("rows", [])),
     "raw_routed_origin_recorded": False,
