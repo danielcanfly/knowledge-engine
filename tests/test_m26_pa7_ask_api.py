@@ -158,14 +158,96 @@ def _owner_headers() -> dict[str, str]:
     }
 
 
+def _dto_runtime_fixture(**_: Any) -> dict[str, Any]:
+    return {
+        "schema_version": "knowledge-engine-m26-pa7-arbitrary-owner-query-response/v1",
+        "status": "owner_only_cited_answer",
+        "terminal_status": "answered",
+        "trace_id": "test_trace",
+        "question_sha256": "ab" * 32,
+        "answer_text": "A grounded supported answer.",
+        "answer_source": "provider_verified_runtime_bound_semantic_closure",
+        "safe_abstention": False,
+        "reason_codes": [],
+        "citations": [
+            {
+                "citation_id": "c1",
+                "claim_id": "claim_1",
+                "claim_role": "relationship",
+                "evidence_id": "evidence_1",
+                "evidence_type": "passage",
+                "locator_id": "loc_1",
+                "source_id": "source_1",
+                "source_identity": "source_identity_1",
+                "section_id": "section_1",
+                "concept_id": "concept_1",
+                "release_id": "release_test",
+                "source_locator": "synthetic://source/1",
+                "source_artifact_sha256": "11" * 32,
+                "support_text_sha256": "12" * 32,
+                "exact_quote_sha256": "13" * 32,
+                "provenance_record_sha256": "14" * 32,
+                "runtime_owned_locator": True,
+            },
+            {
+                "citation_id": "c2",
+                "claim_id": "claim_1",
+                "claim_role": "relationship",
+                "evidence_id": "evidence_2",
+                "evidence_type": "passage",
+                "locator_id": "loc_2",
+                "source_id": "source_2",
+                "source_identity": "source_identity_2",
+                "section_id": "section_2",
+                "concept_id": "concept_2",
+                "release_id": "release_test",
+                "source_locator": "synthetic://source/2",
+                "source_artifact_sha256": "21" * 32,
+                "support_text_sha256": "22" * 32,
+                "exact_quote_sha256": "23" * 32,
+                "provenance_record_sha256": "24" * 32,
+                "runtime_owned_locator": True,
+            },
+        ],
+        "answer_claims": [{"claim_id": "claim_1", "claim_role": "relationship"}],
+        "relationship_summary": {},
+        "multi_evidence_verification": {"support_precision": 1.0},
+        "semantic_closure": {
+            "failures": [],
+            "semantic_contract": {
+                "entrypoint": canonical_runtime_module.CANONICAL_RUNTIME_ENTRYPOINT,
+                "fingerprint": canonical_runtime_module.semantic_contract_fingerprint(),
+            },
+        },
+        "selected_evidence": [],
+        "evidence_utilization_trace": {},
+        "graph_observability": {},
+        "production_release_id": "release_test",
+        "production_manifest_sha256": "31" * 32,
+        "production_pointer_digest": "32" * 32,
+        "resolved_gate_self_sha256": "33" * 32,
+        "retrieval_mode_summary": {},
+        "retrieval_backend_identity": {},
+        "candidate_count_by_channel": {},
+        "selected_evidence_count": 2,
+        "distinct_source_count": 2,
+        "distinct_source_identities": ["source_identity_1", "source_identity_2"],
+        "provider_invoked": True,
+        "provider_call_count": 1,
+        "payg_equivalent_cost_usd": "0.00001",
+        "latency_ms": 1,
+        "privacy": {"raw_query_persisted": False},
+        "mutations": {"canonical_writes": 0},
+        "unsupported_accepted_claims": 0,
+        "material_claim_support_verified": True,
+        "citation_locator_valid": True,
+    }
+
+
 def test_web_dto_wraps_canonical_runtime_without_raw_question(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        canonical_runtime_module.legacy,
-        "_looks_like_underspecified_workflow_question",
-        lambda question: False,
-    )
+    monkeypatch.setattr(m26_ask_api, "run_owner_arbitrary_query", _dto_runtime_fixture)
     question = "Compare router permission-first controls and harness acceptance components."
     dto = run_owner_query_for_web(
         root=ROOT,
