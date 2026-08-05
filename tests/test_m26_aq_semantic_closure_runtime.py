@@ -173,17 +173,27 @@ def test_bb01_provider_abstention_recovers_to_visible_cited_route_replan_answer(
     evidence = [
         _passage(
             "route",
-            "The query router chooses the initial route, path, or capability for a request before execution begins.",
+            (
+                "The query router chooses the initial route, path, or capability "
+                "for a request before execution begins."
+            ),
             "router-note",
         ),
         _passage(
             "replan",
-            "Adaptive replanning revises the remaining work after execution has started when evidence invalidates the plan.",
+            (
+                "Adaptive replanning revises the remaining work after execution "
+                "has started when evidence invalidates the plan."
+            ),
             "replan-note",
         ),
         _passage(
             "contrast",
-            "Initial dispatch and later replanning are different jobs: the first route happens upfront, and the later revision corrects the plan after runtime reality changes.",
+            (
+                "Initial dispatch and later replanning are different jobs: the first "
+                "route happens upfront, and the later revision corrects the plan after "
+                "runtime reality changes."
+            ),
             "contrast-note",
         ),
     ]
@@ -203,27 +213,42 @@ def test_bb01_provider_abstention_recovers_to_visible_cited_route_replan_answer(
 
 
 def test_bb02_supported_lifecycle_facets_recover_to_visible_answer() -> None:
-    question = "Why is persisted run state important when a client disconnects before a long-running workflow has finished?"
+    question = (
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
+    )
     requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
     evidence = [
         _passage(
             "admission",
-            "The request admission boundary records the effective policy and task contract before execution.",
+            (
+                "The request admission boundary records the effective policy and task "
+                "contract before execution."
+            ),
             "admission-note",
         ),
         _passage(
             "durable",
-            "A durable persisted server-side run state preserves authority after the client disconnects.",
+            (
+                "A durable persisted server-side run state preserves authority after "
+                "the client disconnects."
+            ),
             "durable-note",
         ),
         _passage(
             "completion",
-            "Completion verification and acceptance checks happen before the system declares terminal success.",
+            (
+                "Completion verification and acceptance checks happen before the system "
+                "declares terminal success."
+            ),
             "completion-note",
         ),
         _passage(
             "observability",
-            "Observability, status, and reattach or resume handles let clients follow a headless continuing run.",
+            (
+                "Observability, status, and reattach or resume handles let clients "
+                "follow a headless continuing run."
+            ),
             "observability-note",
         ),
     ]
@@ -244,7 +269,10 @@ def test_bb02_supported_lifecycle_facets_recover_to_visible_answer() -> None:
 
 
 def test_positive_answerability_recovery_still_abstains_when_support_is_insufficient() -> None:
-    question = "Why is persisted run state important when a client disconnects before a long-running workflow has finished?"
+    question = (
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
+    )
     requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
     candidate = _supported_semantic_recovery_candidate(
         question=question,
@@ -274,7 +302,10 @@ def test_positive_answerability_recovery_does_not_override_ood_external_marker()
     evidence = [
         _passage(
             "disconnect",
-            "A durable persisted server-side run state preserves authority after the client disconnects.",
+            (
+                "A durable persisted server-side run state preserves authority after "
+                "the client disconnects."
+            ),
             "durable-note",
         )
     ]
