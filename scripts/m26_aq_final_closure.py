@@ -12,6 +12,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from knowledge_engine.m26_aq_semantic_contract import (
+    CANONICAL_RUNTIME_ENTRYPOINT,
+    derive_semantic_requirements,
+    evaluate_visible_semantics,
+    semantic_contract_fingerprint,
+)
+
 EXPECTED_RELEASE_ID = "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
 EXPECTED_GRAPH_SHA256 = (
     "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869"
@@ -83,14 +90,9 @@ def _request_json_get(
     )
     for attempt in range(1, GET_REQUEST_ATTEMPTS + 1):
         try:
-            with urllib.request.urlopen(
-                request,
-                timeout=GET_REQUEST_TIMEOUT_SECONDS,
-            ) as response:
+            with urllib.request.urlopen(request, timeout=GET_REQUEST_TIMEOUT_SECONDS) as response:
                 raw = response.read()
-                return response.status, _parse_json_response(raw), _elapsed_ms(
-                    total_started
-                ), attempt
+                return response.status, _parse_json_response(raw), _elapsed_ms(total_started), attempt
         except urllib.error.HTTPError as exc:
             parsed = _parse_json_response(exc.read())
             if exc.code in _TRANSIENT_HTTP_STATUSES and attempt < GET_REQUEST_ATTEMPTS:
@@ -156,9 +158,7 @@ def _query_post_json(
 def _timeout_policy() -> dict[str, int]:
     return {
         "provider_network_deadline_seconds": PROVIDER_NETWORK_DEADLINE_SECONDS,
-        "production_query_wallclock_deadline_seconds": (
-            PRODUCTION_QUERY_WALLCLOCK_DEADLINE_SECONDS
-        ),
+        "production_query_wallclock_deadline_seconds": PRODUCTION_QUERY_WALLCLOCK_DEADLINE_SECONDS,
         "collector_request_timeout_seconds": QUERY_COLLECTOR_REQUEST_TIMEOUT_SECONDS,
         "population_deadline_seconds": POPULATION_DEADLINE_SECONDS,
         "get_request_attempts": GET_REQUEST_ATTEMPTS,
@@ -188,8 +188,10 @@ def _write_artifact_atomic(output: Path, artifact: dict[str, Any]) -> None:
 
 def _new_artifact(*, expected_sha: str) -> dict[str, Any]:
     return {
-        "schema_version": "m26-aq-final-live-closure/v2",
+        "schema_version": "m26-aq-final-live-closure/v3",
         "expected_deploy_sha": expected_sha,
+        "expected_runtime_entrypoint": CANONICAL_RUNTIME_ENTRYPOINT,
+        "expected_semantic_contract_fingerprint": semantic_contract_fingerprint(),
         "health": {},
         "graph": {},
         "rows": [],
@@ -302,9 +304,7 @@ def _row_from_response(
         "citations": response.get("citations", []),
         "answer_claims": response.get("answer_claims", []),
         "relationship_summary": response.get("relationship_summary", {}),
-        "multi_evidence_verification": response.get(
-            "multi_evidence_verification", {}
-        ),
+        "multi_evidence_verification": response.get("multi_evidence_verification", {}),
         "semantic_closure": response.get("semantic_closure", {}),
         "selected_evidence": response.get("selected_evidence", []),
         "evidence_utilization_trace": response.get("evidence_utilization_trace", {}),
@@ -330,12 +330,8 @@ def _graph_summary(graph_code: int, graph: dict[str, Any]) -> dict[str, Any]:
         "graph_scope": graph.get("graph_scope"),
         "release_id": graph.get("release_id"),
         "graph_v2_sha256": graph.get("graph_v2_sha256"),
-        "node_count": len(graph.get("nodes", []))
-        if isinstance(graph.get("nodes"), list)
-        else 0,
-        "edge_count": len(graph.get("edges", []))
-        if isinstance(graph.get("edges"), list)
-        else 0,
+        "node_count": len(graph.get("nodes", [])) if isinstance(graph.get("nodes"), list) else 0,
+        "edge_count": len(graph.get("edges", [])) if isinstance(graph.get("edges"), list) else 0,
         "authority": graph.get("authority", {}),
     }
 
@@ -387,17 +383,14 @@ def collect(
             "status": "collector_failure",
             "failure": exc.reason,
         }
-        _fail_collection(
-            artifact,
-            output,
-            collect_started=collect_started,
-            reason="health_get_failed",
-        )
+        _fail_collection(artifact, output, collect_started=collect_started, reason="health_get_failed")
+    canonical = health.get("canonical_runtime", {}) if isinstance(health, dict) else {}
     artifact["health"] = {
         "http_status": health_code,
         "status": health.get("status"),
-        "build_sha": health.get("canonical_runtime", {}).get("build_sha"),
-        "entrypoint": health.get("canonical_runtime", {}).get("entrypoint"),
+        "build_sha": canonical.get("build_sha"),
+        "entrypoint": canonical.get("entrypoint"),
+        "semantic_contract_fingerprint": canonical.get("semantic_contract_fingerprint"),
     }
     _update_collection(artifact, collect_started=collect_started)
     _write_artifact_atomic(output, artifact)
@@ -413,12 +406,7 @@ def collect(
             "status": "collector_failure",
             "failure": exc.reason,
         }
-        _fail_collection(
-            artifact,
-            output,
-            collect_started=collect_started,
-            reason="graph_get_failed",
-        )
+        _fail_collection(artifact, output, collect_started=collect_started, reason="graph_get_failed")
     artifact["graph"] = _graph_summary(graph_code, graph)
     _update_collection(artifact, collect_started=collect_started)
     _write_artifact_atomic(output, artifact)
@@ -433,11 +421,7 @@ def collect(
                 case_id=case_id,
             )
         _emit_progress("AQ_COLLECT_CASE_START", case_id)
-        _update_collection(
-            artifact,
-            collect_started=collect_started,
-            current_case_id=case_id,
-        )
+        _update_collection(artifact, collect_started=collect_started, current_case_id=case_id)
         _write_artifact_atomic(output, artifact)
         try:
             code, response, elapsed_ms, attempts = _query_post_json(
@@ -464,26 +448,14 @@ def collect(
                 reason=exc.reason,
                 case_id=case_id,
             )
-        row = _row_from_response(
-            case,
-            code=code,
-            response=response,
-            elapsed_ms=elapsed_ms,
-            attempts=attempts,
-        )
+        row = _row_from_response(case, code=code, response=response, elapsed_ms=elapsed_ms, attempts=attempts)
         artifact["rows"].append(row)
         artifact["collection"]["completed_case_ids"].append(case_id)
         _update_collection(artifact, collect_started=collect_started)
         _write_artifact_atomic(output, artifact)
         _emit_progress("AQ_COLLECT_CASE_DONE", case_id)
         if code != 200:
-            _fail_collection(
-                artifact,
-                output,
-                collect_started=collect_started,
-                reason="query_http_not_200",
-                case_id=case_id,
-            )
+            _fail_collection(artifact, output, collect_started=collect_started, reason="query_http_not_200", case_id=case_id)
         if row.get("collector", {}).get("deadline_exceeded"):
             _fail_collection(
                 artifact,
@@ -500,40 +472,54 @@ def collect(
                 reason="population_deadline_exceeded_after_case",
                 case_id=case_id,
             )
-    _update_collection(
-        artifact,
-        collect_started=collect_started,
-        status="complete",
-        current_case_id=None,
-    )
+    _update_collection(artifact, collect_started=collect_started, status="complete", current_case_id=None)
     _write_artifact_atomic(output, artifact)
 
 
 def _provider_telemetry(row: dict[str, Any]) -> list[dict[str, Any]]:
     verification = row.get("multi_evidence_verification", {})
-    telemetry = (
-        verification.get("provider_attempt_telemetry", [])
-        if isinstance(verification, dict)
-        else []
-    )
+    telemetry = verification.get("provider_attempt_telemetry", []) if isinstance(verification, dict) else []
     return telemetry if isinstance(telemetry, list) else []
 
 
 def _zero_mutations(value: Any) -> bool:
     if not isinstance(value, dict):
         return False
-    return all(
-        not isinstance(item, bool) and int(item) == 0
-        for item in value.values()
-    )
+    return all(not isinstance(item, bool) and int(item) == 0 for item in value.values())
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _runtime_fingerprint(value: Mapping[str, Any]) -> str:
+    runtime_identity = _mapping(value.get("canonical_runtime"))
+    return str(runtime_identity.get("semantic_contract_fingerprint", ""))
+
+
+def _closure_fingerprint(row: Mapping[str, Any]) -> str:
+    closure = _mapping(row.get("semantic_closure"))
+    contract = _mapping(closure.get("semantic_contract"))
+    return str(contract.get("fingerprint", ""))
+
+
+def _validate_canonical_identity(row: dict[str, Any], expected_sha: str) -> list[str]:
+    failures: list[str] = []
+    canonical = _mapping(row.get("canonical_runtime"))
+    expected_fingerprint = semantic_contract_fingerprint()
+    if canonical.get("build_sha") != expected_sha:
+        failures.append("runtime_sha_mismatch")
+    if canonical.get("entrypoint") != CANONICAL_RUNTIME_ENTRYPOINT:
+        failures.append("runtime_entrypoint_mismatch")
+    if canonical.get("semantic_contract_fingerprint") != expected_fingerprint:
+        failures.append("runtime_fingerprint_mismatch")
+    closure_fp = _closure_fingerprint(row)
+    if closure_fp and closure_fp != expected_fingerprint:
+        failures.append("semantic_closure_fingerprint_mismatch")
+    return failures
 
 
 def _validate_visible_semantics(row: dict[str, Any]) -> list[str]:
-    from knowledge_engine.m26_pa7_semantic_closure_runtime import (
-        _semantic_requirements,
-        _visible_semantic_failures,
-    )
-
     question = str(row.get("question", ""))
     relationship = row.get("relationship_summary", {})
     intent = (
@@ -541,22 +527,14 @@ def _validate_visible_semantics(row: dict[str, Any]) -> list[str]:
         if isinstance(relationship, dict)
         else "direct_grounded_knowledge"
     )
-    requirements = _semantic_requirements(question, intent)
-    return _visible_semantic_failures(
-        str(row.get("answer_text", "")),
-        requirements,
-        question,
-    )
+    requirements = derive_semantic_requirements(question, intent)
+    return evaluate_visible_semantics(str(row.get("answer_text", "")), requirements, question)
 
 
-def validate(
-    *,
-    input_path: Path,
-    gate_path: Path,
-    expected_sha: str,
-) -> None:
+def validate(*, input_path: Path, gate_path: Path, expected_sha: str) -> None:
     artifact = json.loads(input_path.read_text(encoding="utf-8"))
     failures: list[str] = []
+    expected_fingerprint = semantic_contract_fingerprint()
     collection = artifact.get("collection", {})
     if isinstance(collection, dict):
         if collection.get("status") != "complete":
@@ -571,11 +549,10 @@ def validate(
         failures.append("health_not_ok")
     if health.get("build_sha") != expected_sha:
         failures.append("health_build_sha_mismatch")
-    if (
-        health.get("entrypoint")
-        != "knowledge_engine.m26_pa7_semantic_closure_runtime.run_owner_arbitrary_query"
-    ):
+    if health.get("entrypoint") != CANONICAL_RUNTIME_ENTRYPOINT:
         failures.append("wrong_production_entrypoint")
+    if health.get("semantic_contract_fingerprint") != expected_fingerprint:
+        failures.append("health_semantic_fingerprint_mismatch")
     if graph.get("http_status") != 200 or graph.get("status") != "ok":
         failures.append("graph_not_ok")
     if graph.get("graph_scope") != "full_current_production_relation_graph":
@@ -584,10 +561,7 @@ def validate(
         failures.append("graph_release_mismatch")
     if graph.get("graph_v2_sha256") != EXPECTED_GRAPH_SHA256:
         failures.append("graph_sha_mismatch")
-    if (
-        graph.get("node_count") != EXPECTED_NODE_COUNT
-        or graph.get("edge_count") != EXPECTED_EDGE_COUNT
-    ):
+    if graph.get("node_count") != EXPECTED_NODE_COUNT or graph.get("edge_count") != EXPECTED_EDGE_COUNT:
         failures.append("graph_population_mismatch")
     gate = json.loads(gate_path.read_text(encoding="utf-8"))
     identities = gate.get("production_identities", {})
@@ -598,11 +572,7 @@ def validate(
     if not isinstance(rows, list) or len(rows) != 12:
         failures.append("r3_population_not_12")
         rows = rows if isinstance(rows, list) else []
-    by_id = {
-        str(row.get("case_id")): row
-        for row in rows
-        if isinstance(row, dict)
-    }
+    by_id = {str(row.get("case_id")): row for row in rows if isinstance(row, dict)}
     abstain_ids = {"R3-Q10", "R3-Q11"}
     for case_id in [f"R3-Q{index:02d}" for index in range(1, 13)]:
         row = by_id.get(case_id)
@@ -612,31 +582,23 @@ def validate(
         if row.get("http_status") != 200:
             failures.append(f"{case_id}:http")
             continue
+        for identity_failure in _validate_canonical_identity(row, expected_sha):
+            failures.append(f"{case_id}:{identity_failure}")
         collector = row.get("collector", {})
         if isinstance(collector, dict):
             if collector.get("deadline_exceeded"):
                 failures.append(f"{case_id}:collector_deadline_exceeded")
             if collector.get("timeout_converted_to_answer") is not False:
                 failures.append(f"{case_id}:timeout_converted_to_answer")
-        accounting = (
-            row.get("accounting", {})
-            if isinstance(row.get("accounting"), dict)
-            else {}
-        )
+        accounting = row.get("accounting", {}) if isinstance(row.get("accounting"), dict) else {}
         provider_calls = int(accounting.get("provider_call_count", 0))
         if case_id in abstain_ids:
-            if (
-                not row.get("safe_abstention")
-                or row.get("status") != "owner_only_safe_abstention"
-            ):
+            if not row.get("safe_abstention") or row.get("status") != "owner_only_safe_abstention":
                 failures.append(f"{case_id}:expected_safe_abstention")
             if provider_calls != 0:
                 failures.append(f"{case_id}:provider_calls_not_zero")
             continue
-        if (
-            row.get("safe_abstention")
-            or row.get("status") != "owner_only_cited_answer"
-        ):
+        if row.get("safe_abstention") or row.get("status") != "owner_only_cited_answer":
             failures.append(f"{case_id}:not_answered")
         if row.get("answer_source") != ANSWER_SOURCE:
             failures.append(f"{case_id}:wrong_answer_source")
@@ -646,11 +608,7 @@ def validate(
             failures.append(f"{case_id}:provider_call_count")
         if not row.get("citations"):
             failures.append(f"{case_id}:missing_citations")
-        integrity = (
-            row.get("integrity", {})
-            if isinstance(row.get("integrity"), dict)
-            else {}
-        )
+        integrity = row.get("integrity", {}) if isinstance(row.get("integrity"), dict) else {}
         if int(integrity.get("unsupported_accepted_claims", 0)) != 0:
             failures.append(f"{case_id}:unsupported_claims")
         if not integrity.get("material_claim_support_verified", False):
@@ -659,11 +617,7 @@ def validate(
             failures.append(f"{case_id}:citation_locator_invalid")
         if not _zero_mutations(row.get("mutations", {})):
             failures.append(f"{case_id}:protected_mutation")
-        closure = (
-            row.get("semantic_closure", {})
-            if isinstance(row.get("semantic_closure"), dict)
-            else {}
-        )
+        closure = row.get("semantic_closure", {}) if isinstance(row.get("semantic_closure"), dict) else {}
         if closure.get("failures"):
             failures.append(f"{case_id}:semantic_closure_failures")
         if closure.get("broad_deterministic_fallback_used") is not False:
@@ -672,10 +626,7 @@ def validate(
             if not isinstance(telemetry, dict):
                 failures.append(f"{case_id}:invalid_provider_telemetry")
                 continue
-            if str(telemetry.get("stop_reason", "")).casefold() in {
-                "max_tokens",
-                "length",
-            }:
+            if str(telemetry.get("stop_reason", "")).casefold() in {"max_tokens", "length"}:
                 failures.append(f"{case_id}:provider_max_tokens")
             parse = telemetry.get("parse_telemetry", {})
             if not isinstance(parse, dict) or not parse.get("parse_ok", False):
@@ -683,11 +634,7 @@ def validate(
         for semantic_failure in _validate_visible_semantics(row):
             failures.append(f"{case_id}:{semantic_failure}")
         if case_id in {"R3-Q05", "R3-Q09"}:
-            endpoint = (
-                closure.get("endpoint_proof", {})
-                if isinstance(closure, dict)
-                else {}
-            )
+            endpoint = closure.get("endpoint_proof", {}) if isinstance(closure, dict) else {}
             if not endpoint.get("matched"):
                 failures.append(f"{case_id}:endpoint_not_matched")
             if endpoint.get("edge_id") != EXPECTED_GRAPH_EDGE:
@@ -703,43 +650,24 @@ def validate(
     if privacy.get("provider_secret_recorded") is not False:
         failures.append("privacy_provider_secret_recorded")
     if failures:
-        print(
-            json.dumps(
-                {"status": "FAIL", "failures": sorted(set(failures))},
-                indent=2,
-            )
-        )
+        print(json.dumps({"status": "FAIL", "failures": sorted(set(failures))}, indent=2))
         raise SystemExit(1)
-    print(
-        json.dumps(
-            {"status": "PASS", "rows": 12, "deploy_sha": expected_sha},
-            indent=2,
-        )
-    )
+    print(json.dumps({"status": "PASS", "rows": 12, "deploy_sha": expected_sha}, indent=2))
 
 
 def validate_junit(*, junit_path: Path, minimum: int) -> None:
     root = ET.parse(junit_path).getroot()
     if root.tag == "testsuites":
-        count = sum(
-            int(item.attrib.get("tests", 0))
-            for item in root.findall("testsuite")
-        )
+        count = sum(int(item.attrib.get("tests", 0)) for item in root.findall("testsuite"))
         failures = sum(
-            int(item.attrib.get("failures", 0))
-            + int(item.attrib.get("errors", 0))
+            int(item.attrib.get("failures", 0)) + int(item.attrib.get("errors", 0))
             for item in root.findall("testsuite")
         )
     else:
         count = int(root.attrib.get("tests", 0))
-        failures = int(root.attrib.get("failures", 0)) + int(
-            root.attrib.get("errors", 0)
-        )
+        failures = int(root.attrib.get("failures", 0)) + int(root.attrib.get("errors", 0))
     if count < minimum or failures:
-        raise SystemExit(
-            "regression gate failed "
-            f"tests={count} failures={failures} minimum={minimum}"
-        )
+        raise SystemExit(f"regression gate failed tests={count} failures={failures} minimum={minimum}")
     print(json.dumps({"status": "PASS", "tests": count, "minimum": minimum}))
 
 
@@ -749,10 +677,7 @@ def main() -> None:
     collect_parser = sub.add_parser("collect")
     collect_parser.add_argument("--questions", type=Path, required=True)
     collect_parser.add_argument("--output", type=Path, required=True)
-    collect_parser.add_argument(
-        "--base-url",
-        default="http://127.0.0.1:8080",
-    )
+    collect_parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     collect_parser.add_argument("--expected-sha", required=True)
     validate_parser = sub.add_parser("validate")
     validate_parser.add_argument("--input", type=Path, required=True)
@@ -770,11 +695,7 @@ def main() -> None:
             expected_sha=args.expected_sha,
         )
     elif args.command == "validate":
-        validate(
-            input_path=args.input,
-            gate_path=args.gate,
-            expected_sha=args.expected_sha,
-        )
+        validate(input_path=args.input, gate_path=args.gate, expected_sha=args.expected_sha)
     else:
         validate_junit(junit_path=args.junit, minimum=args.minimum)
 
