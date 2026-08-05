@@ -9,16 +9,29 @@ from knowledge_engine.m26_aq_semantic_contract import (
     CANONICAL_RUNTIME_ENTRYPOINT,
     semantic_contract_fingerprint,
 )
-from m26_aq_final_closure import (
-    ANSWER_SOURCE,
-    EXPECTED_EDGE_COUNT,
-    EXPECTED_GRAPH_SHA256,
-    EXPECTED_NODE_COUNT,
-    EXPECTED_RELEASE_ID,
-    _provider_telemetry,
-    _validate_visible_semantics,
-    _zero_mutations,
-)
+
+if __package__:
+    from .m26_aq_final_closure import (
+        ANSWER_SOURCE,
+        EXPECTED_EDGE_COUNT,
+        EXPECTED_GRAPH_SHA256,
+        EXPECTED_NODE_COUNT,
+        EXPECTED_RELEASE_ID,
+        _provider_telemetry,
+        _validate_visible_semantics,
+        _zero_mutations,
+    )
+else:
+    from m26_aq_final_closure import (
+        ANSWER_SOURCE,
+        EXPECTED_EDGE_COUNT,
+        EXPECTED_GRAPH_SHA256,
+        EXPECTED_NODE_COUNT,
+        EXPECTED_RELEASE_ID,
+        _provider_telemetry,
+        _validate_visible_semantics,
+        _zero_mutations,
+    )
 
 REQUIRED_CLASSES = {
     "direct_explanatory": 2,
