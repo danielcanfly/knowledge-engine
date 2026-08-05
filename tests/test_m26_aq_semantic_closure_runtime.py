@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from knowledge_engine.m26_aq_semantic_contract import (
+    _should_attempt_semantic_recovery,
+    _supported_semantic_recovery_candidate,
+    derive_semantic_requirements,
+    evaluate_visible_semantics,
+)
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _parse_compact_provider_result,
     _requirement_support_failures,
@@ -15,6 +21,24 @@ def _failures(
 ) -> list[str]:
     requirements = _semantic_requirements(question, intent)
     return _visible_semantic_failures(answer, requirements, question)
+
+
+def _passage(
+    evidence_id: str,
+    text: str,
+    source: str,
+) -> dict[str, str]:
+    return {
+        "evidence_id": evidence_id,
+        "locator_id": f"loc_{evidence_id}",
+        "evidence_type": "passage",
+        "source_id": source,
+        "source_identity": source,
+        "concept_id": f"concept_{evidence_id}",
+        "title": source,
+        "section_title": source,
+        "passage_text": text,
+    }
 
 
 def test_nc01_cited_but_irrelevant_disconnect_answer_is_rejected() -> None:
@@ -128,3 +152,130 @@ def test_router_vs_replanner_implicit_wording_gets_both_roles() -> None:
     requirements = _semantic_requirements(question, "cross_document_comparison")
     ids = {item.requirement_id for item in requirements}
     assert {"initial_routing_role", "replanning_role", "role_contrast"}.issubset(ids)
+
+
+def test_bb01_initial_route_vs_revision_question_derives_positive_requirements() -> None:
+    question = (
+        "Explain the difference between the component that chooses an initial request route "
+        "and the component that revises a plan after execution has already started."
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    ids = {item.requirement_id for item in requirements}
+    assert {"initial_routing_role", "replanning_role", "role_contrast"}.issubset(ids)
+
+
+def test_bb01_provider_abstention_recovers_to_visible_cited_route_replan_answer() -> None:
+    question = (
+        "Explain the difference between the component that chooses an initial request route "
+        "and the component that revises a plan after execution has already started."
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _passage(
+            "route",
+            "The query router chooses the initial route, path, or capability for a request before execution begins.",
+            "router-note",
+        ),
+        _passage(
+            "replan",
+            "Adaptive replanning revises the remaining work after execution has started when evidence invalidates the plan.",
+            "replan-note",
+        ),
+        _passage(
+            "contrast",
+            "Initial dispatch and later replanning are different jobs: the first route happens upfront, and the later revision corrects the plan after runtime reality changes.",
+            "contrast-note",
+        ),
+    ]
+    candidate = _supported_semantic_recovery_candidate(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+    assert candidate is not None
+    answer_text = str(candidate["answer_text"])
+    assert not evaluate_visible_semantics(answer_text, requirements, question)
+    assert "initial" in answer_text.casefold()
+    assert "remaining" in answer_text.casefold()
+    assert len(candidate["claims"][0]["support_refs"]) >= 3
+
+
+def test_bb02_supported_lifecycle_facets_recover_to_visible_answer() -> None:
+    question = "Why is persisted run state important when a client disconnects before a long-running workflow has finished?"
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _passage(
+            "admission",
+            "The request admission boundary records the effective policy and task contract before execution.",
+            "admission-note",
+        ),
+        _passage(
+            "durable",
+            "A durable persisted server-side run state preserves authority after the client disconnects.",
+            "durable-note",
+        ),
+        _passage(
+            "completion",
+            "Completion verification and acceptance checks happen before the system declares terminal success.",
+            "completion-note",
+        ),
+        _passage(
+            "observability",
+            "Observability, status, and reattach or resume handles let clients follow a headless continuing run.",
+            "observability-note",
+        ),
+    ]
+    candidate = _supported_semantic_recovery_candidate(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+    assert candidate is not None
+    answer_text = str(candidate["answer_text"])
+    assert not evaluate_visible_semantics(answer_text, requirements, question)
+    assert "admission" in answer_text.casefold()
+    assert "durable" in answer_text.casefold()
+    assert "completion" in answer_text.casefold()
+    assert "observability" in answer_text.casefold()
+
+
+def test_positive_answerability_recovery_still_abstains_when_support_is_insufficient() -> None:
+    question = "Why is persisted run state important when a client disconnects before a long-running workflow has finished?"
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    candidate = _supported_semantic_recovery_candidate(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=[
+            _passage(
+                "unrelated",
+                "A reverse proxy can retry a failed upstream connection.",
+                "network-note",
+            )
+        ],
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+    assert candidate is None
+
+
+def test_positive_answerability_recovery_does_not_override_ood_external_marker() -> None:
+    question = "What does ZZZAlienProtocol say about client disconnect recovery?"
+    verification = {
+        "status": "owner_only_safe_abstention",
+        "reason_codes": ["PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE"],
+        "unsupported_accepted_claims": 0,
+        "citation_locator_valid": True,
+    }
+    closure = {"failures": ["SEMANTIC_CLOSURE_FAILED"]}
+    evidence = [
+        _passage(
+            "disconnect",
+            "A durable persisted server-side run state preserves authority after the client disconnects.",
+            "durable-note",
+        )
+    ]
+    assert not _should_attempt_semantic_recovery(question, verification, closure, evidence)
