@@ -188,9 +188,10 @@ def test_frozen_like_part_questions_remain_answerable_when_entity_supported(
         f"Harness Theory {part} says a harness is a constraint system "
         "for repeatable work."
     )
+    evidence_id = f"ev-{part.lower().replace(' ', '-')}"
     evidence = [
         _evidence(
-            f"ev-{part.lower().replace(' ', '-')}",
+            evidence_id,
             quote,
             source="harness-theory",
         )
@@ -207,8 +208,8 @@ def test_frozen_like_part_questions_remain_answerable_when_entity_supported(
                 "for repeatable work [[claim_1]]."
             ),
             surface_text=quote,
-            evidence_id=f"ev-{part.lower().replace(' ', '-')}",
-            locator_id=f"loc-{part.lower().replace(' ', '-')}",
+            evidence_id=evidence_id,
+            locator_id=f"loc-{evidence_id}",
             exact_quote=quote,
             facet_ids=[f"entity_harness_theory_{part.lower().replace(' ', '_')}"],
         ),
