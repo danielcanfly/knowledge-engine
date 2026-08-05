@@ -132,6 +132,9 @@ def test_config_policy_and_permissions(tmp_path: Path) -> None:
         "ServerAliveCountMax 6",
         "TCPKeepAlive yes",
         "StrictHostKeyChecking yes",
+        "ControlMaster auto",
+        "ControlPersist 10m",
+        f"ControlPath {ssh_dir}/oracle-%r@%h:%p",
     ):
         assert expected in config
     assert stat.S_IMODE(ssh_dir.stat().st_mode) == 0o700
