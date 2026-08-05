@@ -1320,22 +1320,64 @@ def _exact_named_graph_edge(
     )
 
 
+def _identity_phrase_matches(phrase: str, text: str) -> bool:
+    normalized_phrase = str(phrase).casefold().strip()
+    normalized_text = str(text).casefold()
+    if not normalized_phrase:
+        return False
+    if re.search(r"\bpart\s+\d+\b", normalized_phrase) is None:
+        return normalized_phrase in normalized_text
+    tokens = re.findall(r"[a-z0-9]+", normalized_phrase)
+    if not tokens:
+        return False
+    pattern = re.compile(
+        r"(?<![a-z0-9])"
+        + r"[^a-z0-9]+".join(re.escape(token) for token in tokens)
+        + r"(?![a-z0-9])",
+        flags=re.I,
+    )
+    return pattern.search(str(text)) is not None
+
+
 def _entity_concepts(bundle: ProductionAnswerBundle, entity: str) -> set[str]:
     needle = entity.casefold()
+    strict_part_identity = re.search(r"\bpart\s+\d+\b", needle) is not None
     scored: list[tuple[float, str]] = []
     for document in legacy._release_documents(bundle):
         title = str(document.get("title", ""))
         section_title = str(document.get("section_title", ""))
+        source_identity = str(
+            document.get("source_identity") or document.get("source_id") or ""
+        )
         text = legacy._document_text(document)
-        if needle not in text.casefold():
-            continue
-        score = 1.0
-        if needle in title.casefold():
-            score += 4.0
-        if needle in section_title.casefold():
-            score += 2.0
-        if title.casefold().startswith(needle):
-            score += 3.0
+        if strict_part_identity:
+            text_match = _identity_phrase_matches(entity, text)
+            title_match = _identity_phrase_matches(entity, title)
+            section_match = _identity_phrase_matches(entity, section_title)
+            source_match = _identity_phrase_matches(entity, source_identity)
+            if not any((text_match, title_match, section_match, source_match)):
+                continue
+            score = 1.0 if text_match else 0.0
+            if title_match:
+                score += 6.0
+            if section_match:
+                score += 3.0
+            if source_match:
+                score += 8.0
+            normalized_title = re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip()
+            normalized_entity = re.sub(r"[^a-z0-9]+", " ", needle).strip()
+            if normalized_title == normalized_entity:
+                score += 4.0
+        else:
+            if needle not in text.casefold():
+                continue
+            score = 1.0
+            if needle in title.casefold():
+                score += 4.0
+            if needle in section_title.casefold():
+                score += 2.0
+            if title.casefold().startswith(needle):
+                score += 3.0
         scored.append((score, str(document.get("concept_id", ""))))
     if not scored:
         return set()
@@ -1548,14 +1590,22 @@ def _requirement_document_score(
 ) -> float:
     text = legacy._document_text(document)
     if requirement.exact_phrase:
-        needle = requirement.exact_phrase.casefold()
-        if needle not in text.casefold():
+        if not _identity_phrase_matches(requirement.exact_phrase, text):
             return 0.0
         score = 3.0
-        if needle in str(document.get("title", "")).casefold():
+        if _identity_phrase_matches(
+            requirement.exact_phrase, str(document.get("title", ""))
+        ):
             score += 4.0
-        if needle in str(document.get("section_title", "")).casefold():
+        if _identity_phrase_matches(
+            requirement.exact_phrase, str(document.get("section_title", ""))
+        ):
             score += 2.0
+        if _identity_phrase_matches(
+            requirement.exact_phrase,
+            str(document.get("source_identity") or document.get("source_id") or ""),
+        ):
+            score += 4.0
         return score
     terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
     overlap = len(terms & legacy._meaningful_terms(text))
@@ -1577,6 +1627,8 @@ def _requirement_evidence_score(
             "title",
             "section_title",
             "passage_text",
+            "source_identity",
+            "source_id",
             "concept_id",
             "relation_type",
         )
@@ -1584,7 +1636,7 @@ def _requirement_evidence_score(
     if requirement.exact_phrase:
         return (
             3.0
-            if requirement.exact_phrase.casefold() in text.casefold()
+            if _identity_phrase_matches(requirement.exact_phrase, text)
             else 0.0
         )
     terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
