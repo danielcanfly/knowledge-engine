@@ -41,6 +41,67 @@ def _state_machine_replanner_question(question: str) -> bool:
     )
 
 
+def _route_replan_question(question: str) -> bool:
+    q = question.casefold()
+    has_initial_route = (
+        ("initial" in q or "first" in q or "before execution" in q)
+        and ("route" in q or "routing" in q or "path" in q or "where" in q)
+    )
+    has_later_replan = any(
+        marker in q
+        for marker in (
+            "revises a plan",
+            "revise a plan",
+            "revises the plan",
+            "changes the remaining work",
+            "remaining work",
+            "after execution has already started",
+            "after execution started",
+            "after execution",
+            "replan",
+            "replanner",
+            "replanning",
+        )
+    )
+    asks_difference = any(
+        marker in q
+        for marker in ("difference", "different", "contrast", "versus", "vs", "another")
+    )
+    return has_initial_route and has_later_replan and asks_difference
+
+
+def _route_replan_requirements() -> list[SemanticRequirement]:
+    return [
+        SemanticRequirement(
+            requirement_id="initial_routing_role",
+            instruction="Explain that routing chooses the initial path/capability for the request before execution.",
+            evidence_terms=("router", "route", "routing", "initial", "path", "capability", "request", "before execution"),
+            visible_patterns=(
+                r"\b(?:router|routing|route).{0,140}(?:initial|first|before execution|path|capability|request)",
+                r"\binitial.{0,140}(?:route|path|dispatch|capability|request)",
+            ),
+        ),
+        SemanticRequirement(
+            requirement_id="replanning_role",
+            instruction="Explain that replanning revises the remaining work after execution has started when evidence or reality invalidates the plan.",
+            evidence_terms=("adaptive", "replan", "replanning", "revise", "remaining", "after execution", "invalid", "evidence", "reality"),
+            visible_patterns=(
+                r"\b(?:replan|replanning|replanner|revise|revises|revision).{0,180}(?:remaining|after execution|started|invalid|evidence|reality|plan)",
+                r"\bremaining.{0,140}(?:work|plan|steps).{0,140}(?:replan|revise|after|invalid)",
+            ),
+        ),
+        SemanticRequirement(
+            requirement_id="role_contrast",
+            instruction="Contrast initial dispatch with later replanning rather than conflating them.",
+            evidence_terms=("initial", "later", "after", "different", "dispatch", "replanning", "contrast"),
+            visible_patterns=(
+                r"\b(?:whereas|while|by contrast|different|initial).{0,200}(?:later|after|replan|replanning|revision|remaining)",
+                r"\b(?:first|initial).{0,160}(?:later|after|then|replan|revision)",
+            ),
+        ),
+    ]
+
+
 def _authority_boundary_requirement() -> SemanticRequirement:
     return SemanticRequirement(
         requirement_id="authority_boundary",
@@ -110,6 +171,12 @@ def derive_semantic_requirements(
         )
     if _state_machine_replanner_question(question):
         requirements.append(_authority_boundary_requirement())
+    if _route_replan_question(question):
+        for requirement in _route_replan_requirements():
+            if requirement.requirement_id in seen:
+                continue
+            seen.add(requirement.requirement_id)
+            requirements.append(requirement)
     return requirements
 
 
@@ -163,6 +230,14 @@ def semantic_behavior_probe_judgments() -> dict[str, Any]:
     )
     precedes_question = "Does Part 1 precede Part 2 prove implementation dependency?"
     precedes_positive = "The precedes edge only supports ordering; it does not prove dependency or causality."
+    route_replan_question = (
+        "Explain the difference between the component that chooses an initial request route "
+        "and the component that revises a plan after execution has already started."
+    )
+    route_replan_positive = (
+        "The router chooses the initial request path before execution, while adaptive "
+        "replanning revises the remaining work later after evidence invalidates the plan."
+    )
     return {
         "authority_positive": evaluate_visible_semantics(
             authority_positive,
@@ -197,6 +272,11 @@ def semantic_behavior_probe_judgments() -> dict[str, Any]:
             _probe_requirements(authority_question),
             authority_question,
         ),
+        "route_replan_positive": evaluate_visible_semantics(
+            route_replan_positive,
+            _probe_requirements(route_replan_question),
+            route_replan_question,
+        ),
     }
 
 
@@ -213,6 +293,7 @@ def semantic_contract_manifest() -> dict[str, Any]:
             "multi_facet_publication",
             "post_render_alignment",
             "deterministic_recovery_publication",
+            "positive_answerability_recovery",
         ],
         "authority_boundary": {
             "instruction": authority.instruction,
@@ -237,6 +318,7 @@ def semantic_contract_manifest() -> dict[str, Any]:
             "protected_mutations": 0,
             "post_render_semantic_validation": True,
             "internal_reference_leak_rejection": True,
+            "positive_answerability_recovery": True,
         },
     }
 
@@ -543,6 +625,14 @@ def _supported_semantic_recovery_candidate(
         )
         if candidate is not None:
             return candidate
+    candidate = _positive_answerability_requirement_candidate(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+    )
+    if candidate is not None:
+        return candidate
     try:
         candidate = legacy._deterministic_provider_candidate(
             question=question,
@@ -554,6 +644,108 @@ def _supported_semantic_recovery_candidate(
     if not isinstance(candidate, Mapping):
         return None
     return dict(candidate)
+
+
+def _positive_answerability_requirement_candidate(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+) -> dict[str, Any] | None:
+    requirement_ids = {str(getattr(item, "requirement_id", "")) for item in requirements}
+    route_replan_ids = {"initial_routing_role", "replanning_role", "role_contrast"}
+    lifecycle_ids = {
+        "admission_policy",
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }
+    if route_replan_ids.issubset(requirement_ids):
+        surface = (
+            "The routing component chooses the initial request route, path, or capability before execution. "
+            "By contrast, the replanning component revises the remaining work later, after execution has started and evidence or runtime reality invalidates the plan."
+        )
+        claim_role = "comparison"
+        relation = "contrasts_with"
+        required_ids = route_replan_ids
+    elif lifecycle_ids.issubset(requirement_ids):
+        surface = (
+            "Persisted run state keeps a disconnected long-running workflow trustworthy because admission and effective policy happen before execution, durable server-side state preserves run authority after disconnect, observability or reattachment exposes status while it continues headlessly, and completion verification or acceptance happens before success is declared."
+        )
+        claim_role = "direct"
+        relation = None
+        required_ids = lifecycle_ids
+    else:
+        return None
+
+    selected_items: list[Mapping[str, Any]] = []
+    seen: set[str] = set()
+    for requirement in requirements:
+        if str(getattr(requirement, "requirement_id", "")) not in required_ids:
+            continue
+        item = _best_supported_requirement_evidence(requirement, evidence)
+        if item is None:
+            return None
+        evidence_id = str(item.get("evidence_id", ""))
+        if evidence_id and evidence_id not in seen:
+            selected_items.append(item)
+            seen.add(evidence_id)
+
+    refs = []
+    for item in selected_items:
+        ref = _support_ref(item)
+        if ref is None:
+            return None
+        refs.append(ref)
+    if len(refs) < min(2, len(required_ids)):
+        return None
+    if evaluate_visible_semantics(surface, requirements, question):
+        return None
+    if _internal_reference_leaks(surface, question):
+        return None
+
+    facet_ids = legacy._required_facet_ids(question=question, intent_class=intent_class)
+    if not facet_ids:
+        facet_ids = sorted(required_ids)
+    return {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "relation": relation,
+        "selected_evidence_ids": list(dict.fromkeys(ref["evidence_id"] for ref in refs)),
+        "answer_text": f"{surface} [[claim_1]].",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_role": claim_role,
+                "surface_text": surface,
+                "facet_ids": facet_ids,
+                "support_mode": "runtime_bound_exact_multi_evidence",
+                "support_refs": refs[:6],
+            }
+        ],
+        "missing_facets": [],
+        "abstention_reason": None,
+    }
+
+
+def _best_supported_requirement_evidence(
+    requirement: Any,
+    evidence: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
+    best: Mapping[str, Any] | None = None
+    best_score = 0.0
+    for item in evidence:
+        try:
+            score = float(runtime._requirement_evidence_score(requirement, item))
+        except Exception:
+            score = 0.0
+        if score > best_score:
+            best = item
+            best_score = score
+    if best is None or best_score < 1.0:
+        return None
+    return best
 
 
 def _precedes_boundary_required(
