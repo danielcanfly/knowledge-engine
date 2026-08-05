@@ -57,6 +57,8 @@ _ALIGNMENT_STOPWORDS = {
     "can",
     "compare",
     "contrast",
+    "control",
+    "controls",
     "did",
     "do",
     "does",
@@ -69,6 +71,7 @@ _ALIGNMENT_STOPWORDS = {
     "it",
     "of",
     "or",
+    "reliability",
     "should",
     "show",
     "tell",
@@ -241,9 +244,9 @@ def _debug_like_surface(answer_text: str) -> bool:
     if not stripped:
         return False
     fragments = [piece.strip() for piece in re.split(r"[.;\n]", stripped) if piece.strip()]
-    if fragments and all(":" in piece and len(piece.split()) <= 6 for piece in fragments[:3]):
-        return True
-    return False
+    return bool(fragments) and all(
+        ":" in piece and len(piece.split()) <= 6 for piece in fragments[:3]
+    )
 
 
 def _is_comparison_question(q_folded: str) -> bool:

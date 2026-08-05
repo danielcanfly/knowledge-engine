@@ -67,6 +67,8 @@ RELATIONAL_INTENTS = {
 }
 MULTI_SOURCE_INTENTS = RELATIONAL_INTENTS | {"provenance_source_trace"}
 PROVIDER_STATUS_VALUES = {"answer_candidate", "partial_candidate", "abstain"}
+QUESTION_EVIDENCE_RELEVANCE_CODE = "M26-PA7-ME-047"
+QUESTION_EVIDENCE_RELEVANCE_HARD_STOP = "QUESTION_EVIDENCE_RELEVANCE_HARD_STOP"
 PROMPT_INJECTION_PATTERNS = (
     re.compile(r"\bignore\s+(?:all\s+)?previous\b", re.I),
     re.compile(r"\bsystem\s+prompt\b", re.I),
@@ -1010,6 +1012,12 @@ def _synthesize_and_verify(
             return answer
         except VerifiedAnswerGateError as exc:
             failures.append(exc.code)
+            if _is_question_evidence_relevance_hard_stop(exc):
+                return _verified_abstention(
+                    reason_codes=[exc.code, QUESTION_EVIDENCE_RELEVANCE_HARD_STOP],
+                    calls=calls,
+                    repair_attempted=repair_attempted,
+                )
             if attempt == 1:
                 repair_attempted = True
                 continue
@@ -2336,6 +2344,13 @@ def _verify_multi_evidence_provider_output(
     missing_facets = sorted(required_facets - covered_facets)
     if missing_facets:
         raise _verification_failure("M26-PA7-ME-029", "answer candidate misses required facets")
+    _verify_question_evidence_relevance(
+        question=question,
+        intent_class=intent_class,
+        claims=claim_records,
+        used_evidence_ids=used_evidence_ids,
+        evidence_by_id=evidence_by_id,
+    )
     return {
         "case_id": trace_id,
         "terminal_status": "verified_answer_ready_candidate",
@@ -2478,6 +2493,231 @@ def _has_non_entailment_boundary(text_casefold: str) -> bool:
         )
     )
     return negative and boundary
+
+
+def _verify_question_evidence_relevance(
+    *,
+    question: str,
+    intent_class: str,
+    claims: Sequence[Mapping[str, Any]],
+    used_evidence_ids: set[str],
+    evidence_by_id: Mapping[str, Mapping[str, Any]],
+) -> None:
+    if intent_class != "direct_grounded_knowledge":
+        return
+    subjects = _question_relevance_subjects(question)
+    if not subjects:
+        return
+    evidence_items = [
+        evidence_by_id[evidence_id]
+        for evidence_id in sorted(used_evidence_ids)
+        if evidence_id in evidence_by_id
+    ]
+    support_text_by_evidence_id: dict[str, list[str]] = {}
+    for claim in claims:
+        for ref in _list(claim.get("support_refs", []), "verified claim support refs"):
+            evidence_id = str(_object(ref, "verified claim support ref").get("evidence_id", ""))
+            support_text_by_evidence_id.setdefault(evidence_id, []).append(
+                str(_object(ref, "verified claim support ref").get("exact_quote", ""))
+            )
+    relevance_items = [
+        (
+            str(item.get("evidence_id", "")),
+            " ".join(
+                [
+                    str(item.get("title", "")),
+                    str(item.get("section_title", "")),
+                    str(item.get("concept_id", "")),
+                    str(item.get("section_id", "")),
+                    str(item.get("passage_text", "")),
+                    " ".join(
+                        support_text_by_evidence_id.get(str(item.get("evidence_id", "")), [])
+                    ),
+                ]
+            ),
+        )
+        for item in evidence_items
+    ]
+    if not relevance_items:
+        return
+
+    request_groups = _requested_attribute_groups(question=question, subjects=subjects)
+    for subject in subjects:
+        subject_norm = _normalized_relevance_text(subject)
+        if not subject_norm:
+            continue
+        subject_terms = set(subject_norm.split())
+        subject_items = [
+            evidence_id
+            for evidence_id, text in relevance_items
+            if _contains_normalized_unit(text, subject_norm)
+        ]
+        if not subject_items:
+            evidence_terms = _meaningful_terms(" ".join(text for _, text in relevance_items))
+            decomposed = sorted((subject_terms & evidence_terms) - _relevance_common_terms())
+            detail = (
+                "decomposed terms: " + ", ".join(decomposed[:8])
+                if decomposed
+                else "no subject-unit evidence"
+            )
+            raise _verification_failure(
+                QUESTION_EVIDENCE_RELEVANCE_CODE,
+                (
+                    f"{QUESTION_EVIDENCE_RELEVANCE_HARD_STOP}: compound subject "
+                    f"'{subject}' is not established as a coherent unit in used evidence; "
+                    f"{detail}"
+                ),
+            )
+        missing_groups = [
+            sorted(group)
+            for group in request_groups
+            if not any(_text_supports_attribute_group(text, group) for _, text in relevance_items)
+        ]
+        if missing_groups:
+            group_labels = ["/".join(group[:3]) for group in missing_groups]
+            raise _verification_failure(
+                QUESTION_EVIDENCE_RELEVANCE_CODE,
+                (
+                    f"{QUESTION_EVIDENCE_RELEVANCE_HARD_STOP}: used evidence establishes "
+                    f"compound subject '{subject}' but not requested attribute/action "
+                    f"{', '.join(group_labels)}"
+                ),
+            )
+
+
+def _is_question_evidence_relevance_hard_stop(exc: VerifiedAnswerGateError) -> bool:
+    return (
+        exc.code == QUESTION_EVIDENCE_RELEVANCE_CODE
+        and QUESTION_EVIDENCE_RELEVANCE_HARD_STOP in exc.safe_message
+    )
+
+
+def _question_relevance_subjects(question: str) -> list[str]:
+    subjects: list[str] = []
+
+    def add(candidate: str) -> None:
+        cleaned = re.sub(r"\s+", " ", str(candidate).strip(" ?!.,;:'\"()[]{}"))
+        cleaned = re.sub(
+            r"^(?:(?:what|which|when|where|why|how|does|do|did|can|should|could)\s+)+",
+            "",
+            cleaned,
+            flags=re.I,
+        ).strip()
+        if not cleaned:
+            return
+        normalized = _normalized_relevance_text(cleaned)
+        if not normalized or len(normalized.split()) < 2:
+            return
+        if normalized not in {
+            _normalized_relevance_text(existing)
+            for existing in subjects
+        }:
+            subjects.append(cleaned)
+
+    for entity in _named_question_entities(question):
+        add(entity)
+    for match in re.finditer(r"['\"]([^'\"]{4,})['\"]", question):
+        add(match.group(1))
+    patterns = (
+        r"\bfor\s+the\s+([A-Za-z0-9][A-Za-z0-9 .'/&-]{5,}?)\??$",
+        r"\bdid\s+the\s+([A-Za-z0-9][A-Za-z0-9 .'/&-]{5,}?)\s+"
+        r"(?:announce|announced|launch|launched|release|released|ship|shipped)\b",
+        r"\bwas\s+announced\s+for\s+the\s+([A-Za-z0-9][A-Za-z0-9 .'/&-]{5,}?)\??$",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, question, flags=re.I)
+        if match is not None:
+            add(match.group(1))
+    return subjects
+
+
+def _requested_attribute_groups(
+    *,
+    question: str,
+    subjects: Sequence[str],
+) -> list[set[str]]:
+    question_norm = _normalized_relevance_text(question)
+    for subject in subjects:
+        subject_norm = _normalized_relevance_text(subject)
+        if subject_norm:
+            question_norm = re.sub(
+                rf"\b{re.escape(subject_norm)}\b",
+                " ",
+                question_norm,
+            )
+    groups: list[set[str]] = []
+
+    def add(*terms: str) -> None:
+        group = {term for term in terms if term}
+        if group and group not in groups:
+            groups.append(group)
+
+    terms = set(question_norm.split())
+    if "date" in terms:
+        if "launch" in terms:
+            add("date", "launch")
+        if "integration" in terms:
+            add("date", "integration")
+        if "release" in terms:
+            add("date", "release")
+        if "announce" in terms or "announced" in terms:
+            add("date", "announce")
+    return groups
+
+
+def _normalized_relevance_text(text: str) -> str:
+    lowered = str(text).casefold().replace("-", " ")
+    tokens = re.findall(r"[a-z0-9]+|[\u3400-\u9fff]+", lowered)
+    return " ".join(tokens)
+
+
+def _contains_normalized_unit(text: str, unit: str) -> bool:
+    normalized_text = f" {_normalized_relevance_text(text)} "
+    normalized_unit = _normalized_relevance_text(unit)
+    if not normalized_unit:
+        return False
+    if f" {normalized_unit} " in normalized_text:
+        return True
+    unit_tokens = normalized_unit.split()
+    variants: list[str] = []
+    if len(unit_tokens) >= 2 and not unit_tokens[-1].endswith("s"):
+        variants.append(" ".join([*unit_tokens[:-1], f"{unit_tokens[-1]}s"]))
+    if len(unit_tokens) >= 2 and unit_tokens[-1].endswith("s"):
+        variants.append(" ".join([*unit_tokens[:-1], unit_tokens[-1].removesuffix("s")]))
+    return any(f" {variant} " in normalized_text for variant in variants)
+
+
+def _relevance_common_terms() -> set[str]:
+    return {
+        "announce",
+        "announced",
+        "date",
+        "integration",
+        "launch",
+        "module",
+        "nonexistent",
+        "platform",
+        "project",
+        "protocol",
+        "release",
+        "system",
+        "team",
+        "ticketing",
+    }
+
+
+def _text_supports_attribute_group(text: str, group: set[str]) -> bool:
+    normalized_terms = set(_normalized_relevance_text(text).split())
+    if not normalized_terms:
+        return False
+    for term in group:
+        if term == "announce":
+            if not any(token.startswith("announce") for token in normalized_terms):
+                return False
+            continue
+        if term not in normalized_terms:
+            return False
+    return True
 
 
 def _question_requires_non_entailment_boundary(question: str) -> bool:

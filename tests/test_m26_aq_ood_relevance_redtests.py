@@ -8,7 +8,6 @@ import pytest
 from knowledge_engine import m26_pa7_arbitrary_query_runtime as runtime
 from knowledge_engine.m26_verified_answer_citation_gate import VerifiedAnswerGateError
 
-
 EXPECTED_OOD_RELEVANCE_CODE = "M26-PA7-ME-047"
 
 
