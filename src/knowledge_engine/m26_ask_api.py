@@ -13,12 +13,17 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request, status
 
 from .config import Settings
+from .m26_aq_semantic_contract import (
+    CANONICAL_RUNTIME_ENTRYPOINT,
+    CONTRACT_SCHEMA_VERSION,
+    semantic_contract_fingerprint,
+    run_owner_arbitrary_query,
+)
 from .m26_pa7_arbitrary_query_runtime import (
     MAX_QUERY_CHARS,
     DenseChannel,
     PA7ArbitraryQueryError,
     ProviderClient,
-    run_owner_arbitrary_query,
 )
 from .m26_production_answer_bundle import (
     FULL_PRODUCTION_EDGE_COUNT,
@@ -41,9 +46,7 @@ WEB_GRAPH_SCHEMA = "knowledge-engine-m26-pa7-owner-full-graph/v1"
 DEFAULT_GATE_PATH = Path("pilot/m26/m26-pa-7-resolved-production-gate.json")
 OWNER_HASH_HEADER = "x-m26-owner-subject-hash"
 BACKEND_TOKEN_HEADER = "authorization"
-RUNTIME_ENTRYPOINT = (
-    "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
-)
+RUNTIME_ENTRYPOINT = CANONICAL_RUNTIME_ENTRYPOINT
 MAX_BODY_BYTES = 4096
 RATE_WINDOW_SECONDS = 60
 RATE_WINDOW_MAX_REQUESTS = 12
@@ -134,8 +137,21 @@ def run_owner_query_for_web(
     return build_web_query_dto(runtime_response)
 
 
+def _semantic_contract_dto() -> dict[str, str]:
+    return {
+        "semantic_contract_schema": CONTRACT_SCHEMA_VERSION,
+        "semantic_contract_fingerprint": semantic_contract_fingerprint(),
+    }
+
+
 def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
     citations = _web_citations(runtime_response)
+    semantic_contract = _semantic_contract_dto()
+    semantic_closure = dict(
+        runtime_response.get("semantic_closure", {})
+        if isinstance(runtime_response.get("semantic_closure"), Mapping)
+        else {}
+    )
     return {
         "schema_version": WEB_RESPONSE_SCHEMA,
         "canonical_runtime": {
@@ -143,12 +159,14 @@ def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
             "entrypoint": RUNTIME_ENTRYPOINT,
             "build_sha": os.environ.get("M26_QUERY_BUILD_SHA", "local_unset"),
             "runtime_response_sha256": canonical_sha256(dict(runtime_response)),
+            **semantic_contract,
         },
         "status": str(runtime_response.get("status", "")),
         "terminal_status": str(runtime_response.get("terminal_status", "")),
         "trace_id": str(runtime_response.get("trace_id", "")),
         "question_sha256": str(runtime_response.get("question_sha256", "")),
         "answer_text": str(runtime_response.get("answer_text", "")),
+        "answer_source": str(runtime_response.get("answer_source", "")),
         "safe_abstention": bool(runtime_response.get("safe_abstention", True)),
         "reason_codes": _string_list(runtime_response.get("reason_codes")),
         "citations": citations,
@@ -158,7 +176,18 @@ def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
         "multi_evidence_verification": dict(
             _mapping(runtime_response.get("multi_evidence_verification"))
         ),
+        "semantic_closure": semantic_closure,
         "selected_evidence": _object_list(runtime_response.get("selected_evidence")),
+        "evidence_utilization_trace": dict(
+            runtime_response.get("evidence_utilization_trace", {})
+            if isinstance(runtime_response.get("evidence_utilization_trace"), Mapping)
+            else {}
+        ),
+        "graph_observability": dict(
+            runtime_response.get("graph_observability", {})
+            if isinstance(runtime_response.get("graph_observability"), Mapping)
+            else {}
+        ),
         "identities": {
             "production_release_id": runtime_response.get("production_release_id"),
             "production_manifest_sha256": runtime_response.get("production_manifest_sha256"),
@@ -187,6 +216,15 @@ def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
         },
         "privacy": dict(_mapping(runtime_response.get("privacy"))),
         "mutations": dict(_mapping(runtime_response.get("mutations"))),
+        "integrity": {
+            "unsupported_accepted_claims": int(
+                runtime_response.get("unsupported_accepted_claims", 0)
+            ),
+            "material_claim_support_verified": bool(
+                runtime_response.get("material_claim_support_verified", True)
+            ),
+            "citation_locator_valid": bool(runtime_response.get("citation_locator_valid", True)),
+        },
     }
 
 
@@ -200,6 +238,7 @@ def build_health_dto(*, root: Path, gate_path: Path) -> dict[str, Any]:
             "entrypoint": RUNTIME_ENTRYPOINT,
             "build_sha": os.environ.get("M26_QUERY_BUILD_SHA", "local_unset"),
             "root_sha256": sha256_value(str(root.resolve())),
+            **_semantic_contract_dto(),
         },
         "route": {
             "ask_url": "https://m24-internal.danielcanfly.com/ask",
