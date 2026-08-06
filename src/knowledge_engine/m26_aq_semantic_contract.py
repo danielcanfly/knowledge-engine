@@ -659,7 +659,7 @@ def synthesize_and_verify(
         requirements=requirements,
         endpoint_proof=endpoint_proof,
     )
-    recovered = _recover_supported_semantic_answer(
+    verification, closure = _publish_support_proof_recovered_answer(
         compatibility=compatibility,
         question=question,
         trace_id=trace_id,
@@ -670,8 +670,6 @@ def synthesize_and_verify(
         verification=verification,
         closure=closure,
     )
-    if recovered is not None:
-        verification, closure = recovered
     fingerprint = semantic_contract_fingerprint()
     closure = {
         **dict(closure),
@@ -686,6 +684,34 @@ def synthesize_and_verify(
         "semantic_contract_fingerprint": fingerprint,
     }
     return verification, closure
+
+
+def _publish_support_proof_recovered_answer(
+    *,
+    compatibility: Any,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+    verification: Mapping[str, Any],
+    closure: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    recovered = _recover_supported_semantic_answer(
+        compatibility=compatibility,
+        question=question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof=endpoint_proof,
+        verification=verification,
+        closure=closure,
+    )
+    if recovered is not None:
+        return recovered
+    return dict(verification), dict(closure)
 
 
 def _recover_supported_semantic_answer(
@@ -1893,7 +1919,15 @@ def _support_proof_ref_only_trigger(
         return True
     raw_answer = verification.get("raw_answer")
     answer_text = verification.get("answer_text")
-    return raw_answer in (None, "") and not str(answer_text or "").strip()
+    answer_source = str(verification.get("answer_source", ""))
+    raw_empty = not str(raw_answer or "").strip()
+    empty_surface = not str(answer_text or "").strip()
+    safe_source = (
+        answer_source == "safe_abstention"
+        or verification.get("safe_abstention") is True
+        or verification.get("status") == "owner_only_safe_abstention"
+    )
+    return raw_empty or (safe_source and empty_surface)
 
 
 def _selected_evidence_text_unavailable(

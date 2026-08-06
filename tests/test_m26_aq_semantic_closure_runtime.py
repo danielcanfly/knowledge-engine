@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import time
 
 from knowledge_engine.m26_aq_semantic_contract import (
     _contract_compat_module,
+    _publish_support_proof_recovered_answer,
     _recover_supported_semantic_answer,
     _should_attempt_semantic_recovery,
     _supported_semantic_recovery_candidate,
@@ -13,6 +15,7 @@ from knowledge_engine.m26_aq_semantic_contract import (
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _parse_compact_provider_result,
     _requirement_support_failures,
+    _response_from_verification,
     _semantic_requirements,
     _visible_semantic_failures,
 )
@@ -459,6 +462,167 @@ def test_bb13_support_proof_ref_only_recovers_without_passage_text() -> None:
     assert "NO_SEMANTIC_TEXT" not in closure.get("local_repair_rejection_codes", [])
     assert {item["evidence_id"] for item in answer["citations"]} == {"durable", "completion"}
     assert "exact_quote" not in json.dumps(answer)
+
+
+def test_support_proof_recovery_publishes_into_final_response_envelope() -> None:
+    question = (
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _metadata_only_passage("durable", "daniel_blog_en__harness-theory-part-6"),
+        _metadata_only_passage("completion", "daniel_blog_en__harness-theory-part-2"),
+        _metadata_only_passage("observability", "daniel_blog_en__harness-theory-part-2"),
+    ]
+    support_proof = [
+        {
+            "requirement_id": "durable_state",
+            "supported": True,
+            "score": 4.5,
+            "evidence_id": "durable",
+            "source_identity": "daniel_blog_en__harness-theory-part-6",
+        },
+        {
+            "requirement_id": "completion_verification",
+            "supported": True,
+            "score": 1.5,
+            "evidence_id": "completion",
+            "source_identity": "daniel_blog_en__harness-theory-part-2",
+        },
+        {
+            "requirement_id": "observability",
+            "supported": True,
+            "score": 3.5,
+            "evidence_id": "observability",
+            "source_identity": "daniel_blog_en__harness-theory-part-2",
+        },
+    ]
+
+    verification, closure = _publish_support_proof_recovered_answer(
+        compatibility=_contract_compat_module(),
+        question=question,
+        trace_id="trace-publication-support-proof",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+        verification={
+            "status": "owner_only_safe_abstention",
+            "terminal_status": "safe_abstention",
+            "answer_source": "safe_abstention",
+            "safe_abstention": True,
+            "reason_codes": ["M26-PA7-ME-034", "SEMANTIC_CLOSURE_FAILED"],
+            "unsupported_accepted_claims": 0,
+            "citation_locator_valid": True,
+            "raw_answer": "provider abstained",
+            "answer_text": "",
+            "provider_call_count": 1,
+            "payg_equivalent_cost_usd": "0.001",
+            "multi_evidence_verification": {
+                "provider_attempt_telemetry": [{"attempt": 1}]
+            },
+        },
+        closure={
+            "failures": ["M26-PA7-ME-034"],
+            "support_proof": support_proof,
+        },
+    )
+
+    response = _response_from_verification(
+        gate={"self_sha256": "gate-sha"},
+        bundle=None,
+        dense_result=None,
+        lexical_result=None,
+        evidence=evidence,
+        verification=verification,
+        trace_id="trace-publication-support-proof",
+        question_sha="q" * 64,
+        started=time.monotonic(),
+        intent_class="direct_grounded_knowledge",
+        semantic_closure=closure,
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert response["safe_abstention"] is False
+    assert response["answer_text"]
+    assert response["citations"]
+    assert response["reason_codes"] == []
+    assert response["unsupported_accepted_claims"] == 0
+    assert response["semantic_closure"]["failures"] == []
+    assert response["multi_evidence_verification"]["support_proof_ref_only_used"] is True
+    assert {item["evidence_id"] for item in response["citations"]} == {
+        "durable",
+        "completion",
+        "observability",
+    }
+
+
+def test_support_proof_recovery_publishes_two_facet_lifecycle_response() -> None:
+    question = (
+        "How should a long-running controlled agent recover after a client disconnect "
+        "without replaying completed work or skipping the verification that still has "
+        "to happen later?"
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _metadata_only_passage("durable", "daniel_blog_en__harness-theory-part-6"),
+        _metadata_only_passage("completion", "daniel_blog_en__harness-theory-part-7"),
+    ]
+    verification, closure = _publish_support_proof_recovered_answer(
+        compatibility=_contract_compat_module(),
+        question=question,
+        trace_id="trace-two-facet-lifecycle",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+        verification={
+            "status": "owner_only_safe_abstention",
+            "terminal_status": "safe_abstention",
+            "answer_source": "safe_abstention",
+            "safe_abstention": True,
+            "reason_codes": ["M26-PA7-ME-034", "SEMANTIC_CLOSURE_FAILED"],
+            "unsupported_accepted_claims": 0,
+            "citation_locator_valid": True,
+            "raw_answer": "",
+            "answer_text": "",
+        },
+        closure={
+            "failures": ["M26-PA7-ME-034"],
+            "support_proof": [
+                {
+                    "requirement_id": "durable_state",
+                    "supported": True,
+                    "score": 3.0,
+                    "evidence_id": "durable",
+                    "source_identity": "daniel_blog_en__harness-theory-part-6",
+                },
+                {
+                    "requirement_id": "completion_verification",
+                    "supported": True,
+                    "score": 4.5,
+                    "evidence_id": "completion",
+                    "source_identity": "daniel_blog_en__harness-theory-part-7",
+                },
+            ],
+        },
+    )
+
+    text = verification["answer_text"].casefold()
+    assert verification["status"] == "owner_only_cited_answer"
+    assert verification["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert verification["safe_abstention"] is False
+    assert verification["reason_codes"] == []
+    assert "durable" in text
+    assert "completion verification" in text
+    assert "observability" not in text
+    assert closure["failures"] == []
+    assert {item["evidence_id"] for item in verification["citations"]} == {
+        "durable",
+        "completion",
+    }
 
 
 def test_bb10_supported_lifecycle_facets_recover_to_visible_answer() -> None:
