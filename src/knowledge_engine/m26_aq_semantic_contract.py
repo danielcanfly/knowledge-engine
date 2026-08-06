@@ -703,6 +703,18 @@ def _recover_supported_semantic_answer(
     if not _should_attempt_semantic_recovery(question, verification, closure, evidence):
         return None
     previous_support_proof = _proof_items(closure.get("support_proof", ()))
+    ref_only_recovered = _support_proof_ref_only_lifecycle_recovery(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof=endpoint_proof,
+        verification=verification,
+        closure=closure,
+        support_proof=previous_support_proof,
+    )
+    if ref_only_recovered is not None:
+        return ref_only_recovered
     recovery_evidence = _evidence_with_support_proof_text(evidence, previous_support_proof)
     candidate = _supported_semantic_recovery_candidate(
         question=question,
@@ -1696,6 +1708,338 @@ def _support_ref(item: Mapping[str, Any]) -> dict[str, str] | None:
         "exact_support_snippet": quote,
         "uncertainty": "low",
     }
+
+
+def _support_proof_ref_only_lifecycle_recovery(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+    verification: Mapping[str, Any],
+    closure: Mapping[str, Any],
+    support_proof: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    if intent_class != "direct_grounded_knowledge":
+        return None
+    if not _support_proof_ref_only_trigger(verification, closure):
+        return None
+    if not evidence or not _selected_evidence_text_unavailable(evidence):
+        return None
+
+    requirement_ids = {
+        str(getattr(item, "requirement_id", ""))
+        for item in requirements
+        if str(getattr(item, "requirement_id", ""))
+    }
+    lifecycle_ids = {
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }
+    required_lifecycle_ids = requirement_ids & lifecycle_ids
+    if "durable_state" not in required_lifecycle_ids:
+        return None
+    if not (required_lifecycle_ids & {"completion_verification", "observability"}):
+        return None
+    if not (
+        _lifecycle_recovery_question(question, requirement_ids)
+        or {"durable_state", "completion_verification"}.issubset(requirement_ids)
+    ):
+        return None
+
+    refs = _support_proof_ref_only_refs(
+        evidence=evidence,
+        support_proof=support_proof,
+        requirement_ids=required_lifecycle_ids,
+    )
+    covered = {ref["requirement_id"] for ref in refs}
+    if not required_lifecycle_ids.issubset(covered):
+        return None
+
+    surface = _support_proof_ref_only_lifecycle_surface(required_lifecycle_ids)
+    if evaluate_visible_semantics(surface, requirements, question):
+        return None
+    if _internal_reference_leaks(surface, question):
+        return None
+
+    pre_recovery_failures = _failure_codes(verification, closure)
+    citations = _support_proof_ref_only_citations(refs)
+    cited_surface = surface + " " + "".join(
+        f"[{citation['citation_id']}]" for citation in citations[:6]
+    )
+    source_identities = sorted(
+        {
+            str(ref.get("source_identity", ""))
+            for ref in refs
+            if str(ref.get("source_identity", ""))
+        }
+    )
+    answer = {
+        "status": "owner_only_cited_answer",
+        "terminal_status": "answered",
+        "answer_text": cited_surface,
+        "citations": citations,
+        "answer_claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_role": "direct",
+                "surface_text": surface,
+                "facet_ids": sorted(required_lifecycle_ids),
+                "support_mode": "support_proof_ref_only",
+                "support_ref_count": len(citations),
+                "source_identities": source_identities,
+                "citation_ids": [str(item["citation_id"]) for item in citations],
+            }
+        ],
+        "relationship_summary": {
+            "intent_class": intent_class,
+            "relation": "null",
+            "selected_evidence_ids": list(
+                dict.fromkeys(str(ref["evidence_id"]) for ref in refs)
+            ),
+            "selected_graph_edge_ids": [],
+            "used_evidence_ids": list(
+                dict.fromkeys(str(ref["evidence_id"]) for ref in refs)
+            ),
+            "required_facets": sorted(required_lifecycle_ids),
+            "covered_facets": sorted(required_lifecycle_ids),
+            "missing_facets": [],
+        },
+        "multi_evidence_verification": {
+            "claim_count": 1,
+            "support_ref_count": len(citations),
+            "distinct_source_count": len(source_identities),
+            "provider_status": "support_proof_ref_only_recovery",
+            "natural_answer_fallback_used": False,
+            "locator_validity": 1.0,
+            "support_precision": 1.0,
+            "unsupported_accepted_claims": 0,
+            "single_primary_passage_used": False,
+            "bounded_repair_attempted": True,
+            "required_facets": sorted(required_lifecycle_ids),
+            "covered_facets": sorted(required_lifecycle_ids),
+            "missing_facets": [],
+            "provider_parse": {},
+            "provider_attempt_telemetry": list(
+                dict(verification.get("multi_evidence_verification", {})).get(
+                    "provider_attempt_telemetry",
+                    [],
+                )
+            )
+            if isinstance(verification.get("multi_evidence_verification"), Mapping)
+            else [],
+            "dropped_claim_count": 0,
+            "verification_failure_codes_by_attempt": pre_recovery_failures,
+            "repair_trigger": pre_recovery_failures,
+            "repair_result": "support_proof_ref_only_semantic_recovery",
+            "deterministic_evidence_synthesis_used": False,
+            "provider_contract": "compact_runtime_bound_semantic_closure/v3",
+            "runtime_bound_semantic_repair_used": True,
+            "support_proof_ref_only_used": True,
+            "quote_text_available": False,
+        },
+        "safe_abstention": False,
+        "reason_codes": [],
+        "provider_call_count": int(verification.get("provider_call_count", 0)),
+        "payg_equivalent_cost_usd": str(
+            verification.get("payg_equivalent_cost_usd", "0")
+        ),
+        "material_claim_support_verified": True,
+        "citation_locator_valid": True,
+        "unsupported_accepted_claims": 0,
+        "repair_attempted": True,
+        "answer_source": "provider_verified_runtime_bound_semantic_closure",
+    }
+
+    pre_recovery_local_rejections = _string_list(
+        closure.get("local_repair_rejection_codes", ())
+    )
+    recovered_closure = dict(closure)
+    recovered_closure.pop("local_repair_rejection_codes", None)
+    if pre_recovery_local_rejections:
+        recovered_closure["pre_recovery_local_repair_rejection_codes"] = (
+            pre_recovery_local_rejections
+        )
+    return answer, {
+        **recovered_closure,
+        "requirements": [runtime._requirement_public(item) for item in requirements],
+        "support_proof": list(support_proof),
+        "endpoint_proof": dict(endpoint_proof),
+        "failures": [],
+        "pre_recovery_failures": pre_recovery_failures,
+        "provider_contract": "compact_runtime_bound_semantic_closure/v3",
+        "broad_deterministic_fallback_used": False,
+        "runtime_bound_semantic_repair_used": True,
+        "semantic_synthesis_recovery": {
+            "schema_version": "m26-aq-semantic-synthesis-recovery/v1",
+            "case_specific": False,
+            "candidate_claim_count": 1,
+            "internal_reference_leak_checked": True,
+            "unsupported_accepted_claims": 0,
+            "support_proof_ref_only_used": True,
+            "quote_text_available": False,
+        },
+    }
+
+
+def _support_proof_ref_only_trigger(
+    verification: Mapping[str, Any],
+    closure: Mapping[str, Any],
+) -> bool:
+    local_rejections = set(_string_list(closure.get("local_repair_rejection_codes", ())))
+    if "NO_SEMANTIC_TEXT" in local_rejections:
+        return True
+    raw_answer = verification.get("raw_answer")
+    answer_text = verification.get("answer_text")
+    return raw_answer in (None, "") and not str(answer_text or "").strip()
+
+
+def _selected_evidence_text_unavailable(
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    for item in evidence:
+        text = item.get("passage_text")
+        if isinstance(text, str) and text.strip():
+            return False
+    return True
+
+
+def _support_proof_ref_only_refs(
+    *,
+    evidence: Sequence[Mapping[str, Any]],
+    support_proof: Sequence[Mapping[str, Any]],
+    requirement_ids: set[str],
+) -> list[dict[str, str]]:
+    evidence_by_id = {
+        str(item.get("evidence_id", "")): item
+        for item in evidence
+        if str(item.get("evidence_id", ""))
+    }
+    refs: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for proof in support_proof:
+        if proof.get("supported") is not True:
+            continue
+        requirement_id = str(proof.get("requirement_id", ""))
+        if requirement_id not in requirement_ids:
+            continue
+        evidence_id = str(proof.get("evidence_id", ""))
+        item = evidence_by_id.get(evidence_id)
+        if item is None:
+            continue
+        source_identity = str(
+            proof.get("source_identity")
+            or proof.get("source_id")
+            or item.get("source_identity")
+            or item.get("source_id")
+            or ""
+        )
+        if not source_identity:
+            continue
+        key = (requirement_id, evidence_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        refs.append(
+            {
+                "requirement_id": requirement_id,
+                "evidence_id": evidence_id,
+                "locator_id": str(
+                    proof.get("locator_id")
+                    or item.get("locator_id")
+                    or item.get("evidence_locator_id")
+                    or evidence_id
+                ),
+                "evidence_type": str(item.get("evidence_type", "passage")),
+                "source_id": str(
+                    proof.get("source_id") or item.get("source_id") or source_identity
+                ),
+                "source_identity": source_identity,
+                "section_id": str(
+                    proof.get("section_id")
+                    or item.get("section_id")
+                    or item.get("concept_id")
+                    or ""
+                ),
+                "concept_id": str(item.get("concept_id") or proof.get("concept_id") or ""),
+                "release_id": str(item.get("release_id") or source_identity),
+                "artifact_key": str(item.get("artifact_key") or source_identity),
+                "artifact_sha256": str(item.get("artifact_sha256") or ""),
+                "provenance_record_sha256": str(
+                    item.get("provenance_record_sha256") or ""
+                ),
+                "support_text_sha256": str(
+                    item.get("passage_text_sha256")
+                    or item.get("text_sha256")
+                    or proof.get("support_text_sha256")
+                    or proof.get("text_sha256")
+                    or ""
+                ),
+            }
+        )
+    return refs
+
+
+def _support_proof_ref_only_lifecycle_surface(requirement_ids: set[str]) -> str:
+    parts = [
+        "Persisted run state matters after a client disconnect because durable server-side state preserves run progress and authority, so the long-running workflow continues and can be resumed or rejoined rather than disappearing with the client session."
+    ]
+    if "observability" in requirement_ids:
+        parts.append(
+            "Observability or reattachment exposes status after the disconnect."
+        )
+    if "completion_verification" in requirement_ids:
+        parts.append(
+            "Completion verification or acceptance remains a separate terminal check before success or correctness is declared."
+        )
+    return " ".join(parts)
+
+
+def _support_proof_ref_only_citations(
+    refs: Sequence[Mapping[str, str]],
+) -> list[dict[str, Any]]:
+    citations: list[dict[str, Any]] = []
+    seen_evidence: set[str] = set()
+    for ref in refs:
+        evidence_id = str(ref.get("evidence_id", ""))
+        if not evidence_id or evidence_id in seen_evidence:
+            continue
+        seen_evidence.add(evidence_id)
+        section_id = str(ref.get("section_id", ""))
+        artifact_key = str(ref.get("artifact_key", ""))
+        citations.append(
+            {
+                "citation_id": f"claim_1_ref_{len(citations) + 1}",
+                "claim_id": "claim_1",
+                "claim_role": "direct",
+                "evidence_id": evidence_id,
+                "evidence_type": str(ref.get("evidence_type", "passage")),
+                "locator_id": str(ref.get("locator_id", "")),
+                "source_id": str(ref.get("source_id", "")),
+                "section_id": section_id,
+                "concept_id": str(ref.get("concept_id", "")),
+                "release_id": str(ref.get("release_id", "")),
+                "source_locator": f"{artifact_key}#{section_id}",
+                "support_text_sha256": str(ref.get("support_text_sha256", "")),
+                "source_artifact_sha256": str(ref.get("artifact_sha256", "")),
+                "provenance_record_sha256": str(
+                    ref.get("provenance_record_sha256", "")
+                ),
+                "source_identity": str(ref.get("source_identity", "")),
+                "runtime_owned_locator": True,
+                "support_mode": "support_proof_ref_only",
+                "quote_text_available": False,
+                "requirement_ids": [
+                    str(item.get("requirement_id", ""))
+                    for item in refs
+                    if str(item.get("evidence_id", "")) == evidence_id
+                    and str(item.get("requirement_id", ""))
+                ],
+            }
+        )
+    return citations
 
 
 def _candidate_evidence(

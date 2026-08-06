@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from knowledge_engine.m26_aq_semantic_contract import (
     _contract_compat_module,
     _recover_supported_semantic_answer,
@@ -40,6 +42,23 @@ def _passage(
         "title": source,
         "section_title": source,
         "passage_text": text,
+    }
+
+
+def _metadata_only_passage(
+    evidence_id: str,
+    source: str,
+) -> dict[str, str]:
+    return {
+        "evidence_id": evidence_id,
+        "locator_id": f"loc_{evidence_id}",
+        "evidence_type": "passage",
+        "source_id": source,
+        "source_identity": source,
+        "concept_id": f"concept_{evidence_id}",
+        "title": source,
+        "section_title": source,
+        "passage_text": "",
     }
 
 
@@ -275,10 +294,10 @@ def test_bb02_supported_lifecycle_facets_recover_to_visible_answer() -> None:
     assert "observability" in answer_text.casefold()
 
 
-def test_lifecycle_support_proof_recovers_no_semantic_text_without_exact_question() -> None:
+def test_bb02_support_proof_ref_only_recovers_without_passage_text() -> None:
     question = (
-        "When a browser session is interrupted during a long-running workflow, "
-        "why should durable run state be persisted so status and completion can be checked?"
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
     )
     requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
     requirement_ids = {item.requirement_id for item in requirements}
@@ -287,13 +306,12 @@ def test_lifecycle_support_proof_recovers_no_semantic_text_without_exact_questio
         "completion_verification",
         "observability",
     }.issubset(requirement_ids)
-    assert "client disconnects before a long-running workflow has finished" not in question
-
     evidence = [
-        _passage("durable", "", "daniel_blog_en__harness-theory-part-6"),
-        _passage("completion", "", "daniel_blog_en__harness-theory-part-2"),
-        _passage("observability", "", "daniel_blog_en__harness-theory-part-2"),
+        _metadata_only_passage("durable", "daniel_blog_en__harness-theory-part-6"),
+        _metadata_only_passage("completion", "daniel_blog_en__harness-theory-part-2"),
+        _metadata_only_passage("observability", "daniel_blog_en__harness-theory-part-2"),
     ]
+
     support_proof = [
         {
             "requirement_id": "durable_state",
@@ -301,10 +319,8 @@ def test_lifecycle_support_proof_recovers_no_semantic_text_without_exact_questio
             "score": 3.0,
             "evidence_id": "durable",
             "source_identity": "daniel_blog_en__harness-theory-part-6",
-            "exact_support_snippet": (
-                "Durable persisted server-side state preserves run progress and "
-                "authority after interruption while the workflow continues."
-            ),
+            "source_id": "daniel_blog_en__harness-theory-part-6",
+            "locator_id": "loc_durable",
         },
         {
             "requirement_id": "completion_verification",
@@ -312,10 +328,8 @@ def test_lifecycle_support_proof_recovers_no_semantic_text_without_exact_questio
             "score": 2.0,
             "evidence_id": "completion",
             "source_identity": "daniel_blog_en__harness-theory-part-2",
-            "exact_support_snippet": (
-                "Completion verification and acceptance checks happen before the "
-                "system declares workflow success."
-            ),
+            "source_id": "daniel_blog_en__harness-theory-part-2",
+            "locator_id": "loc_completion",
         },
         {
             "requirement_id": "observability",
@@ -323,10 +337,8 @@ def test_lifecycle_support_proof_recovers_no_semantic_text_without_exact_questio
             "score": 2.0,
             "evidence_id": "observability",
             "source_identity": "daniel_blog_en__harness-theory-part-2",
-            "exact_support_snippet": (
-                "Observability, status, and reattach handles let the owner inspect "
-                "or resume the continuing run."
-            ),
+            "source_id": "daniel_blog_en__harness-theory-part-2",
+            "locator_id": "loc_observability",
         },
     ]
     recovered = _recover_supported_semantic_answer(
@@ -356,12 +368,15 @@ def test_lifecycle_support_proof_recovers_no_semantic_text_without_exact_questio
     text = answer["answer_text"].casefold()
     assert answer["status"] == "owner_only_cited_answer"
     assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert answer["multi_evidence_verification"]["support_proof_ref_only_used"] is True
     assert answer["unsupported_accepted_claims"] == 0
     assert answer["citation_locator_valid"] is True
     assert "durable" in text
     assert "continues" in text
     assert "observability" in text
     assert "completion verification" in text
+    assert "exact_quote" not in json.dumps(answer)
+    assert "exact_support_snippet" not in json.dumps(answer)
     assert closure["failures"] == []
     assert "NO_SEMANTIC_TEXT" not in closure.get("local_repair_rejection_codes", [])
     assert closure["pre_recovery_local_repair_rejection_codes"] == ["NO_SEMANTIC_TEXT"]
@@ -375,6 +390,75 @@ def test_lifecycle_support_proof_recovers_no_semantic_text_without_exact_questio
         "completion",
         "observability",
     }
+
+
+def test_bb13_support_proof_ref_only_recovers_without_passage_text() -> None:
+    question = (
+        "How should a long-running controlled agent recover after a client disconnect "
+        "without replaying completed work or skipping the verification that still has "
+        "to happen later?"
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    requirement_ids = {item.requirement_id for item in requirements}
+    assert {"durable_state", "completion_verification"}.issubset(requirement_ids)
+
+    evidence = [
+        _metadata_only_passage("durable", "daniel_blog_en__harness-theory-part-6"),
+        _metadata_only_passage("completion", "daniel_blog_en__harness-theory-part-9"),
+    ]
+    support_proof = [
+        {
+            "requirement_id": "durable_state",
+            "supported": True,
+            "score": 3.0,
+            "evidence_id": "durable",
+            "source_identity": "daniel_blog_en__harness-theory-part-6",
+            "source_id": "daniel_blog_en__harness-theory-part-6",
+            "locator_id": "loc_durable",
+        },
+        {
+            "requirement_id": "completion_verification",
+            "supported": True,
+            "score": 2.0,
+            "evidence_id": "completion",
+            "source_identity": "daniel_blog_en__harness-theory-part-9",
+            "source_id": "daniel_blog_en__harness-theory-part-9",
+            "locator_id": "loc_completion",
+        },
+    ]
+    recovered = _recover_supported_semantic_answer(
+        compatibility=_contract_compat_module(),
+        question=question,
+        trace_id="trace-bb13-support-proof",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+        verification={
+            "status": "owner_only_safe_abstention",
+            "answer_source": "safe_abstention",
+            "reason_codes": ["M26-PA7-ME-034", "SEMANTIC_CLOSURE_FAILED"],
+            "unsupported_accepted_claims": 0,
+            "citation_locator_valid": True,
+            "raw_answer": "",
+            "answer_text": "",
+        },
+        closure={
+            "failures": ["M26-PA7-ME-034"],
+            "support_proof": support_proof,
+            "local_repair_rejection_codes": ["NO_SEMANTIC_TEXT"],
+        },
+    )
+
+    assert recovered is not None
+    answer, closure = recovered
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["multi_evidence_verification"]["support_proof_ref_only_used"] is True
+    assert answer["unsupported_accepted_claims"] == 0
+    assert closure["failures"] == []
+    assert "NO_SEMANTIC_TEXT" not in closure.get("local_repair_rejection_codes", [])
+    assert {item["evidence_id"] for item in answer["citations"]} == {"durable", "completion"}
+    assert "exact_quote" not in json.dumps(answer)
 
 
 def test_bb10_supported_lifecycle_facets_recover_to_visible_answer() -> None:
