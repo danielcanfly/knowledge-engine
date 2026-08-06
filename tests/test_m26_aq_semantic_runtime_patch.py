@@ -204,6 +204,52 @@ def test_explicit_install_authority_surface_is_visible_without_absolute_modality
     )
 
 
+def test_explicit_install_bb02_lifecycle_surface_is_non_empty() -> None:
+    _run_isolated(
+        """
+        from knowledge_engine import m26_aq_semantic_runtime_patch_v2 as patch_v2
+        from knowledge_engine.m26_aq_semantic_contract import derive_semantic_requirements
+        from knowledge_engine.m26_aq_semantic_runtime_patch_v2 import _semantic_answer_text_v2
+
+        patch_v2.install()
+        question = (
+            "Why is persisted run state important when a client disconnects before a "
+            "long-running workflow has finished?"
+        )
+        requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+        answer = _semantic_answer_text_v2(question, requirements)
+        lowered = answer.casefold()
+        assert answer
+        assert "durable" in lowered or "persisted" in lowered
+        assert "observability" in lowered or "status" in lowered or "reattachment" in lowered
+        assert "completion verification" in lowered or "acceptance" in lowered
+        assert "success" in lowered or "correctness" in lowered
+        """
+    )
+
+
+def test_explicit_install_bb02_lifecycle_paraphrase_surface_is_non_empty() -> None:
+    _run_isolated(
+        """
+        from knowledge_engine import m26_aq_semantic_runtime_patch_v2 as patch_v2
+        from knowledge_engine.m26_aq_semantic_contract import derive_semantic_requirements
+        from knowledge_engine.m26_aq_semantic_runtime_patch_v2 import _semantic_answer_text_v2
+
+        patch_v2.install()
+        question = (
+            "How does durable run state help when a browser disconnects during a "
+            "long-running agent workflow, and why is verification still separate?"
+        )
+        requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+        answer = _semantic_answer_text_v2(question, requirements)
+        lowered = answer.casefold()
+        assert isinstance(answer, str)
+        assert "durable" in lowered or "persisted" in lowered
+        assert "verification" in lowered or "acceptance" in lowered
+        """
+    )
+
+
 def test_repairable_verifier_failure_codes_are_routed() -> None:
     assert _repairable_verifier_failure("M26-PA7-ME-029")
     assert _repairable_verifier_failure("M26-PA7-ME-030")

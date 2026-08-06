@@ -395,6 +395,164 @@ def test_bb02_support_proof_ref_only_recovers_without_passage_text() -> None:
     }
 
 
+def test_bb02_support_proof_ref_only_recovers_when_observability_and_completion_share_ref() -> None:
+    question = (
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    requirement_ids = {item.requirement_id for item in requirements}
+    assert {
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }.issubset(requirement_ids)
+    evidence = [
+        _metadata_only_passage("durable", "daniel_blog_en__harness-theory-part-6"),
+        _metadata_only_passage("lifecycle", "daniel_blog_en__harness-theory-part-2"),
+    ]
+    support_proof = [
+        {
+            "requirement_id": "durable_state",
+            "supported": True,
+            "score": 3.0,
+            "evidence_id": "durable",
+            "source_identity": "daniel_blog_en__harness-theory-part-6",
+            "source_id": "daniel_blog_en__harness-theory-part-6",
+            "locator_id": "loc_durable",
+        },
+        {
+            "requirement_id": "completion_verification",
+            "supported": True,
+            "score": 2.0,
+            "evidence_id": "lifecycle",
+            "source_identity": "daniel_blog_en__harness-theory-part-2",
+            "source_id": "daniel_blog_en__harness-theory-part-2",
+            "locator_id": "loc_lifecycle",
+        },
+        {
+            "requirement_id": "observability",
+            "supported": True,
+            "score": 2.0,
+            "evidence_id": "lifecycle",
+            "source_identity": "daniel_blog_en__harness-theory-part-2",
+            "source_id": "daniel_blog_en__harness-theory-part-2",
+            "locator_id": "loc_lifecycle",
+        },
+    ]
+
+    recovered = _recover_supported_semantic_answer(
+        compatibility=_contract_compat_module(),
+        question=question,
+        trace_id="trace-bb02-shared-ref",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+        verification={
+            "status": "owner_only_safe_abstention",
+            "answer_source": "safe_abstention",
+            "reason_codes": ["M26-PA7-ME-034", "SEMANTIC_CLOSURE_FAILED"],
+            "unsupported_accepted_claims": 0,
+            "citation_locator_valid": True,
+            "raw_answer": "",
+            "answer_text": "",
+        },
+        closure={
+            "failures": ["M26-PA7-ME-034"],
+            "support_proof": support_proof,
+            "local_repair_rejection_codes": ["NO_SEMANTIC_TEXT"],
+        },
+    )
+
+    assert recovered is not None
+    answer, closure = recovered
+    lowered = answer["answer_text"].casefold()
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert answer["safe_abstention"] is False
+    assert answer["reason_codes"] == []
+    assert "durable" in lowered
+    assert "observability" in lowered
+    assert "completion verification" in lowered
+    assert "exact_quote" not in json.dumps(answer)
+    assert "exact_support_snippet" not in json.dumps(answer)
+    assert closure["failures"] == []
+    assert {item["evidence_id"] for item in answer["citations"]} == {
+        "durable",
+        "lifecycle",
+    }
+
+
+def test_bb02_lifecycle_paraphrase_recovers_without_exact_question_string() -> None:
+    question = (
+        "How does durable run state help when a browser disconnects during a "
+        "long-running agent workflow, and why is verification still separate?"
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _metadata_only_passage("durable", "daniel_blog_en__harness-theory-part-6"),
+        _metadata_only_passage("lifecycle", "daniel_blog_en__harness-theory-part-2"),
+    ]
+    recovered = _publish_support_proof_recovered_answer(
+        compatibility=_contract_compat_module(),
+        question=question,
+        trace_id="trace-bb02-paraphrase",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+        verification={
+            "status": "owner_only_safe_abstention",
+            "terminal_status": "safe_abstention",
+            "answer_source": "safe_abstention",
+            "safe_abstention": True,
+            "reason_codes": ["M26-PA7-ME-034", "SEMANTIC_CLOSURE_FAILED"],
+            "unsupported_accepted_claims": 0,
+            "citation_locator_valid": True,
+            "raw_answer": "",
+            "answer_text": "",
+        },
+        closure={
+            "failures": ["M26-PA7-ME-034"],
+            "support_proof": [
+                {
+                    "requirement_id": "durable_state",
+                    "supported": True,
+                    "score": 3.0,
+                    "evidence_id": "durable",
+                    "source_identity": "daniel_blog_en__harness-theory-part-6",
+                },
+                {
+                    "requirement_id": "completion_verification",
+                    "supported": True,
+                    "score": 2.0,
+                    "evidence_id": "lifecycle",
+                    "source_identity": "daniel_blog_en__harness-theory-part-2",
+                },
+                {
+                    "requirement_id": "observability",
+                    "supported": True,
+                    "score": 2.0,
+                    "evidence_id": "lifecycle",
+                    "source_identity": "daniel_blog_en__harness-theory-part-2",
+                },
+            ],
+            "local_repair_rejection_codes": ["NO_SEMANTIC_TEXT"],
+        },
+    )
+
+    answer, closure = recovered
+    lowered = answer["answer_text"].casefold()
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert answer["safe_abstention"] is False
+    assert "durable" in lowered
+    assert "verification" in lowered
+    assert "resume" in lowered or "rejoined" in lowered or "continues" in lowered
+    assert closure["failures"] == []
+
+
 def test_bb13_support_proof_ref_only_recovers_without_passage_text() -> None:
     question = (
         "How should a long-running controlled agent recover after a client disconnect "

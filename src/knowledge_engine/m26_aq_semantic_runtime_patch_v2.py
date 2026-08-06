@@ -1865,6 +1865,23 @@ def _distinct_repair_sources(items: Sequence[Mapping[str, Any]]) -> int:
 
 def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
     ids = {str(item.requirement_id) for item in requirements}
+    if {"durable_state", "completion_verification", "observability"}.issubset(ids):
+        return (
+            "Persisted run state matters after a client disconnect because durable "
+            "server-side state preserves run progress and authority, so the long-running "
+            "workflow continues and can be resumed or rejoined rather than disappearing "
+            "with the client session. Observability or reattachment exposes status after "
+            "the disconnect. Completion verification or acceptance remains a separate "
+            "terminal check before success or correctness is declared."
+        )
+    if {"durable_state", "completion_verification"}.issubset(ids):
+        return (
+            "Persisted run state matters after a client disconnect because durable "
+            "server-side state preserves run progress and authority, so the long-running "
+            "workflow continues and can be resumed or rejoined rather than disappearing "
+            "with the client session. Completion verification or acceptance remains a "
+            "separate terminal check before success or correctness is declared."
+        )
     if {
         "admission_policy",
         "durable_state",
