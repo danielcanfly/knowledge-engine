@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from knowledge_engine.m26_aq_semantic_contract import (
+    _contract_compat_module,
+    _recover_supported_semantic_answer,
     _should_attempt_semantic_recovery,
     _supported_semantic_recovery_candidate,
     derive_semantic_requirements,
@@ -271,6 +273,108 @@ def test_bb02_supported_lifecycle_facets_recover_to_visible_answer() -> None:
     assert "durable" in answer_text.casefold()
     assert "completion" in answer_text.casefold()
     assert "observability" in answer_text.casefold()
+
+
+def test_lifecycle_support_proof_recovers_no_semantic_text_without_exact_question() -> None:
+    question = (
+        "When a browser session is interrupted during a long-running workflow, "
+        "why should durable run state be persisted so status and completion can be checked?"
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    requirement_ids = {item.requirement_id for item in requirements}
+    assert {
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }.issubset(requirement_ids)
+    assert "client disconnects before a long-running workflow has finished" not in question
+
+    evidence = [
+        _passage("durable", "", "daniel_blog_en__harness-theory-part-6"),
+        _passage("completion", "", "daniel_blog_en__harness-theory-part-2"),
+        _passage("observability", "", "daniel_blog_en__harness-theory-part-2"),
+    ]
+    support_proof = [
+        {
+            "requirement_id": "durable_state",
+            "supported": True,
+            "score": 3.0,
+            "evidence_id": "durable",
+            "source_identity": "daniel_blog_en__harness-theory-part-6",
+            "exact_support_snippet": (
+                "Durable persisted server-side state preserves run progress and "
+                "authority after interruption while the workflow continues."
+            ),
+        },
+        {
+            "requirement_id": "completion_verification",
+            "supported": True,
+            "score": 2.0,
+            "evidence_id": "completion",
+            "source_identity": "daniel_blog_en__harness-theory-part-2",
+            "exact_support_snippet": (
+                "Completion verification and acceptance checks happen before the "
+                "system declares workflow success."
+            ),
+        },
+        {
+            "requirement_id": "observability",
+            "supported": True,
+            "score": 2.0,
+            "evidence_id": "observability",
+            "source_identity": "daniel_blog_en__harness-theory-part-2",
+            "exact_support_snippet": (
+                "Observability, status, and reattach handles let the owner inspect "
+                "or resume the continuing run."
+            ),
+        },
+    ]
+    recovered = _recover_supported_semantic_answer(
+        compatibility=_contract_compat_module(),
+        question=question,
+        trace_id="trace-lifecycle-support-proof",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+        verification={
+            "status": "owner_only_safe_abstention",
+            "answer_source": "safe_abstention",
+            "reason_codes": ["M26-PA7-ME-029", "SEMANTIC_CLOSURE_FAILED"],
+            "unsupported_accepted_claims": 0,
+            "citation_locator_valid": True,
+        },
+        closure={
+            "failures": ["M26-PA7-ME-029"],
+            "support_proof": support_proof,
+            "local_repair_rejection_codes": ["NO_SEMANTIC_TEXT"],
+        },
+    )
+
+    assert recovered is not None
+    answer, closure = recovered
+    text = answer["answer_text"].casefold()
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert answer["unsupported_accepted_claims"] == 0
+    assert answer["citation_locator_valid"] is True
+    assert "durable" in text
+    assert "continues" in text
+    assert "observability" in text
+    assert "completion verification" in text
+    assert closure["failures"] == []
+    assert "NO_SEMANTIC_TEXT" not in closure.get("local_repair_rejection_codes", [])
+    assert closure["pre_recovery_local_repair_rejection_codes"] == ["NO_SEMANTIC_TEXT"]
+    assert {
+        item["requirement_id"]
+        for item in closure["support_proof"]
+        if item.get("supported") is True
+    }.issuperset({"durable_state", "completion_verification", "observability"})
+    assert {item["evidence_id"] for item in answer["citations"]} == {
+        "durable",
+        "completion",
+        "observability",
+    }
 
 
 def test_bb10_supported_lifecycle_facets_recover_to_visible_answer() -> None:

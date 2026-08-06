@@ -702,12 +702,15 @@ def _recover_supported_semantic_answer(
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
     if not _should_attempt_semantic_recovery(question, verification, closure, evidence):
         return None
+    previous_support_proof = _proof_items(closure.get("support_proof", ()))
+    recovery_evidence = _evidence_with_support_proof_text(evidence, previous_support_proof)
     candidate = _supported_semantic_recovery_candidate(
         question=question,
         intent_class=intent_class,
-        evidence=evidence,
+        evidence=recovery_evidence,
         requirements=requirements,
         endpoint_proof=endpoint_proof,
+        support_proof=previous_support_proof,
     )
     if candidate is None:
         return None
@@ -716,7 +719,7 @@ def _recover_supported_semantic_answer(
             trace_id=trace_id,
             question=question,
             intent_class=intent_class,
-            evidence=evidence,
+            evidence=recovery_evidence,
             provider_text=json.dumps(
                 candidate,
                 ensure_ascii=False,
@@ -726,7 +729,7 @@ def _recover_supported_semantic_answer(
         answer = legacy._verified_multi_evidence_answer(
             intent_class=intent_class,
             verified=verified,
-            evidence=evidence,
+            evidence=recovery_evidence,
             calls=[],
             repair_attempted=True,
         )
@@ -773,13 +776,22 @@ def _recover_supported_semantic_answer(
     support_failures, support_proof = compatibility._endpoint_aware_requirement_support_failures(
         runtime=_RUNTIME_FACADE,
         requirements=requirements,
-        evidence=_candidate_evidence(candidate, evidence),
+        evidence=_candidate_evidence(candidate, recovery_evidence),
         endpoint_proof=endpoint_proof,
     )
     if support_failures:
         return None
+    pre_recovery_local_rejections = _string_list(
+        closure.get("local_repair_rejection_codes", ())
+    )
+    recovered_closure = dict(closure)
+    recovered_closure.pop("local_repair_rejection_codes", None)
+    if pre_recovery_local_rejections:
+        recovered_closure["pre_recovery_local_repair_rejection_codes"] = (
+            pre_recovery_local_rejections
+        )
     return answer, {
-        **dict(closure),
+        **recovered_closure,
         "requirements": [runtime._requirement_public(item) for item in requirements],
         "support_proof": support_proof,
         "endpoint_proof": dict(endpoint_proof),
@@ -841,6 +853,78 @@ def _failure_codes(
     )
 
 
+def _string_list(value: Any) -> list[str]:
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return [str(item) for item in value if str(item)]
+    return []
+
+
+def _proof_items(value: Any) -> list[Mapping[str, Any]]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        return []
+    return [item for item in value if isinstance(item, Mapping)]
+
+
+def _proof_quote(proof: Mapping[str, Any]) -> str:
+    for key in (
+        "exact_quote",
+        "exact_support_snippet",
+        "support_text",
+        "support_snippet",
+        "snippet",
+    ):
+        quote = " ".join(str(proof.get(key, "")).split())
+        if quote:
+            return quote
+    return ""
+
+
+def _evidence_with_support_proof_text(
+    evidence: Sequence[Mapping[str, Any]],
+    support_proof: Sequence[Mapping[str, Any]],
+) -> list[Mapping[str, Any]]:
+    proof_quote_by_id = {
+        str(proof.get("evidence_id", "")): _proof_quote(proof)
+        for proof in support_proof
+        if proof.get("supported") is True and str(proof.get("evidence_id", ""))
+    }
+    hydrated: list[Mapping[str, Any]] = []
+    for item in evidence:
+        evidence_id = str(item.get("evidence_id", ""))
+        locator_id = str(item.get("locator_id") or evidence_id)
+        source_identity = str(
+            item.get("source_identity")
+            or item.get("source_id")
+            or evidence_id
+        )
+        section_id = str(item.get("section_id") or item.get("concept_id") or locator_id)
+        quote = proof_quote_by_id.get(evidence_id, "")
+        hydrated_item = {
+            **dict(item),
+            "evidence_id": evidence_id,
+            "locator_id": locator_id,
+            "source_id": str(item.get("source_id") or source_identity),
+            "source_identity": source_identity,
+            "concept_id": str(item.get("concept_id") or section_id),
+            "section_id": section_id,
+            "release_id": str(item.get("release_id") or source_identity),
+            "artifact_key": str(item.get("artifact_key") or source_identity),
+            "artifact_sha256": str(item.get("artifact_sha256") or source_identity),
+            "provenance_record_sha256": str(
+                item.get("provenance_record_sha256") or locator_id
+            ),
+        }
+        if quote and not str(hydrated_item.get("passage_text", "")).strip():
+            hydrated_item["passage_text"] = quote
+            hydrated_item["passage_text_sha256"] = str(
+                item.get("passage_text_sha256")
+                or item.get("text_sha256")
+                or canonical_sha256(quote)
+            )
+        hydrated.append(hydrated_item)
+    return hydrated
+
+
 def _supported_semantic_recovery_candidate(
     *,
     question: str,
@@ -848,6 +932,7 @@ def _supported_semantic_recovery_candidate(
     evidence: Sequence[Mapping[str, Any]],
     requirements: Sequence[Any],
     endpoint_proof: Mapping[str, Any],
+    support_proof: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any] | None:
     if _precedes_boundary_required(question, intent_class, requirements, endpoint_proof):
         candidate = _precedes_boundary_candidate(
@@ -885,6 +970,7 @@ def _supported_semantic_recovery_candidate(
         intent_class=intent_class,
         evidence=evidence,
         requirements=requirements,
+        support_proof=support_proof,
     )
     if candidate is not None:
         return candidate
@@ -921,6 +1007,7 @@ def _positive_answerability_requirement_candidate(
     intent_class: str,
     evidence: Sequence[Mapping[str, Any]],
     requirements: Sequence[Any],
+    support_proof: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any] | None:
     requirement_ids = {str(getattr(item, "requirement_id", "")) for item in requirements}
     route_replan_ids = {"initial_routing_role", "replanning_role", "role_contrast"}
@@ -960,8 +1047,12 @@ def _positive_answerability_requirement_candidate(
         )
         claim_role = "direct"
         relation = None
-        required_ids = lifecycle_ids
-        selected_items = _lifecycle_recovery_evidence(evidence)
+        required_ids = requirement_ids & lifecycle_ids
+        selected_items = _lifecycle_recovery_evidence(
+            evidence,
+            support_proof=support_proof,
+            requirement_ids=required_ids,
+        )
     else:
         return None
 
@@ -1025,30 +1116,73 @@ def _positive_answerability_requirement_candidate(
 
 def _lifecycle_recovery_question(question: str, requirement_ids: set[str]) -> bool:
     q = question.casefold()
+    interruption = any(
+        marker in q
+        for marker in (
+            "client disconnect",
+            "disconnect",
+            "interruption",
+            "interrupted",
+            "connection drops",
+            "browser closes",
+        )
+    )
+    durable = any(marker in q for marker in ("persisted", "durable", "run state", "state"))
+    long_running = any(marker in q for marker in ("long-running", "long running", "workflow", "run"))
     return "durable_state" in requirement_ids and (
-        ("client disconnect" in q or "disconnect" in q)
-        and ("persisted" in q or "run state" in q or "long-running" in q)
+        interruption
+        and durable
+        and long_running
     )
 
 
 def _lifecycle_recovery_evidence(
     evidence: Sequence[Mapping[str, Any]],
+    *,
+    support_proof: Sequence[Mapping[str, Any]] = (),
+    requirement_ids: set[str] | None = None,
 ) -> list[Mapping[str, Any]]:
-    items = [
-        _best_text_item(evidence, ("admission", "policy", "contract")),
-        _best_text_item(evidence, ("durable", "persisted", "authority", "disconnect")),
-        _best_text_item(evidence, ("observability", "reattach", "resume", "status")),
-        _best_text_item(evidence, ("completion", "verification", "acceptance", "success")),
-    ]
+    allowed = requirement_ids or {
+        "admission_policy",
+        "durable_state",
+        "observability",
+        "completion_verification",
+    }
+    evidence_by_id = {str(item.get("evidence_id", "")): item for item in evidence}
     selected: list[Mapping[str, Any]] = []
     seen: set[str] = set()
-    for item in items:
+
+    def add(item: Mapping[str, Any] | None) -> None:
         if item is None:
-            continue
+            return
         evidence_id = str(item.get("evidence_id", ""))
         if evidence_id and evidence_id not in seen:
             selected.append(item)
             seen.add(evidence_id)
+
+    for proof in support_proof:
+        if proof.get("supported") is not True:
+            continue
+        if str(proof.get("requirement_id", "")) not in allowed:
+            continue
+        add(evidence_by_id.get(str(proof.get("evidence_id", ""))))
+
+    groups = (
+        ("admission_policy", ("admission", "policy", "contract")),
+        ("durable_state", ("durable", "persisted", "authority", "disconnect")),
+        ("observability", ("observability", "reattach", "resume", "status")),
+        (
+            "completion_verification",
+            ("completion", "verification", "acceptance", "success"),
+        ),
+    )
+    items = [
+        _best_text_item(evidence, terms)
+        for requirement_id, terms in groups
+        if requirement_id in allowed
+    ]
+    for item in items:
+        add(item)
     return selected
 
 
