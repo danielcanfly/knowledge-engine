@@ -828,11 +828,61 @@ def _looks_like_router_replanner_contrast(q: str) -> bool:
 
 def _looks_like_controlled_architecture(q: str) -> bool:
     tokens = {
-        "sources": "source" in q,
-        "progress": "progress" in q or "state" in q,
-        "parallel": "parallel" in q or "concurrent" in q or "branches" in q,
-        "verification": "verification" in q or "checks" in q,
-        "approval": "approval" in q or "approving" in q or "person" in q or "human" in q,
+        "sources": any(
+            term in q
+            for term in (
+                "source",
+                "sources",
+                "different sources",
+                "multiple sources",
+                "multi-source",
+                "routing",
+                "selection",
+            )
+        ),
+        "progress": any(
+            term in q
+            for term in (
+                "progress",
+                "persisted",
+                "durable",
+                "checkpoint",
+                "saved state",
+                "state",
+            )
+        ),
+        "parallel": any(
+            term in q
+            for term in (
+                "parallel",
+                "concurrent",
+                "branches",
+                "branching",
+                "workstreams",
+            )
+        ),
+        "verification": any(
+            term in q
+            for term in (
+                "verification",
+                "verify",
+                "checked",
+                "checks",
+                "completion",
+                "acceptance",
+            )
+        ),
+        "approval": any(
+            term in q
+            for term in (
+                "approval",
+                "approving",
+                "human",
+                "person",
+                "review",
+                "authority",
+            )
+        ),
     }
     return sum(1 for value in tokens.values() if value) >= 4
 
@@ -1706,7 +1756,9 @@ def _direct_facet_surface_text(
             "The canonical source and provenance artifact authority is the source of trust."
         ),
         "responsibility_mapping": "The answer maps what each component is responsible for.",
+        "source_selection": "Source selection routes the work to the right different sources.",
         "multi_source_selection": "The trust claim is grounded in source and provenance authority.",
+        "verification_gate": "The verification gate checks the joined result before release.",
         "verification_or_approval": (
             "Verification and approval gates check the result before release."
         ),
