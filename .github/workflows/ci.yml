@@ -26,65 +26,47 @@ jobs:
           path = Path('src/knowledge_engine/m26_aq_semantic_runtime_patch_v2.py')
           text = path.read_text(encoding='utf-8')
 
-          threshold = "    if len(facet_ids) < 4:\n        return None\n"
+          threshold = '    if len(facet_ids) < 4:\n        return None\n'
           assert text.count(threshold) == 1, 'direct facet threshold drifted'
-          text = text.replace(threshold, "    if len(facet_ids) < 2:\n        return None\n", 1)
+          text = text.replace(threshold, '    if len(facet_ids) < 2:\n        return None\n', 1)
 
-          architecture = '''    if {
-              "source_selection",
-              "persisted_progress",
-              "parallel_branches",
-              "verification_gate",
-              "human_approval",
-          }.issubset(ids):
-              return (
-                  "Source selection routes work to different sources. Persisted progress is "
-                  "durable state. Parallel research branches keep work concurrent and join "
-                  "at a verification gate. Human approval is the final authority gate before "
-                  "release."
-              )
-          '''
-          assert text.count(architecture) == 1, 'controlled architecture surface drifted'
-          text = text.replace(architecture, '', 1)
+          arch_start_marker = '    if {\n        "source_selection",\n'
+          arch_end_marker = '            "release."\n        )\n'
+          assert text.count(arch_start_marker) == 1, 'controlled architecture start drifted'
+          arch_start = text.index(arch_start_marker)
+          arch_end = text.index(arch_end_marker, arch_start) + len(arch_end_marker)
+          architecture = text[arch_start:arch_end]
+          text = text[:arch_start] + text[arch_end:]
 
-          lifecycle_marker = '''    if {
-              "admission_policy",
-              "durable_state",
-              "completion_verification",
-              "observability",
-          }.issubset(ids):
-          '''
+          lifecycle_marker = '    if {\n        "admission_policy",\n'
           assert text.count(lifecycle_marker) == 1, 'lifecycle marker drifted'
-          text = text.replace(lifecycle_marker, architecture + lifecycle_marker, 1)
+          lifecycle_index = text.index(lifecycle_marker)
+          text = text[:lifecycle_index] + architecture + text[lifecycle_index:]
 
-          surface_marker = '''        "multi_source_selection": "The trust claim is grounded in source and provenance authority.",
-          "verification_or_approval": (
-          '''
-          surface_replacement = '''        "multi_source_selection": "The trust claim is grounded in source and provenance authority.",
-          "durable_state_authority": (
-              "Durable persisted server-side run state preserves progress and authority "
-              "after a client disconnect."
-          ),
-          "continued_execution": (
-              "The long-running workflow continues after the client disconnect and can "
-              "later be resumed or rejoined."
-          ),
-          "verification_completion": (
-              "Completion verification or acceptance checks the result before success "
-              "or correctness is declared."
-          ),
-          "observability_reattachment": (
-              "Observability, status, and reattachment let the owner inspect or resume "
-              "the continuing run."
-          ),
-          "admission_policy": (
-              "Admission policy or the request contract gates whether execution may start."
-          ),
-          "verification_or_approval": (
-          '''
-          # The workflow block strips six YAML spaces, so these literals land at 8/12 spaces.
-          assert text.count(surface_marker) == 1, 'direct facet surface marker drifted'
-          text = text.replace(surface_marker, surface_replacement, 1)
+          verification_marker = '        "verification_or_approval": (\n'
+          assert text.count(verification_marker) == 1, 'direct facet surface marker drifted'
+          surface_addition = ''.join([
+              '        "durable_state_authority": (\n',
+              '            "Durable persisted server-side run state preserves progress and authority "\n',
+              '            "after a client disconnect."\n',
+              '        ),\n',
+              '        "continued_execution": (\n',
+              '            "The long-running workflow continues after the client disconnect and can "\n',
+              '            "later be resumed or rejoined."\n',
+              '        ),\n',
+              '        "verification_completion": (\n',
+              '            "Completion verification or acceptance checks the result before success "\n',
+              '            "or correctness is declared."\n',
+              '        ),\n',
+              '        "observability_reattachment": (\n',
+              '            "Observability, status, and reattachment let the owner inspect or resume "\n',
+              '            "the continuing run."\n',
+              '        ),\n',
+              '        "admission_policy": (\n',
+              '            "Admission policy or the request contract gates whether execution may start."\n',
+              '        ),\n',
+          ])
+          text = text.replace(verification_marker, surface_addition + verification_marker, 1)
 
           path.write_text(text, encoding='utf-8')
           PY
