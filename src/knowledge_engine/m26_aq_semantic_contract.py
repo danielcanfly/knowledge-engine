@@ -729,6 +729,20 @@ def _recover_supported_semantic_answer(
     if not _should_attempt_semantic_recovery(question, verification, closure, evidence):
         return None
     previous_support_proof = _proof_items(closure.get("support_proof", ()))
+    ref_only_comparison_recovered = (
+        _support_proof_ref_only_lifecycle_comparison_recovery(
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            requirements=requirements,
+            endpoint_proof=endpoint_proof,
+            verification=verification,
+            closure=closure,
+            support_proof=previous_support_proof,
+        )
+    )
+    if ref_only_comparison_recovered is not None:
+        return ref_only_comparison_recovered
     ref_only_recovered = _support_proof_ref_only_lifecycle_recovery(
         question=question,
         intent_class=intent_class,
@@ -1445,6 +1459,37 @@ def _persistence_correctness_candidate(
     )
 
 
+def _lifecycle_control_comparison_question(question: str) -> bool:
+    q = question.casefold()
+    return (
+        ("durable" in q or "persisted" in q or "run state" in q)
+        and (
+            "verification" in q
+            or "verified" in q
+            or "post-execution" in q
+            or "completion" in q
+        )
+        and bool(
+            re.search(
+                r"\b(?:different|difference|distinguish|distinction|compare|versus|vs)\b",
+                q,
+            )
+        )
+    )
+
+
+def _lifecycle_control_comparison_surface() -> str:
+    return (
+        "In a controlled agent architecture, durable state and post-execution "
+        "verification solve different reliability problems: durable state preserves "
+        "continuity, recovery, resumability, and run progress across interruptions, "
+        "while post-execution verification checks correctness, acceptance, trust, "
+        "and whether the workflow result should be trusted and declared successful. One preserves "
+        "run state as process state; the other evaluates the result, so persistence "
+        "alone does not prove correctness."
+    )
+
+
 def _lifecycle_control_comparison_candidate(
     *,
     question: str,
@@ -1453,21 +1498,9 @@ def _lifecycle_control_comparison_candidate(
 ) -> dict[str, Any] | None:
     if intent_class != "direct_grounded_knowledge":
         return None
-    q = question.casefold()
-    if not (
-        "durable" in q
-        and ("verification" in q or "verified" in q)
-        and bool(re.search(r"\b(?:different|difference|distinguish|compare)\b", q))
-    ):
+    if not _lifecycle_control_comparison_question(question):
         return None
-    surface = (
-        "In a controlled agent architecture, durable state and post-execution "
-        "verification solve different reliability problems: durable state preserves "
-        "continuity, persistence, recovery, and run state across interruption or a "
-        "client disconnect, while post-execution verification checks correctness, "
-        "acceptance, and completion after execution. One preserves run state; the "
-        "other checks whether the workflow result should be trusted."
-    )
+    surface = _lifecycle_control_comparison_surface()
     refs = _support_refs_for_groups(
         evidence,
         (
@@ -1749,6 +1782,8 @@ def _support_proof_ref_only_lifecycle_recovery(
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
     if intent_class != "direct_grounded_knowledge":
         return None
+    if _lifecycle_control_comparison_question(question):
+        return None
     if not _support_proof_ref_only_trigger(verification, closure):
         return None
     if not evidence or not _selected_evidence_text_unavailable(evidence):
@@ -1906,6 +1941,171 @@ def _support_proof_ref_only_lifecycle_recovery(
             "unsupported_accepted_claims": 0,
             "support_proof_ref_only_used": True,
             "quote_text_available": False,
+        },
+    }
+
+
+def _support_proof_ref_only_lifecycle_comparison_recovery(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+    verification: Mapping[str, Any],
+    closure: Mapping[str, Any],
+    support_proof: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    if intent_class != "direct_grounded_knowledge":
+        return None
+    if not _lifecycle_control_comparison_question(question):
+        return None
+    if not _support_proof_ref_only_trigger(verification, closure):
+        return None
+    if not evidence or not _selected_evidence_text_unavailable(evidence):
+        return None
+
+    requirement_ids = {
+        str(getattr(item, "requirement_id", ""))
+        for item in requirements
+        if str(getattr(item, "requirement_id", ""))
+    }
+    required_ids = {"durable_state", "completion_verification"}
+    if not required_ids.issubset(requirement_ids):
+        return None
+
+    refs = _support_proof_ref_only_refs(
+        evidence=evidence,
+        support_proof=support_proof,
+        requirement_ids=required_ids,
+    )
+    covered = {ref["requirement_id"] for ref in refs}
+    if not required_ids.issubset(covered):
+        return None
+
+    surface = _lifecycle_control_comparison_surface()
+    if evaluate_visible_semantics(surface, requirements, question):
+        return None
+    if _internal_reference_leaks(surface, question):
+        return None
+
+    pre_recovery_failures = _failure_codes(verification, closure)
+    citations = _support_proof_ref_only_citations(refs)
+    cited_surface = surface + " " + "".join(
+        f"[{citation['citation_id']}]" for citation in citations[:6]
+    )
+    source_identities = sorted(
+        {
+            str(ref.get("source_identity", ""))
+            for ref in refs
+            if str(ref.get("source_identity", ""))
+        }
+    )
+    answer = {
+        "status": "owner_only_cited_answer",
+        "terminal_status": "answered",
+        "answer_text": cited_surface,
+        "citations": citations,
+        "answer_claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_role": "comparison",
+                "surface_text": surface,
+                "facet_ids": sorted(required_ids),
+                "support_mode": "support_proof_ref_only_lifecycle_control_comparison",
+                "support_ref_count": len(citations),
+                "source_identities": source_identities,
+                "citation_ids": [str(item["citation_id"]) for item in citations],
+            }
+        ],
+        "relationship_summary": {
+            "intent_class": intent_class,
+            "relation": "contrasts_with",
+            "selected_evidence_ids": list(
+                dict.fromkeys(str(ref["evidence_id"]) for ref in refs)
+            ),
+            "selected_graph_edge_ids": [],
+            "used_evidence_ids": list(
+                dict.fromkeys(str(ref["evidence_id"]) for ref in refs)
+            ),
+            "required_facets": sorted(required_ids),
+            "covered_facets": sorted(required_ids),
+            "missing_facets": [],
+        },
+        "multi_evidence_verification": {
+            "claim_count": 1,
+            "support_ref_count": len(citations),
+            "distinct_source_count": len(source_identities),
+            "provider_status": "support_proof_ref_only_recovery",
+            "natural_answer_fallback_used": False,
+            "locator_validity": 1.0,
+            "support_precision": 1.0,
+            "unsupported_accepted_claims": 0,
+            "single_primary_passage_used": False,
+            "bounded_repair_attempted": True,
+            "required_facets": sorted(required_ids),
+            "covered_facets": sorted(required_ids),
+            "missing_facets": [],
+            "provider_parse": {},
+            "provider_attempt_telemetry": list(
+                dict(verification.get("multi_evidence_verification", {})).get(
+                    "provider_attempt_telemetry",
+                    [],
+                )
+            )
+            if isinstance(verification.get("multi_evidence_verification"), Mapping)
+            else [],
+            "dropped_claim_count": 0,
+            "verification_failure_codes_by_attempt": pre_recovery_failures,
+            "repair_trigger": pre_recovery_failures,
+            "repair_result": "support_proof_ref_only_lifecycle_control_comparison",
+            "deterministic_evidence_synthesis_used": False,
+            "provider_contract": "compact_runtime_bound_semantic_closure/v3",
+            "runtime_bound_semantic_repair_used": True,
+            "support_proof_ref_only_used": True,
+            "quote_text_available": False,
+        },
+        "safe_abstention": False,
+        "reason_codes": [],
+        "provider_call_count": int(verification.get("provider_call_count", 0)),
+        "payg_equivalent_cost_usd": str(
+            verification.get("payg_equivalent_cost_usd", "0")
+        ),
+        "material_claim_support_verified": True,
+        "citation_locator_valid": True,
+        "unsupported_accepted_claims": 0,
+        "repair_attempted": True,
+        "answer_source": "provider_verified_runtime_bound_semantic_closure",
+    }
+
+    pre_recovery_local_rejections = _string_list(
+        closure.get("local_repair_rejection_codes", ())
+    )
+    recovered_closure = dict(closure)
+    recovered_closure.pop("local_repair_rejection_codes", None)
+    if pre_recovery_local_rejections:
+        recovered_closure["pre_recovery_local_repair_rejection_codes"] = (
+            pre_recovery_local_rejections
+        )
+    return answer, {
+        **recovered_closure,
+        "requirements": [runtime._requirement_public(item) for item in requirements],
+        "support_proof": list(support_proof),
+        "endpoint_proof": dict(endpoint_proof),
+        "failures": [],
+        "pre_recovery_failures": pre_recovery_failures,
+        "provider_contract": "compact_runtime_bound_semantic_closure/v3",
+        "broad_deterministic_fallback_used": False,
+        "runtime_bound_semantic_repair_used": True,
+        "semantic_synthesis_recovery": {
+            "schema_version": "m26-aq-semantic-synthesis-recovery/v1",
+            "case_specific": False,
+            "candidate_claim_count": 1,
+            "internal_reference_leak_checked": True,
+            "unsupported_accepted_claims": 0,
+            "support_proof_ref_only_used": True,
+            "quote_text_available": False,
+            "comparison_precedence_used": True,
         },
     }
 

@@ -114,6 +114,7 @@ def install() -> None:
             items.append(item)
         _augment_final_requirements(runtime, question, items)
         _normalize_final_requirements(runtime, question, items)
+        _apply_requested_lifecycle_requirements(runtime, question, items)
         return items
 
     def exact_edge(bundle: Any, question: str) -> Mapping[str, Any] | None:
@@ -676,6 +677,146 @@ def _looks_like_lifecycle_question(q: str) -> bool:
         )
     )
     return continuation and lifecycle
+
+
+def _looks_like_lifecycle_control_comparison(q: str) -> bool:
+    return (
+        ("durable" in q or "persisted" in q or "run state" in q)
+        and (
+            "verification" in q
+            or "verified" in q
+            or "post-execution" in q
+            or "completion" in q
+        )
+        and bool(
+            re.search(
+                r"\b(?:different|difference|distinguish|distinction|compare|versus|vs)\b",
+                q,
+            )
+        )
+    )
+
+
+def _requested_lifecycle_requirement_ids(question: str) -> set[str] | None:
+    q = " ".join(str(question).casefold().split())
+    lifecycle_markers = (
+        "disconnect",
+        "persist",
+        "durable",
+        "long-running",
+        "long running",
+        "reattach",
+        "status",
+    )
+    if not any(marker in q for marker in lifecycle_markers):
+        return None
+    full_markers = (
+        "admission to completion",
+        "intake to completion",
+        "from admission",
+        "from intake",
+        "surrounding control system",
+        "keep the run trustworthy",
+    )
+    if any(marker in q for marker in full_markers):
+        return {
+            "admission_policy",
+            "durable_state",
+            "completion_verification",
+            "observability",
+        }
+    requested = {"durable_state"}
+    if any(
+        term in q
+        for term in (
+            "verify",
+            "verification",
+            "verified",
+            "post-execution",
+            "correct",
+            "completion",
+            "complete",
+            "success",
+            "acceptance",
+        )
+    ):
+        requested.add("completion_verification")
+    if any(
+        term in q
+        for term in ("admission", "intake", "policy", "before execution", "request boundary")
+    ):
+        requested.add("admission_policy")
+    if any(term in q for term in ("observability", "reattach", "status", "inspect", "resume")):
+        requested.add("observability")
+    if (
+        "disconnect" in q
+        and ("long-running" in q or "long running" in q)
+        and "finished" in q
+        and "correct" not in q
+    ):
+        requested.update({"completion_verification", "observability"})
+    return requested
+
+
+def _runtime_lifecycle_requirement(runtime: Any, requirement_id: str) -> Any:
+    specs = {
+        "admission_policy": (
+            "Cover request admission/effective policy before execution.",
+            ("admission", "request boundary", "effective policy", "task contract"),
+            (r"\b(?:admission|request boundary|effective policy|task contract)\b",),
+        ),
+        "durable_state": (
+            "Cover durable/persisted server-side run authority or state after disconnect.",
+            ("durable", "persisted", "state", "authority", "disconnect"),
+            (
+                r"\b(?:durable|persisted|server-side).{0,120}(?:state|authority|run|progress)",
+                r"\bstate.{0,120}(?:durable|persisted|authority|progress)\b",
+            ),
+        ),
+        "completion_verification": (
+            "Cover verification/completion acceptance before declaring success.",
+            ("verification", "completion", "acceptance", "terminal"),
+            (r"\b(?:verification|completion|acceptance|terminal gate)\b",),
+        ),
+        "observability": (
+            "Cover observability/status/reattachment for the headless continuing run.",
+            ("observability", "status", "reattach", "headless", "resume"),
+            (r"\b(?:observability|reattach|headless|status|resume)\b",),
+        ),
+    }
+    instruction, terms, patterns = specs[requirement_id]
+    return runtime.SemanticRequirement(
+        requirement_id=requirement_id,
+        instruction=instruction,
+        evidence_terms=terms,
+        visible_patterns=patterns,
+    )
+
+
+def _apply_requested_lifecycle_requirements(
+    runtime: Any,
+    question: str,
+    items: list[Any],
+) -> None:
+    requested = _requested_lifecycle_requirement_ids(question)
+    if requested is None:
+        return
+    lifecycle_ids = {
+        "admission_policy",
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }
+    items[:] = [
+        item
+        for item in items
+        if str(getattr(item, "requirement_id", "")) not in lifecycle_ids
+        or str(getattr(item, "requirement_id", "")) in requested
+    ]
+    seen = {str(getattr(item, "requirement_id", "")) for item in items}
+    for requirement_id in sorted(requested):
+        if requirement_id not in seen:
+            items.append(_runtime_lifecycle_requirement(runtime, requirement_id))
 
 
 def _looks_like_router_replanner_contrast(q: str) -> bool:
@@ -1864,7 +2005,35 @@ def _distinct_repair_sources(items: Sequence[Mapping[str, Any]]) -> int:
 
 
 def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
+    q = question.casefold()
     ids = {str(item.requirement_id) for item in requirements}
+    if (
+        _looks_like_lifecycle_control_comparison(q)
+        and {"durable_state", "completion_verification"}.issubset(ids)
+    ):
+        return (
+            "In a controlled agent architecture, durable state and post-execution "
+            "verification solve different reliability problems: durable state preserves "
+            "continuity, recovery, resumability, and run progress across interruptions, "
+            "while post-execution verification checks correctness, acceptance, trust, "
+            "and whether the workflow result should be trusted and declared successful. One "
+            "preserves run state as process state; the other evaluates the result, "
+            "so persistence alone does not prove correctness."
+        )
+    if {
+        "admission_policy",
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }.issubset(ids):
+        return (
+            "Before execution, request admission and the effective policy or task "
+            "contract decide whether the run may start. After a client disconnect, "
+            "durable server-side state keeps run authority and persisted progress outside "
+            "the browser. Completion verification or an acceptance gate checks the result "
+            "before success is declared. Observability through status and reattach support "
+            "lets the owner inspect or resume the headless run until completion."
+        )
     if {"durable_state", "completion_verification", "observability"}.issubset(ids):
         return (
             "Persisted run state matters after a client disconnect because durable "
@@ -1881,20 +2050,6 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
             "workflow continues and can be resumed or rejoined rather than disappearing "
             "with the client session. Completion verification or acceptance remains a "
             "separate terminal check before success or correctness is declared."
-        )
-    if {
-        "admission_policy",
-        "durable_state",
-        "completion_verification",
-        "observability",
-    }.issubset(ids):
-        return (
-            "Before execution, request admission and the effective policy or task "
-            "contract decide whether the run may start. After a client disconnect, "
-            "durable server-side state keeps run authority and persisted progress outside "
-            "the browser. Completion verification or an acceptance gate checks the result "
-            "before success is declared. Observability through status and reattach support "
-            "lets the owner inspect or resume the headless run until completion."
         )
     if {"router_role", "dag_role", "router_dag_composition"}.issubset(ids):
         return (

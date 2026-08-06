@@ -622,6 +622,91 @@ def test_bb13_support_proof_ref_only_recovers_without_passage_text() -> None:
     assert "exact_quote" not in json.dumps(answer)
 
 
+def test_bb10_support_proof_ref_only_comparison_precedes_lifecycle_wording() -> None:
+    question = (
+        "Why do durable state and post-execution verification solve different "
+        "reliability problems in a controlled agent architecture?"
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    assert {item.requirement_id for item in requirements} == {
+        "durable_state",
+        "completion_verification",
+    }
+    evidence = [
+        _metadata_only_passage("durable", "durable-note"),
+        _metadata_only_passage("completion", "completion-note"),
+    ]
+    support_proof = [
+        {
+            "requirement_id": "completion_verification",
+            "supported": True,
+            "score": 4.5,
+            "evidence_id": "completion",
+            "source_identity": "completion-note",
+            "source_id": "completion-note",
+            "locator_id": "loc_completion",
+        },
+        {
+            "requirement_id": "durable_state",
+            "supported": True,
+            "score": 4.5,
+            "evidence_id": "durable",
+            "source_identity": "durable-note",
+            "source_id": "durable-note",
+            "locator_id": "loc_durable",
+        },
+    ]
+
+    recovered = _recover_supported_semantic_answer(
+        compatibility=_contract_compat_module(),
+        question=question,
+        trace_id="trace-bb10-support-proof-comparison",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+        verification={
+            "status": "owner_only_safe_abstention",
+            "answer_source": "safe_abstention",
+            "reason_codes": ["M26-PA7-ME-034", "SEMANTIC_CLOSURE_FAILED"],
+            "unsupported_accepted_claims": 0,
+            "citation_locator_valid": True,
+            "raw_answer": "",
+            "answer_text": "",
+        },
+        closure={
+            "failures": ["M26-PA7-ME-034"],
+            "support_proof": support_proof,
+            "local_repair_rejection_codes": ["NO_SEMANTIC_TEXT"],
+        },
+    )
+
+    assert recovered is not None
+    answer, closure = recovered
+    lowered = answer["answer_text"].casefold()
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert answer["answer_claims"][0]["claim_role"] == "comparison"
+    assert answer["relationship_summary"]["relation"] == "contrasts_with"
+    assert answer["unsupported_accepted_claims"] == 0
+    assert "different reliability problems" in lowered
+    assert "continuity" in lowered or "recovery" in lowered
+    assert "correctness" in lowered or "acceptance" in lowered or "trust" in lowered
+    assert "one preserves run state" in lowered
+    assert "process state" in lowered
+    assert "evaluates the result" in lowered
+    assert "persistence alone does not prove correctness" in lowered
+    assert "client disconnect because" not in lowered
+    assert "exact_quote" not in json.dumps(answer)
+    assert "exact_support_snippet" not in json.dumps(answer)
+    assert closure["failures"] == []
+    assert closure["semantic_synthesis_recovery"]["comparison_precedence_used"] is True
+    assert {item["evidence_id"] for item in answer["citations"]} == {
+        "durable",
+        "completion",
+    }
+
+
 def test_support_proof_recovery_publishes_into_final_response_envelope() -> None:
     question = (
         "Why is persisted run state important when a client disconnects before "

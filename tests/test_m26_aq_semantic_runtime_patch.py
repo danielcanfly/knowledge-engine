@@ -208,6 +208,7 @@ def test_explicit_install_bb02_lifecycle_surface_is_non_empty() -> None:
     _run_isolated(
         """
         from knowledge_engine import m26_aq_semantic_runtime_patch_v2 as patch_v2
+        from knowledge_engine import m26_pa7_semantic_closure_runtime as runtime
         from knowledge_engine.m26_aq_semantic_contract import derive_semantic_requirements
         from knowledge_engine.m26_aq_semantic_runtime_patch_v2 import _semantic_answer_text_v2
 
@@ -224,6 +225,53 @@ def test_explicit_install_bb02_lifecycle_surface_is_non_empty() -> None:
         assert "observability" in lowered or "status" in lowered or "reattachment" in lowered
         assert "completion verification" in lowered or "acceptance" in lowered
         assert "success" in lowered or "correctness" in lowered
+        runtime_requirements = runtime._semantic_requirements(
+            question,
+            "direct_grounded_knowledge",
+        )
+        assert {item.requirement_id for item in runtime_requirements} == {
+            "durable_state",
+            "completion_verification",
+            "observability",
+        }
+        assert runtime._visible_semantic_failures(answer, runtime_requirements, question) == []
+        """
+    )
+
+
+def test_explicit_install_bb10_comparison_precedes_generic_lifecycle_surface() -> None:
+    _run_isolated(
+        """
+        from knowledge_engine import m26_aq_semantic_runtime_patch_v2 as patch_v2
+        from knowledge_engine import m26_pa7_semantic_closure_runtime as runtime
+        from knowledge_engine.m26_aq_semantic_contract import derive_semantic_requirements
+        from knowledge_engine.m26_aq_semantic_runtime_patch_v2 import _semantic_answer_text_v2
+
+        patch_v2.install()
+        question = (
+            "Why do durable state and post-execution verification solve different "
+            "reliability problems in a controlled agent architecture?"
+        )
+        requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+        answer = _semantic_answer_text_v2(question, requirements)
+        lowered = answer.casefold()
+        assert "different reliability problems" in lowered
+        assert "continuity" in lowered or "recovery" in lowered
+        assert "correctness" in lowered or "acceptance" in lowered or "trust" in lowered
+        assert "one preserves run state" in lowered
+        assert "process state" in lowered
+        assert "evaluates the result" in lowered
+        assert "persistence alone does not prove correctness" in lowered
+        assert "client disconnect because" not in lowered
+        assert runtime._visible_semantic_failures(answer, requirements, question) == []
+        runtime_requirements = runtime._semantic_requirements(
+            question,
+            "direct_grounded_knowledge",
+        )
+        assert {item.requirement_id for item in runtime_requirements} == {
+            "durable_state",
+            "completion_verification",
+        }
         """
     )
 
