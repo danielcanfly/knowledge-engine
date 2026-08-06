@@ -65,6 +65,16 @@ def _metadata_only_passage(
     }
 
 
+def _semantic_metadata_passage(
+    evidence_id: str,
+    source: str,
+    requirement_ids: list[str],
+) -> dict[str, object]:
+    item = _metadata_only_passage(evidence_id, source)
+    item["retrieval_metadata"] = {"semantic_requirement_ids": requirement_ids}
+    return item
+
+
 def test_nc01_cited_but_irrelevant_disconnect_answer_is_rejected() -> None:
     question = (
         "If an agent keeps working after the client disconnects, what parts of the surrounding "
@@ -482,6 +492,112 @@ def test_bb02_support_proof_ref_only_recovers_when_observability_and_completion_
         "durable",
         "lifecycle",
     }
+
+
+def test_bb02_selected_evidence_metadata_recovers_when_support_proof_is_empty() -> None:
+    question = (
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _semantic_metadata_passage("durable", "lifecycle-source-a", ["durable_state"]),
+        _semantic_metadata_passage(
+            "lifecycle",
+            "lifecycle-source-b",
+            ["completion_verification", "observability"],
+        ),
+    ]
+
+    recovered = _recover_supported_semantic_answer(
+        compatibility=_contract_compat_module(),
+        question=question,
+        trace_id="trace-bb02-selected-evidence-metadata",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+        verification={
+            "status": "owner_only_safe_abstention",
+            "answer_source": "safe_abstention",
+            "reason_codes": [
+                "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE",
+                "SEMANTIC_CLOSURE_FAILED",
+            ],
+            "unsupported_accepted_claims": 0,
+            "citation_locator_valid": True,
+            "raw_answer": "",
+            "answer_text": "",
+        },
+        closure={
+            "failures": ["PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE"],
+            "support_proof": [],
+            "local_repair_rejection_codes": ["M26-PA7-ME-029"],
+        },
+    )
+
+    assert recovered is not None
+    answer, closure = recovered
+    lowered = answer["answer_text"].casefold()
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert answer["safe_abstention"] is False
+    assert answer["unsupported_accepted_claims"] == 0
+    assert "durable" in lowered
+    assert "observability" in lowered
+    assert "completion verification" in lowered
+    assert "exact_quote" not in json.dumps(answer)
+    assert "passage_text" not in json.dumps(answer)
+    assert {item["evidence_id"] for item in answer["citations"]} == {
+        "durable",
+        "lifecycle",
+    }
+    assert {
+        item["requirement_id"]
+        for item in closure["support_proof"]
+        if item.get("supported") is True
+    }.issuperset({"durable_state", "completion_verification", "observability"})
+
+
+def test_bb02_selected_evidence_metadata_requires_completion_support() -> None:
+    question = (
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _semantic_metadata_passage("durable", "lifecycle-source-a", ["durable_state"]),
+        _semantic_metadata_passage("status", "lifecycle-source-b", ["observability"]),
+    ]
+
+    recovered = _recover_supported_semantic_answer(
+        compatibility=_contract_compat_module(),
+        question=question,
+        trace_id="trace-bb02-selected-evidence-metadata-missing-completion",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+        verification={
+            "status": "owner_only_safe_abstention",
+            "answer_source": "safe_abstention",
+            "reason_codes": [
+                "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE",
+                "SEMANTIC_CLOSURE_FAILED",
+            ],
+            "unsupported_accepted_claims": 0,
+            "citation_locator_valid": True,
+            "raw_answer": "",
+            "answer_text": "",
+        },
+        closure={
+            "failures": ["PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE"],
+            "support_proof": [],
+            "local_repair_rejection_codes": ["M26-PA7-ME-029"],
+        },
+    )
+
+    assert recovered is None
 
 
 def test_bb02_lifecycle_paraphrase_recovers_without_exact_question_string() -> None:

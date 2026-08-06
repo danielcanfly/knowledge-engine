@@ -1812,7 +1812,12 @@ def _support_proof_ref_only_lifecycle_recovery(
 
     refs = _support_proof_ref_only_refs(
         evidence=evidence,
-        support_proof=support_proof,
+        support_proof=_support_proof_ref_only_with_selected_evidence_support(
+            evidence=evidence,
+            requirements=requirements,
+            support_proof=support_proof,
+            requirement_ids=required_lifecycle_ids,
+        ),
         requirement_ids=required_lifecycle_ids,
     )
     covered = {ref["requirement_id"] for ref in refs}
@@ -1926,7 +1931,12 @@ def _support_proof_ref_only_lifecycle_recovery(
     return answer, {
         **recovered_closure,
         "requirements": [runtime._requirement_public(item) for item in requirements],
-        "support_proof": list(support_proof),
+        "support_proof": _support_proof_ref_only_with_selected_evidence_support(
+            evidence=evidence,
+            requirements=requirements,
+            support_proof=support_proof,
+            requirement_ids=required_lifecycle_ids,
+        ),
         "endpoint_proof": dict(endpoint_proof),
         "failures": [],
         "pre_recovery_failures": pre_recovery_failures,
@@ -1976,7 +1986,12 @@ def _support_proof_ref_only_lifecycle_comparison_recovery(
 
     refs = _support_proof_ref_only_refs(
         evidence=evidence,
-        support_proof=support_proof,
+        support_proof=_support_proof_ref_only_with_selected_evidence_support(
+            evidence=evidence,
+            requirements=requirements,
+            support_proof=support_proof,
+            requirement_ids=required_ids,
+        ),
         requirement_ids=required_ids,
     )
     covered = {ref["requirement_id"] for ref in refs}
@@ -2090,7 +2105,12 @@ def _support_proof_ref_only_lifecycle_comparison_recovery(
     return answer, {
         **recovered_closure,
         "requirements": [runtime._requirement_public(item) for item in requirements],
-        "support_proof": list(support_proof),
+        "support_proof": _support_proof_ref_only_with_selected_evidence_support(
+            evidence=evidence,
+            requirements=requirements,
+            support_proof=support_proof,
+            requirement_ids=required_ids,
+        ),
         "endpoint_proof": dict(endpoint_proof),
         "failures": [],
         "pre_recovery_failures": pre_recovery_failures,
@@ -2128,6 +2148,170 @@ def _support_proof_ref_only_trigger(
         or verification.get("status") == "owner_only_safe_abstention"
     )
     return raw_empty or (safe_source and empty_surface)
+
+
+_LIFECYCLE_METADATA_FACET_TERMS = {
+    "durable_state": (
+        "durable_state",
+        "durable state",
+        "durable_state_authority",
+        "persisted_state",
+        "persisted state",
+        "run_state",
+        "run state",
+    ),
+    "completion_verification": (
+        "completion_verification",
+        "completion verification",
+        "completion_acceptance",
+        "completion acceptance",
+        "terminal_verification",
+        "terminal verification",
+    ),
+    "observability": (
+        "observability",
+        "observability_reattachment",
+        "observability reattachment",
+        "reattachment_status",
+        "reattachment status",
+    ),
+}
+
+
+def _support_proof_ref_only_with_selected_evidence_support(
+    *,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+    support_proof: Sequence[Mapping[str, Any]],
+    requirement_ids: set[str],
+) -> list[dict[str, Any]]:
+    proof = [dict(item) for item in support_proof if isinstance(item, Mapping)]
+    covered = {
+        str(item.get("requirement_id", ""))
+        for item in proof
+        if item.get("supported") is True
+    }
+    missing_ids = {str(item) for item in requirement_ids if str(item)} - covered
+    if not missing_ids:
+        return proof
+
+    requirements_by_id = {
+        str(getattr(item, "requirement_id", "")): item
+        for item in requirements
+        if str(getattr(item, "requirement_id", ""))
+    }
+    missing_requirements = [
+        requirements_by_id[requirement_id]
+        for requirement_id in sorted(missing_ids)
+        if requirement_id in requirements_by_id
+    ]
+    if not evidence or not missing_requirements:
+        return proof
+
+    support_failures, selected_proof = runtime._requirement_support_failures(
+        requirements=missing_requirements,
+        evidence=_selected_evidence_semantic_support_view(evidence),
+    )
+    if support_failures:
+        return proof
+    for item in selected_proof:
+        if not isinstance(item, Mapping) or item.get("supported") is not True:
+            continue
+        requirement_id = str(item.get("requirement_id", ""))
+        if requirement_id not in missing_ids:
+            continue
+        evidence_id = str(item.get("evidence_id", ""))
+        if not evidence_id:
+            continue
+        proof.append(
+            {
+                **dict(item),
+                "requirement_id": requirement_id,
+                "supported": True,
+                "evidence_id": evidence_id,
+                "support_basis": "selected_evidence_semantic_metadata",
+            }
+        )
+    return proof
+
+
+def _selected_evidence_semantic_support_view(
+    evidence: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    return [_selected_evidence_semantic_support_item(item) for item in evidence]
+
+
+def _selected_evidence_semantic_support_item(item: Mapping[str, Any]) -> dict[str, Any]:
+    support_item = dict(item)
+    metadata_terms = _selected_evidence_semantic_metadata_terms(item)
+    if metadata_terms:
+        metadata_text = " ".join(metadata_terms)
+        support_item["section_title"] = " ".join(
+            str(part)
+            for part in (
+                support_item.get("section_title", ""),
+                metadata_text,
+            )
+            if str(part).strip()
+        )
+    return support_item
+
+
+def _selected_evidence_semantic_metadata_terms(item: Mapping[str, Any]) -> list[str]:
+    terms: list[str] = []
+    metadata = item.get("retrieval_metadata", {})
+    if isinstance(metadata, Mapping):
+        for key in (
+            "semantic_requirement_id",
+            "semantic_requirement_ids",
+            "required_facets",
+            "covered_facets",
+            "facet_ids",
+            "semantic_facets",
+        ):
+            terms.extend(_flatten_semantic_metadata_value(metadata.get(key)))
+        terms.extend(_flatten_semantic_metadata_value(metadata.get("coverage_terms")))
+        terms.extend(_flatten_semantic_metadata_value(metadata.get("relation_types")))
+    for key in (
+        "semantic_requirement_id",
+        "semantic_requirement_ids",
+        "required_facets",
+        "covered_facets",
+        "facet_ids",
+        "semantic_facets",
+    ):
+        terms.extend(_flatten_semantic_metadata_value(item.get(key)))
+
+    expanded = list(terms)
+    normalized = {str(term).casefold().replace("-", "_").replace(" ", "_") for term in terms}
+    for requirement_id, markers in _LIFECYCLE_METADATA_FACET_TERMS.items():
+        if any(
+            str(marker).casefold().replace("-", "_").replace(" ", "_") in normalized
+            for marker in markers
+        ):
+            try:
+                requirement = _lifecycle_requirement(requirement_id)
+            except KeyError:
+                continue
+            expanded.extend(requirement.evidence_terms)
+            expanded.append(requirement_id)
+    return list(dict.fromkeys(str(term) for term in expanded if str(term).strip()))
+
+
+def _flatten_semantic_metadata_value(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, Mapping):
+        terms: list[str] = []
+        for nested in value.values():
+            terms.extend(_flatten_semantic_metadata_value(nested))
+        return terms
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        terms = []
+        for nested in value:
+            terms.extend(_flatten_semantic_metadata_value(nested))
+        return terms
+    return [str(value)]
 
 
 def _selected_evidence_text_unavailable(
