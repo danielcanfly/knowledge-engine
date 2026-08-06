@@ -58,10 +58,8 @@ jobs:
           text = text.replace(lifecycle_marker, architecture + lifecycle_marker, 1)
 
           surface_marker = '''        "multi_source_selection": "The trust claim is grounded in source and provenance authority.",
-              "verification_or_approval": (
+          "verification_or_approval": (
           '''
-          # Normalize the marker indentation written above to the production dictionary's 8 spaces.
-          surface_marker = surface_marker.replace('\n              "verification_or_approval"', '\n        "verification_or_approval"')
           surface_replacement = '''        "multi_source_selection": "The trust claim is grounded in source and provenance authority.",
           "durable_state_authority": (
               "Durable persisted server-side run state preserves progress and authority "
@@ -84,8 +82,7 @@ jobs:
           ),
           "verification_or_approval": (
           '''
-          # Normalize dictionary indentation in the inserted block.
-          surface_replacement = surface_replacement.replace('\n      "', '\n        "').replace('\n          "', '\n            "')
+          # The workflow block strips six YAML spaces, so these literals land at 8/12 spaces.
           assert text.count(surface_marker) == 1, 'direct facet surface marker drifted'
           text = text.replace(surface_marker, surface_replacement, 1)
 
