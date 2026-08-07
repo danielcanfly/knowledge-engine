@@ -1,0 +1,127 @@
+{
+  "accepted_release": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+  "authority": {
+    "answer_to_canonical_writes": 0,
+    "canonical_writes": 0,
+    "production_pointer_writes": 0,
+    "qdrant_writes": 0,
+    "r2_writes": 0,
+    "source_writes": 0
+  },
+  "benchmark": "artifacts/m26/answer-quality/old-main-vs-candidate-benchmark-v2.json",
+  "graph_edges": 8525,
+  "graph_nodes": 4222,
+  "graph_v2_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+  "old_m24_concept_count": 20,
+  "outside_old_m24_concepts_in_graph": 4222,
+  "proofs": [
+    {
+      "case_id": "direct_factual",
+      "channels": [
+        "graph_1hop"
+      ],
+      "concept_id": "article_269b05728188ce883e76",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_8f3d40d7251b2244a38df7bb466d44bd",
+      "source_id": "daniel_blog_en__building-ai-skills-series-part-2"
+    },
+    {
+      "case_id": "ordinary_graph_no_keywords",
+      "channels": [
+        "graph_1hop",
+        "graph_2hop"
+      ],
+      "concept_id": "article_8f6183647319d61b9714",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_880faba2601d95918136ec32fc7d6a5e",
+      "source_id": "daniel_blog_en__harness-theory-part-3"
+    },
+    {
+      "case_id": "explanatory",
+      "channels": [
+        "graph_1hop",
+        "graph_2hop"
+      ],
+      "concept_id": "article_e0458970faa6e27d9a18",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_a89edcadfa157b2cc913fa1fcb5e91c4",
+      "source_id": "daniel_blog_en__harness-theory-part-7"
+    },
+    {
+      "case_id": "cross_document_comparison",
+      "channels": [
+        "graph_1hop",
+        "graph_2hop"
+      ],
+      "concept_id": "article_7b0a74cb6bac8f3923a2",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_55c219501dc17fdb37e4ab7f72f3f551",
+      "source_id": "daniel_blog_en__harness-theory-part-11"
+    },
+    {
+      "case_id": "complementary_synthesis",
+      "channels": [
+        "graph_1hop",
+        "graph_2hop"
+      ],
+      "concept_id": "article_7b0a74cb6bac8f3923a2",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_a9500c76e2b3619c351cf1b944e87b97",
+      "source_id": "daniel_blog_en__harness-theory-part-11"
+    },
+    {
+      "case_id": "graph_relationship",
+      "channels": [
+        "graph"
+      ],
+      "concept_id": "article_f8573ff5ee10182a3f6c",
+      "evidence_type": "graph_edge",
+      "locator_id": "m26pa7edge_a5de4fc1a0e46f18caaca484663f4449",
+      "source_id": "graph_v2:edge_3f15206278e63ccf8981"
+    },
+    {
+      "case_id": "provenance",
+      "channels": [
+        "graph_1hop"
+      ],
+      "concept_id": "article_b5e27e2b14e2e99c3168",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_0ae1b54bd1cb6ec0be5e2ca20c683964",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-9"
+    },
+    {
+      "case_id": "temporal_conflict",
+      "channels": [
+        "graph_1hop",
+        "graph_2hop"
+      ],
+      "concept_id": "article_32719886881dfc89abe8",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_3721ef1be746b115846765d2fdc44ef7",
+      "source_id": "daniel_blog_en__harness-theory-part-10"
+    },
+    {
+      "case_id": "user_like_planning",
+      "channels": [
+        "graph_1hop"
+      ],
+      "concept_id": "article_933eb10c2db516ac0813",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_10125bb7a87fc315c561755eb6a1fac1",
+      "source_id": "daniel_blog_en__the-atlas-of-agent-design-patterns-part-2"
+    },
+    {
+      "case_id": "user_like_terminal_acceptance",
+      "channels": [
+        "graph_1hop"
+      ],
+      "concept_id": "article_f9ac41d2422c8438e4ca",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_b37a1cdb69b2ec34845928de99c4f908",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-10"
+    }
+  ],
+  "proofs_sha256": "9f38df72d7f3323e00aa910a7100b9a35b59b53ff25752a5fa5c6f062e5d014f",
+  "runtime_graph_expanded_outside_old20_evidence_count": 10,
+  "schema_version": "knowledge-engine-m26-outside-old-20-runtime-proof/v1"
+}

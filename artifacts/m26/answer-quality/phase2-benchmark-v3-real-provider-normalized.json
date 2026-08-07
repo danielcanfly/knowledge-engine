@@ -1,0 +1,807 @@
+{
+  "schema_version": "llm-wiki-answer-quality-benchmark-v3-normalized/runtime-v1",
+  "scoring_method": "runtime-hard-gate-plus-annotation-aware-automated-rubric",
+  "rows": [
+    {
+      "case_id": "AQV3-Q01",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__building-ai-skills-series-part-1",
+        "daniel_blog_en__building-ai-skills-series-part-2"
+      ],
+      "covered_concepts": [
+        "router path selection",
+        "permission/risk/source-of-truth signals",
+        "explicit escape/unsupported path"
+      ],
+      "graph_used_edges": [],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 4,
+        "citation_usefulness": 5,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 2,
+        "used_fraction": 0.25,
+        "graph_required": false,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    },
+    {
+      "case_id": "AQV3-Q02",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__building-ai-skills-series-part-2",
+        "daniel_blog_en__category-design-for-founders-02"
+      ],
+      "covered_concepts": [
+        "state",
+        "legal transition",
+        "guard/condition",
+        "persisted progress",
+        "terminal outcome"
+      ],
+      "graph_used_edges": [],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 5,
+        "citation_usefulness": 5,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 2,
+        "used_fraction": 0.25,
+        "graph_required": false,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    },
+    {
+      "case_id": "AQV3-Q03",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__from-rag-to-production-rag-part-10",
+        "daniel_blog_en__from-rag-to-production-rag-part-9"
+      ],
+      "covered_concepts": [
+        "request boundary/admission",
+        "task contract/effective policy",
+        "canonical run authority/durable state",
+        "verification/completion gate",
+        "headless service/observability"
+      ],
+      "graph_used_edges": [],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 5,
+        "directness_relevance": 4,
+        "naturalness_readability": 5,
+        "citation_usefulness": 5,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 2,
+        "used_fraction": 0.2,
+        "graph_required": true,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    },
+    {
+      "case_id": "AQV3-Q04",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__after-the-pause-03",
+        "daniel_blog_en__the-atlas-of-agent-design-patterns-part-3"
+      ],
+      "covered_concepts": [
+        "router",
+        "adaptive planning",
+        "initial path selection vs post-evidence replanning"
+      ],
+      "graph_used_edges": [],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 4,
+        "citation_usefulness": 4,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 2,
+        "used_fraction": 0.166667,
+        "graph_required": false,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    },
+    {
+      "case_id": "AQV3-Q05",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__the-atlas-of-agent-design-patterns-part-7",
+        "daniel_blog_en__the-atlas-of-agent-design-patterns-part-8",
+        "graph_v2:edge_bd69105a90110a6f17e6"
+      ],
+      "covered_concepts": [
+        "state machine",
+        "DAG",
+        "conditional/cyclic control vs acyclic dependency ordering"
+      ],
+      "graph_used_edges": [
+        "edge_bd69105a90110a6f17e6"
+      ],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 5,
+        "citation_usefulness": 5,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 3,
+        "used_fraction": 0.3,
+        "graph_required": false,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    },
+    {
+      "case_id": "AQV3-Q06",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__from-rag-to-production-rag-part-3",
+        "daniel_blog_en__from-rag-to-production-rag-part-4",
+        "graph_v2:edge_b845894c52b7c2f048d5"
+      ],
+      "covered_concepts": [
+        "router",
+        "DAG",
+        "bounded multi-step flow"
+      ],
+      "graph_used_edges": [
+        "edge_b845894c52b7c2f048d5"
+      ],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 5,
+        "citation_usefulness": 5,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 3,
+        "used_fraction": 0.3,
+        "graph_required": false,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    },
+    {
+      "case_id": "AQV3-Q07",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__harness-theory-part-10",
+        "daniel_blog_en__harness-theory-part-9",
+        "graph_v2:edge_32dead08984b92601f34"
+      ],
+      "covered_concepts": [
+        "precedes edge",
+        "ordering",
+        "non-entailment of dependency/implementation/causality"
+      ],
+      "graph_used_edges": [
+        "edge_32dead08984b92601f34"
+      ],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 5,
+        "citation_usefulness": 5,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 3,
+        "used_fraction": 0.25,
+        "graph_required": false,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    },
+    {
+      "case_id": "AQV3-Q08",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__from-rag-to-production-rag-part-9",
+        "provenance:daniel_blog_en__from-rag-to-production-rag-part-9"
+      ],
+      "covered_concepts": [
+        "mode router",
+        "pattern router",
+        "published provenance"
+      ],
+      "graph_used_edges": [],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 5,
+        "citation_usefulness": 5,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 2,
+        "used_fraction": 0.2,
+        "graph_required": false,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    },
+    {
+      "case_id": "AQV3-Q09",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__from-rag-to-production-rag-part-10",
+        "daniel_blog_en__from-rag-to-production-rag-part-9"
+      ],
+      "covered_concepts": [
+        "Part 1 boundary definition",
+        "Part 2 responsibility architecture",
+        "extension not supersession"
+      ],
+      "graph_used_edges": [],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 5,
+        "citation_usefulness": 5,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 2,
+        "used_fraction": 0.2,
+        "graph_required": false,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    },
+    {
+      "case_id": "AQV3-Q10",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__from-rag-to-production-rag-part-7",
+        "daniel_blog_en__from-rag-to-production-rag-part-8"
+      ],
+      "covered_concepts": [
+        "adaptive planning",
+        "local repair",
+        "global replan trigger",
+        "preserve valid completed work"
+      ],
+      "graph_used_edges": [],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 4,
+        "citation_usefulness": 5,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 2,
+        "used_fraction": 0.25,
+        "graph_required": false,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    },
+    {
+      "case_id": "AQV3-Q11",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__the-atlas-of-agent-design-patterns-part-2",
+        "daniel_blog_en__the-atlas-of-agent-design-patterns-part-3"
+      ],
+      "covered_concepts": [
+        "state machine",
+        "replanner",
+        "verifier/policy gate",
+        "bounded authority"
+      ],
+      "graph_used_edges": [],
+      "useful_graph_contribution": false,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 5,
+        "citation_usefulness": 4,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 2,
+        "used_fraction": 0.166667,
+        "graph_required": false,
+        "graph_relation_types": []
+      }
+    },
+    {
+      "case_id": "AQV3-Q12",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__the-atlas-of-agent-design-patterns-part-2",
+        "daniel_blog_en__the-atlas-of-agent-design-patterns-part-8"
+      ],
+      "covered_concepts": [
+        "router",
+        "persisted state machine",
+        "research DAG",
+        "verification",
+        "human approval"
+      ],
+      "graph_used_edges": [],
+      "useful_graph_contribution": false,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 4,
+        "citation_usefulness": 4,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 2,
+        "used_fraction": 0.166667,
+        "graph_required": false,
+        "graph_relation_types": []
+      }
+    },
+    {
+      "case_id": "AQV3-Q13",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__from-rag-to-production-rag-part-8",
+        "daniel_blog_en__from-rag-to-production-rag-part-9"
+      ],
+      "covered_concepts": [
+        "Obsidian",
+        "Graphology",
+        "Sigma.js",
+        "source of trust"
+      ],
+      "graph_used_edges": [],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 4,
+        "citation_usefulness": 5,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 2,
+        "used_fraction": 0.2,
+        "graph_required": false,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    },
+    {
+      "case_id": "AQV3-Q14",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__from-rag-to-production-rag-part-3",
+        "daniel_blog_en__from-rag-to-production-rag-part-9"
+      ],
+      "covered_concepts": [
+        "pattern router",
+        "cross-source-of-truth query",
+        "bounded multi-step workflow",
+        "top_k limitation"
+      ],
+      "graph_used_edges": [],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 4,
+        "citation_usefulness": 5,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 2,
+        "used_fraction": 0.2,
+        "graph_required": false,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    },
+    {
+      "case_id": "AQV3-Q15",
+      "status": "owner_only_safe_abstention",
+      "safe_abstention": true,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [],
+      "covered_concepts": [],
+      "graph_used_edges": [],
+      "useful_graph_contribution": false,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 0,
+        "completeness": 0,
+        "relationship_aware_synthesis": 0,
+        "directness_relevance": 0,
+        "naturalness_readability": 0,
+        "citation_usefulness": 0,
+        "citation_fidelity": 0
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 0,
+        "used_fraction": 0.0,
+        "graph_required": false,
+        "graph_relation_types": []
+      }
+    },
+    {
+      "case_id": "AQV3-Q16",
+      "status": "owner_only_safe_abstention",
+      "safe_abstention": true,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [],
+      "covered_concepts": [],
+      "graph_used_edges": [],
+      "useful_graph_contribution": false,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 0,
+        "completeness": 0,
+        "relationship_aware_synthesis": 0,
+        "directness_relevance": 0,
+        "naturalness_readability": 0,
+        "citation_usefulness": 0,
+        "citation_fidelity": 0
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 0,
+        "used_fraction": 0.0,
+        "graph_required": false,
+        "graph_relation_types": []
+      }
+    },
+    {
+      "case_id": "AQV3-Q17",
+      "status": "owner_only_safe_abstention",
+      "safe_abstention": true,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [],
+      "covered_concepts": [],
+      "graph_used_edges": [],
+      "useful_graph_contribution": false,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 0,
+        "completeness": 0,
+        "relationship_aware_synthesis": 0,
+        "directness_relevance": 0,
+        "naturalness_readability": 0,
+        "citation_usefulness": 0,
+        "citation_fidelity": 0
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 0,
+        "used_fraction": 0.0,
+        "graph_required": false,
+        "graph_relation_types": []
+      }
+    },
+    {
+      "case_id": "AQV3-Q18",
+      "status": "owner_only_cited_answer",
+      "safe_abstention": false,
+      "unsupported_accepted_material_claims": 0,
+      "fabricated_identifiers": 0,
+      "unresolved_material_citations": 0,
+      "protected_mutations": {
+        "r2_write_operations": 0,
+        "qdrant_write_operations": 0,
+        "production_pointer_mutations": 0,
+        "canonical_writes": 0,
+        "source_mutations": 0
+      },
+      "used_source_ids": [
+        "daniel_blog_en__harness-theory-part-6",
+        "daniel_blog_en__harness-theory-part-7",
+        "graph_v2:edge_245ad504dbb5bb6f0bf7"
+      ],
+      "covered_concepts": [
+        "precedes edge",
+        "premise correction",
+        "non-entailment of depends_on"
+      ],
+      "graph_used_edges": [
+        "edge_245ad504dbb5bb6f0bf7"
+      ],
+      "useful_graph_contribution": true,
+      "relation_upgrade_violation": false,
+      "rubric_scores": {
+        "grounded_correctness": 5,
+        "completeness": 4,
+        "relationship_aware_synthesis": 4,
+        "directness_relevance": 4,
+        "naturalness_readability": 5,
+        "citation_usefulness": 5,
+        "citation_fidelity": 5
+      },
+      "automated_scoring_basis": {
+        "runtime_unsupported_claims": 0,
+        "citation_count": 3,
+        "used_fraction": 0.25,
+        "graph_required": false,
+        "graph_relation_types": [
+          "precedes"
+        ]
+      }
+    }
+  ]
+}

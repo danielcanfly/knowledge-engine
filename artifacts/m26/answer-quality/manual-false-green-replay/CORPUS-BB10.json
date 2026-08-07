@@ -1,0 +1,895 @@
+{
+  "answer_claims": [
+    {
+      "citation_ids": [
+        "claim_1_ref_1"
+      ],
+      "claim_id": "claim_1",
+      "claim_role": "direct",
+      "facet_ids": [
+        "demand_not_business_proof",
+        "non_entailment_boundary",
+        "value_capture"
+      ],
+      "source_identities": [
+        "daniel_blog_en__from-pain-to-venture-part05"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "A precedes relationship does not by itself prove dependency; What measurable numbers prove value?"
+    },
+    {
+      "citation_ids": [
+        "claim_2_ref_1"
+      ],
+      "claim_id": "claim_2",
+      "claim_role": "direct",
+      "facet_ids": [
+        "demand_not_business_proof"
+      ],
+      "source_identities": [
+        "daniel_blog_en__from-pain-to-venture-part10"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "| Without retention, the business keeps rebuying demand | This table is really asking one thing: > Will customers move from awareness to adoption, and can you afford the path?"
+    },
+    {
+      "citation_ids": [
+        "claim_3_ref_1"
+      ],
+      "claim_id": "claim_3",
+      "claim_role": "direct",
+      "facet_ids": [
+        "value_capture"
+      ],
+      "source_identities": [
+        "daniel_blog_en__from-pain-to-venture-part05"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "For independent hospitality: | Lens | Example | |---|---| | Value shock | OTA dependency affects margin, guest relationships, and long-term brand assets | | Technical feasibility | Early validation can avoid PMS integration and use QR"
+    },
+    {
+      "citation_ids": [
+        "claim_4_ref_1"
+      ],
+      "claim_id": "claim_4",
+      "claim_role": "direct",
+      "facet_ids": [
+        "business_economics"
+      ],
+      "source_identities": [
+        "daniel_blog_en__from-rag-to-production-rag-part-8"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "## Five modes, four capabilities, mapped The five modes from the end of Part 07 are the starting point for this post, **not a decorative recap** — turn each capability on, off, or weakened, and you land on five meaningful production modes:"
+    },
+    {
+      "citation_ids": [
+        "claim_5_ref_1"
+      ],
+      "claim_id": "claim_5",
+      "claim_role": "direct",
+      "facet_ids": [
+        "business_delivery"
+      ],
+      "source_identities": [
+        "daniel_blog_en__from-pain-to-venture-part10"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "| Delivery cost determines margin and scalability | | How much does it cost to support a customer?"
+    },
+    {
+      "citation_ids": [
+        "claim_6_ref_1"
+      ],
+      "claim_id": "claim_6",
+      "claim_role": "direct",
+      "facet_ids": [
+        "business_repeatability"
+      ],
+      "source_identities": [
+        "daniel_blog_en__after-the-pause-05"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "I had designed loyalty and re-engagement loops with the hope that the alliance would not simply create guest drift, but actually strengthen direct return paths."
+    }
+  ],
+  "answer_source": "deterministic_verified_evidence_synthesis",
+  "answer_text": "What measurable numbers prove value? [claim_1_ref_1] | Without retention, the business keeps rebuying demand | This table is really asking one thing: > Will customers move from awareness to adoption, and can you afford the path? [claim_2_ref_1] For independent hospitality: | Lens | Example | |---|---| | Value shock | OTA dependency affects margin, guest relationships, and long-term brand assets | | Technical feasibility | Early validation can avoid PMS integration and use QR [claim_3_ref_1] ## Five modes, four capabilities, mapped The five modes from the end of Part 07 are the starting point for this post, **not a decorative recap** — turn each capability on, off, or weakened, and you land on five meaningful production modes: [claim_4_ref_1] | Delivery cost determines margin and scalability | | How much does it cost to support a customer? [claim_5_ref_1] I had designed loyalty and re-engagement loops with the hope that the alliance would not simply create guest drift, but actually strengthen direct return paths. [claim_6_ref_1]",
+  "candidate_count_by_channel": {
+    "combined_unique": 16,
+    "dense": 8,
+    "graph_edge_selected": 0,
+    "graph_expanded_selected": 0,
+    "lexical": 8,
+    "seed": 16
+  },
+  "citation_locator_valid": true,
+  "citations": [
+    {
+      "citation_id": "claim_1_ref_1",
+      "claim_id": "claim_1",
+      "claim_role": "direct",
+      "concept_id": "article_6843373b843e523e99bf",
+      "evidence_id": "m26pa7ev_003608439024aba9dfbae2331aee0b97",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "56cd01bba108424d54dbfacf876b8567268e268a31e030c7b772061c519e93d6",
+      "locator_id": "m26pa7loc_20e48133fef6cdcf6983db6440c25df9",
+      "provenance_record_sha256": "68ceb386d9124b4d95e91f571ae09e1140561337cddb302c5040923de2dfcc89",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_09ef3eb2bb386c1910a7",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__from-pain-to-venture-part05",
+      "source_identity": "daniel_blog_en__from-pain-to-venture-part05",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_09ef3eb2bb386c1910a7",
+      "support_text_sha256": "b690da4fe2192ce78c6aaff42b5c0c1e68d99f310a778e66470dfee57baa43f6"
+    },
+    {
+      "citation_id": "claim_2_ref_1",
+      "claim_id": "claim_2",
+      "claim_role": "direct",
+      "concept_id": "article_090e7ac2b04c4fa01371",
+      "evidence_id": "m26pa7ev_d51dabc16d6ef781dab9c8f26ca4e13a",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "cb7176bb9a17f9f35845df09f0c9c650dc8c716bb0dc886af04dd2328c887020",
+      "locator_id": "m26pa7loc_9da3f1815f0683272b9147bf136bf378",
+      "provenance_record_sha256": "eff8276e0288b04238ac4b7aeb5132326fc4b70d2731672fb8f0a37a49822f1c",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_8f2813d5627f35d76d45",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__from-pain-to-venture-part10",
+      "source_identity": "daniel_blog_en__from-pain-to-venture-part10",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_8f2813d5627f35d76d45",
+      "support_text_sha256": "a7da610cce623ae54cefef082cbc05e4f0de7176317afea0c8148981e449cc2e"
+    },
+    {
+      "citation_id": "claim_3_ref_1",
+      "claim_id": "claim_3",
+      "claim_role": "direct",
+      "concept_id": "article_6843373b843e523e99bf",
+      "evidence_id": "m26pa7ev_003608439024aba9dfbae2331aee0b97",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "c33c54e0c017f22d42a0102bf35fcda0b8ff27317397b6c5d66a4e7d237a67b4",
+      "locator_id": "m26pa7loc_20e48133fef6cdcf6983db6440c25df9",
+      "provenance_record_sha256": "68ceb386d9124b4d95e91f571ae09e1140561337cddb302c5040923de2dfcc89",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_09ef3eb2bb386c1910a7",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__from-pain-to-venture-part05",
+      "source_identity": "daniel_blog_en__from-pain-to-venture-part05",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_09ef3eb2bb386c1910a7",
+      "support_text_sha256": "b690da4fe2192ce78c6aaff42b5c0c1e68d99f310a778e66470dfee57baa43f6"
+    },
+    {
+      "citation_id": "claim_4_ref_1",
+      "claim_id": "claim_4",
+      "claim_role": "direct",
+      "concept_id": "article_6d430e058d1392e85678",
+      "evidence_id": "m26pa7ev_cc1a2aa7d5621a8da4d7587db0fe3a79",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "4875cc33ba6f35e7b58f52cd2002594a62d7dce4a4a04bff5639889d13d06523",
+      "locator_id": "m26pa7loc_85432a519f2658a378e5dbfaa999057e",
+      "provenance_record_sha256": "8dff9b67d6a46accbfa0745179b8673186a267e41094957fd1cdaf999e8b1487",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_6550087d638cf5350a1a",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-8",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-8",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_6550087d638cf5350a1a",
+      "support_text_sha256": "b0867e89f185d5a57b7df01da999fdeec1ec72e0139eafcc40017e87b6cc3db7"
+    },
+    {
+      "citation_id": "claim_5_ref_1",
+      "claim_id": "claim_5",
+      "claim_role": "direct",
+      "concept_id": "article_090e7ac2b04c4fa01371",
+      "evidence_id": "m26pa7ev_d51dabc16d6ef781dab9c8f26ca4e13a",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "1876149b416bf7febfc473d646c27ef0d838c40525eec178a9fe94cbb2401c84",
+      "locator_id": "m26pa7loc_9da3f1815f0683272b9147bf136bf378",
+      "provenance_record_sha256": "eff8276e0288b04238ac4b7aeb5132326fc4b70d2731672fb8f0a37a49822f1c",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_8f2813d5627f35d76d45",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__from-pain-to-venture-part10",
+      "source_identity": "daniel_blog_en__from-pain-to-venture-part10",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_8f2813d5627f35d76d45",
+      "support_text_sha256": "a7da610cce623ae54cefef082cbc05e4f0de7176317afea0c8148981e449cc2e"
+    },
+    {
+      "citation_id": "claim_6_ref_1",
+      "claim_id": "claim_6",
+      "claim_role": "direct",
+      "concept_id": "article_2a1966b5eca2eb4b0b40",
+      "evidence_id": "m26pa7ev_db61bb4da26da21f56c9c89d283cc390",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "2b8e7ee61d236a8ef016de7084f732f03671c1e885a0ab8e38ce71f4482e7d70",
+      "locator_id": "m26pa7loc_cf477bffe0eab2d7661cbc479f31f6f7",
+      "provenance_record_sha256": "8753b860a58e5ad6b4881765653553aa9894ffe9b094cbfce1fccec6bf21df10",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_963cb42b60fb4325b3a8",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__after-the-pause-05",
+      "source_identity": "daniel_blog_en__after-the-pause-05",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_963cb42b60fb4325b3a8",
+      "support_text_sha256": "d59e9dfcba33ab9dccefa524f5a69e75d574dd91f8ba503edebd42d53e159d9a"
+    }
+  ],
+  "distinct_source_count": 9,
+  "distinct_source_identities": [
+    "daniel_blog_en__after-the-pause-05",
+    "daniel_blog_en__from-pain-to-venture-part05",
+    "daniel_blog_en__from-pain-to-venture-part06",
+    "daniel_blog_en__from-pain-to-venture-part10",
+    "daniel_blog_en__from-rag-to-production-rag-part-3",
+    "daniel_blog_en__from-rag-to-production-rag-part-4",
+    "daniel_blog_en__from-rag-to-production-rag-part-8",
+    "daniel_blog_en__from-rag-to-production-rag-part-9",
+    "daniel_blog_en__pm-product-data-and-experimentation-01"
+  ],
+  "evidence_utilization_trace": {
+    "selected_evidence_count": 10,
+    "selected_evidence_used_fraction": 0.4,
+    "selected_gt_zero_used_zero_failure": false,
+    "unused_selected_evidence_count": 6,
+    "unused_selected_evidence_ids": [
+      "m26pa7ev_30ac030cc6a0fceb63e0695102a6b3a7",
+      "m26pa7ev_4d64c15dab709cea7cb0d607f1a44ab7",
+      "m26pa7ev_7106a4b2797b30110a685c445b7a8bd5",
+      "m26pa7ev_c186b8be791dbfdb211e351bf06a537e",
+      "m26pa7ev_ddece8c283a9622e05528a1e721c64f0",
+      "m26pa7ev_f925f59e40903c12b02f1942901bcfe8"
+    ],
+    "used_evidence_count": 4,
+    "used_evidence_ids": [
+      "m26pa7ev_003608439024aba9dfbae2331aee0b97",
+      "m26pa7ev_cc1a2aa7d5621a8da4d7587db0fe3a79",
+      "m26pa7ev_d51dabc16d6ef781dab9c8f26ca4e13a",
+      "m26pa7ev_db61bb4da26da21f56c9c89d283cc390"
+    ],
+    "used_evidence_type_counts": {
+      "passage": 6
+    },
+    "used_source_identities": [
+      "daniel_blog_en__after-the-pause-05",
+      "daniel_blog_en__from-pain-to-venture-part05",
+      "daniel_blog_en__from-pain-to-venture-part10",
+      "daniel_blog_en__from-rag-to-production-rag-part-8"
+    ]
+  },
+  "graph_hops_used": 2,
+  "graph_observability": {
+    "selected_graph_derived_evidence_count": 0,
+    "selected_graph_hop_counts": [],
+    "selected_graph_relation_type_counts": {},
+    "selected_graph_relation_types": [],
+    "structural_relation_type_counts": {}
+  },
+  "graph_trace": [
+    {
+      "confidence": 1.0,
+      "edge_id": "edge_cc189e5d4d739a506c84",
+      "provenance_ref_sha256": "43f8a67a459f07f78f3a4db0af4bd9ed230499ea604f0ca1ef4330a10c57e9e9",
+      "relation_type": "precedes",
+      "source": "article_6d430e058d1392e85678",
+      "target": "article_b5e27e2b14e2e99c3168"
+    },
+    {
+      "confidence": 1.0,
+      "edge_id": "edge_b845894c52b7c2f048d5",
+      "provenance_ref_sha256": "43f8a67a459f07f78f3a4db0af4bd9ed230499ea604f0ca1ef4330a10c57e9e9",
+      "relation_type": "precedes",
+      "source": "article_262078c49cdafb3cecc9",
+      "target": "article_d946af4465827a5e6d0f"
+    }
+  ],
+  "intent_class": "direct_grounded_knowledge",
+  "latency_ms": 4222,
+  "material_claim_support_verified": true,
+  "model_identity": "MiniMax-M3",
+  "multi_evidence_verification": {
+    "bounded_repair_attempted": false,
+    "claim_count": 6,
+    "covered_facets": [
+      "business_delivery",
+      "business_economics",
+      "business_repeatability",
+      "demand_not_business_proof",
+      "non_entailment_boundary",
+      "value_capture"
+    ],
+    "deterministic_evidence_synthesis_used": true,
+    "distinct_source_count": 4,
+    "dropped_claim_count": 0,
+    "fallback_eligibility": {
+      "allow_after_repair_failure": false,
+      "eligible": true,
+      "reasons": [
+        "provider_abstention_narrow_eligibility_checked",
+        "semantic_facet_bound_candidate"
+      ]
+    },
+    "locator_validity": 1.0,
+    "missing_facets": [],
+    "natural_answer_fallback_used": true,
+    "provider_attempt_telemetry": [
+      {
+        "attempt": 1,
+        "call_class": "pa7_multi_evidence_query",
+        "content_block_types": [
+          "text"
+        ],
+        "output_tokens": 101,
+        "parse_telemetry": {
+          "missing_keys": [],
+          "parse_ok": true,
+          "parse_subtype": "exact_json",
+          "unknown_keys": []
+        },
+        "provider_text_char_count": 371,
+        "stop_reason": "end_turn"
+      }
+    ],
+    "provider_parse": {
+      "missing_keys": [],
+      "parse_subtype": "exact_json",
+      "unknown_keys": []
+    },
+    "provider_status": "answer_candidate",
+    "repair_result": "deterministic_verified_evidence_synthesis",
+    "repair_trigger": [
+      "INSUFFICIENT_SUPPORT"
+    ],
+    "required_facets": [
+      "business_delivery",
+      "business_economics",
+      "business_repeatability",
+      "demand_not_business_proof",
+      "non_entailment_boundary",
+      "value_capture"
+    ],
+    "single_primary_passage_used": false,
+    "support_precision": 1.0,
+    "support_ref_count": 6,
+    "trigger_reason_codes": [
+      "INSUFFICIENT_SUPPORT"
+    ],
+    "unsupported_accepted_claims": 0,
+    "verification_failure_codes_by_attempt": []
+  },
+  "mutations": {
+    "answer_to_canonical_writes": 0,
+    "canonical_writes": 0,
+    "corpus_index_content_mutations": 0,
+    "production_pointer_mutations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0
+  },
+  "parent_expansion": {
+    "enabled": true,
+    "expanded_section_count": 30,
+    "items": [
+      {
+        "evidence_id": "m26pa7ev_003608439024aba9dfbae2331aee0b97",
+        "parent_concept_id": "article_6843373b843e523e99bf",
+        "sibling_section_ids": [
+          "article_6843373b843e523e99bf",
+          "section_3c621109bd9657facab3",
+          "section_5628a9de1272307c4018"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_d51dabc16d6ef781dab9c8f26ca4e13a",
+        "parent_concept_id": "article_090e7ac2b04c4fa01371",
+        "sibling_section_ids": [
+          "article_090e7ac2b04c4fa01371",
+          "section_0807e3f0e51366505802",
+          "section_33dfb073d3edd69281ba"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_c186b8be791dbfdb211e351bf06a537e",
+        "parent_concept_id": "article_a55ae678733a3b071f50",
+        "sibling_section_ids": [
+          "article_a55ae678733a3b071f50",
+          "section_06d2461902f6ced94244",
+          "section_45fb44bf741d5efff738"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_cc1a2aa7d5621a8da4d7587db0fe3a79",
+        "parent_concept_id": "article_6d430e058d1392e85678",
+        "sibling_section_ids": [
+          "article_6d430e058d1392e85678",
+          "section_22605b7c64acbb6bbcb0",
+          "section_29c1a4c28fd8033a70de"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_4d64c15dab709cea7cb0d607f1a44ab7",
+        "parent_concept_id": "article_334c4fa4f69ff41b06a5",
+        "sibling_section_ids": [
+          "article_334c4fa4f69ff41b06a5",
+          "section_1feb29518665db6e7511",
+          "section_20c0735aabe0ec7b3495"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_db61bb4da26da21f56c9c89d283cc390",
+        "parent_concept_id": "article_2a1966b5eca2eb4b0b40",
+        "sibling_section_ids": [
+          "article_2a1966b5eca2eb4b0b40",
+          "section_0c58a14cbb44ebaba548",
+          "section_137fd0dcf79ce86af53d"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_ddece8c283a9622e05528a1e721c64f0",
+        "parent_concept_id": "article_d946af4465827a5e6d0f",
+        "sibling_section_ids": [
+          "article_d946af4465827a5e6d0f",
+          "section_1300edf852a8daf75a7c",
+          "section_9b84809cda6ccdc622b0"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_30ac030cc6a0fceb63e0695102a6b3a7",
+        "parent_concept_id": "article_b5e27e2b14e2e99c3168",
+        "sibling_section_ids": [
+          "article_b5e27e2b14e2e99c3168",
+          "section_0ba9f40ed60181ba7ec6",
+          "section_37e96a53c37aa25909ca"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_f925f59e40903c12b02f1942901bcfe8",
+        "parent_concept_id": "article_d946af4465827a5e6d0f",
+        "sibling_section_ids": [
+          "article_d946af4465827a5e6d0f",
+          "section_27946df53837499c6e96",
+          "section_9b84809cda6ccdc622b0"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_7106a4b2797b30110a685c445b7a8bd5",
+        "parent_concept_id": "article_262078c49cdafb3cecc9",
+        "sibling_section_ids": [
+          "article_262078c49cdafb3cecc9",
+          "section_64c1fb27e1410949a022",
+          "section_69d37e918e807904e001"
+        ]
+      }
+    ],
+    "max_siblings_per_evidence": 3
+  },
+  "payg_equivalent_cost_usd": "0.00303798",
+  "privacy": {
+    "full_provider_response_persisted": false,
+    "raw_evidence_persisted": false,
+    "raw_query_persisted": false,
+    "secret_values_persisted": false,
+    "vectors_persisted": false
+  },
+  "production_manifest_sha256": "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3",
+  "production_pointer_digest": "061589d7a487d37a807bcc366461b3e61f2605362f594c49ce39b503990ffb98",
+  "production_release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+  "provider_call_count": 1,
+  "provider_identity": "MiniMax",
+  "provider_invoked": true,
+  "qdrant_collection": null,
+  "question_sha256": "83c4d05d18bd38a7d1f3f75c0f963625097039649cfb4fcf1a4f422b9bd1009b",
+  "reason_codes": [],
+  "relationship_summary": {
+    "covered_facets": [
+      "business_delivery",
+      "business_economics",
+      "business_repeatability",
+      "demand_not_business_proof",
+      "non_entailment_boundary",
+      "value_capture"
+    ],
+    "intent_class": "direct_grounded_knowledge",
+    "missing_facets": [],
+    "relation": "null",
+    "required_facets": [
+      "business_delivery",
+      "business_economics",
+      "business_repeatability",
+      "demand_not_business_proof",
+      "non_entailment_boundary",
+      "value_capture"
+    ],
+    "selected_evidence_ids": [
+      "m26pa7ev_003608439024aba9dfbae2331aee0b97",
+      "m26pa7ev_d51dabc16d6ef781dab9c8f26ca4e13a",
+      "m26pa7ev_cc1a2aa7d5621a8da4d7587db0fe3a79",
+      "m26pa7ev_db61bb4da26da21f56c9c89d283cc390"
+    ],
+    "selected_graph_edge_ids": [],
+    "synthesis_source": "deterministic_verified_evidence_spans",
+    "used_evidence_ids": [
+      "m26pa7ev_003608439024aba9dfbae2331aee0b97",
+      "m26pa7ev_cc1a2aa7d5621a8da4d7587db0fe3a79",
+      "m26pa7ev_d51dabc16d6ef781dab9c8f26ca4e13a",
+      "m26pa7ev_db61bb4da26da21f56c9c89d283cc390"
+    ]
+  },
+  "repair_attempted": false,
+  "rerank_diversity_summary": {
+    "distinct_source_count": 9,
+    "selected_channel_counts": {
+      "lexical": 4,
+      "query_coverage": 6,
+      "required_facet_coverage": 2
+    },
+    "selected_evidence_count": 10,
+    "selected_evidence_type_counts": {
+      "passage": 10
+    },
+    "selected_source_redundancy": {
+      "daniel_blog_en__from-rag-to-production-rag-part-4": 2
+    }
+  },
+  "resolved_gate_self_sha256": "6adf0f4fa53d0b061f9e587b72e99ce38de2805f8b35b23841d5a63e44d9af5b",
+  "retrieval_backend_identity": {
+    "dense": {
+      "backend": "local_release_dense_projection_v1",
+      "manifest_sha256": "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "remote": false,
+      "vector_dimension": 64,
+      "vectors_persisted": false
+    },
+    "graph_v2": {
+      "artifact_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+      "edge_count": 8525,
+      "node_count": 4222,
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+    },
+    "lexical": {
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+    },
+    "provenance": {
+      "artifact_sha256": "d8f7b88ce828daa42b36a8a60c8b47615c83262f308ead5eef226fba6d952c3f",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+    }
+  },
+  "retrieval_mode_summary": {
+    "actual_question_reaches_retrieval": true,
+    "dense": true,
+    "dynamic_evidence_budget": true,
+    "graph": true,
+    "graph_expansion_default_for_ordinary_queries": true,
+    "intent_class": "direct_grounded_knowledge",
+    "lexical": true,
+    "multi_evidence_bundle": true,
+    "parent_expansion": true,
+    "provenance": true,
+    "redundancy_penalty": true,
+    "reranking": "dynamic_candidate_pool_graph_distance_source_diversity_redundancy_penalty",
+    "source_diversity": true
+  },
+  "safe_abstention": false,
+  "schema_version": "knowledge-engine-m26-pa7-arbitrary-owner-query-response/v1",
+  "selected_evidence": [
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "query_coverage"
+      ],
+      "concept_id": "article_6843373b843e523e99bf",
+      "evidence_id": "m26pa7ev_003608439024aba9dfbae2331aee0b97",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_20e48133fef6cdcf6983db6440c25df9",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "coverage_terms": [
+          "prove",
+          "through"
+        ],
+        "query_overlap_score": 0.4230769230769231
+      },
+      "section_granularity": "section",
+      "section_id": "section_09ef3eb2bb386c1910a7",
+      "source_id": "daniel_blog_en__from-pain-to-venture-part05",
+      "source_identity": "daniel_blog_en__from-pain-to-venture-part05",
+      "text_sha256": "b690da4fe2192ce78c6aaff42b5c0c1e68d99f310a778e66470dfee57baa43f6"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "query_coverage"
+      ],
+      "concept_id": "article_090e7ac2b04c4fa01371",
+      "evidence_id": "m26pa7ev_d51dabc16d6ef781dab9c8f26ca4e13a",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_9da3f1815f0683272b9147bf136bf378",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "coverage_terms": [
+          "answer",
+          "business",
+          "delivery",
+          "demand",
+          "does",
+          "must",
+          "not",
+          "question",
+          "questions",
+          "still",
+          "there",
+          "value",
+          "why"
+        ],
+        "query_overlap_score": 0.5
+      },
+      "section_granularity": "section",
+      "section_id": "section_8f2813d5627f35d76d45",
+      "source_id": "daniel_blog_en__from-pain-to-venture-part10",
+      "source_identity": "daniel_blog_en__from-pain-to-venture-part10",
+      "text_sha256": "a7da610cce623ae54cefef082cbc05e4f0de7176317afea0c8148981e449cc2e"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_a55ae678733a3b071f50",
+      "evidence_id": "m26pa7ev_c186b8be791dbfdb211e351bf06a537e",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_cb18b9181631c0cae7f05f88ab8a653f",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 139.516667,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_c3362df8d7b318682945",
+      "source_id": "daniel_blog_en__pm-product-data-and-experimentation-01",
+      "source_identity": "daniel_blog_en__pm-product-data-and-experimentation-01",
+      "text_sha256": "09aea53eb428918d37481b2da74a427176db385f79d7730b3adce626302117db"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "required_facet_coverage",
+        "query_coverage"
+      ],
+      "concept_id": "article_6d430e058d1392e85678",
+      "evidence_id": "m26pa7ev_cc1a2aa7d5621a8da4d7587db0fe3a79",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_85432a519f2658a378e5dbfaa999057e",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "covered_facet_terms": [
+          "economic",
+          "economics"
+        ],
+        "required_facet_id": "business_economics",
+        "required_facet_terms": [
+          "economic",
+          "economics"
+        ]
+      },
+      "section_granularity": "section",
+      "section_id": "section_6550087d638cf5350a1a",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-8",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-8",
+      "text_sha256": "b0867e89f185d5a57b7df01da999fdeec1ec72e0139eafcc40017e87b6cc3db7"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "required_facet_coverage",
+        "query_coverage"
+      ],
+      "concept_id": "article_334c4fa4f69ff41b06a5",
+      "evidence_id": "m26pa7ev_4d64c15dab709cea7cb0d607f1a44ab7",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_490bb0d7bd87fa9c2d27e6350e76d01b",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "covered_facet_terms": [
+          "delivery"
+        ],
+        "required_facet_id": "business_delivery",
+        "required_facet_terms": [
+          "delivery"
+        ]
+      },
+      "section_granularity": "section",
+      "section_id": "section_c1b8165b6eefe46ea09b",
+      "source_id": "daniel_blog_en__from-pain-to-venture-part06",
+      "source_identity": "daniel_blog_en__from-pain-to-venture-part06",
+      "text_sha256": "69203a29bb0749257510b0317a25740f0115e0d843636ac4ca628c8746eb7f85"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "query_coverage"
+      ],
+      "concept_id": "article_2a1966b5eca2eb4b0b40",
+      "evidence_id": "m26pa7ev_db61bb4da26da21f56c9c89d283cc390",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_cf477bffe0eab2d7661cbc479f31f6f7",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "coverage_terms": [
+          "economic",
+          "economics",
+          "extra",
+          "that"
+        ],
+        "query_overlap_score": 0.46153846153846156
+      },
+      "section_granularity": "section",
+      "section_id": "section_963cb42b60fb4325b3a8",
+      "source_id": "daniel_blog_en__after-the-pause-05",
+      "source_identity": "daniel_blog_en__after-the-pause-05",
+      "text_sha256": "d59e9dfcba33ab9dccefa524f5a69e75d574dd91f8ba503edebd42d53e159d9a"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "query_coverage"
+      ],
+      "concept_id": "article_d946af4465827a5e6d0f",
+      "evidence_id": "m26pa7ev_ddece8c283a9622e05528a1e721c64f0",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_e4b60d9f170d3ecf66fe2a084e5a1c32",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "coverage_terms": [
+          "viable"
+        ],
+        "query_overlap_score": 0.4230769230769231
+      },
+      "section_granularity": "section",
+      "section_id": "section_27946df53837499c6e96",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-4",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-4",
+      "text_sha256": "1722fbc4ad23eaf0a32004f7df24aac5b7fb57768c302319758118b9277b9d67"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_b5e27e2b14e2e99c3168",
+      "evidence_id": "m26pa7ev_30ac030cc6a0fceb63e0695102a6b3a7",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_ad657963817f5dca8d0a1e2fd1f558c7",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 180.35,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_f206a930b1d87612af3d",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-9",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-9",
+      "text_sha256": "9d5b3d54e8f9444f2b44e0bbc716957673a27ab965b93fda37cd9af540edd531"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_d946af4465827a5e6d0f",
+      "evidence_id": "m26pa7ev_f925f59e40903c12b02f1942901bcfe8",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_98b0132cbbd214edb3fc337cb7b5e0a8",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 163.85,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_1300edf852a8daf75a7c",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-4",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-4",
+      "text_sha256": "3d78d12c6d49cba58f2381247eb3829032816dea31e7a2bf8c617210676b02b8"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_262078c49cdafb3cecc9",
+      "evidence_id": "m26pa7ev_7106a4b2797b30110a685c445b7a8bd5",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_6744f4da5aecb08a631c11bd7a1c8859",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 162.683333,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_296166df8c108754ed74",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-3",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-3",
+      "text_sha256": "9cd9a8a6f10e955b6c9206302f8e3a75e111456ba7ed2fba095f3da220a6cbad"
+    }
+  ],
+  "selected_evidence_count": 10,
+  "selected_evidence_ids": [
+    "m26pa7ev_003608439024aba9dfbae2331aee0b97",
+    "m26pa7ev_d51dabc16d6ef781dab9c8f26ca4e13a",
+    "m26pa7ev_c186b8be791dbfdb211e351bf06a537e",
+    "m26pa7ev_cc1a2aa7d5621a8da4d7587db0fe3a79",
+    "m26pa7ev_4d64c15dab709cea7cb0d607f1a44ab7",
+    "m26pa7ev_db61bb4da26da21f56c9c89d283cc390",
+    "m26pa7ev_ddece8c283a9622e05528a1e721c64f0",
+    "m26pa7ev_30ac030cc6a0fceb63e0695102a6b3a7",
+    "m26pa7ev_f925f59e40903c12b02f1942901bcfe8",
+    "m26pa7ev_7106a4b2797b30110a685c445b7a8bd5"
+  ],
+  "selected_locator_ids": [
+    "m26pa7loc_20e48133fef6cdcf6983db6440c25df9",
+    "m26pa7loc_9da3f1815f0683272b9147bf136bf378",
+    "m26pa7loc_cb18b9181631c0cae7f05f88ab8a653f",
+    "m26pa7loc_85432a519f2658a378e5dbfaa999057e",
+    "m26pa7loc_490bb0d7bd87fa9c2d27e6350e76d01b",
+    "m26pa7loc_cf477bffe0eab2d7661cbc479f31f6f7",
+    "m26pa7loc_e4b60d9f170d3ecf66fe2a084e5a1c32",
+    "m26pa7loc_ad657963817f5dca8d0a1e2fd1f558c7",
+    "m26pa7loc_98b0132cbbd214edb3fc337cb7b5e0a8",
+    "m26pa7loc_6744f4da5aecb08a631c11bd7a1c8859"
+  ],
+  "status": "owner_only_cited_answer",
+  "terminal_status": "verified_answer_ready_candidate",
+  "trace_id": "m26pa7aq_615544f94d7492e1e32f7dfe2af5174a",
+  "unsupported_accepted_claims": 0
+}

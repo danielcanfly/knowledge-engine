@@ -1,0 +1,864 @@
+{
+  "schema_version": "knowledge-engine-m26-answer-quality-benchmark/v1",
+  "candidate": {
+    "provider_mode": "real",
+    "rows": [
+      {
+        "case_id": "direct_factual",
+        "class": "direct factual",
+        "question": "What should a router define for permission-first controls?",
+        "status": "owner_only_cited_answer",
+        "intent_class": "direct_grounded_knowledge",
+        "answer": "Building AI Skills Series Part 2: Why ChatGPT should not connect directly to low-level tools Why exposing low-level tools directly to ChatGPT becomes difficult to govern, and how a thin skill gateway creates safer task boundaries. [claim_1_ref_1] A skill is task methodology, not merely a prompt This is where many teams wobble. [claim_1_ref_2]",
+        "evidence_count": 5,
+        "distinct_source_count": 5,
+        "graph_expanded_evidence_count": 1,
+        "citation_count": 2,
+        "material_claim_count": 1,
+        "evidence_used_by_claims": 2,
+        "unused_selected_evidence": 3,
+        "distinct_cited_source_count": 2,
+        "answer_length": 344,
+        "latency_ms": 7387,
+        "provider_calls": 1,
+        "cost": "0.00034788",
+        "unsupported_claims": 0,
+        "safe_abstention": false,
+        "graph_universe": {
+          "artifact_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+          "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+          "node_count": 4222,
+          "edge_count": 8525
+        },
+        "graph_relation_types": [
+          "precedes"
+        ],
+        "selected_evidence_preview": [
+          {
+            "evidence_id": "m26pa7ev_ff19cec39f53b897604a71121c8ec047",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_8f3d40d7251b2244a38df7bb466d44bd",
+            "source_id": "daniel_blog_en__building-ai-skills-series-part-2",
+            "source_identity": "daniel_blog_en__building-ai-skills-series-part-2",
+            "section_id": "article_269b05728188ce883e76",
+            "concept_id": "article_269b05728188ce883e76",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "ba9925af569bac98e67c40cdf2578fe77a833de428d103586308491d21b7d9f3",
+            "channels": [
+              "graph_1hop"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 55.925,
+              "graph_hop": 1,
+              "graph_edges": [
+                {
+                  "edge_id": "edge_ae086d74746c9b8d0449",
+                  "source": "article_10e8efb9b9693156298e",
+                  "target": "article_269b05728188ce883e76",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_3a7dad126af6b3feac5a",
+                  "source": "article_269b05728188ce883e76",
+                  "target": "article_e51ad47ebbfaacf5ac18",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                }
+              ],
+              "relation_types": [
+                "precedes"
+              ],
+              "graph_seed_concepts": [
+                "article_10e8efb9b9693156298e",
+                "article_e51ad47ebbfaacf5ac18"
+              ]
+            }
+          },
+          {
+            "evidence_id": "m26pa7ev_ad8c4b57b0ec0f04064a4d6c4a5318dc",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_af5842605662e6bfa5b17a2a6080c61d",
+            "source_id": "daniel_blog_en__building-ai-skills-series-part-1",
+            "source_identity": "daniel_blog_en__building-ai-skills-series-part-1",
+            "section_id": "section_5717ceb392a84a7a53b7",
+            "concept_id": "article_10e8efb9b9693156298e",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "d0205ef416c70a1791b704c193da9bcb9255b080eafbb1c7e95e0f06f35643f7",
+            "channels": [
+              "lexical"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 54.35,
+              "graph_hop": 0,
+              "graph_edges": [],
+              "relation_types": [],
+              "graph_seed_concepts": []
+            }
+          },
+          {
+            "evidence_id": "m26pa7ev_e12f70e500520050d0aac1aa468d2179",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_0b0d4d3666e70384b7bc6beec9f881f7",
+            "source_id": "daniel_blog_en__from-rag-to-production-rag-part-8",
+            "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-8",
+            "section_id": "section_29c1a4c28fd8033a70de",
+            "concept_id": "article_6d430e058d1392e85678",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "21924ae2804b2c767baef72f852932396377cd1bd23bf0abe8ae11c54be87d74",
+            "channels": [
+              "lexical"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 52.85,
+              "graph_hop": 0,
+              "graph_edges": [],
+              "relation_types": [],
+              "graph_seed_concepts": []
+            }
+          }
+        ]
+      },
+      {
+        "case_id": "ordinary_graph_no_keywords",
+        "class": "graph-needed explanatory without graph keywords",
+        "question": "Explain how harness acceptance components support permission-first execution.",
+        "status": "owner_only_cited_answer",
+        "intent_class": "direct_grounded_knowledge",
+        "answer": "Harness Theory Part 03 | Agent Loops and Control Flow: How Does the Model Start Doing Work? [claim_1_ref_1] Harness Theory Part 11 | Observability and operations: how do you know what the agent actually did? [claim_1_ref_2]",
+        "evidence_count": 8,
+        "distinct_source_count": 7,
+        "graph_expanded_evidence_count": 6,
+        "citation_count": 2,
+        "material_claim_count": 1,
+        "evidence_used_by_claims": 2,
+        "unused_selected_evidence": 6,
+        "distinct_cited_source_count": 2,
+        "answer_length": 223,
+        "latency_ms": 8696,
+        "provider_calls": 2,
+        "cost": "0.00149220",
+        "unsupported_claims": 0,
+        "safe_abstention": false,
+        "graph_universe": {
+          "artifact_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+          "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+          "node_count": 4222,
+          "edge_count": 8525
+        },
+        "graph_relation_types": [
+          "precedes"
+        ],
+        "selected_evidence_preview": [
+          {
+            "evidence_id": "m26pa7ev_d5300cb90260ec0f4465612459e7ab08",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_880faba2601d95918136ec32fc7d6a5e",
+            "source_id": "daniel_blog_en__harness-theory-part-3",
+            "source_identity": "daniel_blog_en__harness-theory-part-3",
+            "section_id": "article_8f6183647319d61b9714",
+            "concept_id": "article_8f6183647319d61b9714",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "05dc205e45148d881847f16f9782c565179ea274c42bd698d1d46f9c542fcccd",
+            "channels": [
+              "graph_1hop",
+              "graph_2hop"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 36.761667,
+              "graph_hop": 1,
+              "graph_edges": [
+                {
+                  "edge_id": "edge_a8263249835f3f955496",
+                  "source": "article_71b9d92dad73c6d1fa18",
+                  "target": "article_8f6183647319d61b9714",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_dcf8b4a91f933f90fb9a",
+                  "source": "article_8f6183647319d61b9714",
+                  "target": "article_1ad60ca7d679e538a9c3",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_a8263249835f3f955496",
+                  "source": "article_71b9d92dad73c6d1fa18",
+                  "target": "article_8f6183647319d61b9714",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                }
+              ],
+              "relation_types": [
+                "precedes"
+              ],
+              "graph_seed_concepts": [
+                "article_1ad60ca7d679e538a9c3",
+                "article_71b9d92dad73c6d1fa18"
+              ]
+            }
+          },
+          {
+            "evidence_id": "m26pa7ev_b8160cf8642b58658710aa1967c68076",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_cfd450182c9cbd4b727c356277cd0ee0",
+            "source_id": "daniel_blog_en__harness-theory-part-11",
+            "source_identity": "daniel_blog_en__harness-theory-part-11",
+            "section_id": "article_7b0a74cb6bac8f3923a2",
+            "concept_id": "article_7b0a74cb6bac8f3923a2",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "b01a2cd36d04ecb5ce2a80b10fc6d35fcc5a39d8ff8167c9626a845b9085bb94",
+            "channels": [
+              "graph_1hop",
+              "graph_2hop"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 35.507571,
+              "graph_hop": 1,
+              "graph_edges": [
+                {
+                  "edge_id": "edge_c7fde9ad54626dc5f4db",
+                  "source": "article_7b0a74cb6bac8f3923a2",
+                  "target": "article_abfeeb118ff8c536fa0d",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_87b928337125085a35dc",
+                  "source": "article_32719886881dfc89abe8",
+                  "target": "article_7b0a74cb6bac8f3923a2",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_87b928337125085a35dc",
+                  "source": "article_32719886881dfc89abe8",
+                  "target": "article_7b0a74cb6bac8f3923a2",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                }
+              ],
+              "relation_types": [
+                "precedes"
+              ],
+              "graph_seed_concepts": [
+                "article_32719886881dfc89abe8",
+                "article_abfeeb118ff8c536fa0d"
+              ]
+            }
+          },
+          {
+            "evidence_id": "m26pa7ev_567f49c3fbe2ccc22c082b753922efd8",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_d503bebe865225da54b5b8cfa1835461",
+            "source_id": "daniel_blog_en__harness-theory-part-2",
+            "source_identity": "daniel_blog_en__harness-theory-part-2",
+            "section_id": "article_71b9d92dad73c6d1fa18",
+            "concept_id": "article_71b9d92dad73c6d1fa18",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "e88121aca647324ddfad443e805a51ea0756e36457d3a3c8bdbf11e136da64ac",
+            "channels": [
+              "graph_1hop",
+              "graph_2hop"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 34.370833,
+              "graph_hop": 1,
+              "graph_edges": [
+                {
+                  "edge_id": "edge_3f15206278e63ccf8981",
+                  "source": "article_f8573ff5ee10182a3f6c",
+                  "target": "article_71b9d92dad73c6d1fa18",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_3f15206278e63ccf8981",
+                  "source": "article_f8573ff5ee10182a3f6c",
+                  "target": "article_71b9d92dad73c6d1fa18",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_a8263249835f3f955496",
+                  "source": "article_71b9d92dad73c6d1fa18",
+                  "target": "article_8f6183647319d61b9714",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_a8263249835f3f955496",
+                  "source": "article_71b9d92dad73c6d1fa18",
+                  "target": "article_8f6183647319d61b9714",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                }
+              ],
+              "relation_types": [
+                "precedes"
+              ],
+              "graph_seed_concepts": [
+                "article_8f6183647319d61b9714",
+                "article_f8573ff5ee10182a3f6c"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "case_id": "explanatory",
+        "class": "explanatory",
+        "question": "Explain how state machines make legal transitions explicit.",
+        "status": "owner_only_cited_answer",
+        "intent_class": "direct_grounded_knowledge",
+        "answer": "## State machine: make progress and legal transitions explicit A state machine represents a finite set of states and the transitions allowed between them: ```text START -> RETRIEVE -> VERIFY_EVIDENCE -> enough evidence -> DRAFT -> insufficient and retries remain -> REWRITE_QUERY -> retry limit reached -> FAILED -> WAITING_FOR_APPROVAL -> approved -> EXECUTE -> rejected -> CANCELLED -> COMPLETED ``` The structure answers: - where the system is now - what transitions are legal - which condition selects each transition - what data must be persisted - which states are terminal Workflow engines such as AWS Step Functions expose explicit task and flow states, including choices, waits, maps, and parallel branches. [claim_1_ref_1] Harness Theory Part 07 | Long-running and Multi-agent Work: How Tasks Survive Context Boundaries A practical model for fresh-context iteration, session bootstrap, progress ledgers, clean hand-offs, subagent contracts, multi-agent messaging, atomic claiming and workspace isolation. [claim_1_ref_2]",
+        "evidence_count": 8,
+        "distinct_source_count": 7,
+        "graph_expanded_evidence_count": 6,
+        "citation_count": 2,
+        "material_claim_count": 1,
+        "evidence_used_by_claims": 2,
+        "unused_selected_evidence": 6,
+        "distinct_cited_source_count": 2,
+        "answer_length": 1030,
+        "latency_ms": 13952,
+        "provider_calls": 2,
+        "cost": "0.00204816",
+        "unsupported_claims": 0,
+        "safe_abstention": false,
+        "graph_universe": {
+          "artifact_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+          "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+          "node_count": 4222,
+          "edge_count": 8525
+        },
+        "graph_relation_types": [
+          "precedes"
+        ],
+        "selected_evidence_preview": [
+          {
+            "evidence_id": "m26pa7ev_2dcccb251c2cadf24bb04adc860568ee",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_1083d34cbaffa38fe9ea0420e2e7cf69",
+            "source_id": "daniel_blog_en__the-atlas-of-agent-design-patterns-part-2",
+            "source_identity": "daniel_blog_en__the-atlas-of-agent-design-patterns-part-2",
+            "section_id": "section_01fb4982339d023e86f6",
+            "concept_id": "article_933eb10c2db516ac0813",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "819b9fd19e4da65fc1356afbdacd9ae980a78d38e29120dd162399227285c6e8",
+            "channels": [
+              "dense",
+              "lexical"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 40.291051,
+              "graph_hop": 0,
+              "graph_edges": [],
+              "relation_types": [],
+              "graph_seed_concepts": []
+            }
+          },
+          {
+            "evidence_id": "m26pa7ev_3ab7bc7da8402851d2d31a4a5f13571a",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_a89edcadfa157b2cc913fa1fcb5e91c4",
+            "source_id": "daniel_blog_en__harness-theory-part-7",
+            "source_identity": "daniel_blog_en__harness-theory-part-7",
+            "section_id": "article_e0458970faa6e27d9a18",
+            "concept_id": "article_e0458970faa6e27d9a18",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "54a75aa3592a753528231e4a492f2340770c1a59fe129d51ad1ce8cfa4fb9371",
+            "channels": [
+              "graph_1hop",
+              "graph_2hop"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 31.679405,
+              "graph_hop": 1,
+              "graph_edges": [
+                {
+                  "edge_id": "edge_245ad504dbb5bb6f0bf7",
+                  "source": "article_41f3d27ae8b6188147ad",
+                  "target": "article_e0458970faa6e27d9a18",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_352ddc096be9052c0a06",
+                  "source": "article_e0458970faa6e27d9a18",
+                  "target": "article_281be973720b56fca87d",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_245ad504dbb5bb6f0bf7",
+                  "source": "article_41f3d27ae8b6188147ad",
+                  "target": "article_e0458970faa6e27d9a18",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_352ddc096be9052c0a06",
+                  "source": "article_e0458970faa6e27d9a18",
+                  "target": "article_281be973720b56fca87d",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                }
+              ],
+              "relation_types": [
+                "precedes"
+              ],
+              "graph_seed_concepts": [
+                "article_281be973720b56fca87d",
+                "article_41f3d27ae8b6188147ad"
+              ]
+            }
+          },
+          {
+            "evidence_id": "m26pa7ev_ad8bbb80284cff0c9eba45de197d4a26",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_a424cca37a62c3c3873b9ef927e98b4c",
+            "source_id": "daniel_blog_en__ai-agentic-workflow-series-2",
+            "source_identity": "daniel_blog_en__ai-agentic-workflow-series-2",
+            "section_id": "article_5c7de07499a7842d43d2",
+            "concept_id": "article_5c7de07499a7842d43d2",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "017cbc0ae0d27eb63949820fa94ba6f0a6de1f25154cebbbe4b81b28d9c7516d",
+            "channels": [
+              "graph_1hop",
+              "lexical"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 31.342857,
+              "graph_hop": 1,
+              "graph_edges": [
+                {
+                  "edge_id": "edge_82438c6dad9abe87b660",
+                  "source": "article_b58e8e531f0e3636ebe6",
+                  "target": "article_5c7de07499a7842d43d2",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                }
+              ],
+              "relation_types": [
+                "precedes"
+              ],
+              "graph_seed_concepts": [
+                "article_b58e8e531f0e3636ebe6"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "case_id": "cross_document_comparison",
+        "class": "cross-document comparison",
+        "question": "Compare routers and adaptive planning for permission-first controls.",
+        "status": "owner_only_cited_answer",
+        "intent_class": "cross_document_comparison",
+        "answer": "The strongest grounded comparison is that the selected sources describe different parts of the same operating model: ## From theory to implementation: Part 11 checklist - [ ] Thread, turn, run, item, worker, operation, work, and event have stable identifiers with distinct responsibilities. [claim_1_ref_1]; It decides whether the knowledge base is clean, updateable, permission-aware, and rich enough for retrieval to work later. [claim_1_ref_2]",
+        "evidence_count": 10,
+        "distinct_source_count": 7,
+        "graph_expanded_evidence_count": 4,
+        "citation_count": 2,
+        "material_claim_count": 1,
+        "evidence_used_by_claims": 2,
+        "unused_selected_evidence": 8,
+        "distinct_cited_source_count": 2,
+        "answer_length": 446,
+        "latency_ms": 14134,
+        "provider_calls": 2,
+        "cost": "0.0021390",
+        "unsupported_claims": 0,
+        "safe_abstention": false,
+        "graph_universe": {
+          "artifact_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+          "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+          "node_count": 4222,
+          "edge_count": 8525
+        },
+        "graph_relation_types": [
+          "precedes"
+        ],
+        "selected_evidence_preview": [
+          {
+            "evidence_id": "m26pa7ev_c60005439662851f11bcd0d62d3d8dc3",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_bad02aea84f0737f366c0552adcdb493",
+            "source_id": "daniel_blog_en__harness-theory-part-11",
+            "source_identity": "daniel_blog_en__harness-theory-part-11",
+            "section_id": "section_6f669aae28f4e613bb4f",
+            "concept_id": "article_7b0a74cb6bac8f3923a2",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "0f064ccd25ff23ed01ce66bf82bc92cc0f5a8efd221a6599772a3c2d57c373f5",
+            "channels": [
+              "lexical"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 47.35,
+              "graph_hop": 0,
+              "graph_edges": [],
+              "relation_types": [],
+              "graph_seed_concepts": []
+            }
+          },
+          {
+            "evidence_id": "m26pa7ev_34ac650301725fcd36e67fcb873ed323",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_55c219501dc17fdb37e4ab7f72f3f551",
+            "source_id": "daniel_blog_en__harness-theory-part-11",
+            "source_identity": "daniel_blog_en__harness-theory-part-11",
+            "section_id": "article_7b0a74cb6bac8f3923a2",
+            "concept_id": "article_7b0a74cb6bac8f3923a2",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "b01a2cd36d04ecb5ce2a80b10fc6d35fcc5a39d8ff8167c9626a845b9085bb94",
+            "channels": [
+              "graph_1hop",
+              "graph_2hop"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 43.94,
+              "graph_hop": 1,
+              "graph_edges": [
+                {
+                  "edge_id": "edge_c7fde9ad54626dc5f4db",
+                  "source": "article_7b0a74cb6bac8f3923a2",
+                  "target": "article_abfeeb118ff8c536fa0d",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_87b928337125085a35dc",
+                  "source": "article_32719886881dfc89abe8",
+                  "target": "article_7b0a74cb6bac8f3923a2",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_c7fde9ad54626dc5f4db",
+                  "source": "article_7b0a74cb6bac8f3923a2",
+                  "target": "article_abfeeb118ff8c536fa0d",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                }
+              ],
+              "relation_types": [
+                "precedes"
+              ],
+              "graph_seed_concepts": [
+                "article_32719886881dfc89abe8",
+                "article_abfeeb118ff8c536fa0d"
+              ]
+            }
+          },
+          {
+            "evidence_id": "m26pa7ev_9da27d9c6e1d904e9bde084428874796",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_ead2f162b507482bfbaca1a3826f16c8",
+            "source_id": "daniel_blog_en__from-rag-to-production-rag-appendix-a",
+            "source_identity": "daniel_blog_en__from-rag-to-production-rag-appendix-a",
+            "section_id": "section_0040693f027aa637ec6b",
+            "concept_id": "article_9c0dcb80beb2068e1b50",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "912071ccf49cf7a6f57f099a2b9a25977f9e891ea7a1e24a5476495ddbe7a3b5",
+            "channels": [
+              "lexical"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 43.85,
+              "graph_hop": 0,
+              "graph_edges": [],
+              "relation_types": [],
+              "graph_seed_concepts": []
+            }
+          }
+        ]
+      },
+      {
+        "case_id": "complementary_synthesis",
+        "class": "complementary synthesis",
+        "question": "How do routers and directed acyclic graphs complement each other for permission-first execution?",
+        "status": "owner_only_safe_abstention",
+        "intent_class": "complementary_synthesis",
+        "answer": "",
+        "evidence_count": 10,
+        "distinct_source_count": 8,
+        "graph_expanded_evidence_count": 2,
+        "citation_count": 0,
+        "material_claim_count": 0,
+        "evidence_used_by_claims": 0,
+        "unused_selected_evidence": 10,
+        "distinct_cited_source_count": 0,
+        "answer_length": 0,
+        "latency_ms": 11695,
+        "provider_calls": 2,
+        "cost": "0.00391404",
+        "unsupported_claims": 0,
+        "safe_abstention": true,
+        "graph_universe": {
+          "artifact_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+          "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+          "node_count": 4222,
+          "edge_count": 8525
+        },
+        "graph_relation_types": [
+          "precedes"
+        ],
+        "selected_evidence_preview": [
+          {
+            "evidence_id": "m26pa7ev_2fc78ec5a1e424575fae76a8dc6c9749",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_21fdffb9556f6659838e75c06c051fb8",
+            "source_id": "daniel_blog_en__harness-theory-part-11",
+            "source_identity": "daniel_blog_en__harness-theory-part-11",
+            "section_id": "section_6f669aae28f4e613bb4f",
+            "concept_id": "article_7b0a74cb6bac8f3923a2",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "0f064ccd25ff23ed01ce66bf82bc92cc0f5a8efd221a6599772a3c2d57c373f5",
+            "channels": [
+              "lexical"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 57.35,
+              "graph_hop": 0,
+              "graph_edges": [],
+              "relation_types": [],
+              "graph_seed_concepts": []
+            }
+          },
+          {
+            "evidence_id": "m26pa7ev_a7e2a2eb90014111c570d7b054d916e7",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_a9500c76e2b3619c351cf1b944e87b97",
+            "source_id": "daniel_blog_en__harness-theory-part-11",
+            "source_identity": "daniel_blog_en__harness-theory-part-11",
+            "section_id": "article_7b0a74cb6bac8f3923a2",
+            "concept_id": "article_7b0a74cb6bac8f3923a2",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "b01a2cd36d04ecb5ce2a80b10fc6d35fcc5a39d8ff8167c9626a845b9085bb94",
+            "channels": [
+              "graph_1hop",
+              "graph_2hop"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 51.1675,
+              "graph_hop": 1,
+              "graph_edges": [
+                {
+                  "edge_id": "edge_c7fde9ad54626dc5f4db",
+                  "source": "article_7b0a74cb6bac8f3923a2",
+                  "target": "article_abfeeb118ff8c536fa0d",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_87b928337125085a35dc",
+                  "source": "article_32719886881dfc89abe8",
+                  "target": "article_7b0a74cb6bac8f3923a2",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_c7fde9ad54626dc5f4db",
+                  "source": "article_7b0a74cb6bac8f3923a2",
+                  "target": "article_abfeeb118ff8c536fa0d",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                }
+              ],
+              "relation_types": [
+                "precedes"
+              ],
+              "graph_seed_concepts": [
+                "article_32719886881dfc89abe8",
+                "article_abfeeb118ff8c536fa0d"
+              ]
+            }
+          },
+          {
+            "evidence_id": "m26pa7ev_fed181dcda1d36bab52d8d41fbc67696",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_846b3e2104aa90da89980ac207d5c976",
+            "source_id": "daniel_blog_en__llm-wiki-theory-part-2-architecture",
+            "source_identity": "daniel_blog_en__llm-wiki-theory-part-2-architecture",
+            "section_id": "section_27ffcaa5df96d6d907b8",
+            "concept_id": "article_e73fa1da830cd3cffd71",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "dcb6dfb877ea5041a1c7bbdd4fb415aa0b713a680525541bfc7960767bc3b09e",
+            "channels": [
+              "lexical"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 50.85,
+              "graph_hop": 0,
+              "graph_edges": [],
+              "relation_types": [],
+              "graph_seed_concepts": []
+            }
+          }
+        ]
+      },
+      {
+        "case_id": "graph_relationship",
+        "class": "graph relationship",
+        "question": "What graph relationship connects harness and headless harness service?",
+        "status": "owner_only_safe_abstention",
+        "intent_class": "graph_relationship",
+        "answer": "",
+        "evidence_count": 10,
+        "distinct_source_count": 7,
+        "graph_expanded_evidence_count": 7,
+        "citation_count": 0,
+        "material_claim_count": 0,
+        "evidence_used_by_claims": 0,
+        "unused_selected_evidence": 10,
+        "distinct_cited_source_count": 0,
+        "answer_length": 0,
+        "latency_ms": 14754,
+        "provider_calls": 2,
+        "cost": "0.0022518",
+        "unsupported_claims": 0,
+        "safe_abstention": true,
+        "graph_universe": {
+          "artifact_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+          "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+          "node_count": 4222,
+          "edge_count": 8525
+        },
+        "graph_relation_types": [
+          "precedes"
+        ],
+        "selected_evidence_preview": [
+          {
+            "evidence_id": "m26pa7ev_a3a80ff803adbe46d17a33a8cf3fdab3",
+            "evidence_type": "graph_edge",
+            "locator_id": "m26pa7edge_a5de4fc1a0e46f18caaca484663f4449",
+            "source_id": "graph_v2:edge_3f15206278e63ccf8981",
+            "source_identity": "graph_v2:edge_3f15206278e63ccf8981",
+            "section_id": "edge_3f15206278e63ccf8981",
+            "concept_id": "article_f8573ff5ee10182a3f6c",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/graph-v2.json",
+            "artifact_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "d14dd94078830189d87657d4840e39b3f3a00e80ebf92c793b13cda20d942dc0",
+            "channels": [
+              "graph"
+            ],
+            "edge_id": "edge_3f15206278e63ccf8981",
+            "edge_source": "article_f8573ff5ee10182a3f6c",
+            "edge_target": "article_71b9d92dad73c6d1fa18",
+            "relation_type": "precedes"
+          },
+          {
+            "evidence_id": "m26pa7ev_2e100fb6e0d26e00d635d1c764c4a714",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_374f110d514dc0a0e46602e81946977a",
+            "source_id": "daniel_blog_en__harness-theory-part-1",
+            "source_identity": "daniel_blog_en__harness-theory-part-1",
+            "section_id": "article_f8573ff5ee10182a3f6c",
+            "concept_id": "article_f8573ff5ee10182a3f6c",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "4ab696fbb1bcd0b2a6bc9d5c47e4d0f260c8d0eb5d8aea754fd374f423e67c3d",
+            "channels": [
+              "graph_1hop",
+              "graph_2hop"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 59.960833,
+              "graph_hop": 1,
+              "graph_edges": [
+                {
+                  "edge_id": "edge_3f15206278e63ccf8981",
+                  "source": "article_f8573ff5ee10182a3f6c",
+                  "target": "article_71b9d92dad73c6d1fa18",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                },
+                {
+                  "edge_id": "edge_3f15206278e63ccf8981",
+                  "source": "article_f8573ff5ee10182a3f6c",
+                  "target": "article_71b9d92dad73c6d1fa18",
+                  "relation_type": "precedes",
+                  "confidence": 1.0
+                }
+              ],
+              "relation_types": [
+                "precedes"
+              ],
+              "graph_seed_concepts": [
+                "article_71b9d92dad73c6d1fa18"
+              ]
+            }
+          },
+          {
+            "evidence_id": "m26pa7ev_a2888b59101d765708eeddb55fcbe4d9",
+            "evidence_type": "passage",
+            "locator_id": "m26pa7loc_2de9deb0620c27d6d8bf3142cb7fe5a3",
+            "source_id": "daniel_blog_en__harness-theory-part-2",
+            "source_identity": "daniel_blog_en__harness-theory-part-2",
+            "section_id": "section_9c3afa58848c97ee3b67",
+            "concept_id": "article_71b9d92dad73c6d1fa18",
+            "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+            "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+            "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+            "text_sha256": "9ae2853780b62d97c9d2cf610f8e34c9ad58106196bbe49884c52e447adbd3c8",
+            "channels": [
+              "lexical"
+            ],
+            "retrieval_metadata": {
+              "rerank_score": 80.35,
+              "graph_hop": 0,
+              "graph_edges": [],
+              "relation_types": [],
+              "graph_seed_concepts": []
+            }
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "row_count": 6,
+      "answerable_count": 4,
+      "safe_abstention_count": 2,
+      "avg_evidence_count": 7.75,
+      "avg_graph_expanded_evidence_count": 4.25,
+      "avg_answer_length": 510.75,
+      "avg_evidence_used_by_claims": 2.0,
+      "avg_distinct_cited_source_count": 2.0,
+      "unsupported_claims": 0
+    }
+  }
+}

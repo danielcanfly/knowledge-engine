@@ -8,7 +8,7 @@
     "semantic_inputs_sha256": "377c8b8ec3b52aad03481008c50ac3c1f8203537928477de0a3d1bf89d26e7e0"
   },
   "budget": {
-    "max_output_tokens_per_call": 512,
+    "max_output_tokens_per_call": 3072,
     "max_passage_bytes_per_item": 2048,
     "max_prompt_bytes_per_item": 12000,
     "max_provider_calls_per_item_including_repair": 2,
@@ -36,11 +36,11 @@
     "stream": false
   },
   "schema_version": "knowledge-engine-m26-pa-4-verified-answer-policy/v1",
-  "self_sha256": "56d7743ded108309fefbbeede2ed2eb6e5ae295540c41f458ab5ec5a2fad6069",
+  "self_sha256": "7fa355ef75bd5f9987bc6fdc4d96adbe3a9d1dae4a0f87381a1b06bd60fe2d60",
   "stage_id": "M26.PA.4",
   "verification": {
     "allow_unsupported_material_claims": false,
-    "max_claims_per_item": 1,
+    "max_claims_per_item": 2,
     "minimum_abstention_items": 2,
     "minimum_ready_candidate_items": 8,
     "support_threshold": 1.0

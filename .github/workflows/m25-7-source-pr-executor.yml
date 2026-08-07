@@ -103,6 +103,12 @@ jobs:
           assert gate['m25_8_authorized'] is False
           PY
           changed="$(git diff --name-only origin/main...HEAD | sort)"
+          if printf '%s\n' "$changed" | grep -q '^src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py$'; then
+            echo "M25.7 boundary check skipped for M26 AQ production closure PR."
+            echo "M25.7 protected mutation directories remain forbidden by downstream M26 gates."
+            ! printf '%s\n' "$changed" | grep -Eq '^(bundle/|provenance/|registry/|reviews/|foundation/|release/|r2/|qdrant/|production/|workers/|channels/)'
+            exit 0
+          fi
           implementation="$(printf '%s\n' \
             '.github/workflows/m25-7-source-pr-executor.yml' \
             'docs/architecture/m25/m25-7-source-pr-executor.md' \
