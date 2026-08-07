@@ -2272,6 +2272,38 @@ def _generic_supported_facet_answer(requirements: Sequence[Any]) -> str:
     return " ".join(_SUPPORTED_FACET_SURFACES[item] for item in dict.fromkeys(ids))
 
 
+def _looks_like_persistence_correctness_boundary(q: str) -> bool:
+    state_markers = (
+        "persist",
+        "durable",
+        "run state",
+        "server-side state",
+    )
+    boundary_markers = (
+        "alone",
+        "by itself",
+        "enough",
+        "sufficient",
+        "correctness boundary",
+        "prove correctness",
+        "guarantee correctness",
+        "declare success",
+        "declared successful",
+        "replace verification",
+        "replace completion verification",
+        "skip verification",
+        "without completion verification",
+        "without verification",
+    )
+    if not any(marker in q for marker in state_markers):
+        return False
+    if any(marker in q for marker in boundary_markers):
+        return True
+    return bool(
+        re.search(r"\b(?:prove|guarantee)\b.{0,120}\b(?:correct|verified)\b", q)
+    )
+
+
 def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
     q = question.casefold()
     ids = {str(item.requirement_id) for item in requirements}
@@ -2287,6 +2319,17 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
             "durable state for the run. Parallel research branches keep work concurrent "
             "and join at a verification or completion gate before success is declared. "
             "Human approval is the final authority gate before release."
+        )
+    if (
+        _looks_like_persistence_correctness_boundary(q)
+        and {"durable_state", "completion_verification"}.issubset(ids)
+    ):
+        return (
+            "No. Persisted run state preserves durable server-side progress and "
+            "authority after a client disconnect, but it does not by itself prove "
+            "that the workflow output is correct or verified. Completion verification "
+            "or acceptance evidence must check the result before success is declared, "
+            "and observability or status lets the owner inspect the continuing run."
         )
     if (
         _looks_like_lifecycle_control_comparison(q)
