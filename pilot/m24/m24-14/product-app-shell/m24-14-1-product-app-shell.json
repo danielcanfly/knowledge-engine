@@ -16,9 +16,9 @@
       "sha256": "0cd3b347e2cd62b69d1c9909518b55f6d3df6452468724891ddc8a602977822c"
     },
     {
-      "bytes": 16185,
+      "bytes": 8851,
       "path": "pilot/m24/internal-product-deployment/site/m26-ask.js",
-      "sha256": "9f870081b3c7972788cd93308d0255b37ea5a7f1a0e8038daccf66d8df2152d7"
+      "sha256": "2d606abed0f1b5bb8c52e599a5b37a844412d82f8fdd0a2ca43c3b5b3d4748e3"
     },
     {
       "bytes": 45565,
@@ -177,7 +177,7 @@
     "same_origin_artifact_fetch_only": true,
     "secret_scan_passed": true
   },
-  "self_sha256": "7f64530a9ef4b1deeaa9e95b2d626797398872ac089e38637289b2111b32162f",
+  "self_sha256": "97900789fbb57b73ce73faf9210c01fe5c6427ee4eb3ec2e81c0fad1e6867842",
   "source_commit_sha": "acf78596ace8a7366688ccef72b507204d09d9f9",
   "status": "m24_14_1_product_application_shell_implemented"
 }

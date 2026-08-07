@@ -343,6 +343,117 @@ def test_manual_false_green_answers_are_question_alignment_failures() -> None:
         assert expected_missing & missing_ids
 
 
+def test_bb02_business_change_question_stays_direct_not_temporal() -> None:
+    question = (
+        "When a startup changes direction more than once in a short period, how can you "
+        "distinguish evidence-driven learning from aimless founder drift? Focus on what "
+        "changed in the problem, constraints and market reality rather than how often the "
+        "pitch deck changed."
+    )
+    assert legacy._intent_class(question) == "direct_grounded_knowledge"
+
+
+def test_bb12_durable_venture_question_derives_venture_facets_not_lifecycle() -> None:
+    question = (
+        "Why is a venture more than its product? Explain how operations, resources, team, "
+        "finance and risk turn a promising product into—or prevent it from becoming—a durable "
+        "venture system."
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    ids = {item.requirement_id for item in requirements}
+    assert "durable_state" not in ids
+    assert {
+        "venture_not_product",
+        "operations_system",
+        "venture_resources",
+        "team_capacity",
+        "finance_model",
+        "risk_management",
+    }.issubset(ids)
+
+
+def test_bb03_pain_adoption_question_derives_bilingual_facets() -> None:
+    question = (
+        "如果客戶明明都承認問題存在，為什麼市場仍然可能完全不動？請用旅宿業者的實際經驗解釋 "
+        "「有痛點」和「願意改變／願意採用」之間還差了哪些條件。"
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    ids = {item.requirement_id for item in requirements}
+    assert {
+        "pain_acknowledgement",
+        "change_willingness",
+        "adoption_conditions",
+        "market_movement",
+    }.issubset(ids)
+
+
+def test_bb24_quote_level_support_rejects_generic_model_family_paragraph() -> None:
+    generic = _passage(
+        "generic",
+        "SDXL is the best balanced all-round starting point for a 16GB Mac.",
+        "comfyui-generic",
+    )
+    specific = _passage(
+        "specific",
+        (
+            "Model-related selectors inside nodes Checkpoints, VAEs and LoRAs are "
+            "chosen in the nodes that need them."
+        ),
+        "comfyui-specific",
+    )
+    generic_ref = legacy._deterministic_support_ref_for_facet(
+        generic,
+        {"facet_id": "comfyui_checkpoints", "terms": ["checkpoint", "checkpoints"]},
+    )
+    specific_ref = legacy._deterministic_support_ref_for_facet(
+        specific,
+        {"facet_id": "comfyui_checkpoints", "terms": ["checkpoint", "checkpoints"]},
+    )
+    assert generic_ref is None
+    assert specific_ref is not None
+
+
+def test_bb05_resource_constraint_rejects_generic_harness_resources() -> None:
+    generic = _passage(
+        "generic",
+        (
+            "A summary should retain current objective, user constraints, modified "
+            "resources, tests and evidence, remaining work, and next safe action."
+        ),
+        "harness",
+    )
+    venture = _passage(
+        "venture",
+        (
+            "But when the people, timing and resources are wrong, forcing yourself "
+            "to keep going is not bravery."
+        ),
+        "venture",
+    )
+    facet = {"facet_id": "resource_constraint", "terms": ["resource", "resources"]}
+
+    assert legacy._deterministic_support_ref_for_facet(generic, facet) is None
+    assert legacy._deterministic_support_ref_for_facet(venture, facet) is not None
+
+
+def test_bb24_quote_window_keeps_late_facet_terms_visible() -> None:
+    passage = _passage(
+        "late",
+        (
+            "SDXL is the best balanced all-round starting point for a 16GB Mac, and "
+            "this introductory model discussion is intentionally long before it moves "
+            "to the practical mess: what checkpoints, clips, LoRAs, and VAE files "
+            "are, where they go, and why Flux workflows open with red nodes."
+        ),
+        "comfyui",
+    )
+    facet = {"facet_id": "comfyui_checkpoints", "terms": ["checkpoint", "checkpoints"]}
+    ref = legacy._deterministic_support_ref_for_facet(passage, facet)
+
+    assert ref is not None
+    assert "checkpoint" in ref["exact_quote"].casefold()
+
+
 def test_comfyui_memory_pressure_does_not_satisfy_debug_order_support() -> None:
     question = (
         "A downloaded ComfyUI workflow opens with red nodes or runs out of memory. "

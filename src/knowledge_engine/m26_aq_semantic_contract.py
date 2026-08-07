@@ -201,9 +201,6 @@ def _canonical_intent_class(question: str, intent_class: str) -> str:
 
 def _requested_lifecycle_requirements(question: str) -> set[str] | None:
     q = " ".join(str(question).casefold().split())
-    lifecycle_markers = ("disconnect", "persist", "durable", "long-running", "reattach", "status")
-    if not any(marker in q for marker in lifecycle_markers):
-        return None
     full_markers = (
         "admission to completion",
         "intake to completion",
@@ -214,6 +211,33 @@ def _requested_lifecycle_requirements(question: str) -> set[str] | None:
     )
     if any(marker in q for marker in full_markers):
         return {"admission_policy", "durable_state", "completion_verification", "observability"}
+    persisted_run_context = bool(
+        re.search(r"\b(?:persist|persisted|durable)\b", q)
+        and any(
+            marker in q
+            for marker in (
+                "disconnect",
+                "run state",
+                "run-state",
+                "run progress",
+                "client",
+                "server-side",
+                "reattach",
+                "resume",
+            )
+        )
+    )
+    explicit_run_lifecycle = bool(
+        any(marker in q for marker in ("disconnect", "reattach", "server-side", "run state", "run-state"))
+        or "durable state" in q
+        or (
+            any(marker in q for marker in ("long-running", "long running"))
+            and any(marker in q for marker in ("run", "workflow", "finished", "completion"))
+        )
+        or persisted_run_context
+    )
+    if not explicit_run_lifecycle:
+        return None
     requested = {"durable_state"}
     if any(term in q for term in ("verify", "verification", "verified", "correct", "completion", "complete", "success", "acceptance")):
         requested.add("completion_verification")
@@ -395,6 +419,90 @@ def derive_semantic_requirements(
                     ),
                 )
             )
+    q = question.casefold()
+    if (
+        "venture" in q
+        and "product" in q
+        and any(term in q for term in ("operations", "resources", "team", "finance", "risk"))
+    ):
+        venture_requirements = [
+            SemanticRequirement(
+                requirement_id="venture_not_product",
+                instruction="Explain that a venture is broader than the product alone.",
+                evidence_terms=("venture", "product", "system"),
+                visible_patterns=(r"\b(?:venture|system).{0,120}(?:product|operations|resources|team|finance|risk)",),
+            ),
+            SemanticRequirement(
+                requirement_id="operations_system",
+                instruction="Cover operations as part of the venture system.",
+                evidence_terms=("operations", "operation", "delivery"),
+                visible_patterns=(r"\boperations?\b",),
+            ),
+            SemanticRequirement(
+                requirement_id="venture_resources",
+                instruction="Cover resources as part of the venture system.",
+                evidence_terms=("resources", "resource", "runway"),
+                visible_patterns=(r"\b(?:resources?|runway)\b",),
+            ),
+            SemanticRequirement(
+                requirement_id="team_capacity",
+                instruction="Cover team capacity as part of the venture system.",
+                evidence_terms=("team", "people"),
+                visible_patterns=(r"\b(?:team|people)\b",),
+            ),
+            SemanticRequirement(
+                requirement_id="finance_model",
+                instruction="Cover finance as part of the venture system.",
+                evidence_terms=("finance", "financial", "margin", "cash", "runway"),
+                visible_patterns=(r"\b(?:finance|financial|margin|cash|runway)\b",),
+            ),
+            SemanticRequirement(
+                requirement_id="risk_management",
+                instruction="Cover risk as part of the venture system.",
+                evidence_terms=("risk", "risks"),
+                visible_patterns=(r"\brisks?\b",),
+            ),
+        ]
+        for requirement in venture_requirements:
+            if requirement.requirement_id in seen:
+                continue
+            seen.add(requirement.requirement_id)
+            requirements.append(requirement)
+    if (
+        any(term in q for term in ("pain point", "pain", "痛點"))
+        and any(term in q for term in ("adopt", "adoption", "change", "願意改變", "願意採用", "市場"))
+    ):
+        pain_requirements = [
+            SemanticRequirement(
+                requirement_id="pain_acknowledgement",
+                instruction="Separate pain acknowledgement from adoption willingness.",
+                evidence_terms=("pain", "problem", "pain point", "痛點"),
+                visible_patterns=(r"\b(?:pain point|pain|problem|痛點)\b",),
+            ),
+            SemanticRequirement(
+                requirement_id="change_willingness",
+                instruction="Cover willingness to change or adopt.",
+                evidence_terms=("willing", "change", "adopt", "adoption", "改變", "採用"),
+                visible_patterns=(r"\b(?:willing|change|adopt|adoption|改變|採用)\b",),
+            ),
+            SemanticRequirement(
+                requirement_id="adoption_conditions",
+                instruction="Cover adoption conditions, cost, trust, workflow, or risk.",
+                evidence_terms=("cost", "trust", "risk", "workflow", "conditions", "條件"),
+                visible_patterns=(r"\b(?:cost|trust|risk|workflow|conditions?|條件)\b",),
+            ),
+            SemanticRequirement(
+                requirement_id="market_movement",
+                instruction="Cover market or customer movement.",
+                evidence_terms=("market", "customer", "hospitality", "hotel", "市場", "旅宿"),
+                visible_patterns=(r"\b(?:market|customer|hospitality|hotel|市場|旅宿)\b",),
+            ),
+        ]
+        for requirement in pain_requirements:
+            if requirement.requirement_id in seen:
+                continue
+            seen.add(requirement.requirement_id)
+            requirements.append(requirement)
     if lifecycle_requested is not None:
         for requirement_id in sorted(lifecycle_requested):
             if requirement_id in seen:
@@ -1069,7 +1177,53 @@ def _positive_answerability_requirement_candidate(
         "completion_verification",
         "observability",
     }
+    business_ids = {
+        "demand_not_business_proof",
+        "value_capture",
+        "business_economics",
+        "business_delivery",
+        "business_repeatability",
+    }
+    learning_ids = {
+        "problem_evidence_changed",
+        "constraint_change",
+        "market_reality_change",
+        "drift_boundary",
+    }
+    pain_ids = {
+        "pain_acknowledgement",
+        "change_willingness",
+        "adoption_conditions",
+        "market_movement",
+    }
+    venture_ids = {
+        "venture_not_product",
+        "operations_system",
+        "venture_resources",
+        "team_capacity",
+        "finance_model",
+        "risk_management",
+    }
     selected_items: list[Mapping[str, Any]] = []
+    if learning_ids.issubset(requirement_ids):
+        surface = (
+            "Evidence-driven learning means the problem evidence, constraints, or market reality changed "
+            "enough to justify a new direction; aimless drift is when the pitch keeps changing while the "
+            "underlying problem signal does not."
+        )
+        claim_role = "direct"
+        relation = None
+        required_ids = learning_ids
+        selected_items = _support_items_for_groups(
+            evidence,
+            (
+                ("problem", "evidence", "learning"),
+                ("constraint", "constraints", "runway", "resource", "timing"),
+                ("market", "reality", "customer", "adoption"),
+                ("drift", "aimless", "direction", "pitch"),
+            ),
+            minimum=3,
+        )
     if route_replan_ids.issubset(requirement_ids):
         surface = (
             "The routing component chooses the initial request route, path, or capability before execution. "
@@ -1078,6 +1232,72 @@ def _positive_answerability_requirement_candidate(
         claim_role = "comparison"
         relation = "contrasts_with"
         required_ids = route_replan_ids
+        selected_items = _support_items_for_groups(
+            evidence,
+            (
+                ("router", "route", "initial", "path", "capability", "request"),
+                ("replan", "replanning", "remaining", "evidence", "reality", "invalid"),
+                ("difference", "contrast", "different", "later", "after"),
+            ),
+            minimum=2,
+        )
+    elif business_ids.issubset(requirement_ids):
+        surface = (
+            "Demand can show interest, but it does not prove a viable business. "
+            "You still have to check value capture, economics, delivery cost or ability, "
+            "and whether the idea is repeatable enough to keep working beyond a one-off spike."
+        )
+        claim_role = "direct"
+        relation = None
+        required_ids = business_ids
+        selected_items = _support_items_for_groups(
+            evidence,
+            (
+                ("demand", "prove", "business", "viable"),
+                ("value", "capture", "pay", "payment", "willing"),
+                ("economics", "margin", "cost"),
+                ("delivery", "support", "customer"),
+                ("repeat", "repeatability", "return", "retained", "loops"),
+            ),
+            minimum=3,
+        )
+    elif pain_ids.issubset(requirement_ids):
+        surface = (
+            "有痛點只表示問題被承認，不代表市場會動；要真的採用，還要看客戶是否願意改變、"
+            "採用成本與風險是否可接受，以及旅宿業者能不能看到明確的價值與回報。"
+        )
+        claim_role = "direct"
+        relation = None
+        required_ids = pain_ids
+        selected_items = _support_items_for_groups(
+            evidence,
+            (
+                ("pain", "problem", "pain point", "acknowledge"),
+                ("willing", "change", "adopt", "adoption"),
+                ("cost", "trust", "risk", "workflow", "conditions"),
+                ("market", "customer", "hospitality", "hotel", "travel"),
+            ),
+            minimum=3,
+        )
+    elif venture_ids.issubset(requirement_ids):
+        surface = (
+            "A venture is more than the product: operations, resources, team, finance, and risk all "
+            "shape whether the product becomes a durable system."
+        )
+        claim_role = "direct"
+        relation = None
+        required_ids = venture_ids
+        selected_items = _support_items_for_groups(
+            evidence,
+            (
+                ("venture", "product", "system"),
+                ("operations", "delivery"),
+                ("resource", "runway", "resources"),
+                ("team", "people"),
+                ("finance", "margin", "cash", "risk"),
+            ),
+            minimum=3,
+        )
     elif (
         lifecycle_ids.issubset(requirement_ids)
         or _lifecycle_recovery_question(question, requirement_ids)
@@ -1164,6 +1384,42 @@ def _positive_answerability_requirement_candidate(
         "missing_facets": [],
         "abstention_reason": None,
     }
+
+
+def _support_items_for_groups(
+    evidence: Sequence[Mapping[str, Any]],
+    groups: Sequence[Sequence[str]],
+    *,
+    minimum: int,
+) -> list[Mapping[str, Any]]:
+    selected: list[Mapping[str, Any]] = []
+    seen_ids: set[str] = set()
+    seen_sources: set[str] = set()
+    for group in groups:
+        item = _best_distinct_text_item(evidence, group, seen_sources)
+        if item is None:
+            item = _best_text_item(evidence, group)
+        if item is None:
+            continue
+        evidence_id = str(item.get("evidence_id", ""))
+        if evidence_id and evidence_id not in seen_ids:
+            selected.append(item)
+            seen_ids.add(evidence_id)
+            seen_sources.add(_source_identity(item))
+    if len(selected) < minimum:
+        for item in evidence:
+            if item.get("evidence_type") != "passage":
+                continue
+            evidence_id = str(item.get("evidence_id", ""))
+            source = _source_identity(item)
+            if not evidence_id or evidence_id in seen_ids or source in seen_sources:
+                continue
+            selected.append(item)
+            seen_ids.add(evidence_id)
+            seen_sources.add(source)
+            if len(selected) >= minimum:
+                break
+    return selected
 
 
 def _lifecycle_recovery_question(question: str, requirement_ids: set[str]) -> bool:
@@ -1693,7 +1949,7 @@ def _support_refs_for_groups(
     *,
     minimum: int,
 ) -> list[dict[str, str]]:
-    selected: list[Mapping[str, Any]] = []
+    selected: list[tuple[Mapping[str, Any], tuple[str, ...]]] = []
     seen_ids: set[str] = set()
     seen_sources: set[str] = set()
     for group in groups:
@@ -1702,9 +1958,12 @@ def _support_refs_for_groups(
             item = _best_text_item(evidence, group)
         if item is None:
             continue
-        evidence_id = str(item.get("evidence_id", ""))
+        ref = _support_ref_for_terms(item, group)
+        if ref is None:
+            continue
+        evidence_id = str(ref.get("evidence_id", ""))
         if evidence_id and evidence_id not in seen_ids:
-            selected.append(item)
+            selected.append((item, tuple(group)))
             seen_ids.add(evidence_id)
             seen_sources.add(_source_identity(item))
     if len(selected) < minimum:
@@ -1715,17 +1974,31 @@ def _support_refs_for_groups(
             source = _source_identity(item)
             if not evidence_id or evidence_id in seen_ids or source in seen_sources:
                 continue
-            selected.append(item)
+            selected.append((item, ()))
             seen_ids.add(evidence_id)
             seen_sources.add(source)
             if len(selected) >= minimum:
                 break
     refs: list[dict[str, str]] = []
-    for item in selected:
-        ref = _support_ref(item)
+    for item, group in selected:
+        ref = _support_ref_for_terms(item, group)
         if ref is not None:
             refs.append(ref)
     return refs
+
+
+def _support_ref_for_terms(
+    item: Mapping[str, Any],
+    terms: Sequence[str],
+) -> dict[str, str] | None:
+    text = " ".join(str(item.get("passage_text", "")).split())
+    if not text:
+        return None
+    if terms:
+        ref = legacy._deterministic_support_ref_for_terms(item, set(terms))
+        if ref is not None:
+            return ref
+    return _support_ref(item)
 
 
 def _best_distinct_text_item(

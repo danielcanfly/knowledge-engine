@@ -4,17 +4,52 @@ import json
 import subprocess
 import sys
 import textwrap
+from types import ModuleType
+
+import pytest
 
 import knowledge_engine.m26_aq_semantic_runtime_patch as base_patch
+import knowledge_engine.m26_aq_semantic_runtime_patch_v2 as v2_patch
 import knowledge_engine.m26_aq_semantic_runtime_patch_v3 as patch_v3
 import knowledge_engine.m26_aq_semantic_runtime_patch_v3_lifecycle as boundary_patch
 import knowledge_engine.m26_aq_semantic_runtime_patch_v3_surface as surface_patch
 import knowledge_engine.m26_pa7_arbitrary_query_runtime as legacy
 import knowledge_engine.m26_pa7_semantic_closure_runtime as runtime
 
-patch_v3.install()
-boundary_patch.install()
-surface_patch.install()
+_PATCH_MODULES = (
+    base_patch,
+    v2_patch,
+    patch_v3,
+    boundary_patch,
+    surface_patch,
+    legacy,
+    runtime,
+)
+
+
+def _snapshot_modules() -> dict[ModuleType, dict[str, object]]:
+    return {module: dict(vars(module)) for module in _PATCH_MODULES}
+
+
+def _restore_modules(snapshots: dict[ModuleType, dict[str, object]]) -> None:
+    for module, snapshot in snapshots.items():
+        current = vars(module)
+        for name in list(current):
+            if name not in snapshot:
+                del current[name]
+        current.update(snapshot)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def install_v3_legacy_patches_for_module() -> None:
+    snapshots = _snapshot_modules()
+    patch_v3.install()
+    boundary_patch.install()
+    surface_patch.install()
+    try:
+        yield
+    finally:
+        _restore_modules(snapshots)
 
 
 def _run_isolated(code: str) -> None:

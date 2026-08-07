@@ -384,7 +384,7 @@ def _synthesize_and_verify(
                     continue
                 break
 
-            answer = str(parsed["answer"]).strip()
+            answer = _normalize_compact_provider_visible_answer(parsed["answer"])
             visible_failures = _visible_semantic_failures(
                 answer, requirements, question
             )
@@ -582,7 +582,8 @@ def _compact_provider_payload(
         "Answer only from supplied evidence. Return exactly one compact JSON object with "
         "keys status, answer, used. status is answer or abstain. For answer, write 2-4 "
         "concise natural sentences and list the evidence labels actually used. Address "
-        "every must_state item explicitly. Do not paste code or headings. Do not invent "
+        "every must_state item explicitly. Evidence labels such as e1 or e2 belong only in "
+        "the used field and must not appear in the visible answer text. Do not paste code or headings. Do not invent "
         "facts. A precedes edge means ordering/navigation only, never dependency, "
         "causality or implementation unless passage text separately proves that stronger "
         "relation. If support is insufficient, abstain."
@@ -640,6 +641,21 @@ def _parse_compact_provider_result(text: str) -> dict[str, Any]:
         "answer": answer,
         "used": [str(item) for item in raw_used],
     }
+
+
+def _normalize_compact_provider_visible_answer(answer: str) -> str:
+    text = re.sub(
+        r"\s*[\[(（]\s*(?:e\d+(?:\s*[,;，、]\s*e\d+)*)\s*[\])）]",
+        "",
+        str(answer),
+    )
+    text = re.sub(
+        r"\s*(?:e\d+(?:\s*[,;，、]\s*e\d+)*)\s*(?=(?:[。.!?]|$|\s))",
+        " ",
+        text,
+        flags=re.I,
+    )
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _compact_call_telemetry(
@@ -874,11 +890,108 @@ def _semantic_requirements(
         add(
             "observability",
             (
-                "Cover observability/status/reattachment for the headless continuing "
-                "run."
-            ),
+            "Cover observability/status/reattachment for the headless continuing "
+            "run."
+        ),
             ["observability", "status", "reattach", "headless", "resume"],
             [r"\b(?:observability|reattach|headless|status|resume)\b"],
+        )
+    if (
+        "venture" in q
+        and "product" in q
+        and any(term in q for term in ("operations", "resources", "team", "finance", "risk"))
+    ):
+        add(
+            "venture_not_product",
+            "Explain that a venture is broader than the product alone.",
+            ["venture", "product", "system"],
+            [r"\b(?:venture|system).{0,120}(?:product|operations|resources|team|finance|risk)"],
+        )
+        add(
+            "operations_system",
+            "Cover operations as part of the venture system.",
+            ["operations", "operation", "delivery"],
+            [r"\boperations?\b"],
+        )
+        add(
+            "venture_resources",
+            "Cover resources as part of the venture system.",
+            ["resources", "resource", "runway"],
+            [r"\b(?:resources?|runway)\b"],
+        )
+        add(
+            "team_capacity",
+            "Cover team capacity as part of the venture system.",
+            ["team", "people"],
+            [r"\b(?:team|people)\b"],
+        )
+        add(
+            "finance_model",
+            "Cover finance as part of the venture system.",
+            ["finance", "financial", "margin", "cash", "runway"],
+            [r"\b(?:finance|financial|margin|cash|runway)\b"],
+        )
+        add(
+            "risk_management",
+            "Cover risk as part of the venture system.",
+            ["risk", "risks"],
+            [r"\brisks?\b"],
+        )
+    if (
+        any(term in q for term in ("pain point", "pain", "痛點"))
+        and any(term in q for term in ("adopt", "adoption", "change", "願意改變", "願意採用", "市場"))
+    ):
+        add(
+            "pain_acknowledgement",
+            "Separate pain acknowledgement from adoption willingness.",
+            ["pain", "problem", "pain point", "痛點"],
+            [r"\b(?:pain point|pain|problem|痛點)\b"],
+        )
+        add(
+            "change_willingness",
+            "Cover willingness to change or adopt.",
+            ["willing", "change", "adopt", "adoption", "改變", "採用"],
+            [r"\b(?:willing|change|adopt|adoption|改變|採用)\b"],
+        )
+        add(
+            "adoption_conditions",
+            "Cover adoption conditions, cost, trust, workflow, or risk.",
+            ["cost", "trust", "risk", "workflow", "conditions", "條件"],
+            [r"\b(?:cost|trust|risk|workflow|conditions?|條件)\b"],
+        )
+        add(
+            "market_movement",
+            "Cover market or customer movement.",
+            ["market", "customer", "hospitality", "hotel", "市場", "旅宿"],
+            [r"\b(?:market|customer|hospitality|hotel|市場|旅宿)\b"],
+        )
+    if (
+        any(term in q for term in ("changes direction", "changed in the problem", "founder drift", "aimless"))
+        and any(term in q for term in ("problem", "constraint", "market reality"))
+    ):
+        add(
+            "problem_evidence_changed",
+            "Focus on how the problem evidence changed rather than the pitch deck.",
+            ["problem", "evidence", "learning"],
+            [r"\b(?:problem|evidence|learning|pitch deck)\b"],
+        )
+        add(
+            "constraint_change",
+            "Cover changed constraints such as runway, timing, or resources.",
+            ["constraint", "constraints", "runway", "resource", "timing"],
+            [r"\b(?:constraint|constraints|runway|resource|timing)\b"],
+        )
+        add(
+            "market_reality_change",
+            "Cover changes in market reality or customer adoption.",
+            ["market", "reality", "customer", "adoption"],
+            [r"\b(?:market|reality|customer|adoption)\b"],
+        )
+        add(
+            "drift_boundary",
+            "Separate evidence-driven learning from aimless founder drift.",
+            ["drift", "aimless", "direction", "change"],
+            [r"\b(?:drift|aimless|direction|change)\b"],
         )
 
     if (

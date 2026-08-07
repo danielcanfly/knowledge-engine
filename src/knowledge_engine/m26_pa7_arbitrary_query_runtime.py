@@ -170,6 +170,17 @@ DIRECT_FACET_EXACT_PHRASES = {
         "one variable at a time",
     )
 }
+DIRECT_FACET_REQUIRED_QUOTE_TERM_GROUPS = {
+    "comfyui_checkpoints": (("checkpoint", "checkpoints"),),
+    "comfyui_loras": (("lora", "loras"),),
+    "comfyui_vae": (("vae",),),
+    "comfyui_clip_t5xxl": (("clip",), ("t5xxl",)),
+    "comfyui_quantization": (("gguf",), ("fp8",)),
+    "resource_constraint": (
+        ("resource", "resources", "runway"),
+        ("runway", "timing", "people", "venture", "founder"),
+    ),
+}
 DIRECT_FACET_DISPLAY_LABELS = {
     "comfyui_quantization": "comfyui GGUF/FP8 quantization",
 }
@@ -1390,6 +1401,15 @@ def _best_evidence_for_direct_facet(
     facet_terms = _facet_terms(facet)
     if not facet_terms:
         return _single_responsive_fallback_passage(question=question, evidence=passages)
+    if _direct_facet_required_quote_groups(str(facet.get("facet_id", ""))):
+        passages = [
+            item
+            for item in passages
+            if _direct_facet_text_matches(facet, str(item.get("passage_text", "")))
+            and _deterministic_support_ref_for_facet(item, facet) is not None
+        ]
+        if not passages:
+            return None
     ranked = sorted(
         passages,
         key=lambda item: (
@@ -1507,13 +1527,13 @@ def _deterministic_support_ref_for_terms(
         )
         quote = ranked[0]
         if not (facet_terms & _coverage_terms(quote)):
-            quote = _first_exact_evidence_quote(evidence_text)
+            return None
     else:
         quote = _first_exact_evidence_quote(evidence_text)
     if not quote:
         return None
     if len(quote) > 240:
-        quote = quote[:240].rsplit(" ", 1)[0].rstrip()
+        quote = _bounded_quote_around_terms(quote, facet_terms, max_chars=240)
     return {
         "evidence_id": str(item["evidence_id"]),
         "locator_id": str(item["locator_id"]),
@@ -1528,6 +1548,40 @@ def _deterministic_support_ref_for_facet(
     facet: Mapping[str, Any],
 ) -> dict[str, str] | None:
     facet_id = str(facet.get("facet_id", ""))
+    quote_groups = _direct_facet_required_quote_groups(facet_id)
+    if quote_groups and not _direct_facet_required_phrases(facet_id):
+        evidence_text = str(item.get("passage_text", ""))
+        segments = _exact_quote_segments(evidence_text)
+        if not segments:
+            return None
+        grouped_terms = {term for group in quote_groups for term in group}
+        ranked = sorted(
+            segments,
+            key=lambda segment: (
+                -sum(
+                    1
+                    for group in quote_groups
+                    if any(term in str(segment).casefold() for term in group)
+                ),
+                -_text_term_overlap_score(grouped_terms, segment),
+                _thin_heading(segment),
+                _article_title_like(segment),
+                _segment_noise_penalty(segment),
+                -len(_meaningful_terms(segment)),
+            ),
+        )
+        quote = ranked[0]
+        if not _direct_facet_text_matches(facet, quote):
+            return None
+        if len(quote) > 240:
+            quote = _bounded_quote_around_terms(quote, grouped_terms, max_chars=240)
+        return {
+            "evidence_id": str(item["evidence_id"]),
+            "locator_id": str(item["locator_id"]),
+            "exact_quote": quote,
+            "exact_support_snippet": quote,
+            "uncertainty": "low",
+        }
     if not _direct_facet_required_phrases(facet_id):
         return _deterministic_support_ref_for_terms(item, _facet_terms(facet))
     evidence_text = str(item.get("passage_text", ""))
@@ -1548,7 +1602,11 @@ def _deterministic_support_ref_for_facet(
     if _direct_facet_phrase_score(facet_id, quote) <= 0:
         return None
     if len(quote) > 240:
-        quote = quote[:240].rsplit(" ", 1)[0].rstrip()
+        quote = _bounded_quote_around_terms(
+            quote,
+            set(_direct_facet_required_phrases(facet_id)),
+            max_chars=240,
+        )
     return {
         "evidence_id": str(item["evidence_id"]),
         "locator_id": str(item["locator_id"]),
@@ -1556,6 +1614,38 @@ def _deterministic_support_ref_for_facet(
         "exact_support_snippet": quote,
         "uncertainty": "low",
     }
+
+
+def _bounded_quote_around_terms(
+    quote: str,
+    terms: set[str],
+    *,
+    max_chars: int,
+) -> str:
+    text = re.sub(r"\s+", " ", str(quote)).strip()
+    if len(text) <= max_chars:
+        return text
+    lowered = text.casefold()
+    positions = [
+        lowered.find(str(term).casefold())
+        for term in sorted(terms, key=len, reverse=True)
+        if str(term).strip() and lowered.find(str(term).casefold()) >= 0
+    ]
+    if not positions:
+        return text[:max_chars].rsplit(" ", 1)[0].rstrip()
+    anchor = min(positions)
+    start = max(0, anchor - max_chars // 3)
+    if start > 0:
+        boundary = text.rfind(" ", 0, start)
+        if boundary > 0:
+            start = boundary + 1
+    end = min(len(text), start + max_chars)
+    if end < len(text):
+        boundary = text.rfind(" ", start, end)
+        if boundary > start + max_chars // 2:
+            end = boundary
+    window = text[start:end].strip(" ,;:")
+    return window or text[:max_chars].rsplit(" ", 1)[0].rstrip()
 
 
 def _segment_noise_penalty(text: str) -> int:
@@ -2139,6 +2229,33 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
         add("business_delivery", ["delivery"])
         add("business_repeatability", ["repeatability", "repeatable", "repeat", "again", "return", "retained"])
     if (
+        any(term in question_casefold for term in ("changes direction", "changed in the problem", "founder drift", "aimless"))
+        and any(term in question_casefold for term in ("problem", "constraint", "market reality"))
+    ):
+        add("problem_evidence_changed", ["problem", "evidence", "learning"])
+        add("constraint_change", ["constraint", "constraints", "runway", "resource", "timing"])
+        add("market_reality_change", ["market", "reality", "customer", "adoption"])
+        add("drift_boundary", ["drift", "aimless", "direction", "pitch"])
+    if (
+        any(term in question_casefold for term in ("pain point", "pain", "痛點"))
+        and any(term in question_casefold for term in ("adopt", "adoption", "change willingness", "願意改變", "願意採用", "市場"))
+    ):
+        add("pain_acknowledgement", ["pain", "problem", "痛點"])
+        add("change_willingness", ["willing", "change", "adopt", "adoption", "改變", "採用"])
+        add("adoption_conditions", ["cost", "trust", "risk", "workflow", "conditions", "條件"])
+        add("market_movement", ["market", "customer", "hospitality", "hotel", "市場", "旅宿"])
+    if (
+        "venture" in question_casefold
+        and "product" in question_casefold
+        and any(term in question_casefold for term in ("operations", "resources", "team", "finance", "risk"))
+    ):
+        add("venture_not_product", ["venture", "product", "system"])
+        add("operations_system", ["operations", "operation", "delivery"])
+        add("venture_resources", ["resources", "resource", "runway"])
+        add("team_capacity", ["team", "people"])
+        add("finance_model", ["finance", "financial", "margin", "cash", "runway"])
+        add("risk_management", ["risk", "risks"])
+    if (
         "comfyui" in question_casefold
         and any(term in question_casefold for term in ("red nodes", "out of memory", "memory", "workflow"))
     ):
@@ -2615,9 +2732,13 @@ def _direct_facet_signal_met(
     exact_phrases = _direct_facet_required_phrases(facet_id)
     if exact_phrases:
         return any(phrase in visible_casefold for phrase in exact_phrases) and any(
-            phrase in support_text or phrase in evidence_text
+            phrase in support_text
             for phrase in exact_phrases
         )
+    quote_groups = _direct_facet_required_quote_groups(facet_id)
+    if quote_groups:
+        support_casefold = support_text.casefold()
+        return all(any(term in support_casefold for term in group) for group in quote_groups)
     if facet_id == "non_entailment_boundary":
         return _has_non_entailment_boundary(visible_casefold)
     if facet_id == "ordering_boundary":
@@ -4183,6 +4304,10 @@ def _direct_facet_required_phrases(facet_id: str) -> tuple[str, ...]:
     return DIRECT_FACET_EXACT_PHRASES.get(str(facet_id), ())
 
 
+def _direct_facet_required_quote_groups(facet_id: str) -> tuple[tuple[str, ...], ...]:
+    return DIRECT_FACET_REQUIRED_QUOTE_TERM_GROUPS.get(str(facet_id), ())
+
+
 def _direct_facet_phrase_score(facet_id: str, text: str) -> int:
     text_casefold = str(text).casefold()
     return sum(
@@ -4197,10 +4322,21 @@ def _direct_facet_match_score(facet: Mapping[str, Any], text: str) -> int:
     phrase_score = _direct_facet_phrase_score(facet_id, text)
     if _direct_facet_required_phrases(facet_id):
         return phrase_score
+    quote_groups = _direct_facet_required_quote_groups(facet_id)
+    if quote_groups:
+        return sum(
+            1
+            for group in quote_groups
+            if any(term in str(text).casefold() for term in group)
+        )
     return len(_facet_terms(facet) & _meaningful_terms(str(text)))
 
 
 def _direct_facet_text_matches(facet: Mapping[str, Any], text: str) -> bool:
+    groups = _direct_facet_required_quote_groups(str(facet.get("facet_id", "")))
+    if groups:
+        text_casefold = str(text).casefold()
+        return all(any(term in text_casefold for term in group) for group in groups)
     return _direct_facet_match_score(facet, text) >= 1
 
 
@@ -4216,6 +4352,15 @@ def _direct_facet_covered_markers(
     }
     if phrases:
         return phrases
+    groups = _direct_facet_required_quote_groups(facet_id)
+    if groups:
+        text_casefold = str(text).casefold()
+        return {
+            term
+            for group in groups
+            for term in group
+            if term in text_casefold
+        }
     return _facet_terms(facet) & _meaningful_terms(str(text))
 
 
@@ -5064,8 +5209,43 @@ def _looks_like_underspecified_workflow_question(question: str) -> bool:
 def _intent_class(question: str) -> str:
     for intent, patterns in INTENT_PATTERNS:
         if any(pattern.search(question) for pattern in patterns):
+            if intent == "temporal_conflict" and not _temporal_conflict_question(question):
+                continue
             return intent
     return "direct_grounded_knowledge"
+
+
+def _temporal_conflict_question(question: str) -> bool:
+    q = " ".join(str(question).casefold().split())
+    explicit_context = any(
+        marker in q
+        for marker in (
+            "source record",
+            "source records",
+            "source/version",
+            "version record",
+            "version records",
+            "temporal record",
+            "temporal records",
+            "provenance record",
+            "retrieved at",
+            "retrieval time",
+            "older",
+            "newer",
+            "first record",
+            "second record",
+            "timestamp",
+            "edited",
+            "updated",
+            "release",
+            "version",
+        )
+    )
+    if not explicit_context:
+        return False
+    if "what changed" in q or "changed between" in q or "older" in q or "newer" in q:
+        return True
+    return bool(re.search(r"\b(?:time|temporal|version|record|source|edited|updated)\b", q))
 
 
 def _secret_like(text: str) -> bool:

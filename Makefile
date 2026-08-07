@@ -1,5 +1,3 @@
-LOCAL_PYTHONPATH := $(CURDIR)/src
-
 .PHONY: install lint test compile ci build query clean
 
 install:
@@ -10,10 +8,10 @@ lint:
 	ruff check .
 
 test:
-	PYTHONPATH=$(LOCAL_PYTHONPATH) pytest -q
+	pytest -q
 
 compile:
-	PYTHONPATH=$(LOCAL_PYTHONPATH) python -m compileall -q src tests scripts
+	python -m compileall -q src tests scripts
 
 ci: lint test compile
 
