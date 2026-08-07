@@ -1,0 +1,914 @@
+{
+  "answer_claims": [
+    {
+      "citation_ids": [
+        "claim_1_ref_1"
+      ],
+      "claim_id": "claim_1",
+      "claim_role": "direct",
+      "facet_ids": [
+        "venture_pause_rationality"
+      ],
+      "source_identities": [
+        "daniel_blog_en__after-the-pause-06"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "Sometimes pausing a venture is not giving up on it."
+    },
+    {
+      "citation_ids": [
+        "claim_2_ref_1"
+      ],
+      "claim_id": "claim_2",
+      "claim_role": "direct",
+      "facet_ids": [
+        "conviction_problem_boundary"
+      ],
+      "source_identities": [
+        "daniel_blog_en__after-the-pause-03"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "It means you are willing to cut something you badly wanted to believe in."
+    },
+    {
+      "citation_ids": [
+        "claim_3_ref_1"
+      ],
+      "claim_id": "claim_3",
+      "claim_role": "direct",
+      "facet_ids": [
+        "runway_constraint"
+      ],
+      "source_identities": [
+        "daniel_blog_en__from-pain-to-venture-part11"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "The basic runway formula is simple: > cash balance ÷ monthly net burn = months of runway But the deeper question is not only how many months remain."
+    },
+    {
+      "citation_ids": [
+        "claim_4_ref_1"
+      ],
+      "claim_id": "claim_4",
+      "claim_role": "direct",
+      "facet_ids": [
+        "people_constraint",
+        "resource_constraint",
+        "timing_constraint"
+      ],
+      "source_identities": [
+        "daniel_blog_en__after-the-pause-06"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "But when the people, timing and resources are wrong, forcing yourself to keep going is not bravery."
+    },
+    {
+      "citation_ids": [
+        "claim_5_ref_1"
+      ],
+      "claim_id": "claim_5",
+      "claim_role": "direct",
+      "facet_ids": [
+        "conviction_problem_boundary",
+        "people_constraint",
+        "runway_constraint"
+      ],
+      "source_identities": [
+        "daniel_blog_en__after-the-pause-06"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "More in the sense that I had already taken the problem far enough to see its shape clearly, and I could also see that under slightly different conditions, more time, better people, a bit more runway, it was not impossible that something"
+    },
+    {
+      "citation_ids": [
+        "claim_6_ref_1"
+      ],
+      "claim_id": "claim_6",
+      "claim_role": "direct",
+      "facet_ids": [
+        "resource_constraint"
+      ],
+      "source_identities": [
+        "daniel_blog_en__harness-theory-part-8"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "stop safely when critical state can no longer be preserved Cutting must not separate: - tool requests from correlated results - approval requests from decisions - background acceptance from work IDs - side-effect operations from receipts -"
+    }
+  ],
+  "answer_source": "deterministic_verified_evidence_synthesis",
+  "answer_text": "venture pause rationality: Sometimes pausing a venture is not giving up on it [claim_1_ref_1]. conviction problem boundary: It means you are willing to cut something you badly wanted to believe in [claim_2_ref_1]. runway constraint: The basic runway formula is simple: > cash balance ÷ monthly net burn = months of runway But the deeper question is not only how many months remain [claim_3_ref_1]. timing constraint: But when the people, timing and resources are wrong, forcing yourself to keep going is not bravery [claim_4_ref_1]. people constraint: More in the sense that I had already taken the problem far enough to see its shape clearly, and I could also see that under slightly different conditions, more time, better people, a bit more runway, it was not impossible that something [claim_5_ref_1]. resource constraint: stop safely when critical state can no longer be preserved Cutting must not separate: - tool requests from correlated results - approval requests from decisions - background acceptance from work IDs - side-effect operations from receipts - [claim_6_ref_1].",
+  "candidate_count_by_channel": {
+    "combined_unique": 16,
+    "dense": 8,
+    "graph_edge_selected": 0,
+    "graph_expanded_selected": 0,
+    "lexical": 8,
+    "seed": 16
+  },
+  "citation_locator_valid": true,
+  "citations": [
+    {
+      "citation_id": "claim_1_ref_1",
+      "claim_id": "claim_1",
+      "claim_role": "direct",
+      "concept_id": "article_aa65675211fcc4791a90",
+      "evidence_id": "m26pa7ev_aa9bc663a89c363d717dd4514c4ed7be",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "09f504028e8d97f3b36396fa75d072c14a16263234193eb6150b2f19a2c071b7",
+      "locator_id": "m26pa7loc_1045f91cf1c2b28458b644d4a69615c3",
+      "provenance_record_sha256": "4e37a120a2ce9744052695eb0d21a019eb308cbe1020efeaa8179d9c1bfee857",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_855a2005e894783e5028",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__after-the-pause-06",
+      "source_identity": "daniel_blog_en__after-the-pause-06",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_855a2005e894783e5028",
+      "support_text_sha256": "c2229df260410d61bfb7a25bbb31903a087ba5ba45b880461d606e66518a2186"
+    },
+    {
+      "citation_id": "claim_2_ref_1",
+      "claim_id": "claim_2",
+      "claim_role": "direct",
+      "concept_id": "article_fd41d90749f2ed08acfa",
+      "evidence_id": "m26pa7ev_4728d700f2e6d95926d4d99797876120",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "1fd7c2d40cc96cdef06de5d5ae2e0480ec46c1caeeb2ced9083ba6df77451de1",
+      "locator_id": "m26pa7loc_7e34dabece0dad3c8fca58265c734ff4",
+      "provenance_record_sha256": "cef44645259efa320163e12bd034ba2836503fecef087c49e61906628b0dc453",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_943b938e906ec11e673f",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__after-the-pause-03",
+      "source_identity": "daniel_blog_en__after-the-pause-03",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_943b938e906ec11e673f",
+      "support_text_sha256": "587095001fd41231ef844f0cc1e3b25fcb78ba477f17309d106839f75d31bd97"
+    },
+    {
+      "citation_id": "claim_3_ref_1",
+      "claim_id": "claim_3",
+      "claim_role": "direct",
+      "concept_id": "article_f63bdc15f10c824c7842",
+      "evidence_id": "m26pa7ev_df7b4609387e56f1b91337f3fa4e526d",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "2428482a134ea6f26ed8f7bafed981222d8436454314b9fbf46c6aa34f775afb",
+      "locator_id": "m26pa7loc_ba8620361dc488f02a08f71dbd89e709",
+      "provenance_record_sha256": "a5c4bfb8b9c8b97470bec32bd9b8ba11a40585dc1c00fcd81bf6640b0c6f41b2",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_31aef6b90a0b05639c06",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__from-pain-to-venture-part11",
+      "source_identity": "daniel_blog_en__from-pain-to-venture-part11",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_31aef6b90a0b05639c06",
+      "support_text_sha256": "5a2ae6d184e9fa69382a8ff583c0049c1895aaef006b8486a3dc2d217319dfcb"
+    },
+    {
+      "citation_id": "claim_4_ref_1",
+      "claim_id": "claim_4",
+      "claim_role": "direct",
+      "concept_id": "article_aa65675211fcc4791a90",
+      "evidence_id": "m26pa7ev_aa9bc663a89c363d717dd4514c4ed7be",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "81623c0043ee5404df81d9b14f22420b5f57781871b4c3f87e5f5b5bae9b414a",
+      "locator_id": "m26pa7loc_1045f91cf1c2b28458b644d4a69615c3",
+      "provenance_record_sha256": "4e37a120a2ce9744052695eb0d21a019eb308cbe1020efeaa8179d9c1bfee857",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_855a2005e894783e5028",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__after-the-pause-06",
+      "source_identity": "daniel_blog_en__after-the-pause-06",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_855a2005e894783e5028",
+      "support_text_sha256": "c2229df260410d61bfb7a25bbb31903a087ba5ba45b880461d606e66518a2186"
+    },
+    {
+      "citation_id": "claim_5_ref_1",
+      "claim_id": "claim_5",
+      "claim_role": "direct",
+      "concept_id": "article_aa65675211fcc4791a90",
+      "evidence_id": "m26pa7ev_aa9bc663a89c363d717dd4514c4ed7be",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "2d1009fd08e86c59c8f3a3db16323f10027b0c95f040fb7255fb579c0114d2ac",
+      "locator_id": "m26pa7loc_1045f91cf1c2b28458b644d4a69615c3",
+      "provenance_record_sha256": "4e37a120a2ce9744052695eb0d21a019eb308cbe1020efeaa8179d9c1bfee857",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_855a2005e894783e5028",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__after-the-pause-06",
+      "source_identity": "daniel_blog_en__after-the-pause-06",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_855a2005e894783e5028",
+      "support_text_sha256": "c2229df260410d61bfb7a25bbb31903a087ba5ba45b880461d606e66518a2186"
+    },
+    {
+      "citation_id": "claim_6_ref_1",
+      "claim_id": "claim_6",
+      "claim_role": "direct",
+      "concept_id": "article_281be973720b56fca87d",
+      "evidence_id": "m26pa7ev_f65f5042b21b3bbe9f5c1c0519565e7b",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "80ec89193ae58cfa7ab6dc5b6754ec71543766d85eb0428bb13c4a813de44a7e",
+      "locator_id": "m26pa7loc_5148b8432d2bc1100e1f9afcd220697b",
+      "provenance_record_sha256": "93cd7ee92b39a03ecb63e7bcc366173bf708c3a6dafcf327abb45edc654aa115",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_1933f85c5e0e57a24a7d",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__harness-theory-part-8",
+      "source_identity": "daniel_blog_en__harness-theory-part-8",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_1933f85c5e0e57a24a7d",
+      "support_text_sha256": "4968c6649dbdce51d79ae4b72097fa7744cc1108b1c79050296390cd912c045a"
+    }
+  ],
+  "distinct_source_count": 10,
+  "distinct_source_identities": [
+    "daniel_blog_en__after-the-pause-03",
+    "daniel_blog_en__after-the-pause-05",
+    "daniel_blog_en__after-the-pause-06",
+    "daniel_blog_en__build-mcp-server-part-5",
+    "daniel_blog_en__from-pain-to-venture-part11",
+    "daniel_blog_en__from-rag-to-production-rag-part-3",
+    "daniel_blog_en__from-rag-to-production-rag-part-4",
+    "daniel_blog_en__from-rag-to-production-rag-part-8",
+    "daniel_blog_en__from-rag-to-production-rag-part-9",
+    "daniel_blog_en__harness-theory-part-8"
+  ],
+  "evidence_utilization_trace": {
+    "selected_evidence_count": 10,
+    "selected_evidence_used_fraction": 0.4,
+    "selected_gt_zero_used_zero_failure": false,
+    "unused_selected_evidence_count": 6,
+    "unused_selected_evidence_ids": [
+      "m26pa7ev_37ecde0b41fa6098933d37797e59187f",
+      "m26pa7ev_5f7f3a104421d4520f7f2176f5f84ab6",
+      "m26pa7ev_839e6a464c2ac0ea22d671e405a28b63",
+      "m26pa7ev_9784131f2afe77f62b64064b37f938ab",
+      "m26pa7ev_98d328e66b9b9910a7c89ac80c228e2f",
+      "m26pa7ev_b8892be84fbb304ee203382fb82a2158"
+    ],
+    "used_evidence_count": 4,
+    "used_evidence_ids": [
+      "m26pa7ev_4728d700f2e6d95926d4d99797876120",
+      "m26pa7ev_aa9bc663a89c363d717dd4514c4ed7be",
+      "m26pa7ev_df7b4609387e56f1b91337f3fa4e526d",
+      "m26pa7ev_f65f5042b21b3bbe9f5c1c0519565e7b"
+    ],
+    "used_evidence_type_counts": {
+      "passage": 6
+    },
+    "used_source_identities": [
+      "daniel_blog_en__after-the-pause-03",
+      "daniel_blog_en__after-the-pause-06",
+      "daniel_blog_en__from-pain-to-venture-part11",
+      "daniel_blog_en__harness-theory-part-8"
+    ]
+  },
+  "graph_hops_used": 2,
+  "graph_observability": {
+    "selected_graph_derived_evidence_count": 0,
+    "selected_graph_hop_counts": [],
+    "selected_graph_relation_type_counts": {},
+    "selected_graph_relation_types": [],
+    "structural_relation_type_counts": {}
+  },
+  "graph_trace": [
+    {
+      "confidence": 1.0,
+      "edge_id": "edge_cc189e5d4d739a506c84",
+      "provenance_ref_sha256": "43f8a67a459f07f78f3a4db0af4bd9ed230499ea604f0ca1ef4330a10c57e9e9",
+      "relation_type": "precedes",
+      "source": "article_6d430e058d1392e85678",
+      "target": "article_b5e27e2b14e2e99c3168"
+    },
+    {
+      "confidence": 1.0,
+      "edge_id": "edge_b845894c52b7c2f048d5",
+      "provenance_ref_sha256": "43f8a67a459f07f78f3a4db0af4bd9ed230499ea604f0ca1ef4330a10c57e9e9",
+      "relation_type": "precedes",
+      "source": "article_262078c49cdafb3cecc9",
+      "target": "article_d946af4465827a5e6d0f"
+    }
+  ],
+  "intent_class": "direct_grounded_knowledge",
+  "latency_ms": 21944,
+  "material_claim_support_verified": true,
+  "model_identity": "MiniMax-M3",
+  "multi_evidence_verification": {
+    "bounded_repair_attempted": true,
+    "claim_count": 6,
+    "covered_facets": [
+      "conviction_problem_boundary",
+      "people_constraint",
+      "resource_constraint",
+      "runway_constraint",
+      "timing_constraint",
+      "venture_pause_rationality"
+    ],
+    "deterministic_evidence_synthesis_used": true,
+    "distinct_source_count": 4,
+    "dropped_claim_count": 0,
+    "fallback_eligibility": {
+      "allow_after_repair_failure": true,
+      "eligible": true,
+      "reasons": [
+        "after_bounded_repair_failure",
+        "semantic_facet_bound_candidate"
+      ]
+    },
+    "locator_validity": 1.0,
+    "missing_facets": [],
+    "natural_answer_fallback_used": false,
+    "provider_attempt_telemetry": [
+      {
+        "attempt": 1,
+        "call_class": "pa7_multi_evidence_query",
+        "content_block_types": [
+          "text"
+        ],
+        "output_tokens": 546,
+        "parse_telemetry": {
+          "missing_keys": [],
+          "parse_ok": true,
+          "parse_subtype": "exact_json",
+          "unknown_keys": []
+        },
+        "provider_text_char_count": 2084,
+        "stop_reason": "end_turn"
+      },
+      {
+        "attempt": 2,
+        "call_class": "pa7_multi_evidence_query_repair",
+        "content_block_types": [
+          "text"
+        ],
+        "output_tokens": 634,
+        "parse_telemetry": {
+          "missing_keys": [],
+          "parse_ok": true,
+          "parse_subtype": "exact_json",
+          "unknown_keys": []
+        },
+        "provider_text_char_count": 2509,
+        "stop_reason": "end_turn"
+      }
+    ],
+    "provider_parse": {
+      "missing_keys": [],
+      "parse_subtype": "exact_json",
+      "unknown_keys": []
+    },
+    "provider_status": "answer_candidate",
+    "repair_result": "deterministic_verified_evidence_synthesis",
+    "repair_trigger": [
+      "BOUNDED_REPAIR_EXHAUSTED",
+      "M26-PA7-ME-021"
+    ],
+    "required_facets": [
+      "conviction_problem_boundary",
+      "people_constraint",
+      "resource_constraint",
+      "runway_constraint",
+      "timing_constraint",
+      "venture_pause_rationality"
+    ],
+    "single_primary_passage_used": false,
+    "support_precision": 1.0,
+    "support_ref_count": 6,
+    "trigger_reason_codes": [
+      "BOUNDED_REPAIR_EXHAUSTED",
+      "M26-PA7-ME-021"
+    ],
+    "unsupported_accepted_claims": 0,
+    "verification_failure_codes_by_attempt": [
+      "M26-PA7-ME-021",
+      "M26-PA7-ME-021"
+    ]
+  },
+  "mutations": {
+    "answer_to_canonical_writes": 0,
+    "canonical_writes": 0,
+    "corpus_index_content_mutations": 0,
+    "production_pointer_mutations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0
+  },
+  "parent_expansion": {
+    "enabled": true,
+    "expanded_section_count": 30,
+    "items": [
+      {
+        "evidence_id": "m26pa7ev_aa9bc663a89c363d717dd4514c4ed7be",
+        "parent_concept_id": "article_aa65675211fcc4791a90",
+        "sibling_section_ids": [
+          "article_aa65675211fcc4791a90",
+          "section_6ea4345732237aafac3c",
+          "section_843fc82e56a27b698aa8"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_4728d700f2e6d95926d4d99797876120",
+        "parent_concept_id": "article_fd41d90749f2ed08acfa",
+        "sibling_section_ids": [
+          "article_fd41d90749f2ed08acfa",
+          "section_3c3e6615ef2cd003e1f5",
+          "section_4361b6783cc9b2a6a6a0"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_df7b4609387e56f1b91337f3fa4e526d",
+        "parent_concept_id": "article_f63bdc15f10c824c7842",
+        "sibling_section_ids": [
+          "article_f63bdc15f10c824c7842",
+          "section_00c95b55578006da22cf",
+          "section_058feabbf955264c6493"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_98d328e66b9b9910a7c89ac80c228e2f",
+        "parent_concept_id": "article_6442977b860ceaa580be",
+        "sibling_section_ids": [
+          "article_6442977b860ceaa580be",
+          "section_23d7b11751e45e81bba6",
+          "section_24b999bda30a17f09c88"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_37ecde0b41fa6098933d37797e59187f",
+        "parent_concept_id": "article_2a1966b5eca2eb4b0b40",
+        "sibling_section_ids": [
+          "article_2a1966b5eca2eb4b0b40",
+          "section_0c58a14cbb44ebaba548",
+          "section_137fd0dcf79ce86af53d"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_f65f5042b21b3bbe9f5c1c0519565e7b",
+        "parent_concept_id": "article_281be973720b56fca87d",
+        "sibling_section_ids": [
+          "article_281be973720b56fca87d",
+          "section_20027c6f964c9dbca43f",
+          "section_21b64613bbca26917d96"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_839e6a464c2ac0ea22d671e405a28b63",
+        "parent_concept_id": "article_b5e27e2b14e2e99c3168",
+        "sibling_section_ids": [
+          "article_b5e27e2b14e2e99c3168",
+          "section_0ba9f40ed60181ba7ec6",
+          "section_37e96a53c37aa25909ca"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_5f7f3a104421d4520f7f2176f5f84ab6",
+        "parent_concept_id": "article_262078c49cdafb3cecc9",
+        "sibling_section_ids": [
+          "article_262078c49cdafb3cecc9",
+          "section_64c1fb27e1410949a022",
+          "section_69d37e918e807904e001"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_9784131f2afe77f62b64064b37f938ab",
+        "parent_concept_id": "article_6d430e058d1392e85678",
+        "sibling_section_ids": [
+          "article_6d430e058d1392e85678",
+          "section_22605b7c64acbb6bbcb0",
+          "section_29c1a4c28fd8033a70de"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_b8892be84fbb304ee203382fb82a2158",
+        "parent_concept_id": "article_d946af4465827a5e6d0f",
+        "sibling_section_ids": [
+          "article_d946af4465827a5e6d0f",
+          "section_27946df53837499c6e96",
+          "section_9b84809cda6ccdc622b0"
+        ]
+      }
+    ],
+    "max_siblings_per_evidence": 3
+  },
+  "payg_equivalent_cost_usd": "0.00681528",
+  "privacy": {
+    "full_provider_response_persisted": false,
+    "raw_evidence_persisted": false,
+    "raw_query_persisted": false,
+    "secret_values_persisted": false,
+    "vectors_persisted": false
+  },
+  "production_manifest_sha256": "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3",
+  "production_pointer_digest": "061589d7a487d37a807bcc366461b3e61f2605362f594c49ce39b503990ffb98",
+  "production_release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+  "provider_call_count": 2,
+  "provider_identity": "MiniMax",
+  "provider_invoked": true,
+  "qdrant_collection": null,
+  "question_sha256": "3b9035b29834912c403e34610c78c088f4756a48686afc97c770c263b9779eaf",
+  "reason_codes": [],
+  "relationship_summary": {
+    "covered_facets": [
+      "conviction_problem_boundary",
+      "people_constraint",
+      "resource_constraint",
+      "runway_constraint",
+      "timing_constraint",
+      "venture_pause_rationality"
+    ],
+    "intent_class": "direct_grounded_knowledge",
+    "missing_facets": [],
+    "relation": "null",
+    "required_facets": [
+      "conviction_problem_boundary",
+      "people_constraint",
+      "resource_constraint",
+      "runway_constraint",
+      "timing_constraint",
+      "venture_pause_rationality"
+    ],
+    "selected_evidence_ids": [
+      "m26pa7ev_aa9bc663a89c363d717dd4514c4ed7be",
+      "m26pa7ev_4728d700f2e6d95926d4d99797876120",
+      "m26pa7ev_df7b4609387e56f1b91337f3fa4e526d",
+      "m26pa7ev_f65f5042b21b3bbe9f5c1c0519565e7b"
+    ],
+    "selected_graph_edge_ids": [],
+    "synthesis_source": "deterministic_verified_evidence_spans",
+    "used_evidence_ids": [
+      "m26pa7ev_4728d700f2e6d95926d4d99797876120",
+      "m26pa7ev_aa9bc663a89c363d717dd4514c4ed7be",
+      "m26pa7ev_df7b4609387e56f1b91337f3fa4e526d",
+      "m26pa7ev_f65f5042b21b3bbe9f5c1c0519565e7b"
+    ]
+  },
+  "repair_attempted": true,
+  "rerank_diversity_summary": {
+    "distinct_source_count": 10,
+    "selected_channel_counts": {
+      "lexical": 5,
+      "query_coverage": 5,
+      "required_facet_coverage": 1
+    },
+    "selected_evidence_count": 10,
+    "selected_evidence_type_counts": {
+      "passage": 10
+    },
+    "selected_source_redundancy": {}
+  },
+  "resolved_gate_self_sha256": "6adf0f4fa53d0b061f9e587b72e99ce38de2805f8b35b23841d5a63e44d9af5b",
+  "retrieval_backend_identity": {
+    "dense": {
+      "backend": "local_release_dense_projection_v1",
+      "manifest_sha256": "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "remote": false,
+      "vector_dimension": 64,
+      "vectors_persisted": false
+    },
+    "graph_v2": {
+      "artifact_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+      "edge_count": 8525,
+      "node_count": 4222,
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+    },
+    "lexical": {
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+    },
+    "provenance": {
+      "artifact_sha256": "d8f7b88ce828daa42b36a8a60c8b47615c83262f308ead5eef226fba6d952c3f",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+    }
+  },
+  "retrieval_mode_summary": {
+    "actual_question_reaches_retrieval": true,
+    "dense": true,
+    "dynamic_evidence_budget": true,
+    "graph": true,
+    "graph_expansion_default_for_ordinary_queries": true,
+    "intent_class": "direct_grounded_knowledge",
+    "lexical": true,
+    "multi_evidence_bundle": true,
+    "parent_expansion": true,
+    "provenance": true,
+    "redundancy_penalty": true,
+    "reranking": "dynamic_candidate_pool_graph_distance_source_diversity_redundancy_penalty",
+    "source_diversity": true
+  },
+  "safe_abstention": false,
+  "schema_version": "knowledge-engine-m26-pa7-arbitrary-owner-query-response/v1",
+  "selected_evidence": [
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "query_coverage"
+      ],
+      "concept_id": "article_aa65675211fcc4791a90",
+      "evidence_id": "m26pa7ev_aa9bc663a89c363d717dd4514c4ed7be",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_1045f91cf1c2b28458b644d4a69615c3",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "coverage_terms": [
+          "decision",
+          "founder",
+          "pausing",
+          "people",
+          "problem",
+          "resource",
+          "runway",
+          "than",
+          "that",
+          "timing",
+          "venture"
+        ],
+        "query_overlap_score": 0.5
+      },
+      "section_granularity": "section",
+      "section_id": "section_855a2005e894783e5028",
+      "source_id": "daniel_blog_en__after-the-pause-06",
+      "source_identity": "daniel_blog_en__after-the-pause-06",
+      "text_sha256": "c2229df260410d61bfb7a25bbb31903a087ba5ba45b880461d606e66518a2186"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "query_coverage"
+      ],
+      "concept_id": "article_fd41d90749f2ed08acfa",
+      "evidence_id": "m26pa7ev_4728d700f2e6d95926d4d99797876120",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_7e34dabece0dad3c8fca58265c734ff4",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "coverage_terms": [
+          "believe",
+          "conviction",
+          "evidence",
+          "longer",
+          "separate"
+        ],
+        "query_overlap_score": 0.5
+      },
+      "section_granularity": "section",
+      "section_id": "section_943b938e906ec11e673f",
+      "source_id": "daniel_blog_en__after-the-pause-03",
+      "source_identity": "daniel_blog_en__after-the-pause-03",
+      "text_sha256": "587095001fd41231ef844f0cc1e3b25fcb78ba477f17309d106839f75d31bd97"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "query_coverage"
+      ],
+      "concept_id": "article_f63bdc15f10c824c7842",
+      "evidence_id": "m26pa7ev_df7b4609387e56f1b91337f3fa4e526d",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_ba8620361dc488f02a08f71dbd89e709",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "coverage_terms": [
+          "survival"
+        ],
+        "query_overlap_score": 0.36363636363636365
+      },
+      "section_granularity": "section",
+      "section_id": "section_31aef6b90a0b05639c06",
+      "source_id": "daniel_blog_en__from-pain-to-venture-part11",
+      "source_identity": "daniel_blog_en__from-pain-to-venture-part11",
+      "text_sha256": "5a2ae6d184e9fa69382a8ff583c0049c1895aaef006b8486a3dc2d217319dfcb"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "required_facet_coverage",
+        "query_coverage"
+      ],
+      "concept_id": "article_6442977b860ceaa580be",
+      "evidence_id": "m26pa7ev_98d328e66b9b9910a7c89ac80c228e2f",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_addc2d5192f59baff7d196f299ce2949",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "covered_facet_terms": [
+          "timing"
+        ],
+        "required_facet_id": "timing_constraint",
+        "required_facet_terms": [
+          "timing"
+        ]
+      },
+      "section_granularity": "section",
+      "section_id": "section_a0a1bc4aa2af66352aaa",
+      "source_id": "daniel_blog_en__build-mcp-server-part-5",
+      "source_identity": "daniel_blog_en__build-mcp-server-part-5",
+      "text_sha256": "7365473f1dbd35ec9717523454dd857a36c3c320602a31194e4ed7516070008a"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_2a1966b5eca2eb4b0b40",
+      "evidence_id": "m26pa7ev_37ecde0b41fa6098933d37797e59187f",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_2faedd6d635321f147c3fd7ebb14670e",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 200.492857,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_963cb42b60fb4325b3a8",
+      "source_id": "daniel_blog_en__after-the-pause-05",
+      "source_identity": "daniel_blog_en__after-the-pause-05",
+      "text_sha256": "d59e9dfcba33ab9dccefa524f5a69e75d574dd91f8ba503edebd42d53e159d9a"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "query_coverage"
+      ],
+      "concept_id": "article_281be973720b56fca87d",
+      "evidence_id": "m26pa7ev_f65f5042b21b3bbe9f5c1c0519565e7b",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_5148b8432d2bc1100e1f9afcd220697b",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "coverage_terms": [
+          "constraint",
+          "constraints",
+          "rather"
+        ],
+        "query_overlap_score": 0.45454545454545453
+      },
+      "section_granularity": "section",
+      "section_id": "section_1933f85c5e0e57a24a7d",
+      "source_id": "daniel_blog_en__harness-theory-part-8",
+      "source_identity": "daniel_blog_en__harness-theory-part-8",
+      "text_sha256": "4968c6649dbdce51d79ae4b72097fa7744cc1108b1c79050296390cd912c045a"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_b5e27e2b14e2e99c3168",
+      "evidence_id": "m26pa7ev_839e6a464c2ac0ea22d671e405a28b63",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_4a1b4bcf6c14e2e256f8263126d95402",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 312.35,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_f206a930b1d87612af3d",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-9",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-9",
+      "text_sha256": "9d5b3d54e8f9444f2b44e0bbc716957673a27ab965b93fda37cd9af540edd531"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_262078c49cdafb3cecc9",
+      "evidence_id": "m26pa7ev_5f7f3a104421d4520f7f2176f5f84ab6",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_8f0776652a7c6066ceece35f8b4e91cd",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 260.85,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_296166df8c108754ed74",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-3",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-3",
+      "text_sha256": "9cd9a8a6f10e955b6c9206302f8e3a75e111456ba7ed2fba095f3da220a6cbad"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_6d430e058d1392e85678",
+      "evidence_id": "m26pa7ev_9784131f2afe77f62b64064b37f938ab",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_08944a8167f068e389e3ba9a58e3d8d4",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 255.683333,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_e8964324d9c6f49af3bb",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-8",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-8",
+      "text_sha256": "4a3e1c8ff0145282d1d3c0d1dd6718f60f6a955e5f0760c63264a05586aab345"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_d946af4465827a5e6d0f",
+      "evidence_id": "m26pa7ev_b8892be84fbb304ee203382fb82a2158",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_e1d4f26e80a221d56c8fbc15dd767a78",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 233.6,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_1300edf852a8daf75a7c",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-4",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-4",
+      "text_sha256": "3d78d12c6d49cba58f2381247eb3829032816dea31e7a2bf8c617210676b02b8"
+    }
+  ],
+  "selected_evidence_count": 10,
+  "selected_evidence_ids": [
+    "m26pa7ev_aa9bc663a89c363d717dd4514c4ed7be",
+    "m26pa7ev_4728d700f2e6d95926d4d99797876120",
+    "m26pa7ev_df7b4609387e56f1b91337f3fa4e526d",
+    "m26pa7ev_98d328e66b9b9910a7c89ac80c228e2f",
+    "m26pa7ev_37ecde0b41fa6098933d37797e59187f",
+    "m26pa7ev_f65f5042b21b3bbe9f5c1c0519565e7b",
+    "m26pa7ev_839e6a464c2ac0ea22d671e405a28b63",
+    "m26pa7ev_5f7f3a104421d4520f7f2176f5f84ab6",
+    "m26pa7ev_9784131f2afe77f62b64064b37f938ab",
+    "m26pa7ev_b8892be84fbb304ee203382fb82a2158"
+  ],
+  "selected_locator_ids": [
+    "m26pa7loc_1045f91cf1c2b28458b644d4a69615c3",
+    "m26pa7loc_7e34dabece0dad3c8fca58265c734ff4",
+    "m26pa7loc_ba8620361dc488f02a08f71dbd89e709",
+    "m26pa7loc_addc2d5192f59baff7d196f299ce2949",
+    "m26pa7loc_2faedd6d635321f147c3fd7ebb14670e",
+    "m26pa7loc_5148b8432d2bc1100e1f9afcd220697b",
+    "m26pa7loc_4a1b4bcf6c14e2e256f8263126d95402",
+    "m26pa7loc_8f0776652a7c6066ceece35f8b4e91cd",
+    "m26pa7loc_08944a8167f068e389e3ba9a58e3d8d4",
+    "m26pa7loc_e1d4f26e80a221d56c8fbc15dd767a78"
+  ],
+  "status": "owner_only_cited_answer",
+  "terminal_status": "verified_answer_ready_candidate",
+  "trace_id": "m26pa7aq_6bbf3867f925649072e84224bfa3f158",
+  "unsupported_accepted_claims": 0
+}

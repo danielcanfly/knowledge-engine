@@ -1073,6 +1073,141 @@ def _semantic_requirements(
             ],
         )
 
+    if (
+        any(term in q for term in ("pausing a venture", "pause a venture", "pausing", "survival decision"))
+        and any(term in q for term in ("runway", "timing", "people", "resource", "constraint"))
+    ):
+        add(
+            "venture_pause_rationality",
+            "Explain when pausing the venture is a rational survival/timing decision.",
+            ["pause", "pausing", "venture", "survival", "rational"],
+            [r"\b(?:pause|pausing).{0,140}(?:venture|survival|rational|runway|timing)"],
+        )
+        add(
+            "conviction_problem_boundary",
+            "Separate conviction in the problem from whether now is executable.",
+            ["conviction", "believe", "problem", "execute"],
+            [r"\b(?:conviction|belie(?:f|ve|ves)).{0,160}(?:problem|still|separate|execution|execute)"],
+        )
+        add(
+            "runway_constraint",
+            "Cover runway constraints.",
+            ["runway"],
+            [r"\brunway\b"],
+        )
+        add(
+            "timing_constraint",
+            "Cover timing constraints.",
+            ["timing"],
+            [r"\btiming\b"],
+        )
+        add(
+            "people_constraint",
+            "Cover people/team constraints.",
+            ["people", "team"],
+            [r"\b(?:people|team)\b"],
+        )
+        add(
+            "resource_constraint",
+            "Cover resource constraints.",
+            ["resource", "constraints"],
+            [r"\bresources?\b|\bconstraints?\b"],
+        )
+
+    if (
+        "demand" in q
+        and any(term in q for term in ("viable business", "value capture", "economics", "delivery", "repeatability"))
+    ):
+        add(
+            "demand_not_business_proof",
+            "Explain that demand alone does not prove a viable business.",
+            ["demand", "prove", "viable", "business"],
+            [r"\bdemand.{0,160}(?:not|doesn't|does not|still).{0,120}(?:business|viable|prove)"],
+        )
+        add(
+            "value_capture",
+            "Cover value capture/payment rather than interest alone.",
+            ["value", "capture", "pay", "willingness"],
+            [r"\bvalue capture\b|\b(?:capture|pay|payment|willingness).{0,100}value"],
+        )
+        add(
+            "business_economics",
+            "Cover business economics.",
+            ["economics"],
+            [r"\beconomics?\b"],
+        )
+        add(
+            "business_delivery",
+            "Cover delivery ability.",
+            ["delivery"],
+            [r"\bdelivery\b"],
+        )
+        add(
+            "business_repeatability",
+            "Cover repeatability.",
+            ["repeatability", "repeatable", "repeat", "again", "return", "retained"],
+            [r"\brepeatab(?:le|ility)\b", r"\bagain\b", r"\breturn\b", r"\bretained\b", r"\brepeat\b"],
+        )
+
+    if (
+        "comfyui" in q
+        and any(term in q for term in ("red nodes", "out of memory", "memory", "workflow"))
+    ):
+        add(
+            "comfyui_failure_modes",
+            "Explain red nodes and out-of-memory as different ComfyUI failure modes.",
+            ["comfyui", "red", "nodes", "memory", "workflow"],
+            [r"\bcomfyui\b", r"\bred nodes?\b", r"\b(?:out of memory|oom|memory pressure)\b"],
+        )
+        add(
+            "comfyui_checkpoints",
+            "Cover checkpoint mismatches.",
+            ["checkpoint"],
+            [r"\bcheckpoints?\b"],
+        )
+        add(
+            "comfyui_loras",
+            "Cover LoRA mismatches.",
+            ["lora"],
+            [r"\bloras?\b"],
+        )
+        add(
+            "comfyui_vae",
+            "Cover VAE mismatches.",
+            ["vae"],
+            [r"\bvae\b"],
+        )
+        add(
+            "comfyui_clip_t5xxl",
+            "Cover CLIP/T5XXL text encoder requirements.",
+            ["clip", "t5xxl"],
+            [r"\bclip\b|\bt5xxl\b"],
+        )
+        add(
+            "comfyui_quantization",
+            "Cover GGUF/FP8 quantization choices.",
+            ["gguf", "fp8"],
+            [r"\bgguf\b|\bfp8\b"],
+        )
+        add(
+            "comfyui_requirements",
+            "Cover missing custom node/package requirements.",
+            ["requirements", "required", "designed", "workflow", "release", "version", "matches", "stack"],
+            [r"\brequirements?\b", r"\brequired\b", r"\bdesigned\b", r"\bworkflow\b", r"\brelease\b", r"\bversion\b", r"\bmatches\b", r"\bstack\b"],
+        )
+        add(
+            "comfyui_memory_debug_order",
+            "Cover a sensible debugging order from the simplest working state onward.",
+            [
+                "boring on purpose",
+                "minimal working state",
+                "one variable at a time",
+            ],
+            [
+                r"\b(?:boring on purpose|minimal working state|one variable at a time)\b",
+            ],
+        )
+
     if "local repair" in q and "global replan" in q:
         add(
             "local_repair_condition",

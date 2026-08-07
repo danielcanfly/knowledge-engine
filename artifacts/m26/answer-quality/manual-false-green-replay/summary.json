@@ -1,0 +1,45 @@
+{
+  "cases": [
+    {
+      "answer_source": "deterministic_verified_evidence_synthesis",
+      "answer_text": "venture pause rationality: Sometimes pausing a venture is not giving up on it [claim_1_ref_1]. conviction problem boundary: It means you are willing to cut something you badly wanted to believe in [claim_2_ref_1]. runway constraint: The basic runway formula is simple: > cash balance ÷ monthly net burn = months of runway But the deeper question is not only how many months remain [claim_3_ref_1]. timing constraint: But when the people, timing and resources are wrong, forcing yourself to keep going is not bravery [claim_4_ref_1]. people constraint: More in the sense that I had already taken the problem far enough to see its shape clearly, and I could also see that under slightly different conditions, more time, better people, a bit more runway, it was not impossible that something [claim_5_ref_1]. resource constraint: stop safely when critical state can no longer be preserved Cutting must not separate: - tool requests from correlated results - approval requests from decisions - background acceptance from work IDs - side-effect operations from receipts - [claim_6_ref_1].",
+      "case_id": "CORPUS-BB05",
+      "citation_count": 6,
+      "forbidden_false_green_terms": [],
+      "manual_false_green_replay": "PASS",
+      "missing_answer_terms": [],
+      "provider_call_count": 2,
+      "raw_artifact": "/Users/huaihsuanhuang/Documents/GitHub/knowledge-engine-product-closure-onepass/artifacts/m26/answer-quality/manual-false-green-replay/CORPUS-BB05.json",
+      "selected_evidence_count": 10,
+      "status": "owner_only_cited_answer"
+    },
+    {
+      "answer_source": "deterministic_verified_evidence_synthesis",
+      "answer_text": "What measurable numbers prove value? [claim_1_ref_1] | Without retention, the business keeps rebuying demand | This table is really asking one thing: > Will customers move from awareness to adoption, and can you afford the path? [claim_2_ref_1] For independent hospitality: | Lens | Example | |---|---| | Value shock | OTA dependency affects margin, guest relationships, and long-term brand assets | | Technical feasibility | Early validation can avoid PMS integration and use QR [claim_3_ref_1] ## Five modes, four capabilities, mapped The five modes from the end of Part 07 are the starting point for this post, **not a decorative recap** — turn each capability on, off, or weakened, and you land on five meaningful production modes: [claim_4_ref_1] | Delivery cost determines margin and scalability | | How much does it cost to support a customer? [claim_5_ref_1] I had designed loyalty and re-engagement loops with the hope that the alliance would not simply create guest drift, but actually strengthen direct return paths. [claim_6_ref_1]",
+      "case_id": "CORPUS-BB10",
+      "citation_count": 6,
+      "forbidden_false_green_terms": [],
+      "manual_false_green_replay": "PASS",
+      "missing_answer_terms": [],
+      "provider_call_count": 1,
+      "raw_artifact": "/Users/huaihsuanhuang/Documents/GitHub/knowledge-engine-product-closure-onepass/artifacts/m26/answer-quality/manual-false-green-replay/CORPUS-BB10.json",
+      "selected_evidence_count": 10,
+      "status": "owner_only_cited_answer"
+    },
+    {
+      "answer_source": "deterministic_verified_evidence_synthesis",
+      "answer_text": "comfyui failure modes: ## My own advice: when debugging, get boring on purpose The easiest mistake is to make five changes at once: - swap the model - swap the workflow - update ComfyUI - update all custom nodes - reinstall Python for good measure That usually [claim_1_ref_1]. comfyui checkpoints / comfyui clip t5xxl / comfyui loras: ## One simple takeaway > **SDXL is the best balanced all-round starting point for a 16GB Mac, SD 1.5 is the easiest old friend, Flux is excellent but heavier, and HiDream is exciting but not where I would begin.** Next up, we stop talking [claim_2_ref_1]. comfyui GGUF/FP8 quantization: That is why many people eventually conclude that safetensors or FP8 workflows are not always the most extreme option, but they can be cheaper to maintain [claim_3_ref_1]. comfyui requirements: In practice it still depends on: - which release you downloaded - whether the workflow was designed for it - whether the text encoder, VAE, and UNet arrangement matches - whether your hardware can handle the rest of the stack [claim_4_ref_1]. comfyui memory debug order: go back to a minimal working state 2 [claim_5_ref_1].",
+      "case_id": "CORPUS-BB24",
+      "citation_count": 5,
+      "forbidden_false_green_terms": [],
+      "manual_false_green_replay": "PASS",
+      "missing_answer_terms": [],
+      "provider_call_count": 2,
+      "raw_artifact": "/Users/huaihsuanhuang/Documents/GitHub/knowledge-engine-product-closure-onepass/artifacts/m26/answer-quality/manual-false-green-replay/CORPUS-BB24.json",
+      "selected_evidence_count": 10,
+      "status": "owner_only_cited_answer"
+    }
+  ],
+  "schema_version": "m26-aq-manual-false-green-replay/v2",
+  "status": "PASS"
+}

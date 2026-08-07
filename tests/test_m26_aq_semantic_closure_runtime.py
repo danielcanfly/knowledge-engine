@@ -4,6 +4,7 @@ import json
 import time
 from typing import Any
 
+from knowledge_engine import m26_pa7_arbitrary_query_runtime as legacy
 from knowledge_engine.m26_aq_semantic_contract import (
     _contract_compat_module,
     _publish_support_proof_recovered_answer,
@@ -243,6 +244,151 @@ def test_provider_abstain_with_available_evidence_uses_verified_deterministic_fa
     assert closure["failures"] == []
     assert closure["broad_deterministic_fallback_used"] is True
     assert "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE" in closure["pre_recovery_failures"]
+
+
+def test_resource_constraints_do_not_trigger_multi_source_requirement() -> None:
+    question = (
+        "When is pausing a venture a rational survival decision rather than evidence "
+        "that the founder no longer believes in the problem? Separate conviction in "
+        "the problem from runway, timing, people and resource constraints."
+    )
+    facet_ids = {
+        item["facet_id"]
+        for item in legacy._direct_question_facets(question)
+    }
+    assert "multi_source_selection" not in facet_ids
+    assert {
+        "venture_pause_rationality",
+        "conviction_problem_boundary",
+        "runway_constraint",
+        "timing_constraint",
+        "people_constraint",
+        "resource_constraint",
+    }.issubset(facet_ids)
+
+
+def test_manual_false_green_answers_are_question_alignment_failures() -> None:
+    cases = [
+        (
+            (
+                "When is pausing a venture a rational survival decision rather than "
+                "evidence that the founder no longer believes in the problem? Separate "
+                "conviction in the problem from runway, timing, people and resource constraints."
+            ),
+            (
+                "multi source selection: The build side: how documents come in "
+                "**Station 1 - Data source** This is not an AI problem."
+            ),
+            {
+                "venture_pause_rationality",
+                "conviction_problem_boundary",
+                "runway_constraint",
+                "timing_constraint",
+                "people_constraint",
+                "resource_constraint",
+            },
+        ),
+        (
+            (
+                "Why does evidence of demand still not prove that there is a viable "
+                "business? Walk through the extra questions a founder must answer "
+                "about value capture, economics, delivery and repeatability."
+            ),
+            (
+                "non entailment boundary: A precedes relationship does not by itself "
+                "prove dependency; What measurable numbers prove value?"
+            ),
+            {
+                "demand_not_business_proof",
+                "value_capture",
+                "business_economics",
+                "business_delivery",
+                "business_repeatability",
+            },
+        ),
+        (
+            (
+                "A downloaded ComfyUI workflow opens with red nodes or runs out of "
+                "memory. Explain how checkpoints, LoRAs, VAE, CLIP/T5XXL, GGUF/FP8, "
+                "missing requirements and memory pressure can produce different "
+                "failure modes, and how you would debug them in a sensible order."
+            ),
+            (
+                "direct answer: SDXL is the best balanced all-round starting point "
+                "for a 16GB Mac, SD 1.5 is the easiest old friend, Flux is excellent "
+                "but heavier, and HiDream is exciting but not where I would begin."
+            ),
+            {
+                "comfyui_failure_modes",
+                "comfyui_checkpoints",
+                "comfyui_loras",
+                "comfyui_vae",
+                "comfyui_clip_t5xxl",
+                "comfyui_quantization",
+                "comfyui_requirements",
+                "comfyui_memory_debug_order",
+            },
+        ),
+    ]
+    for question, answer, expected_missing in cases:
+        failures = _visible_semantic_failures(
+            answer,
+            _semantic_requirements(question, "direct_grounded_knowledge"),
+            question,
+        )
+        missing_ids = {
+            item.removeprefix("SEMANTIC_VISIBLE_MISSING:")
+            for item in failures
+        }
+        assert expected_missing & missing_ids
+
+
+def test_comfyui_memory_pressure_does_not_satisfy_debug_order_support() -> None:
+    question = (
+        "A downloaded ComfyUI workflow opens with red nodes or runs out of memory. "
+        "Explain how checkpoints, LoRAs, VAE, CLIP/T5XXL, GGUF/FP8, missing requirements "
+        "and memory pressure can produce different failure modes, and how you would debug "
+        "them in a sensible order."
+    )
+    requirements = _semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _rich_passage(
+            "ev1",
+            "If ComfyUI runs out of memory, reduce batch size and close other apps.",
+            "comfyui-memory-note",
+        )
+    ]
+    failures, proof = _requirement_support_failures(
+        requirements=requirements,
+        evidence=evidence,
+    )
+    assert "SEMANTIC_SUPPORT_MISSING:comfyui_memory_debug_order" in failures
+    assert any(
+        item["requirement_id"] == "comfyui_memory_debug_order" and not item["supported"]
+        for item in proof
+    )
+
+
+def test_comfyui_direct_debug_order_requires_exact_strategy_phrase() -> None:
+    question = (
+        "A downloaded ComfyUI workflow opens with red nodes or runs out of memory. "
+        "Explain how checkpoints, LoRAs, VAE, CLIP/T5XXL, GGUF/FP8, missing requirements "
+        "and memory pressure can produce different failure modes, and how you would debug "
+        "them in a sensible order."
+    )
+    facet = next(
+        item
+        for item in legacy._question_contract(
+            question=question,
+            intent_class="direct_grounded_knowledge",
+        )["required_facets"]
+        if item["facet_id"] == "comfyui_memory_debug_order"
+    )
+    generic_memory = "If ComfyUI runs out of memory, reduce batch size and close other apps."
+    ordered_debugging = "A steadier method is to go back to a minimal working state."
+
+    assert not legacy._direct_facet_text_matches(facet, generic_memory)
+    assert legacy._direct_facet_text_matches(facet, ordered_debugging)
 
 
 def test_router_vs_replanner_implicit_wording_gets_both_roles() -> None:

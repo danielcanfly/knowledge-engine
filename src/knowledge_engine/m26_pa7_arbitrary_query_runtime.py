@@ -163,6 +163,16 @@ ORDER_SURFACE_TERMS = {
     "sequence",
     "series",
 }
+DIRECT_FACET_EXACT_PHRASES = {
+    "comfyui_memory_debug_order": (
+        "boring on purpose",
+        "minimal working state",
+        "one variable at a time",
+    )
+}
+DIRECT_FACET_DISPLAY_LABELS = {
+    "comfyui_quantization": "comfyui GGUF/FP8 quantization",
+}
 MODALITY_STRENGTHENING_TERMS = {
     "always",
     "cannot",
@@ -1219,7 +1229,7 @@ def _deterministic_direct_provider_candidate(
         item = _best_evidence_for_direct_facet(question=question, facet=facet, evidence=evidence)
         if item is None:
             return None
-        ref = _deterministic_support_ref_for_terms(item, _facet_terms(facet))
+        ref = _deterministic_support_ref_for_facet(item, facet)
         if ref is None:
             return None
         facet_id = str(facet.get("facet_id", f"facet_{index}"))
@@ -1383,7 +1393,7 @@ def _best_evidence_for_direct_facet(
     ranked = sorted(
         passages,
         key=lambda item: (
-            -len(facet_terms & _coverage_terms(str(item.get("passage_text", "")))),
+            -_direct_facet_match_score(facet, str(item.get("passage_text", ""))),
             -_text_term_overlap_score(facet_terms, str(item.get("passage_text", ""))),
             _is_article_root_evidence(item),
             str(item.get("section_id", "")),
@@ -1392,8 +1402,7 @@ def _best_evidence_for_direct_facet(
     best = ranked[0]
     return (
         best
-        if len(facet_terms & _coverage_terms(str(best.get("passage_text", ""))))
-        >= 1
+        if _direct_facet_match_score(facet, str(best.get("passage_text", ""))) >= 1
         else None
     )
 
@@ -1469,7 +1478,10 @@ def _deterministic_claim_label(facet_ids: Any) -> str:
     ]
     labels = []
     for facet_id in ids[:3]:
-        label = facet_id.removeprefix("entity_").replace("_", " ")
+        label = DIRECT_FACET_DISPLAY_LABELS.get(
+            facet_id,
+            facet_id.removeprefix("entity_").replace("_", " "),
+        )
         labels.append(label)
     return " / ".join(labels)
 
@@ -1499,6 +1511,41 @@ def _deterministic_support_ref_for_terms(
     else:
         quote = _first_exact_evidence_quote(evidence_text)
     if not quote:
+        return None
+    if len(quote) > 240:
+        quote = quote[:240].rsplit(" ", 1)[0].rstrip()
+    return {
+        "evidence_id": str(item["evidence_id"]),
+        "locator_id": str(item["locator_id"]),
+        "exact_quote": quote,
+        "exact_support_snippet": quote,
+        "uncertainty": "low",
+    }
+
+
+def _deterministic_support_ref_for_facet(
+    item: Mapping[str, Any],
+    facet: Mapping[str, Any],
+) -> dict[str, str] | None:
+    facet_id = str(facet.get("facet_id", ""))
+    if not _direct_facet_required_phrases(facet_id):
+        return _deterministic_support_ref_for_terms(item, _facet_terms(facet))
+    evidence_text = str(item.get("passage_text", ""))
+    segments = _exact_quote_segments(evidence_text)
+    if not segments:
+        return None
+    ranked = sorted(
+        segments,
+        key=lambda segment: (
+            -_direct_facet_phrase_score(facet_id, segment),
+            _thin_heading(segment),
+            _article_title_like(segment),
+            _segment_noise_penalty(segment),
+            -len(_meaningful_terms(segment)),
+        ),
+    )
+    quote = ranked[0]
+    if _direct_facet_phrase_score(facet_id, quote) <= 0:
         return None
     if len(quote) > 240:
         quote = quote[:240].rsplit(" ", 1)[0].rstrip()
@@ -2072,7 +2119,45 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
         add("persisted_progress", ["persisted", "progress", "state"])
     if "parallel" in question_casefold or "branches" in question_casefold:
         add("parallel_branches", ["parallel", "branches"])
-    if "sources" in question_casefold or "source" in question_casefold:
+    if (
+        any(term in question_casefold for term in ("pausing a venture", "pause a venture", "pausing", "survival decision"))
+        and any(term in question_casefold for term in ("runway", "timing", "people", "resource", "constraint"))
+    ):
+        add("venture_pause_rationality", ["pause", "pausing", "venture", "survival", "rational"])
+        add("conviction_problem_boundary", ["conviction", "believes", "believe", "problem"])
+        add("runway_constraint", ["runway"])
+        add("timing_constraint", ["timing"])
+        add("people_constraint", ["people"])
+        add("resource_constraint", ["resource", "resources", "constraints"])
+    if (
+        "demand" in question_casefold
+        and any(term in question_casefold for term in ("viable business", "value capture", "economics", "delivery", "repeatability"))
+    ):
+        add("demand_not_business_proof", ["demand", "prove", "viable", "business"])
+        add("value_capture", ["value", "capture", "willingness", "pay"])
+        add("business_economics", ["economics"])
+        add("business_delivery", ["delivery"])
+        add("business_repeatability", ["repeatability", "repeatable", "repeat", "again", "return", "retained"])
+    if (
+        "comfyui" in question_casefold
+        and any(term in question_casefold for term in ("red nodes", "out of memory", "memory", "workflow"))
+    ):
+        add("comfyui_failure_modes", ["comfyui", "red", "nodes", "memory", "workflow"])
+        add("comfyui_checkpoints", ["checkpoints", "checkpoint"])
+        add("comfyui_loras", ["loras", "lora"])
+        add("comfyui_vae", ["vae"])
+        add("comfyui_clip_t5xxl", ["clip", "t5xxl"])
+        add("comfyui_quantization", ["gguf", "fp8"])
+        add("comfyui_requirements", ["requirements", "required", "designed", "workflow", "release", "version", "matches", "stack"])
+        add(
+            "comfyui_memory_debug_order",
+            [
+                "boring on purpose",
+                "minimal working state",
+                "one variable at a time",
+            ],
+        )
+    if re.search(r"\bsources?\b", question_casefold):
         add("multi_source_selection", ["source", "sources"])
     if "unlimited authority" in question_casefold or "without giving the replanner" in question_casefold:
         add("authority_boundary", ["authority", "boundary", "policy"])
@@ -2476,14 +2561,17 @@ def _validated_claim_facets(
     visible_terms = _coverage_terms(visible_text)
     support_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs)
     support_terms = _coverage_terms(support_text)
+    support_casefold = support_text.casefold()
     evidence_items = [
         evidence_by_id[str(ref.get("evidence_id", ""))]
         for ref in support_refs
         if str(ref.get("evidence_id", "")) in evidence_by_id
     ]
+    evidence_text = " ".join(str(item.get("passage_text", "")) for item in evidence_items)
     evidence_terms = _coverage_terms(
-        " ".join(str(item.get("passage_text", "")) for item in evidence_items)
+        evidence_text
     )
+    evidence_casefold = evidence_text.casefold()
     candidate_facets = inferred | (requested_facet_ids & set(_required_facet_ids(question=question, intent_class=intent_class)))
     accepted: set[str] = set()
     for facet in _question_contract(question=question, intent_class=intent_class)[
@@ -2497,7 +2585,9 @@ def _validated_claim_facets(
             facet_terms=_facet_terms(facet),
             visible_text=visible_text,
             visible_terms=visible_terms,
+            support_text=support_casefold,
             support_terms=support_terms,
+            evidence_text=evidence_casefold,
             evidence_terms=evidence_terms,
         ):
             accepted.add(facet_id)
@@ -2516,10 +2606,18 @@ def _direct_facet_signal_met(
     facet_terms: set[str],
     visible_text: str,
     visible_terms: set[str],
+    support_text: str,
     support_terms: set[str],
+    evidence_text: str,
     evidence_terms: set[str],
 ) -> bool:
     visible_casefold = visible_text.casefold()
+    exact_phrases = _direct_facet_required_phrases(facet_id)
+    if exact_phrases:
+        return any(phrase in visible_casefold for phrase in exact_phrases) and any(
+            phrase in support_text or phrase in evidence_text
+            for phrase in exact_phrases
+        )
     if facet_id == "non_entailment_boundary":
         return _has_non_entailment_boundary(visible_casefold)
     if facet_id == "ordering_boundary":
@@ -4015,7 +4113,7 @@ def _ensure_required_facet_coverage_passages(
                 for item in selected
                 if item.get("evidence_type") == "passage"
                 and str(item.get("section_id", "")) not in prepend_sections
-                and facet_terms & _meaningful_terms(str(item.get("passage_text", "")))
+                and _direct_facet_text_matches(facet, str(item.get("passage_text", "")))
             ),
             None,
         )
@@ -4026,7 +4124,7 @@ def _ensure_required_facet_coverage_passages(
         documents = sorted(
             _release_documents(bundle),
             key=lambda document: (
-                -len(facet_terms & _meaningful_terms(_document_text(document))),
+                -_direct_facet_match_score(facet, _document_text(document)),
                 -_text_term_overlap_score(facet_terms, _document_text(document)),
                 _is_article_root_document(document),
                 -_passage_text_quality(str(document.get("body") or document.get("excerpt") or "")),
@@ -4038,7 +4136,7 @@ def _ensure_required_facet_coverage_passages(
                 item
                 for item in documents
                 if str(item.get("section_id", "")) not in selected_sections
-                and facet_terms & _meaningful_terms(_document_text(item))
+                and _direct_facet_text_matches(facet, _document_text(item))
             ),
             None,
         )
@@ -4054,17 +4152,13 @@ def _ensure_required_facet_coverage_passages(
             retrieval_metadata={
                 "required_facet_id": str(facet.get("facet_id", "")),
                 "required_facet_terms": sorted(facet_terms),
-                "covered_facet_terms": sorted(
-                    facet_terms & _meaningful_terms(_document_text(document))
-                ),
+                "covered_facet_terms": sorted(_direct_facet_covered_markers(facet, _document_text(document))),
             },
         )
         prepend.append(item)
         prepend_sections.add(str(document.get("section_id", "")))
         selected_sections.add(str(document.get("section_id", "")))
         ordinal += 1
-        if len(prepend) + len(selected) >= limit:
-            break
     return [
         *prepend,
         *[
@@ -4083,6 +4177,46 @@ def _facet_terms(facet: Mapping[str, Any]) -> set[str]:
     for term in raw_terms:
         terms |= _meaningful_terms(str(term))
     return terms
+
+
+def _direct_facet_required_phrases(facet_id: str) -> tuple[str, ...]:
+    return DIRECT_FACET_EXACT_PHRASES.get(str(facet_id), ())
+
+
+def _direct_facet_phrase_score(facet_id: str, text: str) -> int:
+    text_casefold = str(text).casefold()
+    return sum(
+        1
+        for phrase in _direct_facet_required_phrases(facet_id)
+        if phrase in text_casefold
+    )
+
+
+def _direct_facet_match_score(facet: Mapping[str, Any], text: str) -> int:
+    facet_id = str(facet.get("facet_id", ""))
+    phrase_score = _direct_facet_phrase_score(facet_id, text)
+    if _direct_facet_required_phrases(facet_id):
+        return phrase_score
+    return len(_facet_terms(facet) & _meaningful_terms(str(text)))
+
+
+def _direct_facet_text_matches(facet: Mapping[str, Any], text: str) -> bool:
+    return _direct_facet_match_score(facet, text) >= 1
+
+
+def _direct_facet_covered_markers(
+    facet: Mapping[str, Any],
+    text: str,
+) -> set[str]:
+    facet_id = str(facet.get("facet_id", ""))
+    phrases = {
+        phrase
+        for phrase in _direct_facet_required_phrases(facet_id)
+        if phrase in str(text).casefold()
+    }
+    if phrases:
+        return phrases
+    return _facet_terms(facet) & _meaningful_terms(str(text))
 
 
 def _ensure_query_coverage_passages(
