@@ -1332,6 +1332,384 @@ def test_cli_defaults_to_public_runtime_and_health_status_is_explicit() -> None:
     assert "if args.health_status:" in cli_source
 
 
+def test_required_facet_support_rejects_business_lexical_overlap() -> None:
+    business_economics = _facet_for_question(
+        (
+            "Why does customer demand not prove a viable business? Explain value capture, "
+            "unit economics, ability to deliver, and repeatability."
+        ),
+        "business_economics",
+    )
+    business_delivery = _facet_for_question(
+        (
+            "Why does customer demand not prove a viable business? Explain value capture, "
+            "unit economics, ability to deliver, and repeatability."
+        ),
+        "business_delivery",
+    )
+
+    unrelated_economics = (
+        "System economics describe token cost and latency for retrieval infrastructure."
+    )
+    unrelated_delivery = "Data delivery moves indexed payloads from one technical store to another."
+    genuine_economics = (
+        "The venture only becomes a viable business if customers pay enough for margins "
+        "and costs to create workable unit economics."
+    )
+
+    assert not runtime_module._direct_facet_text_matches(
+        business_economics,
+        unrelated_economics,
+    )
+    assert not runtime_module._direct_facet_text_matches(
+        business_delivery,
+        unrelated_delivery,
+    )
+    assert runtime_module._direct_facet_text_matches(business_economics, genuine_economics)
+    assert runtime_module._direct_facet_support_quote(business_economics, genuine_economics)
+
+
+def test_required_facet_supplementation_rejects_title_only_support() -> None:
+    question = (
+        "Why does customer demand not prove a viable business? Explain value capture, "
+        "unit economics, ability to deliver, and repeatability."
+    )
+    bundle = _facet_bundle(
+        [
+            _facet_document(
+                "title-only",
+                "Business Economics and Delivery",
+                "This passage discusses retrieval logging, index refreshes, and cache hygiene.",
+            ),
+        ]
+    )
+
+    evidence = runtime_module._ensure_required_facet_coverage_passages(
+        bundle=bundle,
+        evidence=[],
+        trace_id="trace-title-only",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        limit=3,
+    )
+    covered = runtime_module._covered_required_facets(
+        facets=runtime_module._question_contract(
+            question=question,
+            intent_class="direct_grounded_knowledge",
+        )["required_facets"],
+        evidence=evidence,
+    )
+
+    assert evidence == []
+    assert "business_economics" not in covered
+    assert "business_delivery" not in covered
+
+
+def test_required_facet_supplementation_rejects_description_only_support() -> None:
+    question = (
+        "Why does customer demand not prove a viable business? Explain value capture, "
+        "unit economics, ability to deliver, and repeatability."
+    )
+    bundle = _facet_bundle(
+        [
+            _facet_document(
+                "description-only",
+                "Infrastructure Notes",
+                "This passage discusses retrieval logging, index refreshes, and cache hygiene.",
+                description=(
+                    "A viable business needs business economics, margins, customer delivery, "
+                    "and repeatable sales."
+                ),
+            ),
+        ]
+    )
+
+    evidence = runtime_module._ensure_required_facet_coverage_passages(
+        bundle=bundle,
+        evidence=[],
+        trace_id="trace-description-only",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        limit=3,
+    )
+
+    assert evidence == []
+
+
+def test_required_facet_supplementation_rejects_support_beyond_bounded_passage() -> None:
+    question = (
+        "Why does customer demand not prove a viable business? Explain value capture, "
+        "unit economics, ability to deliver, and repeatability."
+    )
+    late_support = (
+        "The venture only becomes a viable business if customer costs and margins create "
+        "workable unit economics."
+    )
+    body = ("Neutral platform maintenance notes without commercial proof. " * 80) + late_support
+    assert late_support not in runtime_module._document_passage_text({"body": body})
+    bundle = _facet_bundle([_facet_document("late-support", "Late Support", body)])
+
+    evidence = runtime_module._ensure_required_facet_coverage_passages(
+        bundle=bundle,
+        evidence=[],
+        trace_id="trace-late-support",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        limit=3,
+    )
+    covered = runtime_module._covered_required_facets(
+        facets=runtime_module._question_contract(
+            question=question,
+            intent_class="direct_grounded_knowledge",
+        )["required_facets"],
+        evidence=evidence,
+    )
+
+    assert "business_economics" not in covered
+    assert all(item["source_id"] != "late-support" for item in evidence)
+
+
+def test_required_facet_support_quote_is_exact_substring_after_whitespace_normalization() -> None:
+    question = (
+        "Why does customer demand not prove a viable business? Explain value capture, "
+        "unit economics, ability to deliver, and repeatability."
+    )
+    body = (
+        "A viable\n\n business only works when customer costs,\t margins, and cash "
+        "create workable unit economics."
+    )
+    bundle = _facet_bundle([_facet_document("whitespace", "Whitespace", body)])
+
+    evidence = runtime_module._ensure_required_facet_coverage_passages(
+        bundle=bundle,
+        evidence=[],
+        trace_id="trace-whitespace",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        limit=3,
+    )
+
+    item = next(item for item in evidence if item["source_id"] == "whitespace")
+    quote = item["retrieval_metadata"]["required_facet_support_quote"]
+    assert quote
+    assert quote in item["passage_text"]
+    assert "\n" not in item["passage_text"]
+    assert "\t" not in item["passage_text"]
+
+
+def test_required_facet_supplementation_uses_genuine_support_within_budget() -> None:
+    question = (
+        "Why does customer demand not prove a viable business? Explain value capture, "
+        "unit economics, ability to deliver, and repeatability."
+    )
+    bundle = _facet_bundle(
+        [
+            _facet_document(
+                "unrelated-economics",
+                "System Economics",
+                "System economics describe token cost and latency for retrieval infrastructure.",
+            ),
+            _facet_document(
+                "technical-delivery",
+                "Data Delivery",
+                "Data delivery moves indexed payloads from one technical store to another.",
+            ),
+            _facet_document(
+                "business-model",
+                "Business Model",
+                (
+                    "Demand is not the same as proof of a viable business. A founder still "
+                    "has to test whether customers will pay enough to capture value, whether "
+                    "margins and costs create workable unit economics, whether the team can "
+                    "deliver the service reliably, and whether acquisition and repeat purchase "
+                    "are repeatable."
+                ),
+            ),
+            _facet_document(
+                "secondary-business",
+                "Business Operations",
+                (
+                    "A second business source says customers can pay for a service when "
+                    "operations deliver reliably and repeat purchases return through a "
+                    "repeatable channel."
+                ),
+            ),
+        ]
+    )
+    selected = [
+        _facet_evidence("ev-unrelated-economics", "unrelated-economics", bundle),
+        _facet_evidence("ev-technical-delivery", "technical-delivery", bundle),
+        _facet_evidence("ev-low", "secondary-business", bundle),
+    ]
+
+    evidence = runtime_module._ensure_required_facet_coverage_passages(
+        bundle=bundle,
+        evidence=selected,
+        trace_id="trace-facet",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        limit=3,
+    )
+
+    assert len(evidence) == 3
+    assert evidence[0]["source_id"] == "business-model"
+    assert "required_facet_coverage" in evidence[0]["channels"]
+    quote = evidence[0]["retrieval_metadata"]["required_facet_support_quote"]
+    assert quote
+    assert quote in evidence[0]["passage_text"]
+    supported = runtime_module._facets_supported_by_text(
+        runtime_module._question_contract(
+            question=question,
+            intent_class="direct_grounded_knowledge",
+        )["required_facets"],
+        evidence[0]["passage_text"],
+    )
+    assert {
+        "demand_not_business_proof",
+        "value_capture",
+        "business_economics",
+        "business_delivery",
+        "business_repeatability",
+    }.issubset(supported)
+
+
+def test_required_facet_supplementation_counts_bb02_multi_facet_passage_only_from_passage_text() -> None:
+    question = (
+        "When founders change direction twice, how do you distinguish learning from "
+        "aimless drift using changed problem evidence, constraints, and market reality?"
+    )
+    body = (
+        "Customer problem evidence changed, and learning corrected the need. "
+        "Runway constraints forced a narrower plan. Market adoption reality changed "
+        "as demand signals weakened. This was evidence-led learning rather than "
+        "aimless founder drift."
+    )
+    bundle = _facet_bundle([_facet_document("bb02-multi", "BB02 Multi", body)])
+
+    evidence = runtime_module._ensure_required_facet_coverage_passages(
+        bundle=bundle,
+        evidence=[],
+        trace_id="trace-bb02-multi",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        limit=4,
+    )
+
+    item = next(item for item in evidence if item["source_id"] == "bb02-multi")
+    quote = item["retrieval_metadata"]["required_facet_support_quote"]
+    assert quote
+    assert quote in item["passage_text"]
+    supported = runtime_module._facets_supported_by_text(
+        runtime_module._question_contract(
+            question=question,
+            intent_class="direct_grounded_knowledge",
+        )["required_facets"],
+        item["passage_text"],
+    )
+    assert {
+        "problem_evidence_changed",
+        "constraint_change",
+        "market_reality_change",
+        "drift_boundary",
+    }.issubset(supported)
+
+
+def test_required_facet_supplementation_preserves_diversity_when_support_is_equal() -> None:
+    question = (
+        "Why does customer demand not prove a viable business? Explain value capture, "
+        "unit economics, ability to deliver, and repeatability."
+    )
+    bundle = _facet_bundle(
+        [
+            _facet_document(
+                "source-a-1",
+                "Business Model A",
+                (
+                    "Demand is not enough to prove a viable business because customers must "
+                    "pay enough to capture value."
+                ),
+            ),
+            _facet_document(
+                "source-a-2",
+                "Business Model A",
+                (
+                    "Business delivery works only when the team can deliver the service "
+                    "reliably for customers."
+                ),
+                source_identity="source-a-1",
+            ),
+            _facet_document(
+                "source-b",
+                "Business Model B",
+                (
+                    "Business delivery works only when the team can deliver the service "
+                    "reliably for customers."
+                ),
+            ),
+        ]
+    )
+    selected = [_facet_evidence("ev-a-1", "source-a-1", bundle)]
+
+    evidence = runtime_module._ensure_required_facet_coverage_passages(
+        bundle=bundle,
+        evidence=selected,
+        trace_id="trace-diverse",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        limit=3,
+    )
+
+    assert any(item["source_id"] == "source-b" for item in evidence)
+    assert len({item["source_identity"] for item in evidence}) >= 2
+
+
+def test_required_facet_supplementation_does_not_fabricate_missing_support() -> None:
+    question = (
+        "When founders change direction twice, how do you distinguish learning from "
+        "aimless drift using changed problem evidence, constraints, and market reality?"
+    )
+    bundle = _facet_bundle(
+        [
+            _facet_document(
+                "problem-only",
+                "Problem Evidence",
+                "The customer problem signal changed, so the founder learned that the need was narrower.",
+            ),
+            _facet_document(
+                "constraint-only",
+                "Constraints",
+                "Runway became short and resource constraints forced a narrower plan.",
+            ),
+        ]
+    )
+
+    evidence = runtime_module._ensure_required_facet_coverage_passages(
+        bundle=bundle,
+        evidence=[],
+        trace_id="trace-missing",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        limit=4,
+    )
+    covered = runtime_module._covered_required_facets(
+        facets=runtime_module._question_contract(
+            question=question,
+            intent_class="direct_grounded_knowledge",
+        )["required_facets"],
+        evidence=evidence,
+    )
+
+    assert "problem_evidence_changed" in covered
+    assert "constraint_change" in covered
+    assert "market_reality_change" not in covered
+    assert "drift_boundary" not in covered
+    assert all(
+        item["retrieval_metadata"]["required_facet_support_quote"] in item["passage_text"]
+        for item in evidence
+        if "required_facet_coverage" in item.get("channels", [])
+    )
+
+
 def _direct_semantic_evidence() -> dict[str, Any]:
     return {
         "evidence_id": "ev_semantic",
@@ -1352,6 +1730,108 @@ def _direct_semantic_evidence() -> dict[str, Any]:
         "passage_text_sha256": "b" * 64,
         "provenance_record_sha256": "c" * 64,
     }
+
+
+def _facet_for_question(question: str, facet_id: str) -> dict[str, Any]:
+    return next(
+        item
+        for item in runtime_module._question_contract(
+            question=question,
+            intent_class="direct_grounded_knowledge",
+        )["required_facets"]
+        if item["facet_id"] == facet_id
+    )
+
+
+def _facet_document(
+    source_id: str,
+    title: str,
+    body: str,
+    *,
+    description: str | None = None,
+    source_identity: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "concept_id": f"concept-{source_id}",
+        "section_id": f"section-{source_id}",
+        "source_id": source_id,
+        "source_identity": source_identity or source_id,
+        "audience": "internal",
+        "title": title,
+        "section_title": "Overview",
+        "description": body[:180] if description is None else description,
+        "body": body,
+        "excerpt": body[:320],
+        "terms": body.lower().replace(".", "").split(),
+    }
+
+
+def _facet_bundle(documents: list[dict[str, Any]]) -> Any:
+    lexical_index = {
+        "schema_version": "knowledge-engine-lexical-index/v1",
+        "release_id": "facet-release",
+        "documents": documents,
+    }
+    graph = {"schema_version": "knowledge-engine-graph/v1", "nodes": [], "edges": []}
+    graph_v2 = {
+        "schema_version": "knowledge-os-graph/v2",
+        "release": {"release_id": "facet-release"},
+        "nodes": [],
+        "edges": [],
+    }
+    provenance = {
+        "schema_version": "knowledge-engine-provenance/v1",
+        "records": [
+            {
+                "source_id": document["source_id"],
+                "concept_id": document["concept_id"],
+                "source_identity": document["source_identity"],
+            }
+            for document in documents
+        ],
+    }
+    return runtime_module.ProductionAnswerBundle(
+        manifest={"release_id": "facet-release"},
+        graph=graph,
+        graph_v2=graph_v2,
+        lexical_index=lexical_index,
+        provenance=provenance,
+        manifest_sha256="m" * 64,
+        artifact_sha256={
+            "graph": "a" * 64,
+            "graph_v2": "b" * 64,
+            "lexical_index": "c" * 64,
+            "provenance": "d" * 64,
+        },
+        artifact_keys={
+            "graph": "graph.json",
+            "graph_v2": "graph-v2.json",
+            "lexical_index": "lexical-index.json",
+            "provenance": "provenance.json",
+        },
+        loaded_at="2026-08-08T00:00:00Z",
+    )
+
+
+def _facet_evidence(
+    evidence_id: str,
+    source_id: str,
+    bundle: Any,
+) -> dict[str, Any]:
+    document = next(
+        item for item in bundle.lexical_index["documents"] if item["source_id"] == source_id
+    )
+    item = runtime_module._evidence_item(
+        bundle=bundle,
+        document=document,
+        lexical_result={},
+        trace_id="trace-selected",
+        ordinal=1,
+        channels=["lexical"],
+        retrieval_metadata={"rerank_score": 1.0},
+    )
+    item["evidence_id"] = evidence_id
+    return item
 
 
 def _direct_semantic_provider_body(

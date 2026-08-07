@@ -180,6 +180,43 @@ DIRECT_FACET_REQUIRED_QUOTE_TERM_GROUPS = {
         ("resource", "resources", "runway"),
         ("runway", "timing", "people", "venture", "founder"),
     ),
+    "problem_evidence_changed": (
+        ("problem", "customer", "pain", "need", "signal", "evidence"),
+        ("change", "changed", "correct", "corrected", "learning", "learned", "weakened", "strengthened"),
+    ),
+    "constraint_change": (
+        ("constraint", "constraints", "runway", "timing", "resource", "resources", "people", "team", "cash"),
+        ("change", "changed", "limited", "short", "force", "forced", "pause", "paused", "cannot"),
+    ),
+    "market_reality_change": (
+        ("market", "adoption", "buying", "workflow", "willing", "demand", "response"),
+        ("reality", "signal", "changed", "corrected", "adopt", "adoption", "buy", "pay", "willing"),
+    ),
+    "drift_boundary": (
+        ("drift", "aimless", "wandering", "arbitrary", "random", "direction", "pitch"),
+        ("evidence", "reality", "problem", "constraint", "market", "signal", "learning"),
+    ),
+    "demand_not_business_proof": (
+        ("demand", "interest", "want", "pain"),
+        ("business", "company", "venture", "viable", "model"),
+        ("prove", "proof", "enough", "same", "not"),
+    ),
+    "value_capture": (
+        ("value", "capture", "pay", "pricing", "revenue", "monetize", "monetise", "willingness"),
+        ("customer", "market", "business", "money", "pay"),
+    ),
+    "business_economics": (
+        ("economics", "margin", "margins", "cost", "costs", "profit", "profitability", "cash"),
+        ("business", "company", "venture", "unit", "model", "viable", "delivery", "customer"),
+    ),
+    "business_delivery": (
+        ("delivery", "deliver", "operations", "operational", "support", "service", "serve"),
+        ("customer", "market", "business", "team", "cost", "ability", "reliably", "repeatably"),
+    ),
+    "business_repeatability": (
+        ("repeatability", "repeatable", "repeat", "return", "retained", "retention", "again", "loops"),
+        ("business", "customer", "sale", "delivery", "demand", "motion", "channel", "workflow"),
+    ),
 }
 DIRECT_FACET_DISPLAY_LABELS = {
     "comfyui_quantization": "comfyui GGUF/FP8 quantization",
@@ -4102,7 +4139,7 @@ def _evidence_item(
     retrieval_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     section_id = str(document["section_id"])
-    passage = _bounded_text(str(document.get("body") or document.get("excerpt") or ""))
+    passage = _document_passage_text(document)
     passage_sha = sha256_bytes(passage.encode("utf-8"))
     locator_id = (
         "m26pa7loc_"
@@ -4219,36 +4256,57 @@ def _ensure_required_facet_coverage_passages(
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
     selected_sections = {str(item.get("section_id", "")) for item in selected}
-    prepend: list[dict[str, Any]] = []
-    prepend_sections: set[str] = set()
+    selected_sources = {_source_identity(item) for item in selected}
+    coverage_items: list[dict[str, Any]] = []
+    coverage_sections: set[str] = set()
     ordinal = len(selected) + 1
-    for facet in _question_contract(question=question, intent_class=intent_class)[
-        "required_facets"
-    ]:
-        facet_terms = _facet_terms(facet)
-        if not facet_terms:
-            continue
+    facets = [
+        dict(facet)
+        for facet in _question_contract(question=question, intent_class=intent_class)[
+            "required_facets"
+        ]
+    ]
+    covered_facets: set[str] = set()
+    query_terms = _coverage_terms(question)
+    for facet in facets:
+        facet_id = str(facet.get("facet_id", ""))
         existing = next(
             (
                 item
                 for item in selected
                 if item.get("evidence_type") == "passage"
-                and str(item.get("section_id", "")) not in prepend_sections
+                and str(item.get("section_id", "")) not in coverage_sections
                 and _direct_facet_text_matches(facet, str(item.get("passage_text", "")))
+                and _direct_facet_support_quote(facet, str(item.get("passage_text", "")))
             ),
             None,
         )
         if existing is not None:
-            prepend.append(dict(existing))
-            prepend_sections.add(str(existing.get("section_id", "")))
+            coverage_items.append(dict(existing))
+            coverage_sections.add(str(existing.get("section_id", "")))
+            covered_facets |= _facets_supported_by_text(
+                facets,
+                str(existing.get("passage_text", "")),
+            )
+            continue
+        if facet_id in covered_facets:
+            continue
+        facet_terms = _facet_terms(facet)
+        if not facet_terms:
             continue
         documents = sorted(
             _release_documents(bundle),
             key=lambda document: (
-                -_direct_facet_match_score(facet, _document_text(document)),
+                -len(
+                    _facets_supported_by_text(facets, _document_passage_text(document))
+                    - covered_facets
+                ),
+                -_direct_facet_match_score(facet, _document_passage_text(document)),
+                -_text_term_overlap_score(query_terms, _document_text(document)),
                 -_text_term_overlap_score(facet_terms, _document_text(document)),
+                _source_identity(document) in selected_sources,
                 _is_article_root_document(document),
-                -_passage_text_quality(str(document.get("body") or document.get("excerpt") or "")),
+                -_passage_text_quality(_document_passage_text(document)),
                 str(document.get("section_id", "")),
             ),
         )
@@ -4256,12 +4314,22 @@ def _ensure_required_facet_coverage_passages(
             (
                 item
                 for item in documents
+                if (passage_text := _document_passage_text(item))
                 if str(item.get("section_id", "")) not in selected_sections
-                and _direct_facet_text_matches(facet, _document_text(item))
+                and _direct_facet_text_matches(facet, passage_text)
+                and _required_facet_question_relevant(
+                    question_terms=query_terms,
+                    facet_terms=facet_terms,
+                    text=passage_text,
+                )
             ),
             None,
         )
         if document is None:
+            continue
+        passage_text = _document_passage_text(document)
+        quote = _direct_facet_support_quote(facet, passage_text)
+        if not quote or quote not in passage_text:
             continue
         item = _evidence_item(
             bundle=bundle,
@@ -4273,21 +4341,192 @@ def _ensure_required_facet_coverage_passages(
             retrieval_metadata={
                 "required_facet_id": str(facet.get("facet_id", "")),
                 "required_facet_terms": sorted(facet_terms),
-                "covered_facet_terms": sorted(_direct_facet_covered_markers(facet, _document_text(document))),
+                "covered_facet_terms": sorted(_direct_facet_covered_markers(facet, passage_text)),
+                "required_facet_support_quote": quote,
             },
         )
-        prepend.append(item)
-        prepend_sections.add(str(document.get("section_id", "")))
+        if quote not in str(item.get("passage_text", "")):
+            continue
+        coverage_items.append(item)
+        coverage_sections.add(str(document.get("section_id", "")))
         selected_sections.add(str(document.get("section_id", "")))
+        selected_sources.add(_source_identity(item))
+        covered_facets |= _facets_supported_by_text(facets, str(item.get("passage_text", "")))
         ordinal += 1
-    return [
-        *prepend,
-        *[
-            item
-            for item in selected
-            if str(item.get("section_id", "")) not in prepend_sections
+    return _bounded_required_facet_evidence(
+        [
+            *coverage_items,
+            *[
+                item
+                for item in selected
+                if str(item.get("section_id", "")) not in coverage_sections
+            ],
         ],
-    ]
+        facets=facets,
+        limit=limit,
+    )
+
+
+def _covered_required_facets(
+    *,
+    facets: Sequence[Mapping[str, Any]],
+    evidence: Sequence[Mapping[str, Any]],
+) -> set[str]:
+    covered: set[str] = set()
+    for item in evidence:
+        if item.get("evidence_type") != "passage":
+            continue
+        covered |= _facets_supported_by_text(facets, str(item.get("passage_text", "")))
+    return covered
+
+
+def _facets_supported_by_text(
+    facets: Sequence[Mapping[str, Any]],
+    text: str,
+) -> set[str]:
+    supported: set[str] = set()
+    for facet in facets:
+        facet_id = str(facet.get("facet_id", ""))
+        if not facet_id or not _direct_facet_text_matches(facet, text):
+            continue
+        quote = _direct_facet_support_quote(facet, text)
+        if quote and quote in text:
+            supported.add(facet_id)
+    return supported
+
+
+def _required_facet_question_relevant(
+    *,
+    question_terms: set[str],
+    facet_terms: set[str],
+    text: str,
+) -> bool:
+    text_terms = _coverage_terms(text)
+    if not text_terms:
+        return False
+    return bool((question_terms | facet_terms) & text_terms)
+
+
+def _bounded_required_facet_evidence(
+    evidence: Sequence[Mapping[str, Any]],
+    *,
+    facets: Sequence[Mapping[str, Any]],
+    limit: int,
+) -> list[dict[str, Any]]:
+    selected = _dedupe_evidence(evidence)
+    if not any(
+        _direct_facet_required_quote_groups(str(facet.get("facet_id", "")))
+        or _direct_facet_required_phrases(str(facet.get("facet_id", "")))
+        for facet in facets
+    ):
+        return selected[:limit]
+    if len(selected) <= limit:
+        return selected
+    required_facet_ids = {str(facet.get("facet_id", "")) for facet in facets}
+    facet_supporters: dict[str, list[str]] = {facet_id: [] for facet_id in required_facet_ids}
+    section_by_index = {index: str(item.get("section_id", "")) for index, item in enumerate(selected)}
+    for index, item in enumerate(selected):
+        supported = _facets_supported_by_text(facets, str(item.get("passage_text", "")))
+        for facet_id in supported & required_facet_ids:
+            facet_supporters.setdefault(facet_id, []).append(section_by_index[index])
+
+    kept = [True] * len(selected)
+    while sum(1 for item in kept if item) > limit:
+        removable_index = None
+        removable_score: tuple[float, ...] | None = None
+        active_sections = {
+            section_by_index[index]
+            for index, keep in enumerate(kept)
+            if keep and section_by_index[index]
+        }
+        for index, item in enumerate(selected):
+            if not kept[index]:
+                continue
+            section_id = section_by_index[index]
+            supported = _facets_supported_by_text(facets, str(item.get("passage_text", "")))
+            uniquely_required = any(
+                facet_id in required_facet_ids
+                and [sid for sid in facet_supporters.get(facet_id, []) if sid in active_sections] == [section_id]
+                for facet_id in supported
+            )
+            if uniquely_required:
+                continue
+            channels = {str(channel) for channel in item.get("channels", [])}
+            metadata = item.get("retrieval_metadata", {})
+            rerank_score = (
+                float(metadata.get("rerank_score", 0.0))
+                if isinstance(metadata, Mapping)
+                else 0.0
+            )
+            score = (
+                1.0 if "required_facet_coverage" in channels else 0.0,
+                1.0 if supported else 0.0,
+                1.0 if "query_coverage" in channels else 0.0,
+                rerank_score,
+                float(index),
+            )
+            if removable_score is None or score < removable_score:
+                removable_index = index
+                removable_score = score
+        if removable_index is None:
+            break
+        kept[removable_index] = False
+    return [
+        dict(item)
+        for index, item in enumerate(selected)
+        if kept[index]
+    ][:limit]
+
+
+def _direct_facet_support_quote(facet: Mapping[str, Any], text: str) -> str:
+    facet_id = str(facet.get("facet_id", ""))
+    evidence_text = str(text)
+    segments = _exact_quote_segments(evidence_text)
+    if not segments:
+        return ""
+    quote_groups = _direct_facet_required_quote_groups(facet_id)
+    if quote_groups and not _direct_facet_required_phrases(facet_id):
+        grouped_terms = {term for group in quote_groups for term in group}
+        ranked = sorted(
+            segments,
+            key=lambda segment: (
+                -sum(
+                    1
+                    for group in quote_groups
+                    if any(term in str(segment).casefold() for term in group)
+                ),
+                -_text_term_overlap_score(grouped_terms, segment),
+                _thin_heading(segment),
+                _article_title_like(segment),
+                _segment_noise_penalty(segment),
+                -len(_meaningful_terms(segment)),
+            ),
+        )
+        quote = ranked[0]
+        if not _direct_facet_text_matches(facet, quote):
+            return ""
+        return _bounded_quote_around_terms(quote, grouped_terms, max_chars=240)
+    exact_phrases = _direct_facet_required_phrases(facet_id)
+    if exact_phrases:
+        ranked = sorted(
+            segments,
+            key=lambda segment: (
+                -_direct_facet_phrase_score(facet_id, segment),
+                _thin_heading(segment),
+                _article_title_like(segment),
+                _segment_noise_penalty(segment),
+                -len(_meaningful_terms(segment)),
+            ),
+        )
+        quote = ranked[0]
+        if _direct_facet_phrase_score(facet_id, quote) <= 0:
+            return ""
+        return _bounded_quote_around_terms(quote, set(exact_phrases), max_chars=240)
+    ref = _deterministic_support_ref_for_terms(
+        {"evidence_id": "", "locator_id": "", "passage_text": evidence_text},
+        _facet_terms(facet),
+    )
+    return str(ref.get("exact_quote", "")) if ref else ""
 
 
 def _facet_terms(facet: Mapping[str, Any]) -> set[str]:
@@ -5422,6 +5661,10 @@ def _document_text(document: Mapping[str, Any]) -> str:
         str(document.get(key, ""))
         for key in ("title", "section_title", "description", "body", "excerpt", "concept_id")
     )
+
+
+def _document_passage_text(document: Mapping[str, Any]) -> str:
+    return _bounded_text(str(document.get("body") or document.get("excerpt") or ""))
 
 
 def _coverage_terms(text: str) -> set[str]:
