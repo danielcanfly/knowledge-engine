@@ -250,6 +250,96 @@ def _requested_lifecycle_requirements(question: str) -> set[str] | None:
     return requested
 
 
+def _looks_like_controlled_lifecycle_composition(question: str) -> bool:
+    q = " ".join(str(question).casefold().split())
+    if not any(term in q for term in ("agent", "controlled", "control", "controls", "architecture", "lifecycle", "workflow")):
+        return False
+    facets = {
+        "routing": any(term in q for term in ("initial routing", "route selection", "routing", "router", "route", "source selection")),
+        "dag": any(term in q for term in ("dag", "dependency", "dependencies", "parallel", "branches", "branching", "join")),
+        "state": any(term in q for term in ("durable", "persisted", "progress", "run state", "state")),
+        "verification": any(term in q for term in ("verification", "verify", "completion", "acceptance", "gate")),
+        "approval": any(term in q for term in ("human approval", "approval", "authority", "human review", "person")),
+    }
+    return sum(1 for matched in facets.values() if matched) >= 4
+
+
+def _asks_control_role_distinction(question: str) -> bool:
+    q = " ".join(str(question).casefold().split())
+    return any(
+        marker in q
+        for marker in (
+            "not interchangeable",
+            "interchangeable",
+            "not treating",
+            "without treating",
+            "not conflate",
+            "not conflated",
+            "conflating",
+            "conflated",
+            "different roles",
+            "distinct roles",
+            "separate roles",
+            "not replace",
+            "cannot replace",
+        )
+    )
+
+
+def _controlled_lifecycle_requirements(question: str) -> list[SemanticRequirement]:
+    requirements = [
+        SemanticRequirement(
+            requirement_id="source_selection",
+            instruction="Cover initial routing or route/source selection before execution.",
+            evidence_terms=("routing", "route", "router", "source selection", "capability", "request"),
+            visible_patterns=(
+                r"\b(?:initial routing|route selection|routing|router|source selection)\b",
+                r"\b(?:route|routes).{0,120}(?:request|work|capability|source)",
+            ),
+        ),
+        SemanticRequirement(
+            requirement_id="parallel_branches",
+            instruction="Cover dependency DAG, dependency ordering, or parallel branch execution.",
+            evidence_terms=("DAG", "dag", "dependency", "dependencies", "parallel", "branch", "join"),
+            visible_patterns=(
+                r"\bDAG\b.{0,180}(?:dependency|dependencies|parallel|branch|join|execution|ordering)",
+                r"\b(?:dependency|parallel).{0,180}(?:DAG|branch|branches|join|execution|ordering)",
+            ),
+        ),
+        SemanticRequirement(
+            requirement_id="persisted_progress",
+            instruction="Cover durable or persisted run state/progress.",
+            evidence_terms=("persisted", "durable", "progress", "state", "run state"),
+            visible_patterns=(r"\b(?:persisted|durable).{0,120}(?:progress|state|run state)\b",),
+        ),
+        SemanticRequirement(
+            requirement_id="verification_gate",
+            instruction="Cover verification or completion gating before success/release.",
+            evidence_terms=("verification", "completion", "acceptance", "gate", "success"),
+            visible_patterns=(r"\b(?:verification|completion|acceptance).{0,120}(?:gate|before|success|release|declared)\b",),
+        ),
+        SemanticRequirement(
+            requirement_id="human_approval",
+            instruction="Cover human approval as an authority gate.",
+            evidence_terms=("human approval", "approval gate", "human-in-the-loop", "publication", "sensitive action", "release"),
+            visible_patterns=(r"\bhuman approval\b.{0,120}(?:authority|gate|before|release|action)?",),
+        ),
+    ]
+    if _asks_control_role_distinction(question):
+        requirements.append(
+            SemanticRequirement(
+                requirement_id="control_role_distinction",
+                instruction="State that the controls have distinct roles and are not interchangeable.",
+                evidence_terms=("structures", "distinct problems", "router", "DAG", "state machine", "human approval", "not mutually exclusive", "interchangeable"),
+                visible_patterns=(
+                    r"\b(?:not interchangeable|not conflated|not replace|cannot replace|different roles|distinct roles|separate roles)\b",
+                    r"\bcontrols?\b.{0,180}\b(?:different|distinct|separate)\b.{0,120}\b(?:roles?|responsibilities)\b",
+                ),
+            )
+        )
+    return requirements
+
+
 def _lifecycle_requirement(requirement_id: str) -> SemanticRequirement:
     specs = {
         "admission_policy": (
@@ -385,6 +475,12 @@ def derive_semantic_requirements(
         requirements.append(_authority_boundary_requirement())
     if _route_replan_question(question):
         for requirement in _route_replan_requirements():
+            if requirement.requirement_id in seen:
+                continue
+            seen.add(requirement.requirement_id)
+            requirements.append(requirement)
+    if _looks_like_controlled_lifecycle_composition(question):
+        for requirement in _controlled_lifecycle_requirements(question):
             if requirement.requirement_id in seen:
                 continue
             seen.add(requirement.requirement_id)
@@ -1171,6 +1267,13 @@ def _positive_answerability_requirement_candidate(
 ) -> dict[str, Any] | None:
     requirement_ids = {str(getattr(item, "requirement_id", "")) for item in requirements}
     route_replan_ids = {"initial_routing_role", "replanning_role", "role_contrast"}
+    controlled_lifecycle_ids = {
+        "source_selection",
+        "parallel_branches",
+        "persisted_progress",
+        "verification_gate",
+        "human_approval",
+    }
     lifecycle_ids = {
         "admission_policy",
         "durable_state",
@@ -1240,6 +1343,38 @@ def _positive_answerability_requirement_candidate(
                 ("difference", "contrast", "different", "later", "after"),
             ),
             minimum=2,
+        )
+    elif controlled_lifecycle_ids.issubset(requirement_ids):
+        distinction = ""
+        required_ids = set(controlled_lifecycle_ids)
+        if "control_role_distinction" in requirement_ids:
+            distinction = (
+                " These controls have distinct roles and are not interchangeable: "
+                "routing chooses where work starts, the DAG constrains execution order, "
+                "state preserves progress, verification checks completion, and human "
+                "approval supplies authority."
+            )
+            required_ids.add("control_role_distinction")
+        surface = (
+            "A controlled agent lifecycle can first use initial routing or route "
+            "selection to choose the permitted path, then execute a dependency DAG "
+            "or parallel branches, persist durable run state and progress, pass a "
+            "verification or completion gate before success is declared, and require "
+            f"human approval as the authority gate before release.{distinction}"
+        )
+        claim_role = "direct"
+        relation = None
+        selected_items = _support_items_for_groups(
+            evidence,
+            (
+                ("routing", "route", "router", "source", "capability", "request"),
+                ("DAG", "dag", "dependency", "parallel", "branch", "join"),
+                ("durable", "persisted", "state", "progress", "authority"),
+                ("verification", "completion", "acceptance", "gate", "success"),
+                ("human approval", "approval gate", "human-in-the-loop", "publication", "sensitive action", "release"),
+                ("structures", "distinct problems", "router", "DAG", "state machine", "human approval", "not mutually exclusive", "interchangeable"),
+            ),
+            minimum=5,
         )
     elif business_ids.issubset(requirement_ids):
         surface = (

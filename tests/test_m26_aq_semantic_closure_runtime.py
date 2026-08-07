@@ -166,6 +166,134 @@ def test_nc04_selected_evidence_without_requirement_support_is_rejected() -> Non
     assert any(not item["supported"] for item in proof)
 
 
+def test_controlled_lifecycle_composition_derives_all_roles_from_paraphrases() -> None:
+    questions = [
+        (
+            "Describe one controlled agent lifecycle that combines initial routing, "
+            "a dependency DAG, durable state, verification, and human approval without "
+            "treating those controls as interchangeable."
+        ),
+        (
+            "Walk through a governed agent workflow: route the request first, run "
+            "dependent parallel steps, persist run state, verify completion, then "
+            "require human approval while keeping those controls in separate roles."
+        ),
+        (
+            "How would a controlled architecture combine route selection, dependency "
+            "ordering, durable progress, a completion gate, and an approval authority "
+            "without conflating the controls?"
+        ),
+    ]
+
+    for question in questions:
+        requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+        ids = {item.requirement_id for item in requirements}
+        assert {
+            "source_selection",
+            "parallel_branches",
+            "persisted_progress",
+            "verification_gate",
+            "human_approval",
+            "control_role_distinction",
+        }.issubset(ids)
+
+
+def test_controlled_lifecycle_recovery_mentions_dag_and_distinct_roles() -> None:
+    question = (
+        "Describe one controlled agent lifecycle that combines initial routing, "
+        "a dependency DAG, durable state, verification, and human approval without "
+        "treating those controls as interchangeable."
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _passage(
+            "route",
+            "A Router sends different requests to different capabilities and sources of truth.",
+            "routing-note",
+        ),
+        _passage(
+            "dag",
+            (
+                "A dependency DAG expresses directional dependencies, fan-out, "
+                "branches, and joins without cycles inside one run."
+            ),
+            "dag-note",
+        ),
+        _passage(
+            "state",
+            (
+                "Durable server-side state governs persisted progress, legal "
+                "transitions, recovery, and terminal outcomes."
+            ),
+            "state-note",
+        ),
+        _passage(
+            "verify",
+            (
+                "Evidence verification and completion acceptance checks form the "
+                "gate before success or release."
+            ),
+            "verification-note",
+        ),
+        _passage(
+            "approval",
+            "Human approval is required before publication or another sensitive release action.",
+            "approval-note",
+        ),
+        _passage(
+            "roles",
+            (
+                "Routers, DAGs, state machines, verification, and approval gates "
+                "solve different parts of the problem and are not interchangeable."
+            ),
+            "roles-note",
+        ),
+    ]
+
+    candidate = _supported_semantic_recovery_candidate(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert candidate is not None
+    answer_text = str(candidate["answer_text"])
+    lowered = answer_text.casefold()
+    assert not evaluate_visible_semantics(answer_text, requirements, question)
+    assert "initial routing" in lowered or "route selection" in lowered
+    assert "DAG" in answer_text
+    assert "durable" in lowered and "state" in lowered
+    assert "verification" in lowered
+    assert "human approval" in lowered
+    assert "not interchangeable" in lowered or "distinct roles" in lowered
+    assert set(candidate["selected_evidence_ids"]) >= {
+        "route",
+        "dag",
+        "state",
+        "verify",
+        "approval",
+    }
+
+
+def test_controlled_lifecycle_requirements_do_not_attach_to_venture_state_question() -> None:
+    question = (
+        "Why is a durable venture more than a product when operations, resources, "
+        "team, finance, and risk all matter?"
+    )
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    ids = {item.requirement_id for item in requirements}
+    assert not {
+        "source_selection",
+        "parallel_branches",
+        "persisted_progress",
+        "verification_gate",
+        "human_approval",
+        "control_role_distinction",
+    } & ids
+
+
 def test_compact_provider_contract_accepts_small_json() -> None:
     parsed = _parse_compact_provider_result(
         '{"status":"answer","answer":"A short grounded answer.","used":["e1","e2"]}'
