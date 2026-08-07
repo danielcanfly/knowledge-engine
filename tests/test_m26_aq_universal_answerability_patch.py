@@ -92,6 +92,28 @@ def test_semantic_admission_keeps_precise_identifier_questions_strict() -> None:
     )
 
 
+def test_runtime_overlap_rejects_dense_without_semantic_metadata_signal() -> None:
+    evidence = [
+        _evidence(
+            "ev1",
+            "This passage is only a dense candidate with no positive semantic metadata.",
+            source="source-a",
+            channels=["dense"],
+        ),
+        _evidence(
+            "ev2",
+            "This second passage is also dense-only and has no admission proof.",
+            source="source-b",
+            channels=["dense"],
+        ),
+    ]
+
+    assert not legacy._has_meaningful_overlap(
+        "完全不同語言的問題沒有字面重疊時不能靠空白語義訊號放行",
+        evidence,
+    )
+
+
 def test_evidence_bound_recovery_candidate_verifies_without_internal_labels() -> None:
     evidence = [
         _evidence(

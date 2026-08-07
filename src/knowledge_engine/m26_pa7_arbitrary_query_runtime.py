@@ -4997,8 +4997,69 @@ def _has_meaningful_overlap(question: str, evidence: Sequence[Mapping[str, Any]]
         return len(overlap) >= 2 and any(
             term in overlap and _looks_like_random_identifier(term) for term in query_terms
         )
-    required_overlap = 1
-    return len(overlap) >= required_overlap
+    if overlap:
+        return True
+    return _has_semantic_admission_signal(evidence)
+
+
+def _has_semantic_admission_signal(evidence: Sequence[Mapping[str, Any]]) -> bool:
+    passages = [
+        item for item in evidence if str(item.get("evidence_type", "passage")) == "passage"
+    ]
+    if len(passages) < 2:
+        return False
+    semantic_channels = {
+        "query_coverage",
+        "required_facet_coverage",
+        "release_distinct_source",
+        "semantic_requirement_recovery",
+    }
+    has_signal = False
+    for item in passages:
+        channels = {str(channel) for channel in item.get("channels", [])}
+        if channels & semantic_channels or any(channel.startswith("graph_") for channel in channels):
+            has_signal = True
+            break
+        metadata = item.get("retrieval_metadata", {})
+        if isinstance(metadata, Mapping) and _metadata_has_semantic_admission_signal(
+            metadata, dense_channel_present="dense" in channels
+        ):
+            has_signal = True
+            break
+    if not has_signal:
+        return False
+    if len({_source_identity(item) for item in passages}) < 2 and len(passages) < 3:
+        return False
+    return sum(_passage_text_quality(str(item.get("passage_text", ""))) for item in passages) > 0
+
+
+def _metadata_has_semantic_admission_signal(
+    metadata: Mapping[str, Any], *, dense_channel_present: bool
+) -> bool:
+    for key in ("semantic_requirement_score", "query_overlap_score", "rerank_score"):
+        if key not in metadata:
+            continue
+        try:
+            if float(metadata.get(key, 0.0)) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    graph_scores = metadata.get("graph_relevance_scores")
+    if isinstance(graph_scores, Sequence) and not isinstance(graph_scores, (str, bytes)):
+        for score in graph_scores:
+            try:
+                if float(score) > 0:
+                    return True
+            except (TypeError, ValueError):
+                continue
+    coverage_terms = metadata.get("coverage_terms")
+    if (
+        isinstance(coverage_terms, Sequence)
+        and not isinstance(coverage_terms, (str, bytes))
+        and any(str(item).strip() for item in coverage_terms)
+    ):
+        return True
+    return dense_channel_present and "rerank_score" in metadata
 
 
 def _requires_precise_overlap(query_terms: set[str]) -> bool:

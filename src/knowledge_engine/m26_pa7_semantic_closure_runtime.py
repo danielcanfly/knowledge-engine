@@ -481,6 +481,33 @@ def _synthesize_and_verify(
             failures.append(type(exc).__name__)
             break
 
+    deterministic = legacy._deterministic_evidence_synthesis(
+        trace_id=trace_id,
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+        calls=calls,
+        repair_attempted=True,
+        trigger_reason_codes=[*failures, "SEMANTIC_CLOSURE_FAILED"],
+        allow_after_repair_failure=True,
+    )
+    if deterministic is not None:
+        deterministic["multi_evidence_verification"] = {
+            **dict(deterministic.get("multi_evidence_verification", {})),
+            "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+        }
+        closure = {
+            "schema_version": "m26-aq-semantic-closure/v1",
+            "requirements": [_requirement_public(item) for item in requirements],
+            "support_proof": final_support_proof,
+            "endpoint_proof": dict(endpoint_proof),
+            "failures": [],
+            "pre_recovery_failures": sorted(set(failures)),
+            "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+            "broad_deterministic_fallback_used": True,
+        }
+        return deterministic, closure
+
     abstention = legacy._verified_abstention(
         reason_codes=[*failures, "SEMANTIC_CLOSURE_FAILED"],
         calls=calls,

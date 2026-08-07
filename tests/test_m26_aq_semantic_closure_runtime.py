@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from typing import Any
 
 from knowledge_engine.m26_aq_semantic_contract import (
     _contract_compat_module,
@@ -17,8 +18,24 @@ from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _requirement_support_failures,
     _response_from_verification,
     _semantic_requirements,
+    _synthesize_and_verify,
     _visible_semantic_failures,
 )
+from knowledge_engine.m26_verified_answer_citation_gate import sha256_bytes
+
+
+class _AbstainingProvider:
+    def __init__(self) -> None:
+        self.calls: list[tuple[dict[str, Any], str]] = []
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls.append((payload, call_class))
+        return {
+            "text": json.dumps({"status": "abstain", "answer": "", "used": []}),
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            "cost_usd": "0.00",
+            "call_class": call_class,
+        }
 
 
 def _failures(
@@ -45,6 +62,21 @@ def _passage(
         "title": source,
         "section_title": source,
         "passage_text": text,
+    }
+
+
+def _rich_passage(evidence_id: str, text: str, source: str) -> dict[str, Any]:
+    return {
+        **_passage(evidence_id, text, source),
+        "release_id": "release-test",
+        "artifact_key": "artifact-test",
+        "artifact_sha256": "a" * 64,
+        "section_id": f"section_{evidence_id}",
+        "channels": ["dense"],
+        "passage_text_sha256": sha256_bytes(text.encode("utf-8")),
+        "provenance_record_sha256": "b" * 64,
+        "retrieved_at": "",
+        "retrieval_metadata": {"query_overlap_score": 1.0},
     }
 
 
@@ -166,6 +198,51 @@ def test_graph_false_premise_contract_binds_full_named_entities() -> None:
     assert "entity_harness_theory_part_2" in ids
     assert "ordering_semantics" in ids
     assert "non_entailment" in ids
+
+
+def test_provider_abstain_with_available_evidence_uses_verified_deterministic_fallback() -> None:
+    question = (
+        "If a client disconnects, how does the admission policy, durable state authority, "
+        "continued execution, completion verification, and observability reattachment keep "
+        "the run trustworthy from admission to completion?"
+    )
+    evidence = [
+        _rich_passage(
+            "ev1",
+            (
+                "An admitted task remains trustworthy through admission policy, durable "
+                "persisted state authority, continued execution after disconnect, completion "
+                "verification, and observability for reattachment status."
+            ),
+            "source-a",
+        )
+    ]
+    provider = _AbstainingProvider()
+
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-test",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=_semantic_requirements(question, "direct_grounded_knowledge"),
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+    ]
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "deterministic_verified_evidence_synthesis"
+    assert answer["safe_abstention"] is False
+    assert answer["citations"]
+    verification = answer["multi_evidence_verification"]
+    assert verification["deterministic_evidence_synthesis_used"] is True
+    assert verification["provider_contract"] == "compact_runtime_bound_semantic_closure/v1"
+    assert closure["failures"] == []
+    assert closure["broad_deterministic_fallback_used"] is True
+    assert "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE" in closure["pre_recovery_failures"]
 
 
 def test_router_vs_replanner_implicit_wording_gets_both_roles() -> None:
