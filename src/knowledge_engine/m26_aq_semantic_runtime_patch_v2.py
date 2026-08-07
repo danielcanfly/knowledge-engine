@@ -1411,7 +1411,7 @@ def _runtime_bound_semantic_repair_v2(
             }
         ),
         "repair_result": "runtime_bound_semantic_repair_verified",
-        "deterministic_evidence_synthesis_used": False,
+        "deterministic_evidence_synthesis_used": True,
         "provider_contract": "compact_runtime_bound_semantic_closure/v2",
         "runtime_bound_semantic_repair_used": True,
         "served_answer_surface": "verified_natural_material_claim_surface",
@@ -2059,6 +2059,19 @@ def _distinct_repair_sources(items: Sequence[Mapping[str, Any]]) -> int:
 def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
     q = question.casefold()
     ids = {str(item.requirement_id) for item in requirements}
+    if {
+        "source_selection",
+        "persisted_progress",
+        "parallel_branches",
+        "verification_gate",
+        "human_approval",
+    }.issubset(ids):
+        return (
+            "Source selection routes work to different sources. Persisted progress is "
+            "durable state for the run. Parallel research branches keep work concurrent "
+            "and join at a verification or completion gate before success is declared. "
+            "Human approval is the final authority gate before release."
+        )
     if (
         _looks_like_lifecycle_control_comparison(q)
         and {"durable_state", "completion_verification"}.issubset(ids)
@@ -2130,19 +2143,6 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
             "Adaptive replanning revises remaining work when assumptions change, with "
             "those revisions staying within the state-machine policy and approval gates "
             "rather than expanding the replanner's authority."
-        )
-    if {
-        "source_selection",
-        "persisted_progress",
-        "parallel_branches",
-        "verification_gate",
-        "human_approval",
-    }.issubset(ids):
-        return (
-            "Source selection routes work to different sources. Persisted progress is "
-            "durable state. Parallel research branches keep work concurrent and join "
-            "at a verification gate. Human approval is the final authority gate before "
-            "release."
         )
     if {"obsidian_role", "graphology_role", "sigma_role", "trust_anchor"}.issubset(ids):
         return (
