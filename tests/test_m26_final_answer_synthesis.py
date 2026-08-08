@@ -511,6 +511,57 @@ def test_supported_partial_answer_states_unsupported_boundary() -> None:
     assert closure["partial_answer"] is True
 
 
+def test_answer_status_with_soft_missing_dimension_downgrades_to_verified_partial() -> None:
+    question = (
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
+    )
+    evidence = [
+        _passage(
+            "e1",
+            (
+                "Durable persisted server-side state preserves run progress and "
+                "authority after a client disconnect."
+            ),
+            "durable-note",
+        )
+    ]
+    partial = (
+        "Durable persisted server-side state matters because it preserves run "
+        "progress and authority after a client disconnect."
+    )
+    provider = _SequenceTypedProvider(
+        [
+            _typed_body(
+                status="answer",
+                answer_text=partial,
+                claims=[
+                    {
+                        "claim_id": "claim_1",
+                        "claim_type": "EVIDENCE_FACT",
+                        "surface_text": partial,
+                        "evidence_labels": ["e1"],
+                        "covers": ["durable_state"],
+                    }
+                ],
+            )
+        ]
+    )
+
+    answer, closure = _run_typed_synthesis(question, evidence, provider)
+
+    assert len(provider.calls) == 2
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_partial_semantic_closure"
+    assert answer["multi_evidence_verification"]["partial_answer"] is True
+    assert answer["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is False
+    assert closure["partial_answer"] is True
+    assert closure["broad_deterministic_fallback_used"] is False
+    assert "Unsupported boundary" in answer["answer_text"]
+    assert "completion_verification" not in answer["answer_text"]
+    assert "observability/status" not in answer["answer_text"]
+
+
 def test_unsupported_core_query_fully_abstains() -> None:
     question = "Why do durable state and verification solve different reliability problems?"
     provider = _SequenceTypedProvider(

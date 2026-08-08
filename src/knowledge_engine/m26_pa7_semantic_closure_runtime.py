@@ -355,6 +355,7 @@ def _synthesize_and_verify(
     calls: list[dict[str, Any]] = []
     repair_attempted = False
     final_support_proof: list[dict[str, Any]] = []
+    parseable_useful_provider_seen = False
 
     for attempt in (1, 2):
         compact_payload, label_map, snippet_map = _compact_provider_payload(
@@ -414,6 +415,8 @@ def _synthesize_and_verify(
             used_items = _resolve_used_items(used_labels, label_map)
             if not used_items:
                 used_items = _infer_used_items(answer, evidence, limit=6)
+            if answer and used_items:
+                parseable_useful_provider_seen = True
             used_items = _force_required_support_items(
                 question=question,
                 intent_class=intent_class,
@@ -434,6 +437,29 @@ def _synthesize_and_verify(
                 if attempt == 1:
                     repair_attempted = True
                     continue
+                partial_result = _publish_verified_provider_partial(
+                    question=question,
+                    trace_id=trace_id,
+                    intent_class=intent_class,
+                    evidence=evidence,
+                    calls=calls,
+                    repair_attempted=repair_attempted,
+                    requirements=requirements,
+                    endpoint_proof=endpoint_proof,
+                    answer=answer,
+                    used_items=used_items,
+                    claims=claims,
+                    label_map=label_map,
+                    snippet_map=snippet_map,
+                    unanswered_dimensions=unanswered_dimensions,
+                    visible_failures=visible_failures,
+                    support_failures=support_failures,
+                    semantic_failures=semantic_failures,
+                    failures=failures,
+                    support_proof=final_support_proof,
+                )
+                if partial_result is not None:
+                    return partial_result
                 if provider_status in {"partial", "partial_candidate"} and _partial_answer_has_substantial_value(
                     answer=answer,
                     requirements=requirements,
@@ -545,6 +571,29 @@ def _synthesize_and_verify(
                 if attempt == 1:
                     repair_attempted = True
                     continue
+                partial_result = _publish_verified_provider_partial(
+                    question=question,
+                    trace_id=trace_id,
+                    intent_class=intent_class,
+                    evidence=evidence,
+                    calls=calls,
+                    repair_attempted=repair_attempted,
+                    requirements=requirements,
+                    endpoint_proof=endpoint_proof,
+                    answer=answer,
+                    used_items=used_items,
+                    claims=claims,
+                    label_map=label_map,
+                    snippet_map=snippet_map,
+                    unanswered_dimensions=unanswered_dimensions,
+                    visible_failures=post_failures,
+                    support_failures=[],
+                    semantic_failures=post_failures,
+                    failures=failures,
+                    support_proof=final_support_proof,
+                )
+                if partial_result is not None:
+                    return partial_result
                 break
 
             final_answer["answer_source"] = (
@@ -578,32 +627,36 @@ def _synthesize_and_verify(
             failures.append(type(exc).__name__)
             break
 
-    deterministic = legacy._deterministic_evidence_synthesis(
-        trace_id=trace_id,
-        question=question,
-        intent_class=intent_class,
-        evidence=evidence,
-        calls=calls,
-        repair_attempted=True,
-        trigger_reason_codes=[*failures, "SEMANTIC_CLOSURE_FAILED"],
-        allow_after_repair_failure=True,
-    )
-    if deterministic is not None:
-        deterministic["multi_evidence_verification"] = {
-            **dict(deterministic.get("multi_evidence_verification", {})),
-            "provider_contract": "compact_runtime_bound_semantic_closure/v1",
-        }
-        closure = {
-            "schema_version": "m26-aq-semantic-closure/v1",
-            "requirements": [_requirement_public(item) for item in requirements],
-            "support_proof": final_support_proof,
-            "endpoint_proof": dict(endpoint_proof),
-            "failures": [],
-            "pre_recovery_failures": sorted(set(failures)),
-            "provider_contract": "compact_runtime_bound_semantic_closure/v1",
-            "broad_deterministic_fallback_used": True,
-        }
-        return deterministic, closure
+    if not (
+        parseable_useful_provider_seen
+        and _only_soft_semantic_failures(failures)
+    ):
+        deterministic = legacy._deterministic_evidence_synthesis(
+            trace_id=trace_id,
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            calls=calls,
+            repair_attempted=True,
+            trigger_reason_codes=[*failures, "SEMANTIC_CLOSURE_FAILED"],
+            allow_after_repair_failure=True,
+        )
+        if deterministic is not None:
+            deterministic["multi_evidence_verification"] = {
+                **dict(deterministic.get("multi_evidence_verification", {})),
+                "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+            }
+            closure = {
+                "schema_version": "m26-aq-semantic-closure/v1",
+                "requirements": [_requirement_public(item) for item in requirements],
+                "support_proof": final_support_proof,
+                "endpoint_proof": dict(endpoint_proof),
+                "failures": [],
+                "pre_recovery_failures": sorted(set(failures)),
+                "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                "broad_deterministic_fallback_used": True,
+            }
+            return deterministic, closure
 
     abstention = legacy._verified_abstention(
         reason_codes=[*failures, "SEMANTIC_CLOSURE_FAILED"],
@@ -621,6 +674,100 @@ def _synthesize_and_verify(
         "broad_deterministic_fallback_used": False,
     }
     return abstention, closure
+
+
+def _publish_verified_provider_partial(
+    *,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    calls: Sequence[Mapping[str, Any]],
+    repair_attempted: bool,
+    requirements: Sequence[SemanticRequirement],
+    endpoint_proof: Mapping[str, Any],
+    answer: str,
+    used_items: Sequence[Mapping[str, Any]],
+    claims: Sequence[Mapping[str, Any]],
+    label_map: Mapping[str, Mapping[str, Any]],
+    snippet_map: Mapping[str, str],
+    unanswered_dimensions: Sequence[str],
+    visible_failures: Sequence[str],
+    support_failures: Sequence[str],
+    semantic_failures: Sequence[str],
+    failures: Sequence[str],
+    support_proof: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    if not _partial_answer_has_substantial_value(
+        answer=answer,
+        requirements=requirements,
+        visible_failures=visible_failures,
+        support_failures=support_failures,
+        used_items=used_items,
+    ):
+        return None
+    try:
+        candidate = _runtime_bound_candidate(
+            answer=answer,
+            question=question,
+            intent_class=intent_class,
+            used_items=used_items,
+            claims=claims,
+            label_map=label_map,
+            snippet_map=snippet_map,
+            provider_status="partial_candidate",
+            requirements=requirements,
+            unanswered_dimensions=unanswered_dimensions,
+            semantic_failures=semantic_failures,
+        )
+        verified = legacy._verify_multi_evidence_provider_output(
+            trace_id=trace_id,
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_text=json.dumps(
+                candidate,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+        )
+        partial_answer = legacy._verified_multi_evidence_answer(
+            intent_class=intent_class,
+            verified=verified,
+            evidence=evidence,
+            calls=calls,
+            repair_attempted=repair_attempted,
+        )
+    except (legacy.VerifiedAnswerGateError, ValueError, KeyError):
+        return None
+
+    pre_partial_failures = sorted({str(item) for item in failures if str(item)})
+    partial_answer["answer_source"] = (
+        "provider_verified_runtime_bound_partial_semantic_closure"
+    )
+    partial_answer["multi_evidence_verification"] = {
+        **dict(partial_answer.get("multi_evidence_verification", {})),
+        "verification_failure_codes_by_attempt": pre_partial_failures,
+        "repair_trigger": pre_partial_failures,
+        "repair_result": "verified_partial",
+        "deterministic_evidence_synthesis_used": False,
+        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+        "partial_answer": True,
+        "unanswered_dimensions": list(unanswered_dimensions),
+    }
+    closure = {
+        "schema_version": "m26-aq-semantic-closure/v1",
+        "requirements": [_requirement_public(item) for item in requirements],
+        "support_proof": list(support_proof),
+        "endpoint_proof": dict(endpoint_proof),
+        "failures": [],
+        "pre_partial_failures": pre_partial_failures,
+        "partial_answer": True,
+        "unanswered_dimensions": list(unanswered_dimensions),
+        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+        "broad_deterministic_fallback_used": False,
+    }
+    return partial_answer, closure
 
 
 def _compact_provider_payload(
@@ -1123,6 +1270,17 @@ def _missing_requirement_ids(failures: Sequence[str]) -> set[str]:
     return ids
 
 
+def _only_soft_semantic_failures(failures: Sequence[str]) -> bool:
+    codes = {str(item) for item in failures if str(item)}
+    if not codes:
+        return False
+    return all(
+        code.startswith("SEMANTIC_VISIBLE_MISSING:")
+        or code.startswith("SEMANTIC_SUPPORT_MISSING:")
+        for code in codes
+    )
+
+
 def _partial_missing_dimension_labels(
     *,
     requirements: Sequence[SemanticRequirement],
@@ -1137,8 +1295,29 @@ def _partial_missing_dimension_labels(
             labels.append(value)
     for requirement_id in sorted(_missing_requirement_ids(semantic_failures)):
         requirement = by_id.get(requirement_id)
-        labels.append(requirement.requirement_id if requirement else requirement_id)
+        labels.append(
+            _natural_partial_dimension_label(requirement)
+            if requirement is not None
+            else requirement_id.replace("_", " ")
+        )
     return list(dict.fromkeys(labels))
+
+
+def _natural_partial_dimension_label(requirement: SemanticRequirement) -> str:
+    instruction = " ".join(str(requirement.instruction).strip().split())
+    if not instruction:
+        return requirement.requirement_id.replace("_", " ")
+    label = re.sub(
+        r"^(?:Cover|State|Explain|Name and address|Contrast|Define)\s+",
+        "",
+        instruction,
+        flags=re.I,
+    )
+    label = label.replace("/", " or ")
+    label = label.rstrip(".")
+    if not label:
+        return requirement.requirement_id.replace("_", " ")
+    return label[:1].lower() + label[1:]
 
 
 def _append_partial_boundary(answer: str, boundary: str) -> str:

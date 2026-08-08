@@ -31,6 +31,47 @@ class _CompactAbstainingProvider:
         }
 
 
+class _RepeatedPartialSurfaceProvider:
+    def __init__(
+        self,
+        answer_text: str,
+        covers: list[str] | None = None,
+    ) -> None:
+        self.answer_text = answer_text
+        self.covers = covers or ["durable_state"]
+        self.calls = 0
+        self.cost = Decimal("0")
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls += 1
+        self.cost += Decimal("0.00001")
+        return {
+            "text": json.dumps(
+                {
+                    "schema_version": "m26-fas-synthesis/v1",
+                    "status": "answer",
+                    "answer_text": self.answer_text,
+                    "claims": [
+                        {
+                            "claim_id": "claim_1",
+                            "claim_type": "EVIDENCE_FACT",
+                            "surface_text": self.answer_text,
+                            "evidence_labels": ["e1"],
+                            "covers": self.covers,
+                        }
+                    ],
+                    "unanswered_dimensions": [],
+                    "abstention_reason": None,
+                }
+            ),
+            "usage": {"input_tokens": 16, "output_tokens": 32},
+            "cost_usd": "0.00001",
+            "latency_ms": 1,
+            "response_id": f"partial-surface-{self.calls}",
+            "call_class": call_class,
+        }
+
+
 def _passage(evidence_id: str, text: str, *, concept_id: str = "") -> dict[str, Any]:
     return {
         "evidence_id": evidence_id,
@@ -382,6 +423,114 @@ def test_provider_abstention_recovers_disconnect_state_answer_without_admission_
     assert "observability" in text
     assert "completion verification" in text
     assert "admission" not in text
+
+
+def test_soft_incomplete_provider_answer_publishes_as_verified_partial() -> None:
+    from knowledge_engine.m26_aq_semantic_contract import (
+        derive_semantic_requirements,
+        synthesize_and_verify,
+    )
+
+    question = (
+        "Why is persisted run state important when a client disconnects before a "
+        "long-running workflow has finished?"
+    )
+    answer_text = (
+        "Durable persisted server-side state matters because it preserves run "
+        "progress and authority after a client disconnect."
+    )
+    evidence = [
+        _passage(
+            "e1",
+            (
+                "Durable persisted server-side state preserves run progress and "
+                "authority after a client disconnect."
+            ),
+        )
+    ]
+
+    answer, closure = synthesize_and_verify(
+        question=question,
+        trace_id="trace-soft-partial-preserve",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=_RepeatedPartialSurfaceProvider(answer_text),
+        requirements=derive_semantic_requirements(
+            question,
+            "direct_grounded_knowledge",
+        ),
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    text = answer["answer_text"]
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_partial_semantic_closure"
+    assert answer["multi_evidence_verification"]["partial_answer"] is True
+    assert answer["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is False
+    assert closure["partial_answer"] is True
+    assert closure["broad_deterministic_fallback_used"] is False
+    assert answer_text in text
+    assert "Unsupported boundary" in text
+    assert "completion_verification" not in text
+    assert "observability/status" not in text
+
+
+def test_graphology_measured_frame_rate_gap_publishes_useful_partial() -> None:
+    from knowledge_engine.m26_aq_semantic_contract import (
+        derive_semantic_requirements,
+        synthesize_and_verify,
+    )
+
+    question = (
+        "Explain what Graphology contributes to the graph product surface, and "
+        "also give the exact browser frame rate Daniel measured for that "
+        "visualization on 15 July 2026."
+    )
+    answer_text = (
+        "Graphology stores and analyzes graph data for the product surface, while "
+        "Sigma.js is the browser rendering layer."
+    )
+    evidence = [
+        _passage(
+            "e1",
+            (
+                "Graphology stores and analyses graph data. Sigma.js renders an "
+                "interactive graph in the browser."
+            ),
+        )
+    ]
+    requirements = derive_semantic_requirements(
+        question,
+        "direct_grounded_knowledge",
+    )
+    assert {item.requirement_id for item in requirements}.issuperset(
+        {"entity_graphology", "exact_measured_frame_rate"}
+    )
+
+    answer, closure = synthesize_and_verify(
+        question=question,
+        trace_id="trace-graphology-frame-rate-partial",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=_RepeatedPartialSurfaceProvider(
+            answer_text,
+            covers=["entity_graphology"],
+        ),
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    text = answer["answer_text"]
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_partial_semantic_closure"
+    assert answer["multi_evidence_verification"]["partial_answer"] is True
+    assert answer["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is False
+    assert closure["partial_answer"] is True
+    assert closure["broad_deterministic_fallback_used"] is False
+    assert "Graphology stores and analyzes graph data" in text
+    assert "Unsupported boundary" in text
+    assert "exact_measured_frame_rate" not in text
+    assert "frame-rate value" in text
 
 
 def test_provider_abstention_recovers_pure_precedes_ordering_relation() -> None:

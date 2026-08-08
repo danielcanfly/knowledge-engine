@@ -606,6 +606,35 @@ def derive_semantic_requirements(
                 continue
             seen.add(requirement.requirement_id)
             requirements.append(requirement)
+    if (
+        any(term in q for term in ("exact", "measured", "measurement", "測量", "實測"))
+        and any(term in q for term in ("frame rate", "framerate", "fps", "幀率"))
+    ):
+        requirement_id = "exact_measured_frame_rate"
+        if requirement_id not in seen:
+            seen.add(requirement_id)
+            requirements.append(
+                SemanticRequirement(
+                    requirement_id=requirement_id,
+                    instruction=(
+                        "Cover the exact measured browser frame-rate value when the "
+                        "available evidence supports it, or explicitly mark that "
+                        "measurement as unsupported."
+                    ),
+                    evidence_terms=(
+                        "frame rate",
+                        "framerate",
+                        "fps",
+                        "measured",
+                        "browser",
+                        "visualization",
+                    ),
+                    visible_patterns=(
+                        r"\b(?:frame rate|framerate|fps)\b",
+                        r"\b(?:unsupported|not establish|does not establish|no evidence).{0,160}(?:frame rate|framerate|fps|measurement)",
+                    ),
+                )
+            )
     if lifecycle_requested is not None:
         for requirement_id in sorted(lifecycle_requested):
             if requirement_id in seen:
@@ -863,9 +892,7 @@ def synthesize_and_verify(
     endpoint_proof: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     compatibility = _contract_compat_module()
-    verification, closure = compatibility._provider_integrity_safe_synthesize(
-        runtime=_RUNTIME_FACADE,
-        legacy=legacy,
+    verification, closure = runtime._synthesize_and_verify(
         question=question,
         trace_id=trace_id,
         intent_class=intent_class,
@@ -873,6 +900,23 @@ def synthesize_and_verify(
         provider_client=provider_client,
         requirements=requirements,
         endpoint_proof=endpoint_proof,
+    )
+    verification, closure = _reject_external_marker_deterministic_fallback(
+        question=question,
+        verification=verification,
+        closure=closure,
+        evidence=evidence,
+    )
+    verification, closure = _recover_after_broad_deterministic_fallback(
+        compatibility=compatibility,
+        question=question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof=endpoint_proof,
+        verification=verification,
+        closure=closure,
     )
     verification, closure = _publish_support_proof_recovered_answer(
         compatibility=compatibility,
@@ -899,6 +943,116 @@ def synthesize_and_verify(
         "semantic_contract_fingerprint": fingerprint,
     }
     return verification, closure
+
+
+def _reject_external_marker_deterministic_fallback(
+    *,
+    question: str,
+    verification: Mapping[str, Any],
+    closure: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if verification.get("answer_source") != "deterministic_verified_evidence_synthesis":
+        return dict(verification), dict(closure)
+    multi = verification.get("multi_evidence_verification", {})
+    multi = multi if isinstance(multi, Mapping) else {}
+    trigger_codes = set(_string_list(multi.get("trigger_reason_codes")))
+    if "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE" not in trigger_codes:
+        return dict(verification), dict(closure)
+    if not _unsupported_external_markers(question, evidence):
+        return dict(verification), dict(closure)
+
+    previous_mve = verification.get("multi_evidence_verification", {})
+    previous_mve = previous_mve if isinstance(previous_mve, Mapping) else {}
+    abstention = legacy._verified_abstention(
+        reason_codes=[
+            "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE",
+            "UNSUPPORTED_EXTERNAL_MARKER",
+            "SEMANTIC_CLOSURE_FAILED",
+        ],
+        calls=[],
+        repair_attempted=True,
+    )
+    abstention["answer_source"] = "safe_abstention"
+    abstention["multi_evidence_verification"] = {
+        **dict(abstention.get("multi_evidence_verification", {})),
+        "provider_attempt_telemetry": list(
+            previous_mve.get("provider_attempt_telemetry", [])
+        ),
+        "deterministic_evidence_synthesis_used": False,
+        "provider_contract": "compact_runtime_bound_semantic_closure/v3",
+        "rejected_deterministic_fallback": True,
+    }
+    return abstention, {
+        **dict(closure),
+        "failures": [
+            "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE",
+            "UNSUPPORTED_EXTERNAL_MARKER",
+            "SEMANTIC_CLOSURE_FAILED",
+        ],
+        "pre_rejected_deterministic_fallback": True,
+        "provider_contract": "compact_runtime_bound_semantic_closure/v3",
+        "broad_deterministic_fallback_used": False,
+    }
+
+
+def _recover_after_broad_deterministic_fallback(
+    *,
+    compatibility: Any,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+    verification: Mapping[str, Any],
+    closure: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if verification.get("answer_source") != "deterministic_verified_evidence_synthesis":
+        return dict(verification), dict(closure)
+
+    multi = verification.get("multi_evidence_verification", {})
+    multi = multi if isinstance(multi, Mapping) else {}
+    trigger_codes = _string_list(multi.get("trigger_reason_codes"))
+    pre_recovery = _string_list(closure.get("pre_recovery_failures"))
+    reason_codes = sorted({*trigger_codes, *pre_recovery})
+    if not reason_codes:
+        reason_codes = ["SEMANTIC_CLOSURE_FAILED"]
+
+    pseudo_verification = {
+        **dict(verification),
+        "status": "owner_only_safe_abstention",
+        "terminal_status": "safe_abstention",
+        "answer_text": "",
+        "answer_source": "safe_abstention",
+        "safe_abstention": True,
+        "reason_codes": reason_codes,
+        "citations": [],
+        "answer_claims": [],
+    }
+    pseudo_closure = {
+        **dict(closure),
+        "failures": reason_codes,
+        "pre_broad_deterministic_answer_source": verification.get("answer_source"),
+    }
+    recovered = _recover_supported_semantic_answer(
+        compatibility=compatibility,
+        question=question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof=endpoint_proof,
+        verification=pseudo_verification,
+        closure=pseudo_closure,
+    )
+    if recovered is None:
+        return dict(verification), dict(closure)
+    answer, recovered_closure = recovered
+    return answer, {
+        **dict(recovered_closure),
+        "pre_broad_deterministic_fallback_replaced": True,
+    }
 
 
 def _publish_support_proof_recovered_answer(
