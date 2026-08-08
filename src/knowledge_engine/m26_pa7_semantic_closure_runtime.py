@@ -384,10 +384,14 @@ def _synthesize_and_verify(
                     continue
                 break
 
+            provider_status = str(parsed["status"])
             answer = _normalize_compact_provider_visible_answer(
                 _parsed_provider_answer_text(parsed)
             )
             claims = _parsed_provider_claims(parsed)
+            unanswered_dimensions = _parsed_provider_unanswered_dimensions(
+                parsed, claims
+            )
             visible_failures = _visible_semantic_failures(
                 answer, requirements, question
             )
@@ -415,6 +419,74 @@ def _synthesize_and_verify(
                 if attempt == 1:
                     repair_attempted = True
                     continue
+                if provider_status in {"partial", "partial_candidate"} and _partial_answer_has_substantial_value(
+                    answer=answer,
+                    requirements=requirements,
+                    visible_failures=visible_failures,
+                    support_failures=support_failures,
+                    used_items=used_items,
+                ):
+                    try:
+                        candidate = _runtime_bound_candidate(
+                            answer=answer,
+                            question=question,
+                            intent_class=intent_class,
+                            used_items=used_items,
+                            claims=claims,
+                            label_map=label_map,
+                            snippet_map=snippet_map,
+                            provider_status=provider_status,
+                            requirements=requirements,
+                            unanswered_dimensions=unanswered_dimensions,
+                            semantic_failures=semantic_failures,
+                        )
+                        verified = legacy._verify_multi_evidence_provider_output(
+                            trace_id=trace_id,
+                            question=question,
+                            intent_class=intent_class,
+                            evidence=evidence,
+                            provider_text=json.dumps(
+                                candidate,
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                            ),
+                        )
+                        partial_answer = legacy._verified_multi_evidence_answer(
+                            intent_class=intent_class,
+                            verified=verified,
+                            evidence=evidence,
+                            calls=calls,
+                            repair_attempted=repair_attempted,
+                        )
+                    except (legacy.VerifiedAnswerGateError, ValueError, KeyError) as exc:
+                        failures.append(str(getattr(exc, "code", type(exc).__name__)))
+                        break
+                    partial_answer["answer_source"] = (
+                        "provider_verified_runtime_bound_partial_semantic_closure"
+                    )
+                    partial_answer["multi_evidence_verification"] = {
+                        **dict(partial_answer.get("multi_evidence_verification", {})),
+                        "verification_failure_codes_by_attempt": list(failures),
+                        "repair_trigger": sorted(set(failures)),
+                        "repair_result": "verified_partial",
+                        "deterministic_evidence_synthesis_used": False,
+                        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                        "partial_answer": True,
+                        "unanswered_dimensions": unanswered_dimensions,
+                    }
+                    closure = {
+                        "schema_version": "m26-aq-semantic-closure/v1",
+                        "requirements": [_requirement_public(item) for item in requirements],
+                        "support_proof": final_support_proof,
+                        "endpoint_proof": dict(endpoint_proof),
+                        "failures": [],
+                        "pre_partial_failures": sorted(set(failures)),
+                        "partial_answer": True,
+                        "unanswered_dimensions": unanswered_dimensions,
+                        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                        "broad_deterministic_fallback_used": False,
+                    }
+                    return partial_answer, closure
                 break
 
             candidate = _runtime_bound_candidate(
@@ -425,6 +497,10 @@ def _synthesize_and_verify(
                 claims=claims,
                 label_map=label_map,
                 snippet_map=snippet_map,
+                provider_status=provider_status,
+                requirements=requirements,
+                unanswered_dimensions=unanswered_dimensions,
+                semantic_failures=[],
             )
             verified = legacy._verify_multi_evidence_provider_output(
                 trace_id=trace_id,
@@ -735,6 +811,10 @@ def _runtime_bound_candidate(
     claims: Sequence[Mapping[str, Any]] | None,
     label_map: Mapping[str, Mapping[str, Any]],
     snippet_map: Mapping[str, str],
+    provider_status: str = "answer",
+    requirements: Sequence[SemanticRequirement] = (),
+    unanswered_dimensions: Sequence[str] = (),
+    semantic_failures: Sequence[str] = (),
 ) -> dict[str, Any]:
     relation: str | None = None
     if intent_class == "cross_document_comparison":
@@ -838,9 +918,43 @@ def _runtime_bound_candidate(
                 "support_refs": refs,
             }
         )
+    if provider_status in {"partial", "partial_candidate"}:
+        missing = _partial_missing_dimension_labels(
+            requirements=requirements,
+            unanswered_dimensions=unanswered_dimensions,
+            semantic_failures=semantic_failures,
+        )
+        if missing:
+            boundary = (
+                "Unsupported boundary: the available evidence does not establish "
+                + ", ".join(missing[:4])
+                + "."
+            )
+            claim_records.append(
+                {
+                    "claim_id": f"claim_{len(claim_records) + 1}",
+                    "claim_type": "MODEL_EXPLANATION",
+                    "claim_role": "model_explanation",
+                    "surface_text": boundary,
+                    "facet_ids": legacy._required_facet_ids(
+                        question=question,
+                        intent_class=intent_class,
+                    )[:1],
+                    "support_mode": "model_explanation",
+                    "evidence_labels": [],
+                    "covers": [],
+                    "unanswered_dimensions": list(missing),
+                    "support_refs": [],
+                }
+            )
+            answer = _append_partial_boundary(answer, boundary)
     return {
         "schema_version": "aq3-provider-candidate/v3",
-        "status": "answer_candidate",
+        "status": (
+            "partial_candidate"
+            if provider_status in {"partial", "partial_candidate"}
+            else "answer_candidate"
+        ),
         "relation": relation,
         "selected_evidence_ids": [str(item.get("evidence_id", "")) for item in used_items],
         "answer_text": answer.strip(),
@@ -875,6 +989,23 @@ def _parsed_provider_claims(parsed: Mapping[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _parsed_provider_unanswered_dimensions(
+    parsed: Mapping[str, Any],
+    claims: Sequence[Mapping[str, Any]],
+) -> list[str]:
+    values: list[str] = []
+    raw_unanswered = parsed.get("unanswered_dimensions", [])
+    if isinstance(raw_unanswered, Sequence) and not isinstance(raw_unanswered, (str, bytes)):
+        values.extend(str(item) for item in raw_unanswered if str(item))
+    for claim in claims:
+        raw_claim_unanswered = claim.get("unanswered_dimensions", [])
+        if isinstance(raw_claim_unanswered, Sequence) and not isinstance(
+            raw_claim_unanswered, (str, bytes)
+        ):
+            values.extend(str(item) for item in raw_claim_unanswered if str(item))
+    return list(dict.fromkeys(values))
+
+
 def _parsed_provider_used_labels(
     parsed: Mapping[str, Any],
     claims: Sequence[Mapping[str, Any]],
@@ -898,6 +1029,62 @@ def _parsed_provider_used_labels(
     if isinstance(raw_selected, Sequence) and not isinstance(raw_selected, (str, bytes)):
         return [str(item) for item in raw_selected if str(item)]
     return []
+
+
+def _partial_answer_has_substantial_value(
+    *,
+    answer: str,
+    requirements: Sequence[SemanticRequirement],
+    visible_failures: Sequence[str],
+    support_failures: Sequence[str],
+    used_items: Sequence[Mapping[str, Any]],
+) -> bool:
+    if not answer.strip() or not used_items:
+        return False
+    if not requirements:
+        return False
+    missing_visible = _missing_requirement_ids(visible_failures)
+    missing_support = _missing_requirement_ids(support_failures)
+    failed = missing_visible | missing_support
+    covered = {item.requirement_id for item in requirements} - failed
+    return bool(covered)
+
+
+def _missing_requirement_ids(failures: Sequence[str]) -> set[str]:
+    ids = set()
+    for failure in failures:
+        if ":" not in str(failure):
+            continue
+        ids.add(str(failure).split(":", 1)[1])
+    return ids
+
+
+def _partial_missing_dimension_labels(
+    *,
+    requirements: Sequence[SemanticRequirement],
+    unanswered_dimensions: Sequence[str],
+    semantic_failures: Sequence[str],
+) -> list[str]:
+    by_id = {item.requirement_id: item for item in requirements}
+    labels: list[str] = []
+    for item in unanswered_dimensions:
+        value = str(item).strip()
+        if value:
+            labels.append(value)
+    for requirement_id in sorted(_missing_requirement_ids(semantic_failures)):
+        requirement = by_id.get(requirement_id)
+        labels.append(requirement.requirement_id if requirement else requirement_id)
+    return list(dict.fromkeys(labels))
+
+
+def _append_partial_boundary(answer: str, boundary: str) -> str:
+    answer = str(answer).strip()
+    boundary = str(boundary).strip()
+    if not answer:
+        return boundary
+    if boundary.casefold() in answer.casefold():
+        return answer
+    return f"{answer} {boundary}"
 
 
 def _infer_claim_role(*, intent_class: str, claim_type: str) -> str:
@@ -1513,7 +1700,87 @@ def _semantic_requirements(
             ],
         )
 
+    if not requirements:
+        _add_generic_answer_dimension_requirements(
+            add=add,
+            question=question,
+            intent_class=intent_class,
+        )
+
     return requirements
+
+
+def _add_generic_answer_dimension_requirements(
+    *,
+    add: Any,
+    question: str,
+    intent_class: str,
+) -> None:
+    q = question.casefold()
+    if re.search(r"\b(?:why|explain|how)\b", q):
+        add(
+            "explanatory_answer",
+            "Explain the reason, mechanism, or consequence rather than only naming a fact.",
+            _dimension_evidence_terms(question, fallback=("reason", "mechanism", "because")),
+            [
+                r"\b(?:because|so|therefore|means|mechanism|reason|helps|prevents|allows|instead|rather than)\b",
+                r"\b(?:while|whereas|by contrast|different).{0,160}\b",
+            ],
+        )
+
+    if (
+        intent_class in {"cross_document_comparison", "complementary_synthesis"}
+        or re.search(r"\b(?:compare|contrast|different|distinguish|versus|vs)\b", q)
+    ):
+        add(
+            "comparison_or_distinction",
+            "Distinguish the compared items and state their relationship.",
+            _dimension_evidence_terms(
+                question,
+                fallback=("compare", "contrast", "different", "relationship"),
+            ),
+            [
+                r"\b(?:while|whereas|by contrast|different|distinguish|rather than|instead)\b",
+                r"\b(?:both|together|complement|relationship)\b",
+            ],
+        )
+
+    if re.search(r"\b(?:list|mechanisms?|parts?|cases?|tradeoffs?|architecture|describe)\b", q):
+        add(
+            "multi_dimension_structure",
+            "Cover the requested mechanisms, cases, tradeoffs, or architecture parts.",
+            _dimension_evidence_terms(
+                question,
+                fallback=("mechanism", "case", "tradeoff", "architecture"),
+            ),
+            [
+                r"\b(?:first|second|also|another|mechanism|case|tradeoff|architecture|part)\b",
+                r"(?:[.;:]|\band\b).{0,120}(?:[.;:]|\band\b)",
+            ],
+        )
+
+
+def _dimension_evidence_terms(
+    question: str,
+    *,
+    fallback: Sequence[str],
+) -> tuple[str, ...]:
+    terms = [
+        term
+        for term in sorted(legacy._meaningful_terms(question))
+        if len(term) > 2
+        and term
+        not in {
+            "does",
+            "how",
+            "what",
+            "when",
+            "where",
+            "which",
+            "why",
+        }
+    ]
+    return tuple([*terms[:8], *fallback])
 
 
 def _visible_semantic_failures(

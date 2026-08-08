@@ -433,9 +433,16 @@ def derive_semantic_requirements(
         "completion_verification",
         "observability",
     }
+    generic_dimension_ids = {
+        "explanatory_answer",
+        "comparison_or_distinction",
+        "multi_dimension_structure",
+    }
     for item in base:
         requirement_id = str(getattr(item, "requirement_id", ""))
         if not requirement_id or requirement_id in seen:
+            continue
+        if lifecycle_requested is not None and requirement_id in generic_dimension_ids:
             continue
         if requirement_id == "authority_boundary" and _state_machine_replanner_question(question):
             continue

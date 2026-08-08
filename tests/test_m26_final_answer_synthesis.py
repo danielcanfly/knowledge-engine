@@ -60,6 +60,24 @@ class _TypedProvider:
         }
 
 
+class _SequenceTypedProvider:
+    def __init__(self, responses: list[dict[str, Any]]) -> None:
+        self.responses = responses
+        self.calls: list[dict[str, Any]] = []
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls.append({"payload": payload, "call_class": call_class})
+        index = min(len(self.calls), len(self.responses)) - 1
+        return {
+            "text": json.dumps(self.responses[index]),
+            "usage": {"input_tokens": 128, "output_tokens": 48},
+            "cost_usd": "0.00001",
+            "latency_ms": 4,
+            "response_id": f"typed-provider-{len(self.calls)}",
+            "call_class": call_class,
+        }
+
+
 def test_typed_compact_provider_contract_is_accepted() -> None:
     parsed = _parse_compact_provider_result(
         json.dumps(
@@ -212,6 +230,227 @@ def test_canonical_path_uses_typed_compact_synthesis_payload() -> None:
     )
     assert task["output"]["claims"][0]["evidence_labels"] == ["e1"]
     assert task["output"]["claims"][0]["covers"] == []
+
+
+def test_incomplete_answer_gets_one_bounded_repair() -> None:
+    question = "Why do durable state and verification solve different reliability problems?"
+    evidence = [
+        _passage(
+            "e1",
+            "Durable state preserves progress after a disconnect.",
+            "durable-note",
+        ),
+        _passage(
+            "e2",
+            "Completion verification checks the final result before acceptance.",
+            "verification-note",
+        ),
+    ]
+    incomplete = "Durable state preserves progress after a disconnect."
+    complete = (
+        "Durable state preserves progress after a disconnect, while verification checks "
+        "the final result before acceptance."
+    )
+    provider = _SequenceTypedProvider(
+        [
+            _typed_body(
+                status="answer",
+                answer_text=incomplete,
+                claims=[
+                    {
+                        "claim_id": "claim_1",
+                        "claim_type": "EVIDENCE_FACT",
+                        "surface_text": incomplete,
+                        "evidence_labels": ["e1"],
+                        "covers": ["explanatory_answer"],
+                    }
+                ],
+            ),
+            _typed_body(
+                status="answer",
+                answer_text=complete,
+                claims=[
+                    {
+                        "claim_id": "claim_1",
+                        "claim_type": "EVIDENCE_SYNTHESIS",
+                        "surface_text": complete,
+                        "evidence_labels": ["e1", "e2"],
+                        "covers": [
+                            "explanatory_answer",
+                            "comparison_or_distinction",
+                        ],
+                    }
+                ],
+            ),
+        ]
+    )
+
+    answer, closure = _run_typed_synthesis(question, evidence, provider)
+
+    assert len(provider.calls) == 2
+    assert provider.calls[1]["call_class"] == "aq_semantic_closure_repair"
+    assert answer["answer_text"] == complete
+    assert answer["repair_attempted"] is True
+    assert closure["failures"] == []
+
+
+def test_repeated_incomplete_answer_does_not_recursive_repair() -> None:
+    question = "Why do durable state and verification solve different reliability problems?"
+    evidence = [
+        _passage(
+            "e1",
+            "Durable state preserves progress after a disconnect.",
+            "durable-note",
+        ),
+        _passage(
+            "e2",
+            "Completion verification checks the final result before acceptance.",
+            "verification-note",
+        ),
+    ]
+    incomplete = "Durable state preserves progress after a disconnect."
+    provider = _SequenceTypedProvider(
+        [
+            _typed_body(
+                status="answer",
+                answer_text=incomplete,
+                claims=[
+                    {
+                        "claim_id": "claim_1",
+                        "claim_type": "EVIDENCE_FACT",
+                        "surface_text": incomplete,
+                        "evidence_labels": ["e1"],
+                        "covers": ["explanatory_answer"],
+                    }
+                ],
+            )
+        ]
+    )
+
+    _run_typed_synthesis(question, evidence, provider)
+
+    assert len(provider.calls) == 2
+
+
+def test_supported_partial_answer_states_unsupported_boundary() -> None:
+    question = "Why do durable state and verification solve different reliability problems?"
+    evidence = [
+        _passage(
+            "e1",
+            "Durable state preserves progress after a disconnect.",
+            "durable-note",
+        )
+    ]
+    partial = "Durable state helps because it preserves progress after a disconnect."
+    provider = _SequenceTypedProvider(
+        [
+            _typed_body(
+                status="partial",
+                answer_text=partial,
+                claims=[
+                    {
+                        "claim_id": "claim_1",
+                        "claim_type": "EVIDENCE_FACT",
+                        "surface_text": partial,
+                        "evidence_labels": ["e1"],
+                        "covers": ["explanatory_answer"],
+                        "unanswered_dimensions": ["verification side"],
+                    }
+                ],
+                unanswered_dimensions=["verification side"],
+            )
+        ]
+    )
+
+    answer, closure = _run_typed_synthesis(question, evidence, provider)
+
+    assert len(provider.calls) == 2
+    assert answer["status"] == "owner_only_cited_answer"
+    assert "Unsupported boundary" in answer["answer_text"]
+    assert answer["multi_evidence_verification"]["partial_answer"] is True
+    assert closure["partial_answer"] is True
+
+
+def test_unsupported_core_query_fully_abstains() -> None:
+    question = "Why do durable state and verification solve different reliability problems?"
+    provider = _SequenceTypedProvider(
+        [
+            _typed_body(
+                status="abstain",
+                answer_text="",
+                claims=[],
+                unanswered_dimensions=["core answer"],
+                abstention_reason="INSUFFICIENT_SUPPORT",
+            )
+        ]
+    )
+
+    answer, closure = _run_typed_synthesis(question, [], provider)
+
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["safe_abstention"] is True
+    assert "SEMANTIC_CLOSURE_FAILED" in answer["reason_codes"]
+    assert closure["failures"]
+
+
+def test_paraphrased_completeness_behavior_is_equivalent() -> None:
+    question = "How are durable state and completion verification different?"
+    evidence = [
+        _passage(
+            "e1",
+            "Durable state preserves progress after a disconnect.",
+            "durable-note",
+        ),
+        _passage(
+            "e2",
+            "Completion verification checks the final result before acceptance.",
+            "verification-note",
+        ),
+    ]
+    answer_text = (
+        "Durable state preserves progress after a disconnect, while completion "
+        "verification checks the final result before acceptance."
+    )
+    provider = _TypedProvider(
+        claim_type="EVIDENCE_SYNTHESIS",
+        answer_text=answer_text,
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_SYNTHESIS",
+                "surface_text": answer_text,
+                "evidence_labels": ["e1", "e2"],
+                "covers": [
+                    "explanatory_answer",
+                    "comparison_or_distinction",
+                ],
+            }
+        ],
+    )
+
+    answer, closure = _run_typed_synthesis(question, evidence, provider)
+
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_text"] == answer_text
+    assert closure["failures"] == []
+
+
+def _typed_body(
+    *,
+    status: str,
+    answer_text: str,
+    claims: list[dict[str, Any]],
+    unanswered_dimensions: list[str] | None = None,
+    abstention_reason: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "schema_version": "m26-fas-synthesis/v1",
+        "status": status,
+        "answer_text": answer_text,
+        "claims": claims,
+        "unanswered_dimensions": unanswered_dimensions or [],
+        "abstention_reason": abstention_reason,
+    }
 
 
 def _run_typed_synthesis(

@@ -207,10 +207,13 @@ SYNTHESIS_CONTRADICTION_PHRASES = {
     "same thing",
 }
 MODEL_EXPLANATION_GENERIC_TERMS = {
+    "available evidence",
     "because",
     "context",
+    "does not establish",
     "explains",
     "explanation",
+    "evidence",
     "framing",
     "generic",
     "generally",
@@ -220,6 +223,7 @@ MODEL_EXPLANATION_GENERIC_TERMS = {
     "often",
     "rather",
     "typically",
+    "unsupported",
     "usually",
 }
 MODEL_EXPLANATION_ATTRIBUTION_PATTERNS = (

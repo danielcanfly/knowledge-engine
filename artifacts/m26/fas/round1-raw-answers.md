@@ -37,3 +37,25 @@ Reason: unsupported equivalence synthesis is not accepted as provenance-grounded
 Claim type: `MODEL_EXPLANATION`
 
 Support refs: none required for generic model explanation.
+
+## FAS-4 bounded completeness repair
+
+Initial incomplete answer:
+
+`Durable state preserves progress after a disconnect.`
+
+Repaired answer:
+
+`Durable state preserves progress after a disconnect, while verification checks the final result before acceptance.`
+
+Repair attempts: one bounded repair.
+
+## FAS-4 supported partial answer
+
+`Durable state helps because it preserves progress after a disconnect. Unsupported boundary: the available evidence does not establish verification side, comparison_or_distinction.`
+
+Policy: grounded partial accepted with explicit unsupported boundary.
+
+## FAS-4 unsupported core answer
+
+Result: full safe abstention when no substantial grounded answer can be produced.
