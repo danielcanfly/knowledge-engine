@@ -902,7 +902,7 @@ def _parsed_provider_used_labels(
 
 def _infer_claim_role(*, intent_class: str, claim_type: str) -> str:
     if claim_type == "MODEL_EXPLANATION":
-        return "direct"
+        return "model_explanation"
     if intent_class == "cross_document_comparison":
         return "comparison"
     if intent_class == "complementary_synthesis":

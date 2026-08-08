@@ -199,6 +199,34 @@ MODALITY_STRENGTHENING_TERMS = {
     "never",
     "requires",
 }
+SYNTHESIS_CONTRADICTION_PHRASES = {
+    "equivalent",
+    "identical",
+    "interchangeable",
+    "no difference",
+    "same thing",
+}
+MODEL_EXPLANATION_GENERIC_TERMS = {
+    "because",
+    "context",
+    "explains",
+    "explanation",
+    "framing",
+    "generic",
+    "generally",
+    "in general",
+    "instead",
+    "may",
+    "often",
+    "rather",
+    "typically",
+    "usually",
+}
+MODEL_EXPLANATION_ATTRIBUTION_PATTERNS = (
+    re.compile(r"\bsource says\b", re.I),
+    re.compile(r"\bcorpus says\b", re.I),
+    re.compile(r"\baccording to (?:the )?(?:source|corpus|evidence)\b", re.I),
+)
 
 INTENT_PATTERNS: tuple[tuple[str, tuple[re.Pattern[str], ...]], ...] = (
     (
@@ -2492,10 +2520,11 @@ def _verify_multi_evidence_provider_output(
     used_evidence_ids: set[str] = set()
     used_graph_edges: set[str] = set()
     covered_facets: set[str] = set()
+    generic_model_explanation_without_support = False
     required_facets = set(_required_facet_ids(question=question, intent_class=intent_class))
     for index, raw_claim in enumerate(claims, start=1):
         claim = _object(raw_claim, "provider claim")
-        required = {"claim_id", "claim_role", "support_refs"}
+        required = {"claim_id", "claim_role"}
         if not required.issubset(claim):
             raise _verification_failure("M26-PA7-ME-012", "claim missing required fields")
         optional_claim_keys = {
@@ -2506,6 +2535,7 @@ def _verify_multi_evidence_provider_output(
             "evidence_labels",
             "covers",
             "unanswered_dimensions",
+            "support_refs",
         }
         if set(claim) - required - optional_claim_keys:
             raise _verification_failure("M26-PA7-ME-013", "claim contains unknown fields")
@@ -2513,9 +2543,19 @@ def _verify_multi_evidence_provider_output(
         claim_role = str(claim.get("claim_role") or "direct")
         claim_type = str(claim.get("claim_type") or _claim_type_for_role(claim_role))
         surface_text = str(claim.get("surface_text") or "").strip()
-        support_refs = _list(claim.get("support_refs"), "claim support refs")
-        if not support_refs:
+        is_model_explanation = _is_model_explanation_claim(claim_type, claim_role)
+        if "support_refs" in claim:
+            support_refs = _list(claim.get("support_refs"), "claim support refs")
+        else:
+            support_refs = []
+        if not support_refs and not is_model_explanation:
             raise _verification_failure("M26-PA7-ME-014", "claim has no support refs")
+        if not support_refs and is_model_explanation:
+            generic_model_explanation_without_support = True
+            _verify_model_explanation_surface(
+                surface_text=surface_text,
+                answer_text=str(parsed.get("answer_text") or ""),
+            )
         requested_facets = {
             str(item)
             for item in (claim.get("facet_ids") or [])
@@ -2567,6 +2607,7 @@ def _verify_multi_evidence_provider_output(
                 evidence_by_id[str(ref["evidence_id"])] for ref in ref_records
             )
             < 2
+            and not is_model_explanation
         ):
             raise _verification_failure("M26-PA7-ME-021", "relational claim lacks two sources")
         if not surface_text:
@@ -2576,6 +2617,7 @@ def _verify_multi_evidence_provider_output(
             intent_class=intent_class,
             relation=str(parsed.get("relation") or ""),
             claim_role=claim_role,
+            claim_type=claim_type,
             surface_text=surface_text,
             support_refs=ref_records,
             evidence_by_id=evidence_by_id,
@@ -2585,6 +2627,7 @@ def _verify_multi_evidence_provider_output(
                 question=question,
                 intent_class=intent_class,
                 claim_role=claim_role,
+                claim_type=claim_type,
                 surface_text=surface_text,
                 support_refs=ref_records,
                 evidence_by_id=evidence_by_id,
@@ -2600,7 +2643,14 @@ def _verify_multi_evidence_provider_output(
                 "claim_type": claim_type,
                 "surface_text": surface_text,
                 "facet_ids": sorted(claim_facets),
-                "support_mode": str(claim.get("support_mode") or "exact_quote"),
+                "support_mode": str(
+                    claim.get("support_mode")
+                    or (
+                        "model_explanation"
+                        if is_model_explanation and not ref_records
+                        else "exact_quote"
+                    )
+                ),
                 "evidence_labels": [
                     str(item) for item in claim.get("evidence_labels", []) if str(item)
                 ],
@@ -2614,7 +2664,11 @@ def _verify_multi_evidence_provider_output(
                 ],
                 "material": True,
                 "support_refs": ref_records,
-                "support_verdict": "supported_exact_multi_evidence_bundle",
+                "support_verdict": (
+                    "generic_model_explanation"
+                    if is_model_explanation and not ref_records
+                    else "supported_exact_multi_evidence_bundle"
+                ),
             }
         )
     _enforce_intent_minimums(
@@ -2624,7 +2678,11 @@ def _verify_multi_evidence_provider_output(
     selected_or_used = selected_ids or sorted(used_evidence_ids)
     if not set(used_evidence_ids).issubset(set(selected_or_used)):
         raise _verification_failure("M26-PA7-ME-022", "claim used evidence outside selection")
-    if selected_ids and not used_evidence_ids:
+    if (
+        selected_ids
+        and not used_evidence_ids
+        and not generic_model_explanation_without_support
+    ):
         raise _verification_failure("M26-PA7-ME-028", "selected evidence was not used by claims")
     answer_text = str(parsed.get("answer_text") or "")
     try:
@@ -2681,6 +2739,7 @@ def _validated_claim_facets(
     question: str,
     intent_class: str,
     claim_role: str,
+    claim_type: str,
     surface_text: str,
     support_refs: Sequence[Mapping[str, Any]],
     evidence_by_id: Mapping[str, Mapping[str, Any]],
@@ -2698,6 +2757,19 @@ def _validated_claim_facets(
             evidence_by_id=evidence_by_id,
         )
     )
+    if claim_type == "MODEL_EXPLANATION" and not support_refs:
+        visible_text = _strip_runtime_markers(f"{answer_text} {surface_text}")
+        visible_terms = _coverage_terms(visible_text)
+        if not visible_terms:
+            return []
+        return sorted(
+            str(facet["facet_id"])
+            for facet in _question_contract(question=question, intent_class=intent_class)[
+                "required_facets"
+            ]
+            if str(facet.get("facet_id", "")) in requested_facet_ids
+            and _facet_terms(facet) & visible_terms
+        )
     if intent_class != "direct_grounded_knowledge":
         return sorted(inferred)
 
@@ -3106,6 +3178,7 @@ def _verify_claim_surface_semantics(
     intent_class: str,
     relation: str,
     claim_role: str,
+    claim_type: str,
     surface_text: str,
     support_refs: Sequence[Mapping[str, Any]],
     evidence_by_id: Mapping[str, Mapping[str, Any]],
@@ -3113,6 +3186,9 @@ def _verify_claim_surface_semantics(
     surface = re.sub(r"\s+", " ", surface_text).strip()
     if not surface or len(surface) > 1_200:
         raise _verification_failure("M26-PA7-ME-030", "claim surface text is invalid")
+    if claim_type == "MODEL_EXPLANATION" and not support_refs:
+        _verify_model_explanation_surface(surface_text=surface, answer_text=surface)
+        return
     support_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs)
     support_terms = _meaningful_terms(support_text)
     surface_terms = _meaningful_terms(surface)
@@ -3133,6 +3209,13 @@ def _verify_claim_surface_semantics(
             "M26-PA7-ME-032",
             "claim surface is not semantically aligned to exact support",
         )
+    if claim_type == "EVIDENCE_SYNTHESIS" or claim_role in {"relationship", "comparison"}:
+        surface_casefold = surface.casefold()
+        if any(phrase in surface_casefold for phrase in SYNTHESIS_CONTRADICTION_PHRASES):
+            raise _verification_failure(
+                "M26-PA7-ME-048",
+                "claim surface makes an unsupported equivalence claim",
+            )
     support_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", support_text))
     question_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", question))
     unsupported_numbers = (
@@ -3181,6 +3264,36 @@ def _verify_claim_surface_semantics(
                         "M26-PA7-ME-036",
                         "precedes graph edge is nonresponsive without ordering semantics",
                     )
+
+
+def _verify_model_explanation_surface(*, surface_text: str, answer_text: str) -> None:
+    visible_text = re.sub(r"\s+", " ", f"{answer_text} {surface_text}").strip()
+    if _secret_like(visible_text):
+        raise _verification_failure(
+            "M26-PA7-ME-040",
+            "model explanation contains secret-like text",
+        )
+    visible_casefold = visible_text.casefold()
+    if any(pattern.search(visible_text) for pattern in MODEL_EXPLANATION_ATTRIBUTION_PATTERNS):
+        raise _verification_failure(
+            "M26-PA7-ME-050",
+            "model explanation falsely attributes a source claim",
+        )
+    numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", visible_text))
+    if numbers:
+        raise _verification_failure(
+            "M26-PA7-ME-033",
+            "model explanation introduces unsupported number",
+        )
+    if not any(term in visible_casefold for term in MODEL_EXPLANATION_GENERIC_TERMS):
+        raise _verification_failure(
+            "M26-PA7-ME-051",
+            "model explanation is not generic enough",
+        )
+
+
+def _is_model_explanation_claim(claim_type: str, claim_role: str) -> bool:
+    return claim_type == "MODEL_EXPLANATION" or claim_role == "model_explanation"
 
 
 def _verify_answer_material_anchors(

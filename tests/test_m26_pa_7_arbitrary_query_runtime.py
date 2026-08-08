@@ -1028,6 +1028,226 @@ def test_precedes_graph_edge_cannot_be_upgraded_to_dependency() -> None:
     assert exc.value.code == "M26-PA7-ME-047"
 
 
+def test_supported_multi_source_synthesis_with_relation_marker_is_accepted() -> None:
+    evidence = [
+        {
+            "evidence_id": "ev_state",
+            "evidence_type": "passage",
+            "locator_id": "loc_state",
+            "source_id": "src_state",
+            "source_identity": "src_state",
+            "section_id": "state#overview",
+            "concept_id": "state",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": "Durable state preserves progress after a disconnect.",
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+        {
+            "evidence_id": "ev_verify",
+            "evidence_type": "passage",
+            "locator_id": "loc_verify",
+            "source_id": "src_verify",
+            "source_identity": "src_verify",
+            "section_id": "verify#overview",
+            "concept_id": "verify",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": "Completion verification checks the final result before acceptance.",
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+    ]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": "complements",
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": (
+                "Durable state preserves progress after a disconnect, while completion "
+                "verification checks the final result before acceptance [[claim_1]]."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "relationship",
+                    "claim_type": "EVIDENCE_SYNTHESIS",
+                    "surface_text": (
+                        "Durable state preserves progress after a disconnect while "
+                        "completion verification checks the final result before acceptance."
+                    ),
+                    "facet_ids": [
+                        "component_a",
+                        "component_b",
+                        "synthesis_relation",
+                    ],
+                    "support_mode": "multi_evidence_exact",
+                    "support_refs": [
+                        {
+                            "evidence_id": evidence[0]["evidence_id"],
+                            "locator_id": evidence[0]["locator_id"],
+                            "exact_quote": evidence[0]["passage_text"],
+                        },
+                        {
+                            "evidence_id": evidence[1]["evidence_id"],
+                            "locator_id": evidence[1]["locator_id"],
+                            "exact_quote": evidence[1]["passage_text"],
+                        },
+                    ],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="case_supported_synthesis",
+        question="Why do durable state and verification solve different reliability problems?",
+        intent_class="complementary_synthesis",
+        evidence=evidence,
+        provider_text=provider_text,
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+    assert verified["covered_facets"] == [
+        "component_a",
+        "component_b",
+        "synthesis_relation",
+    ]
+
+
+def test_unsupported_multi_source_synthesis_without_relation_marker_is_rejected() -> None:
+    evidence = [
+        {
+            "evidence_id": "ev_state",
+            "evidence_type": "passage",
+            "locator_id": "loc_state",
+            "source_id": "src_state",
+            "source_identity": "src_state",
+            "section_id": "state#overview",
+            "concept_id": "state",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": "Durable state preserves progress after a disconnect.",
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+        {
+            "evidence_id": "ev_verify",
+            "evidence_type": "passage",
+            "locator_id": "loc_verify",
+            "source_id": "src_verify",
+            "source_identity": "src_verify",
+            "section_id": "verify#overview",
+            "concept_id": "verify",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": "Completion verification checks the final result before acceptance.",
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+    ]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": "complements",
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": "Durable state and verification are the same thing [[claim_1]].",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "relationship",
+                    "claim_type": "EVIDENCE_SYNTHESIS",
+                    "surface_text": "Durable state and verification are the same thing.",
+                    "facet_ids": [
+                        "component_a",
+                        "component_b",
+                        "synthesis_relation",
+                    ],
+                    "support_mode": "multi_evidence_exact",
+                    "support_refs": [
+                        {
+                            "evidence_id": evidence[0]["evidence_id"],
+                            "locator_id": evidence[0]["locator_id"],
+                            "exact_quote": evidence[0]["passage_text"],
+                        },
+                        {
+                            "evidence_id": evidence[1]["evidence_id"],
+                            "locator_id": evidence[1]["locator_id"],
+                            "exact_quote": evidence[1]["passage_text"],
+                        },
+                    ],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="case_unsupported_synthesis",
+            question="Why do durable state and verification solve different reliability problems?",
+            intent_class="complementary_synthesis",
+            evidence=evidence,
+            provider_text=provider_text,
+        )
+
+    assert exc.value.code in {"M26-PA7-ME-048", "M26-PA7-ME-049"}
+
+
+def test_generic_model_explanation_without_support_refs_is_accepted() -> None:
+    evidence = [_direct_semantic_evidence()]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": [evidence[0]["evidence_id"]],
+            "answer_text": (
+                "A model explanation gives generic framing instead of pretending to be a "
+                "corpus fact."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "model_explanation",
+                    "claim_type": "MODEL_EXPLANATION",
+                    "surface_text": (
+                        "A model explanation gives generic framing instead of pretending to "
+                        "be a corpus fact."
+                    ),
+                    "facet_ids": ["direct_answer"],
+                    "support_mode": "model_explanation",
+                    "support_refs": [],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="case_model_explanation",
+        question="Why is an explanation different from a direct factual claim?",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=provider_text,
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+    assert verified["material_claims"][0]["claim_type"] == "MODEL_EXPLANATION"
+    assert verified["material_claims"][0]["support_refs"] == []
+
+
 def test_provider_facet_ids_do_not_bypass_direct_semantic_coverage() -> None:
     evidence = [_direct_semantic_evidence()]
     provider_text = json.dumps(
