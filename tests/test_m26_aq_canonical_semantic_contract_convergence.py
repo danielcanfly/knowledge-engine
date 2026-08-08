@@ -647,6 +647,52 @@ def test_cobalt_orchid_bb18_remains_safe_abstention() -> None:
     assert closure["failures"]
 
 
+def test_provider_abstention_does_not_recover_unestablished_compound_subjects() -> None:
+    from knowledge_engine.m26_aq_semantic_contract import (
+        derive_semantic_requirements,
+        synthesize_and_verify,
+    )
+
+    evidence = [
+        _passage(
+            "ev-adjacent-retry",
+            (
+                "The workflow engine records failed executions, uses retry logic, "
+                "stores interval configuration, and documents protocol boundaries."
+            ),
+        )
+    ]
+    questions = [
+        (
+            "What retry interval is specified by the nonexistent silver-pine "
+            "lunar relay protocol for failed workflow executions?"
+        ),
+        "What retry interval is specified by the aurora-maple orbital dispatch protocol?",
+        "How often does the Helio Delta Routing Module's retry timer fire?",
+        "The retry interval of the invented cedar-ridge workflow lattice is what?",
+    ]
+
+    for question in questions:
+        answer, closure = synthesize_and_verify(
+            question=question,
+            trace_id="trace-compound-subject-recovery-stop",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_client=_CompactAbstainingProvider(),
+            requirements=derive_semantic_requirements(
+                question,
+                "direct_grounded_knowledge",
+            ),
+            endpoint_proof={"required": False, "matched": False},
+        )
+
+        assert answer["status"] == "owner_only_safe_abstention"
+        assert answer["answer_source"] == "safe_abstention"
+        assert answer["answer_text"] == ""
+        assert closure["failures"]
+        assert "semantic_synthesis_recovery" not in closure
+
+
 def test_provider_abstention_does_not_recover_unsupported_external_marker_question() -> None:
     from knowledge_engine.m26_aq_semantic_contract import (
         derive_semantic_requirements,

@@ -1805,6 +1805,117 @@ def test_architecture_answer_must_cover_persisted_parallel_verification_facets()
     assert exc.value.code == "M26-PA7-ME-029"
 
 
+def test_compound_subject_extraction_covers_attribute_first_syntaxes() -> None:
+    cases = {
+        (
+            "What retry interval is specified by the nonexistent silver-pine "
+            "lunar relay protocol for failed workflow executions?"
+        ): ["nonexistent silver-pine lunar relay protocol"],
+        (
+            "What retry interval is specified by the aurora-maple orbital "
+            "dispatch protocol for failed jobs?"
+        ): ["aurora-maple orbital dispatch protocol"],
+        "How often does the Helio Delta Routing Module's retry timer fire?": [
+            "Helio Delta Routing Module"
+        ],
+        "The retry interval of the invented cedar-ridge workflow lattice is what?": [
+            "invented cedar-ridge workflow lattice"
+        ],
+        "Does the Quartz Delta Routing Module store retry events?": [
+            "Quartz Delta Routing Module"
+        ],
+    }
+
+    for question, expected in cases.items():
+        assert runtime_module._question_relevance_subjects(question) == expected
+
+
+def test_unestablished_compound_subject_hard_stops_despite_scattered_common_terms() -> None:
+    evidence = {
+        **_direct_semantic_evidence(),
+        "passage_text": (
+            "The workflow engine records failed executions, uses retry logic, "
+            "stores interval configuration, and documents protocol boundaries."
+        ),
+    }
+    questions = [
+        (
+            "What retry interval is specified by the nonexistent silver-pine "
+            "lunar relay protocol for failed workflow executions?"
+        ),
+        "What retry interval is specified by the aurora-maple orbital dispatch protocol?",
+        "How often does the Helio Delta Routing Module's retry timer fire?",
+        "The retry interval of the invented cedar-ridge workflow lattice is what?",
+        "Does the Quartz Delta Routing Module store retry events?",
+    ]
+
+    for question in questions:
+        provider_text = json.dumps(
+            _direct_semantic_provider_body(
+                evidence,
+                question=question,
+                surface_text=evidence["passage_text"],
+            )
+        )
+        with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+            runtime_module._verify_multi_evidence_provider_output(
+                trace_id="case_compound_subject_gap",
+                question=question,
+                intent_class="direct_grounded_knowledge",
+                evidence=[evidence],
+                provider_text=provider_text,
+            )
+
+        assert exc.value.code == runtime_module.QUESTION_EVIDENCE_RELEVANCE_CODE
+        assert runtime_module.QUESTION_EVIDENCE_RELEVANCE_HARD_STOP in exc.value.safe_message
+
+
+def test_coherent_real_compound_subjects_remain_answerable() -> None:
+    cases = [
+        (
+            "What retry interval is specified by the MCP server protocol?",
+            "The MCP server protocol specifies a retry interval of five minutes.",
+        ),
+        (
+            "What memory stack is specified by the ComfyUI workflow system?",
+            (
+                "The ComfyUI workflow system specifies a memory stack with red nodes, "
+                "checkpoints, LoRAs, VAE, CLIP T5XXL, GGUF, FP8, requirements, "
+                "release version matches, boring on purpose, minimal working state, "
+                "and one variable at a time."
+            ),
+        ),
+        (
+            "How often does the Helio Delta Routing Module's retry timer fire?",
+            "The Helio Delta Routing Module retry timer fires every five minutes.",
+        ),
+    ]
+
+    for index, (question, passage_text) in enumerate(cases, start=1):
+        evidence = {
+            **_direct_semantic_evidence(),
+            "evidence_id": f"ev_compound_positive_{index}",
+            "locator_id": f"loc_compound_positive_{index}",
+            "passage_text": passage_text,
+        }
+        verified = runtime_module._verify_multi_evidence_provider_output(
+            trace_id=f"case_compound_positive_{index}",
+            question=question,
+            intent_class="direct_grounded_knowledge",
+            evidence=[evidence],
+            provider_text=json.dumps(
+                _direct_semantic_provider_body(
+                    evidence,
+                    question=question,
+                    surface_text=passage_text,
+                )
+            ),
+        )
+
+        assert verified["terminal_status"] == "verified_answer_ready_candidate"
+        assert verified["support_verification"]["unsupported_claim_count"] == 0
+
+
 def test_no_answer_and_prompt_injection_abstain_safely() -> None:
     no_answer = run_owner_arbitrary_query(
         root=ROOT,

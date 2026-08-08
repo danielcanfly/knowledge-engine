@@ -834,7 +834,11 @@ def canonical_question_entities(question: str) -> list[str]:
     """Expose the canonical entity parser used by semantic requirements."""
     entities: list[str] = []
     seen: set[str] = set()
-    for entity in [*_strict_part_entities(question), *legacy._named_question_entities(question)]:
+    for entity in [
+        *_strict_part_entities(question),
+        *legacy._named_question_entities(question),
+        *legacy._question_relevance_subjects(question),
+    ]:
         cleaned = _clean_graph_entity_phrase(entity)
         key = cleaned.casefold()
         if cleaned and key not in seen:
@@ -2736,6 +2740,9 @@ def _unsupported_external_markers(
 ) -> list[str]:
     marker_space = _evidence_marker_space(evidence)
     markers: list[str] = []
+    for subject in legacy._question_relevance_subjects(question):
+        if not _evidence_establishes_marker_unit(evidence, subject):
+            markers.append(subject)
     for raw in re.findall(r"\b[A-Z][A-Za-z0-9]*(?:\.[A-Za-z]+)?\b|\b\d{3,4}\b", question):
         marker = raw.strip(".,;:!?()[]{}\"'")
         if not marker or marker in _RECOVERY_EXTERNAL_STOPWORDS:
@@ -2746,6 +2753,33 @@ def _unsupported_external_markers(
         if key not in marker_space:
             markers.append(marker)
     return sorted(dict.fromkeys(markers), key=str.casefold)
+
+
+def _evidence_establishes_marker_unit(
+    evidence: Sequence[Mapping[str, Any]],
+    marker: str,
+) -> bool:
+    marker_norm = legacy._normalized_relevance_text(marker)
+    if not marker_norm:
+        return False
+    for item in evidence:
+        parts: list[str] = []
+        for key in (
+            "passage_text",
+            "title",
+            "section_title",
+            "source_id",
+            "source_identity",
+            "concept_id",
+            "section_id",
+        ):
+            parts.append(str(item.get(key, "")))
+        metadata = item.get("retrieval_metadata", {})
+        if isinstance(metadata, Mapping):
+            parts.extend(str(term) for term in metadata.get("graph_seed_concepts", []))
+        if legacy._contains_normalized_unit(" ".join(parts), marker_norm):
+            return True
+    return False
 
 
 def _evidence_marker_space(evidence: Sequence[Mapping[str, Any]]) -> set[str]:

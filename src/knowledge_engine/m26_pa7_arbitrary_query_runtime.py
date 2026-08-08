@@ -2979,7 +2979,7 @@ def _is_question_evidence_relevance_hard_stop(exc: VerifiedAnswerGateError) -> b
 def _question_relevance_subjects(question: str) -> list[str]:
     subjects: list[str] = []
 
-    def add(candidate: str) -> None:
+    def add(candidate: str, *, require_specific_entity: bool = False) -> None:
         cleaned = re.sub(r"\s+", " ", str(candidate).strip(" ?!.,;:'\"()[]{}"))
         cleaned = re.sub(
             r"^(?:(?:what|which|when|where|why|how|does|do|did|can|should|could)\s+)+",
@@ -2988,6 +2988,8 @@ def _question_relevance_subjects(question: str) -> list[str]:
             flags=re.I,
         ).strip()
         if not cleaned:
+            return
+        if require_specific_entity and not _looks_like_specific_question_subject(cleaned):
             return
         normalized = _normalized_relevance_text(cleaned)
         if not normalized or len(normalized.split()) < 2:
@@ -3002,6 +3004,26 @@ def _question_relevance_subjects(question: str) -> list[str]:
         add(entity)
     for match in re.finditer(r"['\"]([^'\"]{4,})['\"]", question):
         add(match.group(1))
+    boundary = (
+        r"(?=\s+(?:for|when|where|while|during|after|before|because|if|that|"
+        r"which|who|whose|with|without|using|from|in|on|at|to|as|"
+        r"is|are|was|were)\b|[?.,;:]|$)"
+    )
+    broad_subject_patterns = (
+        rf"\bby\s+the\s+([A-Za-z0-9][A-Za-z0-9 .'/&-]{{5,}}?){boundary}",
+        rf"\bof\s+the\s+([A-Za-z0-9][A-Za-z0-9 .'/&-]{{5,}}?){boundary}",
+        rf"\bfor\s+the\s+([A-Za-z0-9][A-Za-z0-9 .'/&-]{{5,}}?){boundary}",
+        r"\bthe\s+([A-Za-z0-9][A-Za-z0-9 .'/&-]{5,}?)['’]s\s+"
+        r"(?:[a-z][a-z0-9-]*)(?:\s+[a-z][a-z0-9-]*){0,4}\b",
+        r"\b(?:does|do|did|can|should|could|would)\s+the\s+"
+        r"([A-Za-z0-9][A-Za-z0-9 .'/&-]{5,}?)\s+"
+        r"(?:announce|announced|launch|launched|release|released|ship|shipped|"
+        r"specify|specified|define|defines|state|states|require|requires|store|stores|"
+        r"use|uses|set|sets|list|lists|own|owns|route|routes)\b",
+    )
+    for pattern in broad_subject_patterns:
+        for match in re.finditer(pattern, question, flags=re.I):
+            add(match.group(1), require_specific_entity=True)
     patterns = (
         r"\bfor\s+the\s+([A-Za-z0-9][A-Za-z0-9 .'/&-]{5,}?)\??$",
         r"\bdid\s+the\s+([A-Za-z0-9][A-Za-z0-9 .'/&-]{5,}?)\s+"
@@ -3013,6 +3035,39 @@ def _question_relevance_subjects(question: str) -> list[str]:
         if match is not None:
             add(match.group(1))
     return subjects
+
+
+def _looks_like_specific_question_subject(candidate: str) -> bool:
+    normalized = _normalized_relevance_text(candidate)
+    tokens = normalized.split()
+    if len(tokens) < 2:
+        return False
+    if re.search(r"[A-Za-z0-9]+-[A-Za-z0-9]+", candidate):
+        return True
+    if re.search(r"\b[A-Z]{2,}\b|[A-Z][a-z]+[A-Z][A-Za-z]*", candidate):
+        return True
+    if tokens[0] in {"nonexistent", "invented", "fictional", "fake", "unsupported"}:
+        return len(tokens) >= 3
+    entity_type_terms = {
+        "agent",
+        "api",
+        "bridge",
+        "engine",
+        "entity",
+        "framework",
+        "graph",
+        "lattice",
+        "module",
+        "pipeline",
+        "platform",
+        "protocol",
+        "router",
+        "server",
+        "service",
+        "system",
+        "workflow",
+    }
+    return len(tokens) >= 3 and tokens[-1] in entity_type_terms
 
 
 def _requested_attribute_groups(
