@@ -1248,6 +1248,366 @@ def test_generic_model_explanation_without_support_refs_is_accepted() -> None:
     assert verified["material_claims"][0]["support_refs"] == []
 
 
+def test_fas5_direct_fact_with_correct_support_passes() -> None:
+    evidence = [_citation_binding_evidence()[0]]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": ["ev_router"],
+            "answer_text": "A router defines explicit request boundaries [[claim_1]].",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "surface_text": "A router defines explicit request boundaries.",
+                    "claim_role": "direct",
+                    "facet_ids": ["direct_answer"],
+                    "support_mode": "exact_quote",
+                    "support_refs": [
+                        {
+                            "evidence_id": "ev_router",
+                            "locator_id": "loc_router",
+                            "exact_quote": (
+                                "A router defines explicit request boundaries for owner-only "
+                                "execution."
+                            ),
+                        }
+                    ],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="case_fas5_direct_ok",
+        question="What should a router define for owner-only execution?",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=provider_text,
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected_code"),
+    [
+        (
+            lambda body: body["claims"][0]["support_refs"][0].update(
+                {
+                    "evidence_id": "ev_completion",
+                    "locator_id": "loc_completion",
+                    "exact_quote": "Completion verification checks final results before acceptance.",
+                }
+            ),
+            "M26-PA7-ME-032",
+        ),
+        (
+            lambda body: body["claims"][0]["support_refs"][0].update(
+                {"exact_quote": "A router defines request boundaries."}
+            ),
+            "M26-PA7-ME-020",
+        ),
+        (
+            lambda body: body["claims"][0]["support_refs"][0].update(
+                {"locator_id": "loc_fabricated"}
+            ),
+            "M26-PA7-ME-018",
+        ),
+    ],
+)
+def test_fas5_direct_fact_bad_citation_bindings_fail(
+    mutator: Any,
+    expected_code: str,
+) -> None:
+    evidence = _citation_binding_evidence()
+    body = {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "relation": None,
+        "selected_evidence_ids": ["ev_router", "ev_completion"],
+        "answer_text": "A router defines explicit request boundaries [[claim_1]].",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "surface_text": "A router defines explicit request boundaries.",
+                "claim_role": "direct",
+                "facet_ids": ["direct_answer"],
+                "support_mode": "exact_quote",
+                "support_refs": [
+                    {
+                        "evidence_id": "ev_router",
+                        "locator_id": "loc_router",
+                        "exact_quote": (
+                            "A router defines explicit request boundaries for owner-only "
+                            "execution."
+                        ),
+                    }
+                ],
+            }
+        ],
+        "missing_facets": [],
+        "abstention_reason": None,
+    }
+    mutator(body)
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="case_fas5_direct_bad",
+            question="What should a router define for owner-only execution?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=json.dumps(body),
+        )
+
+    assert exc.value.code == expected_code
+
+
+def test_fas5_graph_citation_requires_genuine_relation() -> None:
+    evidence = [
+        {
+            "evidence_id": "ev_part_1",
+            "evidence_type": "passage",
+            "locator_id": "loc_part_1",
+            "source_id": "src_part_1",
+            "source_identity": "src_part_1",
+            "section_id": "part_1#overview",
+            "concept_id": "part_1",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": "Part 1 describes request boundaries.",
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+        {
+            "evidence_id": "ev_part_2",
+            "evidence_type": "passage",
+            "locator_id": "loc_part_2",
+            "source_id": "src_part_2",
+            "source_identity": "src_part_2",
+            "section_id": "part_2#overview",
+            "concept_id": "part_2",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": "Part 2 describes completion checks.",
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+    ]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": "depends_on",
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": "The graph says Part 1 depends on Part 2 [[claim_1]].",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "surface_text": "The graph says Part 1 depends on Part 2.",
+                    "claim_role": "relationship",
+                    "facet_ids": [
+                        "graph_edge",
+                        "source_endpoint",
+                        "target_endpoint",
+                        "relation_semantics",
+                    ],
+                    "support_mode": "graph_relationship",
+                    "support_refs": [
+                        {
+                            "evidence_id": item["evidence_id"],
+                            "locator_id": item["locator_id"],
+                            "exact_quote": item["passage_text"],
+                        }
+                        for item in evidence
+                    ],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="case_fas5_graph_no_edge",
+            question="What graph relationship connects Part 1 and Part 2?",
+            intent_class="graph_relationship",
+            evidence=evidence,
+            provider_text=provider_text,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-024"
+
+
+def test_fas5_synthesis_premises_do_not_need_verbatim_conclusion() -> None:
+    evidence = _citation_binding_evidence()[1:]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": "complements",
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": (
+                "Together, durable state and completion verification separate progress "
+                "durability from acceptance control [[claim_1]]."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "relationship",
+                    "claim_type": "EVIDENCE_SYNTHESIS",
+                    "surface_text": (
+                        "Durable state and completion verification separate progress "
+                        "durability from acceptance control."
+                    ),
+                    "facet_ids": [
+                        "component_a",
+                        "component_b",
+                        "synthesis_relation",
+                    ],
+                    "support_mode": "multi_evidence_exact",
+                    "support_refs": [
+                        {
+                            "evidence_id": item["evidence_id"],
+                            "locator_id": item["locator_id"],
+                            "exact_quote": item["passage_text"],
+                        }
+                        for item in evidence
+                    ],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="case_fas5_synthesis_premises",
+        question=(
+            "How do durable state and completion verification solve different "
+            "reliability problems?"
+        ),
+        intent_class="complementary_synthesis",
+        evidence=evidence,
+        provider_text=provider_text,
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+    assert verified["material_claims"][0]["support_verdict"] == (
+        "supported_exact_multi_evidence_bundle"
+    )
+
+
+def test_fas5_generic_model_explanation_is_not_falsely_cited() -> None:
+    evidence = [_citation_binding_evidence()[0]]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": ["ev_router"],
+            "answer_text": (
+                "In general, explanations provide framing rather than a corpus fact "
+                "[[claim_1]]."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "model_explanation",
+                    "claim_type": "MODEL_EXPLANATION",
+                    "surface_text": (
+                        "In general, explanations provide framing rather than a corpus fact."
+                    ),
+                    "facet_ids": ["direct_answer"],
+                    "support_mode": "exact_quote",
+                    "support_refs": [
+                        {
+                            "evidence_id": "ev_router",
+                            "locator_id": "loc_router",
+                            "exact_quote": (
+                                "A router defines explicit request boundaries for owner-only "
+                                "execution."
+                            ),
+                        }
+                    ],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="case_fas5_model_fake_citation",
+            question="Why is an explanation different from a direct factual claim?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=provider_text,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-052"
+
+
+def test_fas5_visible_citation_marker_must_bind_to_sentence_claim() -> None:
+    claims = [
+        {
+            "claim_id": "claim_router",
+            "surface_text": "A router defines explicit request boundaries.",
+            "support_refs": [
+                {
+                    "exact_quote": (
+                        "A router defines explicit request boundaries for owner-only execution."
+                    )
+                }
+            ],
+        },
+        {
+            "claim_id": "claim_completion",
+            "surface_text": "Completion verification checks final results.",
+            "support_refs": [
+                {
+                    "exact_quote": (
+                        "Completion verification checks final results before acceptance."
+                    )
+                }
+            ],
+        },
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_visible_answer_claim_alignment(
+            "A router defines explicit request boundaries [claim_completion_ref_1].",
+            claims=claims,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-045"
+
+
+def test_fas5_api_citation_shape_remains_compatible() -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="What should a router define for permission-first controls?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExactSpanProvider(),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+
+    assert _schema_errors("m26-pa-7-arbitrary-owner-query-response-v1.schema.json", response) == []
+    citation = response["citations"][0]
+    assert {"citation_id", "claim_id", "evidence_id", "locator_id", "source_identity"}.issubset(
+        citation
+    )
+    assert response["answer_claims"][0]["citation_ids"] == [citation["citation_id"]]
+
+
 def test_provider_facet_ids_do_not_bypass_direct_semantic_coverage() -> None:
     evidence = [_direct_semantic_evidence()]
     provider_text = json.dumps(
@@ -1570,6 +1930,58 @@ def _direct_semantic_evidence() -> dict[str, Any]:
         "passage_text_sha256": "b" * 64,
         "provenance_record_sha256": "c" * 64,
     }
+
+
+def _citation_binding_evidence() -> list[dict[str, Any]]:
+    return [
+        {
+            "evidence_id": "ev_router",
+            "evidence_type": "passage",
+            "locator_id": "loc_router",
+            "source_id": "src_router",
+            "source_identity": "src_router",
+            "section_id": "router#runtime",
+            "concept_id": "router",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": (
+                "A router defines explicit request boundaries for owner-only execution."
+            ),
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+        {
+            "evidence_id": "ev_state",
+            "evidence_type": "passage",
+            "locator_id": "loc_state",
+            "source_id": "src_state",
+            "source_identity": "src_state",
+            "section_id": "state#runtime",
+            "concept_id": "state",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": "Durable state preserves progress after a disconnect.",
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+        {
+            "evidence_id": "ev_completion",
+            "evidence_type": "passage",
+            "locator_id": "loc_completion",
+            "source_id": "src_completion",
+            "source_identity": "src_completion",
+            "section_id": "completion#runtime",
+            "concept_id": "completion",
+            "artifact_key": "lexical.json",
+            "artifact_sha256": "a" * 64,
+            "release_id": "release",
+            "passage_text": "Completion verification checks final results before acceptance.",
+            "passage_text_sha256": "b" * 64,
+            "provenance_record_sha256": "c" * 64,
+        },
+    ]
 
 
 def _direct_semantic_provider_body(

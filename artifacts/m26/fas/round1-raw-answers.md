@@ -59,3 +59,29 @@ Policy: grounded partial accepted with explicit unsupported boundary.
 ## FAS-4 unsupported core answer
 
 Result: full safe abstention when no substantial grounded answer can be produced.
+
+## FAS-5 direct fact citation binding
+
+Accepted:
+
+`A router defines explicit request boundaries.`
+
+Rejected controls:
+
+- unrelated support quote for the direct fact
+- quote drift that is not exact evidence text
+- fabricated locator ID
+
+## FAS-5 synthesis premise citation binding
+
+`Durable state and completion verification separate progress durability from acceptance control.`
+
+The synthesized conclusion is not required to occur verbatim in one source; the cited premises must each contribute to the conclusion.
+
+## FAS-5 model explanation attribution
+
+Generic `MODEL_EXPLANATION` claims remain uncited. A generic explanation carrying corpus support refs is rejected.
+
+## FAS-5 API citation shape
+
+Citation objects retain `citation_id`, `claim_id`, `evidence_id`, `locator_id`, and `source_identity`, and public `answer_claims` retain compatible `citation_ids`.

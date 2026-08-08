@@ -3193,6 +3193,11 @@ def _verify_claim_surface_semantics(
     if claim_type == "MODEL_EXPLANATION" and not support_refs:
         _verify_model_explanation_surface(surface_text=surface, answer_text=surface)
         return
+    if claim_type == "MODEL_EXPLANATION" and support_refs:
+        raise _verification_failure(
+            "M26-PA7-ME-052",
+            "generic model explanation must not carry corpus citation refs",
+        )
     support_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs)
     support_terms = _meaningful_terms(support_text)
     surface_terms = _meaningful_terms(surface)
@@ -3208,12 +3213,28 @@ def _verify_claim_surface_semantics(
         )
     shared_support_terms = surface_terms & support_terms
     shared_question_terms = surface_terms & question_terms
-    if len(shared_support_terms) < 2 and not shared_question_terms:
+    is_synthesis = claim_type == "EVIDENCE_SYNTHESIS" or claim_role in {
+        "relationship",
+        "comparison",
+        "temporal",
+    }
+    if is_synthesis:
+        _verify_synthesis_premise_binding(
+            surface_terms=surface_terms,
+            question_terms=question_terms,
+            support_refs=support_refs,
+        )
+    elif len(shared_support_terms) < 2:
+        raise _verification_failure(
+            "M26-PA7-ME-032",
+            "direct claim surface is not bound to cited support",
+        )
+    if is_synthesis and len(shared_support_terms) < 2 and not shared_question_terms:
         raise _verification_failure(
             "M26-PA7-ME-032",
             "claim surface is not semantically aligned to exact support",
         )
-    if claim_type == "EVIDENCE_SYNTHESIS" or claim_role in {"relationship", "comparison"}:
+    if is_synthesis:
         surface_casefold = surface.casefold()
         if any(phrase in surface_casefold for phrase in SYNTHESIS_CONTRADICTION_PHRASES):
             raise _verification_failure(
@@ -3268,6 +3289,27 @@ def _verify_claim_surface_semantics(
                         "M26-PA7-ME-036",
                         "precedes graph edge is nonresponsive without ordering semantics",
                     )
+
+
+def _verify_synthesis_premise_binding(
+    *,
+    surface_terms: set[str],
+    question_terms: set[str],
+    support_refs: Sequence[Mapping[str, Any]],
+) -> None:
+    if len(support_refs) < 2:
+        return
+    premise_targets = surface_terms | question_terms
+    contributing_refs = 0
+    for ref in support_refs:
+        ref_terms = _meaningful_terms(str(ref.get("exact_quote", "")))
+        if len(ref_terms & premise_targets) >= 1:
+            contributing_refs += 1
+    if contributing_refs < 2:
+        raise _verification_failure(
+            "M26-PA7-ME-052",
+            "synthesis citation refs are not bound to contributing premises",
+        )
 
 
 def _verify_model_explanation_surface(*, surface_text: str, answer_text: str) -> None:
@@ -3560,19 +3602,26 @@ def _verify_visible_answer_claim_alignment(
     ]
     for sentence in material_sentences:
         anchors = set(CLAIM_ANCHOR_RE.findall(sentence))
+        citation_markers = set(LEGACY_CITATION_RE.findall(sentence))
         sentence_visible = CLAIM_ANCHOR_RE.sub("", sentence)
         sentence_visible = LEGACY_CITATION_RE.sub("", sentence_visible)
         sentence_visible = re.sub(r"\s+", " ", sentence_visible).strip()
         sentence_terms = _meaningful_terms(sentence_visible)
         sentence_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", sentence_visible))
-        if anchors:
+        if anchors or citation_markers:
             claim_terms: set[str] = set()
             claim_numbers: set[str] = set()
-            for claim_id in anchors:
+            cited_claim_ids = set(anchors)
+            cited_claim_ids |= {
+                marker.rsplit("_ref_", 1)[0]
+                for marker in citation_markers
+                if "_ref_" in marker
+            }
+            for claim_id in cited_claim_ids:
                 claim = claim_by_id.get(claim_id)
                 if claim is None:
                     raise _verification_failure(
-                        "M26-PA7-ME-041", "natural answer references unknown claim"
+                        "M26-PA7-ME-043", "natural answer citation marker mismatch"
                     )
                 claim_terms |= _coverage_terms(str(claim.get("surface_text", "")))
                 for ref in _list(claim.get("support_refs", []), "claim support refs"):

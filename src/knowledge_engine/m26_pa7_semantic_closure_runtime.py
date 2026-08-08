@@ -870,7 +870,9 @@ def _runtime_bound_candidate(
             for label in evidence_labels
             if label in label_map
         ]
-        if not support_items:
+        if claim_type == "MODEL_EXPLANATION":
+            support_items = []
+        elif not support_items:
             support_items = list(used_items[:1])
         refs: list[dict[str, Any]] = []
         for _ref_index, item in enumerate(support_items, start=1):
@@ -888,26 +890,33 @@ def _runtime_bound_candidate(
                     "uncertainty": "low",
                 }
             )
-        if not refs:
+        if not refs and claim_type != "MODEL_EXPLANATION":
             raise ValueError("runtime could not bind provider prose to evidence")
         claim_role = str(
             claim.get("claim_role")
             or _infer_claim_role(intent_class=intent_class, claim_type=claim_type)
         )
+        facet_ids = list(
+            claim.get("covers")
+            or claim.get("facet_ids")
+            or legacy._required_facet_ids(
+                question=question,
+                intent_class=intent_class,
+            )
+        )
+        required_facet_ids = legacy._required_facet_ids(
+            question=question,
+            intent_class=intent_class,
+        )
+        if claim_type == "MODEL_EXPLANATION" and not (set(facet_ids) & set(required_facet_ids)):
+            facet_ids = required_facet_ids
         claim_records.append(
             {
                 "claim_id": claim_id,
                 "claim_type": claim_type,
                 "claim_role": claim_role,
                 "surface_text": str(claim.get("surface_text") or answer).strip(),
-                "facet_ids": list(
-                    claim.get("covers")
-                    or claim.get("facet_ids")
-                    or legacy._required_facet_ids(
-                        question=question,
-                        intent_class=intent_class,
-                    )
-                ),
+                "facet_ids": facet_ids,
                 "support_mode": str(
                     claim.get("support_mode")
                     or ("model_explanation" if claim_type == "MODEL_EXPLANATION" else "exact_quote")

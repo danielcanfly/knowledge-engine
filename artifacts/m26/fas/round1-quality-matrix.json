@@ -1,5 +1,5 @@
 {
-  "round": "M26-FAS-4",
+  "round": "M26-FAS-5",
   "overall": "PASS",
   "cases": [
     {
@@ -100,6 +100,66 @@
     },
     {
       "id": "unsupported_core_full_abstention",
+      "responsiveness": "PASS",
+      "completeness": "PASS",
+      "grounding": "PASS",
+      "synthesis_quality": "PASS",
+      "citation_integrity": "PASS",
+      "attribution_honesty": "PASS",
+      "naturalness": "PASS",
+      "abstention_correctness": "PASS",
+      "safety": "PASS"
+    },
+    {
+      "id": "fas5_direct_fact_correct_support",
+      "responsiveness": "PASS",
+      "completeness": "PASS",
+      "grounding": "PASS",
+      "synthesis_quality": "PASS",
+      "citation_integrity": "PASS",
+      "attribution_honesty": "PASS",
+      "naturalness": "PASS",
+      "abstention_correctness": "PASS",
+      "safety": "PASS"
+    },
+    {
+      "id": "fas5_direct_fact_bad_citation_rejected",
+      "responsiveness": "PASS",
+      "completeness": "PASS",
+      "grounding": "PASS",
+      "synthesis_quality": "PASS",
+      "citation_integrity": "PASS",
+      "attribution_honesty": "PASS",
+      "naturalness": "PASS",
+      "abstention_correctness": "PASS",
+      "safety": "PASS"
+    },
+    {
+      "id": "fas5_synthesis_premise_binding",
+      "responsiveness": "PASS",
+      "completeness": "PASS",
+      "grounding": "PASS",
+      "synthesis_quality": "PASS",
+      "citation_integrity": "PASS",
+      "attribution_honesty": "PASS",
+      "naturalness": "PASS",
+      "abstention_correctness": "PASS",
+      "safety": "PASS"
+    },
+    {
+      "id": "fas5_model_explanation_no_false_citation",
+      "responsiveness": "PASS",
+      "completeness": "PASS",
+      "grounding": "PASS",
+      "synthesis_quality": "PASS",
+      "citation_integrity": "PASS",
+      "attribution_honesty": "PASS",
+      "naturalness": "PASS",
+      "abstention_correctness": "PASS",
+      "safety": "PASS"
+    },
+    {
+      "id": "fas5_api_citation_shape_compatible",
       "responsiveness": "PASS",
       "completeness": "PASS",
       "grounding": "PASS",
