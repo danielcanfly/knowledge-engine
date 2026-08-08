@@ -85,3 +85,45 @@ Generic `MODEL_EXPLANATION` claims remain uncited. A generic explanation carryin
 ## FAS-5 API citation shape
 
 Citation objects retain `citation_id`, `claim_id`, `evidence_id`, `locator_id`, and `source_identity`, and public `answer_claims` retain compatible `citation_ids`.
+
+## FAS-6 integrated local product gate
+
+Cumulative FAS/AQ regression: `217 passed`.
+
+Full local pytest: `2994 passed`.
+
+Ruff, compile checks, JSON validation, diff check, hardcode scan, architecture scan: pass.
+
+Legacy governance: ledger complete; no safety weakening; no citation-integrity weakening.
+
+## FAS-6 unseen generalization set
+
+Question count: 10
+
+Pass summary: `10/10`
+
+Categories:
+
+- single-source direct fact
+- multi-source synthesis
+- comparison
+- why/explanation
+- architecture/mechanism
+- partial evidence
+- unsupported private/specific fact
+- OOD/nonexistent control
+
+Representative raw answers:
+
+`A production router inspects the request, applies permission and safety constraints, and selects the downstream path before execution begins.`
+
+`Durable progress records preserve continuity, while final acceptance checks verify whether the result should be trusted.`
+
+`A route selector chooses the handling path, whereas a dependency graph orders tasks and branch or join relationships.`
+
+`Persisted progress helps because it preserves run state after interruption. Unsupported boundary: the available evidence does not establish final checking.`
+
+Unsupported controls:
+
+- private handoff-server token request: safe abstention
+- nonexistent Atlas pump protocol torque request: safe abstention

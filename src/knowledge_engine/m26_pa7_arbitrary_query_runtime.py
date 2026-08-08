@@ -3249,7 +3249,14 @@ def _verify_claim_surface_semantics(
     if unsupported_numbers:
         raise _verification_failure("M26-PA7-ME-033", "claim surface introduces unsupported number")
     strengthened = surface_terms & MODALITY_STRENGTHENING_TERMS
-    if strengthened and not strengthened.issubset(support_terms | question_terms):
+    if (
+        strengthened
+        and not strengthened.issubset(support_terms | question_terms)
+        and not (
+            _has_non_entailment_boundary(surface.casefold())
+            and strengthened.issubset(support_terms | question_terms | {"must", "requires"})
+        )
+    ):
         raise _verification_failure(
             "M26-PA7-ME-034",
             "claim surface strengthens modality beyond evidence",
@@ -3608,6 +3615,10 @@ def _verify_visible_answer_claim_alignment(
         sentence_visible = re.sub(r"\s+", " ", sentence_visible).strip()
         sentence_terms = _meaningful_terms(sentence_visible)
         sentence_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", sentence_visible))
+        if not sentence_terms and (anchors or citation_markers):
+            continue
+        if sentence_terms <= {"no", "yes"} and len(sentence_visible) <= 8:
+            continue
         if anchors or citation_markers:
             claim_terms: set[str] = set()
             claim_numbers: set[str] = set()

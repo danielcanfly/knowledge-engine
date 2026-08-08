@@ -1,5 +1,5 @@
 {
-  "round": "M26-FAS-5",
+  "round": "M26-FAS-6",
   "overall": "PASS",
   "cases": [
     {
@@ -160,6 +160,42 @@
     },
     {
       "id": "fas5_api_citation_shape_compatible",
+      "responsiveness": "PASS",
+      "completeness": "PASS",
+      "grounding": "PASS",
+      "synthesis_quality": "PASS",
+      "citation_integrity": "PASS",
+      "attribution_honesty": "PASS",
+      "naturalness": "PASS",
+      "abstention_correctness": "PASS",
+      "safety": "PASS"
+    },
+    {
+      "id": "fas6_integrated_local_product_gate",
+      "responsiveness": "PASS",
+      "completeness": "PASS",
+      "grounding": "PASS",
+      "synthesis_quality": "PASS",
+      "citation_integrity": "PASS",
+      "attribution_honesty": "PASS",
+      "naturalness": "PASS",
+      "abstention_correctness": "PASS",
+      "safety": "PASS"
+    },
+    {
+      "id": "fas6_unseen_generalization_10_case_set",
+      "responsiveness": "PASS",
+      "completeness": "PASS",
+      "grounding": "PASS",
+      "synthesis_quality": "PASS",
+      "citation_integrity": "PASS",
+      "attribution_honesty": "PASS",
+      "naturalness": "PASS",
+      "abstention_correctness": "PASS",
+      "safety": "PASS"
+    },
+    {
+      "id": "fas6_legacy_test_governance",
       "responsiveness": "PASS",
       "completeness": "PASS",
       "grounding": "PASS",

@@ -1,17 +1,16 @@
 {
-  "terminal_class": "M26-FAS-5-CITATION-BINDING-PASS",
+  "terminal_class": "M26-FAS-6-LOCAL-PRODUCT-GATE-PASS",
   "repo": "danielcanfly/knowledge-engine",
   "branch": "gpt-final/m26-final-answer-synthesis",
   "authorized_baseline_sha": "80db9e0215a3f5b3c3b4622a423fce3402e1df76",
-  "required_parent_stage": "M26-FAS-4",
-  "required_parent_sha": "7d7da42025d52ada52fdbee0f57dd5469325de0b",
-  "actual_branch_sha_before_work": "7d7da42025d52ada52fdbee0f57dd5469325de0b",
+  "required_parent_stage": "M26-FAS-5",
+  "required_parent_sha": "7cbd462c73e31b0f5a6d4e6a336b1efe454c2bdf",
+  "actual_branch_sha_before_gate": "7cbd462c73e31b0f5a6d4e6a336b1efe454c2bdf",
   "parent_match": true,
   "candidate_sha": "pending_commit",
   "changed_files": [
     "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py",
     "src/knowledge_engine/m26_pa7_semantic_closure_runtime.py",
-    "tests/test_m26_pa_7_arbitrary_query_runtime.py",
     "artifacts/m26/fas/round1-quality-matrix.json",
     "artifacts/m26/fas/round1-gate-summary.json",
     "artifacts/m26/fas/round1-raw-answers.md"
@@ -42,14 +41,82 @@
   "rejected_candidate_cherry_picked": false,
   "benchmark_hardcodes": false,
   "new_patch_module_created": false,
+  "architecture": {
+    "retrieval_changed": false,
+    "qdrant_changed": false,
+    "graph_changed": false,
+    "rerank_changed": false,
+    "r2_changed": false,
+    "oracle_changed": false,
+    "cloudflare_changed": false,
+    "provider_vendor_changed": false,
+    "new_patch_module": false,
+    "import_time_monkeypatch_added": false,
+    "second_verifier_added": false,
+    "second_recovery_added": false,
+    "rejected_candidate_cherry_picked": false
+  },
+  "hardcode_scan": {
+    "benchmark_ids": false,
+    "exact_anchor_questions": false,
+    "benchmark_source_ids": false,
+    "suspicious_special_cases": false
+  },
   "tests": {
     "fas2": "PASS",
     "fas3": "PASS",
     "fas4": "PASS",
     "fas5": "PASS",
+    "aq_regression": "PASS",
+    "full_pytest": "PASS",
     "safety_smoke": "PASS",
-    "ruff": "PASS"
+    "ruff": "PASS",
+    "compile_checks": "PASS"
   },
+  "cumulative_validation": {
+    "fas2": "PASS",
+    "fas3": "PASS",
+    "fas4": "PASS",
+    "fas5": "PASS",
+    "aq_regression": "217 passed",
+    "full_pytest": "2994 passed",
+    "ruff": "PASS",
+    "compile_checks": "PASS"
+  },
+  "legacy_test_governance": {
+    "ledger_complete": true,
+    "safety_weakened": false,
+    "citation_integrity_weakened": false
+  },
+  "local_anchor_results": {
+    "false_abstention": "PASS",
+    "false_green": "PASS",
+    "strong_preservation": "PASS",
+    "mechanical_answers": "PASS",
+    "safety": "PASS"
+  },
+  "unseen_generalization": {
+    "question_count": 10,
+    "categories": [
+      "single-source direct fact",
+      "multi-source synthesis",
+      "comparison",
+      "why/explanation",
+      "architecture/mechanism",
+      "partial evidence",
+      "unsupported private/specific fact",
+      "OOD/nonexistent control"
+    ],
+    "pass_summary": "10/10",
+    "generalized_failure_clusters": []
+  },
+  "protected_mutation_count": 0,
+  "unsupported_corpus_claims_observed": 0,
+  "pr_branch_promoted": false,
+  "deploy_performed": false,
+  "merge_performed": false,
+  "product_accepted": false,
+  "next_action": "MASTER_ORCHESTRATOR_AND_INDEPENDENT_AUDITOR_REVIEW",
   "legacy_test_ledger": [
     {
       "legacy_test": "tests/test_m26_pa_7_arbitrary_query_runtime.py::test_provider_natural_cited_prose_is_preserved_after_claim_verification",

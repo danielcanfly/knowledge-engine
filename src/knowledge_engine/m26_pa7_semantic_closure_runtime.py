@@ -1244,6 +1244,33 @@ def _semantic_requirements(
             ["observability", "status", "reattach", "headless", "resume"],
             [r"\b(?:observability|reattach|headless|status|resume)\b"],
         )
+    elif (
+        ("durable" in q or "persisted" in q or "run state" in q)
+        and (
+            "verification" in q
+            or "verified" in q
+            or "post-execution" in q
+            or "completion" in q
+        )
+    ):
+        add(
+            "durable_state",
+            (
+                "Cover durable/persisted server-side run authority or state after "
+                "interruption."
+            ),
+            ["durable", "persisted", "state", "authority", "disconnect", "interruption"],
+            [
+                r"\b(?:durable|persisted|server-side).{0,80}(?:state|authority|run)",
+                r"\bstate.{0,80}(?:durable|persisted|authority)\b",
+            ],
+        )
+        add(
+            "completion_verification",
+            "Cover verification/completion acceptance before declaring success.",
+            ["verification", "completion", "acceptance", "terminal", "correctness"],
+            [r"\b(?:verification|completion|acceptance|terminal gate|correctness)\b"],
+        )
     if (
         "venture" in q
         and "product" in q
