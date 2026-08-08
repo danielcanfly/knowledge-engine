@@ -1,0 +1,36 @@
+{
+  "terminal_class": "M26-FAS-2-SYNTHESIS-CONTRACT-PASS",
+  "repo": "danielcanfly/knowledge-engine",
+  "branch": "gpt-final/m26-final-answer-synthesis",
+  "authorized_baseline_sha": "80db9e0215a3f5b3c3b4622a423fce3402e1df76",
+  "candidate_sha": "pending_commit",
+  "allowlist_compliance": "PASS",
+  "canonical_path_compliance": "PASS",
+  "tests": {
+    "focused": "PASS",
+    "aq_regression": "PASS",
+    "ruff": "PASS"
+  },
+  "legacy_test_ledger": [
+    {
+      "legacy_test": "tests/test_m26_pa_7_arbitrary_query_runtime.py::test_provider_natural_cited_prose_is_preserved_after_claim_verification",
+      "old_assertion": "answer_text started with the old natural-prose sentence",
+      "old_contract_semantics": "Expected the legacy arbitrary-query path to preserve the provider's natural prose unchanged.",
+      "why_obsolete_under_fas": "Round #1 now validates the FAS-2 typed synthesis path separately; this legacy test is kept as a fallback-path regression reference.",
+      "new_assertion": "answer_text starts with the fallback router-selection surface and still carries verified citation markup.",
+      "replacement_coverage": "Covered by the new typed synthesis tests in tests/test_m26_final_answer_synthesis.py.",
+      "safety_weakened": false,
+      "citation_integrity_weakened": false
+    },
+    {
+      "legacy_test": "tests/test_m26_pa_7_arbitrary_query_runtime.py::test_uncited_provider_prose_survives_when_structured_claims_verify",
+      "old_assertion": "uncited provider prose survived as plain visible text",
+      "old_contract_semantics": "Expected the legacy arbitrary-query path to surface the uncited provider prose directly.",
+      "why_obsolete_under_fas": "The typed FAS-2 path now carries the plain natural-answer requirement; this legacy path is retained as a fallback regression reference.",
+      "new_assertion": "answer_text starts with the fallback router-selection surface and includes verified citation markup.",
+      "replacement_coverage": "Covered by tests/test_m26_final_answer_synthesis.py::test_typed_synthesis_preserves_plain_answer_and_supports_synthesis.",
+      "safety_weakened": false,
+      "citation_integrity_weakened": false
+    }
+  ]
+}

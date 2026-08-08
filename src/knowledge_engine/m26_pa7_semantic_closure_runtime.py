@@ -384,11 +384,15 @@ def _synthesize_and_verify(
                     continue
                 break
 
-            answer = _normalize_compact_provider_visible_answer(parsed["answer"])
+            answer = _normalize_compact_provider_visible_answer(
+                _parsed_provider_answer_text(parsed)
+            )
+            claims = _parsed_provider_claims(parsed)
             visible_failures = _visible_semantic_failures(
                 answer, requirements, question
             )
-            used_items = _resolve_used_items(parsed["used"], label_map)
+            used_labels = _parsed_provider_used_labels(parsed, claims)
+            used_items = _resolve_used_items(used_labels, label_map)
             if not used_items:
                 used_items = _infer_used_items(answer, evidence, limit=6)
             used_items = _force_required_support_items(
@@ -418,6 +422,8 @@ def _synthesize_and_verify(
                 question=question,
                 intent_class=intent_class,
                 used_items=used_items,
+                claims=claims,
+                label_map=label_map,
                 snippet_map=snippet_map,
             )
             verified = legacy._verify_multi_evidence_provider_output(
@@ -573,20 +579,31 @@ def _compact_provider_payload(
         "evidence": packed,
         "repair": list(previous_failures)[-8:] if repair else [],
         "output": {
-            "status": "answer|abstain",
-            "answer": "",
-            "used": ["e1"],
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer|partial|abstain",
+            "answer_text": "",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT|EVIDENCE_SYNTHESIS|MODEL_EXPLANATION",
+                    "surface_text": "",
+                    "evidence_labels": ["e1"],
+                    "covers": [],
+                }
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
         },
     }
     system = (
         "Answer only from supplied evidence. Return exactly one compact JSON object with "
-        "keys status, answer, used. status is answer or abstain. For answer, write 2-4 "
-        "concise natural sentences and list the evidence labels actually used. Address "
-        "every must_state item explicitly. Evidence labels such as e1 or e2 belong only in "
-        "the used field and must not appear in the visible answer text. Do not paste code or headings. Do not invent "
-        "facts. A precedes edge means ordering/navigation only, never dependency, "
-        "causality or implementation unless passage text separately proves that stronger "
-        "relation. If support is insufficient, abstain."
+        "keys schema_version, status, answer_text, claims, unanswered_dimensions, and "
+        "abstention_reason. status is answer, partial, or abstain. Each claim must include "
+        "claim_id, claim_type, surface_text, evidence_labels, and covers. Use claim_type "
+        "values EVIDENCE_FACT, EVIDENCE_SYNTHESIS, or MODEL_EXPLANATION. answer_text must "
+        "be natural prose, not a quote collage. Evidence labels such as e1 or e2 belong only "
+        "in evidence_labels and must not appear in the visible answer text. Address every "
+        "must_state item explicitly. If support is insufficient, abstain."
     )
     return (
         {
@@ -623,24 +640,34 @@ def _parse_compact_provider_result(text: str) -> dict[str, Any]:
     value, _ = json.JSONDecoder().raw_decode(stripped[start:])
     if not isinstance(value, Mapping):
         raise ValueError("compact provider JSON must be an object")
-    if set(value) - {"status", "answer", "used"}:
+    allowed_keys = {
+        "status",
+        "answer",
+        "used",
+        "schema_version",
+        "answer_text",
+        "claims",
+        "unanswered_dimensions",
+        "abstention_reason",
+    }
+    if set(value) - allowed_keys:
         raise ValueError("compact provider JSON has unknown keys")
     status = str(value.get("status", ""))
-    if status not in {"answer", "abstain"}:
+    if status not in {"answer", "partial", "abstain", "answer_candidate", "partial_candidate"}:
         raise ValueError("compact provider status invalid")
-    answer = str(value.get("answer", ""))
-    if status == "answer" and (
-        not answer.strip() or len(answer) > MAX_PROVIDER_ANSWER_CHARS
-    ):
+    answer_text = str(value.get("answer_text", value.get("answer", "")))
+    if status != "abstain" and (not answer_text.strip() or len(answer_text) > MAX_PROVIDER_ANSWER_CHARS):
         raise ValueError("compact provider answer invalid")
-    raw_used = value.get("used", [])
-    if not isinstance(raw_used, list):
+    raw_used = value.get("used")
+    if raw_used is not None and not isinstance(raw_used, list):
         raise ValueError("compact provider used must be list")
-    return {
-        "status": status,
-        "answer": answer,
-        "used": [str(item) for item in raw_used],
-    }
+    raw_claims = value.get("claims")
+    if raw_claims is not None and not isinstance(raw_claims, list):
+        raise ValueError("compact provider claims must be list")
+    raw_unanswered = value.get("unanswered_dimensions")
+    if raw_unanswered is not None and not isinstance(raw_unanswered, list):
+        raise ValueError("compact provider unanswered_dimensions must be list")
+    return dict(value)
 
 
 def _normalize_compact_provider_visible_answer(answer: str) -> str:
@@ -705,36 +732,16 @@ def _runtime_bound_candidate(
     question: str,
     intent_class: str,
     used_items: Sequence[Mapping[str, Any]],
+    claims: Sequence[Mapping[str, Any]] | None,
+    label_map: Mapping[str, Mapping[str, Any]],
     snippet_map: Mapping[str, str],
 ) -> dict[str, Any]:
-    refs = []
-    for item in used_items[:8]:
-        evidence_id = str(item.get("evidence_id", ""))
-        quote = snippet_map.get(evidence_id) or legacy._first_exact_evidence_quote(
-            str(item.get("passage_text", "")), max_chars=360
-        )
-        if not quote:
-            continue
-        refs.append(
-            {
-                "evidence_id": evidence_id,
-                "locator_id": str(item.get("locator_id", "")),
-                "exact_quote": quote,
-                "uncertainty": "low",
-            }
-        )
-    if not refs:
-        raise ValueError("runtime could not bind provider prose to evidence")
-    role = "direct"
     relation: str | None = None
     if intent_class == "cross_document_comparison":
-        role = "comparison"
         relation = "contrasts_with"
     elif intent_class == "complementary_synthesis":
-        role = "relationship"
         relation = "complements"
     elif intent_class == "graph_relationship":
-        role = "relationship"
         edge = next(
             (
                 item
@@ -744,36 +751,181 @@ def _runtime_bound_candidate(
             None,
         )
         relation = str(edge.get("relation_type", "")) if edge is not None else None
-    elif intent_class == "provenance_source_trace":
-        role = "provenance"
     elif intent_class == "temporal_conflict":
-        role = "temporal"
         relation = "precedes"
-    anchored = _anchor_material_sentences(answer)
+    claim_records: list[dict[str, Any]] = []
+    source_claims = list(claims or [])
+    if not source_claims:
+        source_claims = [
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "surface_text": answer,
+                "evidence_labels": [str(item.get("evidence_id", "")) for item in used_items[:1]],
+                "covers": legacy._required_facet_ids(
+                    question=question,
+                    intent_class=intent_class,
+                ),
+            }
+        ]
+    for index, raw_claim in enumerate(source_claims, start=1):
+        claim = dict(raw_claim)
+        claim_id = str(claim.get("claim_id") or f"claim_{index}")
+        claim_type = str(claim.get("claim_type") or _infer_claim_type(intent_class, claim))
+        evidence_labels = [
+            str(label)
+            for label in legacy._list(
+                claim.get("evidence_labels"), "claim evidence labels"
+            )
+            if str(label)
+        ]
+        if not evidence_labels and claim.get("used"):
+            evidence_labels = [
+                str(label)
+                for label in legacy._list(claim.get("used"), "claim used labels")
+                if str(label)
+            ]
+        support_items = [
+            label_map[label]
+            for label in evidence_labels
+            if label in label_map
+        ]
+        if not support_items:
+            support_items = list(used_items[:1])
+        refs: list[dict[str, Any]] = []
+        for _ref_index, item in enumerate(support_items, start=1):
+            evidence_id = str(item.get("evidence_id", ""))
+            quote = snippet_map.get(evidence_id) or legacy._first_exact_evidence_quote(
+                str(item.get("passage_text", "")), max_chars=360
+            )
+            if not quote:
+                continue
+            refs.append(
+                {
+                    "evidence_id": evidence_id,
+                    "locator_id": str(item.get("locator_id", "")),
+                    "exact_quote": quote,
+                    "uncertainty": "low",
+                }
+            )
+        if not refs:
+            raise ValueError("runtime could not bind provider prose to evidence")
+        claim_role = str(
+            claim.get("claim_role")
+            or _infer_claim_role(intent_class=intent_class, claim_type=claim_type)
+        )
+        claim_records.append(
+            {
+                "claim_id": claim_id,
+                "claim_type": claim_type,
+                "claim_role": claim_role,
+                "surface_text": str(claim.get("surface_text") or answer).strip(),
+                "facet_ids": list(
+                    claim.get("covers")
+                    or claim.get("facet_ids")
+                    or legacy._required_facet_ids(
+                        question=question,
+                        intent_class=intent_class,
+                    )
+                ),
+                "support_mode": str(
+                    claim.get("support_mode")
+                    or ("model_explanation" if claim_type == "MODEL_EXPLANATION" else "exact_quote")
+                ),
+                "evidence_labels": evidence_labels,
+                "covers": list(claim.get("covers", [])),
+                "unanswered_dimensions": list(claim.get("unanswered_dimensions", [])),
+                "support_refs": refs,
+            }
+        )
     return {
         "schema_version": "aq3-provider-candidate/v3",
         "status": "answer_candidate",
         "relation": relation,
-        "selected_evidence_ids": [
-            str(item.get("evidence_id", "")) for item in used_items
-        ],
-        "answer_text": anchored,
-        "claims": [
-            {
-                "claim_id": "claim_1",
-                "claim_role": role,
-                "surface_text": answer,
-                "facet_ids": legacy._required_facet_ids(
-                    question=question,
-                    intent_class=intent_class,
-                ),
-                "support_mode": "runtime_bound_exact_multi_evidence",
-                "support_refs": refs,
-            }
-        ],
+        "selected_evidence_ids": [str(item.get("evidence_id", "")) for item in used_items],
+        "answer_text": answer.strip(),
+        "claims": claim_records,
         "missing_facets": [],
         "abstention_reason": None,
+        "unanswered_dimensions": [
+            str(item)
+            for claim in claim_records
+            for item in legacy._list(
+                claim.get("unanswered_dimensions", []), "unanswered dimensions"
+            )
+            if str(item)
+        ],
     }
+
+
+def _parsed_provider_answer_text(parsed: Mapping[str, Any]) -> str:
+    for key in ("answer_text", "answer"):
+        answer = str(parsed.get(key, "")).strip()
+        if answer:
+            return answer
+    return ""
+
+
+def _parsed_provider_claims(parsed: Mapping[str, Any]) -> list[dict[str, Any]]:
+    claims = parsed.get("claims", [])
+    return [
+        dict(item)
+        for item in claims
+        if isinstance(item, Mapping)
+    ]
+
+
+def _parsed_provider_used_labels(
+    parsed: Mapping[str, Any],
+    claims: Sequence[Mapping[str, Any]],
+) -> list[str]:
+    raw_used = parsed.get("used")
+    if isinstance(raw_used, Sequence) and not isinstance(raw_used, (str, bytes)):
+        labels = [str(item) for item in raw_used if str(item)]
+        if labels:
+            return labels
+    labels: list[str] = []
+    for claim in claims:
+        for label in legacy._list(
+            claim.get("evidence_labels", []), "claim evidence labels"
+        ):
+            value = str(label)
+            if value and value not in labels:
+                labels.append(value)
+    if labels:
+        return labels
+    raw_selected = parsed.get("selected_evidence_ids")
+    if isinstance(raw_selected, Sequence) and not isinstance(raw_selected, (str, bytes)):
+        return [str(item) for item in raw_selected if str(item)]
+    return []
+
+
+def _infer_claim_role(*, intent_class: str, claim_type: str) -> str:
+    if claim_type == "MODEL_EXPLANATION":
+        return "direct"
+    if intent_class == "cross_document_comparison":
+        return "comparison"
+    if intent_class == "complementary_synthesis":
+        return "relationship"
+    if intent_class == "graph_relationship":
+        return "relationship"
+    if intent_class == "temporal_conflict":
+        return "temporal"
+    return "direct"
+
+
+def _infer_claim_type(intent_class: str, claim: Mapping[str, Any]) -> str:
+    claim_type = str(claim.get("claim_type") or claim.get("material_claim_type") or "").strip()
+    if claim_type:
+        return claim_type
+    claim_role = str(claim.get("claim_role") or "").strip()
+    if claim_role in {"relationship", "comparison", "temporal"}:
+        return "EVIDENCE_SYNTHESIS"
+    if claim.get("support_mode") == "model_explanation":
+        return "MODEL_EXPLANATION"
+    if intent_class in {"cross_document_comparison", "complementary_synthesis", "graph_relationship", "temporal_conflict"}:
+        return "EVIDENCE_SYNTHESIS"
+    return "EVIDENCE_FACT"
 
 
 def _anchor_material_sentences(answer: str) -> str:

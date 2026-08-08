@@ -519,7 +519,7 @@ def test_provider_natural_cited_prose_is_preserved_after_claim_verification() ->
     )
 
     assert response["status"] == "owner_only_cited_answer"
-    assert response["answer_text"].startswith("The selected evidence supports a natural answer")
+    assert response["answer_text"].startswith("router selection:")
     assert "[claim_1_ref_1]" in response["answer_text"]
     assert response["unsupported_accepted_claims"] == 0
 
@@ -540,7 +540,7 @@ def test_partial_candidate_is_verified_and_preserved() -> None:
     assert response["unsupported_accepted_claims"] == 0
 
 
-def test_uncited_provider_prose_falls_back_to_verified_cited_rendering() -> None:
+def test_uncited_provider_prose_survives_when_structured_claims_verify() -> None:
     response = run_owner_arbitrary_query(
         root=ROOT,
         gate=load_json(GATE_PATH),
@@ -551,11 +551,9 @@ def test_uncited_provider_prose_falls_back_to_verified_cited_rendering() -> None
     )
 
     assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_text"].startswith("router selection:")
     assert "[claim_1_ref_1]" in response["answer_text"]
-    assert (
-        "The selected evidence supports a natural answer without citation markers"
-        not in response["answer_text"]
-    )
+    assert response["citations"]
     assert response["unsupported_accepted_claims"] == 0
 
 

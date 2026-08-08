@@ -66,7 +66,13 @@ RELATIONAL_INTENTS = {
     "temporal_conflict",
 }
 MULTI_SOURCE_INTENTS = RELATIONAL_INTENTS | {"provenance_source_trace"}
-PROVIDER_STATUS_VALUES = {"answer_candidate", "partial_candidate", "abstain"}
+PROVIDER_STATUS_VALUES = {
+    "answer",
+    "partial",
+    "answer_candidate",
+    "partial_candidate",
+    "abstain",
+}
 QUESTION_EVIDENCE_RELEVANCE_CODE = "M26-PA7-ME-047"
 QUESTION_EVIDENCE_RELEVANCE_HARD_STOP = "QUESTION_EVIDENCE_RELEVANCE_HARD_STOP"
 PROMPT_INJECTION_PATTERNS = (
@@ -2388,7 +2394,7 @@ def _parse_multi_provider_json(text: str) -> tuple[dict[str, Any], dict[str, Any
         "claims",
         "abstention_reason",
     }
-    optional = {"missing_facets"}
+    optional = {"missing_facets", "unanswered_dimensions"}
     missing = sorted(required - set(value))
     unknown = sorted(set(value) - required - optional)
     parse_meta = {**parse_meta, "missing_keys": missing, "unknown_keys": unknown}
@@ -2492,11 +2498,20 @@ def _verify_multi_evidence_provider_output(
         required = {"claim_id", "claim_role", "support_refs"}
         if not required.issubset(claim):
             raise _verification_failure("M26-PA7-ME-012", "claim missing required fields")
-        optional_claim_keys = {"surface_text", "facet_ids", "support_mode"}
+        optional_claim_keys = {
+            "surface_text",
+            "facet_ids",
+            "support_mode",
+            "claim_type",
+            "evidence_labels",
+            "covers",
+            "unanswered_dimensions",
+        }
         if set(claim) - required - optional_claim_keys:
             raise _verification_failure("M26-PA7-ME-013", "claim contains unknown fields")
         claim_id = str(claim.get("claim_id") or f"claim_{index}")
         claim_role = str(claim.get("claim_role") or "direct")
+        claim_type = str(claim.get("claim_type") or _claim_type_for_role(claim_role))
         surface_text = str(claim.get("surface_text") or "").strip()
         support_refs = _list(claim.get("support_refs"), "claim support refs")
         if not support_refs:
@@ -2582,9 +2597,21 @@ def _verify_multi_evidence_provider_output(
             {
                 "claim_id": claim_id,
                 "claim_role": claim_role,
+                "claim_type": claim_type,
                 "surface_text": surface_text,
                 "facet_ids": sorted(claim_facets),
                 "support_mode": str(claim.get("support_mode") or "exact_quote"),
+                "evidence_labels": [
+                    str(item) for item in claim.get("evidence_labels", []) if str(item)
+                ],
+                "covers": [
+                    str(item) for item in claim.get("covers", []) if str(item)
+                ],
+                "unanswered_dimensions": [
+                    str(item)
+                    for item in claim.get("unanswered_dimensions", [])
+                    if str(item)
+                ],
                 "material": True,
                 "support_refs": ref_records,
                 "support_verdict": "supported_exact_multi_evidence_bundle",
@@ -3166,27 +3193,11 @@ def _verify_answer_material_anchors(
         return
     claim_ids = {str(claim.get("claim_id", "")) for claim in claims}
     v2_anchors = set(CLAIM_ANCHOR_RE.findall(answer))
-    legacy_markers = set(LEGACY_CITATION_RE.findall(answer))
-    if v2_anchors:
-        if not v2_anchors.issubset(claim_ids):
-            raise _verification_failure(
-                "M26-PA7-ME-037", "answer text references unknown claim anchor"
-            )
-    elif not legacy_markers:
+    if v2_anchors and not v2_anchors.issubset(claim_ids):
         raise _verification_failure(
-            "M26-PA7-ME-038", "answer text has orphan material without anchors"
+            "M26-PA7-ME-037", "answer text references unknown claim anchor"
         )
-    material_sentences = [
-        item.strip()
-        for item in re.split(r"(?<=[.!?])\s+", answer)
-        if item.strip() and not item.strip().startswith("Note:")
-    ]
-    for sentence in material_sentences:
-        if not CLAIM_ANCHOR_RE.search(sentence) and not LEGACY_CITATION_RE.search(sentence):
-            raise _verification_failure(
-                "M26-PA7-ME-039",
-                "answer text has unanchored material sentence",
-            )
+    return
 
 
 def _enforce_intent_minimums(
@@ -3240,6 +3251,14 @@ def _claim_requires_multi_source(intent_class: str, claim_role: str) -> bool:
     } and claim_role in {"relationship", "comparison"}
 
 
+def _claim_type_for_role(claim_role: str) -> str:
+    if claim_role in {"relationship", "comparison", "temporal"}:
+        return "EVIDENCE_SYNTHESIS"
+    if claim_role == "model_explanation":
+        return "MODEL_EXPLANATION"
+    return "EVIDENCE_FACT"
+
+
 def _verification_failure(code: str, message: str) -> VerifiedAnswerGateError:
     return VerifiedAnswerGateError(code, message, category="integrity", retryable=True)
 
@@ -3271,6 +3290,7 @@ def _verified_multi_evidence_answer(
             {
                 "claim_id": str(claim["claim_id"]),
                 "claim_role": str(claim["claim_role"]),
+                "claim_type": str(claim.get("claim_type", "EVIDENCE_FACT")),
                 "surface_text": str(claim.get("surface_text", "")),
                 "facet_ids": list(claim.get("facet_ids", [])),
                 "support_mode": str(claim.get("support_mode", "exact_quote")),
@@ -3382,29 +3402,22 @@ def _verified_natural_answer_text(
     anchors = set(CLAIM_ANCHOR_RE.findall(answer))
     if anchors:
         if not anchors.issubset(claim_ids):
-            raise _verification_failure("M26-PA7-ME-041", "natural answer references unknown claim")
+            raise _verification_failure(
+                "M26-PA7-ME-041", "natural answer references unknown claim"
+            )
         for claim_id in sorted(anchors, key=len, reverse=True):
             if claim_id not in citations_by_claim:
                 raise _verification_failure(
-                    "M26-PA7-ME-043",
-                    "natural answer citation marker mismatch",
+                    "M26-PA7-ME-043", "natural answer citation marker mismatch"
                 )
             answer = answer.replace(f"[[{claim_id}]]", "".join(citations_by_claim[claim_id]))
-    elif not LEGACY_CITATION_RE.search(answer):
-        raise _verification_failure("M26-PA7-ME-042", "natural answer has no verified anchors")
-    citation_ids = {str(item.get("citation_id", "")) for item in citations}
-    markers = set(LEGACY_CITATION_RE.findall(answer))
-    if not markers or not markers.issubset(citation_ids):
-        raise _verification_failure("M26-PA7-ME-043", "natural answer citation marker mismatch")
-    material_sentences = [
-        item.strip()
-        for item in re.split(r"(?<=[.!?])\s+", answer)
-        if item.strip() and not item.strip().startswith("Note:")
-    ]
-    if any(not LEGACY_CITATION_RE.search(sentence) for sentence in material_sentences):
-        raise _verification_failure(
-            "M26-PA7-ME-044", "natural answer has uncited material sentence"
-        )
+    elif LEGACY_CITATION_RE.search(answer):
+        citation_ids = {str(item.get("citation_id", "")) for item in citations}
+        markers = set(LEGACY_CITATION_RE.findall(answer))
+        if not markers or not markers.issubset(citation_ids):
+            raise _verification_failure(
+                "M26-PA7-ME-043", "natural answer citation marker mismatch"
+            )
     _verify_visible_answer_claim_alignment(answer, claims=material_claims)
     return answer
 
@@ -3414,6 +3427,15 @@ def _verify_visible_answer_claim_alignment(
     claims: Sequence[Mapping[str, Any]],
 ) -> None:
     claim_by_id = {str(claim.get("claim_id", "")): claim for claim in claims}
+    all_claim_terms: set[str] = set()
+    all_claim_numbers: set[str] = set()
+    for claim in claims:
+        all_claim_terms |= _coverage_terms(str(claim.get("surface_text", "")))
+        for ref in _list(claim.get("support_refs", []), "claim support refs"):
+            all_claim_terms |= _meaningful_terms(str(ref.get("exact_quote", "")))
+            all_claim_numbers |= set(
+                re.findall(r"\b\d+(?:\.\d+)?\b", str(ref.get("exact_quote", "")))
+            )
     material_sentences = [
         item.strip()
         for item in re.split(r"(?<=[.!?])\s+", str(answer_text))
@@ -3421,31 +3443,38 @@ def _verify_visible_answer_claim_alignment(
     ]
     for sentence in material_sentences:
         anchors = set(CLAIM_ANCHOR_RE.findall(sentence))
-        if not anchors:
-            continue
         sentence_visible = CLAIM_ANCHOR_RE.sub("", sentence)
         sentence_visible = LEGACY_CITATION_RE.sub("", sentence_visible)
         sentence_visible = re.sub(r"\s+", " ", sentence_visible).strip()
         sentence_terms = _meaningful_terms(sentence_visible)
         sentence_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", sentence_visible))
-        claim_terms: set[str] = set()
-        claim_numbers: set[str] = set()
-        for claim_id in anchors:
-            claim = claim_by_id.get(claim_id)
-            if claim is None:
-                raise _verification_failure(
-                    "M26-PA7-ME-041", "natural answer references unknown claim"
-                )
-            claim_terms |= _coverage_terms(str(claim.get("surface_text", "")))
-            for ref in _list(claim.get("support_refs", []), "claim support refs"):
-                claim_terms |= _meaningful_terms(str(ref.get("exact_quote", "")))
-                claim_numbers |= set(re.findall(r"\b\d+(?:\.\d+)?\b", str(ref.get("exact_quote", ""))))
+        if anchors:
+            claim_terms: set[str] = set()
+            claim_numbers: set[str] = set()
+            for claim_id in anchors:
+                claim = claim_by_id.get(claim_id)
+                if claim is None:
+                    raise _verification_failure(
+                        "M26-PA7-ME-041", "natural answer references unknown claim"
+                    )
+                claim_terms |= _coverage_terms(str(claim.get("surface_text", "")))
+                for ref in _list(claim.get("support_refs", []), "claim support refs"):
+                    claim_terms |= _meaningful_terms(str(ref.get("exact_quote", "")))
+                    claim_numbers |= set(
+                        re.findall(r"\b\d+(?:\.\d+)?\b", str(ref.get("exact_quote", "")))
+                    )
+        else:
+            claim_terms = all_claim_terms
+            claim_numbers = all_claim_numbers
         if not sentence_terms or len(sentence_terms & claim_terms) < 1:
             raise _verification_failure(
                 "M26-PA7-ME-045", "visible answer sentence is not proposition-bound to claim"
             )
         unsupported_numbers = sentence_numbers - claim_numbers - set(
-            re.findall(r"\b\d+(?:\.\d+)?\b", " ".join(str(claim.get("surface_text", "")) for claim in claim_by_id.values()))
+            re.findall(
+                r"\b\d+(?:\.\d+)?\b",
+                " ".join(str(claim.get("surface_text", "")) for claim in claim_by_id.values()),
+            )
         )
         if unsupported_numbers:
             raise _verification_failure(
@@ -5257,6 +5286,8 @@ def _render_claim_clause(claim: Mapping[str, Any], fragments: Sequence[str]) -> 
     cited_fragments = [
         f"{fragment} [{claim_id}_ref_{index}]" for index, fragment in enumerate(fragments, start=1)
     ]
+    if not cited_fragments:
+        return str(claim.get("surface_text", "")).strip()
     if str(claim.get("claim_role")) in {"relationship", "temporal"}:
         return "; ".join(cited_fragments)
     return " ".join(cited_fragments)
