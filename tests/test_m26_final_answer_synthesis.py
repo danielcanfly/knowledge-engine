@@ -78,6 +78,50 @@ class _SequenceTypedProvider:
         }
 
 
+class _TruncatingThenTypedProvider:
+    def __init__(self, *, answer_text: str, claims: list[dict[str, Any]]) -> None:
+        self.answer_text = answer_text
+        self.claims = claims
+        self.calls: list[dict[str, Any]] = []
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls.append({"payload": payload, "call_class": call_class})
+        if len(self.calls) == 1:
+            return {
+                "text": (
+                    '{"schema_version":"m26-fas-synthesis/v1","status":"answer",'
+                    '"answer_text":"truncated'
+                ),
+                "usage": {
+                    "input_tokens": 128,
+                    "output_tokens": int(payload["max_tokens"]),
+                },
+                "stop_reason": "max_tokens",
+                "cost_usd": "0.00001",
+                "latency_ms": 4,
+                "response_id": "typed-provider-truncated",
+                "call_class": call_class,
+            }
+        return {
+            "text": json.dumps(
+                {
+                    "schema_version": "m26-fas-synthesis/v1",
+                    "status": "answer",
+                    "answer_text": self.answer_text,
+                    "claims": self.claims,
+                    "unanswered_dimensions": [],
+                    "abstention_reason": None,
+                }
+            ),
+            "usage": {"input_tokens": 128, "output_tokens": 96},
+            "stop_reason": "stop",
+            "cost_usd": "0.00001",
+            "latency_ms": 4,
+            "response_id": "typed-provider-repaired",
+            "call_class": call_class,
+        }
+
+
 def test_typed_compact_provider_contract_is_accepted() -> None:
     parsed = _parse_compact_provider_result(
         json.dumps(
@@ -230,6 +274,102 @@ def test_canonical_path_uses_typed_compact_synthesis_payload() -> None:
     )
     assert task["output"]["claims"][0]["evidence_labels"] == ["e1"]
     assert task["output"]["claims"][0]["covers"] == []
+    assert payload["max_tokens"] > 512
+
+
+def test_max_tokens_truncation_gets_larger_bounded_repair_budget() -> None:
+    question = "Why do durable state and verification solve different reliability problems?"
+    evidence = [
+        _passage(
+            "e1",
+            "Durable state preserves progress after a disconnect.",
+            "durable-note",
+        ),
+        _passage(
+            "e2",
+            "Completion verification checks the final result before acceptance.",
+            "verification-note",
+        ),
+    ]
+    answer_text = (
+        "Durable state preserves progress after a disconnect, while verification checks "
+        "the final result before acceptance."
+    )
+    provider = _TruncatingThenTypedProvider(
+        answer_text=answer_text,
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_SYNTHESIS",
+                "surface_text": answer_text,
+                "evidence_labels": ["e1", "e2"],
+                "covers": ["explanatory_answer", "comparison_or_distinction"],
+            }
+        ],
+    )
+
+    answer, closure = _run_typed_synthesis(question, evidence, provider)
+
+    assert len(provider.calls) == 2
+    first_budget = provider.calls[0]["payload"]["max_tokens"]
+    repair_budget = provider.calls[1]["payload"]["max_tokens"]
+    assert first_budget > 512
+    assert repair_budget > first_budget
+    assert provider.calls[1]["call_class"] == "aq_semantic_closure_repair"
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert answer["answer_text"] == answer_text
+    assert answer["repair_attempted"] is True
+    telemetry = answer["multi_evidence_verification"]["provider_attempt_telemetry"]
+    assert telemetry[0]["truncation_detected"] is True
+    assert "COMPACT_PROVIDER_TRUNCATED" in answer["multi_evidence_verification"][
+        "verification_failure_codes_by_attempt"
+    ]
+    assert closure["failures"] == []
+
+
+def test_long_multi_dimension_answer_publishes_directly_without_512_ceiling() -> None:
+    question = "Why do durable state and verification solve different reliability problems?"
+    evidence = [
+        _passage(
+            "e1",
+            "Durable state preserves progress after a disconnect.",
+            "durable-note",
+        ),
+        _passage(
+            "e2",
+            "Completion verification checks the final result before acceptance.",
+            "verification-note",
+        ),
+    ]
+    sentence = (
+        "Durable state preserves progress after a disconnect, while completion "
+        "verification checks the final result before acceptance."
+    )
+    answer_text = " ".join([sentence] * 18)
+    claim_surface = sentence
+    assert 1800 < len(answer_text) < 4096
+    provider = _TypedProvider(
+        claim_type="EVIDENCE_SYNTHESIS",
+        answer_text=answer_text,
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_SYNTHESIS",
+                "surface_text": claim_surface,
+                "evidence_labels": ["e1", "e2"],
+                "covers": ["explanatory_answer", "comparison_or_distinction"],
+            }
+        ],
+    )
+
+    answer, closure = _run_typed_synthesis(question, evidence, provider)
+
+    assert provider.calls[0]["payload"]["max_tokens"] > 512
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_text"] == answer_text
+    assert answer["repair_attempted"] is False
+    assert closure["failures"] == []
 
 
 def test_incomplete_answer_gets_one_bounded_repair() -> None:

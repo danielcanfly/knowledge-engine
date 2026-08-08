@@ -35,7 +35,12 @@ RESPONSE_SCHEMA = legacy.RESPONSE_SCHEMA
 
 MAX_PROVIDER_EVIDENCE = 10
 MAX_PROVIDER_SNIPPET_CHARS = 420
-MAX_PROVIDER_ANSWER_CHARS = 1800
+MAX_PROVIDER_ANSWER_CHARS = 4096
+MIN_PROVIDER_OUTPUT_TOKENS = 1024
+MIN_PROVIDER_REPAIR_OUTPUT_TOKENS = 1536
+MAX_PROVIDER_OUTPUT_TOKENS = 3072
+COMPACT_PROVIDER_TRUNCATED = "COMPACT_PROVIDER_TRUNCATED"
+COMPACT_PROVIDER_PARSE_FAILED = "COMPACT_PROVIDER_PARSE_FAILED"
 
 
 @dataclass(frozen=True)
@@ -370,12 +375,22 @@ def _synthesize_and_verify(
                 ),
             )
             try:
+                stop_reason = str(
+                    raw.get("stop_reason") or raw.get("finish_reason") or ""
+                )
                 parsed = _parse_compact_provider_result(
                     str(raw.get("text", raw.get("provider_text", "")))
                 )
             except ValueError:
                 calls.append(_compact_call_telemetry(raw, parse_ok=False))
-                raise
+                if stop_reason == "max_tokens":
+                    failures.append(COMPACT_PROVIDER_TRUNCATED)
+                else:
+                    failures.append(COMPACT_PROVIDER_PARSE_FAILED)
+                if attempt == 1:
+                    repair_attempted = True
+                    continue
+                break
             calls.append(_compact_call_telemetry(raw, parse_ok=True))
             if parsed["status"] == "abstain":
                 failures.append("PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE")
@@ -681,10 +696,18 @@ def _compact_provider_payload(
         "in evidence_labels and must not appear in the visible answer text. Address every "
         "must_state item explicitly. If support is insufficient, abstain."
     )
+    max_tokens = _compact_provider_output_tokens(
+        question=question,
+        intent_class=intent_class,
+        packed_evidence=packed,
+        requirements=requirements,
+        repair=repair,
+        previous_failures=previous_failures,
+    )
     return (
         {
             "model": "MiniMax-M3",
-            "max_tokens": 512,
+            "max_tokens": max_tokens,
             "temperature": 0,
             "stream": False,
             "system": system,
@@ -701,6 +724,38 @@ def _compact_provider_payload(
         },
         label_map,
         snippet_map,
+    )
+
+
+def _compact_provider_output_tokens(
+    *,
+    question: str,
+    intent_class: str,
+    packed_evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[SemanticRequirement],
+    repair: bool,
+    previous_failures: Sequence[str],
+) -> int:
+    evidence_chars = sum(len(str(item.get("text", ""))) for item in packed_evidence)
+    requirement_count = len(requirements)
+    question_chars = len(str(question))
+    relational_bonus = 192 if intent_class in legacy.RELATIONAL_INTENTS else 0
+    base = (
+        MIN_PROVIDER_OUTPUT_TOKENS
+        + min(640, evidence_chars // 8)
+        + min(320, question_chars // 4)
+        + min(384, requirement_count * 48)
+        + relational_bonus
+    )
+    if repair:
+        base = max(int(base * 1.35), MIN_PROVIDER_REPAIR_OUTPUT_TOKENS)
+    if COMPACT_PROVIDER_TRUNCATED in set(str(item) for item in previous_failures):
+        base += 384
+    elif COMPACT_PROVIDER_PARSE_FAILED in set(str(item) for item in previous_failures):
+        base += 192
+    return max(
+        MIN_PROVIDER_REPAIR_OUTPUT_TOKENS if repair else MIN_PROVIDER_OUTPUT_TOKENS,
+        min(MAX_PROVIDER_OUTPUT_TOKENS, base),
     )
 
 
@@ -765,15 +820,15 @@ def _compact_call_telemetry(
     result: Mapping[str, Any], *, parse_ok: bool
 ) -> dict[str, Any]:
     usage = result.get("usage") if isinstance(result.get("usage"), Mapping) else {}
+    stop_reason = str(result.get("stop_reason") or result.get("finish_reason") or "")
     return {
         "provider_text": "",
         "provider_text_char_count": len(
             str(result.get("text", result.get("provider_text", "")))
         ),
         "call_class": str(result.get("call_class", "")),
-        "stop_reason": str(
-            result.get("stop_reason") or result.get("finish_reason") or ""
-        ),
+        "stop_reason": stop_reason,
+        "truncation_detected": stop_reason == "max_tokens",
         "content_block_types": [
             str(item) for item in result.get("content_block_types", [])
         ],

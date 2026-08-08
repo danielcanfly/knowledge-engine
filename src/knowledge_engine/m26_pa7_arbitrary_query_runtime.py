@@ -3848,6 +3848,10 @@ def _provider_attempt_telemetry(calls: Sequence[Mapping[str, Any]]) -> list[dict
             "attempt": index,
             "call_class": str(call.get("call_class", "")),
             "stop_reason": str(call.get("stop_reason", "")),
+            "truncation_detected": bool(
+                call.get("truncation_detected")
+                or str(call.get("stop_reason", "")) == "max_tokens"
+            ),
             "content_block_types": list(call.get("content_block_types", [])),
             "provider_text_char_count": int(call.get("provider_text_char_count", 0)),
             "output_tokens": int(
