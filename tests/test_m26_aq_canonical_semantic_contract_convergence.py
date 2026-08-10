@@ -31,6 +31,25 @@ class _CompactAbstainingProvider:
         }
 
 
+class _TypedCompactProvider:
+    def __init__(self, body: dict[str, Any]) -> None:
+        self.body = body
+        self.calls = 0
+        self.cost = Decimal("0")
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls += 1
+        self.cost += Decimal("0.00001")
+        return {
+            "text": json.dumps(self.body),
+            "usage": {"input_tokens": 32, "output_tokens": 32},
+            "cost_usd": "0.00001",
+            "latency_ms": 1,
+            "response_id": f"typed-compact-{self.calls}",
+            "call_class": call_class,
+        }
+
+
 def _passage(evidence_id: str, text: str, *, concept_id: str = "") -> dict[str, Any]:
     return {
         "evidence_id": evidence_id,
@@ -85,6 +104,18 @@ def _graph_edge(
         "provenance_record_sha256": "d" * 64,
         "retrieval_metadata": {"coverage_terms": ["precedes", "ordering", "sequence"]},
     }
+
+
+def _assert_abstention_is_not_recovered(
+    answer: dict[str, Any],
+    closure: dict[str, Any],
+) -> None:
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["answer_source"] == "safe_abstention"
+    assert answer["answer_text"] == ""
+    assert answer["unsupported_accepted_claims"] == 0
+    assert closure["broad_deterministic_fallback_used"] is False
+    assert "semantic_synthesis_recovery" not in closure
 
 
 def _run(code: str) -> str:
@@ -200,7 +231,68 @@ def test_shared_part_entities_are_derived_without_case_specific_text() -> None:
     assert "Widget Harness Part 2" in entities
 
 
-def test_provider_abstention_recovers_precedes_relation_without_internal_id_leak() -> None:
+def test_canonical_provider_paraphrase_does_not_require_patch_v2(monkeypatch: Any) -> None:
+    import knowledge_engine.m26_aq_semantic_contract as contract
+
+    def fail_if_called() -> None:
+        raise AssertionError("canonical synthesis must not import compatibility patch modules")
+
+    monkeypatch.setattr(contract, "_contract_compat_module", fail_if_called)
+    question = "What does Graphology do for graph data?"
+    answer_text = "Graphology keeps and analyzes graph data."
+    requirements = [
+        contract.SemanticRequirement(
+            requirement_id="graphology_storage",
+            instruction="Explain that Graphology stores and analyses graph data.",
+            evidence_terms=("Graphology", "stores", "graph", "data", "analysis"),
+            visible_patterns=(r"Graphology stores graph data exactly",),
+        )
+    ]
+    evidence = [
+        _passage(
+            "ev-graphology",
+            "Graphology stores graph data and supports graph analysis.",
+            concept_id="Graphology",
+        )
+    ]
+    provider = _TypedCompactProvider(
+        {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": answer_text,
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": answer_text,
+                    "evidence_labels": ["e1"],
+                    "covers": ["graphology_storage"],
+                }
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+    )
+
+    answer, closure = contract.synthesize_and_verify(
+        question=question,
+        trace_id="trace-canonical-paraphrase",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert provider.calls == 2
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_text"] == answer_text
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert "semantic_synthesis_recovery" not in closure
+    assert closure["broad_deterministic_fallback_used"] is False
+
+
+def test_provider_abstention_does_not_recover_precedes_relation() -> None:
     from knowledge_engine.m26_aq_semantic_contract import (
         derive_semantic_requirements,
         synthesize_and_verify,
@@ -260,23 +352,10 @@ def test_provider_abstention_recovers_precedes_relation_without_internal_id_leak
         },
     )
 
-    text = answer["answer_text"]
-    assert answer["status"] == "owner_only_cited_answer"
-    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
-    assert closure["failures"] == []
-    assert closure["broad_deterministic_fallback_used"] is False
-    assert "Widget Harness Part 1" in text
-    assert "Widget Harness Part 2" in text
-    assert "ordering" in text.casefold() or "sequence" in text.casefold()
-    assert "does not" in text.casefold()
-    assert "prove" in text.casefold()
-    assert "dependency" in text.casefold()
-    assert "article_" not in text
-    assert "concept-widget" not in text
-    assert "ev-" not in text
+    _assert_abstention_is_not_recovered(answer, closure)
 
 
-def test_provider_abstention_recovers_supported_adaptive_planning_answer() -> None:
+def test_provider_abstention_does_not_recover_adaptive_planning_answer() -> None:
     from knowledge_engine.m26_aq_semantic_contract import (
         derive_semantic_requirements,
         synthesize_and_verify,
@@ -316,19 +395,10 @@ def test_provider_abstention_recovers_supported_adaptive_planning_answer() -> No
         endpoint_proof={"required": False, "matched": False},
     )
 
-    text = answer["answer_text"].casefold()
-    assert answer["status"] == "owner_only_cited_answer"
-    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
-    assert closure["failures"] == []
-    assert closure["broad_deterministic_fallback_used"] is False
-    assert "adaptive planning" in text
-    assert "replan globally" in text
-    assert "local repair" in text
-    assert answer["unsupported_accepted_claims"] == 0
-    assert answer["citation_locator_valid"] is True
+    _assert_abstention_is_not_recovered(answer, closure)
 
 
-def test_provider_abstention_recovers_disconnect_state_answer_without_admission_overreach() -> None:
+def test_provider_abstention_does_not_recover_disconnect_state_answer() -> None:
     from knowledge_engine.m26_aq_semantic_contract import (
         derive_semantic_requirements,
         synthesize_and_verify,
@@ -375,16 +445,10 @@ def test_provider_abstention_recovers_disconnect_state_answer_without_admission_
         endpoint_proof={"required": False, "matched": False},
     )
 
-    text = answer["answer_text"].casefold()
-    assert answer["status"] == "owner_only_cited_answer"
-    assert closure["failures"] == []
-    assert "client disconnect" in text
-    assert "observability" in text
-    assert "completion verification" in text
-    assert "admission" not in text
+    _assert_abstention_is_not_recovered(answer, closure)
 
 
-def test_provider_abstention_recovers_pure_precedes_ordering_relation() -> None:
+def test_provider_abstention_does_not_recover_pure_precedes_ordering_relation() -> None:
     from knowledge_engine.m26_aq_semantic_contract import (
         _canonical_intent_class,
         derive_semantic_requirements,
@@ -432,17 +496,11 @@ def test_provider_abstention_recovers_pure_precedes_ordering_relation() -> None:
         },
     )
 
-    text = answer["answer_text"]
     assert intent == "graph_relationship"
-    assert answer["status"] == "owner_only_cited_answer"
-    assert closure["failures"] == []
-    assert "precedes" in text
-    assert "Harness Theory Part 1" in text
-    assert "Harness Theory Part 2" in text
-    assert "dependency" not in text.casefold()
+    _assert_abstention_is_not_recovered(answer, closure)
 
 
-def test_provider_abstention_recovers_natural_control_comparison_surfaces() -> None:
+def test_provider_abstention_does_not_recover_natural_control_comparison_surfaces() -> None:
     from knowledge_engine.m26_aq_semantic_contract import (
         derive_semantic_requirements,
         synthesize_and_verify,
@@ -505,15 +563,11 @@ def test_provider_abstention_recovers_natural_control_comparison_surfaces() -> N
             ),
             endpoint_proof={"required": False, "matched": False},
         )
-        text = answer["answer_text"].casefold()
-        assert answer["status"] == "owner_only_cited_answer"
-        assert closure["failures"] == []
-        assert all(term in text for term in expected_terms)
-        assert "compare left" not in text
-        assert "comparison relation" not in text
+        del expected_terms
+        _assert_abstention_is_not_recovered(answer, closure)
 
 
-def test_provider_abstention_recovers_sigma_authority_surface() -> None:
+def test_provider_abstention_does_not_recover_sigma_authority_surface() -> None:
     from knowledge_engine.m26_aq_semantic_contract import (
         derive_semantic_requirements,
         synthesize_and_verify,
@@ -551,17 +605,10 @@ def test_provider_abstention_recovers_sigma_authority_surface() -> None:
         endpoint_proof={"required": False, "matched": False},
     )
 
-    text = answer["answer_text"].casefold()
-    assert answer["status"] == "owner_only_cited_answer"
-    assert closure["failures"] == []
-    assert "canonical source" in text
-    assert "provenance" in text
-    assert "sigma.js appears to disagree" in text
-    assert "visualization surface" in text
-    assert "sigma js:" not in text
+    _assert_abstention_is_not_recovered(answer, closure)
 
 
-def test_provider_abstention_recovers_persistence_correctness_boundary() -> None:
+def test_provider_abstention_does_not_recover_persistence_correctness_boundary() -> None:
     from knowledge_engine.m26_aq_semantic_contract import (
         derive_semantic_requirements,
         synthesize_and_verify,
@@ -601,15 +648,7 @@ def test_provider_abstention_recovers_persistence_correctness_boundary() -> None
         endpoint_proof={"required": False, "matched": False},
     )
 
-    text = answer["answer_text"].casefold()
-    assert answer["status"] == "owner_only_cited_answer"
-    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
-    assert closure["failures"] == []
-    assert text.startswith("no.")
-    assert "does not by itself prove" in text
-    assert "completion verification" in text
-    assert answer["unsupported_accepted_claims"] == 0
-    assert answer["citation_locator_valid"] is True
+    _assert_abstention_is_not_recovered(answer, closure)
 
 
 def test_cobalt_orchid_bb18_remains_safe_abstention() -> None:

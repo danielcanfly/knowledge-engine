@@ -350,6 +350,7 @@ def _synthesize_and_verify(
     provider_client: ProviderClient,
     requirements: Sequence[SemanticRequirement],
     endpoint_proof: Mapping[str, Any],
+    allow_deterministic_recovery: bool = True,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     failures: list[str] = []
     calls: list[dict[str, Any]] = []
@@ -410,6 +411,7 @@ def _synthesize_and_verify(
             visible_failures = _visible_semantic_failures(
                 answer, requirements, question
             )
+            hard_visible_failures = _hard_visible_semantic_failures(visible_failures)
             used_labels = _parsed_provider_used_labels(parsed, claims)
             used_items = _resolve_used_items(used_labels, label_map)
             if not used_items:
@@ -427,54 +429,58 @@ def _synthesize_and_verify(
             )
             final_support_proof = support_proof
             semantic_failures = sorted(
-                set([*visible_failures, *support_failures])
+                set([*hard_visible_failures, *support_failures])
             )
-            if semantic_failures:
-                failures.extend(semantic_failures)
+            repair_failures = sorted(set([*visible_failures, *support_failures]))
+            if repair_failures:
+                failures.extend(repair_failures)
                 if attempt == 1:
                     repair_attempted = True
                     continue
-                if provider_status in {"partial", "partial_candidate"} and _partial_answer_has_substantial_value(
-                    answer=answer,
-                    requirements=requirements,
-                    visible_failures=visible_failures,
-                    support_failures=support_failures,
-                    used_items=used_items,
-                ):
-                    try:
-                        candidate = _runtime_bound_candidate(
-                            answer=answer,
-                            question=question,
-                            intent_class=intent_class,
-                            used_items=used_items,
-                            claims=claims,
-                            label_map=label_map,
-                            snippet_map=snippet_map,
-                            provider_status=provider_status,
-                            requirements=requirements,
-                            unanswered_dimensions=unanswered_dimensions,
-                            semantic_failures=semantic_failures,
-                        )
-                        verified = legacy._verify_multi_evidence_provider_output(
-                            trace_id=trace_id,
-                            question=question,
-                            intent_class=intent_class,
-                            evidence=evidence,
-                            provider_text=json.dumps(
-                                candidate,
-                                ensure_ascii=False,
-                                separators=(",", ":"),
-                            ),
-                        )
-                        partial_answer = legacy._verified_multi_evidence_answer(
-                            intent_class=intent_class,
-                            verified=verified,
-                            evidence=evidence,
-                            calls=calls,
-                            repair_attempted=repair_attempted,
-                        )
-                    except (legacy.VerifiedAnswerGateError, ValueError, KeyError) as exc:
-                        failures.append(str(getattr(exc, "code", type(exc).__name__)))
+                if semantic_failures or provider_status in {"partial", "partial_candidate"}:
+                    if _partial_answer_has_substantial_value(
+                        answer=answer,
+                        requirements=requirements,
+                        visible_failures=visible_failures,
+                        support_failures=support_failures,
+                        used_items=used_items,
+                    ):
+                        try:
+                            candidate = _runtime_bound_candidate(
+                                answer=answer,
+                                question=question,
+                                intent_class=intent_class,
+                                used_items=used_items,
+                                claims=claims,
+                                label_map=label_map,
+                                snippet_map=snippet_map,
+                                provider_status=provider_status,
+                                requirements=requirements,
+                                unanswered_dimensions=unanswered_dimensions,
+                                semantic_failures=semantic_failures,
+                            )
+                            verified = legacy._verify_multi_evidence_provider_output(
+                                trace_id=trace_id,
+                                question=question,
+                                intent_class=intent_class,
+                                evidence=evidence,
+                                provider_text=json.dumps(
+                                    candidate,
+                                    ensure_ascii=False,
+                                    separators=(",", ":"),
+                                ),
+                            )
+                            partial_answer = legacy._verified_multi_evidence_answer(
+                                intent_class=intent_class,
+                                verified=verified,
+                                evidence=evidence,
+                                calls=calls,
+                                repair_attempted=repair_attempted,
+                            )
+                        except (legacy.VerifiedAnswerGateError, ValueError, KeyError) as exc:
+                            failures.append(str(getattr(exc, "code", type(exc).__name__)))
+                            break
+                    else:
                         break
                     partial_answer["answer_source"] = (
                         "provider_verified_runtime_bound_partial_semantic_closure"
@@ -502,7 +508,6 @@ def _synthesize_and_verify(
                         "broad_deterministic_fallback_used": False,
                     }
                     return partial_answer, closure
-                break
 
             candidate = _runtime_bound_candidate(
                 answer=answer,
@@ -540,7 +545,7 @@ def _synthesize_and_verify(
                 requirements,
                 question,
             )
-            if post_failures:
+            if _hard_visible_semantic_failures(post_failures):
                 failures.extend(post_failures)
                 if attempt == 1:
                     repair_attempted = True
@@ -578,32 +583,33 @@ def _synthesize_and_verify(
             failures.append(type(exc).__name__)
             break
 
-    deterministic = legacy._deterministic_evidence_synthesis(
-        trace_id=trace_id,
-        question=question,
-        intent_class=intent_class,
-        evidence=evidence,
-        calls=calls,
-        repair_attempted=True,
-        trigger_reason_codes=[*failures, "SEMANTIC_CLOSURE_FAILED"],
-        allow_after_repair_failure=True,
-    )
-    if deterministic is not None:
-        deterministic["multi_evidence_verification"] = {
-            **dict(deterministic.get("multi_evidence_verification", {})),
-            "provider_contract": "compact_runtime_bound_semantic_closure/v1",
-        }
-        closure = {
-            "schema_version": "m26-aq-semantic-closure/v1",
-            "requirements": [_requirement_public(item) for item in requirements],
-            "support_proof": final_support_proof,
-            "endpoint_proof": dict(endpoint_proof),
-            "failures": [],
-            "pre_recovery_failures": sorted(set(failures)),
-            "provider_contract": "compact_runtime_bound_semantic_closure/v1",
-            "broad_deterministic_fallback_used": True,
-        }
-        return deterministic, closure
+    if allow_deterministic_recovery:
+        deterministic = legacy._deterministic_evidence_synthesis(
+            trace_id=trace_id,
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            calls=calls,
+            repair_attempted=True,
+            trigger_reason_codes=[*failures, "SEMANTIC_CLOSURE_FAILED"],
+            allow_after_repair_failure=True,
+        )
+        if deterministic is not None:
+            deterministic["multi_evidence_verification"] = {
+                **dict(deterministic.get("multi_evidence_verification", {})),
+                "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+            }
+            closure = {
+                "schema_version": "m26-aq-semantic-closure/v1",
+                "requirements": [_requirement_public(item) for item in requirements],
+                "support_proof": final_support_proof,
+                "endpoint_proof": dict(endpoint_proof),
+                "failures": [],
+                "pre_recovery_failures": sorted(set(failures)),
+                "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                "broad_deterministic_fallback_used": True,
+            }
+            return deterministic, closure
 
     abstention = legacy._verified_abstention(
         reason_codes=[*failures, "SEMANTIC_CLOSURE_FAILED"],
@@ -1903,6 +1909,14 @@ def _visible_semantic_failures(
     ):
         failures.append("SEMANTIC_VISIBLE_MISSING:non_entailment")
     return sorted(set(failures))
+
+
+def _hard_visible_semantic_failures(failures: Sequence[str]) -> list[str]:
+    return [
+        str(item)
+        for item in failures
+        if str(item) == "SEMANTIC_VISIBLE_MISSING:non_entailment"
+    ]
 
 
 def _requirement_support_failures(

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import json
 import os
 import re
@@ -727,8 +726,6 @@ def semantic_contract_manifest() -> dict[str, Any]:
             "ordering_semantics",
             "multi_facet_publication",
             "post_render_alignment",
-            "deterministic_recovery_publication",
-            "positive_answerability_recovery",
         ],
         "authority_boundary": {
             "instruction": authority.instruction,
@@ -753,7 +750,9 @@ def semantic_contract_manifest() -> dict[str, Any]:
             "protected_mutations": 0,
             "post_render_semantic_validation": True,
             "internal_reference_leak_rejection": True,
-            "positive_answerability_recovery": True,
+            "provider_visible_prose_required": True,
+            "semantic_recovery_publication": False,
+            "expression_mismatch_hard_gate": False,
         },
     }
 
@@ -848,8 +847,7 @@ def canonical_question_entities(question: str) -> list[str]:
 
 
 def _contract_compat_module() -> Any:
-    suffix = bytes.fromhex("70617463685f7632").decode("ascii")
-    return importlib.import_module("knowledge_engine.m26_aq_semantic_runtime_" + suffix)
+    return runtime
 
 
 def synthesize_and_verify(
@@ -862,10 +860,7 @@ def synthesize_and_verify(
     requirements: Sequence[Any],
     endpoint_proof: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    compatibility = _contract_compat_module()
-    verification, closure = compatibility._provider_integrity_safe_synthesize(
-        runtime=_RUNTIME_FACADE,
-        legacy=legacy,
+    verification, closure = runtime._synthesize_and_verify(
         question=question,
         trace_id=trace_id,
         intent_class=intent_class,
@@ -873,17 +868,7 @@ def synthesize_and_verify(
         provider_client=provider_client,
         requirements=requirements,
         endpoint_proof=endpoint_proof,
-    )
-    verification, closure = _publish_support_proof_recovered_answer(
-        compatibility=compatibility,
-        question=question,
-        trace_id=trace_id,
-        intent_class=intent_class,
-        evidence=evidence,
-        requirements=requirements,
-        endpoint_proof=endpoint_proof,
-        verification=verification,
-        closure=closure,
+        allow_deterministic_recovery=False,
     )
     fingerprint = semantic_contract_fingerprint()
     closure = {
