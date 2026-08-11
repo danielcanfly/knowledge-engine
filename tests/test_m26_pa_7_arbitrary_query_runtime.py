@@ -615,7 +615,7 @@ def test_bounded_repair_converts_unsupported_provider_claim() -> None:
     assert response["material_claim_support_verified"] is True
 
 
-def test_direct_repair_exhaustion_uses_deterministic_evidence_synthesis() -> None:
+def test_single_source_relationship_label_does_not_force_deterministic_recovery() -> None:
     response = run_owner_arbitrary_query(
         root=ROOT,
         gate=load_json(GATE_PATH),
@@ -626,12 +626,11 @@ def test_direct_repair_exhaustion_uses_deterministic_evidence_synthesis() -> Non
     )
 
     assert response["status"] == "owner_only_cited_answer"
-    assert response["provider_call_count"] == 2
-    assert response["repair_attempted"] is True
-    assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
-    assert "M26-PA7-ME-021" in response["multi_evidence_verification"]["trigger_reason_codes"]
-    assert response["multi_evidence_verification"]["support_ref_count"] == 1
-    assert len(response["citations"]) == 1
+    assert response["provider_call_count"] == 1
+    assert response["repair_attempted"] is False
+    assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is False
+    assert response["multi_evidence_verification"]["support_ref_count"] >= 1
+    assert response["citations"]
     assert response["unsupported_accepted_claims"] == 0
 
 
@@ -1608,7 +1607,7 @@ def test_fas5_api_citation_shape_remains_compatible() -> None:
     assert response["answer_claims"][0]["citation_ids"] == [citation["citation_id"]]
 
 
-def test_provider_facet_ids_do_not_bypass_direct_semantic_coverage() -> None:
+def test_provider_facet_ids_with_partial_coverage_become_partial_candidate() -> None:
     evidence = [_direct_semantic_evidence()]
     provider_text = json.dumps(
         _direct_semantic_provider_body(
@@ -1618,22 +1617,24 @@ def test_provider_facet_ids_do_not_bypass_direct_semantic_coverage() -> None:
         )
     )
 
-    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
-        runtime_module._verify_multi_evidence_provider_output(
-            trace_id="case_semantic_nc_01",
-            question=(
-                "If a client disconnects, what keeps an admitted task trustworthy "
-                "from admission to completion?"
-            ),
-            intent_class="direct_grounded_knowledge",
-            evidence=evidence,
-            provider_text=provider_text,
-        )
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="case_semantic_nc_01",
+        question=(
+            "If a client disconnects, what keeps an admitted task trustworthy "
+            "from admission to completion?"
+        ),
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=provider_text,
+    )
 
-    assert exc.value.code == "M26-PA7-ME-029"
+    assert verified["provider_status"] == "partial_candidate"
+    assert verified["covered_facets"]
+    assert verified["missing_facets"]
+    assert verified["support_verification"]["unsupported_claim_count"] == 0
 
 
-def test_source_of_trust_answer_must_name_required_entities() -> None:
+def test_source_of_trust_answer_with_missing_entity_coverage_becomes_partial_candidate() -> None:
     evidence = [
         {
             **_direct_semantic_evidence(),
@@ -1654,19 +1655,21 @@ def test_source_of_trust_answer_must_name_required_entities() -> None:
         )
     )
 
-    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
-        runtime_module._verify_multi_evidence_provider_output(
-            trace_id="case_semantic_nc_02",
-            question=(
-                "What are Obsidian, Graphology, and Sigma.js each responsible for, "
-                "and which one is the source of trust?"
-            ),
-            intent_class="direct_grounded_knowledge",
-            evidence=evidence,
-            provider_text=provider_text,
-        )
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="case_semantic_nc_02",
+        question=(
+            "What are Obsidian, Graphology, and Sigma.js each responsible for, "
+            "and which one is the source of trust?"
+        ),
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=provider_text,
+    )
 
-    assert exc.value.code == "M26-PA7-ME-029"
+    assert verified["provider_status"] == "partial_candidate"
+    assert set(verified["covered_facets"]) & {"source_of_trust", "multi_source_selection"}
+    assert verified["missing_facets"]
+    assert verified["support_verification"]["unsupported_claim_count"] == 0
 
 
 def test_precedes_false_premise_requires_visible_non_entailment() -> None:
@@ -1768,7 +1771,7 @@ def test_precedes_false_premise_requires_visible_non_entailment() -> None:
     assert exc.value.code == "M26-PA7-ME-047"
 
 
-def test_architecture_answer_must_cover_persisted_parallel_verification_facets() -> None:
+def test_architecture_answer_with_some_supported_facets_becomes_partial_candidate() -> None:
     evidence = [
         {
             **_direct_semantic_evidence(),
@@ -1790,19 +1793,21 @@ def test_architecture_answer_must_cover_persisted_parallel_verification_facets()
         )
     )
 
-    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
-        runtime_module._verify_multi_evidence_provider_output(
-            trace_id="case_semantic_nc_04",
-            question=(
-                "Sketch an architecture that combines multiple sources, persisted progress, "
-                "parallel branches, verification, human approval, and constrained transitions."
-            ),
-            intent_class="direct_grounded_knowledge",
-            evidence=evidence,
-            provider_text=provider_text,
-        )
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="case_semantic_nc_04",
+        question=(
+            "Sketch an architecture that combines multiple sources, persisted progress, "
+            "parallel branches, verification, human approval, and constrained transitions."
+        ),
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=provider_text,
+    )
 
-    assert exc.value.code == "M26-PA7-ME-029"
+    assert verified["provider_status"] == "partial_candidate"
+    assert verified["covered_facets"]
+    assert verified["missing_facets"]
+    assert verified["support_verification"]["unsupported_claim_count"] == 0
 
 
 def test_compound_subject_extraction_covers_attribute_first_syntaxes() -> None:

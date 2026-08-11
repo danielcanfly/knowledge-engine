@@ -50,6 +50,30 @@ class _TypedCompactProvider:
         }
 
 
+class _RepairingCompactProvider:
+    def __init__(self, repair_body: dict[str, Any]) -> None:
+        self.repair_body = repair_body
+        self.calls = 0
+        self.cost = Decimal("0")
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls += 1
+        self.cost += Decimal("0.00001")
+        body = (
+            {"schema_version": "m26-fas-synthesis/v1", "status": "abstain", "answer_text": "", "claims": [], "unanswered_dimensions": [], "abstention_reason": "needs_repair"}
+            if self.calls == 1
+            else self.repair_body
+        )
+        return {
+            "text": json.dumps(body),
+            "usage": {"input_tokens": 32, "output_tokens": 32},
+            "cost_usd": "0.00001",
+            "latency_ms": 1,
+            "response_id": f"repairing-compact-{self.calls}",
+            "call_class": call_class,
+        }
+
+
 def _passage(evidence_id: str, text: str, *, concept_id: str = "") -> dict[str, Any]:
     return {
         "evidence_id": evidence_id,
@@ -289,6 +313,77 @@ def test_canonical_provider_paraphrase_does_not_require_patch_v2(monkeypatch: An
     assert answer["answer_text"] == answer_text
     assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
     assert "semantic_synthesis_recovery" not in closure
+    assert closure["broad_deterministic_fallback_used"] is False
+
+
+def test_initial_provider_abstention_with_supported_repair_publishes_provider_prose() -> None:
+    from knowledge_engine.m26_aq_semantic_contract import (
+        SemanticRequirement,
+        synthesize_and_verify,
+    )
+
+    question = "Why does durable state matter for an interrupted workflow?"
+    answer_text = (
+        "Durable state lets the workflow preserve progress after interruption while "
+        "later verification still decides whether the result is acceptable."
+    )
+    evidence = [
+        _passage(
+            "ev-state",
+            (
+                "Durable state preserves workflow progress after interruption. "
+                "Completion verification decides whether the final result is acceptable."
+            ),
+        )
+    ]
+    provider = _RepairingCompactProvider(
+        {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": answer_text,
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_SYNTHESIS",
+                    "surface_text": answer_text,
+                    "evidence_labels": ["e1"],
+                    "covers": ["durable_state", "verification_boundary"],
+                }
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+    )
+
+    answer, closure = synthesize_and_verify(
+        question=question,
+        trace_id="trace-supported-repair",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[
+            SemanticRequirement(
+                requirement_id="durable_state",
+                instruction="Explain durable state preservation.",
+                evidence_terms=("durable", "state", "preserves", "progress"),
+                visible_patterns=(),
+            ),
+            SemanticRequirement(
+                requirement_id="verification_boundary",
+                instruction="Explain verification remains separate.",
+                evidence_terms=("verification", "result", "acceptable"),
+                visible_patterns=(),
+            ),
+        ],
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert provider.calls == 2
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_text"] == answer_text
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert answer["multi_evidence_verification"]["repair_result"] == "verified"
+    assert answer["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is False
     assert closure["broad_deterministic_fallback_used"] is False
 
 

@@ -2606,7 +2606,12 @@ def _verify_multi_evidence_provider_output(
                 }
             )
         if (
-            _claim_requires_multi_source(intent_class, claim_role)
+            _claim_requires_multi_source(
+                intent_class=intent_class,
+                claim_role=claim_role,
+                surface_text=surface_text,
+                support_refs=ref_records,
+            )
             and _distinct_source_count(
                 evidence_by_id[str(ref["evidence_id"])] for ref in ref_records
             )
@@ -2695,8 +2700,10 @@ def _verify_multi_evidence_provider_output(
         if exc.code not in {"M26-PA7-ME-038", "M26-PA7-ME-039"}:
             raise
     missing_facets = sorted(required_facets - covered_facets)
-    if missing_facets:
+    if missing_facets and not covered_facets:
         raise _verification_failure("M26-PA7-ME-029", "answer candidate misses required facets")
+    if missing_facets:
+        status = "partial_candidate"
     _verify_question_evidence_relevance(
         question=question,
         intent_class=intent_class,
@@ -3463,13 +3470,33 @@ def _enforce_intent_minimums(
             )
 
 
-def _claim_requires_multi_source(intent_class: str, claim_role: str) -> bool:
-    if claim_role in {"relationship", "temporal"}:
-        return True
-    return intent_class in {
-        "cross_document_comparison",
-        "complementary_synthesis",
-    } and claim_role in {"relationship", "comparison"}
+def _claim_requires_multi_source(
+    *,
+    intent_class: str,
+    claim_role: str,
+    surface_text: str,
+    support_refs: Sequence[Mapping[str, Any]],
+) -> bool:
+    if len(support_refs) >= 2:
+        return False
+    surface_terms = _meaningful_terms(surface_text)
+    multi_premise_terms = {
+        "both",
+        "between",
+        "compare",
+        "comparison",
+        "conflict",
+        "contrast",
+        "different",
+        "relationship",
+        "temporal",
+        "together",
+        "whereas",
+        "while",
+    }
+    if intent_class in {"cross_document_comparison", "complementary_synthesis", "temporal_conflict"}:
+        return bool(surface_terms & multi_premise_terms)
+    return claim_role in {"comparison", "temporal"} and bool(surface_terms & multi_premise_terms)
 
 
 def _claim_type_for_role(claim_role: str) -> str:
@@ -3491,6 +3518,7 @@ def _verified_multi_evidence_answer(
     evidence: Sequence[Mapping[str, Any]],
     calls: Sequence[Mapping[str, Any]],
     repair_attempted: bool,
+    allow_expression_variance: bool = False,
 ) -> dict[str, Any]:
     evidence_by_id = {str(item["evidence_id"]): item for item in evidence}
     provider_status = str(verified.get("provider_status", ""))
@@ -3535,6 +3563,7 @@ def _verified_multi_evidence_answer(
             citations=citations,
             material_claims=verified.get("material_claims", []),
             fallback=fallback_answer,
+            allow_expression_variance=allow_expression_variance,
         )
     except VerifiedAnswerGateError as exc:
         if exc.code not in {
@@ -3608,6 +3637,7 @@ def _verified_natural_answer_text(
     citations: Sequence[Mapping[str, Any]],
     material_claims: Sequence[Mapping[str, Any]],
     fallback: str,
+    allow_expression_variance: bool = False,
 ) -> str:
     answer = str(raw_answer or "").strip()
     if not answer:
@@ -3639,13 +3669,19 @@ def _verified_natural_answer_text(
             raise _verification_failure(
                 "M26-PA7-ME-043", "natural answer citation marker mismatch"
             )
-    _verify_visible_answer_claim_alignment(answer, claims=material_claims)
+    _verify_visible_answer_claim_alignment(
+        answer,
+        claims=material_claims,
+        allow_expression_variance=allow_expression_variance,
+    )
     return answer
 
 
 def _verify_visible_answer_claim_alignment(
     answer_text: str,
     claims: Sequence[Mapping[str, Any]],
+    *,
+    allow_expression_variance: bool = False,
 ) -> None:
     claim_by_id = {str(claim.get("claim_id", "")): claim for claim in claims}
     all_claim_terms: set[str] = set()
@@ -3712,9 +3748,11 @@ def _verify_visible_answer_claim_alignment(
             raise _verification_failure(
                 "M26-PA7-ME-033", "visible answer introduces unsupported number"
             )
-        if sentence_terms & MODALITY_STRENGTHENING_TERMS and not (
-            sentence_terms & MODALITY_STRENGTHENING_TERMS
-        ).issubset(claim_terms):
+        if (
+            not allow_expression_variance
+            and sentence_terms & MODALITY_STRENGTHENING_TERMS
+            and not (sentence_terms & MODALITY_STRENGTHENING_TERMS).issubset(claim_terms)
+        ):
             raise _verification_failure(
                 "M26-PA7-ME-046",
                 "visible answer strengthens modality beyond claim/support",

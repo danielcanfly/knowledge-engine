@@ -393,14 +393,20 @@ def _synthesize_and_verify(
                     continue
                 break
             calls.append(_compact_call_telemetry(raw, parse_ok=True))
-            if parsed["status"] == "abstain":
-                failures.append("PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE")
-                if attempt == 1:
-                    repair_attempted = True
-                    continue
-                break
-
             provider_status = str(parsed["status"])
+            if provider_status == "abstain":
+                failures.append("PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE")
+                provider_has_material = bool(
+                    _parsed_provider_answer_text(parsed).strip()
+                    or _parsed_provider_claims(parsed)
+                )
+                if not provider_has_material:
+                    if attempt == 1:
+                        repair_attempted = True
+                        continue
+                    break
+                provider_status = "partial_candidate"
+
             answer = _normalize_compact_provider_visible_answer(
                 _parsed_provider_answer_text(parsed)
             )
@@ -476,6 +482,7 @@ def _synthesize_and_verify(
                                 evidence=evidence,
                                 calls=calls,
                                 repair_attempted=repair_attempted,
+                                allow_expression_variance=True,
                             )
                         except (legacy.VerifiedAnswerGateError, ValueError, KeyError) as exc:
                             failures.append(str(getattr(exc, "code", type(exc).__name__)))
@@ -539,6 +546,7 @@ def _synthesize_and_verify(
                 evidence=evidence,
                 calls=calls,
                 repair_attempted=repair_attempted,
+                allow_expression_variance=True,
             )
             post_failures = _visible_semantic_failures(
                 str(final_answer.get("answer_text", "")),
@@ -693,14 +701,17 @@ def _compact_provider_payload(
         },
     }
     system = (
-        "Answer only from supplied evidence. Return exactly one compact JSON object with "
+        "Use supplied evidence for Daniel/KB-specific factual claims. Return exactly one compact JSON object with "
         "keys schema_version, status, answer_text, claims, unanswered_dimensions, and "
         "abstention_reason. status is answer, partial, or abstain. Each claim must include "
         "claim_id, claim_type, surface_text, evidence_labels, and covers. Use claim_type "
         "values EVIDENCE_FACT, EVIDENCE_SYNTHESIS, or MODEL_EXPLANATION. answer_text must "
         "be natural prose, not a quote collage. Evidence labels such as e1 or e2 belong only "
-        "in evidence_labels and must not appear in the visible answer text. Address every "
-        "must_state item explicitly. If support is insufficient, abstain."
+        "in evidence_labels and must not appear in the visible answer text. Publish a supported "
+        "partial answer when at least one material dimension is supported, and list unsupported "
+        "dimensions in unanswered_dimensions instead of whole-answer abstaining. Abstain only "
+        "when no material supported answer can be stated or a hard safety boundary applies. "
+        "MODEL_EXPLANATION may be used only for genuinely generic explanation or unsupported-boundary text."
     )
     max_tokens = _compact_provider_output_tokens(
         question=question,
