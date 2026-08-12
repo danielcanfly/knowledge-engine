@@ -1,0 +1,48 @@
+name: TESC CR2 Diagnostic 2
+on:
+  push:
+    branches: [gpt-tesc/cr2-diag-v2]
+permissions:
+  contents: read
+jobs:
+  diag:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gpt-tesc/cr2-diag-v2
+          fetch-depth: 80
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply CR2 and instrument deterministic verifier
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('.github/workflows/tesc-cr2-build.yml').read_text().splitlines()
+          out=[]; inside=False
+          for line in text:
+              if not inside and "python3 - <<'PY'" in line:
+                  inside=True; continue
+              if inside and line.strip()=='PY': break
+              if inside: out.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/apply_cr2.py').write_text('\n'.join(out)+'\n')
+          PY
+          python3 /tmp/apply_cr2.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py')
+          s=p.read_text()
+          fn=s.index('def _deterministic_evidence_synthesis(')
+          end=s.index('\ndef _deterministic_provider_candidate(', fn)
+          chunk=s[fn:end]
+          old='    except VerifiedAnswerGateError:\n        return None'
+          assert old in chunk
+          chunk=chunk.replace(old, '    except VerifiedAnswerGateError as exc:\n        print(f"CR2_DETERMINISTIC_VERIFY_FAIL={exc.code}:{exc.safe_message}")\n        return None',1)
+          p.write_text(s[:fn]+chunk+s[end:])
+          PY
+      - name: Install and run graph case
+        run: |
+          python -m pip install -e '.[dev]' >/dev/null
+          python -m pytest -s tests/test_m26_pa_7_arbitrary_query_runtime.py::test_invalid_complex_multi_evidence_provider_outputs_abstain_after_bounded_repair -k missing_graph_edge
