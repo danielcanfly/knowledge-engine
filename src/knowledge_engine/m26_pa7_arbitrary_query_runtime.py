@@ -193,12 +193,36 @@ DIRECT_FACET_DISPLAY_LABELS = {
 MODALITY_STRENGTHENING_TERMS = {
     "always",
     "cannot",
+    "certain",
+    "certainly",
     "guarantee",
     "guarantees",
     "must",
     "never",
     "requires",
+    "will",
 }
+CAUSALITY_UPGRADE_TERMS = {
+    "cause",
+    "caused",
+    "causes",
+    "causing",
+    "determine",
+    "determines",
+    "determined",
+}
+CAUSALITY_SUPPORT_TERMS = CAUSALITY_UPGRADE_TERMS | {
+    "because",
+    "causal",
+    "causality",
+    "due",
+    "leads",
+    "lead",
+    "results",
+    "result",
+}
+PARTIAL_SCOPE_TERMS = {"some", "several"}
+UNIVERSAL_SCOPE_TERMS = {"all", "each", "every"}
 SYNTHESIS_CONTRADICTION_PHRASES = {
     "equivalent",
     "identical",
@@ -3303,6 +3327,11 @@ def _verify_claim_surface_semantics(
     )
     if unsupported_numbers:
         raise _verification_failure("M26-PA7-ME-033", "claim surface introduces unsupported number")
+    _verify_hard_truth_boundary_mutations(
+        surface_text=surface,
+        support_text=support_text,
+        question=question,
+    )
     strengthened = surface_terms & MODALITY_STRENGTHENING_TERMS
     if (
         strengthened
@@ -3351,6 +3380,11 @@ def _verify_claim_surface_semantics(
                         "M26-PA7-ME-036",
                         "precedes graph edge is nonresponsive without ordering semantics",
                     )
+                _verify_graph_direction_not_reversed(
+                    surface=surface,
+                    edge=edge,
+                    evidence_items=evidence_items,
+                )
 
 
 def _verify_synthesis_premise_binding(
@@ -3372,6 +3406,149 @@ def _verify_synthesis_premise_binding(
             "M26-PA7-ME-052",
             "synthesis citation refs are not bound to contributing premises",
         )
+
+
+def _verify_hard_truth_boundary_mutations(
+    *,
+    surface_text: str,
+    support_text: str,
+    question: str = "",
+) -> None:
+    surface = re.sub(r"\s+", " ", str(surface_text)).strip()
+    support = re.sub(r"\s+", " ", str(support_text)).strip()
+    if not surface or not support:
+        return
+    surface_casefold = surface.casefold()
+    support_casefold = support.casefold()
+    surface_terms = _meaningful_terms(surface)
+    support_terms = _meaningful_terms(support)
+    question_terms = _coverage_terms(question)
+    shared_terms = (surface_terms & support_terms) - _relevance_common_terms()
+
+    causal_upgrade = surface_terms & CAUSALITY_UPGRADE_TERMS
+    if (
+        causal_upgrade
+        and not causal_upgrade.issubset(support_terms | question_terms)
+        and not support_terms & CAUSALITY_SUPPORT_TERMS
+    ):
+        raise _verification_failure(
+            "M26-PA7-ME-053",
+            "claim surface upgrades association or ordering into causality",
+        )
+
+    for number in re.findall(r"\b\d+(?:\.\d+)?\b", surface):
+        if not re.search(rf"\b(?:exactly|precisely)\s+{re.escape(number)}\b", surface_casefold):
+            continue
+        if re.search(
+            rf"\b(?:about|approximately|around|at least|more than|over)\s+{re.escape(number)}\b",
+            support_casefold,
+        ) and not re.search(
+            rf"\b(?:exactly|precisely)\s+{re.escape(number)}\b",
+            support_casefold,
+        ):
+            raise _verification_failure(
+                "M26-PA7-ME-033",
+                "claim surface converts approximate or bounded quantity into exact quantity",
+            )
+
+    if (
+        surface_terms & UNIVERSAL_SCOPE_TERMS
+        and support_terms & PARTIAL_SCOPE_TERMS
+        and not support_terms & UNIVERSAL_SCOPE_TERMS
+    ):
+        raise _verification_failure(
+            "M26-PA7-ME-054",
+            "claim surface expands partial scope into universal scope",
+        )
+
+    support_entities = _hard_boundary_entities(support)
+    surface_entities = _hard_boundary_entities(surface)
+    question_entities = _hard_boundary_entities(question)
+    invented_entities = surface_entities - support_entities - question_entities
+    if invented_entities and support_entities and (shared_terms or len(surface_terms & support_terms) >= 2):
+        raise _verification_failure(
+            "M26-PA7-ME-055",
+            "claim surface swaps or invents a named entity",
+        )
+
+    if (
+        _has_material_negation(surface_casefold) != _has_material_negation(support_casefold)
+        and shared_terms
+        and not _has_non_entailment_boundary(surface_casefold)
+    ):
+        raise _verification_failure(
+            "M26-PA7-ME-056",
+            "claim surface flips factual polarity",
+        )
+
+
+def _hard_boundary_entities(text: str) -> set[str]:
+    normalized = re.sub(r"[_-]+", " ", str(text))
+    entities = {
+        re.sub(r"\s+", " ", item).strip().casefold()
+        for item in re.findall(
+            r"\b(?:[A-Z][A-Za-z0-9]*(?:\s+[A-Z0-9][A-Za-z0-9]*)+|Entity\s+[A-Z0-9]+)\b",
+            normalized,
+        )
+    }
+    return {
+        item
+        for item in entities
+        if item not in {"the", "a", "an"}
+        and not item.startswith(("the ", "a ", "an "))
+    }
+
+
+def _has_material_negation(text_casefold: str) -> bool:
+    text = re.sub(r"\bnot only\b", " ", text_casefold)
+    return bool(
+        re.search(
+            r"\b(?:no|not|never|cannot|can't|does not|doesn't|do not|don't|without)\b",
+            text,
+        )
+    )
+
+
+def _verify_graph_direction_not_reversed(
+    *,
+    surface: str,
+    edge: Mapping[str, Any],
+    evidence_items: Sequence[Mapping[str, Any]],
+) -> None:
+    relation_type = str(edge.get("relation_type", ""))
+    if relation_type != "precedes":
+        return
+    aliases_by_concept: dict[str, set[str]] = {}
+    for item in evidence_items:
+        concept = str(item.get("concept_id") or "")
+        if concept:
+            aliases_by_concept.setdefault(concept, set()).add(_normalized_graph_endpoint(concept))
+            passage = str(item.get("passage_text", ""))
+            for match in re.findall(r"\b[A-Z][A-Za-z0-9]*(?:\s+[A-Z0-9][A-Za-z0-9]*)*\s+Part\s+\d+\b", passage):
+                aliases_by_concept.setdefault(concept, set()).add(
+                    _normalized_graph_endpoint(match)
+                )
+    source_aliases = aliases_by_concept.get(str(edge.get("edge_source")), set())
+    target_aliases = aliases_by_concept.get(str(edge.get("edge_target")), set())
+    surface_normalized = _normalized_graph_endpoint(surface)
+    for target in target_aliases:
+        for source in source_aliases:
+            if not target or not source:
+                continue
+            reversed_pattern = (
+                rf"\b{re.escape(target)}\b.{{0,80}}\bprecedes?\b.{{0,80}}\b"
+                rf"{re.escape(source)}\b"
+            )
+            if re.search(reversed_pattern, surface_normalized):
+                raise _verification_failure(
+                    "M26-PA7-ME-057",
+                    "claim surface reverses graph edge direction",
+                )
+
+
+def _normalized_graph_endpoint(text: str) -> str:
+    normalized = str(text).casefold().replace("_", " ").replace("-", " ")
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 def _verify_model_explanation_surface(*, surface_text: str, answer_text: str) -> None:
@@ -3677,6 +3854,7 @@ def _verify_visible_answer_claim_alignment(
         if anchors or citation_markers:
             claim_terms: set[str] = set()
             claim_numbers: set[str] = set()
+            claim_support_parts: list[str] = []
             cited_claim_ids = set(anchors)
             cited_claim_ids |= {
                 marker.rsplit("_ref_", 1)[0]
@@ -3690,7 +3868,9 @@ def _verify_visible_answer_claim_alignment(
                         "M26-PA7-ME-043", "natural answer citation marker mismatch"
                     )
                 claim_terms |= _coverage_terms(str(claim.get("surface_text", "")))
+                claim_support_parts.append(str(claim.get("surface_text", "")))
                 for ref in _list(claim.get("support_refs", []), "claim support refs"):
+                    claim_support_parts.append(str(ref.get("exact_quote", "")))
                     claim_terms |= _meaningful_terms(str(ref.get("exact_quote", "")))
                     claim_numbers |= set(
                         re.findall(r"\b\d+(?:\.\d+)?\b", str(ref.get("exact_quote", "")))
@@ -3698,6 +3878,15 @@ def _verify_visible_answer_claim_alignment(
         else:
             claim_terms = all_claim_terms
             claim_numbers = all_claim_numbers
+            claim_support_parts = [
+                str(claim.get("surface_text", ""))
+                for claim in claims
+            ]
+            for claim in claims:
+                claim_support_parts.extend(
+                    str(ref.get("exact_quote", ""))
+                    for ref in _list(claim.get("support_refs", []), "claim support refs")
+                )
         if not sentence_terms or len(sentence_terms & claim_terms) < 1:
             raise _verification_failure(
                 "M26-PA7-ME-045", "visible answer sentence is not proposition-bound to claim"
@@ -3719,6 +3908,10 @@ def _verify_visible_answer_claim_alignment(
                 "M26-PA7-ME-046",
                 "visible answer strengthens modality beyond claim/support",
             )
+        _verify_hard_truth_boundary_mutations(
+            surface_text=sentence_visible,
+            support_text=" ".join(claim_support_parts),
+        )
 
 
 def _verified_abstention(

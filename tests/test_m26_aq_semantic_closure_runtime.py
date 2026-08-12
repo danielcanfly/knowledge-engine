@@ -15,9 +15,11 @@ from knowledge_engine.m26_aq_semantic_contract import (
     evaluate_visible_semantics,
 )
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
+    SemanticRequirement,
     _parse_compact_provider_result,
     _requirement_support_failures,
     _response_from_verification,
+    _runtime_bound_candidate,
     _semantic_requirements,
     _synthesize_and_verify,
     _visible_semantic_failures,
@@ -1452,3 +1454,59 @@ def test_positive_answerability_recovery_does_not_override_ood_external_marker()
         )
     ]
     assert not _should_attempt_semantic_recovery(question, verification, closure, evidence)
+
+
+def test_tesc_partial_candidate_keeps_supported_a_and_explicit_unsupported_b_boundary() -> None:
+    question = "Explain durable state and observability for disconnected work."
+    durable = _rich_passage(
+        "durable",
+        "Durable state preserves workflow progress after a client disconnect.",
+        "durable-note",
+    )
+    requirements = [
+        SemanticRequirement(
+            requirement_id="durable_state",
+            instruction="Explain durable state.",
+            evidence_terms=("durable", "state", "progress"),
+            visible_patterns=(r"\bdurable.{0,80}(?:state|progress)",),
+        ),
+        SemanticRequirement(
+            requirement_id="observability",
+            instruction="Explain observability status.",
+            evidence_terms=("observability", "status"),
+            visible_patterns=(r"\bobservability.{0,80}status",),
+        ),
+    ]
+    candidate = _runtime_bound_candidate(
+        answer="Durable state preserves workflow progress after a client disconnect [[claim_1]].",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        used_items=[durable],
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "surface_text": (
+                    "Durable state preserves workflow progress after a client disconnect."
+                ),
+                "evidence_labels": ["e1"],
+                "covers": ["durable_state"],
+            }
+        ],
+        label_map={"e1": durable},
+        snippet_map={"durable": durable["passage_text"]},
+        provider_status="partial",
+        requirements=requirements,
+        unanswered_dimensions=["observability"],
+        semantic_failures=["SEMANTIC_SUPPORT_MISSING:observability"],
+    )
+
+    assert candidate["status"] == "partial_candidate"
+    assert "Durable state preserves workflow progress" in candidate["answer_text"]
+    assert "Unsupported boundary" in candidate["answer_text"]
+    assert "observability" in candidate["answer_text"]
+    assert all(
+        "observability status" not in str(claim.get("surface_text", "")).casefold()
+        for claim in candidate["claims"]
+        if claim.get("claim_type") != "MODEL_EXPLANATION"
+    )

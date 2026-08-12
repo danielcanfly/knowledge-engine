@@ -2131,3 +2131,250 @@ def _direct_semantic_provider_body(
         "missing_facets": [],
         "abstention_reason": None,
     }
+
+
+def _tesc_evidence(
+    text: str,
+    *,
+    evidence_id: str = "ev_tesc",
+    concept_id: str = "entity-a",
+    source_identity: str = "src_tesc",
+) -> dict[str, Any]:
+    return {
+        "evidence_id": evidence_id,
+        "evidence_type": "passage",
+        "locator_id": f"loc_{evidence_id}",
+        "source_id": source_identity,
+        "source_identity": source_identity,
+        "section_id": f"{concept_id}#tesc",
+        "concept_id": concept_id,
+        "artifact_key": "tesc.json",
+        "artifact_sha256": "a" * 64,
+        "release_id": "release",
+        "passage_text": text,
+        "passage_text_sha256": "b" * 64,
+        "provenance_record_sha256": "c" * 64,
+    }
+
+
+def _tesc_provider_text(
+    evidence: list[dict[str, Any]],
+    *,
+    surface_text: str,
+    claim_role: str = "direct",
+    relation: str | None = None,
+    support_refs: list[dict[str, str]] | None = None,
+) -> str:
+    refs = support_refs or [
+        {
+            "evidence_id": evidence[0]["evidence_id"],
+            "locator_id": evidence[0]["locator_id"],
+            "exact_quote": evidence[0]["passage_text"],
+        }
+    ]
+    return json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": relation,
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": f"{surface_text} [[claim_1]].",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "surface_text": surface_text,
+                    "claim_role": claim_role,
+                    "facet_ids": ["direct_answer"],
+                    "support_mode": "exact_quote",
+                    "support_refs": refs,
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+
+def _verify_tesc_claim(
+    *,
+    support_text: str,
+    surface_text: str,
+    question: str = "What does Entity A establish?",
+) -> dict[str, Any]:
+    evidence = [_tesc_evidence(support_text)]
+    return runtime_module._verify_multi_evidence_provider_output(
+        trace_id="tesc_matrix",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=_tesc_provider_text(evidence, surface_text=surface_text),
+    )
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("The router preserves workflow progress.", "The router maintains workflow progress."),
+        ("Graphology stores graph data.", "Graphology keeps graph data."),
+        ("The pipeline has two stages.", "The pipeline has two phases."),
+        ("Workflow stage alpha happens before workflow stage beta.", "Workflow stage alpha precedes workflow stage beta."),
+    ],
+)
+def test_tesc_positive_paraphrases_remain_hard_truth_equivalent(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    verified = _verify_tesc_claim(
+        support_text=support_text,
+        surface_text=surface_text,
+        question="What does the evidence establish?",
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text", "expected_code"),
+    [
+        ("Entity A can preserve workflow progress.", "Entity A will preserve workflow progress.", "M26-PA7-ME-034"),
+        ("Entity A may preserve workflow progress.", "Entity A must preserve workflow progress.", "M26-PA7-ME-034"),
+        (
+            "Entity A usually preserves workflow progress.",
+            "Entity A always preserves workflow progress.",
+            "M26-PA7-ME-034",
+        ),
+        ("Entity A preserves workflow progress.", "Entity A always preserves workflow progress.", "M26-PA7-ME-034"),
+        ("Entity A is likely to preserve workflow progress.", "Entity A is certain to preserve workflow progress.", "M26-PA7-ME-034"),
+        ("Entity A is associated with Entity B in workflow traces.", "Entity A causes Entity B in workflow traces.", "M26-PA7-ME-053"),
+        ("Entity A precedes Entity B in workflow order.", "Entity A causes Entity B in workflow order.", "M26-PA7-ME-053"),
+        ("Entity A is correlated with Entity B in workflow traces.", "Entity A determines Entity B in workflow traces.", "M26-PA7-ME-053"),
+        ("Entity A affects more than 10 workflows.", "Entity A affects exactly 10 workflows.", "M26-PA7-ME-033"),
+        ("Entity A affects about 20 workflows.", "Entity A affects exactly 20 workflows.", "M26-PA7-ME-033"),
+        ("Entity A affects some workflows.", "Entity A affects all workflows.", "M26-PA7-ME-054"),
+        ("Entity A affects at least 2 workflows.", "Entity A affects exactly 2 workflows.", "M26-PA7-ME-033"),
+        ("Entity A stores graph data.", "Entity A does not store graph data.", "M26-PA7-ME-056"),
+        ("Entity A stores graph data.", "Entity B stores graph data.", "M26-PA7-ME-055"),
+        ("Entity A is related to Entity B in graph data.", "Entity A causes Entity B in graph data.", "M26-PA7-ME-053"),
+    ],
+)
+def test_tesc_hard_truth_negative_matrix_rejects_unsupported_mutations(
+    support_text: str,
+    surface_text: str,
+    expected_code: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code == expected_code
+
+
+def test_tesc_visible_answer_modality_is_non_bypassable_after_claim_verification() -> None:
+    claims = [
+        {
+            "claim_id": "claim_1",
+            "surface_text": "The router preserves workflow progress.",
+            "support_refs": [{"exact_quote": "The router preserves workflow progress."}],
+        }
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_visible_answer_claim_alignment(
+            "The router always preserves workflow progress [claim_1_ref_1].",
+            claims=claims,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-046"
+
+
+def test_tesc_precedes_graph_edge_cannot_reverse_direction() -> None:
+    edge = {
+        "evidence_id": "ev_edge",
+        "evidence_type": "graph_edge",
+        "locator_id": "loc_edge",
+        "source_id": "graph",
+        "source_identity": "graph",
+        "section_id": "edge",
+        "concept_id": "part_1",
+        "artifact_key": "graph.json",
+        "artifact_sha256": "d" * 64,
+        "release_id": "release",
+        "passage_text": "Widget Part 1 precedes Widget Part 2 in graph order.",
+        "passage_text_sha256": "e" * 64,
+        "provenance_record_sha256": "f" * 64,
+        "edge_id": "edge_1",
+        "edge_source": "part_1",
+        "edge_target": "part_2",
+        "relation_type": "precedes",
+    }
+    source = _tesc_evidence("Widget Part 1 is the first note.", evidence_id="ev_source", concept_id="part_1")
+    target = _tesc_evidence("Widget Part 2 is the second note.", evidence_id="ev_target", concept_id="part_2")
+    evidence = [edge, source, target]
+    support_refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_graph_reverse",
+            question="What does the graph ordering record between Widget Part 1 and Widget Part 2?",
+            intent_class="graph_relationship",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text="Widget Part 2 precedes Widget Part 1 in graph order.",
+                claim_role="relationship",
+                relation="precedes",
+                support_refs=support_refs,
+            ),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-057"
+
+
+def test_tesc_one_entailing_source_can_support_one_direct_proposition() -> None:
+    verified = _verify_tesc_claim(
+        support_text="Entity A stores graph data.",
+        surface_text="Entity A stores graph data.",
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+def test_tesc_comparison_requires_support_for_both_sides() -> None:
+    evidence = [_tesc_evidence("Entity A stores graph data.")]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_missing_comparison_side",
+            question="Compare Entity A and Entity B.",
+            intent_class="cross_document_comparison",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text="Entity A and Entity B both store graph data.",
+                claim_role="comparison",
+                relation="contrasts_with",
+            ),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-021"
+
+
+def test_tesc_generic_explanation_accepts_generic_but_rejects_kb_fact() -> None:
+    runtime_module._verify_model_explanation_surface(
+        surface_text="In general, explanations provide context and framing.",
+        answer_text="In general, explanations provide context and framing.",
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_model_explanation_surface(
+            surface_text="The source says Entity A stores exactly 10 graph records.",
+            answer_text="The source says Entity A stores exactly 10 graph records.",
+        )
+
+    assert exc.value.code in {"M26-PA7-ME-033", "M26-PA7-ME-050"}
