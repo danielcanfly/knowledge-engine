@@ -1497,6 +1497,8 @@ def _deterministic_relation_surface_text(
 ) -> str:
     quotes = [str(ref.get("exact_quote", "")) for ref in refs if ref.get("exact_quote")]
     joined = " ".join(quotes)
+    if relation and quotes and quotes[0].startswith("Production graph navigation edge "):
+        return quotes[0]
     if relation == "precedes":
         entities = _named_question_entities(question)
         left = entities[0] if len(entities) >= 1 else "the first item"
@@ -2513,6 +2515,7 @@ def _verify_multi_evidence_provider_output(
     intent_class: str,
     evidence: Sequence[Mapping[str, Any]],
     provider_text: str,
+    enforce_completeness: bool = True,
 ) -> dict[str, Any]:
     if _secret_like(provider_text):
         raise _verification_failure("M26-PA7-ME-007", "provider output contains secret-like text")
@@ -2630,7 +2633,12 @@ def _verify_multi_evidence_provider_output(
                 }
             )
         if (
-            _claim_requires_multi_source(intent_class, claim_role)
+            _claim_proposition_requires_multi_source(
+                intent_class=intent_class,
+                claim_role=claim_role,
+                surface_text=surface_text,
+                question=question,
+            )
             and _distinct_source_count(
                 evidence_by_id[str(ref["evidence_id"])] for ref in ref_records
             )
@@ -2723,8 +2731,19 @@ def _verify_multi_evidence_provider_output(
     except VerifiedAnswerGateError as exc:
         if exc.code not in {"M26-PA7-ME-038", "M26-PA7-ME-039"}:
             raise
+    answer_truth_surface = " ".join(
+        [answer_text, *(str(claim.get("surface_text", "")) for claim in claim_records)]
+    )
+    if (
+        _question_requires_non_entailment_boundary(question)
+        and not _has_non_entailment_boundary(answer_truth_surface.casefold())
+    ):
+        raise _verification_failure(
+            "M26-PA7-ME-047",
+            "false-premise precedes answer lacks explicit non-entailment boundary",
+        )
     missing_facets = sorted(required_facets - covered_facets)
-    if missing_facets:
+    if missing_facets and enforce_completeness:
         raise _verification_failure("M26-PA7-ME-029", "answer candidate misses required facets")
     _verify_question_evidence_relevance(
         question=question,
@@ -3260,6 +3279,45 @@ def _infer_covered_facets(
     return required[:1] if support_items else []
 
 
+
+def _proposition_local_support_text(*, surface_text: str, support_text: str) -> str:
+    surface = re.sub(r"\s+", " ", str(surface_text)).strip()
+    support = re.sub(r"\s+", " ", str(support_text)).strip()
+    if not surface or not support:
+        return support
+    surface_terms = _meaningful_terms(surface) - _relevance_common_terms()
+    if len(surface_terms) < 2:
+        return support
+    clauses = [
+        item.strip()
+        for item in re.split(
+            r"(?<=[.!?;])\s+|\b(?:whereas|while|but)\b",
+            support,
+            flags=re.I,
+        )
+        if item.strip()
+    ]
+    if len(clauses) <= 1:
+        return support
+    scored: list[tuple[int, int, str]] = []
+    surface_entities = _hard_boundary_entities(surface)
+    for index, clause in enumerate(clauses):
+        clause_terms = _meaningful_terms(clause) - _relevance_common_terms()
+        overlap = len(surface_terms & clause_terms)
+        entity_overlap = len(surface_entities & _hard_boundary_entities(clause))
+        scored.append((overlap + (2 * entity_overlap), -index, clause))
+    best = max(score for score, _, _ in scored)
+    if best < 2:
+        return support
+    threshold = max(2, best - 1)
+    selected = [
+        clause
+        for score, _, clause in sorted(scored, reverse=True)
+        if score >= threshold
+    ][:2]
+    return " ".join(selected) or support
+
+
 def _verify_claim_surface_semantics(
     *,
     question: str,
@@ -3283,17 +3341,26 @@ def _verify_claim_surface_semantics(
             "generic model explanation must not carry corpus citation refs",
         )
     support_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs)
-    support_terms = _meaningful_terms(support_text)
+    local_support_text = _proposition_local_support_text(
+        surface_text=surface,
+        support_text=support_text,
+    )
+    support_terms = _meaningful_terms(local_support_text)
     surface_terms = _meaningful_terms(surface)
     question_terms = _coverage_terms(question)
     if not support_terms or not surface_terms:
         raise _verification_failure("M26-PA7-ME-031", "claim surface has no support terms")
-    if _question_requires_non_entailment_boundary(question) and not _has_non_entailment_boundary(
-        surface.casefold()
+    if (
+        _question_requires_non_entailment_boundary(question)
+        and re.search(
+            r"\b(?:prove|proves|infer|depends?|dependency|require|requires|causal|cause)\b",
+            surface.casefold(),
+        )
+        and not _has_non_entailment_boundary(surface.casefold())
     ):
         raise _verification_failure(
             "M26-PA7-ME-047",
-            "false-premise precedes question lacks explicit non-entailment boundary",
+            "false-premise precedes claim lacks explicit non-entailment boundary",
         )
     shared_support_terms = surface_terms & support_terms
     shared_question_terms = surface_terms & question_terms
@@ -3409,6 +3476,38 @@ def _named_material_entities(text: str) -> set[str]:
     }
 
 
+
+def _claim_proposition_requires_multi_source(
+    *,
+    intent_class: str,
+    claim_role: str,
+    surface_text: str,
+    question: str,
+) -> bool:
+    if intent_class not in {"cross_document_comparison", "complementary_synthesis"}:
+        return _claim_requires_multi_source(intent_class, claim_role)
+    if claim_role not in {"relationship", "comparison", "temporal"}:
+        return False
+    surface = str(surface_text).casefold()
+    relation_markers = (
+        " whereas ",
+        " while ",
+        " by contrast ",
+        " compared with ",
+        " compared to ",
+        " different from ",
+        " differs from ",
+        " both ",
+        " together ",
+        " complements ",
+    )
+    if any(marker in f" {surface} " for marker in relation_markers):
+        return True
+    question_entities = _named_material_entities(question)
+    surface_entities = _named_material_entities(surface_text)
+    return len(question_entities & surface_entities) >= 2
+
+
 def _single_source_synthesis_has_complete_premise_support(
     *,
     question: str,
@@ -3465,6 +3564,10 @@ def _verify_hard_truth_boundary_mutations(
     support = re.sub(r"\s+", " ", str(support_text)).strip()
     if not surface or not support:
         return
+    support = _proposition_local_support_text(
+        surface_text=surface,
+        support_text=support,
+    )
     surface_casefold = surface.casefold()
     support_casefold = support.casefold()
     surface_terms = _meaningful_terms(surface)

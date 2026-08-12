@@ -459,7 +459,7 @@ def _synthesize_and_verify(
                                 unanswered_dimensions=unanswered_dimensions,
                                 semantic_failures=semantic_failures,
                             )
-                            verified = legacy._verify_multi_evidence_provider_output(
+                            verified = _verify_runtime_bound_candidate(
                                 trace_id=trace_id,
                                 question=question,
                                 intent_class=intent_class,
@@ -522,7 +522,7 @@ def _synthesize_and_verify(
                 unanswered_dimensions=unanswered_dimensions,
                 semantic_failures=[],
             )
-            verified = legacy._verify_multi_evidence_provider_output(
+            verified = _verify_runtime_bound_candidate(
                 trace_id=trace_id,
                 question=question,
                 intent_class=intent_class,
@@ -863,6 +863,88 @@ def _compact_call_telemetry(
     }
 
 
+
+def _claim_surface_terms(text: str) -> set[str]:
+    return legacy._meaningful_terms(str(text)) - legacy._relevance_common_terms()
+
+
+def _infer_claim_support_items(
+    *,
+    surface_text: str,
+    used_items: Sequence[Mapping[str, Any]],
+    limit: int = 2,
+    prefer_distinct_sources: bool = False,
+) -> list[Mapping[str, Any]]:
+    surface_terms = _claim_surface_terms(surface_text)
+    scored: list[tuple[int, int, Mapping[str, Any]]] = []
+    for index, item in enumerate(used_items):
+        passage = str(item.get("passage_text", ""))
+        score = len(surface_terms & _claim_surface_terms(passage))
+        scored.append((score, -index, item))
+    ranked = [item for score, _, item in sorted(scored, reverse=True) if score > 0]
+    if not ranked:
+        ranked = list(used_items)
+    chosen: list[Mapping[str, Any]] = []
+    seen_sources: set[str] = set()
+    if prefer_distinct_sources:
+        for item in ranked:
+            source = legacy._source_identity(item)
+            if source in seen_sources:
+                continue
+            chosen.append(item)
+            seen_sources.add(source)
+            if len(chosen) >= limit:
+                return chosen
+    for item in ranked:
+        if item in chosen:
+            continue
+        chosen.append(item)
+        if len(chosen) >= limit:
+            break
+    return chosen
+
+
+def _claim_local_surface(
+    *,
+    answer: str,
+    support_items: Sequence[Mapping[str, Any]],
+) -> str:
+    sentences = [
+        item.strip()
+        for item in re.split(r"(?<=[.!?])\\s+", str(answer).strip())
+        if item.strip()
+    ]
+    if len(sentences) <= 1:
+        return str(answer).strip()
+    support_terms = _claim_surface_terms(
+        " ".join(str(item.get("passage_text", "")) for item in support_items)
+    )
+    scored = [
+        (len(_claim_surface_terms(sentence) & support_terms), -index, sentence)
+        for index, sentence in enumerate(sentences)
+    ]
+    best_score, _, best_sentence = max(scored)
+    return best_sentence if best_score > 0 else sentences[0]
+
+
+def _model_explanation_is_genuinely_generic(surface_text: str) -> bool:
+    try:
+        legacy._verify_model_explanation_surface(
+            surface_text=surface_text,
+            answer_text=surface_text,
+        )
+    except legacy.VerifiedAnswerGateError:
+        return False
+    return True
+
+
+def _verify_runtime_bound_candidate(**kwargs: Any) -> dict[str, Any]:
+    return legacy._verify_multi_evidence_provider_output(
+        enforce_completeness=False,
+        **kwargs,
+    )
+
+
 def _runtime_bound_candidate(
     *,
     answer: str,
@@ -926,15 +1008,51 @@ def _runtime_bound_candidate(
                 for label in legacy._list(claim.get("used"), "claim used labels")
                 if str(label)
             ]
+        surface_text = str(claim.get("surface_text") or "").strip()
         support_items = [
             label_map[label]
             for label in evidence_labels
             if label in label_map
         ]
+        prefer_distinct = claim_type == "EVIDENCE_SYNTHESIS" or intent_class in {
+            "cross_document_comparison",
+            "complementary_synthesis",
+            "graph_relationship",
+            "temporal_conflict",
+        }
+        if not support_items:
+            support_items = _infer_claim_support_items(
+                surface_text=surface_text or answer,
+                used_items=used_items,
+                limit=2,
+                prefer_distinct_sources=prefer_distinct,
+            )
+        elif prefer_distinct and len(
+            {legacy._source_identity(item) for item in support_items}
+        ) < 2:
+            inferred_items = _infer_claim_support_items(
+                surface_text=surface_text or answer,
+                used_items=used_items,
+                limit=2,
+                prefer_distinct_sources=True,
+            )
+            for item in inferred_items:
+                if item not in support_items:
+                    support_items.append(item)
+                if len({legacy._source_identity(row) for row in support_items}) >= 2:
+                    break
+        if not surface_text:
+            surface_text = _claim_local_surface(
+                answer=answer,
+                support_items=support_items,
+            )
         if claim_type == "MODEL_EXPLANATION":
-            support_items = []
-        elif not support_items:
-            support_items = list(used_items[:1])
+            if _model_explanation_is_genuinely_generic(surface_text):
+                support_items = []
+            elif support_items:
+                claim_type = "EVIDENCE_FACT"
+            else:
+                support_items = []
         refs: list[dict[str, Any]] = []
         for _ref_index, item in enumerate(support_items, start=1):
             evidence_id = str(item.get("evidence_id", ""))
@@ -960,23 +1078,14 @@ def _runtime_bound_candidate(
         facet_ids = list(
             claim.get("covers")
             or claim.get("facet_ids")
-            or legacy._required_facet_ids(
-                question=question,
-                intent_class=intent_class,
-            )
+            or []
         )
-        required_facet_ids = legacy._required_facet_ids(
-            question=question,
-            intent_class=intent_class,
-        )
-        if claim_type == "MODEL_EXPLANATION" and not (set(facet_ids) & set(required_facet_ids)):
-            facet_ids = required_facet_ids
         claim_records.append(
             {
                 "claim_id": claim_id,
                 "claim_type": claim_type,
                 "claim_role": claim_role,
-                "surface_text": str(claim.get("surface_text") or answer).strip(),
+                "surface_text": surface_text,
                 "facet_ids": facet_ids,
                 "support_mode": str(
                     claim.get("support_mode")
@@ -1160,6 +1269,8 @@ def _append_partial_boundary(answer: str, boundary: str) -> str:
 def _infer_claim_role(*, intent_class: str, claim_type: str) -> str:
     if claim_type == "MODEL_EXPLANATION":
         return "model_explanation"
+    if claim_type == "EVIDENCE_FACT":
+        return "direct"
     if intent_class == "cross_document_comparison":
         return "comparison"
     if intent_class == "complementary_synthesis":
