@@ -1,0 +1,106 @@
+name: TESC CR1 Materialize Proven Candidate
+
+on:
+  push:
+    branches: [gpt-tesc/cr1-materializer]
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout materializer controls
+        uses: actions/checkout@v4
+        with:
+          ref: gpt-tesc/cr1-materializer
+          fetch-depth: 1
+          show-progress: false
+      - name: Preserve proven patch applicator
+        run: cp .github/tesc-cr1-apply.py /tmp/tesc-cr1-apply.py
+      - name: Checkout exact Candidate 2 parent
+        uses: actions/checkout@v4
+        with:
+          ref: 422a40e34e11b105e4dc4e7ef64f4b5beedf3270
+          fetch-depth: 50
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply exact previously-proven patch
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "422a40e34e11b105e4dc4e7ef64f4b5beedf3270"
+          python /tmp/tesc-cr1-apply.py
+          git diff --check
+          test "$(git diff --name-only | wc -l | tr -d ' ')" = "1"
+          test "$(git diff --name-only)" = "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
+      - name: Install test dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: Re-prove CR1 locality safety
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from knowledge_engine import m26_pa7_arbitrary_query_runtime as r
+          r._verify_hard_truth_boundary_mutations(
+              surface_text='Durable state preserves workflow progress.',
+              support_text='Durable state preserves workflow progress. Verification does not prove correctness by persistence alone.',
+              question='Why is durable state useful?'
+          )
+          try:
+              r._verify_hard_truth_boundary_mutations(
+                  surface_text='Entity A does not store graph data.',
+                  support_text='Entity A stores graph data.',
+                  question='What does Entity A store?'
+              )
+          except r.VerifiedAnswerGateError as exc:
+              assert exc.code == 'M26-PA7-ME-056', exc.code
+          else:
+              raise AssertionError('true polarity flip was not rejected')
+          assert r._single_source_synthesis_has_complete_premise_support(
+              question='Compare Graphology and Sigma.js.',
+              surface_text='Graphology structures graph data while Sigma.js renders it.',
+              support_refs=[{'exact_quote':'Graphology structures graph data while Sigma.js renders the visualization.'}],
+          )
+          assert not r._single_source_synthesis_has_complete_premise_support(
+              question='Compare Entity A and Entity B.',
+              surface_text='Entity A and Entity B both store graph data.',
+              support_refs=[{'exact_quote':'Entity A stores graph data.'}],
+          )
+          print('CR1_LOCALITY_REPROOF=PASS')
+          PY
+      - name: Re-run exact 238-test AQ regression population
+        run: |
+          set -euo pipefail
+          python -m pytest --showlocals \
+            tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_pa_7_arbitrary_query_runtime.py \
+            tests/test_m26_pa7_ask_api.py \
+            tests/test_m26_pa7_final_web_readiness.py \
+            tests/test_m26_pa_7_corrective_formal_product_readiness.py \
+            tests/test_m26_pa_7_production_promotion_closure.py \
+            tests/test_m26_pa_7_reconciliation.py \
+            tests/test_m26_aq_semantic_closure_runtime.py \
+            tests/test_m26_aq_semantic_runtime_patch_v3.py \
+            tests/test_m26_aq_universal_answerability_patch.py \
+            tests/test_m26_aq_final_universal_recovery_patch.py \
+            tests/test_m26_aq_production_route_final_recovery.py \
+            tests/test_m26_aq_surface_guard.py \
+            tests/test_m26_aq_production_deploy_lock.py \
+            tests/test_m26_aq_production_entrypoint.py \
+            tests/test_m26_aq_final_closure_harness.py \
+            tests/test_m26_aq_simplified_product_contract.py \
+            --junitxml=/tmp/m26-aq-regression.xml
+          python scripts/m26_aq_final_closure.py validate-junit --junit /tmp/m26-aq-regression.xml --minimum 94
+          python -m ruff check src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
+      - name: Commit exact proven production patch
+        run: |
+          set -euo pipefail
+          git config user.name 'TESC CR1 Operator'
+          git config user.email 'huaihsuanbusiness@users.noreply.github.com'
+          git add src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
+          git commit -m 'TESC CR1: make truth verification proposition-local'
+          test "$(git rev-parse HEAD^1)" = "422a40e34e11b105e4dc4e7ef64f4b5beedf3270"
+          git push origin HEAD:refs/heads/gpt-tesc/cr1-verifier-locality
+          echo "CR1_CANDIDATE_SHA=$(git rev-parse HEAD)"
