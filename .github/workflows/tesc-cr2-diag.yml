@@ -1,0 +1,62 @@
+name: TESC CR2 Diagnostic
+
+on:
+  push:
+    branches: [gpt-tesc/cr2-diag-v1]
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gpt-tesc/cr2-diag-v1
+          fetch-depth: 80
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Reapply CR2 patch script from operator workflow
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('.github/workflows/tesc-cr2-build.yml').read_text().splitlines()
+          out=[]; inside=False
+          for line in text:
+              if not inside and "python3 - <<'PY'" in line:
+                  inside=True
+                  continue
+              if inside and line.strip()=='PY':
+                  break
+              if inside:
+                  out.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/apply_cr2.py').write_text('\n'.join(out)+'\n')
+          PY
+          python3 /tmp/apply_cr2.py
+          git diff --check
+      - name: Install
+        run: python -m pip install -e '.[dev]' >/dev/null
+      - name: Print failing response
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tests/test_m26_pa_7_arbitrary_query_runtime.py')
+          s=p.read_text()
+          fn='def test_invalid_complex_multi_evidence_provider_outputs_abstain_after_bounded_repair('
+          start=s.index(fn)
+          end=s.index('\ndef test_claim_surface_must_semantically_align_with_exact_support', start)
+          chunk=s[start:end]
+          needle='    assert response["status"] == "owner_only_cited_answer"'
+          assert needle in chunk
+          chunk=chunk.replace(needle, '    print("CR2_DIAG_RESPONSE=" + json.dumps(response, sort_keys=True))\n'+needle,1)
+          p.write_text(s[:start]+chunk+s[end:])
+          PY
+          python -m pytest -s --showlocals \
+            tests/test_m26_pa_7_arbitrary_query_runtime.py::test_invalid_complex_multi_evidence_provider_outputs_abstain_after_bounded_repair \
+            -k missing_graph_edge
