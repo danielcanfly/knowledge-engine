@@ -1,0 +1,136 @@
+name: TESC Restore Live Baseline
+
+on:
+  push:
+    branches:
+      - gpt-tesc/tesc4-restore-live-baseline
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tesc-restore-live-baseline
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: m23-r3-diagnostic
+    env:
+      CANDIDATE_SHA: 422a40e34e11b105e4dc4e7ef64f4b5beedf3270
+      RESTORE_SHA: 80db9e0215a3f5b3c3b4622a423fce3402e1df76
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+
+    steps:
+      - name: Checkout operator source
+        uses: actions/checkout@v4
+        with:
+          ref: 422a40e34e11b105e4dc4e7ef64f4b5beedf3270
+          fetch-depth: 20
+          show-progress: false
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+
+      - name: Record exact pre-state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/tesc-restore-evidence
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' CANDIDATE_SHA='$CANDIDATE_SHA' bash -se" <<'REMOTE' | tee /tmp/tesc-restore-evidence/pre-state.txt
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          repo_sha="$(git rev-parse HEAD)"
+          container_ids="$(docker compose ps -q knowledge-engine || true)"
+          container_count="$(printf '%s\n' "$container_ids" | sed '/^$/d' | wc -l | tr -d ' ')"
+          test "$container_count" = "1"
+          container_id="$(printf '%s\n' "$container_ids" | sed '/^$/d' | head -n 1)"
+          build_sha="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" | awk -F= '$1 == "M26_QUERY_BUILD_SHA" {print substr($0, index($0, "=") + 1)}' | tail -n 1)"
+          printf 'pre_repo_sha=%s\npre_build_sha=%s\n' "$repo_sha" "$build_sha"
+          test "$repo_sha" = "$CANDIDATE_SHA"
+          test "$build_sha" = "$CANDIDATE_SHA"
+          REMOTE
+
+      - name: Restore exact frozen PR-head runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RESTORE_SHA='$RESTORE_SHA' python3 - <<'PY'
+          import os
+          from pathlib import Path
+          deploy_path = Path(os.environ['DEPLOY_PATH'])
+          restore_sha = os.environ['RESTORE_SHA']
+          env_path = deploy_path / '.env'
+          if not env_path.exists():
+              raise SystemExit('missing .env')
+          lines = env_path.read_text(encoding='utf-8').splitlines()
+          out = []
+          seen = False
+          for line in lines:
+              if line.startswith('M26_QUERY_BUILD_SHA='):
+                  out.append(f'M26_QUERY_BUILD_SHA={restore_sha}')
+                  seen = True
+              else:
+                  out.append(line)
+          if not seen:
+              out.append(f'M26_QUERY_BUILD_SHA={restore_sha}')
+          tmp = env_path.with_suffix('.env.next')
+          tmp.write_text('\n'.join(out) + '\n', encoding='utf-8')
+          tmp.replace(env_path)
+          os.chmod(env_path, 0o600)
+          PY"
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RESTORE_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" | tee /tmp/tesc-restore-evidence/restore-deploy.log
+
+      - name: Verify exact restored runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RESTORE_SHA='$RESTORE_SHA' bash -se" <<'REMOTE' | tee /tmp/tesc-restore-evidence/post-state.txt
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          repo_sha="$(git rev-parse HEAD)"
+          container_ids="$(docker compose ps -q knowledge-engine || true)"
+          container_count="$(printf '%s\n' "$container_ids" | sed '/^$/d' | wc -l | tr -d ' ')"
+          test "$container_count" = "1"
+          container_id="$(printf '%s\n' "$container_ids" | sed '/^$/d' | head -n 1)"
+          build_sha="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" | awk -F= '$1 == "M26_QUERY_BUILD_SHA" {print substr($0, index($0, "=") + 1)}' | tail -n 1)"
+          set -a
+          . ./.env
+          set +a
+          : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
+          : "${KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH:?missing owner hash}"
+          health_file="$(mktemp)"
+          trap 'rm -f "$health_file"' EXIT
+          health_code="$(curl --silent --show-error -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" -o "$health_file" -w '%{http_code}' http://127.0.0.1:8080/api/m26/health)"
+          health_sha="$(python3 - "$health_file" <<'PY'
+          import json, sys
+          from pathlib import Path
+          data=json.loads(Path(sys.argv[1]).read_text())
+          print(data.get('canonical_runtime',{}).get('build_sha',''))
+          PY
+          )"
+          printf 'restored_repo_sha=%s\nrestored_build_sha=%s\nhealth_http=%s\nhealth_build_sha=%s\n' "$repo_sha" "$build_sha" "$health_code" "$health_sha"
+          test "$repo_sha" = "$RESTORE_SHA"
+          test "$build_sha" = "$RESTORE_SHA"
+          test "$health_code" = "200"
+          test "$health_sha" = "$RESTORE_SHA"
+          REMOTE
+
+      - name: Upload restore evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesc-live-restore-80db9e0215a3f5b3c3b4622a423fce3402e1df76
+          path: /tmp/tesc-restore-evidence
+          if-no-files-found: error
+          retention-days: 30
