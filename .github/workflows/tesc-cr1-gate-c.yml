@@ -1,0 +1,240 @@
+name: TESC CR1 Gate C Exact Candidate
+
+on:
+  push:
+    branches: [gpt-tesc/cr1-gate-c-operator-v1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tesc-cr1-gate-c-exact
+  cancel-in-progress: false
+
+jobs:
+  gate_c:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    environment: m23-r3-diagnostic
+    env:
+      CANDIDATE_SHA: 4eda4e87fcff6146e61fb5b5dadcfcd1e5e2c4de
+      BASELINE_SHA: 80db9e0215a3f5b3c3b4622a423fce3402e1df76
+      FROZEN_SOURCE_BLOB: c99cfcf79e4f3d509c28d87398e6c9b4841664d2
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+
+    steps:
+      - name: Checkout exact CR1 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 4eda4e87fcff6146e61fb5b5dadcfcd1e5e2c4de
+          fetch-depth: 50
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify identities and frozen population
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^1)" = "422a40e34e11b105e4dc4e7ef64f4b5beedf3270"
+          observed_blob="$(git ls-tree HEAD pilot/m26/m26-aq-gpt-e-black-box-questions.json | awk '{print $3}')"
+          test "$observed_blob" = "$FROZEN_SOURCE_BLOB"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          q=json.loads(Path('pilot/m26/m26-aq-gpt-e-black-box-questions.json').read_text())['questions']
+          assert len(q)==20
+          assert sum(r.get('expected')=='answer' for r in q)==15
+          assert sum(r.get('expected')=='abstain' for r in q)==5
+          PY
+          test "$(git diff --name-only HEAD^1 HEAD)" = "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
+
+      - name: Re-run exact 238 regression before live deploy
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[dev]' >/dev/null
+          python -m pytest --showlocals \
+            tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_pa_7_arbitrary_query_runtime.py \
+            tests/test_m26_pa7_ask_api.py \
+            tests/test_m26_pa7_final_web_readiness.py \
+            tests/test_m26_pa_7_corrective_formal_product_readiness.py \
+            tests/test_m26_pa_7_production_promotion_closure.py \
+            tests/test_m26_pa_7_reconciliation.py \
+            tests/test_m26_aq_semantic_closure_runtime.py \
+            tests/test_m26_aq_semantic_runtime_patch_v3.py \
+            tests/test_m26_aq_universal_answerability_patch.py \
+            tests/test_m26_aq_final_universal_recovery_patch.py \
+            tests/test_m26_aq_production_route_final_recovery.py \
+            tests/test_m26_aq_surface_guard.py \
+            tests/test_m26_aq_production_deploy_lock.py \
+            tests/test_m26_aq_production_entrypoint.py \
+            tests/test_m26_aq_final_closure_harness.py \
+            tests/test_m26_aq_simplified_product_contract.py \
+            --junitxml=/tmp/m26-aq-regression.xml
+          python scripts/m26_aq_final_closure.py validate-junit --junit /tmp/m26-aq-regression.xml --minimum 94
+          python -m ruff check src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+
+      - name: Record baseline pre-state
+        run: |
+          set -euo pipefail
+          mkdir -m 700 -p /tmp/tesc-cr1-gate-c
+          ssh oracle-knowledge "cd '$ORACLE_VM_DEPLOY_PATH' && printf 'repo=%s\n' \"\$(git rev-parse HEAD)\"" > /tmp/tesc-cr1-gate-c/pre-state.txt
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' >> /tmp/tesc-cr1-gate-c/pre-state.txt
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          ids="$(docker compose ps -q knowledge-engine || true)"
+          id="$(printf '%s\n' "$ids" | sed '/^$/d' | head -n1)"
+          test -n "$id"
+          build="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$id" | awk -F= '$1=="M26_QUERY_BUILD_SHA"{print substr($0,index($0,"=")+1)}' | tail -1)"
+          printf 'build=%s\n' "$build"
+          REMOTE
+
+      - name: Deploy exact CR1 candidate
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$CANDIDATE_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" | tee /tmp/tesc-cr1-gate-c/candidate-deploy.log
+
+      - name: Verify exact candidate runtime
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED='$CANDIDATE_SHA' bash -se" <<'REMOTE' | tee /tmp/tesc-cr1-gate-c/candidate-runtime.txt
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+          ids="$(docker compose ps -q knowledge-engine || true)"
+          test "$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')" = "1"
+          id="$(printf '%s\n' "$ids" | sed '/^$/d' | head -n1)"
+          envv="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$id")"
+          build="$(printf '%s\n' "$envv" | awk -F= '$1=="M26_QUERY_BUILD_SHA"{print substr($0,index($0,"=")+1)}' | tail -1)"
+          token="$(printf '%s\n' "$envv" | awk -F= '$1=="M26_QUERY_BACKEND_TOKEN"{print substr($0,index($0,"=")+1)}' | tail -1)"
+          owner="$(printf '%s\n' "$envv" | awk -F= '$1=="KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"{print substr($0,index($0,"=")+1)}' | tail -1)"
+          test "$build" = "$EXPECTED"
+          test -n "$token"; test -n "$owner"
+          health="$(curl --silent --show-error -H "authorization: Bearer $token" -H "x-m26-owner-subject-hash: $owner" http://127.0.0.1:8080/api/m26/health)"
+          HEALTH="$health" EXPECTED="$EXPECTED" python3 - <<'PY'
+          import json, os
+          d=json.loads(os.environ['HEALTH'])
+          assert d.get('canonical_runtime',{}).get('build_sha')==os.environ['EXPECTED'], d
+          print('CR1_RUNTIME_IDENTITY=PASS')
+          PY
+          printf 'repo=%s\nbuild=%s\n' "$(git rev-parse HEAD)" "$build"
+          REMOTE
+
+      - name: Collect frozen Gate C exactly three times
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' CANDIDATE_SHA='$CANDIDATE_SHA' FROZEN_SOURCE_BLOB='$FROZEN_SOURCE_BLOB' bash -se" <<'REMOTE'
+          set -euo pipefail
+          lock_file="/tmp/knowledge-engine-production-oracle.lock"
+          exec 9>"$lock_file"
+          flock -x 9
+          cd "$DEPLOY_PATH"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git ls-tree HEAD pilot/m26/m26-aq-gpt-e-black-box-questions.json | awk '{print $3}')" = "$FROZEN_SOURCE_BLOB"
+          ids="$(docker compose ps -q knowledge-engine || true)"
+          id="$(printf '%s\n' "$ids" | sed '/^$/d' | head -n1)"
+          envv="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$id")"
+          runtime_sha="$(printf '%s\n' "$envv" | awk -F= '$1=="M26_QUERY_BUILD_SHA"{print substr($0,index($0,"=")+1)}' | tail -1)"
+          export M26_QUERY_BACKEND_TOKEN="$(printf '%s\n' "$envv" | awk -F= '$1=="M26_QUERY_BACKEND_TOKEN"{print substr($0,index($0,"=")+1)}' | tail -1)"
+          export KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH="$(printf '%s\n' "$envv" | awk -F= '$1=="KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"{print substr($0,index($0,"=")+1)}' | tail -1)"
+          test "$runtime_sha" = "$CANDIDATE_SHA"
+          evidence_dir="/tmp/tesc-cr1-gate-c-$CANDIDATE_SHA"
+          rm -rf "$evidence_dir"
+          mkdir -m 700 -p "$evidence_dir"
+          python3 -m venv "$evidence_dir/venv"
+          . "$evidence_dir/venv/bin/activate"
+          python -m pip install -e . >/dev/null
+          for run_index in 1 2 3; do
+            output="$evidence_dir/gate-c-run-${run_index}.json"
+            PYTHONPATH=src python3 scripts/m26_aq_final_closure.py collect \
+              --questions pilot/m26/m26-aq-gpt-e-black-box-questions.json \
+              --output "$output" --expected-sha "$CANDIDATE_SHA"
+            RUN_PATH="$output" EXPECTED="$CANDIDATE_SHA" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path(os.environ['RUN_PATH']).read_text())
+          assert len(d.get('rows',[]))==20
+          assert len(d.get('collection',{}).get('completed_case_ids',[]))==20
+          assert d.get('collection',{}).get('failure') in (None,{})
+          assert d.get('expected_deploy_sha')==os.environ['EXPECTED']
+          assert d.get('health',{}).get('build_sha')==os.environ['EXPECTED']
+          for r in d['rows']:
+              assert int(r.get('collector',{}).get('attempts',0))==1, r.get('case_id')
+          PY
+          done
+          printf '%s\n' "$CANDIDATE_SHA" > "$evidence_dir/candidate-sha.txt"
+          printf '%s\n' "$runtime_sha" > "$evidence_dir/runtime-sha.txt"
+          printf '%s\n' "$FROZEN_SOURCE_BLOB" > "$evidence_dir/frozen-source-blob.txt"
+          sha256sum "$evidence_dir"/gate-c-run-*.json > "$evidence_dir/SHA256SUMS"
+          REMOTE
+          for f in gate-c-run-1.json gate-c-run-2.json gate-c-run-3.json candidate-sha.txt runtime-sha.txt frozen-source-blob.txt SHA256SUMS; do
+            scp oracle-knowledge:"/tmp/tesc-cr1-gate-c-$CANDIDATE_SHA/$f" "/tmp/tesc-cr1-gate-c/$f"
+          done
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('/tmp/tesc-cr1-gate-c')
+          for i in (1,2,3):
+              assert len(json.loads((root/f'gate-c-run-{i}.json').read_text())['rows'])==20
+          print('CR1_GATE_C_RAW_COLLECTION_COMPLETE=60')
+          PY
+
+      - name: Restore exact frozen baseline
+        if: always()
+        run: |
+          set +e
+          if ssh -o BatchMode=yes oracle-knowledge true >/dev/null 2>&1; then
+            ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$BASELINE_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" > /tmp/tesc-cr1-gate-c/baseline-restore.log 2>&1
+            restore_rc=$?
+            cat /tmp/tesc-cr1-gate-c/baseline-restore.log
+            exit $restore_rc
+          fi
+          exit 1
+
+      - name: Verify exact restored baseline
+        if: always()
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED='$BASELINE_SHA' bash -se" <<'REMOTE' | tee /tmp/tesc-cr1-gate-c/restored-runtime.txt
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+          ids="$(docker compose ps -q knowledge-engine || true)"
+          id="$(printf '%s\n' "$ids" | sed '/^$/d' | head -n1)"
+          envv="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$id")"
+          build="$(printf '%s\n' "$envv" | awk -F= '$1=="M26_QUERY_BUILD_SHA"{print substr($0,index($0,"=")+1)}' | tail -1)"
+          token="$(printf '%s\n' "$envv" | awk -F= '$1=="M26_QUERY_BACKEND_TOKEN"{print substr($0,index($0,"=")+1)}' | tail -1)"
+          owner="$(printf '%s\n' "$envv" | awk -F= '$1=="KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"{print substr($0,index($0,"=")+1)}' | tail -1)"
+          test "$build" = "$EXPECTED"
+          health="$(curl --silent --show-error -H "authorization: Bearer $token" -H "x-m26-owner-subject-hash: $owner" http://127.0.0.1:8080/api/m26/health)"
+          HEALTH="$health" EXPECTED="$EXPECTED" python3 - <<'PY'
+          import json, os
+          d=json.loads(os.environ['HEALTH'])
+          assert d.get('canonical_runtime',{}).get('build_sha')==os.environ['EXPECTED'], d
+          print('CR1_BASELINE_RESTORE=PASS')
+          PY
+          printf 'repo=%s\nbuild=%s\n' "$(git rev-parse HEAD)" "$build"
+          REMOTE
+
+      - name: Upload CR1 Gate C evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesc-cr1-gate-c-4eda4e87fcff6146e61fb5b5dadcfcd1e5e2c4de
+          path: /tmp/tesc-cr1-gate-c
+          if-no-files-found: warn
+          retention-days: 30
