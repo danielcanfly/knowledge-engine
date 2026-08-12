@@ -2636,8 +2636,13 @@ def _verify_multi_evidence_provider_output(
             )
             < 2
             and not is_model_explanation
+            and not _single_source_synthesis_has_complete_premise_support(
+                question=question,
+                surface_text=surface_text,
+                support_refs=ref_records,
+            )
         ):
-            raise _verification_failure("M26-PA7-ME-021", "relational claim lacks two sources")
+            raise _verification_failure("M26-PA7-ME-021", "relational claim lacks complete premise support")
         if not surface_text:
             surface_text = " ".join(str(ref["exact_quote"]) for ref in ref_records)
         _verify_claim_surface_semantics(
@@ -3387,6 +3392,48 @@ def _verify_claim_surface_semantics(
                 )
 
 
+
+def _named_material_entities(text: str) -> set[str]:
+    value = str(text)
+    entities = {
+        item.casefold()
+        for item in re.findall(
+            r"\bEntity\s+[A-Z0-9]+\b|\b[A-Z][A-Za-z0-9.]*\s+Part\s+\d+\b|\b[A-Z][A-Za-z0-9.]{2,}\b",
+            value,
+        )
+    }
+    return {
+        item
+        for item in entities
+        if item not in {"compare", "explain", "what", "when", "which", "does", "why", "how", "the", "for", "if", "answer"}
+    }
+
+
+def _single_source_synthesis_has_complete_premise_support(
+    *,
+    question: str,
+    surface_text: str,
+    support_refs: Sequence[Mapping[str, Any]],
+) -> bool:
+    if not support_refs:
+        return False
+    support_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs).strip()
+    surface = str(surface_text).strip()
+    if not support_text or not surface:
+        return False
+    required_named = _named_material_entities(surface) & _named_material_entities(question)
+    supported_named = _named_material_entities(support_text)
+    if required_named and not required_named.issubset(supported_named):
+        return False
+    surface_terms = _meaningful_terms(surface) - _relevance_common_terms()
+    support_terms = _meaningful_terms(support_text) - _relevance_common_terms()
+    if not surface_terms or not support_terms:
+        return False
+    shared = surface_terms & support_terms
+    minimum = max(2, min(4, math.ceil(len(surface_terms) * 0.40)))
+    return len(shared) >= minimum
+
+
 def _verify_synthesis_premise_binding(
     *,
     surface_terms: set[str],
@@ -3471,8 +3518,10 @@ def _verify_hard_truth_boundary_mutations(
             "claim surface swaps or invents a named entity",
         )
 
+    surface_negated = _negation_applies_to_shared_proposition(surface, shared_terms)
+    support_negated = _negation_applies_to_shared_proposition(support, shared_terms)
     if (
-        _has_material_negation(surface_casefold) != _has_material_negation(support_casefold)
+        surface_negated != support_negated
         and shared_terms
         and not _has_non_entailment_boundary(surface_casefold)
     ):
@@ -3480,6 +3529,21 @@ def _verify_hard_truth_boundary_mutations(
             "M26-PA7-ME-056",
             "claim surface flips factual polarity",
         )
+
+
+
+def _negation_applies_to_shared_proposition(text: str, shared_terms: set[str]) -> bool:
+    if not shared_terms:
+        return False
+    threshold = max(1, math.ceil(len(shared_terms) * 0.50))
+    clauses = re.split(r"[.!?;]+|\b(?:but|whereas|while)\b", str(text), flags=re.I)
+    for clause in clauses:
+        if not _has_material_negation(clause.casefold()):
+            continue
+        clause_terms = _meaningful_terms(clause) - _relevance_common_terms()
+        if len(clause_terms & shared_terms) >= threshold:
+            return True
+    return False
 
 
 def _hard_boundary_entities(text: str) -> set[str]:
