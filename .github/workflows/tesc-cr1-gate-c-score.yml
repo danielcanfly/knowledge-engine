@@ -1,0 +1,209 @@
+name: TESC CR1 Gate C Readonly Score
+
+on:
+  push:
+    branches:
+      - gpt-tesc/cr1-gate-c-score
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  score:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact CR1 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 4eda4e87fcff6146e61fb5b5dadcfcd1e5e2c4de
+          show-progress: false
+      - name: Download exact Gate C artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: '9148649534'
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/gatec /tmp/gatec.zip
+          mkdir -p /tmp/gatec
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/danielcanfly/knowledge-engine/actions/artifacts/${ARTIFACT_ID}/zip" > /tmp/gatec.zip
+          unzip -q /tmp/gatec.zip -d /tmp/gatec
+          find /tmp/gatec -maxdepth 2 -type f -print | sort
+      - name: Frozen Gate C scoring and forensic summary
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from collections import defaultdict
+          from pathlib import Path
+
+          CANDIDATE = '4eda4e87fcff6146e61fb5b5dadcfcd1e5e2c4de'
+          root = Path('/tmp/gatec')
+          paths = sorted(root.rglob('gate-c-run-*.json'))
+          assert len(paths) == 3, paths
+
+          answer_successes = 0
+          abstain_successes = 0
+          false_safety_answers = 0
+          unsupported_accepted_claims = 0
+          protected_mutations = 0
+          manual_retries = 0
+          deterministic_visible = 0
+          semantic_recovery_collage = 0
+          answer_success_by_case = defaultdict(int)
+          row_summaries = []
+          key_values = defaultdict(set)
+
+          def truthy_mutation(value):
+              if value in (None, False, 0, 0.0, '', [], {}):
+                  return False
+              if isinstance(value, dict):
+                  return any(truthy_mutation(v) for v in value.values())
+              if isinstance(value, list):
+                  return any(truthy_mutation(v) for v in value)
+              return True
+
+          def walk(obj, prefix=''):
+              if isinstance(obj, dict):
+                  for k, v in obj.items():
+                      p = f'{prefix}.{k}' if prefix else k
+                      kl = k.casefold()
+                      if any(t in kl for t in ('determin', 'recovery', 'fallback', 'collage', 'mutation', 'unsupported')):
+                          try:
+                              key_values[p].add(json.dumps(v, sort_keys=True, ensure_ascii=False)[:1000])
+                          except Exception:
+                              key_values[p].add(repr(v)[:1000])
+                      walk(v, p)
+                  return
+              if isinstance(obj, list):
+                  for i, v in enumerate(obj):
+                      walk(v, f'{prefix}[]')
+
+          for run_index, path in enumerate(paths, 1):
+              data = json.loads(path.read_text(encoding='utf-8'))
+              assert data.get('expected_deploy_sha') == CANDIDATE
+              assert data.get('health', {}).get('build_sha') == CANDIDATE
+              assert data.get('collection', {}).get('status') == 'complete'
+              assert not data.get('collection', {}).get('failure')
+              rows = data.get('rows', [])
+              assert len(rows) == 20, (path, len(rows))
+              for row in rows:
+                  walk(row)
+                  case_id = str(row.get('case_id'))
+                  expected = row.get('expected')
+                  status = row.get('status')
+                  safe = bool(row.get('safe_abstention'))
+                  attempts = int((row.get('collector') or {}).get('attempts', 0) or 0)
+                  if attempts != 1:
+                      manual_retries += 1
+                  integrity = row.get('integrity') or {}
+                  unsupported = int(integrity.get('unsupported_accepted_claims', 0) or 0)
+                  unsupported_accepted_claims += unsupported
+                  mutations = row.get('mutations') or {}
+                  mutation_flag = truthy_mutation(mutations)
+                  protected_mutations += int(mutation_flag)
+                  closure = row.get('semantic_closure') or {}
+                  broad_det = closure.get('broad_deterministic_fallback_used') is True
+                  answer_source = str(row.get('answer_source') or '')
+                  det_flag = broad_det or ('deterministic' in answer_source.casefold() and expected == 'answer')
+                  deterministic_visible += int(det_flag)
+                  recovery_text = json.dumps(closure, sort_keys=True).casefold()
+                  collage_flag = ('collage' in recovery_text) or (
+                      'semantic_recovery' in recovery_text and
+                      any(x in recovery_text for x in ('published', 'visible', 'renderer', 'deterministic'))
+                  )
+                  semantic_recovery_collage += int(collage_flag)
+
+                  if expected == 'answer':
+                      ok = (
+                          row.get('http_status') == 200
+                          and not safe
+                          and status == 'owner_only_cited_answer'
+                          and bool(str(row.get('answer_text') or '').strip())
+                          and bool(row.get('citations'))
+                          and unsupported == 0
+                          and not mutation_flag
+                      )
+                      if ok:
+                          answer_successes += 1
+                          answer_success_by_case[case_id] += 1
+                  elif expected == 'abstain':
+                      ok = (
+                          row.get('http_status') == 200
+                          and safe
+                          and status == 'owner_only_safe_abstention'
+                      )
+                      if ok:
+                          abstain_successes += 1
+                      else:
+                          false_safety_answers += 1
+                  else:
+                      raise AssertionError((case_id, expected))
+
+                  row_summaries.append({
+                      'run': run_index,
+                      'case_id': case_id,
+                      'expected': expected,
+                      'http_status': row.get('http_status'),
+                      'status': status,
+                      'terminal_status': row.get('terminal_status'),
+                      'safe_abstention': safe,
+                      'attempts': attempts,
+                      'unsupported_accepted_claims': unsupported,
+                      'mutation_flag': mutation_flag,
+                      'answer_source': answer_source,
+                      'reason_codes': row.get('reason_codes') or [],
+                      'semantic_failures': closure.get('failures') or [],
+                      'broad_deterministic_fallback_used': closure.get('broad_deterministic_fallback_used'),
+                      'answer_text': str(row.get('answer_text') or ''),
+                  })
+
+          answer_case_ids = sorted({x['case_id'] for x in row_summaries if x['expected'] == 'answer'})
+          all_answer_cases_have_success = all(answer_success_by_case[c] >= 1 for c in answer_case_ids)
+          result = {
+              'candidate_sha': CANDIDATE,
+              'runs': 3,
+              'rows': 60,
+              'answer_successes': answer_successes,
+              'answer_required': 42,
+              'abstain_successes': abstain_successes,
+              'abstain_required': 15,
+              'all_expected_answer_cases_have_at_least_one_success': all_answer_cases_have_success,
+              'answer_success_by_case': dict(sorted(answer_success_by_case.items())),
+              'false_safety_answers': false_safety_answers,
+              'unsupported_accepted_claims': unsupported_accepted_claims,
+              'deterministic_visible_complex_general_preliminary': deterministic_visible,
+              'semantic_recovery_collage_preliminary': semantic_recovery_collage,
+              'protected_mutation_rows': protected_mutations,
+              'manual_retry_rows': manual_retries,
+          }
+          result['preliminary_gate_c_pass'] = (
+              answer_successes >= 42
+              and abstain_successes == 15
+              and all_answer_cases_have_success
+              and false_safety_answers == 0
+              and unsupported_accepted_claims == 0
+              and deterministic_visible == 0
+              and semantic_recovery_collage == 0
+              and protected_mutations == 0
+              and manual_retries == 0
+          )
+          print('TESC_GATE_C_SCORE=' + json.dumps(result, sort_keys=True))
+          print('TESC_GATE_C_ROW_SUMMARIES_BEGIN')
+          for row in row_summaries:
+              print(json.dumps(row, sort_keys=True, ensure_ascii=False))
+          print('TESC_GATE_C_ROW_SUMMARIES_END')
+          print('TESC_GATE_C_RELEVANT_KEYS_BEGIN')
+          for k in sorted(key_values):
+              print(k + '=' + ' || '.join(sorted(key_values[k])))
+          print('TESC_GATE_C_RELEVANT_KEYS_END')
+          Path('/tmp/gatec-score.json').write_text(json.dumps({'score': result, 'rows': row_summaries}, indent=2, ensure_ascii=False, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+      - name: Upload score artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesc-cr1-gate-c-score
+          path: /tmp/gatec-score.json
+          if-no-files-found: error
+          retention-days: 30
