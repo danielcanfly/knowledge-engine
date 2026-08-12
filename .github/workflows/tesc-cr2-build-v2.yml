@@ -1,0 +1,142 @@
+name: TESC CR2 Build v2
+
+on:
+  push:
+    branches: [gpt-tesc/cr2-build-operator-v2]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tesc-cr2-build-v2
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      BASE_SHA: 4eda4e87fcff6146e61fb5b5dadcfcd1e5e2c4de
+      CANDIDATE_BRANCH: gpt-tesc/cr2-proposition-local-v2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gpt-tesc/cr2-build-operator-v2
+          fetch-depth: 100
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Reset production files to CR1 and apply CR2 v2
+        run: |
+          set -euo pipefail
+          git checkout "$BASE_SHA" -- \
+            src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py \
+            src/knowledge_engine/m26_pa7_semantic_closure_runtime.py
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('.github/workflows/tesc-cr2-build.yml').read_text().splitlines()
+          out=[]; inside=False
+          for line in text:
+              if not inside and "python3 - <<'PY'" in line:
+                  inside=True; continue
+              if inside and line.strip()=='PY': break
+              if inside: out.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/apply_cr2.py').write_text('\n'.join(out)+'\n')
+          PY
+          python3 /tmp/apply_cr2.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py')
+          s=p.read_text()
+          old='''    if relation == "precedes":
+                  entities = _named_question_entities(question)'''
+          assert s.count(old)==1, s.count(old)
+          new='''    if relation and quotes and quotes[0].startswith("Production graph navigation edge "):
+                  return quotes[0]
+              if relation == "precedes":
+                  entities = _named_question_entities(question)'''
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+          git diff --check
+          test "$(git diff --name-only | grep '^src/' | sort)" = $'src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py\nsrc/knowledge_engine/m26_pa7_semantic_closure_runtime.py'
+      - name: Install and focused integrity probes
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[dev]' >/dev/null
+          python - <<'PY'
+          from knowledge_engine import m26_pa7_arbitrary_query_runtime as r
+          r._verify_hard_truth_boundary_mutations(
+              surface_text='The router preserves workflow progress.',
+              support_text='The router preserves workflow progress. A separate fallback does not preserve an abandoned temporary buffer.',
+              question='What does the router preserve?',
+          )
+          try:
+              r._verify_hard_truth_boundary_mutations(
+                  surface_text='Entity A does not store graph data.',
+                  support_text='Entity A stores graph data.',
+                  question='What does Entity A store?',
+              )
+          except r.VerifiedAnswerGateError as exc:
+              assert exc.code=='M26-PA7-ME-056', exc.code
+          else:
+              raise AssertionError('polarity mutation escaped')
+          surface=r._deterministic_relation_surface_text(
+              question='What graph relationship connects harness and headless harness service?',
+              relation='related_to',
+              refs=[
+                  {'exact_quote':'Production graph navigation edge e1 states a related_to b with confidence 0.9 and review approved.'},
+                  {'exact_quote':'Endpoint A requires a separate unrelated control.'},
+                  {'exact_quote':'Endpoint B describes service behavior.'},
+              ],
+          )
+          assert surface.startswith('Production graph navigation edge e1 states a related_to b')
+          assert 'requires' not in surface
+          print('CR2_V2_FOCUSED_PROBES=PASS')
+          PY
+      - name: Exact 238 regression and lint
+        run: |
+          set -euo pipefail
+          python -m pytest --showlocals \
+            tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_pa_7_arbitrary_query_runtime.py \
+            tests/test_m26_pa7_ask_api.py \
+            tests/test_m26_pa7_final_web_readiness.py \
+            tests/test_m26_pa_7_corrective_formal_product_readiness.py \
+            tests/test_m26_pa_7_production_promotion_closure.py \
+            tests/test_m26_pa_7_reconciliation.py \
+            tests/test_m26_aq_semantic_closure_runtime.py \
+            tests/test_m26_aq_semantic_runtime_patch_v3.py \
+            tests/test_m26_aq_universal_answerability_patch.py \
+            tests/test_m26_aq_final_universal_recovery_patch.py \
+            tests/test_m26_aq_production_route_final_recovery.py \
+            tests/test_m26_aq_surface_guard.py \
+            tests/test_m26_aq_production_deploy_lock.py \
+            tests/test_m26_aq_production_entrypoint.py \
+            tests/test_m26_aq_final_closure_harness.py \
+            tests/test_m26_aq_simplified_product_contract.py \
+            --junitxml=/tmp/cr2v2-regression.xml
+          python scripts/m26_aq_final_closure.py validate-junit --junit /tmp/cr2v2-regression.xml --minimum 94
+          python -m ruff check \
+            src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py \
+            src/knowledge_engine/m26_pa7_semantic_closure_runtime.py
+      - name: Materialize exact clean candidate
+        run: |
+          set -euo pipefail
+          git diff -- \
+            src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py \
+            src/knowledge_engine/m26_pa7_semantic_closure_runtime.py > /tmp/cr2v2.patch
+          test -s /tmp/cr2v2.patch
+          git reset --hard
+          git config user.name 'tesc-cr2-operator'
+          git config user.email 'tesc-cr2-operator@users.noreply.github.com'
+          git switch -c "$CANDIDATE_BRANCH" "$BASE_SHA"
+          git apply /tmp/cr2v2.patch
+          git diff --check
+          test "$(git diff --name-only | sort)" = $'src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py\nsrc/knowledge_engine/m26_pa7_semantic_closure_runtime.py'
+          git add src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py src/knowledge_engine/m26_pa7_semantic_closure_runtime.py
+          git commit -m 'TESC CR2: localize truth checks and graph relation surface'
+          test "$(git rev-parse HEAD^1)" = "$BASE_SHA"
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          echo "CR2_V2_CANDIDATE_SHA=$(git rev-parse HEAD)"
