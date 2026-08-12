@@ -1,0 +1,46 @@
+name: TESC CR1 Gate C Readonly Forensics
+
+on:
+  push:
+    branches:
+      - gpt-tesc/cr1-gate-c-forensics
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 4eda4e87fcff6146e61fb5b5dadcfcd1e5e2c4de
+          show-progress: false
+      - name: Download exact Gate C artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: '9148649534'
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/gatec /tmp/gatec.zip
+          mkdir -p /tmp/gatec
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/danielcanfly/knowledge-engine/actions/artifacts/${ARTIFACT_ID}/zip" > /tmp/gatec.zip
+          unzip -q /tmp/gatec.zip -d /tmp/gatec
+      - name: Print representative raw failing rows
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path('/tmp/gatec/gate-c-run-1.json').read_text(encoding='utf-8'))
+          wanted = {'GPT-E-BB01','GPT-E-BB03','GPT-E-BB04','GPT-E-BB05','GPT-E-BB06','GPT-E-BB12','GPT-E-BB16','GPT-E-BB19'}
+          for row in data['rows']:
+              if row.get('case_id') not in wanted:
+                  continue
+              print('===CASE ' + row['case_id'] + '===')
+              print(json.dumps(row, indent=2, ensure_ascii=False, sort_keys=True))
+              print('===ENDCASE ' + row['case_id'] + '===')
+          PY
