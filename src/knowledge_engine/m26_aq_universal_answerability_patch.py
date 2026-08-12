@@ -346,7 +346,7 @@ def _evidence_bound_recovery_candidate(
         "relation": relation,
         "selected_evidence_ids": list(dict.fromkeys(selected_ids)),
         "answer_text": " ".join(
-            f"{claim['surface_text']} [[{claim['claim_id']}]]." for claim in claims
+            f"{claim['surface_text'].rstrip('.!?')} [[{claim['claim_id']}]]." for claim in claims
         ),
         "claims": claims,
         "missing_facets": [],
