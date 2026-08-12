@@ -1,0 +1,469 @@
+name: TESC CR3 Build Sentence-Local Verification
+
+on:
+  push:
+    branches: [gpt-tesc/cr3-build-operator-v1]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tesc-cr3-build-v1
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      BASE_SHA: 5becaa429ad3c1030a498bc78b41e5684a88ea58
+      CANDIDATE_BRANCH: gpt-tesc/cr3-sentence-local-v1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5becaa429ad3c1030a498bc78b41e5684a88ea58
+          fetch-depth: 100
+          show-progress: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Apply generalized CR3 verifier adapter
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          arb = Path('src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py')
+          sem = Path('src/knowledge_engine/m26_pa7_semantic_closure_runtime.py')
+          a = arb.read_text()
+          s = sem.read_text()
+
+          old = '''    best = max(score for score, _, _ in scored)
+              if best < 2:
+                  return support
+              threshold = max(2, best - 1)
+              selected = [
+                  clause
+                  for score, _, clause in sorted(scored, reverse=True)
+                  if score >= threshold
+              ][:2]
+              return " ".join(selected) or support'''
+          new = '''    best_score, _best_order, best_clause = max(scored)
+              if best_score < 2:
+                  return support
+              return best_clause'''
+          assert a.count(old) == 1, a.count(old)
+          a = a.replace(old, new)
+
+          start = s.index('def _runtime_bound_candidate(\n')
+          end = s.index('\ndef _parsed_provider_answer_text(', start)
+          replacement = r'''def _verification_units(answer: str) -> list[str]:
+              text = re.sub(r"\r\n?", "\n", str(answer)).strip()
+              if not text:
+                  return []
+              raw_units = re.split(r"(?<=[.!?])\s+|\n+|;\s+", text)
+              units: list[str] = []
+              for raw in raw_units:
+                  unit = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", raw).strip()
+                  if not unit:
+                      continue
+                  if len(unit) > 1_180:
+                      unit = unit[:1_180].rstrip()
+                  units.append(unit)
+                  if len(units) >= 10:
+                      break
+              return units or [text[:1_180]]
+
+
+          def _local_exact_quote(
+              *,
+              surface_text: str,
+              item: Mapping[str, Any],
+              max_chars: int = 240,
+          ) -> str:
+              passage = str(item.get("passage_text", ""))
+              if not passage:
+                  return ""
+              surface_terms = _claim_surface_terms(surface_text)
+              surface_entities = legacy._hard_boundary_entities(surface_text)
+              clauses = [
+                  clause.strip()
+                  for clause in re.split(r"(?<=[.!?;])\s+|\n+", passage)
+                  if clause.strip()
+              ]
+              scored: list[tuple[int, int, str]] = []
+              for index, clause in enumerate(clauses):
+                  clause_terms = _claim_surface_terms(clause)
+                  overlap = len(surface_terms & clause_terms)
+                  entity_overlap = len(
+                      surface_entities & legacy._hard_boundary_entities(clause)
+                  )
+                  scored.append((overlap + (2 * entity_overlap), -index, clause))
+              if scored:
+                  score, _order, clause = max(scored)
+                  if score > 0:
+                      return clause[:max_chars].rstrip()
+              return legacy._first_exact_evidence_quote(passage, max_chars=max_chars)
+
+
+          def _provider_hint_items(
+              *,
+              unit: str,
+              claims: Sequence[Mapping[str, Any]],
+              label_map: Mapping[str, Mapping[str, Any]],
+          ) -> list[Mapping[str, Any]]:
+              unit_terms = _claim_surface_terms(unit)
+              ranked: list[tuple[int, int, Mapping[str, Any]]] = []
+              ordinal = 0
+              for claim in claims:
+                  claim_surface = str(claim.get("surface_text") or "")
+                  overlap = len(unit_terms & _claim_surface_terms(claim_surface))
+                  labels = claim.get("evidence_labels") or claim.get("used") or []
+                  if not isinstance(labels, Sequence) or isinstance(labels, (str, bytes)):
+                      continue
+                  for label in labels:
+                      item = label_map.get(str(label))
+                      if item is None:
+                          continue
+                      ranked.append((overlap, -ordinal, item))
+                      ordinal += 1
+              return [item for score, _order, item in sorted(ranked, reverse=True) if score > 0]
+
+
+          def _required_relational_support(
+              *,
+              intent_class: str,
+              used_items: Sequence[Mapping[str, Any]],
+              surface_text: str,
+          ) -> list[Mapping[str, Any]]:
+              if intent_class == "graph_relationship":
+                  edges = [item for item in used_items if item.get("evidence_type") == "graph_edge"]
+                  passages = [item for item in used_items if item.get("evidence_type") == "passage"]
+                  chosen = edges[:1]
+                  for item in _infer_claim_support_items(
+                      surface_text=surface_text,
+                      used_items=passages,
+                      limit=2,
+                      prefer_distinct_sources=True,
+                  ):
+                      if item not in chosen:
+                          chosen.append(item)
+                  return chosen[:3]
+              if intent_class in {
+                  "cross_document_comparison",
+                  "complementary_synthesis",
+                  "temporal_conflict",
+              }:
+                  return _infer_claim_support_items(
+                      surface_text=surface_text,
+                      used_items=used_items,
+                      limit=2,
+                      prefer_distinct_sources=True,
+                  )
+              return []
+
+
+          def _unit_is_relational(*, unit: str, intent_class: str, ordinal: int) -> bool:
+              lowered = f" {unit.casefold()} "
+              markers = (
+                  " whereas ", " while ", " compared ", " by contrast ",
+                  " differs ", " different ", " together ", " complements ",
+                  " precedes ", " before ", " after ", " relationship ",
+              )
+              if any(marker in lowered for marker in markers):
+                  return True
+              return ordinal == 1 and intent_class in {
+                  "cross_document_comparison",
+                  "complementary_synthesis",
+                  "graph_relationship",
+                  "temporal_conflict",
+              }
+
+
+          def _runtime_bound_candidate(
+              *,
+              answer: str,
+              question: str,
+              intent_class: str,
+              used_items: Sequence[Mapping[str, Any]],
+              claims: Sequence[Mapping[str, Any]] | None,
+              label_map: Mapping[str, Mapping[str, Any]],
+              snippet_map: Mapping[str, str],
+              provider_status: str = "answer",
+              requirements: Sequence[SemanticRequirement] = (),
+              unanswered_dimensions: Sequence[str] = (),
+              semantic_failures: Sequence[str] = (),
+          ) -> dict[str, Any]:
+              del snippet_map
+              relation: str | None = None
+              if intent_class == "cross_document_comparison":
+                  relation = "contrasts_with"
+              elif intent_class == "complementary_synthesis":
+                  relation = "complements"
+              elif intent_class == "graph_relationship":
+                  edge = next(
+                      (item for item in used_items if item.get("evidence_type") == "graph_edge"),
+                      None,
+                  )
+                  relation = str(edge.get("relation_type", "")) if edge is not None else None
+              elif intent_class == "temporal_conflict":
+                  relation = "precedes"
+
+              provider_claims = [dict(item) for item in (claims or []) if isinstance(item, Mapping)]
+              units = _verification_units(answer)
+              claim_records: list[dict[str, Any]] = []
+              selected_ids: list[str] = []
+
+              for ordinal, unit in enumerate(units, start=1):
+                  if _model_explanation_is_genuinely_generic(unit):
+                      claim_records.append(
+                          {
+                              "claim_id": f"claim_{ordinal}",
+                              "claim_type": "MODEL_EXPLANATION",
+                              "claim_role": "model_explanation",
+                              "surface_text": unit,
+                              "facet_ids": [],
+                              "support_mode": "model_explanation",
+                              "evidence_labels": [],
+                              "covers": [],
+                              "unanswered_dimensions": [],
+                              "support_refs": [],
+                          }
+                      )
+                      continue
+
+                  relational = _unit_is_relational(
+                      unit=unit,
+                      intent_class=intent_class,
+                      ordinal=ordinal,
+                  )
+                  support_items: list[Mapping[str, Any]] = []
+                  if relational:
+                      support_items.extend(
+                          _required_relational_support(
+                              intent_class=intent_class,
+                              used_items=used_items,
+                              surface_text=unit,
+                          )
+                      )
+                  for item in _provider_hint_items(
+                      unit=unit,
+                      claims=provider_claims,
+                      label_map=label_map,
+                  ):
+                      if item not in support_items:
+                          support_items.append(item)
+                      if len(support_items) >= (3 if intent_class == "graph_relationship" and relational else 2):
+                          break
+                  if not support_items:
+                      support_items = _infer_claim_support_items(
+                          surface_text=unit,
+                          used_items=used_items,
+                          limit=2 if relational else 1,
+                          prefer_distinct_sources=relational,
+                      )
+                  if not support_items:
+                      raise ValueError("runtime could not bind visible proposition to evidence")
+
+                  if not relational:
+                      support_items = support_items[:1]
+                  elif intent_class == "graph_relationship":
+                      support_items = support_items[:3]
+                  else:
+                      support_items = support_items[:2]
+
+                  refs: list[dict[str, Any]] = []
+                  for item in support_items:
+                      evidence_id = str(item.get("evidence_id", ""))
+                      quote = _local_exact_quote(
+                          surface_text=unit,
+                          item=item,
+                          max_chars=240,
+                      )
+                      if not evidence_id or not quote:
+                          continue
+                      refs.append(
+                          {
+                              "evidence_id": evidence_id,
+                              "locator_id": str(item.get("locator_id", "")),
+                              "exact_quote": quote,
+                              "uncertainty": "low",
+                          }
+                      )
+                      if evidence_id not in selected_ids:
+                          selected_ids.append(evidence_id)
+                  if not refs:
+                      raise ValueError("runtime could not bind visible proposition to exact support")
+
+                  claim_type = "EVIDENCE_SYNTHESIS" if relational else "EVIDENCE_FACT"
+                  if relational:
+                      if intent_class == "cross_document_comparison":
+                          role = "comparison"
+                      elif intent_class == "temporal_conflict":
+                          role = "temporal"
+                      else:
+                          role = "relationship"
+                  else:
+                      role = "direct"
+                  claim_records.append(
+                      {
+                          "claim_id": f"claim_{ordinal}",
+                          "claim_type": claim_type,
+                          "claim_role": role,
+                          "surface_text": unit,
+                          "facet_ids": [],
+                          "support_mode": "exact_quote",
+                          "evidence_labels": [str(item.get("evidence_id", "")) for item in support_items],
+                          "covers": [],
+                          "unanswered_dimensions": [],
+                          "support_refs": refs,
+                      }
+                  )
+
+              if not claim_records:
+                  raise ValueError("runtime produced no verifiable visible propositions")
+
+              if provider_status in {"partial", "partial_candidate"}:
+                  missing = _partial_missing_dimension_labels(
+                      requirements=requirements,
+                      unanswered_dimensions=unanswered_dimensions,
+                      semantic_failures=semantic_failures,
+                  )
+                  if missing:
+                      boundary = (
+                          "Unsupported boundary: the available evidence does not establish "
+                          + ", ".join(missing[:4])
+                          + "."
+                      )
+                      claim_records.append(
+                          {
+                              "claim_id": f"claim_{len(claim_records) + 1}",
+                              "claim_type": "MODEL_EXPLANATION",
+                              "claim_role": "model_explanation",
+                              "surface_text": boundary,
+                              "facet_ids": [],
+                              "support_mode": "model_explanation",
+                              "evidence_labels": [],
+                              "covers": [],
+                              "unanswered_dimensions": list(missing),
+                              "support_refs": [],
+                          }
+                      )
+                      answer = _append_partial_boundary(answer, boundary)
+
+              return {
+                  "schema_version": "aq3-provider-candidate/v3",
+                  "status": (
+                      "partial_candidate"
+                      if provider_status in {"partial", "partial_candidate"}
+                      else "answer_candidate"
+                  ),
+                  "relation": relation,
+                  "selected_evidence_ids": selected_ids,
+                  "answer_text": answer.strip(),
+                  "claims": claim_records,
+                  "missing_facets": [],
+                  "abstention_reason": None,
+                  "unanswered_dimensions": [
+                      str(item)
+                      for claim in claim_records
+                      for item in legacy._list(
+                          claim.get("unanswered_dimensions", []), "unanswered dimensions"
+                      )
+                      if str(item)
+                  ],
+              }
+          '''
+          s = s[:start] + replacement + s[end:]
+
+          arb.write_text(a)
+          sem.write_text(s)
+          PY
+          git diff --check
+          test "$(git diff --name-only | sort)" = $'src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py\nsrc/knowledge_engine/m26_pa7_semantic_closure_runtime.py'
+
+      - name: Install and run focused hard-truth probes
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[dev]' >/dev/null
+          python - <<'PY'
+          import json
+          from knowledge_engine import m26_pa7_arbitrary_query_runtime as r
+          from knowledge_engine import m26_pa7_semantic_closure_runtime as s
+
+          r._verify_hard_truth_boundary_mutations(
+              surface_text='The router preserves workflow progress.',
+              support_text='The router preserves workflow progress. A separate fallback does not preserve an abandoned buffer.',
+              question='What does the router preserve?',
+          )
+          try:
+              r._verify_hard_truth_boundary_mutations(
+                  surface_text='Entity A does not store graph data.',
+                  support_text='Entity A stores graph data.',
+                  question='What does Entity A store?',
+              )
+          except r.VerifiedAnswerGateError as exc:
+              assert exc.code == 'M26-PA7-ME-056', exc.code
+          else:
+              raise AssertionError('true polarity mutation escaped')
+
+          used = [
+              {'evidence_id':'ev1','locator_id':'l1','evidence_type':'passage','source_identity':'s1','source_id':'s1','passage_text':'The router preserves workflow progress after a disconnect.'},
+              {'evidence_id':'ev2','locator_id':'l2','evidence_type':'passage','source_identity':'s2','source_id':'s2','passage_text':'Verification does not prove that persisted progress is correct.'},
+          ]
+          candidate = s._runtime_bound_candidate(
+              answer='The router preserves workflow progress after a disconnect. Persisted progress does not by itself prove correctness.',
+              question='How does persisted progress relate to verification after a disconnect?',
+              intent_class='direct_grounded_knowledge',
+              used_items=used,
+              claims=[],
+              label_map={'ev1':used[0],'ev2':used[1]},
+              snippet_map={},
+          )
+          assert len(candidate['claims']) >= 2
+          assert len(json.dumps(candidate)) < 12000
+          print('CR3_SENTENCE_LOCAL_PROBES=PASS')
+          PY
+
+      - name: Run exact 238 regression and lint
+        run: |
+          set -euo pipefail
+          python -m pytest --showlocals \
+            tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_pa_7_arbitrary_query_runtime.py \
+            tests/test_m26_pa7_ask_api.py \
+            tests/test_m26_pa7_final_web_readiness.py \
+            tests/test_m26_pa_7_corrective_formal_product_readiness.py \
+            tests/test_m26_pa_7_production_promotion_closure.py \
+            tests/test_m26_pa_7_reconciliation.py \
+            tests/test_m26_aq_semantic_closure_runtime.py \
+            tests/test_m26_aq_semantic_runtime_patch_v3.py \
+            tests/test_m26_aq_universal_answerability_patch.py \
+            tests/test_m26_aq_final_universal_recovery_patch.py \
+            tests/test_m26_aq_production_route_final_recovery.py \
+            tests/test_m26_aq_surface_guard.py \
+            tests/test_m26_aq_production_deploy_lock.py \
+            tests/test_m26_aq_production_entrypoint.py \
+            tests/test_m26_aq_final_closure_harness.py \
+            tests/test_m26_aq_simplified_product_contract.py \
+            --junitxml=/tmp/cr3-regression.xml
+          python scripts/m26_aq_final_closure.py validate-junit --junit /tmp/cr3-regression.xml --minimum 94
+          python -m ruff check \
+            src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py \
+            src/knowledge_engine/m26_pa7_semantic_closure_runtime.py
+
+      - name: Materialize clean exact CR3 candidate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          git config user.name 'tesc-cr3-operator'
+          git config user.email 'tesc-cr3-operator@users.noreply.github.com'
+          git switch -c "$CANDIDATE_BRANCH"
+          git add src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py src/knowledge_engine/m26_pa7_semantic_closure_runtime.py
+          git commit -m 'TESC CR3: verify natural prose proposition by proposition'
+          test "$(git rev-parse HEAD^1)" = "$BASE_SHA"
+          test "$(git diff --name-only HEAD^1 HEAD | sort)" = $'src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py\nsrc/knowledge_engine/m26_pa7_semantic_closure_runtime.py'
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          echo "CR3_CANDIDATE_SHA=$(git rev-parse HEAD)"
