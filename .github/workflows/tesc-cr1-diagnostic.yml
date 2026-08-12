@@ -1,0 +1,31 @@
+name: TESC CR1 Readonly Diagnostic
+
+on:
+  push:
+    branches: [gpt-tesc/cr1-overlay-diagnostic]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 422a40e34e11b105e4dc4e7ef64f4b5beedf3270
+          fetch-depth: 1
+          show-progress: false
+      - name: Locate closure failures and verifier paths
+        run: |
+          set -euo pipefail
+          echo '=== SC-002 ==='
+          grep -R -n -C 25 --exclude-dir=.git 'M26-PA7-SC-002' src scripts tests || true
+          echo '=== SEMANTIC_CLOSURE_FAILED ==='
+          grep -R -n -C 20 --exclude-dir=.git 'SEMANTIC_CLOSURE_FAILED' src scripts tests || true
+          echo '=== ME-056 ==='
+          grep -R -n -C 20 --exclude-dir=.git 'M26-PA7-ME-056' src tests || true
+          echo '=== ME-021 ==='
+          grep -R -n -C 20 --exclude-dir=.git 'M26-PA7-ME-021' src tests || true
+          echo '=== partial/recovery ==='
+          grep -R -n -C 12 --exclude-dir=.git '_partial_answer_has_substantial_value\|_runtime_bound_candidate\|allow_deterministic_recovery' src/knowledge_engine/m26_pa7_semantic_closure_runtime.py || true
