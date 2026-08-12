@@ -945,6 +945,129 @@ def _verify_runtime_bound_candidate(**kwargs: Any) -> dict[str, Any]:
     )
 
 
+def _verification_units(answer: str) -> list[str]:
+    text = re.sub(r"\r\n?", "\n", str(answer)).strip()
+    if not text:
+        return []
+    raw_units = re.split(r"(?<=[.!?])\s+|\n+|;\s+", text)
+    units: list[str] = []
+    for raw in raw_units:
+        unit = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", raw).strip()
+        if not unit:
+            continue
+        if len(unit) > 1_180:
+            unit = unit[:1_180].rstrip()
+        units.append(unit)
+        if len(units) >= 10:
+            break
+    return units or [text[:1_180]]
+
+
+def _local_exact_quote(
+    *,
+    surface_text: str,
+    item: Mapping[str, Any],
+    max_chars: int = 240,
+) -> str:
+    passage = str(item.get("passage_text", ""))
+    if not passage:
+        return ""
+    surface_terms = _claim_surface_terms(surface_text)
+    surface_entities = legacy._hard_boundary_entities(surface_text)
+    clauses = [
+        clause.strip()
+        for clause in re.split(r"(?<=[.!?;])\s+|\n+", passage)
+        if clause.strip()
+    ]
+    scored: list[tuple[int, int, str]] = []
+    for index, clause in enumerate(clauses):
+        clause_terms = _claim_surface_terms(clause)
+        overlap = len(surface_terms & clause_terms)
+        entity_overlap = len(
+            surface_entities & legacy._hard_boundary_entities(clause)
+        )
+        scored.append((overlap + (2 * entity_overlap), -index, clause))
+    if scored:
+        score, _order, clause = max(scored)
+        if score > 0:
+            return clause[:max_chars].rstrip()
+    return legacy._first_exact_evidence_quote(passage, max_chars=max_chars)
+
+
+def _provider_hint_items(
+    *,
+    unit: str,
+    claims: Sequence[Mapping[str, Any]],
+    label_map: Mapping[str, Mapping[str, Any]],
+) -> list[Mapping[str, Any]]:
+    unit_terms = _claim_surface_terms(unit)
+    ranked: list[tuple[int, int, Mapping[str, Any]]] = []
+    ordinal = 0
+    for claim in claims:
+        claim_surface = str(claim.get("surface_text") or "")
+        overlap = len(unit_terms & _claim_surface_terms(claim_surface))
+        labels = claim.get("evidence_labels") or claim.get("used") or []
+        if not isinstance(labels, Sequence) or isinstance(labels, (str, bytes)):
+            continue
+        for label in labels:
+            item = label_map.get(str(label))
+            if item is None:
+                continue
+            ranked.append((overlap, -ordinal, item))
+            ordinal += 1
+    return [item for score, _order, item in sorted(ranked, reverse=True) if score > 0]
+
+
+def _required_relational_support(
+    *,
+    intent_class: str,
+    used_items: Sequence[Mapping[str, Any]],
+    surface_text: str,
+) -> list[Mapping[str, Any]]:
+    if intent_class == "graph_relationship":
+        edges = [item for item in used_items if item.get("evidence_type") == "graph_edge"]
+        passages = [item for item in used_items if item.get("evidence_type") == "passage"]
+        chosen = edges[:1]
+        for item in _infer_claim_support_items(
+            surface_text=surface_text,
+            used_items=passages,
+            limit=2,
+            prefer_distinct_sources=True,
+        ):
+            if item not in chosen:
+                chosen.append(item)
+        return chosen[:3]
+    if intent_class in {
+        "cross_document_comparison",
+        "complementary_synthesis",
+        "temporal_conflict",
+    }:
+        return _infer_claim_support_items(
+            surface_text=surface_text,
+            used_items=used_items,
+            limit=2,
+            prefer_distinct_sources=True,
+        )
+    return []
+
+
+def _unit_is_relational(*, unit: str, intent_class: str, ordinal: int) -> bool:
+    lowered = f" {unit.casefold()} "
+    markers = (
+        " whereas ", " while ", " compared ", " by contrast ",
+        " differs ", " different ", " together ", " complements ",
+        " precedes ", " before ", " after ", " relationship ",
+    )
+    if any(marker in lowered for marker in markers):
+        return True
+    return ordinal == 1 and intent_class in {
+        "cross_document_comparison",
+        "complementary_synthesis",
+        "graph_relationship",
+        "temporal_conflict",
+    }
+
+
 def _runtime_bound_candidate(
     *,
     answer: str,
@@ -959,6 +1082,7 @@ def _runtime_bound_candidate(
     unanswered_dimensions: Sequence[str] = (),
     semantic_failures: Sequence[str] = (),
 ) -> dict[str, Any]:
+    del snippet_map
     relation: str | None = None
     if intent_class == "cross_document_comparison":
         relation = "contrasts_with"
@@ -966,100 +1090,85 @@ def _runtime_bound_candidate(
         relation = "complements"
     elif intent_class == "graph_relationship":
         edge = next(
-            (
-                item
-                for item in used_items
-                if item.get("evidence_type") == "graph_edge"
-            ),
+            (item for item in used_items if item.get("evidence_type") == "graph_edge"),
             None,
         )
         relation = str(edge.get("relation_type", "")) if edge is not None else None
     elif intent_class == "temporal_conflict":
         relation = "precedes"
+
+    provider_claims = [dict(item) for item in (claims or []) if isinstance(item, Mapping)]
+    units = _verification_units(answer)
     claim_records: list[dict[str, Any]] = []
-    source_claims = list(claims or [])
-    if not source_claims:
-        source_claims = [
-            {
-                "claim_id": "claim_1",
-                "claim_type": "EVIDENCE_FACT",
-                "surface_text": answer,
-                "evidence_labels": [str(item.get("evidence_id", "")) for item in used_items[:1]],
-                "covers": legacy._required_facet_ids(
-                    question=question,
-                    intent_class=intent_class,
-                ),
-            }
-        ]
-    for index, raw_claim in enumerate(source_claims, start=1):
-        claim = dict(raw_claim)
-        claim_id = str(claim.get("claim_id") or f"claim_{index}")
-        claim_type = str(claim.get("claim_type") or _infer_claim_type(intent_class, claim))
-        evidence_labels = [
-            str(label)
-            for label in legacy._list(
-                claim.get("evidence_labels"), "claim evidence labels"
+    selected_ids: list[str] = []
+
+    for ordinal, unit in enumerate(units, start=1):
+        if _model_explanation_is_genuinely_generic(unit):
+            claim_records.append(
+                {
+                    "claim_id": f"claim_{ordinal}",
+                    "claim_type": "MODEL_EXPLANATION",
+                    "claim_role": "model_explanation",
+                    "surface_text": unit,
+                    "facet_ids": [],
+                    "support_mode": "model_explanation",
+                    "evidence_labels": [],
+                    "covers": [],
+                    "unanswered_dimensions": [],
+                    "support_refs": [],
+                }
             )
-            if str(label)
-        ]
-        if not evidence_labels and claim.get("used"):
-            evidence_labels = [
-                str(label)
-                for label in legacy._list(claim.get("used"), "claim used labels")
-                if str(label)
-            ]
-        surface_text = str(claim.get("surface_text") or "").strip()
-        support_items = [
-            label_map[label]
-            for label in evidence_labels
-            if label in label_map
-        ]
-        prefer_distinct = claim_type == "EVIDENCE_SYNTHESIS" or intent_class in {
-            "cross_document_comparison",
-            "complementary_synthesis",
-            "graph_relationship",
-            "temporal_conflict",
-        }
+            continue
+
+        relational = _unit_is_relational(
+            unit=unit,
+            intent_class=intent_class,
+            ordinal=ordinal,
+        )
+        support_items: list[Mapping[str, Any]] = []
+        if relational:
+            support_items.extend(
+                _required_relational_support(
+                    intent_class=intent_class,
+                    used_items=used_items,
+                    surface_text=unit,
+                )
+            )
+        for item in _provider_hint_items(
+            unit=unit,
+            claims=provider_claims,
+            label_map=label_map,
+        ):
+            if item not in support_items:
+                support_items.append(item)
+            if len(support_items) >= (3 if intent_class == "graph_relationship" and relational else 2):
+                break
         if not support_items:
             support_items = _infer_claim_support_items(
-                surface_text=surface_text or answer,
+                surface_text=unit,
                 used_items=used_items,
-                limit=2,
-                prefer_distinct_sources=prefer_distinct,
+                limit=2 if relational else 1,
+                prefer_distinct_sources=relational,
             )
-        elif prefer_distinct and len(
-            {legacy._source_identity(item) for item in support_items}
-        ) < 2:
-            inferred_items = _infer_claim_support_items(
-                surface_text=surface_text or answer,
-                used_items=used_items,
-                limit=2,
-                prefer_distinct_sources=True,
-            )
-            for item in inferred_items:
-                if item not in support_items:
-                    support_items.append(item)
-                if len({legacy._source_identity(row) for row in support_items}) >= 2:
-                    break
-        if not surface_text:
-            surface_text = _claim_local_surface(
-                answer=answer,
-                support_items=support_items,
-            )
-        if claim_type == "MODEL_EXPLANATION":
-            if _model_explanation_is_genuinely_generic(surface_text):
-                support_items = []
-            elif support_items:
-                claim_type = "EVIDENCE_FACT"
-            else:
-                support_items = []
+        if not support_items:
+            raise ValueError("runtime could not bind visible proposition to evidence")
+
+        if not relational:
+            support_items = support_items[:1]
+        elif intent_class == "graph_relationship":
+            support_items = support_items[:3]
+        else:
+            support_items = support_items[:2]
+
         refs: list[dict[str, Any]] = []
-        for _ref_index, item in enumerate(support_items, start=1):
+        for item in support_items:
             evidence_id = str(item.get("evidence_id", ""))
-            quote = snippet_map.get(evidence_id) or legacy._first_exact_evidence_quote(
-                str(item.get("passage_text", "")), max_chars=360
+            quote = _local_exact_quote(
+                surface_text=unit,
+                item=item,
+                max_chars=240,
             )
-            if not quote:
+            if not evidence_id or not quote:
                 continue
             refs.append(
                 {
@@ -1069,34 +1178,39 @@ def _runtime_bound_candidate(
                     "uncertainty": "low",
                 }
             )
-        if not refs and claim_type != "MODEL_EXPLANATION":
-            raise ValueError("runtime could not bind provider prose to evidence")
-        claim_role = str(
-            claim.get("claim_role")
-            or _infer_claim_role(intent_class=intent_class, claim_type=claim_type)
-        )
-        facet_ids = list(
-            claim.get("covers")
-            or claim.get("facet_ids")
-            or []
-        )
+            if evidence_id not in selected_ids:
+                selected_ids.append(evidence_id)
+        if not refs:
+            raise ValueError("runtime could not bind visible proposition to exact support")
+
+        claim_type = "EVIDENCE_SYNTHESIS" if relational else "EVIDENCE_FACT"
+        if relational:
+            if intent_class == "cross_document_comparison":
+                role = "comparison"
+            elif intent_class == "temporal_conflict":
+                role = "temporal"
+            else:
+                role = "relationship"
+        else:
+            role = "direct"
         claim_records.append(
             {
-                "claim_id": claim_id,
+                "claim_id": f"claim_{ordinal}",
                 "claim_type": claim_type,
-                "claim_role": claim_role,
-                "surface_text": surface_text,
-                "facet_ids": facet_ids,
-                "support_mode": str(
-                    claim.get("support_mode")
-                    or ("model_explanation" if claim_type == "MODEL_EXPLANATION" else "exact_quote")
-                ),
-                "evidence_labels": evidence_labels,
-                "covers": list(claim.get("covers", [])),
-                "unanswered_dimensions": list(claim.get("unanswered_dimensions", [])),
+                "claim_role": role,
+                "surface_text": unit,
+                "facet_ids": [],
+                "support_mode": "exact_quote",
+                "evidence_labels": [str(item.get("evidence_id", "")) for item in support_items],
+                "covers": [],
+                "unanswered_dimensions": [],
                 "support_refs": refs,
             }
         )
+
+    if not claim_records:
+        raise ValueError("runtime produced no verifiable visible propositions")
+
     if provider_status in {"partial", "partial_candidate"}:
         missing = _partial_missing_dimension_labels(
             requirements=requirements,
@@ -1115,10 +1229,7 @@ def _runtime_bound_candidate(
                     "claim_type": "MODEL_EXPLANATION",
                     "claim_role": "model_explanation",
                     "surface_text": boundary,
-                    "facet_ids": legacy._required_facet_ids(
-                        question=question,
-                        intent_class=intent_class,
-                    )[:1],
+                    "facet_ids": [],
                     "support_mode": "model_explanation",
                     "evidence_labels": [],
                     "covers": [],
@@ -1127,6 +1238,7 @@ def _runtime_bound_candidate(
                 }
             )
             answer = _append_partial_boundary(answer, boundary)
+
     return {
         "schema_version": "aq3-provider-candidate/v3",
         "status": (
@@ -1135,7 +1247,7 @@ def _runtime_bound_candidate(
             else "answer_candidate"
         ),
         "relation": relation,
-        "selected_evidence_ids": [str(item.get("evidence_id", "")) for item in used_items],
+        "selected_evidence_ids": selected_ids,
         "answer_text": answer.strip(),
         "claims": claim_records,
         "missing_facets": [],
@@ -1149,7 +1261,6 @@ def _runtime_bound_candidate(
             if str(item)
         ],
     }
-
 
 def _parsed_provider_answer_text(parsed: Mapping[str, Any]) -> str:
     for key in ("answer_text", "answer"):

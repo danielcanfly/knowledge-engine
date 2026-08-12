@@ -3306,16 +3306,10 @@ def _proposition_local_support_text(*, surface_text: str, support_text: str) -> 
         overlap = len(surface_terms & clause_terms)
         entity_overlap = len(surface_entities & _hard_boundary_entities(clause))
         scored.append((overlap + (2 * entity_overlap), -index, clause))
-    best = max(score for score, _, _ in scored)
-    if best < 2:
+    best_score, _best_order, best_clause = max(scored)
+    if best_score < 2:
         return support
-    threshold = max(2, best - 1)
-    selected = [
-        clause
-        for score, _, clause in sorted(scored, reverse=True)
-        if score >= threshold
-    ][:2]
-    return " ".join(selected) or support
+    return best_clause
 
 
 def _verify_claim_surface_semantics(
