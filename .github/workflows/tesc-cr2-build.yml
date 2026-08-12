@@ -1,0 +1,535 @@
+name: TESC CR2 Build Proposition-Local Candidate
+
+on:
+  push:
+    branches: [gpt-tesc/cr2-build-operator-v1]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tesc-cr2-build-v1
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      BASE_SHA: 4eda4e87fcff6146e61fb5b5dadcfcd1e5e2c4de
+      CANDIDATE_BRANCH: gpt-tesc/cr2-proposition-local
+    steps:
+      - name: Checkout exact CR1
+        uses: actions/checkout@v4
+        with:
+          ref: 4eda4e87fcff6146e61fb5b5dadcfcd1e5e2c4de
+          fetch-depth: 80
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Apply generalized CR2 patch
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          arb = Path('src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py')
+          sem = Path('src/knowledge_engine/m26_pa7_semantic_closure_runtime.py')
+          a = arb.read_text()
+          s = sem.read_text()
+
+          old = '''def _verify_multi_evidence_provider_output(
+              *,
+              trace_id: str,
+              question: str,
+              intent_class: str,
+              evidence: Sequence[Mapping[str, Any]],
+              provider_text: str,
+          ) -> dict[str, Any]:'''
+          new = '''def _verify_multi_evidence_provider_output(
+              *,
+              trace_id: str,
+              question: str,
+              intent_class: str,
+              evidence: Sequence[Mapping[str, Any]],
+              provider_text: str,
+              enforce_completeness: bool = True,
+          ) -> dict[str, Any]:'''
+          assert a.count(old) == 1, a.count(old)
+          a = a.replace(old, new)
+
+          old = '''        if (
+                      _claim_requires_multi_source(intent_class, claim_role)
+                      and _distinct_source_count('''
+          new = '''        if (
+                      _claim_proposition_requires_multi_source(
+                          intent_class=intent_class,
+                          claim_role=claim_role,
+                          surface_text=surface_text,
+                          question=question,
+                      )
+                      and _distinct_source_count('''
+          assert a.count(old) == 1, a.count(old)
+          a = a.replace(old, new)
+
+          cardinality_helper = r'''
+          def _claim_proposition_requires_multi_source(
+              *,
+              intent_class: str,
+              claim_role: str,
+              surface_text: str,
+              question: str,
+          ) -> bool:
+              if intent_class not in {"cross_document_comparison", "complementary_synthesis"}:
+                  return _claim_requires_multi_source(intent_class, claim_role)
+              if claim_role not in {"relationship", "comparison", "temporal"}:
+                  return False
+              surface = str(surface_text).casefold()
+              relation_markers = (
+                  " whereas ",
+                  " while ",
+                  " by contrast ",
+                  " compared with ",
+                  " compared to ",
+                  " different from ",
+                  " differs from ",
+                  " both ",
+                  " together ",
+                  " complements ",
+              )
+              if any(marker in f" {surface} " for marker in relation_markers):
+                  return True
+              question_entities = _named_material_entities(question)
+              surface_entities = _named_material_entities(surface_text)
+              return len(question_entities & surface_entities) >= 2
+
+
+          '''
+          anchor = 'def _single_source_synthesis_has_complete_premise_support('
+          assert a.count(anchor) == 1
+          a = a.replace(anchor, cardinality_helper + anchor)
+
+          locality_helper = r'''
+          def _proposition_local_support_text(*, surface_text: str, support_text: str) -> str:
+              surface = re.sub(r"\s+", " ", str(surface_text)).strip()
+              support = re.sub(r"\s+", " ", str(support_text)).strip()
+              if not surface or not support:
+                  return support
+              surface_terms = _meaningful_terms(surface) - _relevance_common_terms()
+              if len(surface_terms) < 2:
+                  return support
+              clauses = [
+                  item.strip()
+                  for item in re.split(
+                      r"(?<=[.!?;])\s+|\b(?:whereas|while|but)\b",
+                      support,
+                      flags=re.I,
+                  )
+                  if item.strip()
+              ]
+              if len(clauses) <= 1:
+                  return support
+              scored: list[tuple[int, int, str]] = []
+              surface_entities = _hard_boundary_entities(surface)
+              for index, clause in enumerate(clauses):
+                  clause_terms = _meaningful_terms(clause) - _relevance_common_terms()
+                  overlap = len(surface_terms & clause_terms)
+                  entity_overlap = len(surface_entities & _hard_boundary_entities(clause))
+                  scored.append((overlap + (2 * entity_overlap), -index, clause))
+              best = max(score for score, _, _ in scored)
+              if best < 2:
+                  return support
+              threshold = max(2, best - 1)
+              selected = [
+                  clause
+                  for score, _, clause in sorted(scored, reverse=True)
+                  if score >= threshold
+              ][:2]
+              return " ".join(selected) or support
+
+
+          '''
+          anchor = 'def _verify_claim_surface_semantics('
+          assert a.count(anchor) == 1
+          a = a.replace(anchor, locality_helper + anchor)
+
+          old = '''    support_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs)
+              support_terms = _meaningful_terms(support_text)
+              surface_terms = _meaningful_terms(surface)
+              question_terms = _coverage_terms(question)'''
+          new = '''    support_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs)
+              local_support_text = _proposition_local_support_text(
+                  surface_text=surface,
+                  support_text=support_text,
+              )
+              support_terms = _meaningful_terms(local_support_text)
+              surface_terms = _meaningful_terms(surface)
+              question_terms = _coverage_terms(question)'''
+          assert a.count(old) == 1, a.count(old)
+          a = a.replace(old, new)
+
+          old = '''    if _question_requires_non_entailment_boundary(question) and not _has_non_entailment_boundary(
+                  surface.casefold()
+              ):
+                  raise _verification_failure(
+                      "M26-PA7-ME-047",
+                      "false-premise precedes question lacks explicit non-entailment boundary",
+                  )'''
+          new = '''    if (
+                  _question_requires_non_entailment_boundary(question)
+                  and re.search(
+                      r"\\b(?:prove|proves|infer|depends?|dependency|require|requires|causal|cause)\\b",
+                      surface.casefold(),
+                  )
+                  and not _has_non_entailment_boundary(surface.casefold())
+              ):
+                  raise _verification_failure(
+                      "M26-PA7-ME-047",
+                      "false-premise precedes claim lacks explicit non-entailment boundary",
+                  )'''
+          assert a.count(old) == 1, a.count(old)
+          a = a.replace(old, new)
+
+          old = '''    support = re.sub(r"\\s+", " ", str(support_text)).strip()
+              if not surface or not support:
+                  return
+              surface_casefold = surface.casefold()'''
+          new = '''    support = re.sub(r"\\s+", " ", str(support_text)).strip()
+              if not surface or not support:
+                  return
+              support = _proposition_local_support_text(
+                  surface_text=surface,
+                  support_text=support,
+              )
+              surface_casefold = surface.casefold()'''
+          assert a.count(old) == 1, a.count(old)
+          a = a.replace(old, new)
+
+          old = '''    missing_facets = sorted(required_facets - covered_facets)
+              if missing_facets:
+                  raise _verification_failure("M26-PA7-ME-029", "answer candidate misses required facets")'''
+          new = '''    answer_truth_surface = " ".join(
+                  [answer_text, *(str(claim.get("surface_text", "")) for claim in claim_records)]
+              )
+              if (
+                  _question_requires_non_entailment_boundary(question)
+                  and not _has_non_entailment_boundary(answer_truth_surface.casefold())
+              ):
+                  raise _verification_failure(
+                      "M26-PA7-ME-047",
+                      "false-premise precedes answer lacks explicit non-entailment boundary",
+                  )
+              missing_facets = sorted(required_facets - covered_facets)
+              if missing_facets and enforce_completeness:
+                  raise _verification_failure("M26-PA7-ME-029", "answer candidate misses required facets")'''
+          assert a.count(old) == 1, a.count(old)
+          a = a.replace(old, new)
+
+          sem_helpers = r'''
+          def _claim_surface_terms(text: str) -> set[str]:
+              return legacy._meaningful_terms(str(text)) - legacy._relevance_common_terms()
+
+
+          def _infer_claim_support_items(
+              *,
+              surface_text: str,
+              used_items: Sequence[Mapping[str, Any]],
+              limit: int = 2,
+              prefer_distinct_sources: bool = False,
+          ) -> list[Mapping[str, Any]]:
+              surface_terms = _claim_surface_terms(surface_text)
+              scored: list[tuple[int, int, Mapping[str, Any]]] = []
+              for index, item in enumerate(used_items):
+                  passage = str(item.get("passage_text", ""))
+                  score = len(surface_terms & _claim_surface_terms(passage))
+                  scored.append((score, -index, item))
+              ranked = [item for score, _, item in sorted(scored, reverse=True) if score > 0]
+              if not ranked:
+                  ranked = list(used_items)
+              chosen: list[Mapping[str, Any]] = []
+              seen_sources: set[str] = set()
+              if prefer_distinct_sources:
+                  for item in ranked:
+                      source = legacy._source_identity(item)
+                      if source in seen_sources:
+                          continue
+                      chosen.append(item)
+                      seen_sources.add(source)
+                      if len(chosen) >= limit:
+                          return chosen
+              for item in ranked:
+                  if item in chosen:
+                      continue
+                  chosen.append(item)
+                  if len(chosen) >= limit:
+                      break
+              return chosen
+
+
+          def _claim_local_surface(
+              *,
+              answer: str,
+              support_items: Sequence[Mapping[str, Any]],
+          ) -> str:
+              sentences = [
+                  item.strip()
+                  for item in re.split(r"(?<=[.!?])\\s+", str(answer).strip())
+                  if item.strip()
+              ]
+              if len(sentences) <= 1:
+                  return str(answer).strip()
+              support_terms = _claim_surface_terms(
+                  " ".join(str(item.get("passage_text", "")) for item in support_items)
+              )
+              scored = [
+                  (len(_claim_surface_terms(sentence) & support_terms), -index, sentence)
+                  for index, sentence in enumerate(sentences)
+              ]
+              best_score, _, best_sentence = max(scored)
+              return best_sentence if best_score > 0 else sentences[0]
+
+
+          def _model_explanation_is_genuinely_generic(surface_text: str) -> bool:
+              try:
+                  legacy._verify_model_explanation_surface(
+                      surface_text=surface_text,
+                      answer_text=surface_text,
+                  )
+              except legacy.VerifiedAnswerGateError:
+                  return False
+              return True
+
+
+          def _verify_runtime_bound_candidate(**kwargs: Any) -> dict[str, Any]:
+              return legacy._verify_multi_evidence_provider_output(
+                  enforce_completeness=False,
+                  **kwargs,
+              )
+
+
+          '''
+          anchor = 'def _runtime_bound_candidate('
+          assert s.count(anchor) == 1
+          s = s.replace(anchor, sem_helpers + anchor)
+
+          start = s.index('        support_items = [', s.index('def _runtime_bound_candidate('))
+          end = s.index('        refs: list[dict[str, Any]] = []', start)
+          support_block = '''        surface_text = str(claim.get("surface_text") or "").strip()
+                  support_items = [
+                      label_map[label]
+                      for label in evidence_labels
+                      if label in label_map
+                  ]
+                  prefer_distinct = claim_type == "EVIDENCE_SYNTHESIS" or intent_class in {
+                      "cross_document_comparison",
+                      "complementary_synthesis",
+                      "graph_relationship",
+                      "temporal_conflict",
+                  }
+                  if not support_items:
+                      support_items = _infer_claim_support_items(
+                          surface_text=surface_text or answer,
+                          used_items=used_items,
+                          limit=2,
+                          prefer_distinct_sources=prefer_distinct,
+                      )
+                  elif prefer_distinct and len(
+                      {legacy._source_identity(item) for item in support_items}
+                  ) < 2:
+                      inferred_items = _infer_claim_support_items(
+                          surface_text=surface_text or answer,
+                          used_items=used_items,
+                          limit=2,
+                          prefer_distinct_sources=True,
+                      )
+                      for item in inferred_items:
+                          if item not in support_items:
+                              support_items.append(item)
+                          if len({legacy._source_identity(row) for row in support_items}) >= 2:
+                              break
+                  if not surface_text:
+                      surface_text = _claim_local_surface(
+                          answer=answer,
+                          support_items=support_items,
+                      )
+                  if claim_type == "MODEL_EXPLANATION":
+                      if _model_explanation_is_genuinely_generic(surface_text):
+                          support_items = []
+                      elif support_items:
+                          claim_type = "EVIDENCE_FACT"
+                      else:
+                          support_items = []
+          '''
+          s = s[:start] + support_block + s[end:]
+
+          start = s.index('        facet_ids = list(', s.index('def _runtime_bound_candidate('))
+          end = s.index('        claim_records.append(', start)
+          facet_block = '''        facet_ids = list(
+                      claim.get("covers")
+                      or claim.get("facet_ids")
+                      or []
+                  )
+          '''
+          s = s[:start] + facet_block + s[end:]
+
+          old = '                "surface_text": str(claim.get("surface_text") or answer).strip(),'
+          new = '                "surface_text": surface_text,'
+          assert s.count(old) == 1, s.count(old)
+          s = s.replace(old, new)
+
+          old = '''def _infer_claim_role(*, intent_class: str, claim_type: str) -> str:
+              if claim_type == "MODEL_EXPLANATION":
+                  return "model_explanation"
+              if intent_class == "cross_document_comparison":
+                  return "comparison"
+              if intent_class == "complementary_synthesis":
+                  return "relationship"
+              if intent_class == "graph_relationship":
+                  return "relationship"
+              if intent_class == "temporal_conflict":
+                  return "temporal"
+              return "direct"'''
+          new = '''def _infer_claim_role(*, intent_class: str, claim_type: str) -> str:
+              if claim_type == "MODEL_EXPLANATION":
+                  return "model_explanation"
+              if claim_type == "EVIDENCE_FACT":
+                  return "direct"
+              if intent_class == "cross_document_comparison":
+                  return "comparison"
+              if intent_class == "complementary_synthesis":
+                  return "relationship"
+              if intent_class == "graph_relationship":
+                  return "relationship"
+              if intent_class == "temporal_conflict":
+                  return "temporal"
+              return "direct"'''
+          assert s.count(old) == 1, s.count(old)
+          s = s.replace(old, new)
+
+          assert s.count('legacy._verify_multi_evidence_provider_output(') == 3
+          # One occurrence belongs to the wrapper we just inserted. Replace only the two call sites.
+          call_anchor = '            verified = legacy._verify_multi_evidence_provider_output('
+          assert s.count(call_anchor) == 2, s.count(call_anchor)
+          s = s.replace(call_anchor, '            verified = _verify_runtime_bound_candidate(')
+          partial_anchor = '                            verified = legacy._verify_multi_evidence_provider_output('
+          # The wider replacement above may have caught only the normal-indentation site.
+          if partial_anchor in s:
+              s = s.replace(partial_anchor, '                            verified = _verify_runtime_bound_candidate(')
+          assert s.count('verified = legacy._verify_multi_evidence_provider_output(') == 0
+
+          arb.write_text(a)
+          sem.write_text(s)
+          PY
+          git diff --check
+          git diff --name-only
+          test "$(git diff --name-only | sort)" = $'src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py\nsrc/knowledge_engine/m26_pa7_semantic_closure_runtime.py'
+
+      - name: Install and run focused hard-truth probes
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[dev]' >/dev/null
+          python - <<'PY'
+          from knowledge_engine import m26_pa7_arbitrary_query_runtime as r
+
+          # Unrelated support negation must not poison an otherwise positive proposition.
+          r._verify_hard_truth_boundary_mutations(
+              surface_text='The router preserves workflow progress.',
+              support_text=(
+                  'The router preserves workflow progress. '
+                  'A separate fallback does not preserve an abandoned temporary buffer.'
+              ),
+              question='What does the router preserve?',
+          )
+
+          # Real polarity change must remain a hard stop.
+          try:
+              r._verify_hard_truth_boundary_mutations(
+                  surface_text='Entity A does not store graph data.',
+                  support_text='Entity A stores graph data.',
+                  question='What does Entity A store?',
+              )
+          except r.VerifiedAnswerGateError as exc:
+              assert exc.code == 'M26-PA7-ME-056', exc.code
+          else:
+              raise AssertionError('true polarity mutation was not rejected')
+
+          # Real modality strengthening must remain a hard stop through the full verifier.
+          evidence = [{
+              'evidence_id':'ev1','evidence_type':'passage','locator_id':'loc1',
+              'source_id':'s1','source_identity':'s1','section_id':'sec','concept_id':'c1',
+              'artifact_key':'a','artifact_sha256':'a'*64,'release_id':'r',
+              'passage_text':'Entity A may preserve workflow progress.',
+              'passage_text_sha256':'b'*64,'provenance_record_sha256':'c'*64,
+          }]
+          import json
+          body = {
+              'schema_version':'aq3-provider-candidate/v3','status':'answer_candidate',
+              'relation':None,'selected_evidence_ids':['ev1'],
+              'answer_text':'Entity A must preserve workflow progress.',
+              'claims':[{
+                  'claim_id':'claim_1','claim_role':'direct','claim_type':'EVIDENCE_FACT',
+                  'surface_text':'Entity A must preserve workflow progress.',
+                  'facet_ids':['direct_answer'],'support_mode':'exact_quote',
+                  'support_refs':[{'evidence_id':'ev1','locator_id':'loc1','exact_quote':'Entity A may preserve workflow progress.'}],
+              }],
+              'missing_facets':[],'abstention_reason':None,
+          }
+          try:
+              r._verify_multi_evidence_provider_output(
+                  trace_id='cr2-modality', question='What may Entity A do?',
+                  intent_class='direct_grounded_knowledge', evidence=evidence,
+                  provider_text=json.dumps(body), enforce_completeness=False,
+              )
+          except r.VerifiedAnswerGateError as exc:
+              assert exc.code == 'M26-PA7-ME-034', exc.code
+          else:
+              raise AssertionError('true modality strengthening was not rejected')
+          print('CR2_FOCUSED_HARD_TRUTH_PROBES=PASS')
+          PY
+
+      - name: Run exact regression and lint
+        run: |
+          set -euo pipefail
+          python -m pytest --showlocals \
+            tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_pa_7_arbitrary_query_runtime.py \
+            tests/test_m26_pa7_ask_api.py \
+            tests/test_m26_pa7_final_web_readiness.py \
+            tests/test_m26_pa_7_corrective_formal_product_readiness.py \
+            tests/test_m26_pa_7_production_promotion_closure.py \
+            tests/test_m26_pa_7_reconciliation.py \
+            tests/test_m26_aq_semantic_closure_runtime.py \
+            tests/test_m26_aq_semantic_runtime_patch_v3.py \
+            tests/test_m26_aq_universal_answerability_patch.py \
+            tests/test_m26_aq_final_universal_recovery_patch.py \
+            tests/test_m26_aq_production_route_final_recovery.py \
+            tests/test_m26_aq_surface_guard.py \
+            tests/test_m26_aq_production_deploy_lock.py \
+            tests/test_m26_aq_production_entrypoint.py \
+            tests/test_m26_aq_final_closure_harness.py \
+            tests/test_m26_aq_simplified_product_contract.py \
+            --junitxml=/tmp/cr2-regression.xml
+          python scripts/m26_aq_final_closure.py validate-junit --junit /tmp/cr2-regression.xml --minimum 94
+          python -m ruff check \
+            src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py \
+            src/knowledge_engine/m26_pa7_semantic_closure_runtime.py
+
+      - name: Materialize clean one-commit CR2 candidate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          git config user.name 'tesc-cr2-operator'
+          git config user.email 'tesc-cr2-operator@users.noreply.github.com'
+          git switch -c "$CANDIDATE_BRANCH"
+          git add \
+            src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py \
+            src/knowledge_engine/m26_pa7_semantic_closure_runtime.py
+          git commit -m 'TESC CR2: localize truth checks and runtime evidence binding'
+          test "$(git rev-parse HEAD^1)" = "$BASE_SHA"
+          test "$(git diff --name-only HEAD^1 HEAD | sort)" = $'src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py\nsrc/knowledge_engine/m26_pa7_semantic_closure_runtime.py'
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          printf 'CR2_CANDIDATE_SHA=%s\n' "$(git rev-parse HEAD)"
