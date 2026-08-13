@@ -33,6 +33,8 @@ from knowledge_engine.m26_pa7_final_web_readiness import (
     build_final_web_formal_test_manifest,
     duplicate_live_guard_status,
     final_formal_query_specs,
+    historical_formal_bank_diagnostic_summary,
+    historical_formal_row_diagnostic_only,
     run_final_web_product_readiness,
     validate_final_web_formal_test_manifest,
 )
@@ -315,6 +317,68 @@ def test_final_web_formal_bank_intent_compat_preserves_runtime_telemetry() -> No
     assert row["formal_intent_compat_used"] is True
 
 
+def test_historical_formal_bank_failure_is_diagnostic_without_rewriting_row() -> None:
+    spec = final_formal_query_specs()[2]
+    response = {
+        "citations": [
+            {"evidence_type": "passage", "source_identity": "source-a"},
+        ],
+        "citation_locator_valid": True,
+        "distinct_source_count": 5,
+        "graph_hops_used": 1,
+        "intent_class": "direct_grounded_knowledge",
+        "material_claim_support_verified": True,
+        "multi_evidence_verification": {
+            "single_primary_passage_used": False,
+            "support_ref_count": 1,
+        },
+        "provider_call_count": 1,
+        "provider_invoked": True,
+        "question_sha256": spec["question_sha256"],
+        "reason_codes": [],
+        "relationship_summary": {"relation": "contrasts_with"},
+        "safe_abstention": False,
+        "selected_evidence": [
+            {"evidence_type": "passage", "source_identity": "source-a"},
+        ],
+        "selected_evidence_count": 8,
+        "status": "owner_only_cited_answer",
+        "terminal_status": "verified_answer_ready_candidate",
+        "trace_id": "m26pa7aq_test_historical_diagnostic",
+        "unsupported_accepted_claims": 0,
+    }
+
+    row = _runtime_row_from_response(spec=spec, response=response)
+    summary = historical_formal_bank_diagnostic_summary([row])
+
+    assert row["pass"] is False
+    assert historical_formal_row_diagnostic_only(row) is True
+    assert summary["non_blocking"] is True
+    assert summary["historical_row_results_rewritten"] is False
+    assert summary["diagnostic_failed_rows"][0]["class"] == "cross_document_comparison"
+    assert "canonical semantic contract R3" in summary["canonical_product_authority"]
+
+
+def test_security_or_unsupported_formal_failures_remain_blocking() -> None:
+    row = {
+        "class": "prompt_injection_privacy",
+        "pass": False,
+        "status": "owner_only_cited_answer",
+        "terminal_status": "verified_answer_ready_candidate",
+        "safe_terminal": True,
+        "citation_locator_valid": True,
+        "material_claim_support_verified": True,
+        "unsupported_accepted_claims": 1,
+        "provider_invoked": True,
+    }
+
+    summary = historical_formal_bank_diagnostic_summary([row])
+
+    assert historical_formal_row_diagnostic_only(row) is False
+    assert summary["non_blocking"] is False
+    assert summary["blocking_failed_row_count"] == 1
+
+
 def test_final_web_product_readiness_fixture_receipt_satisfies_a26_to_a53(
     tmp_path: Path,
 ) -> None:
@@ -487,6 +551,14 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert "final_formal_query_specs()[:9]" in workflow
     assert "live_final_runtime_rows_passed_awaiting_owner_browser_e2e" in workflow
     assert "live_final_runtime_rows_failed" in workflow
+    assert (
+        "hard_integration_passed_with_historical_formal_bank_"
+        "diagnostics_awaiting_owner_browser_e2e"
+    ) in workflow
+    assert "historical_formal_bank_diagnostic_summary" in workflow
+    assert "historical_formal_row_results_rewritten" in workflow
+    assert "canonical_product_authority" in workflow
+    assert "hard_post_merge_integration_checks" in workflow
     assert "failed_row" in workflow
     assert "raw_provider_payload_recorded" in workflow
     assert "raw_answer_text_recorded" in workflow
