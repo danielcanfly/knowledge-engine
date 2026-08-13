@@ -1671,6 +1671,53 @@ def test_runtime_bound_structured_candidate_compacts_before_legacy_verification(
     assert closure["failures"] == []
 
 
+def test_runtime_bound_graph_claim_adds_endpoint_support_for_edge_only_label() -> None:
+    edge = _graph_edge("ev_edge", "part_1", "part_2", "precedes")
+    part_1 = {
+        **_rich_passage("ev_part_1", "Part 1 appears first in the series.", "part-1"),
+        "concept_id": "part_1",
+    }
+    part_2 = {
+        **_rich_passage("ev_part_2", "Part 2 appears second in the series.", "part-2"),
+        "concept_id": "part_2",
+    }
+
+    candidate = _runtime_bound_candidate(
+        answer=(
+            "Part 1 precedes Part 2 in graph order, and that edge does not by "
+            "itself prove dependency."
+        ),
+        question="Does a precedes edge prove Part 1 depends on Part 2?",
+        intent_class="graph_relationship",
+        used_items=(),
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_SYNTHESIS",
+                "surface_text": (
+                    "Part 1 precedes Part 2 in graph order, and that edge does "
+                    "not by itself prove dependency."
+                ),
+                "evidence_labels": ["e1"],
+                "covers": ["graph_edge", "ordering_boundary"],
+            }
+        ],
+        label_map={"e1": edge, "e2": part_1, "e3": part_2},
+        snippet_map={
+            "ev_edge": edge["passage_text"],
+            "ev_part_1": part_1["passage_text"],
+            "ev_part_2": part_2["passage_text"],
+        },
+    )
+
+    support_ids = {
+        ref["evidence_id"]
+        for ref in candidate["claims"][0]["support_refs"]
+    }
+    assert support_ids == {"ev_edge", "ev_part_1", "ev_part_2"}
+    assert set(candidate["selected_evidence_ids"]) == support_ids
+
+
 def test_resource_constraints_do_not_trigger_multi_source_requirement() -> None:
     question = (
         "When is pausing a venture a rational survival decision rather than evidence "
