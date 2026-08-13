@@ -1,0 +1,96 @@
+name: M26 Gate C API Budget Recovery
+
+on:
+  push:
+    branches:
+      - "gpt-m26/gate-c-pass-recovery-api-budget"
+
+permissions:
+  contents: write
+
+jobs:
+  patch_validate_commit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gpt-m26/gate-c-pass-recovery-api-budget
+          fetch-depth: 20
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply API boundary budget repair and regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          api = Path("src/knowledge_engine/m26_ask_api.py")
+          text = api.read_text(encoding="utf-8")
+          old = "    max_provider_calls: int = 2,"
+          assert text.count(old) == 1, f"unexpected API budget occurrences: {text.count(old)}"
+          text = text.replace(old, "    max_provider_calls: int = 4,", 1)
+          api.write_text(text, encoding="utf-8")
+
+          tests = Path("tests/test_m26_pa7_ask_api.py")
+          test_text = tests.read_text(encoding="utf-8")
+          marker = "def test_web_query_default_provider_budget_matches_semantic_repair_contract"
+          assert marker not in test_text
+          test_text += '''\n\ndef test_web_query_default_provider_budget_matches_semantic_repair_contract(\n    monkeypatch: pytest.MonkeyPatch,\n) -> None:\n    captured: dict[str, Any] = {}\n\n    def fake_runtime(**kwargs: Any) -> dict[str, Any]:\n        captured.update(kwargs)\n        return _dto_runtime_fixture()\n\n    monkeypatch.setattr(m26_ask_api, "run_owner_arbitrary_query", fake_runtime)\n    run_owner_query_for_web(\n        root=ROOT,\n        gate_path=GATE_PATH,\n        request_payload={"question": "Explain the supported relationship."},\n        owner_subject_hash=OWNER_SUBJECT_HASH,\n        provider_client=ExactSpanProvider(),\n        dense_channel=LocalDenseProjectionChannel(),\n    )\n    assert captured["max_provider_calls"] == 4\n'''
+          tests.write_text(test_text, encoding="utf-8")
+          PY
+
+      - name: Install test dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Verify API budget contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import inspect
+          from knowledge_engine import m26_ask_api
+          from knowledge_engine import m26_pa7_arbitrary_query_runtime as runtime
+          from knowledge_engine import m26_aq_semantic_contract as contract
+
+          assert inspect.signature(m26_ask_api.run_owner_query_for_web).parameters["max_provider_calls"].default == 4
+          assert inspect.signature(contract.run_owner_arbitrary_query).parameters["max_provider_calls"].default == 4
+          assert inspect.signature(runtime.run_owner_arbitrary_query).parameters["max_provider_calls"].default == 4
+          PY
+          python -m py_compile src/knowledge_engine/m26_ask_api.py src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
+          ruff check src/knowledge_engine/m26_ask_api.py src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py tests/test_m26_pa7_ask_api.py
+          python -m pytest -q tests/test_m26_pa7_ask_api.py
+
+      - name: Run full AQ regression population
+        run: |
+          set -euo pipefail
+          python -m pytest --showlocals \
+            tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_pa_7_arbitrary_query_runtime.py \
+            tests/test_m26_pa7_ask_api.py \
+            tests/test_m26_pa7_final_web_readiness.py \
+            tests/test_m26_pa_7_corrective_formal_product_readiness.py \
+            tests/test_m26_pa_7_production_promotion_closure.py \
+            tests/test_m26_pa_7_reconciliation.py \
+            tests/test_m26_aq_semantic_closure_runtime.py \
+            tests/test_m26_aq_semantic_runtime_patch_v3.py \
+            tests/test_m26_aq_universal_answerability_patch.py \
+            tests/test_m26_aq_final_universal_recovery_patch.py \
+            tests/test_m26_aq_production_route_final_recovery.py \
+            tests/test_m26_aq_surface_guard.py \
+            tests/test_m26_aq_production_deploy_lock.py \
+            tests/test_m26_aq_production_entrypoint.py \
+            tests/test_m26_aq_final_closure_harness.py \
+            tests/test_m26_aq_simplified_product_contract.py
+
+      - name: Commit validated repair
+        run: |
+          set -euo pipefail
+          git config user.name "huaihsuanbusiness"
+          git config user.email "38602668+huaihsuanbusiness@users.noreply.github.com"
+          git rm .github/workflows/m26-gate-c-api-budget-recovery.yml
+          git add src/knowledge_engine/m26_ask_api.py tests/test_m26_pa7_ask_api.py
+          git diff --cached --check
+          git commit -m "Align M26 Ask API semantic repair budget"
+          git push origin HEAD:gpt-m26/gate-c-pass-recovery-api-budget
