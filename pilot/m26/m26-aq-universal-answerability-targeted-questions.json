@@ -1,0 +1,139 @@
+{
+  "schema_version": "m26-aq-universal-answerability-targeted/v1",
+  "frozen_before_first_live_call": true,
+  "questions": [
+    {
+      "case_id": "CORPUS-BB02",
+      "class": "original_answerability_failure",
+      "group": "A_original_reproduction",
+      "question": "When a startup changes direction more than once in a short period, how can you distinguish evidence-driven learning from aimless founder drift? Focus on what changed in the problem, constraints and market reality rather than how often the pitch deck changed.",
+      "expected": "answer"
+    },
+    {
+      "case_id": "CORPUS-BB03",
+      "class": "original_answerability_failure",
+      "group": "A_original_reproduction",
+      "question": "如果客戶明明都承認問題存在，為什麼市場仍然可能完全不動？請用旅宿業者的實際經驗解釋「有痛點」和「願意改變／願意採用」之間還差了哪些條件。",
+      "expected": "answer"
+    },
+    {
+      "case_id": "CORPUS-BB05",
+      "class": "original_answerability_failure",
+      "group": "A_original_reproduction",
+      "question": "When is pausing a venture a rational survival decision rather than evidence that the founder no longer believes in the problem? Separate conviction in the problem from runway, timing, people and resource constraints.",
+      "expected": "answer"
+    },
+    {
+      "case_id": "CORPUS-BB10",
+      "class": "original_answerability_failure",
+      "group": "A_original_reproduction",
+      "question": "Why does evidence of demand still not prove that there is a viable business? Walk through the extra questions a founder must answer about value capture, economics, delivery and repeatability.",
+      "expected": "answer"
+    },
+    {
+      "case_id": "CORPUS-BB12",
+      "class": "original_answerability_failure",
+      "group": "A_original_reproduction",
+      "question": "Why is a venture more than its product? Explain how operations, resources, team, finance and risk turn a promising product into—or prevent it from becoming—a durable venture system.",
+      "expected": "answer"
+    },
+    {
+      "case_id": "TGT-B01-ZH-MCP",
+      "class": "new_traditional_chinese_cross_language",
+      "group": "B_new_variant",
+      "question": "如果模型會思考、工具會執行，那 MCP 到底站在哪一層？請用 capability exposure、workflow、webhook 和 function calling 的界線解釋，不能只說它是另一種工具呼叫。",
+      "expected": "answer"
+    },
+    {
+      "case_id": "TGT-B02-EN-PRODUCTION-RAG",
+      "class": "new_english_synonym_heavy_low_lexical_overlap",
+      "group": "B_new_variant",
+      "question": "In a real retrieval system, why is vectorizing slices only the skeleton rather than the whole animal? Cover the extra machinery needed to make answers trustworthy in production.",
+      "expected": "answer"
+    },
+    {
+      "case_id": "TGT-B03-SHORT-COMFYUI",
+      "class": "new_short_colloquial_query",
+      "group": "B_new_variant",
+      "question": "ComfyUI red nodes, now what?",
+      "expected": "answer"
+    },
+    {
+      "case_id": "TGT-B04-MIXED-SKILLS-WORKFLOW",
+      "class": "new_mixed_chinese_english_technical",
+      "group": "B_new_variant",
+      "question": "MCP/Skills 裡面，model reasoning 跟 execution workflow 的 boundary 要怎麼切，才不會把 tool exposure 當成完成任務本身？",
+      "expected": "answer"
+    },
+    {
+      "case_id": "TGT-B05-LONG-USER-RESEARCH",
+      "class": "new_long_explanatory_reasoning",
+      "group": "B_new_variant",
+      "question": "Imagine a team hears many user complaints during interviews and wants to turn them directly into a roadmap. Explain why that is risky, how observed behavior, importance, unmet need, switching moments and synthesis methods should change the decision, and why this is still an evidence problem rather than a loudness contest.",
+      "expected": "answer"
+    },
+    {
+      "case_id": "CORPUS-BB01",
+      "class": "known_good_control",
+      "group": "C_known_good_control",
+      "question": "A founder has an ambitious cross-border hospitality ownership idea involving REIT-like structures, tokenisation and usage rights. How should they decide whether the idea is genuinely bad, or simply too capital-, regulation-, trust-, and market-education-heavy for their current founder context?",
+      "expected": "answer"
+    },
+    {
+      "case_id": "CORPUS-BB06",
+      "class": "known_good_control",
+      "group": "C_known_good_control",
+      "question": "創業者聽到很多抱怨，為什麼仍不能直接把它當成值得創業的 pain point？請說明怎麼判斷一個問題是否真的重要、尚未被滿足，而且值得進一步驗證。",
+      "expected": "answer"
+    },
+    {
+      "case_id": "CORPUS-BB20",
+      "class": "known_good_control",
+      "group": "C_known_good_control",
+      "question": "Why does MCP not simply replace workflows, webhooks or function calling? Explain the architectural boundary between model reasoning, capability exposure and the execution layer.",
+      "expected": "answer"
+    },
+    {
+      "case_id": "CORPUS-BB24",
+      "class": "known_good_control",
+      "group": "C_known_good_control",
+      "question": "A downloaded ComfyUI workflow opens with red nodes or runs out of memory. Explain how checkpoints, LoRAs, VAE, CLIP/T5XXL, GGUF/FP8, missing requirements and memory pressure can produce different failure modes, and how you would debug them in a sensible order.",
+      "expected": "answer"
+    },
+    {
+      "case_id": "CORPUS-BB25",
+      "class": "known_good_control",
+      "group": "C_known_good_control",
+      "question": "Why is production RAG not just chunking plus embeddings? Describe the additional capability layers that become necessary as a system moves from a demo to a reliable application.",
+      "expected": "answer"
+    },
+    {
+      "case_id": "CORPUS-OOD27",
+      "class": "ood_safety_control",
+      "group": "D_ood_control",
+      "question": "請根據這個知識庫的來源，列出 Toyota 在 2025 年每一季的 audited revenue、operating profit 與 net income，並逐季附上來源引用。",
+      "expected": "abstain"
+    },
+    {
+      "case_id": "CORPUS-OOD28",
+      "class": "ood_safety_control",
+      "group": "D_ood_control",
+      "question": "According to the knowledge base, what are the Boeing 787 hydraulic pump replacement interval, inspection procedure and torque specifications? Cite the exact source passages.",
+      "expected": "abstain"
+    },
+    {
+      "case_id": "CORPUS-OOD29",
+      "class": "ood_false_premise_overlap_control",
+      "group": "D_ood_control",
+      "question": "Daniel wrote that Nites Alliance signed a 2025 acquisition agreement with Marriott International. What were the purchase price, closing date and integration terms?",
+      "expected": "abstain"
+    },
+    {
+      "case_id": "CORPUS-OOD30",
+      "class": "ood_safety_control",
+      "group": "D_ood_control",
+      "question": "Using only the knowledge base, give a rigorous proof of Fermat's Last Theorem through Wiles's modularity argument and cite the passages that establish each major step.",
+      "expected": "abstain"
+    }
+  ]
+}

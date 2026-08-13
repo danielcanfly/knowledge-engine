@@ -1,0 +1,457 @@
+{
+  "benchmark_v3": {
+    "candidate_vs_origin_main_summary": {
+      "answerable_count": 15,
+      "avg_answer_length": 534.53,
+      "avg_distinct_cited_source_count": 1.93,
+      "avg_evidence_count": 10.27,
+      "avg_evidence_used_by_claims": 1.93,
+      "avg_graph_expanded_evidence_count": 3.33,
+      "row_count": 18,
+      "safe_abstention_count": 3,
+      "unsupported_claims": 0
+    },
+    "deterministic_summary": {
+      "answerable_count": 15,
+      "avg_answer_length": 534.53,
+      "avg_distinct_cited_source_count": 1.93,
+      "avg_evidence_count": 10.27,
+      "avg_evidence_used_by_claims": 1.93,
+      "avg_graph_expanded_evidence_count": 3.33,
+      "row_count": 18,
+      "safe_abstention_count": 3,
+      "unsupported_claims": 0
+    },
+    "origin_main_summary": {
+      "answerable_count": 16,
+      "avg_answer_length": 464.88,
+      "avg_distinct_cited_source_count": 1.81,
+      "avg_evidence_count": 3.44,
+      "avg_evidence_used_by_claims": 1.88,
+      "avg_graph_expanded_evidence_count": 0.0,
+      "row_count": 18,
+      "safe_abstention_count": 2,
+      "unsupported_claims": 0
+    },
+    "real_provider_critical_repeat_summary": {
+      "answerable_count": 6,
+      "avg_answer_length": 540.33,
+      "avg_distinct_cited_source_count": 2.33,
+      "avg_evidence_count": 11.33,
+      "avg_evidence_used_by_claims": 2.33,
+      "avg_graph_expanded_evidence_count": 2.67,
+      "row_count": 6,
+      "safe_abstention_count": 0,
+      "unsupported_claims": 0
+    },
+    "real_provider_summary": {
+      "answerable_count": 15,
+      "avg_answer_length": 480.8,
+      "avg_distinct_cited_source_count": 2.27,
+      "avg_evidence_count": 10.27,
+      "avg_evidence_used_by_claims": 2.27,
+      "avg_graph_expanded_evidence_count": 3.33,
+      "row_count": 18,
+      "safe_abstention_count": 3,
+      "unsupported_claims": 0
+    }
+  },
+  "binding_proof": {
+    "compatibility_status": "compatible",
+    "graph": {
+      "confidence_histogram": {
+        "0.90-1.00": 8525
+      },
+      "directedness_by_relation": {
+        "contains:True": 4197,
+        "part_of:True": 4197,
+        "precedes:True": 131
+      },
+      "edge_count": 8525,
+      "edge_examples_by_relation": {
+        "contains": [
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_0033d8b647386b8baba9",
+            "provenance_ref": "structural-source-layout",
+            "relation_type": "contains",
+            "review_status": "approved",
+            "source": "article_b870d7d1149ac508e522",
+            "target": "section_311d82c25ff7ab46fe7d"
+          },
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_004cce3c4046d592a5dd",
+            "provenance_ref": "structural-source-layout",
+            "relation_type": "contains",
+            "review_status": "approved",
+            "source": "article_a55ae678733a3b071f50",
+            "target": "section_66fa97834e6bfd1b74ac"
+          },
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_005d0f7cf0a914133147",
+            "provenance_ref": "structural-source-layout",
+            "relation_type": "contains",
+            "review_status": "approved",
+            "source": "article_7fdffd1fb97e7e800bc0",
+            "target": "section_ea25b99dc205fb0c6c08"
+          }
+        ],
+        "part_of": [
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_0002480f8bd189e5f7fe",
+            "provenance_ref": "structural-source-layout",
+            "relation_type": "part_of",
+            "review_status": "approved",
+            "source": "section_6cd64c4bfd38bbc6b173",
+            "target": "article_7ac1cca9b9d25d409ca5"
+          },
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_00102974a8e9425d7ad0",
+            "provenance_ref": "structural-source-layout",
+            "relation_type": "part_of",
+            "review_status": "approved",
+            "source": "section_f759ee4e8b8062ddc424",
+            "target": "article_19e366642b6399741e71"
+          },
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_0010f802f4d6e36828c1",
+            "provenance_ref": "structural-source-layout",
+            "relation_type": "part_of",
+            "review_status": "approved",
+            "source": "section_07270ea94f2cdfa50604",
+            "target": "article_ef516a5a964be88c581d"
+          }
+        ],
+        "precedes": [
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_00d48875ef8bc9d8c2a0",
+            "provenance_ref": "structural-source-layout",
+            "relation_type": "precedes",
+            "review_status": "approved",
+            "source": "article_88f05e7883163e1cb245",
+            "target": "article_db9ac27aa856c791982b"
+          },
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_019257793f5e0e1b8b76",
+            "provenance_ref": "structural-source-layout",
+            "relation_type": "precedes",
+            "review_status": "approved",
+            "source": "article_1c0cbb0d018fcd949d37",
+            "target": "article_358efdca40e354b7bd99"
+          },
+          {
+            "confidence": 1.0,
+            "edge_id": "edge_01aeaf33ca475e5493db",
+            "provenance_ref": "structural-source-layout",
+            "relation_type": "precedes",
+            "review_status": "approved",
+            "source": "article_72d41b52147733b82301",
+            "target": "article_be3f9034ffaf95533161"
+          }
+        ]
+      },
+      "edge_provenance_ref_present_count": 8525,
+      "graph_v2_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+      "mutation_counts": {
+        "canonical_writes": 0,
+        "production_pointer_mutations": 0,
+        "qdrant_write_operations": 0,
+        "r2_write_operations": 0,
+        "source_mutations": 0
+      },
+      "node_count": 4222,
+      "node_type_counts": {
+        "Article": 156,
+        "Section": 4041,
+        "Series": 25
+      },
+      "relation_type_counts": {
+        "contains": 4197,
+        "part_of": 4197,
+        "precedes": 131
+      },
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "review_status_counts": {
+        "approved": 8525
+      },
+      "schema_version": "knowledge-engine-m26-aq-graph-semantics-profile/v1"
+    },
+    "outside_old20": true
+  },
+  "branch": "codex/answer-quality-aq-runtime",
+  "known_limitations": [
+    "Automated rubric scores are evidence-aware heuristics for gating and must be independently audited by GPT-D.",
+    "Full R2 object listing was interrupted for latency; bounded accepted-bundle inventory was used and no write APIs were invoked.",
+    "Reranker telemetry exposes selected feature components; exhaustive dropped-candidate dumps remain backlog."
+  ],
+  "markers": [
+    "[AQ-CODEX] PARALLEL_FINDINGS_ADJUDICATED"
+  ],
+  "origin_main": "3f135eb20d94b05019b5e6cecefedcb06e183674",
+  "pr": 1325,
+  "pre_commit_head": "743e64a802e2b39e388a1027b2eb59f026d0244c",
+  "protected_mutations": {
+    "all_protected_mutations_zero": true,
+    "artifacts_checked": [
+      "phase2-benchmark-v3-deterministic.json",
+      "phase2-benchmark-v3-real-provider.json",
+      "phase2-benchmark-v3-real-provider-critical-repeat.json",
+      "phase2-outside-old20-semantic-crosswalk-proof.json",
+      "phase2-full-graph-bounded-readonly-inventory.json"
+    ],
+    "row_count": 44,
+    "rows": [
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q01",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q02",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q03",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q04",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q05",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q06",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q07",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q08",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q09",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q10",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q11",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q12",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q13",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q14",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q15",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q16",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q17",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-deterministic.json",
+        "case_id": "AQV3-Q18",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q01",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q02",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q03",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q04",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q05",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q06",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q07",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q08",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q09",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q10",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q11",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q12",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q13",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q14",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q15",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q16",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q17",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider.json",
+        "case_id": "AQV3-Q18",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider-critical-repeat.json",
+        "case_id": "AQV3-Q03",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider-critical-repeat.json",
+        "case_id": "AQV3-Q04",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider-critical-repeat.json",
+        "case_id": "AQV3-Q06",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider-critical-repeat.json",
+        "case_id": "AQV3-Q07",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider-critical-repeat.json",
+        "case_id": "AQV3-Q11",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-benchmark-v3-real-provider-critical-repeat.json",
+        "case_id": "AQV3-Q12",
+        "mutations": {}
+      },
+      {
+        "artifact": "phase2-outside-old20-semantic-crosswalk-proof.json",
+        "case_id": "Explain outside old twenty production retrieval neighbour hydration.",
+        "mutations": {
+          "answer_to_canonical_writes": 0,
+          "canonical_writes": 0,
+          "corpus_index_content_mutations": 0,
+          "production_pointer_mutations": 0,
+          "qdrant_write_operations": 0,
+          "r2_write_operations": 0
+        }
+      },
+      {
+        "artifact": "phase2-full-graph-bounded-readonly-inventory.json",
+        "case_id": "artifact",
+        "mutations": {
+          "canonical_writes": 0,
+          "production_pointer_mutations": 0,
+          "qdrant_write_operations": 0,
+          "r2_write_operations": 0,
+          "source_mutations": 0
+        }
+      }
+    ],
+    "schema_version": "knowledge-engine-m26-aq-protected-mutation-evidence/v1",
+    "totals": {
+      "answer_to_canonical_writes": 0,
+      "canonical_writes": 0,
+      "corpus_index_content_mutations": 0,
+      "production_pointer_mutations": 0,
+      "qdrant_write_operations": 0,
+      "r2_write_operations": 0,
+      "source_mutations": 0
+    }
+  },
+  "schema_version": "knowledge-engine-m26-aq-phase2-convergence-summary/v1"
+}

@@ -4,7 +4,7 @@ services:
     image: knowledge-engine:0.2.0
     restart: unless-stopped
     env_file:
-      - .env
+      - ${M26_RUNTIME_ENV_FILE:-.env}
     ports:
       - "127.0.0.1:8080:8080"
     volumes:

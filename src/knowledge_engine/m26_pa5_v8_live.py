@@ -76,6 +76,19 @@ def _extract_text(response: Mapping[str, Any]) -> str:
     return str(response.get("text", ""))
 
 
+def _content_block_types(response: Mapping[str, Any]) -> list[str]:
+    content = response.get("content")
+    if not isinstance(content, list):
+        return []
+    return sorted(
+        {
+            str(part.get("type", "unknown"))
+            for part in content
+            if isinstance(part, Mapping)
+        }
+    )
+
+
 def _extract_json(text: str) -> dict[str, Any]:
     stripped = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.I)
     start = stripped.find("{")
@@ -172,14 +185,18 @@ class MiniMaxClient:
                 if self.cost + cost > self.max_cost:
                     raise LiveGateError("PAYG-equivalent cost budget exceeded")
                 self.cost += cost
+                text = _extract_text(body)
                 return {
-                    "text": _extract_text(body),
+                    "text": text,
                     "usage": usage,
                     "cost_usd": format(cost, "f"),
                     "latency_ms": int((time.monotonic() - started) * 1000),
                     "response_id": str(body.get("id", "")),
                     "call_class": call_class,
                     "network_attempt": network_attempt + 1,
+                    "stop_reason": str(body.get("stop_reason") or body.get("finish_reason") or ""),
+                    "content_block_types": _content_block_types(body),
+                    "output_char_count": len(text),
                 }
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 last_error = exc

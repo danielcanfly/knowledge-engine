@@ -8,7 +8,9 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from knowledge_engine import m26_aq_semantic_contract as canonical_runtime_module
 from knowledge_engine import m26_ask_api
+from knowledge_engine import m26_pa7_arbitrary_query_runtime as runtime_module
 from knowledge_engine.m26_ask_api import (
     WEB_GRAPH_SCHEMA,
     WEB_RESPONSE_SCHEMA,
@@ -24,12 +26,27 @@ from knowledge_engine.m26_pa7_arbitrary_query_runtime import (
     run_owner_arbitrary_query,
 )
 from knowledge_engine.m26_production_promotion_closure import load_json
+from tests.m26_answer_bundle_fixture import synthetic_full_production_answer_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
 GATE_PATH = ROOT / "pilot/m26/m26-pa-7-resolved-production-gate.json"
 OWNER_SUBJECT_HASH = "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b"
 TEST_BACKEND_TOKEN = "test-backend-token"
 AUTH_SCHEME = "Bear" + "er"
+
+
+@pytest.fixture(autouse=True)
+def _production_answer_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        runtime_module,
+        "load_production_answer_bundle",
+        synthetic_full_production_answer_bundle,
+    )
+    monkeypatch.setattr(
+        canonical_runtime_module,
+        "load_production_answer_bundle",
+        synthetic_full_production_answer_bundle,
+    )
 
 
 class ExactSpanProvider:
@@ -141,8 +158,97 @@ def _owner_headers() -> dict[str, str]:
     }
 
 
-def test_web_dto_wraps_canonical_runtime_without_raw_question() -> None:
-    question = "Compare routers and adaptive planning for permission-first controls."
+def _dto_runtime_fixture(**_: Any) -> dict[str, Any]:
+    return {
+        "schema_version": "knowledge-engine-m26-pa7-arbitrary-owner-query-response/v1",
+        "status": "owner_only_cited_answer",
+        "terminal_status": "answered",
+        "trace_id": "test_trace",
+        "question_sha256": "ab" * 32,
+        "answer_text": "A grounded supported answer.",
+        "answer_source": "provider_verified_runtime_bound_semantic_closure",
+        "safe_abstention": False,
+        "reason_codes": [],
+        "citations": [
+            {
+                "citation_id": "c1",
+                "claim_id": "claim_1",
+                "claim_role": "relationship",
+                "evidence_id": "evidence_1",
+                "evidence_type": "passage",
+                "locator_id": "loc_1",
+                "source_id": "source_1",
+                "source_identity": "source_identity_1",
+                "section_id": "section_1",
+                "concept_id": "concept_1",
+                "release_id": "release_test",
+                "source_locator": "synthetic://source/1",
+                "source_artifact_sha256": "11" * 32,
+                "support_text_sha256": "12" * 32,
+                "exact_quote_sha256": "13" * 32,
+                "provenance_record_sha256": "14" * 32,
+                "runtime_owned_locator": True,
+            },
+            {
+                "citation_id": "c2",
+                "claim_id": "claim_1",
+                "claim_role": "relationship",
+                "evidence_id": "evidence_2",
+                "evidence_type": "passage",
+                "locator_id": "loc_2",
+                "source_id": "source_2",
+                "source_identity": "source_identity_2",
+                "section_id": "section_2",
+                "concept_id": "concept_2",
+                "release_id": "release_test",
+                "source_locator": "synthetic://source/2",
+                "source_artifact_sha256": "21" * 32,
+                "support_text_sha256": "22" * 32,
+                "exact_quote_sha256": "23" * 32,
+                "provenance_record_sha256": "24" * 32,
+                "runtime_owned_locator": True,
+            },
+        ],
+        "answer_claims": [{"claim_id": "claim_1", "claim_role": "relationship"}],
+        "relationship_summary": {},
+        "multi_evidence_verification": {"support_precision": 1.0},
+        "semantic_closure": {
+            "failures": [],
+            "semantic_contract": {
+                "entrypoint": canonical_runtime_module.CANONICAL_RUNTIME_ENTRYPOINT,
+                "fingerprint": canonical_runtime_module.semantic_contract_fingerprint(),
+            },
+        },
+        "selected_evidence": [],
+        "evidence_utilization_trace": {},
+        "graph_observability": {},
+        "production_release_id": "release_test",
+        "production_manifest_sha256": "31" * 32,
+        "production_pointer_digest": "32" * 32,
+        "resolved_gate_self_sha256": "33" * 32,
+        "retrieval_mode_summary": {},
+        "retrieval_backend_identity": {},
+        "candidate_count_by_channel": {},
+        "selected_evidence_count": 2,
+        "distinct_source_count": 2,
+        "distinct_source_identities": ["source_identity_1", "source_identity_2"],
+        "provider_invoked": True,
+        "provider_call_count": 1,
+        "payg_equivalent_cost_usd": "0.00001",
+        "latency_ms": 1,
+        "privacy": {"raw_query_persisted": False},
+        "mutations": {"canonical_writes": 0},
+        "unsupported_accepted_claims": 0,
+        "material_claim_support_verified": True,
+        "citation_locator_valid": True,
+    }
+
+
+def test_web_dto_wraps_canonical_runtime_without_raw_question(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(m26_ask_api, "run_owner_arbitrary_query", _dto_runtime_fixture)
+    question = "Compare router permission-first controls and harness acceptance components."
     dto = run_owner_query_for_web(
         root=ROOT,
         gate_path=GATE_PATH,
@@ -163,6 +269,27 @@ def test_web_dto_wraps_canonical_runtime_without_raw_question() -> None:
     assert dto["mutations"]["canonical_writes"] == 0
     assert dto["privacy"]["raw_query_persisted"] is False
     assert question not in encoded
+
+
+def test_web_query_uses_full_semantic_closure_provider_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, Any] = {}
+
+    def fake_runtime(**kwargs: Any) -> dict[str, Any]:
+        observed.update(kwargs)
+        return _dto_runtime_fixture(**kwargs)
+
+    monkeypatch.setattr(m26_ask_api, "run_owner_arbitrary_query", fake_runtime)
+
+    run_owner_query_for_web(
+        root=ROOT,
+        gate_path=GATE_PATH,
+        request_payload={"question": "How should a router repair after semantic review?"},
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+    )
+
+    assert observed["max_provider_calls"] == 4
 
 
 def test_web_dto_matches_cli_runtime_response_identity() -> None:

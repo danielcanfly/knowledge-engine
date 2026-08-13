@@ -1,0 +1,905 @@
+{
+  "answer_claims": [
+    {
+      "citation_ids": [
+        "claim_1_ref_1"
+      ],
+      "claim_id": "claim_1",
+      "claim_role": "direct",
+      "facet_ids": [
+        "comfyui_failure_modes",
+        "comfyui_memory_debug_order",
+        "comfyui_requirements"
+      ],
+      "source_identities": [
+        "daniel_blog_en__comfyui-series-07"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "## My own advice: when debugging, get boring on purpose The easiest mistake is to make five changes at once: - swap the model - swap the workflow - update ComfyUI - update all custom nodes - reinstall Python for good measure That usually"
+    },
+    {
+      "citation_ids": [
+        "claim_2_ref_1"
+      ],
+      "claim_id": "claim_2",
+      "claim_role": "direct",
+      "facet_ids": [
+        "comfyui_checkpoints",
+        "comfyui_clip_t5xxl",
+        "comfyui_loras",
+        "comfyui_vae"
+      ],
+      "source_identities": [
+        "daniel_blog_en__comfyui-series-05"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "## One simple takeaway > **SDXL is the best balanced all-round starting point for a 16GB Mac, SD 1.5 is the easiest old friend, Flux is excellent but heavier, and HiDream is exciting but not where I would begin.** Next up, we stop talking"
+    },
+    {
+      "citation_ids": [
+        "claim_3_ref_1"
+      ],
+      "claim_id": "claim_3",
+      "claim_role": "direct",
+      "facet_ids": [
+        "comfyui_failure_modes",
+        "comfyui_quantization",
+        "comfyui_requirements"
+      ],
+      "source_identities": [
+        "daniel_blog_en__comfyui-series-07"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "That is why many people eventually conclude that safetensors or FP8 workflows are not always the most extreme option, but they can be cheaper to maintain."
+    },
+    {
+      "citation_ids": [
+        "claim_4_ref_1"
+      ],
+      "claim_id": "claim_4",
+      "claim_role": "direct",
+      "facet_ids": [
+        "comfyui_failure_modes",
+        "comfyui_requirements",
+        "comfyui_vae"
+      ],
+      "source_identities": [
+        "daniel_blog_en__comfyui-series-07"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "In practice it still depends on: - which release you downloaded - whether the workflow was designed for it - whether the text encoder, VAE, and UNet arrangement matches - whether your hardware can handle the rest of the stack"
+    },
+    {
+      "citation_ids": [
+        "claim_5_ref_1"
+      ],
+      "claim_id": "claim_5",
+      "claim_role": "direct",
+      "facet_ids": [
+        "comfyui_memory_debug_order"
+      ],
+      "source_identities": [
+        "daniel_blog_en__comfyui-series-07"
+      ],
+      "support_mode": "exact_quote",
+      "support_ref_count": 1,
+      "surface_text": "go back to a minimal working state 2."
+    }
+  ],
+  "answer_source": "deterministic_verified_evidence_synthesis",
+  "answer_text": "comfyui failure modes: ## My own advice: when debugging, get boring on purpose The easiest mistake is to make five changes at once: - swap the model - swap the workflow - update ComfyUI - update all custom nodes - reinstall Python for good measure That usually [claim_1_ref_1]. comfyui checkpoints / comfyui clip t5xxl / comfyui loras: ## One simple takeaway > **SDXL is the best balanced all-round starting point for a 16GB Mac, SD 1.5 is the easiest old friend, Flux is excellent but heavier, and HiDream is exciting but not where I would begin.** Next up, we stop talking [claim_2_ref_1]. comfyui GGUF/FP8 quantization: That is why many people eventually conclude that safetensors or FP8 workflows are not always the most extreme option, but they can be cheaper to maintain [claim_3_ref_1]. comfyui requirements: In practice it still depends on: - which release you downloaded - whether the workflow was designed for it - whether the text encoder, VAE, and UNet arrangement matches - whether your hardware can handle the rest of the stack [claim_4_ref_1]. comfyui memory debug order: go back to a minimal working state 2 [claim_5_ref_1].",
+  "candidate_count_by_channel": {
+    "combined_unique": 16,
+    "dense": 8,
+    "graph_edge_selected": 0,
+    "graph_expanded_selected": 0,
+    "lexical": 8,
+    "seed": 16
+  },
+  "citation_locator_valid": true,
+  "citations": [
+    {
+      "citation_id": "claim_1_ref_1",
+      "claim_id": "claim_1",
+      "claim_role": "direct",
+      "concept_id": "article_163f4f94ce87de66b9e3",
+      "evidence_id": "m26pa7ev_374eb49b03290a549f94dbc8d60d33c3",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "88a7dd8bfe9d592a520a7aab29a646c28548582c8dd69be18b203003fbeb1646",
+      "locator_id": "m26pa7loc_b600c59b67d496324a54bc3f1a370612",
+      "provenance_record_sha256": "0c34de8a5b2d88b0135acca09e482c7bb2fdaa72e62d895333602a3e1d5b3e47",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_18a9c8979e7e5181e8da",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__comfyui-series-07",
+      "source_identity": "daniel_blog_en__comfyui-series-07",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_18a9c8979e7e5181e8da",
+      "support_text_sha256": "2be7163cffc8a26cb1074633cf1d34c8e04303f8a56547f548c58c5b410a9449"
+    },
+    {
+      "citation_id": "claim_2_ref_1",
+      "claim_id": "claim_2",
+      "claim_role": "direct",
+      "concept_id": "article_c4eafeade4cda4d01867",
+      "evidence_id": "m26pa7ev_cff4ced4f8df227e5abb88025aec08fa",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "8e305f7b1af4dd81707eefd08b529e648f70a87868b023f9fd68f4acbb92a832",
+      "locator_id": "m26pa7loc_7b087c0edadb5c6624515afa2282f214",
+      "provenance_record_sha256": "ff10a79bd72176d9b5b3a5950f3f4c65cfc18fef0e2de20b52371bbe682398db",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_16a8580016eac07fff20",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__comfyui-series-05",
+      "source_identity": "daniel_blog_en__comfyui-series-05",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_16a8580016eac07fff20",
+      "support_text_sha256": "f111f770cea061d8e26eed9e921d60ca3e3352a55e4c9e38cd9ed810e598f90c"
+    },
+    {
+      "citation_id": "claim_3_ref_1",
+      "claim_id": "claim_3",
+      "claim_role": "direct",
+      "concept_id": "article_163f4f94ce87de66b9e3",
+      "evidence_id": "m26pa7ev_1268bc12b9263a86ca05848c6eb3fa88",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "01ccd81ec9c898bbb02509a8d8467d7a0bb8b54d01a8a8eb3f9cc1100d1c8abc",
+      "locator_id": "m26pa7loc_efbe3bddd9061f48fd21f31bd73fb934",
+      "provenance_record_sha256": "0c34de8a5b2d88b0135acca09e482c7bb2fdaa72e62d895333602a3e1d5b3e47",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_07a0db6cdbf57296d6ed",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__comfyui-series-07",
+      "source_identity": "daniel_blog_en__comfyui-series-07",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_07a0db6cdbf57296d6ed",
+      "support_text_sha256": "392d1733f775ea5faab24f816284022cb5fb98f5de6426eabb16a2b04ace06d2"
+    },
+    {
+      "citation_id": "claim_4_ref_1",
+      "claim_id": "claim_4",
+      "claim_role": "direct",
+      "concept_id": "article_163f4f94ce87de66b9e3",
+      "evidence_id": "m26pa7ev_69a9519071807094cff5643cc7f44d25",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "cf348f982f86490ccffaf19a26e09697cc57d83d22ff866e3c14c3f3f1c0d971",
+      "locator_id": "m26pa7loc_385f19f7390937b260a56db80c4a4084",
+      "provenance_record_sha256": "0c34de8a5b2d88b0135acca09e482c7bb2fdaa72e62d895333602a3e1d5b3e47",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_17fa402ac7b48ad541e6",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__comfyui-series-07",
+      "source_identity": "daniel_blog_en__comfyui-series-07",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_17fa402ac7b48ad541e6",
+      "support_text_sha256": "26b5ba1769893c5f45af4c3c3f7549dfbf9a45a6697b87e97be3ed6ffc87e212"
+    },
+    {
+      "citation_id": "claim_5_ref_1",
+      "claim_id": "claim_5",
+      "claim_role": "direct",
+      "concept_id": "article_163f4f94ce87de66b9e3",
+      "evidence_id": "m26pa7ev_374eb49b03290a549f94dbc8d60d33c3",
+      "evidence_type": "passage",
+      "exact_quote_sha256": "2cbe5a837cea9a7fc2b808636684747e110cd9095af921e4892089d3489fa06b",
+      "locator_id": "m26pa7loc_b600c59b67d496324a54bc3f1a370612",
+      "provenance_record_sha256": "0c34de8a5b2d88b0135acca09e482c7bb2fdaa72e62d895333602a3e1d5b3e47",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "runtime_owned_locator": true,
+      "section_id": "section_18a9c8979e7e5181e8da",
+      "source_artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "source_id": "daniel_blog_en__comfyui-series-07",
+      "source_identity": "daniel_blog_en__comfyui-series-07",
+      "source_locator": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json#section_18a9c8979e7e5181e8da",
+      "support_text_sha256": "2be7163cffc8a26cb1074633cf1d34c8e04303f8a56547f548c58c5b410a9449"
+    }
+  ],
+  "distinct_source_count": 7,
+  "distinct_source_identities": [
+    "daniel_blog_en__comfyui-series-02",
+    "daniel_blog_en__comfyui-series-05",
+    "daniel_blog_en__comfyui-series-06",
+    "daniel_blog_en__comfyui-series-07",
+    "daniel_blog_en__from-rag-to-production-rag-part-3",
+    "daniel_blog_en__from-rag-to-production-rag-part-8",
+    "daniel_blog_en__from-rag-to-production-rag-part-9"
+  ],
+  "evidence_utilization_trace": {
+    "selected_evidence_count": 10,
+    "selected_evidence_used_fraction": 0.4,
+    "selected_gt_zero_used_zero_failure": false,
+    "unused_selected_evidence_count": 6,
+    "unused_selected_evidence_ids": [
+      "m26pa7ev_41e68f4cc0185fa078535cef0851db2a",
+      "m26pa7ev_7d584fe3be64d57578ff469a2dc5511f",
+      "m26pa7ev_ad08488e3b45e970e0acc25e16ade670",
+      "m26pa7ev_b8162bbd6de2ec99b6970b2e8802de17",
+      "m26pa7ev_ecd6e7e4ca0a1b277aea909fa92dca09",
+      "m26pa7ev_f1765590fe8f4e514995b28a71b19817"
+    ],
+    "used_evidence_count": 4,
+    "used_evidence_ids": [
+      "m26pa7ev_1268bc12b9263a86ca05848c6eb3fa88",
+      "m26pa7ev_374eb49b03290a549f94dbc8d60d33c3",
+      "m26pa7ev_69a9519071807094cff5643cc7f44d25",
+      "m26pa7ev_cff4ced4f8df227e5abb88025aec08fa"
+    ],
+    "used_evidence_type_counts": {
+      "passage": 5
+    },
+    "used_source_identities": [
+      "daniel_blog_en__comfyui-series-05",
+      "daniel_blog_en__comfyui-series-07"
+    ]
+  },
+  "graph_hops_used": 1,
+  "graph_observability": {
+    "selected_graph_derived_evidence_count": 0,
+    "selected_graph_hop_counts": [],
+    "selected_graph_relation_type_counts": {},
+    "selected_graph_relation_types": [],
+    "structural_relation_type_counts": {}
+  },
+  "graph_trace": [
+    {
+      "confidence": 1.0,
+      "edge_id": "edge_cc189e5d4d739a506c84",
+      "provenance_ref_sha256": "43f8a67a459f07f78f3a4db0af4bd9ed230499ea604f0ca1ef4330a10c57e9e9",
+      "relation_type": "precedes",
+      "source": "article_6d430e058d1392e85678",
+      "target": "article_b5e27e2b14e2e99c3168"
+    }
+  ],
+  "intent_class": "direct_grounded_knowledge",
+  "latency_ms": 19106,
+  "material_claim_support_verified": true,
+  "model_identity": "MiniMax-M3",
+  "multi_evidence_verification": {
+    "bounded_repair_attempted": true,
+    "claim_count": 5,
+    "covered_facets": [
+      "comfyui_checkpoints",
+      "comfyui_clip_t5xxl",
+      "comfyui_failure_modes",
+      "comfyui_loras",
+      "comfyui_memory_debug_order",
+      "comfyui_quantization",
+      "comfyui_requirements",
+      "comfyui_vae"
+    ],
+    "deterministic_evidence_synthesis_used": true,
+    "distinct_source_count": 2,
+    "dropped_claim_count": 0,
+    "fallback_eligibility": {
+      "allow_after_repair_failure": true,
+      "eligible": true,
+      "reasons": [
+        "after_bounded_repair_failure",
+        "semantic_facet_bound_candidate"
+      ]
+    },
+    "locator_validity": 1.0,
+    "missing_facets": [],
+    "natural_answer_fallback_used": false,
+    "provider_attempt_telemetry": [
+      {
+        "attempt": 1,
+        "call_class": "pa7_multi_evidence_query",
+        "content_block_types": [
+          "text"
+        ],
+        "output_tokens": 957,
+        "parse_telemetry": {
+          "missing_keys": [],
+          "parse_ok": true,
+          "parse_subtype": "exact_json",
+          "unknown_keys": []
+        },
+        "provider_text_char_count": 3405,
+        "stop_reason": "end_turn"
+      },
+      {
+        "attempt": 2,
+        "call_class": "pa7_multi_evidence_query_repair",
+        "content_block_types": [
+          "text"
+        ],
+        "output_tokens": 1374,
+        "parse_telemetry": {
+          "missing_keys": [],
+          "parse_ok": true,
+          "parse_subtype": "fenced_json",
+          "unknown_keys": []
+        },
+        "provider_text_char_count": 4687,
+        "stop_reason": "end_turn"
+      }
+    ],
+    "provider_parse": {
+      "missing_keys": [],
+      "parse_subtype": "exact_json",
+      "unknown_keys": []
+    },
+    "provider_status": "answer_candidate",
+    "repair_result": "deterministic_verified_evidence_synthesis",
+    "repair_trigger": [
+      "BOUNDED_REPAIR_EXHAUSTED",
+      "M26-PA7-ME-020"
+    ],
+    "required_facets": [
+      "comfyui_checkpoints",
+      "comfyui_clip_t5xxl",
+      "comfyui_failure_modes",
+      "comfyui_loras",
+      "comfyui_memory_debug_order",
+      "comfyui_quantization",
+      "comfyui_requirements",
+      "comfyui_vae"
+    ],
+    "single_primary_passage_used": false,
+    "support_precision": 1.0,
+    "support_ref_count": 5,
+    "trigger_reason_codes": [
+      "BOUNDED_REPAIR_EXHAUSTED",
+      "M26-PA7-ME-020"
+    ],
+    "unsupported_accepted_claims": 0,
+    "verification_failure_codes_by_attempt": [
+      "M26-PA7-ME-020",
+      "M26-PA7-ME-020"
+    ]
+  },
+  "mutations": {
+    "answer_to_canonical_writes": 0,
+    "canonical_writes": 0,
+    "corpus_index_content_mutations": 0,
+    "production_pointer_mutations": 0,
+    "qdrant_write_operations": 0,
+    "r2_write_operations": 0
+  },
+  "parent_expansion": {
+    "enabled": true,
+    "expanded_section_count": 30,
+    "items": [
+      {
+        "evidence_id": "m26pa7ev_f1765590fe8f4e514995b28a71b19817",
+        "parent_concept_id": "article_13abc7fe1d3a7a1f2181",
+        "sibling_section_ids": [
+          "article_13abc7fe1d3a7a1f2181",
+          "section_0b51bf074d0db3585f01",
+          "section_0ce849696a92a7f92ca8"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_b8162bbd6de2ec99b6970b2e8802de17",
+        "parent_concept_id": "article_13abc7fe1d3a7a1f2181",
+        "sibling_section_ids": [
+          "article_13abc7fe1d3a7a1f2181",
+          "section_0b51bf074d0db3585f01",
+          "section_0ce849696a92a7f92ca8"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_cff4ced4f8df227e5abb88025aec08fa",
+        "parent_concept_id": "article_c4eafeade4cda4d01867",
+        "sibling_section_ids": [
+          "article_c4eafeade4cda4d01867",
+          "section_068e3760d24d34fe2782",
+          "section_17306e665ca161f4df58"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_69a9519071807094cff5643cc7f44d25",
+        "parent_concept_id": "article_163f4f94ce87de66b9e3",
+        "sibling_section_ids": [
+          "article_163f4f94ce87de66b9e3",
+          "section_0648d25f5cb705ec290c",
+          "section_07a0db6cdbf57296d6ed"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_7d584fe3be64d57578ff469a2dc5511f",
+        "parent_concept_id": "article_39c649954e35da7b0494",
+        "sibling_section_ids": [
+          "article_39c649954e35da7b0494",
+          "section_089295f259a8e365b8c0",
+          "section_08e078a41900b2ca561d"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_1268bc12b9263a86ca05848c6eb3fa88",
+        "parent_concept_id": "article_163f4f94ce87de66b9e3",
+        "sibling_section_ids": [
+          "article_163f4f94ce87de66b9e3",
+          "section_0648d25f5cb705ec290c",
+          "section_0a4fd69db07c816bc397"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_ecd6e7e4ca0a1b277aea909fa92dca09",
+        "parent_concept_id": "article_262078c49cdafb3cecc9",
+        "sibling_section_ids": [
+          "article_262078c49cdafb3cecc9",
+          "section_64c1fb27e1410949a022",
+          "section_69d37e918e807904e001"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_374eb49b03290a549f94dbc8d60d33c3",
+        "parent_concept_id": "article_163f4f94ce87de66b9e3",
+        "sibling_section_ids": [
+          "article_163f4f94ce87de66b9e3",
+          "section_0648d25f5cb705ec290c",
+          "section_07a0db6cdbf57296d6ed"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_ad08488e3b45e970e0acc25e16ade670",
+        "parent_concept_id": "article_b5e27e2b14e2e99c3168",
+        "sibling_section_ids": [
+          "article_b5e27e2b14e2e99c3168",
+          "section_0ba9f40ed60181ba7ec6",
+          "section_37e96a53c37aa25909ca"
+        ]
+      },
+      {
+        "evidence_id": "m26pa7ev_41e68f4cc0185fa078535cef0851db2a",
+        "parent_concept_id": "article_6d430e058d1392e85678",
+        "sibling_section_ids": [
+          "article_6d430e058d1392e85678",
+          "section_22605b7c64acbb6bbcb0",
+          "section_29c1a4c28fd8033a70de"
+        ]
+      }
+    ],
+    "max_siblings_per_evidence": 3
+  },
+  "payg_equivalent_cost_usd": "0.00581088",
+  "privacy": {
+    "full_provider_response_persisted": false,
+    "raw_evidence_persisted": false,
+    "raw_query_persisted": false,
+    "secret_values_persisted": false,
+    "vectors_persisted": false
+  },
+  "production_manifest_sha256": "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3",
+  "production_pointer_digest": "061589d7a487d37a807bcc366461b3e61f2605362f594c49ce39b503990ffb98",
+  "production_release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+  "provider_call_count": 2,
+  "provider_identity": "MiniMax",
+  "provider_invoked": true,
+  "qdrant_collection": null,
+  "question_sha256": "9cda2bccc83d93a35aa9867b1c6c4d8489d2f0f22dd0d14e06ce30d5bfc04514",
+  "reason_codes": [],
+  "relationship_summary": {
+    "covered_facets": [
+      "comfyui_checkpoints",
+      "comfyui_clip_t5xxl",
+      "comfyui_failure_modes",
+      "comfyui_loras",
+      "comfyui_memory_debug_order",
+      "comfyui_quantization",
+      "comfyui_requirements",
+      "comfyui_vae"
+    ],
+    "intent_class": "direct_grounded_knowledge",
+    "missing_facets": [],
+    "relation": "null",
+    "required_facets": [
+      "comfyui_checkpoints",
+      "comfyui_clip_t5xxl",
+      "comfyui_failure_modes",
+      "comfyui_loras",
+      "comfyui_memory_debug_order",
+      "comfyui_quantization",
+      "comfyui_requirements",
+      "comfyui_vae"
+    ],
+    "selected_evidence_ids": [
+      "m26pa7ev_374eb49b03290a549f94dbc8d60d33c3",
+      "m26pa7ev_cff4ced4f8df227e5abb88025aec08fa",
+      "m26pa7ev_1268bc12b9263a86ca05848c6eb3fa88",
+      "m26pa7ev_69a9519071807094cff5643cc7f44d25"
+    ],
+    "selected_graph_edge_ids": [],
+    "synthesis_source": "deterministic_verified_evidence_spans",
+    "used_evidence_ids": [
+      "m26pa7ev_1268bc12b9263a86ca05848c6eb3fa88",
+      "m26pa7ev_374eb49b03290a549f94dbc8d60d33c3",
+      "m26pa7ev_69a9519071807094cff5643cc7f44d25",
+      "m26pa7ev_cff4ced4f8df227e5abb88025aec08fa"
+    ]
+  },
+  "repair_attempted": true,
+  "rerank_diversity_summary": {
+    "distinct_source_count": 7,
+    "selected_channel_counts": {
+      "lexical": 3,
+      "query_coverage": 7,
+      "required_facet_coverage": 3
+    },
+    "selected_evidence_count": 10,
+    "selected_evidence_type_counts": {
+      "passage": 10
+    },
+    "selected_source_redundancy": {
+      "daniel_blog_en__comfyui-series-06": 2,
+      "daniel_blog_en__comfyui-series-07": 3
+    }
+  },
+  "resolved_gate_self_sha256": "6adf0f4fa53d0b061f9e587b72e99ce38de2805f8b35b23841d5a63e44d9af5b",
+  "retrieval_backend_identity": {
+    "dense": {
+      "backend": "local_release_dense_projection_v1",
+      "manifest_sha256": "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "remote": false,
+      "vector_dimension": 64,
+      "vectors_persisted": false
+    },
+    "graph_v2": {
+      "artifact_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+      "edge_count": 8525,
+      "node_count": 4222,
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+    },
+    "lexical": {
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+    },
+    "provenance": {
+      "artifact_sha256": "d8f7b88ce828daa42b36a8a60c8b47615c83262f308ead5eef226fba6d952c3f",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+    }
+  },
+  "retrieval_mode_summary": {
+    "actual_question_reaches_retrieval": true,
+    "dense": true,
+    "dynamic_evidence_budget": true,
+    "graph": true,
+    "graph_expansion_default_for_ordinary_queries": true,
+    "intent_class": "direct_grounded_knowledge",
+    "lexical": true,
+    "multi_evidence_bundle": true,
+    "parent_expansion": true,
+    "provenance": true,
+    "redundancy_penalty": true,
+    "reranking": "dynamic_candidate_pool_graph_distance_source_diversity_redundancy_penalty",
+    "source_diversity": true
+  },
+  "safe_abstention": false,
+  "schema_version": "knowledge-engine-m26-pa7-arbitrary-owner-query-response/v1",
+  "selected_evidence": [
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "query_coverage"
+      ],
+      "concept_id": "article_13abc7fe1d3a7a1f2181",
+      "evidence_id": "m26pa7ev_f1765590fe8f4e514995b28a71b19817",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_63cc5fbb262d19c7b7a0552cb753f59e",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "coverage_terms": [
+          "checkpoint",
+          "checkpoints",
+          "clip",
+          "comfyui",
+          "downloaded",
+          "failure",
+          "fp8",
+          "gguf",
+          "lora",
+          "loras",
+          "missing",
+          "mode",
+          "modes",
+          "node",
+          "red",
+          "t5xxl",
+          "vae",
+          "workflow",
+          "you"
+        ],
+        "query_overlap_score": 0.5428571428571428
+      },
+      "section_granularity": "section",
+      "section_id": "section_61802b22b682eda95da1",
+      "source_id": "daniel_blog_en__comfyui-series-06",
+      "source_identity": "daniel_blog_en__comfyui-series-06",
+      "text_sha256": "4b380fb9b63e426ae41e4d9434d0976a94437a0e0a4ad1d95eb36883c400fb00"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "query_coverage"
+      ],
+      "concept_id": "article_13abc7fe1d3a7a1f2181",
+      "evidence_id": "m26pa7ev_b8162bbd6de2ec99b6970b2e8802de17",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_208dab4b7f8015779778e75c73947b8c",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "coverage_terms": [
+          "memory",
+          "nodes",
+          "pressure"
+        ],
+        "query_overlap_score": 0.4857142857142857
+      },
+      "section_granularity": "section",
+      "section_id": "section_5647d51fb275de532db8",
+      "source_id": "daniel_blog_en__comfyui-series-06",
+      "source_identity": "daniel_blog_en__comfyui-series-06",
+      "text_sha256": "539409162b2c2a9d9c535a4f0fc7bce5c1ce7a7307d5e945fb789295cf4e44c1"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "query_coverage"
+      ],
+      "concept_id": "article_c4eafeade4cda4d01867",
+      "evidence_id": "m26pa7ev_cff4ced4f8df227e5abb88025aec08fa",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_7b087c0edadb5c6624515afa2282f214",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "coverage_terms": [
+          "open",
+          "would"
+        ],
+        "query_overlap_score": 0.45714285714285713
+      },
+      "section_granularity": "section",
+      "section_id": "section_16a8580016eac07fff20",
+      "source_id": "daniel_blog_en__comfyui-series-05",
+      "source_identity": "daniel_blog_en__comfyui-series-05",
+      "text_sha256": "f111f770cea061d8e26eed9e921d60ca3e3352a55e4c9e38cd9ed810e598f90c"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "query_coverage"
+      ],
+      "concept_id": "article_163f4f94ce87de66b9e3",
+      "evidence_id": "m26pa7ev_69a9519071807094cff5643cc7f44d25",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_385f19f7390937b260a56db80c4a4084",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "coverage_terms": [
+          "can",
+          "requirement",
+          "requirements",
+          "them"
+        ],
+        "query_overlap_score": 0.45714285714285713
+      },
+      "section_granularity": "section",
+      "section_id": "section_17fa402ac7b48ad541e6",
+      "source_id": "daniel_blog_en__comfyui-series-07",
+      "source_identity": "daniel_blog_en__comfyui-series-07",
+      "text_sha256": "26b5ba1769893c5f45af4c3c3f7549dfbf9a45a6697b87e97be3ed6ffc87e212"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "required_facet_coverage",
+        "query_coverage"
+      ],
+      "concept_id": "article_39c649954e35da7b0494",
+      "evidence_id": "m26pa7ev_7d584fe3be64d57578ff469a2dc5511f",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_daa77f0d1a06658eb1673d1ac6d6aae1",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "covered_facet_terms": [
+          "clip",
+          "t5xxl"
+        ],
+        "required_facet_id": "comfyui_clip_t5xxl",
+        "required_facet_terms": [
+          "clip",
+          "t5xxl"
+        ]
+      },
+      "section_granularity": "section",
+      "section_id": "section_b976acd7df8b89246673",
+      "source_id": "daniel_blog_en__comfyui-series-02",
+      "source_identity": "daniel_blog_en__comfyui-series-02",
+      "text_sha256": "5be16429c952ad12c16d5220f82f46f24156e448327309dbf2eb0071ef2e6fc7"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "required_facet_coverage",
+        "query_coverage"
+      ],
+      "concept_id": "article_163f4f94ce87de66b9e3",
+      "evidence_id": "m26pa7ev_1268bc12b9263a86ca05848c6eb3fa88",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_efbe3bddd9061f48fd21f31bd73fb934",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "covered_facet_terms": [
+          "fp8",
+          "gguf"
+        ],
+        "required_facet_id": "comfyui_quantization",
+        "required_facet_terms": [
+          "fp8",
+          "gguf"
+        ]
+      },
+      "section_granularity": "section",
+      "section_id": "section_07a0db6cdbf57296d6ed",
+      "source_id": "daniel_blog_en__comfyui-series-07",
+      "source_identity": "daniel_blog_en__comfyui-series-07",
+      "text_sha256": "392d1733f775ea5faab24f816284022cb5fb98f5de6426eabb16a2b04ace06d2"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_262078c49cdafb3cecc9",
+      "evidence_id": "m26pa7ev_ecd6e7e4ca0a1b277aea909fa92dca09",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_6fa8a477cfffb227fc5445829797dad5",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 163.85,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_296166df8c108754ed74",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-3",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-3",
+      "text_sha256": "9cd9a8a6f10e955b6c9206302f8e3a75e111456ba7ed2fba095f3da220a6cbad"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "required_facet_coverage",
+        "query_coverage"
+      ],
+      "concept_id": "article_163f4f94ce87de66b9e3",
+      "evidence_id": "m26pa7ev_374eb49b03290a549f94dbc8d60d33c3",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_b600c59b67d496324a54bc3f1a370612",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "covered_facet_terms": [
+          "boring on purpose",
+          "minimal working state",
+          "one variable at a time"
+        ],
+        "required_facet_id": "comfyui_memory_debug_order",
+        "required_facet_terms": [
+          "boring",
+          "minimal",
+          "one",
+          "purpose",
+          "state",
+          "time",
+          "variable",
+          "working"
+        ]
+      },
+      "section_granularity": "section",
+      "section_id": "section_18a9c8979e7e5181e8da",
+      "source_id": "daniel_blog_en__comfyui-series-07",
+      "source_identity": "daniel_blog_en__comfyui-series-07",
+      "text_sha256": "2be7163cffc8a26cb1074633cf1d34c8e04303f8a56547f548c58c5b410a9449"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_b5e27e2b14e2e99c3168",
+      "evidence_id": "m26pa7ev_ad08488e3b45e970e0acc25e16ade670",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_c43ef79a8576c286f6f4d1bf0817ab66",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 183.35,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_f206a930b1d87612af3d",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-9",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-9",
+      "text_sha256": "9d5b3d54e8f9444f2b44e0bbc716957673a27ab965b93fda37cd9af540edd531"
+    },
+    {
+      "artifact_key": "releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/artifacts/lexical-index.json",
+      "artifact_sha256": "056ba3feb52aa1207f9097598924737c74e01d39d95833640f89836999528e7e",
+      "channels": [
+        "lexical"
+      ],
+      "concept_id": "article_6d430e058d1392e85678",
+      "evidence_id": "m26pa7ev_41e68f4cc0185fa078535cef0851db2a",
+      "evidence_text_role": "section_passage",
+      "evidence_type": "passage",
+      "locator_id": "m26pa7loc_ecc04d1a14a434af30c2b8a7a66e63ff",
+      "release_id": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+      "retrieval_metadata": {
+        "graph_edges": [],
+        "graph_hop": 0,
+        "graph_relevance_scores": [],
+        "graph_seed_concepts": [],
+        "relation_types": [],
+        "rerank_score": 148.683333,
+        "structural_relation_only": false
+      },
+      "section_granularity": "section",
+      "section_id": "section_e8964324d9c6f49af3bb",
+      "source_id": "daniel_blog_en__from-rag-to-production-rag-part-8",
+      "source_identity": "daniel_blog_en__from-rag-to-production-rag-part-8",
+      "text_sha256": "4a3e1c8ff0145282d1d3c0d1dd6718f60f6a955e5f0760c63264a05586aab345"
+    }
+  ],
+  "selected_evidence_count": 10,
+  "selected_evidence_ids": [
+    "m26pa7ev_f1765590fe8f4e514995b28a71b19817",
+    "m26pa7ev_b8162bbd6de2ec99b6970b2e8802de17",
+    "m26pa7ev_cff4ced4f8df227e5abb88025aec08fa",
+    "m26pa7ev_69a9519071807094cff5643cc7f44d25",
+    "m26pa7ev_7d584fe3be64d57578ff469a2dc5511f",
+    "m26pa7ev_1268bc12b9263a86ca05848c6eb3fa88",
+    "m26pa7ev_ecd6e7e4ca0a1b277aea909fa92dca09",
+    "m26pa7ev_374eb49b03290a549f94dbc8d60d33c3",
+    "m26pa7ev_ad08488e3b45e970e0acc25e16ade670",
+    "m26pa7ev_41e68f4cc0185fa078535cef0851db2a"
+  ],
+  "selected_locator_ids": [
+    "m26pa7loc_63cc5fbb262d19c7b7a0552cb753f59e",
+    "m26pa7loc_208dab4b7f8015779778e75c73947b8c",
+    "m26pa7loc_7b087c0edadb5c6624515afa2282f214",
+    "m26pa7loc_385f19f7390937b260a56db80c4a4084",
+    "m26pa7loc_daa77f0d1a06658eb1673d1ac6d6aae1",
+    "m26pa7loc_efbe3bddd9061f48fd21f31bd73fb934",
+    "m26pa7loc_6fa8a477cfffb227fc5445829797dad5",
+    "m26pa7loc_b600c59b67d496324a54bc3f1a370612",
+    "m26pa7loc_c43ef79a8576c286f6f4d1bf0817ab66",
+    "m26pa7loc_ecc04d1a14a434af30c2b8a7a66e63ff"
+  ],
+  "status": "owner_only_cited_answer",
+  "terminal_status": "verified_answer_ready_candidate",
+  "trace_id": "m26pa7aq_667cc91c9aa7bae5442382a187e54905",
+  "unsupported_accepted_claims": 0
+}

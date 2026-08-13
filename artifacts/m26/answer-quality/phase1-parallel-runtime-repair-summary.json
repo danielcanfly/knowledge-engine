@@ -1,0 +1,216 @@
+{
+  "schema_version": "knowledge-engine-m26-answer-quality-phase1-summary/v1",
+  "phase": "parallel_phase1_provisional",
+  "base_head_before_phase1_commit": "1d9a1e4fb92d47b448f0b389c42adbadc58a3d5b",
+  "pr": 1325,
+  "branch": "codex/answer-quality-aq-runtime",
+  "full_production_binding": {
+    "status": "compatible",
+    "release_id": null,
+    "graph_nodes": 4222,
+    "graph_edges": 8525,
+    "compatibility_mismatch_counts": {
+      "artifact_family_mismatches": 0,
+      "graph_v1_v2_node_mismatch": 0,
+      "lexical_concepts_missing_from_graph": 0,
+      "lexical_sections_missing_from_semantic_inputs": 0,
+      "lexical_sources_missing_from_source_index": 0,
+      "manifest_count_mismatches": 0,
+      "provenance_concepts_missing_from_graph": 0,
+      "provenance_sources_missing_from_source_index": 0,
+      "qdrant_payload_sample_mismatches": 0,
+      "qdrant_point_count_mismatch": 0,
+      "semantic_sections_missing_from_lexical": 0
+    },
+    "protected_mutations": {
+      "answer_to_canonical_writes": 0,
+      "canonical_writes": 0,
+      "production_pointer_writes": 0,
+      "qdrant_writes": 0,
+      "r2_writes": 0,
+      "read_only": true,
+      "source_writes": 0
+    }
+  },
+  "production_relation_profile": {
+    "accepted_release": "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043",
+    "graph_v2_sha256": "ddaceb89bfda15618fdf9360953d9f66a5c8b33c3853480c1db7abe41ba32869",
+    "node_count": 4222,
+    "edge_count": 8525,
+    "relation_type_counts": {
+      "part_of": 4197,
+      "contains": 4197,
+      "precedes": 131
+    },
+    "inference": "Accepted production graph relation semantics are structural/navigation-oriented; richer curated semantic relation types are not present in this graph-v2 artifact."
+  },
+  "runtime_repairs": [
+    "query-conditioned graph edge scoring with structural precedes downweighting outside order/temporal questions",
+    "query coverage evidence insertion before source-diversity trim for comparison/synthesis/temporal intents",
+    "graph relationship edge selection by best endpoint-section relevance, not raw graph order",
+    "deterministic verified synthesis can recover any intent after provider repair exhaustion, but only through the same exact-quote verifier",
+    "selected-vs-used evidence utilization and relation-type observability added to responses and benchmarks",
+    "precision no-answer gate now requires random identifier overlap for checksum/hash-style questions"
+  ],
+  "deterministic_v3_summary": {
+    "row_count": 12,
+    "answerable_count": 10,
+    "safe_abstention_count": 2,
+    "avg_evidence_count": 8.2,
+    "avg_graph_expanded_evidence_count": 1.7,
+    "avg_answer_length": 562.4,
+    "avg_evidence_used_by_claims": 1.9,
+    "avg_distinct_cited_source_count": 1.9,
+    "unsupported_claims": 0
+  },
+  "deterministic_v3_baseline_summary": {
+    "row_count": 12,
+    "answerable_count": 10,
+    "safe_abstention_count": 2,
+    "avg_evidence_count": 3.5,
+    "avg_graph_expanded_evidence_count": 0.0,
+    "avg_answer_length": 456.1,
+    "avg_evidence_used_by_claims": 1.9,
+    "avg_distinct_cited_source_count": 1.8,
+    "unsupported_claims": 0
+  },
+  "real_provider_v2_summary": {
+    "row_count": 6,
+    "answerable_count": 4,
+    "safe_abstention_count": 2,
+    "avg_evidence_count": 7.75,
+    "avg_graph_expanded_evidence_count": 4.25,
+    "avg_answer_length": 510.75,
+    "avg_evidence_used_by_claims": 2.0,
+    "avg_distinct_cited_source_count": 2.0,
+    "unsupported_claims": 0
+  },
+  "real_provider_v3_summary": {
+    "row_count": 8,
+    "answerable_count": 8,
+    "safe_abstention_count": 0,
+    "avg_evidence_count": 8.62,
+    "avg_graph_expanded_evidence_count": 2.12,
+    "avg_answer_length": 594.88,
+    "avg_evidence_used_by_claims": 2.12,
+    "avg_distinct_cited_source_count": 2.12,
+    "unsupported_claims": 0
+  },
+  "real_provider_case_delta": [
+    {
+      "case_id": "complementary_synthesis",
+      "v2_status": "owner_only_safe_abstention",
+      "v3_status": "owner_only_cited_answer",
+      "v2_safe_abstention": true,
+      "v3_safe_abstention": false,
+      "v2_evidence_used_by_claims": 0,
+      "v3_evidence_used_by_claims": 2,
+      "v2_graph_expanded_evidence_count": 2,
+      "v3_graph_expanded_evidence_count": 1,
+      "v3_answer_preview": "Taken together, the cited evidence supports a combined reading: ## DAG: express dependencies without cycles A directed acyclic graph is a set of tasks connected by directional dependencies with no cycle in the graph: ```text -> Research A - Problem -> Split -> Research B --> Synthesis -> Verify -> Research C - ``` The key property is dependency, not parallelism. [claim_1_ref_1]; ### Directed acyclic graph (DAG) A DAG represents dependencies without cycles. [claim_1_ref_2]"
+    },
+    {
+      "case_id": "cross_document_comparison",
+      "v2_status": "owner_only_cited_answer",
+      "v3_status": "owner_only_cited_answer",
+      "v2_safe_abstention": false,
+      "v3_safe_abstention": false,
+      "v2_evidence_used_by_claims": 2,
+      "v3_evidence_used_by_claims": 2,
+      "v2_graph_expanded_evidence_count": 4,
+      "v3_graph_expanded_evidence_count": 0,
+      "v3_answer_preview": "The strongest grounded comparison is that the selected sources describe different parts of the same operating model: ### Router Select the research workflow instead of direct question answering. [claim_1_ref_1]; ## Conclusion The five core structures solve distinct problems: - **Direct** minimises orchestration when one bounded operation is sufficient. [claim_1_ref_2]"
+    },
+    {
+      "case_id": "direct_factual",
+      "v2_status": "owner_only_cited_answer",
+      "v3_status": "owner_only_cited_answer",
+      "v2_safe_abstention": false,
+      "v3_safe_abstention": false,
+      "v2_evidence_used_by_claims": 2,
+      "v3_evidence_used_by_claims": 2,
+      "v2_graph_expanded_evidence_count": 1,
+      "v3_graph_expanded_evidence_count": 1,
+      "v3_answer_preview": "A skill is task methodology, not merely a prompt This is where many teams wobble. [claim_1_ref_1] Building AI Skills Series Part 2: Why ChatGPT should not connect directly to low-level tools Why exposing low-level tools directly to ChatGPT becomes difficult to govern, and how a thin skill gateway creates safer task boundaries. [claim_1_ref_2]"
+    },
+    {
+      "case_id": "explanatory",
+      "v2_status": "owner_only_cited_answer",
+      "v3_status": "owner_only_cited_answer",
+      "v2_safe_abstention": false,
+      "v3_safe_abstention": false,
+      "v2_evidence_used_by_claims": 2,
+      "v3_evidence_used_by_claims": 2,
+      "v2_graph_expanded_evidence_count": 6,
+      "v3_graph_expanded_evidence_count": 4,
+      "v3_answer_preview": "## State machine: make progress and legal transitions explicit A state machine represents a finite set of states and the transitions allowed between them: ```text START -> RETRIEVE -> VERIFY_EVIDENCE -> enough evidence -> DRAFT -> insufficient and retries remain -> REWRITE_QUERY -> retry limit reached -> FAILED -> WAITING_FOR_APPROVAL -> approved -> EXECUTE -> rejected -> CANCELLED -> COMPLETED ``` The structure answers: - where the system is now - what transitions are legal - which condition selects each transition - what data must be persisted - which states are terminal Workflow engines such as AWS Step Functions expose explicit task and flow states, including choices, waits, maps, and pa"
+    },
+    {
+      "case_id": "graph_relationship",
+      "v2_status": "owner_only_safe_abstention",
+      "v3_status": "owner_only_cited_answer",
+      "v2_safe_abstention": true,
+      "v3_safe_abstention": false,
+      "v2_evidence_used_by_claims": 0,
+      "v3_evidence_used_by_claims": 3,
+      "v2_graph_expanded_evidence_count": 7,
+      "v3_graph_expanded_evidence_count": 4,
+      "v3_answer_preview": "The relevant graph relation is precedes. The relationship is grounded by Production graph navigation edge edge_3f15206278e63ccf8981 states article_f8573ff5ee10182a3f6c precedes article_71b9d92dad73c6d1fa18 with confidence 1.0 and review approved. [claim_1_ref_1]; ## Headless harness service: one execution core, several client surfaces ![Headless Harness Service](/images/harness-theory-part-2/harness-theory-part-02-figure-2-3.webp) *Figure 2-3 | Several clients share a harness service, agent core, and durable thread state through a stable bidirectional protocol.* When one agent has to appear in a CLI, IDE, desktop app, web app, and partner product, the quickest prototype is to connect every c"
+    },
+    {
+      "case_id": "ordinary_graph_no_keywords",
+      "v2_status": "owner_only_cited_answer",
+      "v3_status": "owner_only_cited_answer",
+      "v2_safe_abstention": false,
+      "v3_safe_abstention": false,
+      "v2_evidence_used_by_claims": 2,
+      "v3_evidence_used_by_claims": 2,
+      "v2_graph_expanded_evidence_count": 6,
+      "v3_graph_expanded_evidence_count": 4,
+      "v3_answer_preview": "## Headless harness service: one execution core, several client surfaces ![Headless Harness Service](/images/harness-theory-part-2/harness-theory-part-02-figure-2-3.webp) *Figure 2-3 | Several clients share a harness service, agent core, and durable thread state through a stable bidirectional protocol.* When one agent has to appear in a CLI, IDE, desktop app, web app, and partner product, the quickest prototype is to connect every client to an agent SDK separately. [claim_1_ref_1] OpenAI, [Unlocking the Codex harness: how we built the App Server](https://openai.com/index/unlocking-the-codex-harness/), 4 February 2026. [claim_1_ref_2]"
+    },
+    {
+      "case_id": "provenance",
+      "v2_status": null,
+      "v3_status": "owner_only_cited_answer",
+      "v2_safe_abstention": null,
+      "v3_safe_abstention": false,
+      "v2_evidence_used_by_claims": null,
+      "v3_evidence_used_by_claims": 2,
+      "v2_graph_expanded_evidence_count": null,
+      "v3_graph_expanded_evidence_count": 2,
+      "v3_answer_preview": "The provenance trail ties the answer back to the selected source record: ## Routing has two layers: mode router and pattern router The original Part 08 was mostly about the **mode router**: should this query run as fast, safe, deep_eval, creative, or agentic? [claim_1_ref_1]; Provenance record for article_6d430e058d1392e85678 contains daniel_blog_en__from-rag-to-production-rag-part-8: https://danielcanfly.com/en/blog/from-rag-to-production-rag-part-8/ [claim_1_ref_2]"
+    },
+    {
+      "case_id": "temporal_conflict",
+      "v2_status": null,
+      "v3_status": "owner_only_cited_answer",
+      "v2_safe_abstention": null,
+      "v3_safe_abstention": false,
+      "v2_evidence_used_by_claims": null,
+      "v3_evidence_used_by_claims": 2,
+      "v2_graph_expanded_evidence_count": null,
+      "v3_graph_expanded_evidence_count": 1,
+      "v3_answer_preview": "The temporal evidence should be read as a source/version comparison: Temporal record for daniel_blog_en__the-atlas-of-agent-design-patterns-part-7 section section_418be3ba47f5cd425e32 was retrieved at unknown-retrieved-at in release m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043. [claim_1_ref_1]; Temporal record for daniel_blog_en__harness-theory-part-1 section section_977a84886f52ed83d33e was retrieved at unknown-retrieved-at in release m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043. [claim_1_ref_2]"
+    }
+  ],
+  "safety": {
+    "unsupported_claims_deterministic_v3": 0,
+    "unsupported_claims_real_provider_v3": 0,
+    "deterministic_no_answer_status": "owner_only_safe_abstention",
+    "deterministic_prompt_injection_status": "owner_only_safe_abstention",
+    "protected_mutation_evidence": {
+      "r2_writes": 0,
+      "qdrant_writes": 0,
+      "production_pointer_writes": 0,
+      "canonical_writes": 0,
+      "source_writes": 0,
+      "answer_to_canonical_writes": 0
+    }
+  },
+  "artifact_sha256": {
+    "phase1-old-main-vs-candidate-benchmark-v3.json": "55056d972734a5c5cf5ba945a171ef5aa45f92c31222f5221876a104910f2fd7",
+    "phase1-production-style-real-provider-benchmark-v3.json": "5aad896ce21799fbcdb2b2ceedb7e637235c651fd48e273bec2047fe8886ad17",
+    "full-production-compatibility-report.json": "172dc74b99fd2193c17145daa3cd6d3375337863278d43790cd4b9e5dad006f7"
+  }
+}

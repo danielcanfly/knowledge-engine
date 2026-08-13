@@ -1,0 +1,123 @@
+name: M26 AQ Live Readonly Reason Probe
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-aq-live-readonly-reason.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: >
+      github.event.pull_request.number == 1325 &&
+      github.head_ref == 'codex/answer-quality-aq-runtime'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    environment: m23-r3-diagnostic
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 5
+          show-progress: false
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          bash scripts/configure_oracle_ssh.sh
+
+      - name: Read current live query reason without mutation
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' | tee /tmp/m26-aq-live-readonly-reason.json
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          container_id="$(docker compose ps -q knowledge-engine | head -n 1)"
+          test -n "$container_id"
+          container_env() {
+            docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" \
+              | awk -F= -v key="$1" '$1 == key {print substr($0, index($0, "=") + 1)}' \
+              | tail -n 1
+          }
+          runtime_sha="$(container_env M26_QUERY_BUILD_SHA)"
+          token="$(container_env M26_QUERY_BACKEND_TOKEN)"
+          owner="$(container_env KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH)"
+          test -n "$token"
+          test -n "$owner"
+          tmp="$(mktemp)"
+          code="$(curl --silent --show-error --max-time 190 \
+            -H "authorization: Bearer $token" \
+            -H "x-m26-owner-subject-hash: $owner" \
+            -H 'content-type: application/json' \
+            -o "$tmp" -w '%{http_code}' \
+            --data '{"question":"Compare routers and adaptive planning for permission-first controls."}' \
+            http://127.0.0.1:8080/api/m26/query || true)"
+          docker compose exec -T knowledge-engine python - <<'PY' > /tmp/m26-aq-direct-reason.json 2>/dev/null || true
+          import json
+          import os
+          from pathlib import Path
+          from knowledge_engine.m26_ask_api import DEFAULT_GATE_PATH, run_owner_query_for_web
+          env = {
+              "require_remote_dense": os.environ.get("M26_QUERY_REQUIRE_REMOTE_DENSE", "").lower() == "true",
+              "cloudflare_account_id_present": bool(os.environ.get("CLOUDFLARE_ACCOUNT_ID")),
+              "cloudflare_ai_token_present": bool(os.environ.get("CLOUDFLARE_AI_TOKEN") or os.environ.get("CLOUDFLARE_API_TOKEN")),
+              "qdrant_url_present": bool(os.environ.get("QDRANT_URL")),
+              "qdrant_api_key_present": bool(os.environ.get("QDRANT_API_KEY_READ") or os.environ.get("QDRANT_READ_ONLY_API_KEY") or os.environ.get("QDRANT_API_KEY")),
+              "qdrant_collection_present": bool(os.environ.get("M26_PA7_DENSE_COLLECTION") or os.environ.get("QDRANT_COLLECTION") or os.environ.get("QDRANT_COLLECTION_NAME")),
+              "minimax_api_key_present": bool(os.environ.get("MINIMAX_API_KEY")),
+          }
+          try:
+              root = Path(os.environ.get("KNOWLEDGE_ENGINE_ROOT", ".")).resolve()
+              gate = Path(os.environ.get("M26_PA7_GATE_PATH", DEFAULT_GATE_PATH.as_posix()))
+              if not gate.is_absolute(): gate = root / gate
+              response = run_owner_query_for_web(
+                  root=root,
+                  gate_path=gate,
+                  request_payload={"question":"Compare routers and adaptive planning for permission-first controls."},
+                  owner_subject_hash=os.environ.get("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", ""),
+                  require_remote_dense=env["require_remote_dense"],
+              )
+              direct = {"status":"response","response_status":response.get("status"),"reason_codes":response.get("reason_codes",[])}
+          except Exception as exc:
+              direct = {"status":"exception","exception_type":type(exc).__name__,"exception_module":type(exc).__module__,"reason_code":getattr(exc,"reason_code",None)}
+          print(json.dumps({"environment":env,"direct":direct},sort_keys=True))
+          PY
+          python3 - "$tmp" /tmp/m26-aq-direct-reason.json "$code" "$runtime_sha" <<'PY'
+          import json, sys
+          from pathlib import Path
+          def load(p):
+              try: return json.loads(Path(p).read_text())
+              except Exception: return {}
+          payload=load(sys.argv[1]); direct=load(sys.argv[2])
+          detail=payload.get("detail") if isinstance(payload,dict) else None
+          reason=detail.get("reason_code") if isinstance(detail,dict) else payload.get("reason_code") if isinstance(payload,dict) else None
+          print(json.dumps({
+              "schema_version":"m26-aq-live-readonly-reason/v1",
+              "runtime_sha":sys.argv[4],
+              "query_http_status":sys.argv[3],
+              "query_reason_code":reason,
+              "environment":direct.get("environment",{}),
+              "direct":direct.get("direct",{}),
+              "protected_knowledge_mutations":0,
+              "raw_answer_text_recorded":False,
+              "raw_secret_recorded":False,
+          },indent=2,sort_keys=True))
+          PY
+          rm -f "$tmp" /tmp/m26-aq-direct-reason.json
+          REMOTE
+
+      - name: Upload sanitized reason probe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-aq-live-readonly-reason-${{ github.event.pull_request.head.sha }}
+          path: /tmp/m26-aq-live-readonly-reason.json
+          if-no-files-found: warn
+          retention-days: 7
