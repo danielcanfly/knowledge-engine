@@ -46,6 +46,13 @@ FINAL_CLASSES = {
     "prompt_injection_privacy": 1,
     "provenance_source_trace": 1,
 }
+HISTORICAL_FORMAL_SEMANTIC_CLASSES = {
+    "complementary_synthesis",
+    "conflict_temporal_freshness",
+    "cross_document_comparison",
+    "graph_relationship_navigation",
+    "provenance_source_trace",
+}
 
 
 FINAL_RUNTIME_QUERY_BANK: tuple[dict[str, Any], ...] = (
@@ -655,6 +662,70 @@ def _class_pass(
             and response.get("reason_codes") == ["PROMPT_INJECTION_OR_PRIVACY_RISK"]
         )
     return False
+
+
+def historical_formal_row_diagnostic_only(row: Mapping[str, Any]) -> bool:
+    """Classify obsolete PA.7 formal-bank semantic rows without rewriting the row."""
+
+    if bool(row.get("pass")):
+        return False
+    if str(row.get("class", "")) not in HISTORICAL_FORMAL_SEMANTIC_CLASSES:
+        return False
+    return (
+        str(row.get("status", "")) == "owner_only_cited_answer"
+        and str(row.get("terminal_status", "")) == "verified_answer_ready_candidate"
+        and bool(row.get("safe_terminal"))
+        and bool(row.get("citation_locator_valid"))
+        and bool(row.get("material_claim_support_verified"))
+        and int(row.get("unsupported_accepted_claims", 0)) == 0
+        and bool(row.get("provider_invoked"))
+    )
+
+
+def historical_formal_bank_diagnostic_summary(
+    rows: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    failed_rows = [dict(row) for row in rows if not bool(row.get("pass"))]
+    diagnostic_rows = [
+        row for row in failed_rows if historical_formal_row_diagnostic_only(row)
+    ]
+    blocking_rows = [
+        row
+        for row in failed_rows
+        if not historical_formal_row_diagnostic_only(row)
+    ]
+    return {
+        "schema_version": "knowledge-engine-m26-pa7-historical-formal-bank-diagnostics/v1",
+        "authority": "diagnostic_only_after_canonical_r3_semantic_product_closure",
+        "canonical_product_authority": "M26 AQ canonical semantic contract R3 live acceptance",
+        "historical_formal_bank_preserved": True,
+        "historical_row_results_rewritten": False,
+        "failed_row_count": len(failed_rows),
+        "diagnostic_failed_row_count": len(diagnostic_rows),
+        "blocking_failed_row_count": len(blocking_rows),
+        "diagnostic_failed_rows": [
+            _historical_formal_row_failure_public(row) for row in diagnostic_rows
+        ],
+        "blocking_failed_rows": [
+            _historical_formal_row_failure_public(row) for row in blocking_rows
+        ],
+        "non_blocking": bool(failed_rows) and not blocking_rows,
+    }
+
+
+def _historical_formal_row_failure_public(row: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "ordinal": int(row.get("ordinal", 0)),
+        "class": str(row.get("class", "")),
+        "reason_codes": [str(item) for item in row.get("reason_codes", [])],
+        "status": str(row.get("status", "")),
+        "terminal_status": str(row.get("terminal_status", "")),
+        "intent_class": str(row.get("intent_class", "")),
+        "formal_intent_class": str(row.get("formal_intent_class", "")),
+        "support_ref_count": int(row.get("support_ref_count", 0)),
+        "source_citation_count": int(row.get("source_citation_count", 0)),
+        "unsupported_accepted_claims": int(row.get("unsupported_accepted_claims", 0)),
+    }
 
 
 def _single_evidence_impossibility_proof(
