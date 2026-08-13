@@ -152,7 +152,7 @@ jobs:
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
           QDRANT_API_KEY_READ: ${{ secrets.QDRANT_API_KEY_READ }}
           QDRANT_READ_ONLY_API_KEY: ${{ secrets.QDRANT_READ_ONLY_API_KEY }}
-          M26_PA7_DENSE_COLLECTION: ${{ vars.M26_PA7_DENSE_COLLECTION || 'llm_wiki_m23_pilot_bge_m3_1024' }}
+          M26_PA7_DENSE_COLLECTION: ${{ vars.M26_PA7_DENSE_COLLECTION || 'm25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043' }}
         run: |
           set -euo pipefail
           python - <<'PY'

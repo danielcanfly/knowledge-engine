@@ -70,6 +70,22 @@ def test_production_deploy_binds_accepted_qdrant_collection() -> None:
     assert 'stripped.startswith("M26_PA7_DENSE_COLLECTION=")' in deploy
 
 
+def test_pa7_live_workflows_default_to_accepted_qdrant_collection() -> None:
+    final_web = Path(
+        ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
+    ).read_text(encoding="utf-8")
+    promotion = Path(
+        ".github/workflows/m26-pa-7-production-promotion-closure.yml"
+    ).read_text(encoding="utf-8")
+
+    expected = (
+        "M26_PA7_DENSE_COLLECTION: "
+        f"${{{{ vars.M26_PA7_DENSE_COLLECTION || '{FULL_PRODUCTION_QDRANT_COLLECTION}' }}}}"
+    )
+    assert expected in final_web
+    assert expected in promotion
+
+
 def test_final_closure_holds_host_lock_through_live_collection() -> None:
     workflow = Path(
         ".github/workflows/m26-aq-final-production-closure.yml"
