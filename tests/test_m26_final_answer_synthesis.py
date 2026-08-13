@@ -10,6 +10,8 @@ from knowledge_engine.m26_pa7_semantic_closure_runtime import (
 )
 from knowledge_engine.m26_verified_answer_citation_gate import sha256_bytes
 
+SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
+
 
 def _passage(evidence_id: str, text: str, source: str) -> dict[str, Any]:
     return {
@@ -32,6 +34,49 @@ def _passage(evidence_id: str, text: str, source: str) -> dict[str, Any]:
     }
 
 
+def _semantic_review_response(payload: dict[str, Any]) -> dict[str, Any]:
+    task = json.loads(payload["messages"][0]["content"])
+    answer = str(task["answer_text"]).casefold()
+    question = str(task["question_context"]).casefold()
+    judgments = []
+    for case in task["claim_cases"]:
+        local_ids = [str(item["evidence_id"]) for item in case["evidence"]]
+        if str(case["claim_type"]) == "MODEL_EXPLANATION" and not local_ids:
+            verdict = "GENERIC_EXPLANATION"
+            evidence_ids: list[str] = []
+        else:
+            verdict = "ENTAILED"
+            evidence_ids = local_ids
+        judgments.append(
+            {
+                "claim_id": str(case["claim_id"]),
+                "verdict": verdict,
+                "evidence_ids": evidence_ids,
+            }
+        )
+    coverage_verdict = "COVERED"
+    uncovered: list[str] = []
+    if "verification" in question and "verification" not in answer:
+        coverage_verdict = "UNCOVERED"
+        uncovered = ["verification"]
+    return {
+        "schema_version": "m26-claim-entailment-review/v1",
+        "claim_judgments": judgments,
+        "visible_coverage": {
+            "verdict": coverage_verdict,
+            "uncovered_assertions": uncovered,
+        },
+    }
+
+
+def _synthesis_calls(provider: Any) -> list[dict[str, Any]]:
+    return [
+        call
+        for call in provider.calls
+        if call["call_class"] != SEMANTIC_REVIEW_CALL_CLASS
+    ]
+
+
 class _TypedProvider:
     def __init__(self, *, claim_type: str, answer_text: str, claims: list[dict[str, Any]]) -> None:
         self.claim_type = claim_type
@@ -41,6 +86,15 @@ class _TypedProvider:
 
     def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
         self.calls.append({"payload": payload, "call_class": call_class})
+        if call_class == SEMANTIC_REVIEW_CALL_CLASS:
+            return {
+                "text": json.dumps(_semantic_review_response(payload)),
+                "usage": {"input_tokens": 128, "output_tokens": 48},
+                "cost_usd": "0.00001",
+                "latency_ms": 4,
+                "response_id": "typed-provider-review",
+                "call_class": call_class,
+            }
         return {
             "text": json.dumps(
                 {
@@ -64,10 +118,21 @@ class _SequenceTypedProvider:
     def __init__(self, responses: list[dict[str, Any]]) -> None:
         self.responses = responses
         self.calls: list[dict[str, Any]] = []
+        self.synthesis_call_count = 0
 
     def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
         self.calls.append({"payload": payload, "call_class": call_class})
-        index = min(len(self.calls), len(self.responses)) - 1
+        if call_class == SEMANTIC_REVIEW_CALL_CLASS:
+            return {
+                "text": json.dumps(_semantic_review_response(payload)),
+                "usage": {"input_tokens": 128, "output_tokens": 48},
+                "cost_usd": "0.00001",
+                "latency_ms": 4,
+                "response_id": f"typed-provider-review-{len(self.calls)}",
+                "call_class": call_class,
+            }
+        self.synthesis_call_count += 1
+        index = min(self.synthesis_call_count, len(self.responses)) - 1
         return {
             "text": json.dumps(self.responses[index]),
             "usage": {"input_tokens": 128, "output_tokens": 48},
@@ -86,7 +151,17 @@ class _TruncatingThenTypedProvider:
 
     def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
         self.calls.append({"payload": payload, "call_class": call_class})
-        if len(self.calls) == 1:
+        if call_class == SEMANTIC_REVIEW_CALL_CLASS:
+            return {
+                "text": json.dumps(_semantic_review_response(payload)),
+                "usage": {"input_tokens": 128, "output_tokens": 48},
+                "cost_usd": "0.00001",
+                "latency_ms": 4,
+                "response_id": "typed-provider-review",
+                "call_class": call_class,
+            }
+        synthesis_call_count = len(_synthesis_calls(self))
+        if synthesis_call_count == 1:
             return {
                 "text": (
                     '{"schema_version":"m26-fas-synthesis/v1","status":"answer",'
@@ -310,12 +385,13 @@ def test_max_tokens_truncation_gets_larger_bounded_repair_budget() -> None:
 
     answer, closure = _run_typed_synthesis(question, evidence, provider)
 
-    assert len(provider.calls) == 2
-    first_budget = provider.calls[0]["payload"]["max_tokens"]
-    repair_budget = provider.calls[1]["payload"]["max_tokens"]
+    synthesis_calls = _synthesis_calls(provider)
+    assert len(synthesis_calls) == 2
+    first_budget = synthesis_calls[0]["payload"]["max_tokens"]
+    repair_budget = synthesis_calls[1]["payload"]["max_tokens"]
     assert first_budget > 512
     assert repair_budget > first_budget
-    assert provider.calls[1]["call_class"] == "aq_semantic_closure_repair"
+    assert synthesis_calls[1]["call_class"] == "aq_semantic_closure_repair"
     assert answer["status"] == "owner_only_cited_answer"
     assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
     assert answer["answer_text"] == answer_text
@@ -365,7 +441,7 @@ def test_long_multi_dimension_answer_publishes_directly_without_512_ceiling() ->
 
     answer, closure = _run_typed_synthesis(question, evidence, provider)
 
-    assert provider.calls[0]["payload"]["max_tokens"] > 512
+    assert _synthesis_calls(provider)[0]["payload"]["max_tokens"] > 512
     assert answer["status"] == "owner_only_cited_answer"
     assert answer["answer_text"] == answer_text
     assert answer["repair_attempted"] is False
@@ -427,8 +503,9 @@ def test_incomplete_answer_gets_one_bounded_repair() -> None:
 
     answer, closure = _run_typed_synthesis(question, evidence, provider)
 
-    assert len(provider.calls) == 2
-    assert provider.calls[1]["call_class"] == "aq_semantic_closure_repair"
+    synthesis_calls = _synthesis_calls(provider)
+    assert len(synthesis_calls) == 2
+    assert synthesis_calls[1]["call_class"] == "aq_semantic_closure_repair"
     assert answer["answer_text"] == complete
     assert answer["repair_attempted"] is True
     assert closure["failures"] == []
@@ -469,7 +546,7 @@ def test_repeated_incomplete_answer_does_not_recursive_repair() -> None:
 
     _run_typed_synthesis(question, evidence, provider)
 
-    assert len(provider.calls) == 2
+    assert len(_synthesis_calls(provider)) == 2
 
 
 def test_supported_partial_answer_states_unsupported_boundary() -> None:
@@ -504,7 +581,7 @@ def test_supported_partial_answer_states_unsupported_boundary() -> None:
 
     answer, closure = _run_typed_synthesis(question, evidence, provider)
 
-    assert len(provider.calls) == 2
+    assert len(_synthesis_calls(provider)) == 1
     assert answer["status"] == "owner_only_cited_answer"
     assert "Unsupported boundary" in answer["answer_text"]
     assert answer["multi_evidence_verification"]["partial_answer"] is True

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import time
 from typing import Any
@@ -163,8 +164,13 @@ class _SemanticReviewRepairProvider:
 
 
 class _ScriptedSemanticClosureProvider:
-    def __init__(self, synthesis_results: list[Any]) -> None:
+    def __init__(
+        self,
+        synthesis_results: list[Any],
+        review_result: Any | None = None,
+    ) -> None:
         self.synthesis_results = list(synthesis_results)
+        self.review_result = review_result
         self.calls: list[tuple[dict[str, Any], str]] = []
         self.review_claim_cases: list[list[dict[str, Any]]] = []
 
@@ -187,6 +193,18 @@ class _ScriptedSemanticClosureProvider:
         task = json.loads(payload["messages"][0]["content"])
         claim_cases = task["claim_cases"]
         self.review_claim_cases.append(claim_cases)
+        if self.review_result is not None:
+            body = (
+                self.review_result(task)
+                if callable(self.review_result)
+                else self.review_result
+            )
+            return {
+                "text": json.dumps(body),
+                "usage": {"input_tokens": 10, "output_tokens": 10},
+                "cost_usd": "0.001",
+                "call_class": call_class,
+            }
         judgments = []
         for case in claim_cases:
             local_ids = [str(item["evidence_id"]) for item in case["evidence"]]
@@ -614,6 +632,260 @@ def test_candidate2_legacy_helpers_have_no_canonical_publication_authority(
     assert closure["failures"] == []
 
 
+def test_candidate2r1_module_name_cannot_change_semantics() -> None:
+    evidence = [
+        _rich_passage(
+            "router",
+            "The router stores graph snapshots for controlled execution.",
+            "router-note",
+        )
+    ]
+
+    def synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        router_label = next(
+            str(item["id"]) for item in task["evidence"] if "router" in item["text"]
+        )
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": "The router keeps graph snapshots.",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router keeps graph snapshots.",
+                    "evidence_labels": [router_label],
+                    "covers": ["router_snapshots"],
+                }
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    test_module_provider = type(
+        "TestModuleProvider",
+        (_ScriptedSemanticClosureProvider,),
+        {"__module__": "tests.fake_provider"},
+    )
+    provider = test_module_provider([synthesis])
+
+    answer, closure = _synthesize_and_verify(
+        question="Explain router graph snapshots.",
+        trace_id="trace-candidate2r1-module-name-no-bypass",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_claim_semantic_entailment",
+    ]
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert closure["failures"] == []
+
+
+def test_candidate2r1_wrong_review_schema_test_module_fails_closed() -> None:
+    evidence = [
+        _rich_passage(
+            "router",
+            "The router stores graph snapshots for controlled execution.",
+            "router-note",
+        )
+    ]
+
+    def synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        router_label = next(
+            str(item["id"]) for item in task["evidence"] if "router" in item["text"]
+        )
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": "The router keeps graph snapshots.",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router keeps graph snapshots.",
+                    "evidence_labels": [router_label],
+                    "covers": ["router_snapshots"],
+                }
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    test_module_provider = type(
+        "WrongReviewSchemaProvider",
+        (_ScriptedSemanticClosureProvider,),
+        {"__module__": "tests.fake_provider"},
+    )
+    provider = test_module_provider(
+        [synthesis, synthesis],
+        review_result={
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": "old synthesis schema is not a review",
+            "claims": [],
+        },
+    )
+
+    answer, closure = _synthesize_and_verify(
+        question="Explain router graph snapshots.",
+        trace_id="trace-candidate2r1-wrong-review-schema",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_claim_semantic_entailment",
+        "aq_semantic_closure_repair",
+        "aq_claim_semantic_entailment",
+    ]
+    assert answer["answer_source"] == "safe_abstention"
+    assert "ValueError" in closure["failures"]
+    assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
+
+
+def test_candidate2r1_support_refs_do_not_imply_entailment() -> None:
+    evidence = [
+        _rich_passage(
+            "router",
+            "The router stores graph snapshots.",
+            "router-note",
+        )
+    ]
+
+    def synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        router_label = next(
+            str(item["id"]) for item in task["evidence"] if "router" in item["text"]
+        )
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": "The router deletes graph snapshots.",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router deletes graph snapshots.",
+                    "evidence_labels": [router_label],
+                    "covers": ["router_snapshots"],
+                }
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    def contradicted_review(task: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "schema_version": "m26-claim-entailment-review/v1",
+            "claim_judgments": [
+                {
+                    "claim_id": str(case["claim_id"]),
+                    "verdict": "CONTRADICTED",
+                    "evidence_ids": [
+                        str(item["evidence_id"]) for item in case["evidence"]
+                    ],
+                }
+                for case in task["claim_cases"]
+            ],
+            "visible_coverage": {
+                "verdict": "COVERED",
+                "uncovered_assertions": [],
+            },
+        }
+
+    provider = _ScriptedSemanticClosureProvider(
+        [synthesis, synthesis],
+        review_result=contradicted_review,
+    )
+
+    answer, closure = _synthesize_and_verify(
+        question="Explain router graph snapshots.",
+        trace_id="trace-candidate2r1-support-ref-not-entailment",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert answer["answer_source"] == "safe_abstention"
+    assert "SEMANTIC_REVIEW_BLOCKED:claim_1:CONTRADICTED" in closure["failures"]
+    assert provider.review_claim_cases
+
+
+def test_candidate2r1_second_attempt_requires_real_reviewer() -> None:
+    evidence = [
+        _rich_passage(
+            "router",
+            "The router stores graph snapshots.",
+            "router-note",
+        )
+    ]
+
+    def valid_synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        router_label = next(
+            str(item["id"]) for item in task["evidence"] if "router" in item["text"]
+        )
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": "The router keeps graph snapshots.",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router keeps graph snapshots.",
+                    "evidence_labels": [router_label],
+                    "covers": ["router_snapshots"],
+                }
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    class ParseFailThenValidProvider(_ScriptedSemanticClosureProvider):
+        def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+            if call_class == "aq_semantic_closure":
+                self.calls.append((payload, call_class))
+                return {
+                    "text": "{not valid json",
+                    "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "cost_usd": "0.001",
+                    "call_class": call_class,
+                }
+            return super().call(payload, call_class)
+
+    provider = ParseFailThenValidProvider([valid_synthesis])
+
+    answer, closure = _synthesize_and_verify(
+        question="Explain router graph snapshots.",
+        trace_id="trace-candidate2r1-second-attempt-review",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+        "aq_claim_semantic_entailment",
+    ]
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert answer["repair_attempted"] is True
+    assert closure["failures"] == []
+
+
 def test_candidate2_unseen_precedes_paraphrase_reaches_semantic_review(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -945,6 +1217,19 @@ def test_candidate2_claim_local_review_isolation() -> None:
         "claim_router": {"router"},
         "claim_monitor": {"monitor"},
     }
+
+
+def test_candidate2r1_static_no_test_awareness_guard() -> None:
+    source = inspect.getsource(closure_runtime)
+    forbidden = [
+        "_local_test_double_without_review",
+        "_legacy_compact_review_adapter",
+        "_local_claim_semantic_review",
+        "_candidate_selects_all_evidence",
+        "type(provider_client).__module__",
+    ]
+    for needle in forbidden:
+        assert needle not in source
 
 
 def test_provider_abstain_with_available_evidence_safely_abstains_without_quote_collage() -> None:

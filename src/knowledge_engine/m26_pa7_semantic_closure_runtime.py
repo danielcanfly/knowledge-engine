@@ -359,7 +359,6 @@ def _synthesize_and_verify(
     calls: list[dict[str, Any]] = []
     repair_attempted = False
     final_support_proof: list[dict[str, Any]] = []
-    repair_after_semantic_review = False
 
     for attempt in (1, 2):
         compact_payload, label_map, snippet_map = _compact_provider_payload(
@@ -425,37 +424,19 @@ def _synthesize_and_verify(
                 unanswered_dimensions=unanswered_dimensions,
                 semantic_failures=[],
             )
-            if (
-                attempt == 1
-                and _local_test_double_without_review(provider_client)
-                and provider_status == "answer"
-                and not _candidate_selects_all_evidence(candidate, evidence)
-            ):
-                failures.append("PROVIDER_STRUCTURED_COVERAGE_INCOMPLETE")
-                repair_attempted = True
-                continue
-            if (
-                attempt == 2
-                and repair_attempted
-                and not repair_after_semantic_review
-                and _local_test_double_without_review(provider_client)
-            ):
-                semantic_review = _local_claim_semantic_review(candidate)
-            else:
-                semantic_review, review_raw = _call_semantic_entailment_review(
-                    provider_client=provider_client,
-                    question=question,
-                    intent_class=intent_class,
-                    candidate=candidate,
-                    evidence=evidence,
-                )
-                calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
+            semantic_review, review_raw = _call_semantic_entailment_review(
+                provider_client=provider_client,
+                question=question,
+                intent_class=intent_class,
+                candidate=candidate,
+                evidence=evidence,
+            )
+            calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
             review_failures = _semantic_review_blocking_failures(semantic_review)
             if review_failures:
                 failures.extend(review_failures)
                 if attempt == 1:
                     repair_attempted = True
-                    repair_after_semantic_review = True
                     continue
                 break
             verified = legacy._verify_multi_evidence_provider_output(
@@ -863,78 +844,8 @@ def _call_semantic_entailment_review(
         str(raw.get("text", raw.get("provider_text", "")))
     )
     if review.get("schema_version") != SEMANTIC_REVIEW_SCHEMA_VERSION:
-        adapted = _legacy_compact_review_adapter(review, candidate, provider_client)
-        if adapted is None:
-            raise ValueError(SEMANTIC_REVIEW_PARSE_FAILED)
-        review = adapted
+        raise ValueError(SEMANTIC_REVIEW_PARSE_FAILED)
     return review, {**dict(raw), "call_class": SEMANTIC_REVIEW_CALL_CLASS}
-
-
-def _legacy_compact_review_adapter(
-    review: Mapping[str, Any],
-    candidate: Mapping[str, Any],
-    provider_client: ProviderClient,
-) -> dict[str, Any] | None:
-    if not _local_test_double_without_review(provider_client):
-        return None
-    if review.get("schema_version") != "m26-fas-synthesis/v1":
-        return None
-    return _local_claim_semantic_review(candidate)
-
-
-def _local_test_double_without_review(provider_client: ProviderClient) -> bool:
-    module = type(provider_client).__module__
-    return module.startswith("tests.") or module.startswith("test_")
-
-
-def _candidate_selects_all_evidence(
-    candidate: Mapping[str, Any],
-    evidence: Sequence[Mapping[str, Any]],
-) -> bool:
-    selected = {
-        str(item)
-        for item in legacy._list(
-            candidate.get("selected_evidence_ids"), "candidate selected evidence ids"
-        )
-        if str(item)
-    }
-    available = {str(item.get("evidence_id", "")) for item in evidence if item.get("evidence_id")}
-    return available.issubset(selected)
-
-
-def _local_claim_semantic_review(candidate: Mapping[str, Any]) -> dict[str, Any]:
-    judgments: list[dict[str, Any]] = []
-    for raw_claim in legacy._list(candidate.get("claims"), "local review claims"):
-        claim = legacy._object(raw_claim, "local review claim")
-        support_refs = legacy._list(
-            claim.get("support_refs"), "local review support refs"
-        )
-        claim_type = str(claim.get("claim_type", ""))
-        evidence_ids = [
-            str(ref.get("evidence_id", ""))
-            for ref in support_refs
-            if str(ref.get("evidence_id", ""))
-        ]
-        if claim_type == "MODEL_EXPLANATION" and not evidence_ids:
-            verdict = legacy.SEMANTIC_REVIEW_GENERIC_EXPLANATION
-            evidence_ids = []
-        else:
-            verdict = legacy.SEMANTIC_REVIEW_ENTAILED
-        judgments.append(
-            {
-                "claim_id": str(claim.get("claim_id", "")),
-                "verdict": verdict,
-                "evidence_ids": evidence_ids,
-            }
-        )
-    return {
-        "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
-        "claim_judgments": judgments,
-        "visible_coverage": {
-            "verdict": "COVERED",
-            "uncovered_assertions": [],
-        },
-    }
 
 
 def _parse_compact_provider_result(text: str) -> dict[str, Any]:

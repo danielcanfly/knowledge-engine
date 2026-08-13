@@ -11,6 +11,7 @@ from knowledge_engine.m26_verified_answer_citation_gate import sha256_bytes
 
 
 EXPECTED_ENTRYPOINT = "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
+SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
 
 
 class _CompactAbstainingProvider:
@@ -40,6 +41,35 @@ class _TypedCompactProvider:
     def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
         self.calls += 1
         self.cost += Decimal("0.00001")
+        if call_class == SEMANTIC_REVIEW_CALL_CLASS:
+            task = json.loads(payload["messages"][0]["content"])
+            return {
+                "text": json.dumps(
+                    {
+                        "schema_version": "m26-claim-entailment-review/v1",
+                        "claim_judgments": [
+                            {
+                                "claim_id": str(case["claim_id"]),
+                                "verdict": "ENTAILED",
+                                "evidence_ids": [
+                                    str(item["evidence_id"])
+                                    for item in case["evidence"]
+                                ],
+                            }
+                            for case in task["claim_cases"]
+                        ],
+                        "visible_coverage": {
+                            "verdict": "COVERED",
+                            "uncovered_assertions": [],
+                        },
+                    }
+                ),
+                "usage": {"input_tokens": 32, "output_tokens": 32},
+                "cost_usd": "0.00001",
+                "latency_ms": 1,
+                "response_id": f"typed-compact-review-{self.calls}",
+                "call_class": call_class,
+            }
         return {
             "text": json.dumps(self.body),
             "usage": {"input_tokens": 32, "output_tokens": 32},
