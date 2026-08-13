@@ -44,6 +44,9 @@ COMPACT_PROVIDER_PARSE_FAILED = "COMPACT_PROVIDER_PARSE_FAILED"
 SEMANTIC_REVIEW_PARSE_FAILED = "SEMANTIC_REVIEW_PARSE_FAILED"
 SEMANTIC_REVIEW_SCHEMA_VERSION = legacy.SEMANTIC_REVIEW_SCHEMA_VERSION
 SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
+PARTIAL_SEMANTIC_CLOSURE_SOURCE = (
+    "provider_verified_runtime_bound_partial_semantic_closure"
+)
 
 
 @dataclass(frozen=True)
@@ -438,19 +441,58 @@ def _synthesize_and_verify(
                 if attempt == 1:
                     repair_attempted = True
                     continue
+                partial = _verified_supported_review_partial(
+                    trace_id=trace_id,
+                    question=question,
+                    intent_class=intent_class,
+                    evidence=evidence,
+                    candidate=candidate,
+                    semantic_review=semantic_review,
+                    calls=calls,
+                    repair_attempted=repair_attempted,
+                    failures=failures,
+                    requirements=requirements,
+                    endpoint_proof=endpoint_proof,
+                    final_support_proof=final_support_proof,
+                )
+                if partial is not None:
+                    return partial
                 break
-            verified = legacy._verify_multi_evidence_provider_output(
-                trace_id=trace_id,
-                question=question,
-                intent_class=intent_class,
-                evidence=evidence,
-                provider_text=json.dumps(
-                    candidate,
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ),
-                semantic_review=semantic_review,
-            )
+            try:
+                verified = legacy._verify_multi_evidence_provider_output(
+                    trace_id=trace_id,
+                    question=question,
+                    intent_class=intent_class,
+                    evidence=evidence,
+                    provider_text=json.dumps(
+                        candidate,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                    semantic_review=semantic_review,
+                )
+            except legacy.VerifiedAnswerGateError as exc:
+                failures.append(exc.code)
+                if attempt == 1:
+                    repair_attempted = True
+                    continue
+                partial = _verified_supported_review_partial(
+                    trace_id=trace_id,
+                    question=question,
+                    intent_class=intent_class,
+                    evidence=evidence,
+                    candidate=candidate,
+                    semantic_review=semantic_review,
+                    calls=calls,
+                    repair_attempted=repair_attempted,
+                    failures=failures,
+                    requirements=requirements,
+                    endpoint_proof=endpoint_proof,
+                    final_support_proof=final_support_proof,
+                )
+                if partial is not None:
+                    return partial
+                raise
             final_answer = legacy._verified_multi_evidence_answer(
                 intent_class=intent_class,
                 verified=verified,
@@ -461,7 +503,7 @@ def _synthesize_and_verify(
             partial_answer = provider_status in {"partial", "partial_candidate"}
 
             final_answer["answer_source"] = (
-                "provider_verified_runtime_bound_partial_semantic_closure"
+                PARTIAL_SEMANTIC_CLOSURE_SOURCE
                 if partial_answer
                 else "provider_verified_runtime_bound_semantic_closure"
             )
@@ -559,6 +601,202 @@ def _synthesize_and_verify(
         "broad_deterministic_fallback_used": False,
     }
     return abstention, closure
+
+
+def _verified_supported_review_partial(
+    *,
+    trace_id: str,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    candidate: Mapping[str, Any],
+    semantic_review: Mapping[str, Any],
+    calls: Sequence[Mapping[str, Any]],
+    repair_attempted: bool,
+    failures: Sequence[str],
+    requirements: Sequence[SemanticRequirement],
+    endpoint_proof: Mapping[str, Any],
+    final_support_proof: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    partial_candidate, partial_review, dropped_claim_ids = (
+        _supported_review_partial_candidate(candidate, semantic_review)
+    )
+    if partial_candidate is None:
+        return None
+    try:
+        verified = legacy._verify_multi_evidence_provider_output(
+            trace_id=trace_id,
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_text=json.dumps(
+                partial_candidate,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+            semantic_review=partial_review,
+        )
+        answer = legacy._verified_multi_evidence_answer(
+            intent_class=intent_class,
+            verified=verified,
+            evidence=evidence,
+            calls=calls,
+            repair_attempted=repair_attempted,
+        )
+    except Exception:
+        return None
+
+    pre_partial_failures = sorted({str(item) for item in failures if str(item)})
+    answer["answer_source"] = PARTIAL_SEMANTIC_CLOSURE_SOURCE
+    answer["multi_evidence_verification"] = {
+        **dict(answer.get("multi_evidence_verification", {})),
+        "verification_failure_codes_by_attempt": pre_partial_failures,
+        "repair_trigger": pre_partial_failures,
+        "repair_result": "semantic_review_supported_partial",
+        "deterministic_evidence_synthesis_used": False,
+        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+        "semantic_review": dict(verified.get("semantic_review", {})),
+        "partial_answer": True,
+        "dropped_claim_count": len(dropped_claim_ids),
+        "dropped_claim_ids": dropped_claim_ids,
+    }
+    closure = {
+        "schema_version": "m26-aq-semantic-closure/v1",
+        "requirements": [_requirement_public(item) for item in requirements],
+        "support_proof": list(final_support_proof),
+        "endpoint_proof": dict(endpoint_proof),
+        "failures": [],
+        "pre_partial_failures": pre_partial_failures,
+        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+        "semantic_review": dict(verified.get("semantic_review", {})),
+        "broad_deterministic_fallback_used": False,
+        "partial_answer": True,
+        "dropped_claim_count": len(dropped_claim_ids),
+        "dropped_claim_ids": dropped_claim_ids,
+    }
+    return answer, closure
+
+
+def _supported_review_partial_candidate(
+    candidate: Mapping[str, Any],
+    semantic_review: Mapping[str, Any],
+) -> tuple[dict[str, Any] | None, dict[str, Any], list[str]]:
+    claims = [
+        dict(item)
+        for item in legacy._list(candidate.get("claims"), "partial candidate claims")
+        if isinstance(item, Mapping)
+    ]
+    if not claims:
+        return None, {}, []
+    claim_by_id = {str(claim.get("claim_id", "")): claim for claim in claims}
+    supported_ids: list[str] = []
+    dropped_ids: list[str] = []
+    filtered_judgments: list[dict[str, Any]] = []
+    for raw in legacy._list(
+        semantic_review.get("claim_judgments"),
+        "partial semantic review judgments",
+    ):
+        judgment = legacy._object(raw, "partial semantic review judgment")
+        claim_id = str(judgment.get("claim_id", ""))
+        claim = claim_by_id.get(claim_id)
+        if claim is None:
+            continue
+        verdict = str(judgment.get("verdict", ""))
+        claim_type = str(claim.get("claim_type", ""))
+        if verdict == legacy.SEMANTIC_REVIEW_ENTAILED or (
+            verdict == legacy.SEMANTIC_REVIEW_GENERIC_EXPLANATION
+            and claim_type == "MODEL_EXPLANATION"
+        ):
+            supported_ids.append(claim_id)
+            filtered_judgments.append(
+                {
+                    "claim_id": claim_id,
+                    "verdict": verdict,
+                    "evidence_ids": [
+                        str(item)
+                        for item in legacy._list(
+                            judgment.get("evidence_ids"),
+                            "partial semantic evidence ids",
+                        )
+                    ],
+                }
+            )
+        else:
+            dropped_ids.append(claim_id)
+
+    if not supported_ids:
+        return None, {}, dropped_ids
+    supported_claims = [claim_by_id[claim_id] for claim_id in supported_ids]
+    if not any(claim.get("support_refs") for claim in supported_claims):
+        return None, {}, dropped_ids
+
+    compact_claims = [_compact_partial_claim(claim) for claim in supported_claims]
+    answer_text = _partial_answer_text(compact_claims)
+    partial_review = {
+        "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
+        "claim_judgments": filtered_judgments,
+        "visible_coverage": {
+            "verdict": "COVERED",
+            "uncovered_assertions": [],
+        },
+    }
+    return (
+        {
+            "schema_version": str(candidate.get("schema_version", "aq3-provider-candidate/v3")),
+            "status": "partial_candidate",
+            "relation": candidate.get("relation"),
+            "selected_evidence_ids": list(
+                dict.fromkeys(
+                    str(ref.get("evidence_id", ""))
+                    for claim in compact_claims
+                    for ref in legacy._list(
+                        claim.get("support_refs"), "partial support refs"
+                    )
+                    if str(ref.get("evidence_id", ""))
+                )
+            ),
+            "answer_text": answer_text,
+            "claims": compact_claims,
+            "missing_facets": [],
+            "abstention_reason": None,
+            "unanswered_dimensions": dropped_ids,
+        },
+        partial_review,
+        dropped_ids,
+    )
+
+
+def _compact_partial_claim(claim: Mapping[str, Any]) -> dict[str, Any]:
+    compact = dict(claim)
+    compact["support_refs"] = [
+        _compact_partial_ref(ref)
+        for ref in legacy._list(claim.get("support_refs"), "partial support refs")
+    ]
+    return compact
+
+
+def _compact_partial_ref(ref: Mapping[str, Any]) -> dict[str, Any]:
+    exact_quote = str(ref.get("exact_quote", ""))
+    compact_quote = legacy._first_exact_evidence_quote(exact_quote, max_chars=240)
+    return {
+        "evidence_id": str(ref.get("evidence_id", "")),
+        "locator_id": str(ref.get("locator_id", "")),
+        "exact_quote": compact_quote or exact_quote,
+        "uncertainty": str(ref.get("uncertainty", "low")),
+    }
+
+
+def _partial_answer_text(claims: Sequence[Mapping[str, Any]]) -> str:
+    sentences: list[str] = []
+    for claim in claims:
+        claim_id = str(claim.get("claim_id", ""))
+        surface = re.sub(r"\s+", " ", str(claim.get("surface_text", ""))).strip()
+        if not claim_id or not surface:
+            continue
+        if not re.search(r"[.!?。]$", surface):
+            surface += "."
+        sentences.append(f"{surface} [[{claim_id}]]")
+    return " ".join(sentences)
 
 
 def _compact_provider_payload(

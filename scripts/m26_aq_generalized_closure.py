@@ -149,7 +149,11 @@ def _validate_answer_row(row: dict[str, Any], failures: list[str], expected_sha:
     provider_calls = int(accounting.get("provider_call_count", 0))
     if row.get("safe_abstention") or row.get("status") != "owner_only_cited_answer":
         failures.append(f"{case_id}:not_answered")
-    if row.get("answer_source") != ANSWER_SOURCE:
+    accepted_sources = {
+        ANSWER_SOURCE,
+        "provider_verified_runtime_bound_partial_semantic_closure",
+    }
+    if row.get("answer_source") not in accepted_sources:
         failures.append(f"{case_id}:wrong_answer_source")
     if not str(row.get("answer_text", "")).strip():
         failures.append(f"{case_id}:empty_answer")

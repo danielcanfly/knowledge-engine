@@ -1338,6 +1338,114 @@ def test_semantic_review_one_repair_preserves_supported_partial() -> None:
     }
 
 
+def test_semantic_review_final_rejection_publishes_entailed_claims_as_partial() -> None:
+    question = "Explain router snapshots and monitor events."
+    evidence = [
+        _rich_passage(
+            "ev_router",
+            "The router stores graph snapshots.",
+            "router-note",
+        ),
+        _rich_passage(
+            "ev_monitor",
+            "The monitor accepts events.",
+            "monitor-note",
+        ),
+    ]
+
+    def synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        labels = {
+            "router": next(
+                str(item["id"]) for item in task["evidence"] if "router" in item["text"]
+            ),
+            "monitor": next(
+                str(item["id"]) for item in task["evidence"] if "monitor" in item["text"]
+            ),
+        }
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": "The router keeps graph snapshots. The monitor rejects events.",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router keeps graph snapshots.",
+                    "evidence_labels": [labels["router"]],
+                    "covers": ["router_snapshots"],
+                },
+                {
+                    "claim_id": "claim_2",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The monitor rejects events.",
+                    "evidence_labels": [labels["monitor"]],
+                    "covers": ["monitor_events"],
+                },
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    def review(task: dict[str, Any]) -> dict[str, Any]:
+        judgments = []
+        for case in task["claim_cases"]:
+            local_ids = [str(item["evidence_id"]) for item in case["evidence"]]
+            if str(case["claim_id"]) == "claim_1":
+                judgments.append(
+                    {
+                        "claim_id": "claim_1",
+                        "verdict": "ENTAILED",
+                        "evidence_ids": local_ids,
+                    }
+                )
+            else:
+                judgments.append(
+                    {
+                        "claim_id": "claim_2",
+                        "verdict": "INSUFFICIENT",
+                        "evidence_ids": local_ids,
+                    }
+                )
+        return {
+            "schema_version": "m26-claim-entailment-review/v1",
+            "claim_judgments": judgments,
+            "visible_coverage": {
+                "verdict": "UNCOVERED",
+                "uncovered_assertions": ["The monitor rejects events."],
+            },
+        }
+
+    provider = _ScriptedSemanticClosureProvider(
+        [synthesis, synthesis],
+        review_result=review,
+    )
+
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-semantic-review-supported-partial",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_claim_semantic_entailment",
+        "aq_semantic_closure_repair",
+        "aq_claim_semantic_entailment",
+    ]
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_partial_semantic_closure"
+    assert answer["unsupported_accepted_claims"] == 0
+    assert "router keeps graph snapshots" in answer["answer_text"].casefold()
+    assert "monitor rejects events" not in answer["answer_text"].casefold()
+    assert answer["multi_evidence_verification"]["dropped_claim_ids"] == ["claim_2"]
+    assert closure["partial_answer"] is True
+    assert closure["failures"] == []
+
+
 def test_resource_constraints_do_not_trigger_multi_source_requirement() -> None:
     question = (
         "When is pausing a venture a rational survival decision rather than evidence "

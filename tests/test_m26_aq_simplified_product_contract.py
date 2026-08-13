@@ -216,6 +216,63 @@ def test_blackbox_safe_abstention_may_use_one_bounded_provider_call() -> None:
     assert failures == []
 
 
+def test_final_validator_accepts_supported_partial_answer_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module(name="m26_aq_final_closure_partial_contract")
+    monkeypatch.setattr(module, "_validate_visible_semantics", lambda row: [])
+
+    rows = []
+    for index in range(1, 13):
+        case_id = f"R3-Q{index:02d}"
+        if case_id in {"R3-Q10", "R3-Q11"}:
+            rows.append(_abstention_row(module, case_id))
+        else:
+            row = _answered_row(module, case_id)
+            if case_id == "R3-Q04":
+                row["answer_source"] = module.PARTIAL_ANSWER_SOURCE
+                row["semantic_closure"]["partial_answer"] = True
+            rows.append(row)
+
+    artifact = {
+        "collection": {"status": "complete", "failure": None},
+        "health": {
+            "http_status": 200,
+            "status": "ok",
+            "build_sha": "sha",
+            "entrypoint": module.CANONICAL_RUNTIME_ENTRYPOINT,
+            "semantic_contract_fingerprint": module.semantic_contract_fingerprint(),
+        },
+        "graph": {
+            "http_status": 200,
+            "status": "ok",
+            "graph_scope": "full_current_production_relation_graph",
+            "release_id": module.EXPECTED_RELEASE_ID,
+            "graph_v2_sha256": module.EXPECTED_GRAPH_SHA256,
+            "node_count": module.EXPECTED_NODE_COUNT,
+            "edge_count": module.EXPECTED_EDGE_COUNT,
+        },
+        "rows": rows,
+        "privacy": {
+            "raw_backend_token_recorded": False,
+            "raw_owner_hash_recorded": False,
+            "provider_secret_recorded": False,
+        },
+    }
+    gate = {"production_identities": {"public_traffic_percent": 0}}
+    artifact_path = tmp_path / "artifact.json"
+    gate_path = tmp_path / "gate.json"
+    artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+    gate_path.write_text(json.dumps(gate), encoding="utf-8")
+
+    module.validate(
+        input_path=artifact_path,
+        gate_path=gate_path,
+        expected_sha="sha",
+    )
+
+
 def test_blackbox_abstention_still_rejects_answer_text_or_excess_calls() -> None:
     module = _load_generalized_module()
     failures: list[str] = []
