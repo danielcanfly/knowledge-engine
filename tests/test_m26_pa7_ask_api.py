@@ -271,6 +271,27 @@ def test_web_dto_wraps_canonical_runtime_without_raw_question(
     assert question not in encoded
 
 
+def test_web_query_uses_full_semantic_closure_provider_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, Any] = {}
+
+    def fake_runtime(**kwargs: Any) -> dict[str, Any]:
+        observed.update(kwargs)
+        return _dto_runtime_fixture(**kwargs)
+
+    monkeypatch.setattr(m26_ask_api, "run_owner_arbitrary_query", fake_runtime)
+
+    run_owner_query_for_web(
+        root=ROOT,
+        gate_path=GATE_PATH,
+        request_payload={"question": "How should a router repair after semantic review?"},
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+    )
+
+    assert observed["max_provider_calls"] == 4
+
+
 def test_web_dto_matches_cli_runtime_response_identity() -> None:
     runtime = run_owner_arbitrary_query(
         root=ROOT,

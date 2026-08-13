@@ -52,6 +52,7 @@ RATE_WINDOW_SECONDS = 60
 RATE_WINDOW_MAX_REQUESTS = 12
 MAX_OWNER_GRAPH_NODES = 50_000
 MAX_OWNER_GRAPH_EDGES = 100_000
+SEMANTIC_CLOSURE_MAX_PROVIDER_CALLS = 4
 
 FULL_GRAPH_RELEASE_ID = FULL_PRODUCTION_RELEASE_ID
 FULL_GRAPH_MANIFEST_SHA256 = ""
@@ -118,7 +119,7 @@ def run_owner_query_for_web(
     provider_client: ProviderClient | None = None,
     dense_channel: DenseChannel | None = None,
     require_remote_dense: bool = False,
-    max_provider_calls: int = 2,
+    max_provider_calls: int = SEMANTIC_CLOSURE_MAX_PROVIDER_CALLS,
     max_cost: Decimal = Decimal("0.10"),
 ) -> dict[str, Any]:
     question = validate_query_request(request_payload)
