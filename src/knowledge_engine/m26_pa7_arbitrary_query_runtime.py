@@ -2636,6 +2636,10 @@ def _verify_multi_evidence_provider_output(
             )
             < 2
             and not is_model_explanation
+            and not _single_source_claim_supports_surface(
+                surface_text=surface_text,
+                support_refs=ref_records,
+            )
         ):
             raise _verification_failure("M26-PA7-ME-021", "relational claim lacks two sources")
         if not surface_text:
@@ -3408,6 +3412,21 @@ def _verify_synthesis_premise_binding(
         )
 
 
+def _single_source_claim_supports_surface(
+    *,
+    surface_text: str,
+    support_refs: Sequence[Mapping[str, Any]],
+) -> bool:
+    if len(support_refs) != 1:
+        return False
+    surface_terms = _meaningful_terms(surface_text)
+    support_terms = _meaningful_terms(str(support_refs[0].get("exact_quote", "")))
+    material_surface_terms = surface_terms - STOP_TERMS
+    if not material_surface_terms:
+        return False
+    return material_surface_terms.issubset(support_terms)
+
+
 def _verify_hard_truth_boundary_mutations(
     *,
     surface_text: str,
@@ -3887,6 +3906,12 @@ def _verify_visible_answer_claim_alignment(
                     str(ref.get("exact_quote", ""))
                     for ref in _list(claim.get("support_refs", []), "claim support refs")
                 )
+            _verify_uncited_sentence_has_claim_local_support(
+                sentence_visible=sentence_visible,
+                sentence_terms=sentence_terms,
+                sentence_numbers=sentence_numbers,
+                claims=claims,
+            )
         if not sentence_terms or len(sentence_terms & claim_terms) < 1:
             raise _verification_failure(
                 "M26-PA7-ME-045", "visible answer sentence is not proposition-bound to claim"
@@ -3912,6 +3937,42 @@ def _verify_visible_answer_claim_alignment(
             surface_text=sentence_visible,
             support_text=" ".join(claim_support_parts),
         )
+
+
+def _verify_uncited_sentence_has_claim_local_support(
+    *,
+    sentence_visible: str,
+    sentence_terms: set[str],
+    sentence_numbers: set[str],
+    claims: Sequence[Mapping[str, Any]],
+) -> None:
+    for claim in claims:
+        claim_support_parts = [str(claim.get("surface_text", ""))]
+        claim_numbers = set(
+            re.findall(r"\b\d+(?:\.\d+)?\b", str(claim.get("surface_text", "")))
+        )
+        claim_terms = _coverage_terms(str(claim.get("surface_text", "")))
+        for ref in _list(claim.get("support_refs", []), "claim support refs"):
+            exact_quote = str(ref.get("exact_quote", ""))
+            claim_support_parts.append(exact_quote)
+            claim_terms |= _meaningful_terms(exact_quote)
+            claim_numbers |= set(re.findall(r"\b\d+(?:\.\d+)?\b", exact_quote))
+        if not sentence_terms & claim_terms:
+            continue
+        if sentence_numbers - claim_numbers:
+            continue
+        try:
+            _verify_hard_truth_boundary_mutations(
+                surface_text=sentence_visible,
+                support_text=" ".join(claim_support_parts),
+            )
+        except VerifiedAnswerGateError:
+            continue
+        return
+    raise _verification_failure(
+        "M26-PA7-ME-045",
+        "visible answer sentence is not claim-local evidence-bound",
+    )
 
 
 def _verified_abstention(

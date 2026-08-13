@@ -896,7 +896,9 @@ def _runtime_bound_candidate(
         relation = "precedes"
     claim_records: list[dict[str, Any]] = []
     source_claims = list(claims or [])
+    generated_default_claim = False
     if not source_claims:
+        generated_default_claim = True
         source_claims = [
             {
                 "claim_id": "claim_1",
@@ -933,8 +935,10 @@ def _runtime_bound_candidate(
         ]
         if claim_type == "MODEL_EXPLANATION":
             support_items = []
-        elif not support_items:
+        elif not support_items and generated_default_claim:
             support_items = list(used_items[:1])
+        elif not support_items:
+            raise ValueError("runtime could not bind provider claim to evidence labels")
         refs: list[dict[str, Any]] = []
         for _ref_index, item in enumerate(support_items, start=1):
             evidence_id = str(item.get("evidence_id", ""))

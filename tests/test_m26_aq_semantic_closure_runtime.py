@@ -4,6 +4,8 @@ import json
 import time
 from typing import Any
 
+import pytest
+
 from knowledge_engine import m26_pa7_arbitrary_query_runtime as legacy
 from knowledge_engine.m26_aq_semantic_contract import (
     _contract_compat_module,
@@ -1510,3 +1512,34 @@ def test_tesc_partial_candidate_keeps_supported_a_and_explicit_unsupported_b_bou
         for claim in candidate["claims"]
         if claim.get("claim_type") != "MODEL_EXPLANATION"
     )
+
+
+def test_tesc_provider_claim_without_evidence_label_does_not_fallback_to_used_items() -> None:
+    question = "Explain durable state for disconnected work."
+    durable = _rich_passage(
+        "durable",
+        "Durable state preserves workflow progress after a client disconnect.",
+        "durable-note",
+    )
+
+    with pytest.raises(ValueError, match="provider claim to evidence labels"):
+        _runtime_bound_candidate(
+            answer="Durable state preserves workflow progress after a client disconnect.",
+            question=question,
+            intent_class="direct_grounded_knowledge",
+            used_items=[durable],
+            claims=[
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": (
+                        "Durable state preserves workflow progress after a client disconnect."
+                    ),
+                    "evidence_labels": [],
+                    "covers": ["durable_state"],
+                }
+            ],
+            label_map={"e1": durable},
+            snippet_map={"durable": durable["passage_text"]},
+            requirements=[],
+        )

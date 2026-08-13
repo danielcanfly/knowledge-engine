@@ -2345,6 +2345,78 @@ def test_tesc_one_entailing_source_can_support_one_direct_proposition() -> None:
     assert verified["terminal_status"] == "verified_answer_ready_candidate"
 
 
+def test_tesc_one_complete_source_can_support_one_relationship_proposition() -> None:
+    evidence = [
+        _tesc_evidence(
+            "Entity A complements Entity B in workflow design.",
+            evidence_id="ev_relationship",
+        )
+    ]
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="tesc_single_source_relationship",
+        question="What relationship does the evidence establish between Entity A and Entity B?",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=_tesc_provider_text(
+            evidence,
+            surface_text="Entity A complements Entity B in workflow design.",
+            claim_role="relationship",
+            relation="complements",
+        ),
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+def test_tesc_one_incomplete_source_does_not_satisfy_relationship_by_cardinality() -> None:
+    evidence = [
+        _tesc_evidence(
+            "Entity A mentions Entity B in workflow notes.",
+            evidence_id="ev_relationship",
+        )
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_single_source_incomplete_relationship",
+            question="What relationship does the evidence establish between Entity A and Entity B?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text="Entity A complements Entity B in workflow design.",
+                claim_role="relationship",
+                relation="complements",
+            ),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-021"
+
+
+def test_tesc_uncited_visible_sentence_cannot_borrow_negative_sibling_support() -> None:
+    claims = [
+        {
+            "claim_id": "claim_positive",
+            "surface_text": "Entity A stores graph data.",
+            "support_refs": [{"exact_quote": "Entity A stores graph data."}],
+        },
+        {
+            "claim_id": "claim_negative",
+            "surface_text": "Entity B does not store graph data.",
+            "support_refs": [{"exact_quote": "Entity B does not store graph data."}],
+        },
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_visible_answer_claim_alignment(
+            "Entity A does not store graph data.",
+            claims=claims,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-045"
+
+
 def test_tesc_comparison_requires_support_for_both_sides() -> None:
     evidence = [_tesc_evidence("Entity A stores graph data.")]
 
