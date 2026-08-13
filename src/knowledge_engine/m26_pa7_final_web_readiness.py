@@ -11,6 +11,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from .m26_intent_compat import classify_with_semantic_compat
+
 FINAL_OWNER_AUTHORITY_SELF_SHA256 = (
     "19a1a5d41f8c935a235631975a225a622e4767e95b80ce23da2ff867c31ba2ce"
 )
@@ -500,6 +502,8 @@ def _runtime_row_from_response(
     selected = _object_list(response.get("selected_evidence"))
     multi = _mapping(response.get("multi_evidence_verification"))
     relationship = _mapping(response.get("relationship_summary"))
+    runtime_intent = str(response.get("intent_class", ""))
+    formal_intent = _formal_bank_intent_class(spec=spec, runtime_intent=runtime_intent)
     evidence_types = sorted({str(item.get("evidence_type", "")) for item in selected if item})
     citation_types = sorted({str(item.get("evidence_type", "")) for item in citations if item})
     base_pass = (
@@ -518,6 +522,7 @@ def _runtime_row_from_response(
         evidence_types=evidence_types,
         citation_types=citation_types,
         multi=multi,
+        formal_intent_class=formal_intent,
     )
     row: dict[str, Any] = {
         "answerable": answerable,
@@ -528,7 +533,10 @@ def _runtime_row_from_response(
         "distinct_source_count": int(response.get("distinct_source_count", 0)),
         "evidence_channel": "canonical_runtime",
         "graph_hops_used": int(response.get("graph_hops_used", 0)),
-        "intent_class": str(response.get("intent_class", "")),
+        "formal_intent_authority": "m26-pa7-final-web-formal-bank-compatibility",
+        "formal_intent_class": formal_intent,
+        "formal_intent_compat_used": formal_intent != runtime_intent,
+        "intent_class": runtime_intent,
         "latency_ms": int(response.get("latency_ms", 0)),
         "material_claim_support_verified": support_verified,
         "multi_evidence_verification": dict(multi),
@@ -573,6 +581,18 @@ def _runtime_row_from_response(
     return row
 
 
+def _formal_bank_intent_class(
+    *,
+    spec: Mapping[str, Any],
+    runtime_intent: str,
+) -> str:
+    question = str(spec.get("question_text", ""))
+    return classify_with_semantic_compat(
+        question,
+        legacy_classifier=lambda _question: runtime_intent,
+    )
+
+
 def _class_pass(
     *,
     class_name: str,
@@ -583,8 +603,9 @@ def _class_pass(
     evidence_types: Sequence[str],
     citation_types: Sequence[str],
     multi: Mapping[str, Any],
+    formal_intent_class: str | None = None,
 ) -> bool:
-    intent = str(response.get("intent_class", ""))
+    intent = formal_intent_class or str(response.get("intent_class", ""))
     distinct_sources = int(response.get("distinct_source_count", 0))
     support_refs = int(multi.get("support_ref_count", 0))
     if class_name == "direct_grounded_knowledge":
