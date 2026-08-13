@@ -1734,6 +1734,35 @@ def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
     assert "ev1" not in payload["messages"][0]["content"]
 
 
+def test_semantic_review_protocol_defines_model_explanation_verdict() -> None:
+    candidate = {
+        "answer_text": "The router chooses the path, and the DAG runs the steps.",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_type": "MODEL_EXPLANATION",
+                "surface_text": "The router selection and DAG execution compose.",
+                "support_refs": [],
+            }
+        ],
+    }
+
+    payload = _semantic_review_payload(
+        question="How can a query router and a DAG work together?",
+        intent_class="direct_grounded_knowledge",
+        candidate=candidate,
+        evidence=[],
+    )
+    task = json.loads(payload["messages"][0]["content"])
+    claim_case = task["claim_cases"][0]
+
+    assert claim_case["claim_type"] == "MODEL_EXPLANATION"
+    assert claim_case["allowed_evidence_ids"] == []
+    assert "GENERIC_EXPLANATION" in task["review_protocol"]["model_explanation_rule"]
+    assert "return verdict GENERIC_EXPLANATION with evidence_ids []" in payload["system"]
+    assert "MODEL_EXPLANATION glue claim" in payload["system"]
+
+
 def test_semantic_review_claim_local_labels_are_canonicalized() -> None:
     question = "Explain router snapshots."
     evidence = [

@@ -1285,6 +1285,16 @@ def _semantic_review_payload(
                 "labels are aliases for that same case's evidence_id_by_label entries. "
                 "Unknown or cross-claim IDs or labels are invalid."
             ),
+            "model_explanation_rule": (
+                "If claim_type is MODEL_EXPLANATION and the claim case has no local "
+                "evidence, use verdict GENERIC_EXPLANATION with evidence_ids []. Do "
+                "not use ENTAILED for a claim with no local evidence."
+            ),
+            "visible_coverage_rule": (
+                "Visible coverage concerns material KB-dependent assertions in "
+                "answer_text. Do not mark coverage UNCOVERED merely because a visible "
+                "generic glue statement is represented by a MODEL_EXPLANATION claim."
+            ),
         },
         "output": {
             "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
@@ -1312,9 +1322,14 @@ def _semantic_review_payload(
         "by a structured claim. For each ENTAILED judgment, evidence_ids must be an array "
         "of exact evidence_id strings from that claim case's allowed_evidence_ids, or exact "
         "claim-local labels from that claim case's allowed_evidence_labels. "
+        "If claim_type is MODEL_EXPLANATION and the claim case has no local evidence, "
+        "return verdict GENERIC_EXPLANATION with evidence_ids []. "
         "If no allowed local evidence entails the claim, use INSUFFICIENT or CONTRADICTED "
         "instead of ENTAILED. Do not invent claim IDs, evidence IDs, or evidence labels; "
-        "never output example labels unless that exact string is present in the claim case."
+        "never output example labels unless that exact string is present in the claim case. "
+        "For visible_coverage, only list material KB-dependent assertions that are not "
+        "represented by any structured claim; a listed MODEL_EXPLANATION glue claim is "
+        "not by itself an uncovered assertion."
     )
     return {
         "model": "MiniMax-M3",
