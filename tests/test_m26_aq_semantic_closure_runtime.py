@@ -399,8 +399,23 @@ def test_graph_edge_evidence_unit_includes_endpoint_display_labels() -> None:
         "Harness Theory Part 1 (article_1) precedes Harness Theory Part 2 (article_2)"
         in item["passage_text"]
     )
-    assert "graph-artifact fact" in item["passage_text"]
-    assert "does not prove dependency" in item["passage_text"]
+    assert "graph-artifact fact" not in item["passage_text"]
+    assert "does not prove dependency" not in item["passage_text"]
+    assert item["relation_metadata"] == {
+        "schema_version": "m26-graph-relation-metadata/v1",
+        "relation_type": "precedes",
+        "provenance": "graph_artifact_fact",
+        "directed": True,
+        "structural_relation": True,
+        "relation_family": "ordering",
+        "retrieval_semantics": ["ordering", "sequence", "navigation"],
+        "non_asserted_semantics": [
+            "dependency",
+            "causality",
+            "implementation",
+            "requirement",
+        ],
+    }
     graph_rule = legacy._minimum_evidence_rule("graph_relationship")
     assert graph_rule["minimum_evidence"] == 1
     assert graph_rule["requires_graph_edge"] is True
@@ -495,15 +510,57 @@ def test_compound_graph_edge_unit_covers_endpoint_facets_without_passages() -> N
     )
 
 
-def test_precedes_boundary_recovery_uses_graph_edge_unit_only() -> None:
+def test_semantic_review_graph_fact_uses_formal_relation_metadata() -> None:
     edge = _graph_edge("ev_edge", "Harness Theory Part 1", "Harness Theory Part 2", "precedes")
-    edge["passage_text"] = (
-        "Production graph navigation edge edge_precedes states Harness Theory "
-        "Part 1 precedes Harness Theory Part 2. As a graph-artifact fact, this "
-        "precedes relation records ordering, sequence, or navigation only; by "
-        "itself it does not prove dependency, causality, implementation, or "
-        "requirement between the endpoints."
+    edge["relation_metadata"] = legacy._graph_relation_metadata("precedes")
+    surface = (
+        "Harness Theory Part 1 precedes Harness Theory Part 2 in graph order, "
+        "and the graph edge does not by itself prove dependency."
     )
+    candidate = {
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "surface_text": surface,
+                "support_refs": [
+                    {
+                        "evidence_id": "ev_edge",
+                        "locator_id": "loc_ev_edge",
+                        "exact_quote": edge["passage_text"],
+                    }
+                ],
+            }
+        ]
+    }
+
+    payload = _semantic_review_payload(
+        question="Does a precedes edge prove dependency?",
+        intent_class="graph_relationship",
+        candidate=candidate,
+        evidence=[edge],
+    )
+    claim_case = json.loads(payload["messages"][0]["content"])["claim_cases"][0]
+    graph_fact = claim_case["evidence"][0]["graph_fact"]
+
+    assert graph_fact["provenance"] == "graph_artifact_fact"
+    assert graph_fact["relation_metadata"]["relation_type"] == "precedes"
+    assert graph_fact["relation_metadata"]["retrieval_semantics"] == [
+        "ordering",
+        "sequence",
+        "navigation",
+    ]
+    assert graph_fact["relation_metadata"]["non_asserted_semantics"] == [
+        "dependency",
+        "causality",
+        "implementation",
+        "requirement",
+    ]
+    assert "semantic_boundary" not in graph_fact
+
+
+def test_precedes_boundary_recovery_has_no_canonical_publication_authority() -> None:
+    edge = _graph_edge("ev_edge", "Harness Theory Part 1", "Harness Theory Part 2", "precedes")
+    edge["relation_metadata"] = legacy._graph_relation_metadata("precedes")
     question = (
         "The production graph says Harness Theory Part 1 precedes Part 2. "
         "What can we safely infer from that edge, and what can't we infer?"
@@ -525,9 +582,7 @@ def test_precedes_boundary_recovery_uses_graph_edge_unit_only() -> None:
         },
     )
 
-    assert candidate is not None
-    refs = candidate["claims"][0]["support_refs"]
-    assert {ref["evidence_id"] for ref in refs} == {"ev_edge"}
+    assert candidate is None
 
 
 def test_nc01_cited_but_irrelevant_disconnect_answer_is_rejected() -> None:

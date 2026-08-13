@@ -1186,23 +1186,12 @@ def _supported_semantic_recovery_candidate(
     endpoint_proof: Mapping[str, Any],
     support_proof: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any] | None:
-    if _precedes_boundary_required(question, intent_class, requirements, endpoint_proof):
-        candidate = _precedes_boundary_candidate(
-            question=question,
-            evidence=evidence,
-            requirements=requirements,
-            endpoint_proof=endpoint_proof,
-        )
-        if candidate is not None:
-            return candidate
-    if _precedes_relation_required(question, intent_class, requirements, endpoint_proof):
-        candidate = _precedes_relation_candidate(
-            question=question,
-            evidence=evidence,
-            endpoint_proof=endpoint_proof,
-        )
-        if candidate is not None:
-            return candidate
+    if (
+        intent_class == "graph_relationship"
+        or _precedes_boundary_required(question, intent_class, requirements, endpoint_proof)
+        or _precedes_relation_required(question, intent_class, requirements, endpoint_proof)
+    ):
+        return None
     candidate = _persistence_correctness_candidate(
         question=question,
         intent_class=intent_class,

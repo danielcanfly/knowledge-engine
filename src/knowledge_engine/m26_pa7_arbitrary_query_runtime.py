@@ -169,6 +169,31 @@ ORDER_SURFACE_TERMS = {
     "sequence",
     "series",
 }
+
+
+def _graph_relation_metadata(relation_type: str) -> dict[str, Any]:
+    relation = str(relation_type or "related_to")
+    metadata: dict[str, Any] = {
+        "schema_version": "m26-graph-relation-metadata/v1",
+        "relation_type": relation,
+        "provenance": "graph_artifact_fact",
+        "directed": relation not in {"related_to", "contrasts_with", "complements"},
+        "structural_relation": relation in STRUCTURAL_RELATION_TYPES,
+    }
+    if relation == "precedes":
+        metadata.update(
+            {
+                "relation_family": "ordering",
+                "retrieval_semantics": ["ordering", "sequence", "navigation"],
+                "non_asserted_semantics": [
+                    "dependency",
+                    "causality",
+                    "implementation",
+                    "requirement",
+                ],
+            }
+        )
+    return metadata
 DIRECT_FACET_EXACT_PHRASES = {
     "comfyui_memory_debug_order": (
         "boring on purpose",
@@ -5238,12 +5263,7 @@ def _graph_edge_evidence_item(
         f"with confidence {edge.get('confidence')} and review "
         f"{edge.get('review_status', 'approved')}."
     )
-    if relation_type == "precedes":
-        statement += (
-            " As a graph-artifact fact, this precedes relation records ordering, "
-            "sequence, or navigation only; by itself it does not prove dependency, "
-            "causality, implementation, or requirement between the endpoints."
-        )
+    relation_metadata = _graph_relation_metadata(relation_type)
     text_sha = sha256_bytes(statement.encode("utf-8"))
     locator_id = (
         "m26pa7edge_"
@@ -5279,11 +5299,13 @@ def _graph_edge_evidence_item(
         "edge_source_label": source_label,
         "edge_target_label": target_label,
         "relation_type": relation_type,
+        "relation_metadata": relation_metadata,
         "provenance_record_sha256": canonical_sha256(str(edge.get("provenance_ref", ""))),
         "retrieved_at": "",
         "retrieval_metadata": {
             "graph_edge_role": "navigation_identity",
             "structural_relation": relation_type in STRUCTURAL_RELATION_TYPES,
+            "relation_metadata": relation_metadata,
         },
     }
 

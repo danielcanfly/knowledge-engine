@@ -962,6 +962,9 @@ def _compact_provider_payload(
                 "relation": str(item.get("relation_type", "")),
                 "from": str(item.get("edge_source", ""))[:120],
                 "to": str(item.get("edge_target", ""))[:120],
+                "relation_metadata": dict(item.get("relation_metadata", {}))
+                if isinstance(item.get("relation_metadata"), Mapping)
+                else {},
                 "text": snippet,
             }
         )
@@ -1089,12 +1092,12 @@ def _semantic_review_payload(
                     "edge_target_label": str(item.get("edge_target_label", "")),
                     "relation_type": str(item.get("relation_type", "")),
                     "provenance": "graph_artifact_fact",
+                    "relation_metadata": dict(item.get("relation_metadata", {}))
+                    if isinstance(item.get("relation_metadata"), Mapping)
+                    else legacy._graph_relation_metadata(
+                        str(item.get("relation_type", ""))
+                    ),
                 }
-                if str(item.get("relation_type", "")) == "precedes":
-                    graph_fact["semantic_boundary"] = (
-                        "ordering_sequence_navigation_only_not_dependency_causality_"
-                        "implementation_or_requirement"
-                    )
             local_evidence.append(
                 {
                     "evidence_id": evidence_id,
