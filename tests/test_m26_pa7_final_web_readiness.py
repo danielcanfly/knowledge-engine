@@ -29,6 +29,7 @@ from knowledge_engine.m26_pa7_final_web_readiness import (
     FINAL_CLASSES,
     FINAL_WEB_FORMAL_MANIFEST_SCHEMA,
     FINAL_WEB_READINESS_RECEIPT_SCHEMA,
+    _runtime_row_from_response,
     build_final_web_formal_test_manifest,
     duplicate_live_guard_status,
     final_formal_query_specs,
@@ -270,6 +271,48 @@ def test_final_web_formal_manifest_rebuild_matches_committed_artifact() -> None:
     )
 
     assert rebuilt == manifest
+
+
+def test_final_web_formal_bank_intent_compat_preserves_runtime_telemetry() -> None:
+    spec = final_formal_query_specs()[2]
+    response = {
+        "citations": [
+            {"evidence_type": "passage", "source_identity": "source-a"},
+            {"evidence_type": "passage", "source_identity": "source-b"},
+        ],
+        "citation_locator_valid": True,
+        "distinct_source_count": 2,
+        "graph_hops_used": 1,
+        "intent_class": "direct_grounded_knowledge",
+        "material_claim_support_verified": True,
+        "multi_evidence_verification": {
+            "single_primary_passage_used": False,
+            "support_ref_count": 2,
+        },
+        "provider_call_count": 1,
+        "provider_invoked": True,
+        "question_sha256": spec["question_sha256"],
+        "reason_codes": [],
+        "relationship_summary": {"relation": "contrasts_with"},
+        "safe_abstention": False,
+        "selected_evidence": [
+            {"evidence_type": "passage", "source_identity": "source-a"},
+            {"evidence_type": "passage", "source_identity": "source-b"},
+        ],
+        "selected_evidence_count": 2,
+        "status": "owner_only_cited_answer",
+        "terminal_status": "verified_answer_ready_candidate",
+        "trace_id": "m26pa7aq_test_formal_compat",
+        "unsupported_accepted_claims": 0,
+    }
+
+    row = _runtime_row_from_response(spec=spec, response=response)
+
+    assert row["class"] == "cross_document_comparison"
+    assert row["pass"] is True
+    assert row["intent_class"] == "direct_grounded_knowledge"
+    assert row["formal_intent_class"] == "cross_document_comparison"
+    assert row["formal_intent_compat_used"] is True
 
 
 def test_final_web_product_readiness_fixture_receipt_satisfies_a26_to_a53(
