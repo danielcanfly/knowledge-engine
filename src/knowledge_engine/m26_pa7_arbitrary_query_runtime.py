@@ -202,6 +202,47 @@ MODALITY_STRENGTHENING_TERMS = {
     "requires",
     "will",
 }
+WEAKENING_FORCE_PATTERNS: tuple[tuple[str, int, tuple[re.Pattern[str], ...]], ...] = (
+    ("possibility", 1, (re.compile(r"\bmay\b(?!\s+\d{4}\b)", re.I),)),
+    ("possibility", 1, (re.compile(r"\b(?:might|possibly|potentially|possible)\b", re.I),)),
+    ("conditional_possibility", 1, (re.compile(r"\bcould\b", re.I),)),
+    ("capability", 1, (re.compile(r"\bcan\b"), re.compile(r"\bcapable\s+of\b", re.I))),
+    ("epistemic", 1, (re.compile(r"\b(?:appears|seems|suggests|suggest)\b", re.I),)),
+    ("epistemic", 2, (re.compile(r"\b(?:likely|probably)\b", re.I),)),
+    ("frequency", 1, (re.compile(r"\b(?:occasionally|sometimes)\b", re.I),)),
+    ("frequency", 2, (re.compile(r"\b(?:often|frequently|generally)\b", re.I),)),
+    ("frequency", 3, (re.compile(r"\b(?:usually|typically)\b", re.I),)),
+)
+WEAKENING_FORCE_TERMS = {
+    "appears",
+    "can",
+    "capable",
+    "could",
+    "frequently",
+    "generally",
+    "likely",
+    "may",
+    "might",
+    "often",
+    "occasionally",
+    "possible",
+    "possibly",
+    "potentially",
+    "probably",
+    "seems",
+    "sometimes",
+    "suggest",
+    "suggests",
+    "typically",
+    "usually",
+}
+NUMERIC_FORCE_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("approximate", r"\b(?:about|approximately|around)\s+{number}\b"),
+    ("lower_bound_inclusive", r"\b(?:at least|no fewer than)\s+{number}\b"),
+    ("upper_bound_inclusive", r"\b(?:at most|no more than)\s+{number}\b"),
+    ("lower_bound_exclusive", r"\b(?:more than|over)\s+{number}\b"),
+    ("upper_bound_exclusive", r"\b(?:less than|under)\s+{number}\b"),
+)
 CAUSALITY_UPGRADE_TERMS = {
     "cause",
     "caused",
@@ -223,6 +264,66 @@ CAUSALITY_SUPPORT_TERMS = CAUSALITY_UPGRADE_TERMS | {
 }
 PARTIAL_SCOPE_TERMS = {"some", "several"}
 UNIVERSAL_SCOPE_TERMS = {"all", "each", "every"}
+QUALITATIVE_SCOPE_RANKS = {
+    "few": 1,
+    "some": 2,
+    "several": 2,
+    "many": 3,
+    "most": 4,
+    "nearly all": 5,
+    "almost all": 5,
+    "all": 6,
+    "each": 6,
+    "every": 6,
+}
+MONTH_VALUE_TERMS = {
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+}
+WEEKDAY_VALUE_TERMS = {
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+}
+NUMBER_WORD_VALUES = {
+    "zero": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+}
+ORDINAL_WORD_VALUES = {
+    "first": 1,
+    "second": 2,
+    "third": 3,
+    "fourth": 4,
+    "fifth": 5,
+    "sixth": 6,
+    "seventh": 7,
+    "eighth": 8,
+    "ninth": 9,
+    "tenth": 10,
+}
 SYNTHESIS_CONTRADICTION_PHRASES = {
     "equivalent",
     "identical",
@@ -2629,6 +2730,18 @@ def _verify_multi_evidence_provider_output(
                     "passage_span": {"start_char": start, "end_char": start + len(exact_quote)},
                 }
             )
+        if not surface_text:
+            surface_text = " ".join(str(ref["exact_quote"]) for ref in ref_records)
+        _verify_claim_surface_semantics(
+            question=question,
+            intent_class=intent_class,
+            relation=str(parsed.get("relation") or ""),
+            claim_role=claim_role,
+            claim_type=claim_type,
+            surface_text=surface_text,
+            support_refs=ref_records,
+            evidence_by_id=evidence_by_id,
+        )
         if (
             _claim_requires_multi_source(intent_class, claim_role)
             and _distinct_source_count(
@@ -2642,18 +2755,6 @@ def _verify_multi_evidence_provider_output(
             )
         ):
             raise _verification_failure("M26-PA7-ME-021", "relational claim lacks two sources")
-        if not surface_text:
-            surface_text = " ".join(str(ref["exact_quote"]) for ref in ref_records)
-        _verify_claim_surface_semantics(
-            question=question,
-            intent_class=intent_class,
-            relation=str(parsed.get("relation") or ""),
-            claim_role=claim_role,
-            claim_type=claim_type,
-            surface_text=surface_text,
-            support_refs=ref_records,
-            evidence_by_id=evidence_by_id,
-        )
         claim_facets = set(
             _validated_claim_facets(
                 question=question,
@@ -3295,40 +3396,42 @@ def _verify_claim_surface_semantics(
             "false-premise precedes question lacks explicit non-entailment boundary",
         )
     shared_support_terms = surface_terms & support_terms
-    shared_question_terms = surface_terms & question_terms
     is_synthesis = claim_type == "EVIDENCE_SYNTHESIS" or claim_role in {
         "relationship",
         "comparison",
         "temporal",
     }
-    if is_synthesis:
-        _verify_synthesis_premise_binding(
-            surface_terms=surface_terms,
-            question_terms=question_terms,
-            support_refs=support_refs,
-        )
-    elif len(shared_support_terms) < 2:
-        raise _verification_failure(
-            "M26-PA7-ME-032",
-            "direct claim surface is not bound to cited support",
-        )
-    if is_synthesis and len(shared_support_terms) < 2 and not shared_question_terms:
-        raise _verification_failure(
-            "M26-PA7-ME-032",
-            "claim surface is not semantically aligned to exact support",
-        )
-    if is_synthesis:
+    if is_synthesis and intent_class != "graph_relationship":
         surface_casefold = surface.casefold()
         if any(phrase in surface_casefold for phrase in SYNTHESIS_CONTRADICTION_PHRASES):
             raise _verification_failure(
                 "M26-PA7-ME-048",
                 "claim surface makes an unsupported equivalence claim",
             )
+        _verify_synthesis_premise_binding(
+            surface_text=surface,
+            surface_terms=surface_terms,
+            question_terms=question_terms,
+            support_refs=support_refs,
+        )
+    elif not is_synthesis and len(shared_support_terms) < 2:
+        raise _verification_failure(
+            "M26-PA7-ME-032",
+            "direct claim surface is not bound to cited support",
+        )
+    shared_question_terms = surface_terms & question_terms
+    if (
+        is_synthesis
+        and intent_class != "graph_relationship"
+        and len(shared_support_terms) < 2
+        and not shared_question_terms
+    ):
+        raise _verification_failure(
+            "M26-PA7-ME-032",
+            "claim surface is not semantically aligned to exact support",
+        )
     support_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", support_text))
-    question_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", question))
-    unsupported_numbers = (
-        set(re.findall(r"\b\d+(?:\.\d+)?\b", surface)) - support_numbers - question_numbers
-    )
+    unsupported_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", surface)) - support_numbers
     if unsupported_numbers:
         raise _verification_failure("M26-PA7-ME-033", "claim surface introduces unsupported number")
     _verify_hard_truth_boundary_mutations(
@@ -3336,13 +3439,18 @@ def _verify_claim_surface_semantics(
         support_text=support_text,
         question=question,
     )
+    if not is_synthesis and claim_role == "direct":
+        _verify_direct_claim_has_ref_local_support(
+            surface_text=surface,
+            support_refs=support_refs,
+        )
     strengthened = surface_terms & MODALITY_STRENGTHENING_TERMS
     if (
         strengthened
-        and not strengthened.issubset(support_terms | question_terms)
+        and not strengthened.issubset(support_terms)
         and not (
             _has_non_entailment_boundary(surface.casefold())
-            and strengthened.issubset(support_terms | question_terms | {"must", "requires"})
+            and strengthened.issubset(support_terms | {"must", "requires"})
         )
     ):
         raise _verification_failure(
@@ -3393,23 +3501,155 @@ def _verify_claim_surface_semantics(
 
 def _verify_synthesis_premise_binding(
     *,
+    surface_text: str,
     surface_terms: set[str],
     question_terms: set[str],
     support_refs: Sequence[Mapping[str, Any]],
 ) -> None:
     if len(support_refs) < 2:
         return
-    premise_targets = surface_terms | question_terms
+    surface_relations = _local_relationship_triples(surface_text)
+    if surface_relations:
+        if all(
+            set(surface_relations)
+            & set(_local_relationship_triples(str(ref.get("exact_quote", ""))))
+            for ref in support_refs
+        ):
+            return
+        raise _verification_failure(
+            "M26-PA7-ME-052",
+            "synthesis relationship is not bound to a local support premise",
+        )
+    premise_targets = surface_terms
     contributing_refs = 0
     for ref in support_refs:
         ref_terms = _meaningful_terms(str(ref.get("exact_quote", "")))
-        if len(ref_terms & premise_targets) >= 1:
+        material_overlap = (ref_terms & premise_targets) - _relevance_common_terms()
+        if len(material_overlap) >= 2:
             contributing_refs += 1
     if contributing_refs < 2:
         raise _verification_failure(
             "M26-PA7-ME-052",
             "synthesis citation refs are not bound to contributing premises",
         )
+
+
+def _verify_direct_claim_has_ref_local_support(
+    *,
+    surface_text: str,
+    support_refs: Sequence[Mapping[str, Any]],
+) -> None:
+    for ref in support_refs:
+        exact_quote = str(ref.get("exact_quote", ""))
+        if not _direct_ref_supports_surface(surface_text=surface_text, support_text=exact_quote):
+            raise _verification_failure(
+                "M26-PA7-ME-052",
+                "direct claim support refs must each independently support the proposition",
+            )
+
+
+def _direct_ref_supports_surface(*, surface_text: str, support_text: str) -> bool:
+    surface_terms = _meaningful_terms(surface_text)
+    support_terms = _meaningful_terms(support_text)
+    if not surface_terms or not support_terms:
+        return False
+    shared_terms = (surface_terms & support_terms) - _relevance_common_terms()
+    if len(shared_terms) < 1:
+        return False
+    surface_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", surface_text))
+    support_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", support_text))
+    if surface_numbers - support_numbers:
+        return False
+    try:
+        _verify_hard_truth_boundary_mutations(
+            surface_text=surface_text,
+            support_text=support_text,
+        )
+    except VerifiedAnswerGateError:
+        return False
+    support_entities = _hard_boundary_entities(support_text)
+    surface_entities = _hard_boundary_entities(surface_text)
+    if surface_entities and support_entities and surface_entities != support_entities:
+        return False
+    if not _argument_signature_entails_surface(
+        support_text=support_text,
+        surface_text=surface_text,
+    ):
+        return False
+    if _local_relationship_triples(surface_text):
+        return _single_source_relationship_entails_surface(
+            support_text=support_text,
+            surface_text=surface_text,
+        )
+    return True
+
+
+def _argument_signature_entails_surface(*, support_text: str, surface_text: str) -> bool:
+    support_signature = _direct_argument_signature(support_text)
+    surface_signature = _direct_argument_signature(surface_text)
+    if support_signature is None or surface_signature is None:
+        return True
+    support_predicate, support_subject, support_object = support_signature
+    surface_predicate, surface_subject, surface_object = surface_signature
+    if support_predicate != surface_predicate:
+        return True
+    if support_subject and surface_subject and support_subject != surface_subject:
+        return False
+    return not (support_object and surface_object and support_object != surface_object)
+
+
+def _direct_argument_signature(text: str) -> tuple[str, str, str | None] | None:
+    normalized = re.sub(r"\s+", " ", str(text)).strip()
+    predicate_patterns: tuple[tuple[str, bool, re.Pattern[str]], ...] = (
+        ("store", True, re.compile(r"\b(?:stores?|keeps?)\b", re.I)),
+        ("preserve", False, re.compile(r"\b(?:preserves?|maintains?)\b", re.I)),
+        ("use", False, re.compile(r"\buses?\b", re.I)),
+        ("require", False, re.compile(r"\brequires?\b", re.I)),
+        ("affect", False, re.compile(r"\baffects?\b", re.I)),
+        ("launch", False, re.compile(r"\b(?:launches?|launched)\b", re.I)),
+        ("have", False, re.compile(r"\b(?:has|have|had)\b", re.I)),
+        ("fail", False, re.compile(r"\bfails?\b", re.I)),
+        ("stop", False, re.compile(r"\bstops?\b", re.I)),
+    )
+    for predicate, compare_object, pattern in predicate_patterns:
+        match = pattern.search(normalized)
+        if match is None:
+            continue
+        subject = _normalized_argument_anchor(normalized[: match.start()])
+        if not subject:
+            continue
+        object_anchor = None
+        if compare_object:
+            object_anchor = _normalized_argument_anchor(
+                re.split(
+                    r"\b(?:in|on|at|by|before|after|during|when|while|because|if)\b",
+                    normalized[match.end() :],
+                    maxsplit=1,
+                    flags=re.I,
+                )[0]
+            )
+        return predicate, subject, object_anchor
+    return None
+
+
+def _normalized_argument_anchor(text: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_\s.-]+", " ", str(text).casefold())
+    tokens = [
+        token
+        for token in re.findall(r"[a-z0-9]+", cleaned.replace("-", " "))
+        if token not in {"a", "an", "the"} | WEAKENING_FORCE_TERMS
+    ]
+    while tokens and tokens[0] in {
+        "evidence",
+        "source",
+        "support",
+        "claim",
+        "project",
+    }:
+        if tokens[0] == "project" and len(tokens) > 1:
+            break
+        tokens.pop(0)
+    return " ".join(tokens[:4])
 
 
 def _single_source_claim_supports_surface(
@@ -3419,12 +3659,227 @@ def _single_source_claim_supports_surface(
 ) -> bool:
     if len(support_refs) != 1:
         return False
-    surface_terms = _meaningful_terms(surface_text)
-    support_terms = _meaningful_terms(str(support_refs[0].get("exact_quote", "")))
-    material_surface_terms = surface_terms - STOP_TERMS
-    if not material_surface_terms:
+    return _single_source_relationship_entails_surface(
+        support_text=str(support_refs[0].get("exact_quote", "")),
+        surface_text=surface_text,
+    )
+
+
+def _single_source_relationship_entails_surface(*, support_text: str, surface_text: str) -> bool:
+    surface_relations = _local_relationship_triples(surface_text)
+    if not surface_relations:
+        return _direct_ref_supports_surface(surface_text=surface_text, support_text=support_text)
+    support_relations = set(_local_relationship_triples(support_text))
+    if not support_relations:
         return False
-    return material_surface_terms.issubset(support_terms)
+    return any(relation in support_relations for relation in surface_relations)
+
+
+def _local_relationship_triples(text: str) -> list[tuple[str, str, str]]:
+    triples: list[tuple[str, str, str]] = []
+    for clause in _relationship_clauses(text):
+        if re.search(r"\b(?:unlike|rather than|instead of)\b", clause, flags=re.I):
+            continue
+        entities = _entity_spans(clause)
+        if len(entities) < 2:
+            continue
+        first_entity = entities[0]
+        for left, right in zip(entities, entities[1:], strict=False):
+            between = clause[left[2] : right[1]]
+            relation_phrase = _normalized_relation_phrase(between)
+            if not relation_phrase:
+                continue
+            subject = first_entity if _is_elided_subject_relation_phrase(between) else left
+            triples.append((relation_phrase, subject[0], right[0]))
+    return triples
+
+
+def _relationship_clauses(text: str) -> list[str]:
+    normalized = re.sub(r"\s+", " ", str(text)).strip()
+    return [
+        clause.strip()
+        for clause in re.split(
+            r"(?:[.;]|\bwhile\b|\bwhereas\b|\bbut\b|\bthen\b|\bbefore\b)",
+            normalized,
+            flags=re.I,
+        )
+        if clause.strip()
+    ]
+
+
+def _ordered_hard_boundary_entities(text: str) -> list[str]:
+    return [entity for entity, _start, _end in _entity_spans(text)]
+
+
+def _entity_spans(text: str) -> list[tuple[str, int, int]]:
+    normalized = re.sub(r"[_-]+", " ", str(text))
+    spans: list[tuple[str, int, int]] = []
+    entity_re = re.compile(
+        r"\b(?:Entity\s+[A-Z0-9]+|[A-Z][A-Za-z0-9]*(?:\s+[A-Z0-9][A-Za-z0-9]*)*)\b"
+    )
+    for match in entity_re.finditer(normalized):
+        raw_entity = re.sub(r"\s+", " ", match.group(0)).strip()
+        entity = raw_entity.casefold()
+        if not _is_hard_boundary_entity(raw_entity, normalized, match.start(), match.end()):
+            continue
+        if spans and match.start() < spans[-1][2]:
+            continue
+        spans.append((entity, match.start(), match.end()))
+    return spans
+
+
+def _is_hard_boundary_entity(raw_entity: str, full_text: str, start: int, end: int) -> bool:
+    entity = raw_entity.casefold()
+    if entity in {"the", "a", "an"} or entity.startswith(("the ", "a ", "an ")):
+        return False
+    if entity in _single_token_entity_stoplist():
+        return False
+    tokens = entity.split()
+    if len(tokens) >= 2 or re.fullmatch(r"entity\s+[a-z0-9]+", entity):
+        return True
+    token = tokens[0]
+    if not re.fullmatch(r"[a-z][a-z0-9]*", token):
+        return False
+    before = full_text[:start]
+    after = full_text[end:]
+    if before.rstrip().endswith(".") and token in _sentence_initial_common_words():
+        return False
+    if re.search(
+        r"\b(?:stores?|keeps?|preserves?|maintains?|supports?|complements?|mirrors?|"
+        r"audits?|mentions?|depends?\s+on|relies?\s+on|precedes?|follows?|causes?|"
+        r"affects?|uses?|requires?)\s+$",
+        before,
+        flags=re.I,
+    ):
+        return True
+    return bool(
+        re.match(
+            r"\s+(?:(?:may|might|can|could|will|must|appears?(?:\s+to)?|"
+            r"seems?(?:\s+to)?|suggests?(?:\s+that|\s+to)?|likely|probably|"
+            r"possibly|potentially|sometimes|occasionally|often|frequently|"
+            r"generally|usually|typically|always)\s+)*"
+            r"(?:does|do|did|is|are|was|were|"
+            r"stores?|keeps?|preserves?|maintains?|supports?|complements?|mirrors?|"
+            r"audits?|mentions?|depends?|relies?|precedes?|follows?|causes?|affects?|"
+            r"uses?|requires?|fails?|stops?)\b",
+            after,
+            flags=re.I,
+        )
+    )
+
+
+def _single_token_entity_stoplist() -> set[str]:
+    return {
+        "a",
+        "an",
+        "and",
+        "can",
+        "evidence",
+        "may",
+        "note",
+        "the",
+    }
+
+
+def _sentence_initial_common_words() -> set[str]:
+    return {
+        "completion",
+        "current",
+        "evidence",
+        "graph",
+        "policy",
+        "production",
+        "runtime",
+        "system",
+        "the",
+        "workflow",
+    }
+
+
+def _is_elided_subject_relation_phrase(text: str) -> bool:
+    return bool(re.match(r"\s*(?:,?\s*)?and\s+", str(text), flags=re.I))
+
+
+def _normalized_relation_phrase(text: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9\s]+", " ", str(text).casefold())
+    tokens = [token for token in cleaned.split() if token not in {"and", "then", "also"}]
+    while tokens and tokens[0] in {"not", "does", "do", "did", "is", "are", "was", "were"}:
+        tokens.pop(0)
+    while tokens and tokens[-1] in {"a", "an", "the"}:
+        tokens.pop()
+    if not tokens:
+        return ""
+    relation_tokens = [
+        _normalize_relation_token(token)
+        for token in tokens
+        if token
+        not in {
+            "a",
+            "an",
+            "the",
+            "to",
+            "with",
+            "during",
+            "may",
+            "might",
+            "can",
+            "could",
+            "will",
+            "must",
+            "possibly",
+            "potentially",
+            "likely",
+            "probably",
+            "often",
+            "frequently",
+            "generally",
+            "usually",
+            "typically",
+            "sometimes",
+            "occasionally",
+        }
+    ]
+    relation_tokens = [token for token in relation_tokens if token]
+    if not relation_tokens:
+        return ""
+    if relation_tokens[0] == "rely":
+        relation_tokens[0] = "depend"
+    return " ".join(relation_tokens[:3])
+
+
+def _normalize_relation_token(token: str) -> str:
+    aliases = {
+        "relies": "rely",
+        "rely": "rely",
+        "depends": "depend",
+        "dependent": "depend",
+        "supports": "support",
+        "stores": "store",
+        "keeps": "store",
+        "preserves": "preserve",
+        "maintains": "preserve",
+        "complements": "complement",
+        "mirrors": "mirror",
+        "audits": "audit",
+        "mentions": "mention",
+        "precedes": "precede",
+        "follows": "follow",
+        "causes": "cause",
+        "affects": "affect",
+        "uses": "use",
+        "requires": "require",
+        "fails": "fail",
+        "stops": "stop",
+    }
+    if token in aliases:
+        return aliases[token]
+    if len(token) > 4 and token.endswith("ies"):
+        return token[:-3] + "y"
+    if len(token) > 4 and token.endswith("es"):
+        return token[:-2]
+    if len(token) > 3 and token.endswith("s"):
+        return token[:-1]
+    return token
 
 
 def _verify_hard_truth_boundary_mutations(
@@ -3441,13 +3896,26 @@ def _verify_hard_truth_boundary_mutations(
     support_casefold = support.casefold()
     surface_terms = _meaningful_terms(surface)
     support_terms = _meaningful_terms(support)
-    question_terms = _coverage_terms(question)
     shared_terms = (surface_terms & support_terms) - _relevance_common_terms()
+
+    strengthened = surface_terms & MODALITY_STRENGTHENING_TERMS
+    if (
+        strengthened
+        and not strengthened.issubset(support_terms)
+        and not (
+            _has_non_entailment_boundary(surface_casefold)
+            and strengthened.issubset(support_terms | {"must", "requires"})
+        )
+    ):
+        raise _verification_failure(
+            "M26-PA7-ME-034",
+            "claim surface strengthens modality beyond evidence",
+        )
 
     causal_upgrade = surface_terms & CAUSALITY_UPGRADE_TERMS
     if (
         causal_upgrade
-        and not causal_upgrade.issubset(support_terms | question_terms)
+        and not causal_upgrade.issubset(support_terms)
         and not support_terms & CAUSALITY_SUPPORT_TERMS
     ):
         raise _verification_failure(
@@ -3479,12 +3947,28 @@ def _verify_hard_truth_boundary_mutations(
             "M26-PA7-ME-054",
             "claim surface expands partial scope into universal scope",
         )
+    _verify_qualitative_scope_not_strengthened(
+        surface_text=surface,
+        support_text=support,
+    )
+    _verify_textual_temporal_values_not_substituted(
+        surface_text=surface,
+        support_text=support,
+    )
+    _verify_textual_quantity_values_not_substituted(
+        surface_text=surface,
+        support_text=support,
+    )
 
     support_entities = _hard_boundary_entities(support)
     surface_entities = _hard_boundary_entities(surface)
-    question_entities = _hard_boundary_entities(question)
-    invented_entities = surface_entities - support_entities - question_entities
-    if invented_entities and support_entities and (shared_terms or len(surface_terms & support_terms) >= 2):
+    invented_entities = surface_entities - support_entities
+    comparison_surface = bool(surface_terms & {"both", "compare", "comparison", "contrast", "contrasts"})
+    if (
+        invented_entities
+        and not comparison_surface
+        and (support_entities or shared_terms or len(surface_terms & support_terms) >= 2)
+    ):
         raise _verification_failure(
             "M26-PA7-ME-055",
             "claim surface swaps or invents a named entity",
@@ -3500,29 +3984,178 @@ def _verify_hard_truth_boundary_mutations(
             "claim surface flips factual polarity",
         )
 
+    _verify_weakening_force_not_deleted(
+        surface_text=surface,
+        support_text=support,
+        shared_terms=shared_terms,
+    )
+
+
+def _verify_weakening_force_not_deleted(
+    *,
+    surface_text: str,
+    support_text: str,
+    shared_terms: set[str],
+) -> None:
+    material_shared = shared_terms - STOP_TERMS - WEAKENING_FORCE_TERMS
+    if len(material_shared) < 1:
+        return
+    support_forces = _weakening_force_profile(support_text)
+    surface_forces = _weakening_force_profile(surface_text)
+    deleted_forces = set(support_forces) - set(surface_forces)
+    if deleted_forces:
+        raise _verification_failure(
+            "M26-PA7-ME-058",
+            "claim surface deletes an evidence weakening qualifier",
+        )
+    strengthened_forces = {
+        force
+        for force, support_rank in support_forces.items()
+        if surface_forces.get(force, support_rank) > support_rank
+    }
+    if strengthened_forces:
+        raise _verification_failure(
+            "M26-PA7-ME-058",
+            "claim surface strengthens an evidence weakening qualifier",
+        )
+
+    for number in sorted(set(re.findall(r"\b\d+(?:\.\d+)?\b", support_text))):
+        support_numeric_forces = _numeric_force_classes(support_text, number)
+        if not support_numeric_forces:
+            continue
+        if not re.search(rf"\b{re.escape(number)}\b", surface_text):
+            continue
+        surface_numeric_forces = _numeric_force_classes(surface_text, number)
+        if not support_numeric_forces.issubset(surface_numeric_forces):
+            raise _verification_failure(
+                "M26-PA7-ME-033",
+                "claim surface converts approximate or bounded quantity into exact quantity",
+            )
+
+
+def _verify_qualitative_scope_not_strengthened(
+    *,
+    surface_text: str,
+    support_text: str,
+) -> None:
+    surface_ranks = _qualitative_scope_profile(surface_text)
+    support_ranks = _qualitative_scope_profile(support_text)
+    for scope_class, surface_rank in surface_ranks.items():
+        support_rank = support_ranks.get(scope_class)
+        if support_rank is not None and surface_rank > support_rank:
+            raise _verification_failure(
+                "M26-PA7-ME-054",
+                "claim surface strengthens qualitative scope beyond evidence",
+            )
+
+
+def _qualitative_scope_profile(text: str) -> dict[str, int]:
+    guarded = str(text).casefold()
+    profile: dict[str, int] = {}
+    workflow_terms = r"(?:workflows?|queues?|jobs?|checks?|tasks?|routes?|records?|items?)"
+    for phrase, rank in QUALITATIVE_SCOPE_RANKS.items():
+        if re.search(rf"\b{re.escape(phrase)}\s+{workflow_terms}\b", guarded):
+            profile["scope"] = max(profile.get("scope", 0), rank)
+    return profile
+
+
+def _verify_textual_temporal_values_not_substituted(
+    *,
+    surface_text: str,
+    support_text: str,
+) -> None:
+    surface_profile = _textual_temporal_profile(surface_text)
+    support_profile = _textual_temporal_profile(support_text)
+    for value_class, surface_values in surface_profile.items():
+        support_values = support_profile.get(value_class, set())
+        if support_values and surface_values != support_values:
+            raise _verification_failure(
+                "M26-PA7-ME-033",
+                "claim surface substitutes a textual temporal value",
+            )
+
+
+def _textual_temporal_profile(text: str) -> dict[str, set[str]]:
+    lowered = str(text).casefold()
+    tokens = set(re.findall(r"[a-z0-9]+", lowered))
+    profile: dict[str, set[str]] = {}
+    months = tokens & MONTH_VALUE_TERMS
+    if months:
+        profile["month"] = months
+    weekdays = tokens & WEEKDAY_VALUE_TERMS
+    if weekdays:
+        profile["weekday"] = weekdays
+    quarters = {match.group(0).casefold() for match in re.finditer(r"\bq[1-4]\b", lowered)}
+    if quarters:
+        profile["quarter"] = quarters
+    directions = tokens & {"before", "after", "earlier", "later"}
+    if directions:
+        profile["temporal_direction"] = directions
+    return profile
+
+
+def _verify_textual_quantity_values_not_substituted(
+    *,
+    surface_text: str,
+    support_text: str,
+) -> None:
+    surface_profile = _textual_quantity_profile(surface_text)
+    support_profile = _textual_quantity_profile(support_text)
+    for value_class, surface_values in surface_profile.items():
+        support_values = support_profile.get(value_class, set())
+        if support_values and surface_values != support_values:
+            raise _verification_failure(
+                "M26-PA7-ME-033",
+                "claim surface substitutes a textual quantity value",
+            )
+
+
+def _textual_quantity_profile(text: str) -> dict[str, set[int]]:
+    tokens = re.findall(r"[a-z0-9]+", str(text).casefold())
+    cardinal_values = {NUMBER_WORD_VALUES[token] for token in tokens if token in NUMBER_WORD_VALUES}
+    ordinal_values = {ORDINAL_WORD_VALUES[token] for token in tokens if token in ORDINAL_WORD_VALUES}
+    profile: dict[str, set[int]] = {}
+    if cardinal_values:
+        profile["cardinal_word"] = cardinal_values
+    if ordinal_values:
+        profile["ordinal_word"] = ordinal_values
+    return profile
+
+
+def _weakening_force_profile(text: str) -> dict[str, int]:
+    guarded = _force_context_guard_text(text)
+    profile: dict[str, int] = {}
+    for force_class, rank, patterns in WEAKENING_FORCE_PATTERNS:
+        if any(pattern.search(guarded) for pattern in patterns):
+            profile[force_class] = max(profile.get(force_class, 0), rank)
+    return profile
+
+
+def _force_context_guard_text(text: str) -> str:
+    guarded = re.sub(r"\bMay\s+\d{4}\b", " ", str(text))
+    guarded = re.sub(r"\bCAN\s+bus\b", " ", guarded)
+    return guarded
+
+
+def _numeric_force_classes(text: str, number: str) -> set[str]:
+    return {
+        force_class
+        for force_class, pattern in NUMERIC_FORCE_PATTERNS
+        if re.search(pattern.format(number=re.escape(number)), text, re.I)
+    }
+
 
 def _hard_boundary_entities(text: str) -> set[str]:
-    normalized = re.sub(r"[_-]+", " ", str(text))
-    entities = {
-        re.sub(r"\s+", " ", item).strip().casefold()
-        for item in re.findall(
-            r"\b(?:[A-Z][A-Za-z0-9]*(?:\s+[A-Z0-9][A-Za-z0-9]*)+|Entity\s+[A-Z0-9]+)\b",
-            normalized,
-        )
-    }
-    return {
-        item
-        for item in entities
-        if item not in {"the", "a", "an"}
-        and not item.startswith(("the ", "a ", "an "))
-    }
+    return {entity for entity, _start, _end in _entity_spans(text)}
 
 
 def _has_material_negation(text_casefold: str) -> bool:
     text = re.sub(r"\bnot only\b", " ", text_casefold)
+    text = re.sub(r"\bno\s+(?:more|fewer)\s+than\b", " ", text)
     return bool(
         re.search(
-            r"\b(?:no|not|never|cannot|can't|does not|doesn't|do not|don't|without)\b",
+            r"\b(?:no|not|never|cannot|can't|does not|doesn't|do not|don't|without|"
+            r"fails?\s+to|lacks?|absent|is\s+absent|are\s+absent)\b",
             text,
         )
     )
@@ -3874,6 +4507,7 @@ def _verify_visible_answer_claim_alignment(
             claim_terms: set[str] = set()
             claim_numbers: set[str] = set()
             claim_support_parts: list[str] = []
+            cited_claims: list[Mapping[str, Any]] = []
             cited_claim_ids = set(anchors)
             cited_claim_ids |= {
                 marker.rsplit("_ref_", 1)[0]
@@ -3886,8 +4520,8 @@ def _verify_visible_answer_claim_alignment(
                     raise _verification_failure(
                         "M26-PA7-ME-043", "natural answer citation marker mismatch"
                     )
+                cited_claims.append(claim)
                 claim_terms |= _coverage_terms(str(claim.get("surface_text", "")))
-                claim_support_parts.append(str(claim.get("surface_text", "")))
                 for ref in _list(claim.get("support_refs", []), "claim support refs"):
                     claim_support_parts.append(str(ref.get("exact_quote", "")))
                     claim_terms |= _meaningful_terms(str(ref.get("exact_quote", "")))
@@ -3895,12 +4529,10 @@ def _verify_visible_answer_claim_alignment(
                         re.findall(r"\b\d+(?:\.\d+)?\b", str(ref.get("exact_quote", "")))
                     )
         else:
+            cited_claims = []
             claim_terms = all_claim_terms
             claim_numbers = all_claim_numbers
-            claim_support_parts = [
-                str(claim.get("surface_text", ""))
-                for claim in claims
-            ]
+            claim_support_parts = []
             for claim in claims:
                 claim_support_parts.extend(
                     str(ref.get("exact_quote", ""))
@@ -3919,7 +4551,7 @@ def _verify_visible_answer_claim_alignment(
         unsupported_numbers = sentence_numbers - claim_numbers - set(
             re.findall(
                 r"\b\d+(?:\.\d+)?\b",
-                " ".join(str(claim.get("surface_text", "")) for claim in claim_by_id.values()),
+                "",
             )
         )
         if unsupported_numbers:
@@ -3937,6 +4569,13 @@ def _verify_visible_answer_claim_alignment(
             surface_text=sentence_visible,
             support_text=" ".join(claim_support_parts),
         )
+        if anchors or citation_markers:
+            _verify_cited_sentence_has_claim_local_support(
+                sentence_visible=sentence_visible,
+                sentence_terms=sentence_terms,
+                sentence_numbers=sentence_numbers,
+                claims=cited_claims,
+            )
 
 
 def _verify_uncited_sentence_has_claim_local_support(
@@ -3947,10 +4586,8 @@ def _verify_uncited_sentence_has_claim_local_support(
     claims: Sequence[Mapping[str, Any]],
 ) -> None:
     for claim in claims:
-        claim_support_parts = [str(claim.get("surface_text", ""))]
-        claim_numbers = set(
-            re.findall(r"\b\d+(?:\.\d+)?\b", str(claim.get("surface_text", "")))
-        )
+        claim_support_parts: list[str] = []
+        claim_numbers: set[str] = set()
         claim_terms = _coverage_terms(str(claim.get("surface_text", "")))
         for ref in _list(claim.get("support_refs", []), "claim support refs"):
             exact_quote = str(ref.get("exact_quote", ""))
@@ -3972,6 +4609,80 @@ def _verify_uncited_sentence_has_claim_local_support(
     raise _verification_failure(
         "M26-PA7-ME-045",
         "visible answer sentence is not claim-local evidence-bound",
+    )
+
+
+def _verify_cited_sentence_has_claim_local_support(
+    *,
+    sentence_visible: str,
+    sentence_terms: set[str],
+    sentence_numbers: set[str],
+    claims: Sequence[Mapping[str, Any]],
+) -> None:
+    if not sentence_terms:
+        return
+    for claim in claims:
+        if _claim_local_supports_visible_sentence(
+            sentence_visible=sentence_visible,
+            sentence_terms=sentence_terms,
+            sentence_numbers=sentence_numbers,
+            claim=claim,
+        ):
+            return
+    raise _verification_failure(
+        "M26-PA7-ME-045",
+        "visible answer sentence is not claim-local evidence-bound",
+    )
+
+
+def _claim_local_supports_visible_sentence(
+    *,
+    sentence_visible: str,
+    sentence_terms: set[str],
+    sentence_numbers: set[str],
+    claim: Mapping[str, Any],
+) -> bool:
+    claim_support_parts: list[str] = []
+    claim_numbers: set[str] = set()
+    claim_terms = _coverage_terms(str(claim.get("surface_text", "")))
+    for ref in _list(claim.get("support_refs", []), "claim support refs"):
+        exact_quote = str(ref.get("exact_quote", ""))
+        claim_support_parts.append(exact_quote)
+        claim_terms |= _meaningful_terms(exact_quote)
+        claim_numbers |= set(re.findall(r"\b\d+(?:\.\d+)?\b", exact_quote))
+    if not sentence_terms & claim_terms:
+        return False
+    if sentence_numbers - claim_numbers:
+        return False
+    support_text = " ".join(claim_support_parts)
+    try:
+        _verify_hard_truth_boundary_mutations(
+            surface_text=sentence_visible,
+            support_text=support_text,
+        )
+    except VerifiedAnswerGateError:
+        return False
+    claim_type = str(claim.get("claim_type") or "")
+    claim_role = str(claim.get("claim_role") or "")
+    if claim_type == "EVIDENCE_SYNTHESIS" or claim_role in {"relationship", "comparison", "temporal"}:
+        try:
+            _verify_synthesis_premise_binding(
+                surface_text=sentence_visible,
+                surface_terms=sentence_terms,
+                question_terms=set(),
+                support_refs=_list(claim.get("support_refs", []), "claim support refs"),
+            )
+        except VerifiedAnswerGateError:
+            return False
+        return True
+    if claim_role != "direct":
+        return True
+    return all(
+        _direct_ref_supports_surface(
+            surface_text=sentence_visible,
+            support_text=str(ref.get("exact_quote", "")),
+        )
+        for ref in _list(claim.get("support_refs", []), "claim support refs")
     )
 
 

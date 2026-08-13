@@ -1543,3 +1543,41 @@ def test_tesc_provider_claim_without_evidence_label_does_not_fallback_to_used_it
             snippet_map={"durable": durable["passage_text"]},
             requirements=[],
         )
+
+
+def test_tesc_runtime_bound_candidate_preserves_exact_support_qualifier() -> None:
+    question = "Explain whether Atlas supports review routing."
+    atlas = _rich_passage(
+        "atlas",
+        "Atlas may support review routing when the queue has spare capacity.",
+        "atlas-note",
+    )
+    candidate = _runtime_bound_candidate(
+        answer="Atlas supports review routing.",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        used_items=[atlas],
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "surface_text": "Atlas supports review routing.",
+                "evidence_labels": ["e1"],
+                "covers": ["review_routing"],
+            }
+        ],
+        label_map={"e1": atlas},
+        snippet_map={"atlas": atlas["passage_text"]},
+        requirements=[],
+    )
+
+    with pytest.raises(legacy.VerifiedAnswerGateError) as exc:
+        legacy._verify_multi_evidence_provider_output(
+            trace_id="tesc_semantic_closure_qualifier_deletion",
+            question=question,
+            intent_class="direct_grounded_knowledge",
+            evidence=[atlas],
+            provider_text=json.dumps(candidate),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-058"

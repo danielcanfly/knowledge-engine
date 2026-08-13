@@ -2162,6 +2162,7 @@ def _tesc_provider_text(
     *,
     surface_text: str,
     claim_role: str = "direct",
+    claim_type: str | None = None,
     relation: str | None = None,
     support_refs: list[dict[str, str]] | None = None,
 ) -> str:
@@ -2184,6 +2185,7 @@ def _tesc_provider_text(
                     "claim_id": "claim_1",
                     "surface_text": surface_text,
                     "claim_role": claim_role,
+                    **({"claim_type": claim_type} if claim_type is not None else {}),
                     "facet_ids": ["direct_answer"],
                     "support_mode": "exact_quote",
                     "support_refs": refs,
@@ -2229,6 +2231,226 @@ def test_tesc_positive_paraphrases_remain_hard_truth_equivalent(
         surface_text=surface_text,
         question="What does the evidence establish?",
     )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+def test_tesc_exact_auditor_reproducer_rejects_single_source_qualifier_deletion() -> None:
+    evidence = [
+        _tesc_evidence(
+            "Entity A may complement Entity B in workflow design.",
+            evidence_id="ev_relationship",
+        )
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_candidate2_exact_reproducer",
+            question="What relationship does the evidence establish between Entity A and Entity B?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text="Entity A complements Entity B in workflow design.",
+                claim_role="relationship",
+                relation="complements",
+            ),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-058"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Beacon service might support review routing.", "Beacon service supports review routing."),
+        ("Archive worker could depend on queue state.", "Archive worker depends on queue state."),
+        ("Cache layer can store graph snapshots.", "Cache layer stores graph snapshots."),
+        ("Signal phase possibly precedes rollout phase.", "Signal phase precedes rollout phase."),
+        ("Policy draft potentially affects runtime checks.", "Policy draft affects runtime checks."),
+    ],
+)
+def test_tesc_possibility_deletion_family_is_rejected(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code in {"M26-PA7-ME-034", "M26-PA7-ME-058"}
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Beacon service may complement review routing.", "Beacon service might complement review routing."),
+        ("Policy draft possibly affects runtime checks.", "Policy draft potentially affects runtime checks."),
+    ],
+)
+def test_tesc_possibility_preserving_paraphrases_are_accepted(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    verified = _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Atlas likely improves review routing.", "Atlas improves review routing."),
+        ("Beacon probably reduces retry load.", "Beacon reduces retry load."),
+        ("Cinder appears to support audit routing.", "Cinder supports audit routing."),
+        ("Delta seems to require queue state.", "Delta requires queue state."),
+        ("Evidence suggests Atlas relates to Beacon.", "Atlas relates to Beacon."),
+    ],
+)
+def test_tesc_epistemic_deletion_family_is_rejected(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code in {"M26-PA7-ME-034", "M26-PA7-ME-058"}
+
+
+def test_tesc_epistemic_preserving_paraphrase_is_accepted() -> None:
+    verified = _verify_tesc_claim(
+        support_text="Atlas likely improves review routing.",
+        surface_text="Atlas probably improves review routing.",
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Atlas sometimes uses review routing.", "Atlas uses review routing."),
+        ("Beacon often requires queue state.", "Beacon requires queue state."),
+        ("Cinder usually stores graph snapshots.", "Cinder stores graph snapshots."),
+        ("Delta typically follows rollout phase.", "Delta follows rollout phase."),
+        ("Echo generally supports audit routing.", "Echo supports audit routing."),
+    ],
+)
+def test_tesc_frequency_deletion_family_is_rejected(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code == "M26-PA7-ME-058"
+
+
+def test_tesc_frequency_preserving_paraphrase_is_accepted() -> None:
+    verified = _verify_tesc_claim(
+        support_text="Beacon often requires queue state.",
+        surface_text="Beacon frequently requires queue state.",
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Atlas sometimes stores logs.", "Atlas often stores logs."),
+        ("Atlas sometimes stores logs.", "Atlas usually stores logs."),
+        ("Beacon often stores logs.", "Beacon usually stores logs."),
+        ("Cinder frequently stores logs.", "Cinder typically stores logs."),
+        ("Delta generally supports audit routing.", "Delta usually supports audit routing."),
+    ],
+)
+def test_tesc_frequency_intra_class_strengthening_is_rejected(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code == "M26-PA7-ME-058"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Atlas appears to support review routing.", "Atlas likely supports review routing."),
+        ("Beacon seems to reduce retry load.", "Beacon probably reduces retry load."),
+        ("Evidence suggests Cinder relates to Delta.", "Evidence probably shows Cinder relates to Delta."),
+    ],
+)
+def test_tesc_epistemic_intra_class_strengthening_is_rejected(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code == "M26-PA7-ME-058"
+
+
+def test_tesc_possibility_does_not_entail_capability() -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(
+            support_text="Atlas may store graph snapshots.",
+            surface_text="Atlas can store graph snapshots.",
+        )
+
+    assert exc.value.code == "M26-PA7-ME-058"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Project Atlas launched in May 2025.", "Project Atlas launched in May 2025."),
+        ("The CAN bus records diagnostic status.", "The CAN bus records diagnostic status."),
+    ],
+)
+def test_tesc_contextual_may_and_can_are_not_misclassified(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    verified = _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Atlas affects about 20 workflows.", "Atlas affects 20 workflows."),
+        ("Beacon affects approximately 20 workflows.", "Beacon affects 20 workflows."),
+        ("Cinder requires at least 2 checks.", "Cinder requires 2 checks."),
+        ("Delta processes more than 10 jobs.", "Delta processes 10 jobs."),
+        ("Echo supports at most 5 queues.", "Echo supports 5 queues."),
+    ],
+)
+def test_tesc_numeric_qualifier_deletion_family_is_rejected(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code == "M26-PA7-ME-033"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Atlas affects about 20 workflows.", "Atlas affects approximately 20 workflows."),
+        ("Cinder requires at least 2 checks.", "Cinder requires no fewer than 2 checks."),
+        ("Echo supports at most 5 queues.", "Echo supports no more than 5 queues."),
+    ],
+)
+def test_tesc_numeric_qualifier_preserving_paraphrases_are_accepted(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    verified = _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
 
     assert verified["terminal_status"] == "verified_answer_ready_candidate"
 
@@ -2284,6 +2506,114 @@ def test_tesc_visible_answer_modality_is_non_bypassable_after_claim_verification
         )
 
     assert exc.value.code == "M26-PA7-ME-046"
+
+
+@pytest.mark.parametrize(
+    ("question", "support_text", "surface_text", "expected_code"),
+    [
+        (
+            "Does Entity A cause Entity B in workflow traces?",
+            "Entity A is correlated with Entity B in workflow traces.",
+            "Entity A causes Entity B in workflow traces.",
+            "M26-PA7-ME-053",
+        ),
+        (
+            "Does Entity A determine Entity B in workflow traces?",
+            "Entity A is associated with Entity B in workflow traces.",
+            "Entity A determines Entity B in workflow traces.",
+            "M26-PA7-ME-053",
+        ),
+        (
+            "Does Entity A affect exactly 20 workflows?",
+            "Entity A affects workflows in the current release.",
+            "Entity A affects 20 workflows.",
+            "M26-PA7-ME-033",
+        ),
+        (
+            "Did Project Atlas launch in 2025?",
+            "Project Atlas launched after the migration.",
+            "Project Atlas launched in 2025.",
+            "M26-PA7-ME-033",
+        ),
+        (
+            "Does Atlas always preserve progress?",
+            "Atlas often preserves progress.",
+            "Atlas always preserves progress.",
+            "M26-PA7-ME-034",
+        ),
+        (
+            "Does Project Atlas store graph snapshots?",
+            "The current release stores graph snapshots.",
+            "Project Atlas stores graph snapshots.",
+            "M26-PA7-ME-055",
+        ),
+    ],
+)
+def test_tesc_question_false_premises_cannot_ground_hard_truth(
+    question: str,
+    support_text: str,
+    surface_text: str,
+    expected_code: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(
+            support_text=support_text,
+            surface_text=surface_text,
+            question=question,
+        )
+
+    assert exc.value.code == expected_code
+
+
+def test_tesc_visible_answer_cited_sentence_cannot_use_claim_surface_as_support() -> None:
+    claims = [
+        {
+            "claim_id": "claim_1",
+            "surface_text": "Entity A complements Entity B.",
+            "support_refs": [{"exact_quote": "Entity A may complement Entity B."}],
+        }
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_visible_answer_claim_alignment(
+            "Entity A complements Entity B [[claim_1]].",
+            claims=claims,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-058"
+
+
+def test_tesc_visible_answer_uncited_sentence_cannot_use_claim_surface_as_support() -> None:
+    claims = [
+        {
+            "claim_id": "claim_1",
+            "surface_text": "Entity A complements Entity B.",
+            "support_refs": [{"exact_quote": "Entity A may complement Entity B."}],
+        }
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_visible_answer_claim_alignment(
+            "Entity A complements Entity B.",
+            claims=claims,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-045"
+
+
+def test_tesc_visible_answer_accepts_natural_qualified_claim_local_support() -> None:
+    claims = [
+        {
+            "claim_id": "claim_1",
+            "surface_text": "Entity A might complement Entity B.",
+            "support_refs": [{"exact_quote": "Entity A may complement Entity B."}],
+        }
+    ]
+
+    runtime_module._verify_visible_answer_claim_alignment(
+        "Entity A might complement Entity B [[claim_1]].",
+        claims=claims,
+    )
 
 
 def test_tesc_precedes_graph_edge_cannot_reverse_direction() -> None:
@@ -2369,6 +2699,30 @@ def test_tesc_one_complete_source_can_support_one_relationship_proposition() -> 
     assert verified["terminal_status"] == "verified_answer_ready_candidate"
 
 
+def test_tesc_one_complete_source_supports_natural_relationship_paraphrase() -> None:
+    evidence = [
+        _tesc_evidence(
+            "Atlas Router depends on Queue Alpha.",
+            evidence_id="ev_relationship",
+        )
+    ]
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="tesc_single_source_relationship_paraphrase",
+        question="What relationship does the evidence establish between Atlas Router and Queue Alpha?",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=_tesc_provider_text(
+            evidence,
+            surface_text="Atlas Router relies on Queue Alpha.",
+            claim_role="relationship",
+            relation="depends_on",
+        ),
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
 def test_tesc_one_incomplete_source_does_not_satisfy_relationship_by_cardinality() -> None:
     evidence = [
         _tesc_evidence(
@@ -2388,6 +2742,54 @@ def test_tesc_one_incomplete_source_does_not_satisfy_relationship_by_cardinality
                 surface_text="Entity A complements Entity B in workflow design.",
                 claim_role="relationship",
                 relation="complements",
+            ),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-021"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        (
+            "Entity A complements workflow design, while Entity B is documented separately.",
+            "Entity A complements Entity B in workflow design.",
+        ),
+        (
+            "Atlas Router depends on Queue Alpha. Queue Beta documents Atlas Router.",
+            "Atlas Router depends on Queue Beta.",
+        ),
+        (
+            "Entity A supports Entity B. Entity C complements Entity D.",
+            "Entity A complements Entity B.",
+        ),
+        (
+            "Atlas Router depends on Queue Alpha.",
+            "Queue Alpha depends on Atlas Router.",
+        ),
+    ],
+)
+def test_tesc_single_source_relationship_requires_local_endpoint_binding(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    evidence = [
+        _tesc_evidence(
+            support_text,
+            evidence_id="ev_relationship",
+        )
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_single_source_endpoint_binding",
+            question="What relationship does the evidence establish?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text=surface_text,
+                claim_role="relationship",
             ),
         )
 
@@ -2450,3 +2852,731 @@ def test_tesc_generic_explanation_accepts_generic_but_rejects_kb_fact() -> None:
         )
 
     assert exc.value.code in {"M26-PA7-ME-033", "M26-PA7-ME-050"}
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Protocol may fail.", "Protocol fails."),
+        ("System might stop.", "System stops."),
+        ("Module can retry.", "Module will retry."),
+    ],
+)
+def test_tesc_short_qualified_propositions_do_not_bypass_hard_truth(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code in {"M26-PA7-ME-034", "M26-PA7-ME-058"}
+
+
+def test_tesc_valid_short_qualified_proposition_still_passes() -> None:
+    verified = _verify_tesc_claim(
+        support_text="Protocol may fail.",
+        surface_text="Protocol may fail.",
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Beacon stores graph snapshots.", "Atlas stores graph snapshots."),
+        ("Orion may fail.", "Nova may fail."),
+        ("Mercury precedes Venus.", "Venus precedes Mercury."),
+    ],
+)
+def test_tesc_single_token_entity_substitution_is_rejected(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code in {"M26-PA7-ME-052", "M26-PA7-ME-055", "M26-PA7-ME-057"}
+
+
+def test_tesc_single_token_entity_paraphrase_remains_answerable() -> None:
+    verified = _verify_tesc_claim(
+        support_text="Atlas stores graph snapshots.",
+        surface_text="Atlas keeps graph snapshots.",
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+@pytest.mark.parametrize(
+    "support_text",
+    [
+        "Atlas complements Beacon.",
+        "Atlas mirrors Beacon during failover.",
+    ],
+)
+def test_tesc_single_source_single_token_and_arbitrary_relationships_pass(
+    support_text: str,
+) -> None:
+    evidence = [_tesc_evidence(support_text, evidence_id="ev_relationship")]
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="tesc_single_token_arbitrary_relation",
+        question="What relationship does the evidence establish?",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=_tesc_provider_text(
+            evidence,
+            surface_text=support_text,
+            claim_role="relationship",
+            relation="mirrors",
+        ),
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        (
+            "Project Atlas mentions Queue Beta and depends on Queue Alpha.",
+            "Project Atlas depends on Queue Beta.",
+        ),
+        (
+            "Atlas mirrors Beacon while Orion audits Nova.",
+            "Atlas audits Beacon.",
+        ),
+        (
+            "Atlas mirrors Beacon. Orion audits Nova.",
+            "Atlas audits Beacon.",
+        ),
+        ("Atlas mirrors Beacon.", "Beacon mirrors Atlas."),
+    ],
+)
+def test_tesc_relationship_requires_clause_local_predicate_and_endpoint_binding(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    evidence = [_tesc_evidence(support_text, evidence_id="ev_relationship")]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_clause_local_relation_binding",
+            question="What relationship does the evidence establish?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text=surface_text,
+                claim_role="relationship",
+            ),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-021"
+
+
+@pytest.mark.parametrize(
+    ("support_texts", "surface_text"),
+    [
+        (
+            ["Entity A stores graph data.", "Entity B does not store graph data."],
+            "Entity A does not store graph data.",
+        ),
+        (
+            ["Entity A does not store graph data.", "Entity B stores graph data."],
+            "Entity A stores graph data.",
+        ),
+        (
+            ["Entity A correlates with Entity B.", "Entity C causes Entity D."],
+            "Entity A causes Entity B.",
+        ),
+        (
+            ["Entity A may preserve progress.", "Entity B always preserves progress."],
+            "Entity A always preserves progress.",
+        ),
+        (
+            ["Entity A affects about 20 workflows.", "Entity B affects exactly 20 workflows."],
+            "Entity A affects exactly 20 workflows.",
+        ),
+        (
+            ["Entity A stores graph data.", "Entity B stores audit logs."],
+            "Entity A stores audit logs.",
+        ),
+    ],
+)
+def test_tesc_provider_direct_claim_cannot_pool_multiple_refs_for_hard_truth(
+    support_texts: list[str],
+    surface_text: str,
+) -> None:
+    evidence = [
+        _tesc_evidence(text, evidence_id=f"ev_pool_{index}", source_identity=f"src_{index}")
+        for index, text in enumerate(support_texts, start=1)
+    ]
+    support_refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_provider_multiref_bleed",
+            question="What does Entity A establish?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text=surface_text,
+                support_refs=support_refs,
+            ),
+        )
+
+    assert exc.value.code in {
+        "M26-PA7-ME-033",
+        "M26-PA7-ME-034",
+        "M26-PA7-ME-052",
+        "M26-PA7-ME-053",
+        "M26-PA7-ME-055",
+        "M26-PA7-ME-056",
+        "M26-PA7-ME-058",
+    }
+
+
+def test_tesc_provider_multi_ref_corroboration_passes_when_each_ref_supports_claim() -> None:
+    evidence = [
+        _tesc_evidence("Entity A stores graph data.", evidence_id="ev_a1", source_identity="src_a1"),
+        _tesc_evidence("Entity A stores graph data.", evidence_id="ev_a2", source_identity="src_a2"),
+    ]
+    support_refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="tesc_provider_multiref_corroboration",
+        question="What does Entity A establish?",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=_tesc_provider_text(
+            evidence,
+            surface_text="Entity A stores graph data.",
+            support_refs=support_refs,
+        ),
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+@pytest.mark.parametrize(
+    ("claims", "answer_text"),
+    [
+        (
+            [
+                {
+                    "claim_id": "claim_positive",
+                    "surface_text": "Entity A stores graph data.",
+                    "support_refs": [{"exact_quote": "Entity A stores graph data."}],
+                },
+                {
+                    "claim_id": "claim_negative",
+                    "surface_text": "Entity B does not store graph data.",
+                    "support_refs": [{"exact_quote": "Entity B does not store graph data."}],
+                },
+            ],
+            "Entity A does not store graph data [claim_positive_ref_1][claim_negative_ref_1].",
+        ),
+        (
+            [
+                {
+                    "claim_id": "claim_correlates",
+                    "surface_text": "Entity A correlates with Entity B.",
+                    "support_refs": [{"exact_quote": "Entity A correlates with Entity B."}],
+                },
+                {
+                    "claim_id": "claim_causes",
+                    "surface_text": "Entity C causes Entity D.",
+                    "support_refs": [{"exact_quote": "Entity C causes Entity D."}],
+                },
+            ],
+            "Entity A causes Entity B [claim_correlates_ref_1][claim_causes_ref_1].",
+        ),
+        (
+            [
+                {
+                    "claim_id": "claim_may",
+                    "surface_text": "Entity A may preserve progress.",
+                    "support_refs": [{"exact_quote": "Entity A may preserve progress."}],
+                },
+                {
+                    "claim_id": "claim_always",
+                    "surface_text": "Entity B always preserves progress.",
+                    "support_refs": [{"exact_quote": "Entity B always preserves progress."}],
+                },
+            ],
+            "Entity A always preserves progress [claim_may_ref_1][claim_always_ref_1].",
+        ),
+        (
+            [
+                {
+                    "claim_id": "claim_about",
+                    "surface_text": "Entity A affects about 20 workflows.",
+                    "support_refs": [{"exact_quote": "Entity A affects about 20 workflows."}],
+                },
+                {
+                    "claim_id": "claim_exact",
+                    "surface_text": "Entity B affects exactly 20 workflows.",
+                    "support_refs": [{"exact_quote": "Entity B affects exactly 20 workflows."}],
+                },
+            ],
+            "Entity A affects exactly 20 workflows [claim_about_ref_1][claim_exact_ref_1].",
+        ),
+    ],
+)
+def test_tesc_visible_multi_citation_cannot_pool_sibling_truth(
+    claims: list[dict[str, object]],
+    answer_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_visible_answer_claim_alignment(answer_text, claims=claims)
+
+    assert exc.value.code in {"M26-PA7-ME-033", "M26-PA7-ME-045", "M26-PA7-ME-058"}
+
+
+def test_tesc_visible_multi_ref_synthesis_claim_remains_answerable() -> None:
+    claims = [
+        {
+            "claim_id": "claim_1",
+            "claim_type": "EVIDENCE_SYNTHESIS",
+            "claim_role": "relationship",
+            "surface_text": (
+                "Durable state preserves progress while completion verification checks "
+                "final results."
+            ),
+            "support_refs": [
+                {"exact_quote": "Durable state preserves progress after a disconnect."},
+                {"exact_quote": "Completion verification checks final results before acceptance."},
+            ],
+        }
+    ]
+
+    runtime_module._verify_visible_answer_claim_alignment(
+        (
+            "Durable state preserves progress while completion verification checks "
+            "final results [[claim_1]]."
+        ),
+        claims=claims,
+    )
+
+
+@pytest.mark.parametrize(
+    ("support_texts", "surface_text"),
+    [
+        (
+            [
+                "Entity A complements workflow design.",
+                "Entity B appears in a separate project note.",
+            ],
+            "Entity A complements Entity B.",
+        ),
+        (
+            ["Atlas supports Beacon.", "Orion complements Nova."],
+            "Atlas complements Beacon.",
+        ),
+        (
+            ["Atlas complements Nova.", "Orion supports Beacon."],
+            "Atlas complements Beacon.",
+        ),
+    ],
+)
+def test_tesc_synthesis_rejects_vocabulary_endpoint_and_predicate_shuffle(
+    support_texts: list[str],
+    surface_text: str,
+) -> None:
+    evidence = [
+        _tesc_evidence(text, evidence_id=f"ev_synth_{index}", source_identity=f"src_synth_{index}")
+        for index, text in enumerate(support_texts, start=1)
+    ]
+    support_refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_synthesis_shuffle",
+            question="How do Entity A and Entity B relate?",
+            intent_class="complementary_synthesis",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text=surface_text,
+                claim_role="relationship",
+                claim_type="EVIDENCE_SYNTHESIS",
+                relation="complements",
+                support_refs=support_refs,
+            ),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-052"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Some workflows use fallback routing.", "Most workflows use fallback routing."),
+        ("Few workflows use fallback routing.", "Many workflows use fallback routing."),
+        ("Atlas often preserves progress.", "Atlas almost always preserves progress."),
+        ("Atlas occasionally preserves progress.", "Atlas usually preserves progress."),
+    ],
+)
+def test_tesc_scalar_strengthening_beyond_universal_scope_is_rejected(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code in {"M26-PA7-ME-034", "M26-PA7-ME-054", "M26-PA7-ME-058"}
+
+
+@pytest.mark.parametrize(
+    ("subject_a", "subject_b"),
+    [
+        ("The router", "The pipeline"),
+        ("Project Atlas", "Project Beacon"),
+        ("iOS", "macOS"),
+        ("qdrant", "redis"),
+    ],
+)
+def test_tesc_metamorphic_subject_argument_mutation_is_rejected(
+    subject_a: str,
+    subject_b: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(
+            support_text=f"{subject_a} stores graph snapshots.",
+            surface_text=f"{subject_b} stores graph snapshots.",
+        )
+
+    assert exc.value.code in {"M26-PA7-ME-052", "M26-PA7-ME-055"}
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("The router stores graph snapshots.", "The router keeps graph snapshots."),
+        ("iOS stores graph snapshots.", "iOS keeps graph snapshots."),
+        ("qdrant stores vectors.", "qdrant keeps vectors."),
+    ],
+)
+def test_tesc_argument_binding_preserves_truthful_storage_paraphrases(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    verified = _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Project Atlas launched in May.", "Project Atlas launched in June."),
+        ("Project Atlas launched on Monday.", "Project Atlas launched on Tuesday."),
+        ("Project Atlas shipped in Q1.", "Project Atlas shipped in Q2."),
+        ("The migration happened before rollout.", "The migration happened after rollout."),
+        ("The migration happened earlier than rollout.", "The migration happened later than rollout."),
+    ],
+)
+def test_tesc_metamorphic_temporal_value_mutation_is_rejected(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code in {"M26-PA7-ME-033", "M26-PA7-ME-052"}
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("The pipeline has two stages.", "The pipeline has three stages."),
+        ("The workflow has one retry.", "The workflow has two retries."),
+        ("The second stage stores logs.", "The third stage stores logs."),
+        ("The first checkpoint preserves progress.", "The second checkpoint preserves progress."),
+    ],
+)
+def test_tesc_metamorphic_quantity_word_mutation_is_rejected(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code in {"M26-PA7-ME-033", "M26-PA7-ME-052"}
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Atlas mirrors Beacon.", "Atlas mirrors Orion."),
+        ("Atlas mirrors Beacon.", "Orion mirrors Beacon."),
+        ("Atlas audits Orion.", "Atlas audits Beacon."),
+    ],
+)
+def test_tesc_metamorphic_relation_endpoint_mutation_is_rejected(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    evidence = [_tesc_evidence(support_text, evidence_id="ev_relation_mutation")]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_relation_endpoint_mutation",
+            question="What relationship does the evidence establish?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text=surface_text,
+                claim_role="relationship",
+            ),
+        )
+
+    assert exc.value.code in {"M26-PA7-ME-021", "M26-PA7-ME-055"}
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Atlas, unlike Beacon, mirrors Orion.", "Beacon mirrors Orion."),
+        ("Atlas mirrors Beacon, then audits Orion.", "Beacon audits Orion."),
+        ("Atlas mentions Beacon before Orion audits Nova.", "Beacon audits Nova."),
+        ("Atlas mirrors Beacon and Orion audits Nova.", "Atlas audits Nova."),
+    ],
+)
+def test_tesc_ambiguous_relation_attachment_fails_closed(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    evidence = [_tesc_evidence(support_text, evidence_id="ev_ambiguous_relation")]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_ambiguous_relation",
+            question="What relationship does the evidence establish?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text=surface_text,
+                claim_role="relationship",
+            ),
+        )
+
+    assert exc.value.code in {"M26-PA7-ME-021", "M26-PA7-ME-052", "M26-PA7-ME-055"}
+
+
+@pytest.mark.parametrize(
+    ("support_text", "surface_text"),
+    [
+        ("Atlas fails to store logs.", "Atlas stores logs."),
+        ("Atlas lacks audit records.", "Atlas has audit records."),
+        ("Atlas is absent from the index.", "Atlas is present in the index."),
+    ],
+)
+def test_tesc_negative_space_polarity_forms_are_rejected(
+    support_text: str,
+    surface_text: str,
+) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        _verify_tesc_claim(support_text=support_text, surface_text=surface_text)
+
+    assert exc.value.code in {"M26-PA7-ME-052", "M26-PA7-ME-056"}
+
+
+def test_tesc_multisource_one_good_source_plus_unrelated_filler_is_rejected() -> None:
+    evidence = [
+        _tesc_evidence("Atlas complements Beacon.", evidence_id="ev_real", source_identity="src_real"),
+        _tesc_evidence("Orion stores audit logs.", evidence_id="ev_filler", source_identity="src_filler"),
+    ]
+    refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_one_good_plus_filler",
+            question="How do Atlas and Beacon complement each other?",
+            intent_class="complementary_synthesis",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text="Atlas complements Beacon.",
+                claim_role="relationship",
+                claim_type="EVIDENCE_SYNTHESIS",
+                relation="complements",
+                support_refs=refs,
+            ),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-052"
+
+
+def test_tesc_question_terms_do_not_make_filler_a_synthesis_premise() -> None:
+    evidence = [
+        _tesc_evidence("Atlas stores graph snapshots.", evidence_id="ev_real", source_identity="src_real"),
+        _tesc_evidence(
+            "Beacon fallback appears only in a planning note.",
+            evidence_id="ev_question_terms",
+            source_identity="src_question_terms",
+        ),
+    ]
+    refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_question_terms_not_premise",
+            question="How do Atlas graph snapshots and Beacon fallback work together?",
+            intent_class="complementary_synthesis",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text="Atlas stores graph snapshots.",
+                claim_role="relationship",
+                claim_type="EVIDENCE_SYNTHESIS",
+                relation="complements",
+                support_refs=refs,
+            ),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-052"
+
+
+def test_tesc_genuine_two_premise_synthesis_passes_and_filler_mutation_rejects() -> None:
+    evidence = [
+        _tesc_evidence(
+            "Atlas stores graph snapshots after failover.",
+            evidence_id="ev_atlas",
+            source_identity="src_atlas",
+        ),
+        _tesc_evidence(
+            "Beacon stores audit logs before acceptance.",
+            evidence_id="ev_beacon",
+            source_identity="src_beacon",
+        ),
+    ]
+    refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+    provider_text = _tesc_provider_text(
+        evidence,
+        surface_text=(
+            "Atlas stores graph snapshots after failover while Beacon stores audit logs "
+            "before acceptance."
+        ),
+        claim_role="relationship",
+        claim_type="EVIDENCE_SYNTHESIS",
+        relation="complements",
+        support_refs=refs,
+    )
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="tesc_two_premise_synthesis",
+        question="How do Atlas and Beacon cover different runtime records?",
+        intent_class="complementary_synthesis",
+        evidence=evidence,
+        provider_text=provider_text,
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+
+    filler_evidence = [evidence[0], _tesc_evidence("Nova tracks release notes.", evidence_id="ev_filler", source_identity="src_filler")]
+    filler_refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in filler_evidence
+    ]
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_two_premise_synthesis_filler_mutation",
+            question="How do Atlas and Beacon cover different runtime records?",
+            intent_class="complementary_synthesis",
+            evidence=filler_evidence,
+            provider_text=_tesc_provider_text(
+                filler_evidence,
+                surface_text=(
+                    "Atlas stores graph snapshots after failover while Beacon stores audit logs "
+                    "before acceptance."
+                ),
+                claim_role="relationship",
+                claim_type="EVIDENCE_SYNTHESIS",
+                relation="complements",
+                support_refs=filler_refs,
+            ),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-052"
+
+
+def test_tesc_sibling_evidence_cannot_rescue_temporal_value_mutation() -> None:
+    evidence = [
+        _tesc_evidence("Atlas launched in May.", evidence_id="ev_atlas", source_identity="src_atlas"),
+        _tesc_evidence("Orion launched in June.", evidence_id="ev_orion", source_identity="src_orion"),
+    ]
+    refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_sibling_temporal_non_rescue",
+            question="When did Atlas launch?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text="Atlas launched in June.",
+                support_refs=refs,
+            ),
+        )
+
+    assert exc.value.code in {"M26-PA7-ME-033", "M26-PA7-ME-052", "M26-PA7-ME-055"}
