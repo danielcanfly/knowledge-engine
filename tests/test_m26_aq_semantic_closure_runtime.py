@@ -4,7 +4,10 @@ import json
 import time
 from typing import Any
 
+import pytest
+
 from knowledge_engine import m26_pa7_arbitrary_query_runtime as legacy
+from knowledge_engine import m26_pa7_semantic_closure_runtime as closure_runtime
 from knowledge_engine.m26_aq_semantic_contract import (
     _contract_compat_module,
     _publish_support_proof_recovered_answer,
@@ -159,6 +162,64 @@ class _SemanticReviewRepairProvider:
         }
 
 
+class _ScriptedSemanticClosureProvider:
+    def __init__(self, synthesis_results: list[Any]) -> None:
+        self.synthesis_results = list(synthesis_results)
+        self.calls: list[tuple[dict[str, Any], str]] = []
+        self.review_claim_cases: list[list[dict[str, Any]]] = []
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls.append((payload, call_class))
+        if call_class in {"aq_semantic_closure", "aq_semantic_closure_repair"}:
+            task = json.loads(payload["messages"][0]["content"])
+            if self.synthesis_results:
+                result = self.synthesis_results.pop(0)
+            else:
+                result = {"status": "abstain", "answer_text": "", "claims": []}
+            body = result(task) if callable(result) else result
+            return {
+                "text": json.dumps(body),
+                "usage": {"input_tokens": 10, "output_tokens": 10},
+                "cost_usd": "0.001",
+                "call_class": call_class,
+            }
+
+        task = json.loads(payload["messages"][0]["content"])
+        claim_cases = task["claim_cases"]
+        self.review_claim_cases.append(claim_cases)
+        judgments = []
+        for case in claim_cases:
+            local_ids = [str(item["evidence_id"]) for item in case["evidence"]]
+            if str(case["claim_type"]) == "MODEL_EXPLANATION":
+                verdict = "GENERIC_EXPLANATION"
+                evidence_ids: list[str] = []
+            else:
+                verdict = "ENTAILED"
+                evidence_ids = local_ids
+            judgments.append(
+                {
+                    "claim_id": str(case["claim_id"]),
+                    "verdict": verdict,
+                    "evidence_ids": evidence_ids,
+                }
+            )
+        return {
+            "text": json.dumps(
+                {
+                    "schema_version": "m26-claim-entailment-review/v1",
+                    "claim_judgments": judgments,
+                    "visible_coverage": {
+                        "verdict": "COVERED",
+                        "uncovered_assertions": [],
+                    },
+                }
+            ),
+            "usage": {"input_tokens": 10, "output_tokens": 10},
+            "cost_usd": "0.001",
+            "call_class": call_class,
+        }
+
+
 def _failures(
     question: str,
     answer: str,
@@ -198,6 +259,39 @@ def _rich_passage(evidence_id: str, text: str, source: str) -> dict[str, Any]:
         "provenance_record_sha256": "b" * 64,
         "retrieved_at": "",
         "retrieval_metadata": {"query_overlap_score": 1.0},
+    }
+
+
+def _graph_edge(
+    evidence_id: str,
+    source: str,
+    target: str,
+    relation_type: str,
+) -> dict[str, Any]:
+    text = f"{source} {relation_type} {target}."
+    return {
+        "evidence_id": evidence_id,
+        "locator_id": f"loc_{evidence_id}",
+        "evidence_type": "graph_edge",
+        "source_id": "production-graph",
+        "source_identity": "production-graph",
+        "concept_id": source,
+        "title": "production graph",
+        "section_title": "graph edges",
+        "passage_text": text,
+        "release_id": "release-test",
+        "artifact_key": "artifact-test",
+        "artifact_sha256": "a" * 64,
+        "section_id": f"section_{evidence_id}",
+        "channels": ["graph"],
+        "passage_text_sha256": sha256_bytes(text.encode("utf-8")),
+        "provenance_record_sha256": "b" * 64,
+        "retrieved_at": "",
+        "retrieval_metadata": {"query_overlap_score": 1.0},
+        "edge_id": evidence_id,
+        "edge_source": source,
+        "edge_target": target,
+        "relation_type": relation_type,
     }
 
 
@@ -447,6 +541,410 @@ def test_graph_false_premise_contract_binds_full_named_entities() -> None:
     assert "entity_harness_theory_part_2" in ids
     assert "ordering_semantics" in ids
     assert "non_entailment" in ids
+
+
+def test_candidate2_legacy_helpers_have_no_canonical_publication_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_called(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("legacy semantic helper regained publication authority")
+
+    for helper_name in (
+        "_visible_semantic_failures",
+        "_hard_visible_semantic_failures",
+        "_requirement_support_failures",
+        "_infer_used_items",
+        "_force_required_support_items",
+        "_partial_answer_has_substantial_value",
+    ):
+        monkeypatch.setattr(closure_runtime, helper_name, fail_if_called)
+
+    evidence = [
+        _rich_passage(
+            "router",
+            "The router stores graph snapshots for controlled execution.",
+            "router-note",
+        )
+    ]
+
+    def synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        router_label = next(
+            str(item["id"]) for item in task["evidence"] if "router" in item["text"]
+        )
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": "The router keeps graph snapshots.",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router keeps graph snapshots.",
+                    "evidence_labels": [router_label],
+                    "covers": ["router_snapshots"],
+                }
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    provider = _ScriptedSemanticClosureProvider([synthesis])
+    answer, closure = _synthesize_and_verify(
+        question="Explain router graph snapshots.",
+        trace_id="trace-candidate2-no-legacy-helper-authority",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[
+            SemanticRequirement(
+                requirement_id="router_snapshots",
+                instruction="Explain router graph snapshots.",
+                evidence_terms=("router", "graph", "snapshots"),
+                visible_patterns=(r"\brouter.{0,80}snapshots",),
+            )
+        ],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_claim_semantic_entailment",
+    ]
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert closure["failures"] == []
+
+
+def test_candidate2_unseen_precedes_paraphrase_reaches_semantic_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_called(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("legacy visible parser vetoed paraphrase before review")
+
+    for helper_name in (
+        "_visible_semantic_failures",
+        "_hard_visible_semantic_failures",
+        "_requirement_support_failures",
+        "_partial_answer_has_substantial_value",
+    ):
+        monkeypatch.setattr(closure_runtime, helper_name, fail_if_called)
+
+    question = (
+        "Does the precedes edge between Harness Theory Part 1 and Harness Theory Part 2 "
+        "prove that Part 1 depends on Part 2?"
+    )
+    edge = _graph_edge(
+        "edge_precedes",
+        "Harness Theory Part 1",
+        "Harness Theory Part 2",
+        "precedes",
+    )
+    source = _rich_passage(
+        "part_1",
+        "Harness Theory Part 1 is the first endpoint in the relation graph.",
+        "part-1-note",
+    )
+    source["concept_id"] = "Harness Theory Part 1"
+    target = _rich_passage(
+        "part_2",
+        "Harness Theory Part 2 is the second endpoint in the relation graph.",
+        "part-2-note",
+    )
+    target["concept_id"] = "Harness Theory Part 2"
+
+    def synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        edge_label = next(
+            str(item["id"])
+            for item in task["evidence"]
+            if item["type"] == "graph_edge"
+        )
+        source_label = next(
+            str(item["id"])
+            for item in task["evidence"]
+            if item["type"] == "passage"
+            and item["concept"] == "Harness Theory Part 1"
+        )
+        target_label = next(
+            str(item["id"])
+            for item in task["evidence"]
+            if item["type"] == "passage"
+            and item["concept"] == "Harness Theory Part 2"
+        )
+        graph_labels = [edge_label, source_label, target_label]
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": (
+                "Harness Theory Part 1 precedes Harness Theory Part 2: it establishes "
+                "chronology, while dependency remains unresolved."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": (
+                        "Harness Theory Part 1 precedes Harness Theory Part 2."
+                    ),
+                    "evidence_labels": graph_labels,
+                    "covers": [
+                        "entity_harness_theory_part_1",
+                        "entity_harness_theory_part_2",
+                        "ordering_semantics",
+                    ],
+                },
+                {
+                    "claim_id": "claim_2",
+                    "claim_type": "EVIDENCE_SYNTHESIS",
+                    "surface_text": (
+                        "The precedes edge establishes chronology, while dependency "
+                        "remains unresolved."
+                    ),
+                    "evidence_labels": graph_labels,
+                    "covers": ["non_entailment"],
+                },
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    provider = _ScriptedSemanticClosureProvider([synthesis])
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-candidate2-precedes-paraphrase",
+        intent_class="graph_relationship",
+        evidence=[edge, source, target],
+        provider_client=provider,
+        requirements=_semantic_requirements(question, "graph_relationship"),
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_claim_semantic_entailment",
+    ]
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert closure["semantic_review"]["visible_coverage"]["verdict"] == "COVERED"
+    assert {
+        str(item["evidence_id"])
+        for case in provider.review_claim_cases[0]
+        for item in case["evidence"]
+    } == {"edge_precedes", "part_1", "part_2"}
+
+
+def test_candidate2_missing_claims_fail_closed_without_review() -> None:
+    evidence = [
+        _rich_passage(
+            "router",
+            "The router stores graph snapshots for controlled execution.",
+            "router-note",
+        )
+    ]
+    provider = _ScriptedSemanticClosureProvider(
+        [
+            {
+                "schema_version": "m26-fas-synthesis/v1",
+                "status": "answer",
+                "answer_text": "The router stores graph snapshots.",
+                "used": ["e1"],
+                "unanswered_dimensions": [],
+                "abstention_reason": None,
+            },
+            {
+                "schema_version": "m26-fas-synthesis/v1",
+                "status": "answer",
+                "answer_text": "The router stores graph snapshots.",
+                "used": ["e1"],
+                "unanswered_dimensions": [],
+                "abstention_reason": None,
+            },
+        ]
+    )
+
+    answer, closure = _synthesize_and_verify(
+        question="Explain router graph snapshots.",
+        trace_id="trace-candidate2-missing-claims",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+    ]
+    assert provider.review_claim_cases == []
+    assert answer["answer_source"] == "safe_abstention"
+    assert answer["unsupported_accepted_claims"] == 0
+    assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
+
+
+def test_candidate2_top_level_used_cannot_rescue_missing_claim_binding() -> None:
+    evidence = [
+        _rich_passage(
+            "router",
+            "The router stores graph snapshots for controlled execution.",
+            "router-note",
+        )
+    ]
+    provider = _ScriptedSemanticClosureProvider(
+        [
+            {
+                "schema_version": "m26-fas-synthesis/v1",
+                "status": "answer",
+                "answer_text": "The router stores graph snapshots.",
+                "used": ["e1"],
+                "claims": [
+                    {
+                        "claim_id": "claim_1",
+                        "claim_type": "EVIDENCE_FACT",
+                        "surface_text": "The router stores graph snapshots.",
+                        "evidence_labels": [],
+                        "covers": ["router_snapshots"],
+                    }
+                ],
+                "unanswered_dimensions": [],
+                "abstention_reason": None,
+            },
+            {
+                "schema_version": "m26-fas-synthesis/v1",
+                "status": "answer",
+                "answer_text": "The router stores graph snapshots.",
+                "used": ["e1"],
+                "claims": [
+                    {
+                        "claim_id": "claim_1",
+                        "claim_type": "EVIDENCE_FACT",
+                        "surface_text": "The router stores graph snapshots.",
+                        "covers": ["router_snapshots"],
+                    }
+                ],
+                "unanswered_dimensions": [],
+                "abstention_reason": None,
+            },
+        ]
+    )
+
+    answer, _closure = _synthesize_and_verify(
+        question="Explain router graph snapshots.",
+        trace_id="trace-candidate2-missing-local-labels",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+    ]
+    assert provider.review_claim_cases == []
+    assert answer["answer_source"] == "safe_abstention"
+
+
+def test_candidate2_unknown_claim_label_fails_closed_without_review() -> None:
+    evidence = [
+        _rich_passage(
+            "router",
+            "The router stores graph snapshots for controlled execution.",
+            "router-note",
+        )
+    ]
+    bad_claim = {
+        "schema_version": "m26-fas-synthesis/v1",
+        "status": "answer",
+        "answer_text": "The router stores graph snapshots.",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "surface_text": "The router stores graph snapshots.",
+                "evidence_labels": ["e999"],
+                "covers": ["router_snapshots"],
+            }
+        ],
+        "unanswered_dimensions": [],
+        "abstention_reason": None,
+    }
+    provider = _ScriptedSemanticClosureProvider([bad_claim, bad_claim])
+
+    answer, _closure = _synthesize_and_verify(
+        question="Explain router graph snapshots.",
+        trace_id="trace-candidate2-unknown-label",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+    ]
+    assert provider.review_claim_cases == []
+    assert answer["answer_source"] == "safe_abstention"
+
+
+def test_candidate2_claim_local_review_isolation() -> None:
+    evidence = [
+        _rich_passage("router", "The router stores graph snapshots.", "router-note"),
+        _rich_passage("monitor", "The monitor accepts events.", "monitor-note"),
+    ]
+
+    def synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        labels = {
+            str(item["id"]): str(item["text"]).casefold()
+            for item in task["evidence"]
+        }
+        router_label = next(label for label, text in labels.items() if "router" in text)
+        monitor_label = next(label for label, text in labels.items() if "monitor" in text)
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": (
+                "The router stores graph snapshots. The monitor accepts events."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_router",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router stores graph snapshots.",
+                    "evidence_labels": [router_label],
+                    "covers": ["router_snapshots"],
+                },
+                {
+                    "claim_id": "claim_monitor",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The monitor accepts events.",
+                    "evidence_labels": [monitor_label],
+                    "covers": ["monitor_events"],
+                },
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    provider = _ScriptedSemanticClosureProvider([synthesis])
+    answer, _closure = _synthesize_and_verify(
+        question="Explain router snapshots and monitor events.",
+        trace_id="trace-candidate2-claim-local-isolation",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert {
+        str(case["claim_id"]): {str(item["evidence_id"]) for item in case["evidence"]}
+        for case in provider.review_claim_cases[0]
+    } == {
+        "claim_router": {"router"},
+        "claim_monitor": {"monitor"},
+    }
 
 
 def test_provider_abstain_with_available_evidence_safely_abstains_without_quote_collage() -> None:

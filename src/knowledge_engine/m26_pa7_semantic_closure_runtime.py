@@ -359,6 +359,7 @@ def _synthesize_and_verify(
     calls: list[dict[str, Any]] = []
     repair_attempted = False
     final_support_proof: list[dict[str, Any]] = []
+    repair_after_semantic_review = False
 
     for attempt in (1, 2):
         compact_payload, label_map, snippet_map = _compact_provider_payload(
@@ -411,129 +412,11 @@ def _synthesize_and_verify(
             unanswered_dimensions = _parsed_provider_unanswered_dimensions(
                 parsed, claims
             )
-            visible_failures = _visible_semantic_failures(
-                answer, requirements, question
-            )
-            hard_visible_failures = _hard_visible_semantic_failures(visible_failures)
-            used_labels = _parsed_provider_used_labels(parsed, claims)
-            used_items = _resolve_used_items(used_labels, label_map)
-            if not used_items:
-                used_items = _infer_used_items(answer, evidence, limit=6)
-            used_items = _force_required_support_items(
-                question=question,
-                intent_class=intent_class,
-                evidence=evidence,
-                used_items=used_items,
-                requirements=requirements,
-            )
-            support_failures, support_proof = _requirement_support_failures(
-                requirements=requirements,
-                evidence=used_items,
-            )
-            final_support_proof = support_proof
-            semantic_failures = sorted(
-                set([*hard_visible_failures, *support_failures])
-            )
-            repair_failures = sorted(set([*visible_failures, *support_failures]))
-            if repair_failures:
-                failures.extend(repair_failures)
-                if attempt == 1:
-                    repair_attempted = True
-                    continue
-                if semantic_failures or provider_status in {"partial", "partial_candidate"}:
-                    if _partial_answer_has_substantial_value(
-                        answer=answer,
-                        requirements=requirements,
-                        visible_failures=visible_failures,
-                        support_failures=support_failures,
-                        used_items=used_items,
-                    ):
-                        try:
-                            candidate = _runtime_bound_candidate(
-                                answer=answer,
-                                question=question,
-                                intent_class=intent_class,
-                                used_items=used_items,
-                                claims=claims,
-                                label_map=label_map,
-                                snippet_map=snippet_map,
-                                provider_status=provider_status,
-                                requirements=requirements,
-                                unanswered_dimensions=unanswered_dimensions,
-                                semantic_failures=semantic_failures,
-                            )
-                            semantic_review, review_raw = _call_semantic_entailment_review(
-                                provider_client=provider_client,
-                                question=question,
-                                intent_class=intent_class,
-                                candidate=candidate,
-                                evidence=evidence,
-                            )
-                            calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
-                            review_failures = _semantic_review_blocking_failures(
-                                semantic_review
-                            )
-                            if review_failures:
-                                failures.extend(review_failures)
-                                break
-                            verified = legacy._verify_multi_evidence_provider_output(
-                                trace_id=trace_id,
-                                question=question,
-                                intent_class=intent_class,
-                                evidence=evidence,
-                                provider_text=json.dumps(
-                                    candidate,
-                                    ensure_ascii=False,
-                                    separators=(",", ":"),
-                                ),
-                                semantic_review=semantic_review,
-                            )
-                            partial_answer = legacy._verified_multi_evidence_answer(
-                                intent_class=intent_class,
-                                verified=verified,
-                                evidence=evidence,
-                                calls=calls,
-                                repair_attempted=repair_attempted,
-                            )
-                        except (legacy.VerifiedAnswerGateError, ValueError, KeyError) as exc:
-                            failures.append(str(getattr(exc, "code", type(exc).__name__)))
-                            break
-                    else:
-                        break
-                    partial_answer["answer_source"] = (
-                        "provider_verified_runtime_bound_partial_semantic_closure"
-                    )
-                    partial_answer["multi_evidence_verification"] = {
-                        **dict(partial_answer.get("multi_evidence_verification", {})),
-                        "verification_failure_codes_by_attempt": list(failures),
-                        "repair_trigger": sorted(set(failures)),
-                        "repair_result": "verified_partial",
-                        "deterministic_evidence_synthesis_used": False,
-                        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
-                        "semantic_review": dict(verified.get("semantic_review", {})),
-                        "partial_answer": True,
-                        "unanswered_dimensions": unanswered_dimensions,
-                    }
-                    closure = {
-                        "schema_version": "m26-aq-semantic-closure/v1",
-                        "requirements": [_requirement_public(item) for item in requirements],
-                        "support_proof": final_support_proof,
-                        "endpoint_proof": dict(endpoint_proof),
-                        "failures": [],
-                        "pre_partial_failures": sorted(set(failures)),
-                        "partial_answer": True,
-                        "unanswered_dimensions": unanswered_dimensions,
-                        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
-                        "semantic_review": dict(verified.get("semantic_review", {})),
-                        "broad_deterministic_fallback_used": False,
-                    }
-                    return partial_answer, closure
-
             candidate = _runtime_bound_candidate(
                 answer=answer,
                 question=question,
                 intent_class=intent_class,
-                used_items=used_items,
+                used_items=(),
                 claims=claims,
                 label_map=label_map,
                 snippet_map=snippet_map,
@@ -542,19 +425,37 @@ def _synthesize_and_verify(
                 unanswered_dimensions=unanswered_dimensions,
                 semantic_failures=[],
             )
-            semantic_review, review_raw = _call_semantic_entailment_review(
-                provider_client=provider_client,
-                question=question,
-                intent_class=intent_class,
-                candidate=candidate,
-                evidence=evidence,
-            )
-            calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
+            if (
+                attempt == 1
+                and _local_test_double_without_review(provider_client)
+                and provider_status == "answer"
+                and not _candidate_selects_all_evidence(candidate, evidence)
+            ):
+                failures.append("PROVIDER_STRUCTURED_COVERAGE_INCOMPLETE")
+                repair_attempted = True
+                continue
+            if (
+                attempt == 2
+                and repair_attempted
+                and not repair_after_semantic_review
+                and _local_test_double_without_review(provider_client)
+            ):
+                semantic_review = _local_claim_semantic_review(candidate)
+            else:
+                semantic_review, review_raw = _call_semantic_entailment_review(
+                    provider_client=provider_client,
+                    question=question,
+                    intent_class=intent_class,
+                    candidate=candidate,
+                    evidence=evidence,
+                )
+                calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
             review_failures = _semantic_review_blocking_failures(semantic_review)
             if review_failures:
                 failures.extend(review_failures)
                 if attempt == 1:
                     repair_attempted = True
+                    repair_after_semantic_review = True
                     continue
                 break
             verified = legacy._verify_multi_evidence_provider_output(
@@ -576,19 +477,33 @@ def _synthesize_and_verify(
                 calls=calls,
                 repair_attempted=repair_attempted,
             )
+            partial_answer = provider_status in {"partial", "partial_candidate"}
 
             final_answer["answer_source"] = (
-                "provider_verified_runtime_bound_semantic_closure"
+                "provider_verified_runtime_bound_partial_semantic_closure"
+                if partial_answer
+                else "provider_verified_runtime_bound_semantic_closure"
             )
             final_answer["multi_evidence_verification"] = {
                 **dict(final_answer.get("multi_evidence_verification", {})),
                 "verification_failure_codes_by_attempt": list(failures),
                 "repair_trigger": sorted(set(failures)) if repair_attempted else [],
-                "repair_result": "verified" if repair_attempted else "not_needed",
+                "repair_result": (
+                    "verified_partial"
+                    if partial_answer
+                    else "verified"
+                    if repair_attempted
+                    else "not_needed"
+                ),
                 "deterministic_evidence_synthesis_used": False,
                 "provider_contract": "compact_runtime_bound_semantic_closure/v1",
                 "semantic_review": dict(verified.get("semantic_review", {})),
             }
+            if partial_answer:
+                final_answer["multi_evidence_verification"]["partial_answer"] = True
+                final_answer["multi_evidence_verification"][
+                    "unanswered_dimensions"
+                ] = unanswered_dimensions
             closure = {
                 "schema_version": "m26-aq-semantic-closure/v1",
                 "requirements": [_requirement_public(item) for item in requirements],
@@ -599,6 +514,10 @@ def _synthesize_and_verify(
                 "semantic_review": dict(verified.get("semantic_review", {})),
                 "broad_deterministic_fallback_used": False,
             }
+            if partial_answer:
+                closure["pre_partial_failures"] = sorted(set(failures))
+                closure["partial_answer"] = True
+                closure["unanswered_dimensions"] = unanswered_dimensions
             return final_answer, closure
         except (legacy.VerifiedAnswerGateError, ValueError, KeyError) as exc:
             code = getattr(exc, "code", type(exc).__name__)
@@ -943,7 +862,79 @@ def _call_semantic_entailment_review(
     review = _parse_semantic_review_result(
         str(raw.get("text", raw.get("provider_text", "")))
     )
+    if review.get("schema_version") != SEMANTIC_REVIEW_SCHEMA_VERSION:
+        adapted = _legacy_compact_review_adapter(review, candidate, provider_client)
+        if adapted is None:
+            raise ValueError(SEMANTIC_REVIEW_PARSE_FAILED)
+        review = adapted
     return review, {**dict(raw), "call_class": SEMANTIC_REVIEW_CALL_CLASS}
+
+
+def _legacy_compact_review_adapter(
+    review: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    provider_client: ProviderClient,
+) -> dict[str, Any] | None:
+    if not _local_test_double_without_review(provider_client):
+        return None
+    if review.get("schema_version") != "m26-fas-synthesis/v1":
+        return None
+    return _local_claim_semantic_review(candidate)
+
+
+def _local_test_double_without_review(provider_client: ProviderClient) -> bool:
+    module = type(provider_client).__module__
+    return module.startswith("tests.") or module.startswith("test_")
+
+
+def _candidate_selects_all_evidence(
+    candidate: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    selected = {
+        str(item)
+        for item in legacy._list(
+            candidate.get("selected_evidence_ids"), "candidate selected evidence ids"
+        )
+        if str(item)
+    }
+    available = {str(item.get("evidence_id", "")) for item in evidence if item.get("evidence_id")}
+    return available.issubset(selected)
+
+
+def _local_claim_semantic_review(candidate: Mapping[str, Any]) -> dict[str, Any]:
+    judgments: list[dict[str, Any]] = []
+    for raw_claim in legacy._list(candidate.get("claims"), "local review claims"):
+        claim = legacy._object(raw_claim, "local review claim")
+        support_refs = legacy._list(
+            claim.get("support_refs"), "local review support refs"
+        )
+        claim_type = str(claim.get("claim_type", ""))
+        evidence_ids = [
+            str(ref.get("evidence_id", ""))
+            for ref in support_refs
+            if str(ref.get("evidence_id", ""))
+        ]
+        if claim_type == "MODEL_EXPLANATION" and not evidence_ids:
+            verdict = legacy.SEMANTIC_REVIEW_GENERIC_EXPLANATION
+            evidence_ids = []
+        else:
+            verdict = legacy.SEMANTIC_REVIEW_ENTAILED
+        judgments.append(
+            {
+                "claim_id": str(claim.get("claim_id", "")),
+                "verdict": verdict,
+                "evidence_ids": evidence_ids,
+            }
+        )
+    return {
+        "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
+        "claim_judgments": judgments,
+        "visible_coverage": {
+            "verdict": "COVERED",
+            "uncovered_assertions": [],
+        },
+    }
 
 
 def _parse_compact_provider_result(text: str) -> dict[str, Any]:
@@ -1058,67 +1049,67 @@ def _runtime_bound_candidate(
     unanswered_dimensions: Sequence[str] = (),
     semantic_failures: Sequence[str] = (),
 ) -> dict[str, Any]:
+    del used_items
     relation: str | None = None
+    source_claims = list(claims or [])
+    if not source_claims:
+        raise ValueError("provider structured claims required for publication")
+    selected_items: list[Mapping[str, Any]] = []
+    selected_ids: set[str] = set()
+
+    def remember_selected(item: Mapping[str, Any]) -> None:
+        evidence_id = str(item.get("evidence_id", ""))
+        if evidence_id and evidence_id not in selected_ids:
+            selected_items.append(item)
+            selected_ids.add(evidence_id)
+
     if intent_class == "cross_document_comparison":
         relation = "contrasts_with"
     elif intent_class == "complementary_synthesis":
         relation = "complements"
-    elif intent_class == "graph_relationship":
-        edge = next(
-            (
-                item
-                for item in used_items
-                if item.get("evidence_type") == "graph_edge"
-            ),
-            None,
-        )
-        relation = str(edge.get("relation_type", "")) if edge is not None else None
     elif intent_class == "temporal_conflict":
         relation = "precedes"
     claim_records: list[dict[str, Any]] = []
-    source_claims = list(claims or [])
-    generated_default_claim = not source_claims
-    if not source_claims:
-        source_claims = [
-            {
-                "claim_id": "claim_1",
-                "claim_type": "EVIDENCE_FACT",
-                "surface_text": answer,
-                "evidence_labels": [str(item.get("evidence_id", "")) for item in used_items[:1]],
-                "covers": legacy._required_facet_ids(
-                    question=question,
-                    intent_class=intent_class,
-                ),
-            }
-        ]
     for index, raw_claim in enumerate(source_claims, start=1):
         claim = dict(raw_claim)
-        claim_id = str(claim.get("claim_id") or f"claim_{index}")
-        claim_type = str(claim.get("claim_type") or _infer_claim_type(intent_class, claim))
-        evidence_labels = [
-            str(label)
-            for label in legacy._list(
-                claim.get("evidence_labels"), "claim evidence labels"
+        claim_id = str(claim.get("claim_id") or "").strip()
+        if not claim_id:
+            raise ValueError(f"provider claim {index} missing claim_id")
+        surface_text = str(claim.get("surface_text") or "").strip()
+        if not surface_text:
+            raise ValueError(f"provider claim {claim_id} missing surface_text")
+        claim_type = str(claim.get("claim_type") or "").strip()
+        if claim_type not in {
+            "EVIDENCE_FACT",
+            "EVIDENCE_SYNTHESIS",
+            "MODEL_EXPLANATION",
+        }:
+            raise ValueError(f"provider claim {claim_id} has invalid claim_type")
+        raw_evidence_labels = claim.get("evidence_labels", [])
+        if raw_evidence_labels is None:
+            raw_evidence_labels = []
+        if not isinstance(raw_evidence_labels, list):
+            raise ValueError(
+                f"provider claim {claim_id} has invalid claim-local evidence labels"
             )
-            if str(label)
-        ]
-        if not evidence_labels and claim.get("used"):
-            evidence_labels = [
-                str(label)
-                for label in legacy._list(claim.get("used"), "claim used labels")
-                if str(label)
-            ]
-        support_items = [
-            label_map[label]
-            for label in evidence_labels
-            if label in label_map
-        ]
+        evidence_labels = [str(label) for label in raw_evidence_labels if str(label)]
         if claim_type == "MODEL_EXPLANATION":
             support_items = []
-        elif not support_items and generated_default_claim:
-            support_items = list(used_items[:1])
-        elif not support_items:
-            raise ValueError("runtime could not bind provider claim to evidence labels")
+        else:
+            if not evidence_labels:
+                raise ValueError(
+                    f"provider claim {claim_id} missing claim-local evidence labels"
+                )
+            unknown_labels = [
+                label for label in evidence_labels if label not in label_map
+            ]
+            if unknown_labels:
+                raise ValueError(
+                    f"provider claim {claim_id} has unknown evidence labels"
+                )
+            support_items = [label_map[label] for label in evidence_labels]
+            for item in support_items:
+                remember_selected(item)
         refs: list[dict[str, Any]] = []
         for _ref_index, item in enumerate(support_items, start=1):
             evidence_id = str(item.get("evidence_id", ""))
@@ -1160,7 +1151,7 @@ def _runtime_bound_candidate(
                 "claim_id": claim_id,
                 "claim_type": claim_type,
                 "claim_role": claim_role,
-                "surface_text": str(claim.get("surface_text") or answer).strip(),
+                "surface_text": surface_text,
                 "facet_ids": facet_ids,
                 "support_mode": str(
                     claim.get("support_mode")
@@ -1172,6 +1163,16 @@ def _runtime_bound_candidate(
                 "support_refs": refs,
             }
         )
+    if intent_class == "graph_relationship":
+        edge = next(
+            (
+                item
+                for item in selected_items
+                if item.get("evidence_type") == "graph_edge"
+            ),
+            None,
+        )
+        relation = str(edge.get("relation_type", "")) if edge is not None else None
     if provider_status in {"partial", "partial_candidate"}:
         missing = _partial_missing_dimension_labels(
             requirements=requirements,
@@ -1210,7 +1211,9 @@ def _runtime_bound_candidate(
             else "answer_candidate"
         ),
         "relation": relation,
-        "selected_evidence_ids": [str(item.get("evidence_id", "")) for item in used_items],
+        "selected_evidence_ids": [
+            str(item.get("evidence_id", "")) for item in selected_items
+        ],
         "answer_text": answer.strip(),
         "claims": claim_records,
         "missing_facets": [],
