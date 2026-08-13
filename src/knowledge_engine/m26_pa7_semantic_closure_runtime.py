@@ -1336,11 +1336,6 @@ def _runtime_bound_candidate(
                     f"provider claim {claim_id} has unknown evidence labels"
                 )
             support_items = [label_map[label] for label in evidence_labels]
-            support_items = _with_graph_endpoint_support(
-                intent_class=intent_class,
-                support_items=support_items,
-                label_map=label_map,
-            )
             for item in support_items:
                 remember_selected(item)
         refs: list[dict[str, Any]] = []
@@ -1603,42 +1598,6 @@ def _infer_claim_type(intent_class: str, claim: Mapping[str, Any]) -> str:
     if intent_class in {"cross_document_comparison", "complementary_synthesis", "graph_relationship", "temporal_conflict"}:
         return "EVIDENCE_SYNTHESIS"
     return "EVIDENCE_FACT"
-
-
-def _with_graph_endpoint_support(
-    *,
-    intent_class: str,
-    support_items: Sequence[Mapping[str, Any]],
-    label_map: Mapping[str, Mapping[str, Any]],
-) -> list[Mapping[str, Any]]:
-    items = list(support_items)
-    if intent_class != "graph_relationship":
-        return items
-    graph_edge = next(
-        (item for item in items if item.get("evidence_type") == "graph_edge"),
-        None,
-    )
-    if graph_edge is None:
-        return items
-    existing_ids = {str(item.get("evidence_id", "")) for item in items}
-    for concept_id in (
-        str(graph_edge.get("edge_source", "")),
-        str(graph_edge.get("edge_target", "")),
-    ):
-        endpoint = next(
-            (
-                item
-                for item in label_map.values()
-                if item.get("evidence_type") == "passage"
-                and str(item.get("concept_id", "")) == concept_id
-                and str(item.get("evidence_id", "")) not in existing_ids
-            ),
-            None,
-        )
-        if endpoint is not None:
-            items.append(endpoint)
-            existing_ids.add(str(endpoint.get("evidence_id", "")))
-    return items
 
 
 def _anchor_material_sentences(answer: str) -> str:

@@ -3762,16 +3762,13 @@ def _enforce_intent_minimums(
         graph_edges = [item for item in evidence if item.get("evidence_type") == "graph_edge"]
         if not graph_edges:
             raise _verification_failure("M26-PA7-ME-024", "graph intent missing graph edge")
-        endpoint_concepts = {
-            str(item.get("concept_id", ""))
-            for item in evidence
-            if item.get("evidence_type") == "passage"
-        }
         edge = graph_edges[0]
-        if not {str(edge.get("edge_source")), str(edge.get("edge_target"))}.issubset(
-            endpoint_concepts
+        if not (
+            str(edge.get("edge_source", ""))
+            and str(edge.get("edge_target", ""))
+            and str(edge.get("relation_type", ""))
         ):
-            raise _verification_failure("M26-PA7-ME-025", "graph intent missing endpoint evidence")
+            raise _verification_failure("M26-PA7-ME-025", "graph intent missing complete graph edge fact")
     elif intent_class == "provenance_source_trace":
         if not {"passage", "provenance"}.issubset(evidence_types):
             raise _verification_failure(
@@ -5228,8 +5225,11 @@ def _graph_edge_evidence_item(
     source = str(edge.get("source", ""))
     target = str(edge.get("target", ""))
     relation_type = str(edge.get("relation_type", "related_to"))
+    source_label = _graph_endpoint_display_label(bundle, source)
+    target_label = _graph_endpoint_display_label(bundle, target)
     statement = (
-        f"Production graph navigation edge {edge_id} states {source} {relation_type} {target} "
+        f"Production graph navigation edge {edge_id} states "
+        f"{source_label} ({source}) {relation_type} {target_label} ({target}) "
         f"with confidence {edge.get('confidence')} and review "
         f"{edge.get('review_status', 'approved')}."
     )
@@ -5265,6 +5265,8 @@ def _graph_edge_evidence_item(
         "edge_id": edge_id,
         "edge_source": source,
         "edge_target": target,
+        "edge_source_label": source_label,
+        "edge_target_label": target_label,
         "relation_type": relation_type,
         "provenance_record_sha256": canonical_sha256(str(edge.get("provenance_ref", ""))),
         "retrieved_at": "",
@@ -5273,6 +5275,18 @@ def _graph_edge_evidence_item(
             "structural_relation": relation_type in STRUCTURAL_RELATION_TYPES,
         },
     }
+
+
+def _graph_endpoint_display_label(bundle: ProductionAnswerBundle, concept_id: str) -> str:
+    concept = str(concept_id)
+    for document in _release_documents(bundle):
+        if str(document.get("concept_id", "")) != concept:
+            continue
+        for key in ("title", "section_title", "source_identity", "source_id"):
+            value = str(document.get(key, "")).strip()
+            if value:
+                return value
+    return concept
 
 
 def _provenance_evidence_bundle(

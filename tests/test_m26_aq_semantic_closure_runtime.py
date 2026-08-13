@@ -29,6 +29,7 @@ from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _synthesize_and_verify,
     _visible_semantic_failures,
 )
+from knowledge_engine.m26_production_answer_bundle import ProductionAnswerBundle
 from knowledge_engine.m26_verified_answer_citation_gate import sha256_bytes
 
 
@@ -314,6 +315,35 @@ def _graph_edge(
     }
 
 
+def _minimal_answer_bundle(
+    *,
+    documents: list[dict[str, Any]],
+) -> ProductionAnswerBundle:
+    artifact_sha256 = {
+        "graph": "1" * 64,
+        "graph_v2": "2" * 64,
+        "lexical_index": "3" * 64,
+        "provenance": "4" * 64,
+    }
+    artifact_keys = {
+        "graph": "graph.json",
+        "graph_v2": "graph-v2.json",
+        "lexical_index": "lexical-index.json",
+        "provenance": "provenance.json",
+    }
+    return ProductionAnswerBundle(
+        manifest={"release_id": "release-test"},
+        graph={},
+        graph_v2={"nodes": [], "edges": []},
+        lexical_index={"documents": documents},
+        provenance={"records": []},
+        manifest_sha256="5" * 64,
+        artifact_sha256=artifact_sha256,
+        artifact_keys=artifact_keys,
+        loaded_at="2026-08-13T00:00:00Z",
+    )
+
+
 def _metadata_only_passage(
     evidence_id: str,
     source: str,
@@ -329,6 +359,45 @@ def _metadata_only_passage(
         "section_title": source,
         "passage_text": "",
     }
+
+
+def test_graph_edge_evidence_unit_includes_endpoint_display_labels() -> None:
+    bundle = _minimal_answer_bundle(
+        documents=[
+            {
+                "concept_id": "article_1",
+                "title": "Harness Theory Part 1",
+                "section_id": "article_1",
+            },
+            {
+                "concept_id": "article_2",
+                "title": "Harness Theory Part 2",
+                "section_id": "article_2",
+            },
+        ]
+    )
+
+    item = legacy._graph_edge_evidence_item(
+        bundle=bundle,
+        edge={
+            "edge_id": "edge_precedes",
+            "source": "article_1",
+            "target": "article_2",
+            "relation_type": "precedes",
+            "confidence": 0.9,
+            "review_status": "approved",
+        },
+        trace_id="trace-graph-edge-labels",
+        ordinal=1,
+    )
+
+    assert item["evidence_type"] == "graph_edge"
+    assert item["edge_source_label"] == "Harness Theory Part 1"
+    assert item["edge_target_label"] == "Harness Theory Part 2"
+    assert (
+        "Harness Theory Part 1 (article_1) precedes Harness Theory Part 2 (article_2)"
+        in item["passage_text"]
+    )
 
 
 def test_nc01_cited_but_irrelevant_disconnect_answer_is_rejected() -> None:
@@ -930,19 +999,7 @@ def test_candidate2_unseen_precedes_paraphrase_reaches_semantic_review(
             for item in task["evidence"]
             if item["type"] == "graph_edge"
         )
-        source_label = next(
-            str(item["id"])
-            for item in task["evidence"]
-            if item["type"] == "passage"
-            and item["concept"] == "Harness Theory Part 1"
-        )
-        target_label = next(
-            str(item["id"])
-            for item in task["evidence"]
-            if item["type"] == "passage"
-            and item["concept"] == "Harness Theory Part 2"
-        )
-        graph_labels = [edge_label, source_label, target_label]
+        graph_labels = [edge_label]
         return {
             "schema_version": "m26-fas-synthesis/v1",
             "status": "answer",
@@ -1000,7 +1057,7 @@ def test_candidate2_unseen_precedes_paraphrase_reaches_semantic_review(
         str(item["evidence_id"])
         for case in provider.review_claim_cases[0]
         for item in case["evidence"]
-    } == {"edge_precedes", "part_1", "part_2"}
+    } == {"edge_precedes"}
 
 
 def test_candidate2_missing_claims_fail_closed_without_review() -> None:
@@ -1671,7 +1728,7 @@ def test_runtime_bound_structured_candidate_compacts_before_legacy_verification(
     assert closure["failures"] == []
 
 
-def test_runtime_bound_graph_claim_adds_endpoint_support_for_edge_only_label() -> None:
+def test_runtime_bound_graph_claim_preserves_provider_selected_edge_only_support() -> None:
     edge = _graph_edge("ev_edge", "part_1", "part_2", "precedes")
     part_1 = {
         **_rich_passage("ev_part_1", "Part 1 appears first in the series.", "part-1"),
@@ -1714,7 +1771,7 @@ def test_runtime_bound_graph_claim_adds_endpoint_support_for_edge_only_label() -
         ref["evidence_id"]
         for ref in candidate["claims"][0]["support_refs"]
     }
-    assert support_ids == {"ev_edge", "ev_part_1", "ev_part_2"}
+    assert support_ids == {"ev_edge"}
     assert set(candidate["selected_evidence_ids"]) == support_ids
 
 
