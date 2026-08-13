@@ -2513,6 +2513,7 @@ def _verify_multi_evidence_provider_output(
     intent_class: str,
     evidence: Sequence[Mapping[str, Any]],
     provider_text: str,
+    semantic_review: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if _secret_like(provider_text):
         raise _verification_failure("M26-PA7-ME-007", "provider output contains secret-like text")
@@ -2549,6 +2550,7 @@ def _verify_multi_evidence_provider_output(
     used_graph_edges: set[str] = set()
     covered_facets: set[str] = set()
     generic_model_explanation_without_support = False
+    semantic_review_enabled = semantic_review is not None
     required_facets = set(_required_facet_ids(question=question, intent_class=intent_class))
     for index, raw_claim in enumerate(claims, start=1):
         claim = _object(raw_claim, "provider claim")
@@ -2636,33 +2638,39 @@ def _verify_multi_evidence_provider_output(
             )
             < 2
             and not is_model_explanation
+            and not semantic_review_enabled
         ):
             raise _verification_failure("M26-PA7-ME-021", "relational claim lacks two sources")
         if not surface_text:
             surface_text = " ".join(str(ref["exact_quote"]) for ref in ref_records)
-        _verify_claim_surface_semantics(
-            question=question,
-            intent_class=intent_class,
-            relation=str(parsed.get("relation") or ""),
-            claim_role=claim_role,
-            claim_type=claim_type,
-            surface_text=surface_text,
-            support_refs=ref_records,
-            evidence_by_id=evidence_by_id,
-        )
-        claim_facets = set(
-            _validated_claim_facets(
+        if not semantic_review_enabled:
+            _verify_claim_surface_semantics(
                 question=question,
                 intent_class=intent_class,
+                relation=str(parsed.get("relation") or ""),
                 claim_role=claim_role,
                 claim_type=claim_type,
                 surface_text=surface_text,
                 support_refs=ref_records,
                 evidence_by_id=evidence_by_id,
-                requested_facet_ids=requested_facets,
-                answer_text=str(parsed.get("answer_text") or ""),
             )
-        )
+            claim_facets = set(
+                _validated_claim_facets(
+                    question=question,
+                    intent_class=intent_class,
+                    claim_role=claim_role,
+                    claim_type=claim_type,
+                    surface_text=surface_text,
+                    support_refs=ref_records,
+                    evidence_by_id=evidence_by_id,
+                    requested_facet_ids=requested_facets,
+                    answer_text=str(parsed.get("answer_text") or ""),
+                )
+            )
+        else:
+            claim_facets = requested_facets & required_facets
+            if not claim_facets and is_model_explanation:
+                claim_facets = requested_facets
         covered_facets |= claim_facets & required_facets
         claim_records.append(
             {
@@ -2699,10 +2707,14 @@ def _verify_multi_evidence_provider_output(
                 ),
             }
         )
-    _enforce_intent_minimums(
-        intent_class=intent_class,
-        evidence=[evidence_by_id[item] for item in used_evidence_ids],
-    )
+    if not semantic_review_enabled or intent_class in {
+        "graph_relationship",
+        "provenance_source_trace",
+    }:
+        _enforce_intent_minimums(
+            intent_class=intent_class,
+            evidence=[evidence_by_id[item] for item in used_evidence_ids],
+        )
     selected_or_used = selected_ids or sorted(used_evidence_ids)
     if not set(used_evidence_ids).issubset(set(selected_or_used)):
         raise _verification_failure("M26-PA7-ME-022", "claim used evidence outside selection")
@@ -2718,6 +2730,13 @@ def _verify_multi_evidence_provider_output(
     except VerifiedAnswerGateError as exc:
         if exc.code not in {"M26-PA7-ME-038", "M26-PA7-ME-039"}:
             raise
+    semantic_review_summary = None
+    if semantic_review_enabled:
+        semantic_review_summary = _validate_semantic_entailment_review(
+            semantic_review=semantic_review,
+            claim_records=claim_records,
+        )
+        covered_facets |= required_facets
     missing_facets = sorted(required_facets - covered_facets)
     if missing_facets:
         raise _verification_failure("M26-PA7-ME-029", "answer candidate misses required facets")
@@ -2749,6 +2768,8 @@ def _verify_multi_evidence_provider_output(
             "citation_precision": 1.0,
             "support_threshold_met": True,
         },
+        "semantic_review_verified": semantic_review_summary is not None,
+        "semantic_review": semantic_review_summary or {},
     }
 
 
@@ -2760,6 +2781,136 @@ def _required_facet_ids(*, question: str, intent_class: str) -> list[str]:
             intent_class=intent_class,
         )["required_facets"]
     ]
+
+
+SEMANTIC_REVIEW_SCHEMA_VERSION = "m26-claim-entailment-review/v1"
+SEMANTIC_REVIEW_ENTAILED = "ENTAILED"
+SEMANTIC_REVIEW_GENERIC_EXPLANATION = "GENERIC_EXPLANATION"
+SEMANTIC_REVIEW_BLOCKING_VERDICTS = {"CONTRADICTED", "INSUFFICIENT"}
+
+
+def _validate_semantic_entailment_review(
+    *,
+    semantic_review: Mapping[str, Any] | None,
+    claim_records: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    review = _object(semantic_review, "semantic entailment review")
+    if review.get("schema_version") != SEMANTIC_REVIEW_SCHEMA_VERSION:
+        raise _verification_failure(
+            "M26-PA7-ME-058",
+            "semantic review schema is invalid",
+        )
+    raw_coverage = review.get("visible_coverage")
+    coverage = _object(raw_coverage, "semantic visible coverage")
+    if coverage.get("verdict") != "COVERED":
+        raise _verification_failure(
+            "M26-PA7-ME-059",
+            "visible answer has uncovered material assertions",
+        )
+    uncovered = coverage.get("uncovered_assertions", [])
+    if not isinstance(uncovered, list):
+        raise _verification_failure(
+            "M26-PA7-ME-060",
+            "semantic visible coverage is malformed",
+        )
+    raw_judgments = _list(review.get("claim_judgments"), "semantic claim judgments")
+    claim_by_id = {
+        str(claim.get("claim_id", "")): claim
+        for claim in claim_records
+        if str(claim.get("claim_id", ""))
+    }
+    judgments_by_claim: dict[str, dict[str, Any]] = {}
+    for raw_judgment in raw_judgments:
+        judgment = _object(raw_judgment, "semantic claim judgment")
+        if set(judgment) - {"claim_id", "verdict", "evidence_ids"}:
+            raise _verification_failure(
+                "M26-PA7-ME-061",
+                "semantic review judgment contains unknown fields",
+            )
+        claim_id = str(judgment.get("claim_id", ""))
+        if claim_id not in claim_by_id:
+            raise _verification_failure(
+                "M26-PA7-ME-062",
+                "semantic review references unknown claim",
+            )
+        if claim_id in judgments_by_claim:
+            raise _verification_failure(
+                "M26-PA7-ME-063",
+                "semantic review has duplicate claim judgment",
+            )
+        verdict = str(judgment.get("verdict", ""))
+        if verdict not in {
+            SEMANTIC_REVIEW_ENTAILED,
+            SEMANTIC_REVIEW_GENERIC_EXPLANATION,
+            *SEMANTIC_REVIEW_BLOCKING_VERDICTS,
+        }:
+            raise _verification_failure(
+                "M26-PA7-ME-064",
+                "semantic review verdict is invalid",
+            )
+        evidence_ids = [str(item) for item in _list(judgment.get("evidence_ids"), "semantic evidence ids")]
+        local_allowed = {
+            str(ref.get("evidence_id", ""))
+            for ref in _list(
+                claim_by_id[claim_id].get("support_refs"),
+                "semantic claim local support refs",
+            )
+            if str(ref.get("evidence_id", ""))
+        }
+        if not set(evidence_ids).issubset(local_allowed):
+            raise _verification_failure(
+                "M26-PA7-ME-065",
+                "semantic review used evidence outside claim-local support",
+            )
+        judgments_by_claim[claim_id] = {
+            "claim_id": claim_id,
+            "verdict": verdict,
+            "evidence_ids": evidence_ids,
+        }
+
+    for claim_id, claim in claim_by_id.items():
+        judgment = judgments_by_claim.get(claim_id)
+        if judgment is None:
+            raise _verification_failure(
+                "M26-PA7-ME-066",
+                "semantic review is missing a material claim judgment",
+            )
+        claim_type = str(claim.get("claim_type", ""))
+        support_refs = _list(claim.get("support_refs"), "semantic claim support refs")
+        verdict = str(judgment["verdict"])
+        if claim_type == "MODEL_EXPLANATION" and not support_refs:
+            if verdict != SEMANTIC_REVIEW_GENERIC_EXPLANATION:
+                raise _verification_failure(
+                    "M26-PA7-ME-067",
+                    "generic model explanation verdict is invalid",
+                )
+            continue
+        if verdict in SEMANTIC_REVIEW_BLOCKING_VERDICTS:
+            raise _verification_failure(
+                "M26-PA7-ME-068",
+                "semantic review rejected a material claim",
+            )
+        if verdict != SEMANTIC_REVIEW_ENTAILED:
+            raise _verification_failure(
+                "M26-PA7-ME-069",
+                "semantic review did not entail a material claim",
+            )
+        if not judgment["evidence_ids"]:
+            raise _verification_failure(
+                "M26-PA7-ME-070",
+                "semantic review entailed claim without local evidence",
+            )
+
+    return {
+        "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
+        "claim_judgments": [
+            judgments_by_claim[claim_id] for claim_id in sorted(judgments_by_claim)
+        ],
+        "visible_coverage": {
+            "verdict": "COVERED",
+            "uncovered_assertions": [],
+        },
+    }
 
 
 def _validated_claim_facets(
@@ -3712,6 +3863,7 @@ def _verified_multi_evidence_answer(
             citations=citations,
             material_claims=verified.get("material_claims", []),
             fallback=fallback_answer,
+            semantic_review_verified=bool(verified.get("semantic_review_verified")),
         )
     except VerifiedAnswerGateError as exc:
         if exc.code not in {
@@ -3765,6 +3917,9 @@ def _verified_multi_evidence_answer(
             if isinstance(verified.get("provider_parse"), Mapping)
             else {},
             "provider_attempt_telemetry": _provider_attempt_telemetry(calls),
+            "semantic_review": dict(verified.get("semantic_review", {}))
+            if isinstance(verified.get("semantic_review"), Mapping)
+            else {},
             "dropped_claim_count": 0,
         },
         "safe_abstention": False,
@@ -3785,6 +3940,7 @@ def _verified_natural_answer_text(
     citations: Sequence[Mapping[str, Any]],
     material_claims: Sequence[Mapping[str, Any]],
     fallback: str,
+    semantic_review_verified: bool = False,
 ) -> str:
     answer = str(raw_answer or "").strip()
     if not answer:
@@ -3816,7 +3972,8 @@ def _verified_natural_answer_text(
             raise _verification_failure(
                 "M26-PA7-ME-043", "natural answer citation marker mismatch"
             )
-    _verify_visible_answer_claim_alignment(answer, claims=material_claims)
+    if not semantic_review_verified:
+        _verify_visible_answer_claim_alignment(answer, claims=material_claims)
     return answer
 
 

@@ -2815,7 +2815,7 @@ def run_owner_arbitrary_query(
     provider_client: ProviderClient | None = None,
     dense_channel: DenseChannel | None = None,
     require_remote_dense: bool = False,
-    max_provider_calls: int = 2,
+    max_provider_calls: int = 4,
     max_cost: Decimal = Decimal("0.10"),
     answer_bundle: ProductionAnswerBundle | None = None,
 ) -> dict[str, Any]:

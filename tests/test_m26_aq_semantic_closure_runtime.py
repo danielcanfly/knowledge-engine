@@ -41,6 +41,124 @@ class _AbstainingProvider:
         }
 
 
+class _SemanticReviewRepairProvider:
+    def __init__(self) -> None:
+        self.calls: list[tuple[dict[str, Any], str]] = []
+        self.review_claim_cases: list[list[dict[str, Any]]] = []
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls.append((payload, call_class))
+        if call_class in {"aq_semantic_closure", "aq_semantic_closure_repair"}:
+            task = json.loads(payload["messages"][0]["content"])
+            label_by_text = {
+                str(item["id"]): str(item.get("text", "")).casefold()
+                for item in task["evidence"]
+            }
+            router_label = next(
+                label for label, text in label_by_text.items() if "router" in text
+            )
+            monitor_label = next(
+                label for label, text in label_by_text.items() if "monitor" in text
+            )
+            if call_class == "aq_semantic_closure_repair":
+                body = {
+                    "schema_version": "m26-fas-synthesis/v1",
+                    "status": "partial",
+                    "answer_text": "The router keeps graph snapshots.",
+                    "claims": [
+                        {
+                            "claim_id": "claim_1",
+                            "claim_type": "EVIDENCE_FACT",
+                            "surface_text": "The router keeps graph snapshots.",
+                            "evidence_labels": [router_label],
+                            "covers": ["router_snapshots"],
+                        }
+                    ],
+                    "unanswered_dimensions": ["monitor_events"],
+                    "abstention_reason": None,
+                }
+            else:
+                body = {
+                    "schema_version": "m26-fas-synthesis/v1",
+                    "status": "answer",
+                    "answer_text": (
+                        "The router keeps graph snapshots. The monitor rejects events."
+                    ),
+                    "claims": [
+                        {
+                            "claim_id": "claim_1",
+                            "claim_type": "EVIDENCE_FACT",
+                            "surface_text": "The router keeps graph snapshots.",
+                            "evidence_labels": [router_label],
+                            "covers": ["router_snapshots"],
+                        },
+                        {
+                            "claim_id": "claim_2",
+                            "claim_type": "EVIDENCE_FACT",
+                            "surface_text": "The monitor rejects events.",
+                            "evidence_labels": [monitor_label],
+                            "covers": ["monitor_events"],
+                        },
+                    ],
+                    "unanswered_dimensions": [],
+                    "abstention_reason": None,
+                }
+            return {
+                "text": json.dumps(body),
+                "usage": {"input_tokens": 10, "output_tokens": 10},
+                "cost_usd": "0.001",
+                "call_class": call_class,
+            }
+
+        task = json.loads(payload["messages"][0]["content"])
+        claim_cases = task["claim_cases"]
+        self.review_claim_cases.append(claim_cases)
+        judgments = []
+        for case in claim_cases:
+            claim_id = str(case["claim_id"])
+            local_ids = [str(item["evidence_id"]) for item in case["evidence"]]
+            surface = str(case["surface_text"]).casefold()
+            if "rejects" in surface:
+                judgments.append(
+                    {
+                        "claim_id": claim_id,
+                        "verdict": "CONTRADICTED",
+                        "evidence_ids": local_ids,
+                    }
+                )
+            elif str(case["claim_type"]) == "MODEL_EXPLANATION":
+                judgments.append(
+                    {
+                        "claim_id": claim_id,
+                        "verdict": "GENERIC_EXPLANATION",
+                        "evidence_ids": [],
+                    }
+                )
+            else:
+                judgments.append(
+                    {
+                        "claim_id": claim_id,
+                        "verdict": "ENTAILED",
+                        "evidence_ids": local_ids,
+                    }
+                )
+        return {
+            "text": json.dumps(
+                {
+                    "schema_version": "m26-claim-entailment-review/v1",
+                    "claim_judgments": judgments,
+                    "visible_coverage": {
+                        "verdict": "COVERED",
+                        "uncovered_assertions": [],
+                    },
+                }
+            ),
+            "usage": {"input_tokens": 10, "output_tokens": 10},
+            "cost_usd": "0.001",
+            "call_class": call_class,
+        }
+
+
 def _failures(
     question: str,
     answer: str,
@@ -331,7 +449,7 @@ def test_graph_false_premise_contract_binds_full_named_entities() -> None:
     assert "non_entailment" in ids
 
 
-def test_provider_abstain_with_available_evidence_uses_verified_deterministic_fallback() -> None:
+def test_provider_abstain_with_available_evidence_safely_abstains_without_quote_collage() -> None:
     question = (
         "If a client disconnects, how does the admission policy, durable state authority, "
         "continued execution, completion verification, and observability reattachment keep "
@@ -364,16 +482,77 @@ def test_provider_abstain_with_available_evidence_uses_verified_deterministic_fa
         "aq_semantic_closure",
         "aq_semantic_closure_repair",
     ]
-    assert answer["status"] == "owner_only_cited_answer"
-    assert answer["answer_source"] == "deterministic_verified_evidence_synthesis"
-    assert answer["safe_abstention"] is False
-    assert answer["citations"]
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["answer_source"] == "safe_abstention"
+    assert answer["safe_abstention"] is True
     verification = answer["multi_evidence_verification"]
-    assert verification["deterministic_evidence_synthesis_used"] is True
     assert verification["provider_contract"] == "compact_runtime_bound_semantic_closure/v1"
-    assert closure["failures"] == []
-    assert closure["broad_deterministic_fallback_used"] is True
-    assert "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE" in closure["pre_recovery_failures"]
+    assert closure["broad_deterministic_fallback_used"] is False
+    assert "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE" in closure["failures"]
+    assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
+
+
+def test_semantic_review_one_repair_preserves_supported_partial() -> None:
+    question = "Explain router snapshots and monitor events."
+    evidence = [
+        _rich_passage(
+            "ev_router",
+            "The router stores graph snapshots.",
+            "router-note",
+        ),
+        _rich_passage(
+            "ev_monitor",
+            "The monitor accepts events.",
+            "monitor-note",
+        ),
+    ]
+    requirements = [
+        SemanticRequirement(
+            requirement_id="router_snapshots",
+            instruction="Explain router graph snapshots.",
+            evidence_terms=("router", "graph", "snapshots"),
+            visible_patterns=(r"\brouter.{0,80}(?:stores|keeps).{0,80}snapshots",),
+        ),
+        SemanticRequirement(
+            requirement_id="monitor_events",
+            instruction="Explain monitor events.",
+            evidence_terms=("monitor", "events"),
+            visible_patterns=(r"\bmonitor.{0,80}(?:accepts|rejects).{0,80}events",),
+        ),
+    ]
+    provider = _SemanticReviewRepairProvider()
+
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-semantic-review-repair",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=requirements,
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_claim_semantic_entailment",
+        "aq_semantic_closure_repair",
+        "aq_claim_semantic_entailment",
+    ]
+    assert answer["answer_source"] == "provider_verified_runtime_bound_partial_semantic_closure"
+    assert answer["repair_attempted"] is True
+    assert "router keeps graph snapshots" in answer["answer_text"].casefold()
+    assert "unsupported boundary" in answer["answer_text"].casefold()
+    assert closure["partial_answer"] is True
+    first_review_cases = {
+        str(case["claim_id"]): {
+            str(item["evidence_id"]) for item in case["evidence"]
+        }
+        for case in provider.review_claim_cases[0]
+    }
+    assert first_review_cases == {
+        "claim_1": {"ev_router"},
+        "claim_2": {"ev_monitor"},
+    }
 
 
 def test_resource_constraints_do_not_trigger_multi_source_requirement() -> None:

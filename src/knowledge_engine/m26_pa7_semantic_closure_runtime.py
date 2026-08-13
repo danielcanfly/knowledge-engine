@@ -41,6 +41,9 @@ MIN_PROVIDER_REPAIR_OUTPUT_TOKENS = 1536
 MAX_PROVIDER_OUTPUT_TOKENS = 3072
 COMPACT_PROVIDER_TRUNCATED = "COMPACT_PROVIDER_TRUNCATED"
 COMPACT_PROVIDER_PARSE_FAILED = "COMPACT_PROVIDER_PARSE_FAILED"
+SEMANTIC_REVIEW_PARSE_FAILED = "SEMANTIC_REVIEW_PARSE_FAILED"
+SEMANTIC_REVIEW_SCHEMA_VERSION = legacy.SEMANTIC_REVIEW_SCHEMA_VERSION
+SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
 
 
 @dataclass(frozen=True)
@@ -62,7 +65,7 @@ def run_owner_arbitrary_query(
     provider_client: ProviderClient | None = None,
     dense_channel: DenseChannel | None = None,
     require_remote_dense: bool = False,
-    max_provider_calls: int = 2,
+    max_provider_calls: int = 4,
     max_cost: Decimal = Decimal("0.10"),
     answer_bundle: ProductionAnswerBundle | None = None,
 ) -> dict[str, Any]:
@@ -350,7 +353,7 @@ def _synthesize_and_verify(
     provider_client: ProviderClient,
     requirements: Sequence[SemanticRequirement],
     endpoint_proof: Mapping[str, Any],
-    allow_deterministic_recovery: bool = True,
+    allow_deterministic_recovery: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     failures: list[str] = []
     calls: list[dict[str, Any]] = []
@@ -459,6 +462,20 @@ def _synthesize_and_verify(
                                 unanswered_dimensions=unanswered_dimensions,
                                 semantic_failures=semantic_failures,
                             )
+                            semantic_review, review_raw = _call_semantic_entailment_review(
+                                provider_client=provider_client,
+                                question=question,
+                                intent_class=intent_class,
+                                candidate=candidate,
+                                evidence=evidence,
+                            )
+                            calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
+                            review_failures = _semantic_review_blocking_failures(
+                                semantic_review
+                            )
+                            if review_failures:
+                                failures.extend(review_failures)
+                                break
                             verified = legacy._verify_multi_evidence_provider_output(
                                 trace_id=trace_id,
                                 question=question,
@@ -469,6 +486,7 @@ def _synthesize_and_verify(
                                     ensure_ascii=False,
                                     separators=(",", ":"),
                                 ),
+                                semantic_review=semantic_review,
                             )
                             partial_answer = legacy._verified_multi_evidence_answer(
                                 intent_class=intent_class,
@@ -492,6 +510,7 @@ def _synthesize_and_verify(
                         "repair_result": "verified_partial",
                         "deterministic_evidence_synthesis_used": False,
                         "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                        "semantic_review": dict(verified.get("semantic_review", {})),
                         "partial_answer": True,
                         "unanswered_dimensions": unanswered_dimensions,
                     }
@@ -505,6 +524,7 @@ def _synthesize_and_verify(
                         "partial_answer": True,
                         "unanswered_dimensions": unanswered_dimensions,
                         "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                        "semantic_review": dict(verified.get("semantic_review", {})),
                         "broad_deterministic_fallback_used": False,
                     }
                     return partial_answer, closure
@@ -522,6 +542,21 @@ def _synthesize_and_verify(
                 unanswered_dimensions=unanswered_dimensions,
                 semantic_failures=[],
             )
+            semantic_review, review_raw = _call_semantic_entailment_review(
+                provider_client=provider_client,
+                question=question,
+                intent_class=intent_class,
+                candidate=candidate,
+                evidence=evidence,
+            )
+            calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
+            review_failures = _semantic_review_blocking_failures(semantic_review)
+            if review_failures:
+                failures.extend(review_failures)
+                if attempt == 1:
+                    repair_attempted = True
+                    continue
+                break
             verified = legacy._verify_multi_evidence_provider_output(
                 trace_id=trace_id,
                 question=question,
@@ -532,6 +567,7 @@ def _synthesize_and_verify(
                     ensure_ascii=False,
                     separators=(",", ":"),
                 ),
+                semantic_review=semantic_review,
             )
             final_answer = legacy._verified_multi_evidence_answer(
                 intent_class=intent_class,
@@ -540,17 +576,6 @@ def _synthesize_and_verify(
                 calls=calls,
                 repair_attempted=repair_attempted,
             )
-            post_failures = _visible_semantic_failures(
-                str(final_answer.get("answer_text", "")),
-                requirements,
-                question,
-            )
-            if _hard_visible_semantic_failures(post_failures):
-                failures.extend(post_failures)
-                if attempt == 1:
-                    repair_attempted = True
-                    continue
-                break
 
             final_answer["answer_source"] = (
                 "provider_verified_runtime_bound_semantic_closure"
@@ -562,6 +587,7 @@ def _synthesize_and_verify(
                 "repair_result": "verified" if repair_attempted else "not_needed",
                 "deterministic_evidence_synthesis_used": False,
                 "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                "semantic_review": dict(verified.get("semantic_review", {})),
             }
             closure = {
                 "schema_version": "m26-aq-semantic-closure/v1",
@@ -570,6 +596,7 @@ def _synthesize_and_verify(
                 "endpoint_proof": dict(endpoint_proof),
                 "failures": [],
                 "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                "semantic_review": dict(verified.get("semantic_review", {})),
                 "broad_deterministic_fallback_used": False,
             }
             return final_answer, closure
@@ -611,18 +638,23 @@ def _synthesize_and_verify(
             }
             return deterministic, closure
 
+    final_failures = sorted({*failures, "SEMANTIC_CLOSURE_FAILED"})
     abstention = legacy._verified_abstention(
-        reason_codes=[*failures, "SEMANTIC_CLOSURE_FAILED"],
+        reason_codes=final_failures,
         calls=calls,
         repair_attempted=repair_attempted,
     )
     abstention["answer_source"] = "safe_abstention"
+    abstention["multi_evidence_verification"] = {
+        **dict(abstention.get("multi_evidence_verification", {})),
+        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+    }
     closure = {
         "schema_version": "m26-aq-semantic-closure/v1",
         "requirements": [_requirement_public(item) for item in requirements],
         "support_proof": final_support_proof,
         "endpoint_proof": dict(endpoint_proof),
-        "failures": sorted(set(failures)),
+        "failures": final_failures,
         "provider_contract": "compact_runtime_bound_semantic_closure/v1",
         "broad_deterministic_fallback_used": False,
     }
@@ -765,6 +797,155 @@ def _compact_provider_output_tokens(
     )
 
 
+def _semantic_review_payload(
+    *,
+    question: str,
+    intent_class: str,
+    candidate: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    evidence_by_id = {str(item.get("evidence_id", "")): item for item in evidence}
+    claim_cases: list[dict[str, Any]] = []
+    for raw_claim in legacy._list(candidate.get("claims"), "semantic review claims"):
+        claim = legacy._object(raw_claim, "semantic review claim")
+        local_evidence: list[dict[str, Any]] = []
+        for raw_ref in legacy._list(
+            claim.get("support_refs"), "semantic review support refs"
+        ):
+            ref = legacy._object(raw_ref, "semantic review support ref")
+            evidence_id = str(ref.get("evidence_id", ""))
+            item = evidence_by_id.get(evidence_id, {})
+            graph_fact = {}
+            if item.get("evidence_type") == "graph_edge":
+                graph_fact = {
+                    "edge_id": str(item.get("edge_id", "")),
+                    "edge_source": str(item.get("edge_source", "")),
+                    "edge_target": str(item.get("edge_target", "")),
+                    "relation_type": str(item.get("relation_type", "")),
+                }
+            local_evidence.append(
+                {
+                    "evidence_id": evidence_id,
+                    "locator_id": str(ref.get("locator_id", "")),
+                    "evidence_type": str(item.get("evidence_type", "passage")),
+                    "source_identity": str(
+                        item.get("source_identity") or item.get("source_id") or ""
+                    ),
+                    "text": str(ref.get("exact_quote", "")),
+                    "graph_fact": graph_fact,
+                }
+            )
+        claim_cases.append(
+            {
+                "claim_id": str(claim.get("claim_id", "")),
+                "claim_type": str(claim.get("claim_type", "")),
+                "surface_text": str(claim.get("surface_text", "")),
+                "evidence": local_evidence,
+            }
+        )
+    task = {
+        "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
+        "question_context": question,
+        "intent_class": intent_class,
+        "answer_text": str(candidate.get("answer_text", "")),
+        "claim_cases": claim_cases,
+        "output": {
+            "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
+            "claim_judgments": [
+                {
+                    "claim_id": "claim_1",
+                    "verdict": "ENTAILED|CONTRADICTED|INSUFFICIENT|GENERIC_EXPLANATION",
+                    "evidence_ids": ["ev1"],
+                }
+            ],
+            "visible_coverage": {
+                "verdict": "COVERED|UNCOVERED",
+                "uncovered_assertions": [],
+            },
+        },
+    }
+    system = (
+        "You are the bounded M26 claim semantic-entailment reviewer. Return exactly one "
+        "JSON object. Judge each claim's meaning against only that claim case's local "
+        "evidence array. The user question, other claim surfaces, and other claim cases "
+        "are context only and are not evidence. Paraphrase, voice, and order changes may "
+        "be entailed; contradiction, strengthening, identity, quantity, time, causality, "
+        "polarity, graph direction, or endpoint mutation is not entailed. Also report "
+        "whether every material KB-dependent assertion visible in answer_text is covered "
+        "by a structured claim. Do not invent claim IDs or evidence IDs."
+    )
+    return {
+        "model": "MiniMax-M3",
+        "max_tokens": 2048,
+        "temperature": 0,
+        "stream": False,
+        "system": system,
+        "messages": [
+            {
+                "role": "user",
+                "content": json.dumps(task, ensure_ascii=False, separators=(",", ":")),
+            }
+        ],
+    }
+
+
+def _parse_semantic_review_result(text: str) -> dict[str, Any]:
+    stripped = str(text).strip()
+    if not stripped:
+        raise ValueError("semantic review output is empty")
+    stripped = re.sub(r"^```(?:json)?\s*", "", stripped, flags=re.I)
+    stripped = re.sub(r"\s*```$", "", stripped)
+    value, end = json.JSONDecoder().raw_decode(stripped)
+    if stripped[end:].strip():
+        raise ValueError("semantic review output contains trailing text")
+    if not isinstance(value, Mapping):
+        raise ValueError("semantic review JSON must be an object")
+    return dict(value)
+
+
+def _semantic_review_blocking_failures(review: Mapping[str, Any]) -> list[str]:
+    failures: list[str] = []
+    for raw_judgment in legacy._list(
+        review.get("claim_judgments"), "semantic review claim judgments"
+    ):
+        judgment = legacy._object(raw_judgment, "semantic review claim judgment")
+        verdict = str(judgment.get("verdict", ""))
+        if verdict in legacy.SEMANTIC_REVIEW_BLOCKING_VERDICTS:
+            failures.append(
+                "SEMANTIC_REVIEW_BLOCKED:"
+                + str(judgment.get("claim_id", ""))
+                + ":"
+                + verdict
+            )
+    coverage = review.get("visible_coverage")
+    if not isinstance(coverage, Mapping) or coverage.get("verdict") != "COVERED":
+        failures.append("SEMANTIC_REVIEW_VISIBLE_COVERAGE_FAILED")
+    return failures
+
+
+def _call_semantic_entailment_review(
+    *,
+    provider_client: ProviderClient,
+    question: str,
+    intent_class: str,
+    candidate: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    raw = provider_client.call(
+        _semantic_review_payload(
+            question=question,
+            intent_class=intent_class,
+            candidate=candidate,
+            evidence=evidence,
+        ),
+        SEMANTIC_REVIEW_CALL_CLASS,
+    )
+    review = _parse_semantic_review_result(
+        str(raw.get("text", raw.get("provider_text", "")))
+    )
+    return review, {**dict(raw), "call_class": SEMANTIC_REVIEW_CALL_CLASS}
+
+
 def _parse_compact_provider_result(text: str) -> dict[str, Any]:
     stripped = str(text).strip()
     if not stripped:
@@ -896,6 +1077,7 @@ def _runtime_bound_candidate(
         relation = "precedes"
     claim_records: list[dict[str, Any]] = []
     source_claims = list(claims or [])
+    generated_default_claim = not source_claims
     if not source_claims:
         source_claims = [
             {
@@ -933,8 +1115,10 @@ def _runtime_bound_candidate(
         ]
         if claim_type == "MODEL_EXPLANATION":
             support_items = []
-        elif not support_items:
+        elif not support_items and generated_default_claim:
             support_items = list(used_items[:1])
+        elif not support_items:
+            raise ValueError("runtime could not bind provider claim to evidence labels")
         refs: list[dict[str, Any]] = []
         for _ref_index, item in enumerate(support_items, start=1):
             evidence_id = str(item.get("evidence_id", ""))
