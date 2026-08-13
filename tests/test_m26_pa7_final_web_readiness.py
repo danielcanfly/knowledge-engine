@@ -944,5 +944,6 @@ def test_explicit_backend_redeploy_boundary_accepts_production_wiring_fix() -> N
     assert "scripts/m26_pa7_named_backend_tunnel.py" in workflow
     assert "scripts/m26_pa7_durable_backend_origin.py" in workflow
     assert "scripts/m26_pa7_evidence_privacy_hygiene.py" in workflow
+    assert "src/knowledge_engine/m26_pa7_final_web_readiness.py" in workflow
     assert "tests/test_m26_pa7_access_browser_session_contract.py" in workflow
     assert "m26-pa7-oracle-backend-production-${{ github.ref }}" in workflow

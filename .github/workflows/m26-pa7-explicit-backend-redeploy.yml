@@ -19,6 +19,7 @@ on:
       - "src/knowledge_engine/m24_product_surface_integration.py"
       - "src/knowledge_engine/m26_ask_api.py"
       - "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"
+      - "src/knowledge_engine/m26_pa7_final_web_readiness.py"
       - "pilot/m24/internal-product-deployment/site/**"
       - ".github/workflows/m26-pa7-explicit-pages-deploy.yml"
   push:
@@ -69,6 +70,7 @@ jobs:
           python -m py_compile src/knowledge_engine/m23_cloudflare_qdrant.py
           python -m py_compile src/knowledge_engine/m26_ask_api.py
           python -m py_compile src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
+          python -m py_compile src/knowledge_engine/m26_pa7_final_web_readiness.py
           python -m py_compile src/knowledge_engine/m26_production_answer_bundle.py
           node --check pilot/m24/internal-product-deployment/site/m26-ask.js
           node --check pilot/m24/internal-product-deployment/site/m26-full-graph.js
@@ -117,6 +119,7 @@ jobs:
           scripts/m26_pa7_named_backend_tunnel.py
           src/knowledge_engine/m23_cloudflare_qdrant.py
           src/knowledge_engine/m26_ask_api.py
+          src/knowledge_engine/m26_pa7_final_web_readiness.py
           tests/test_m23_5_cloudflare_qdrant.py
           tests/test_m24_internal_ask_ui_api.py
           tests/test_m26_pa7_access_browser_session_contract.py
