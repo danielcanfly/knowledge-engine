@@ -39,6 +39,7 @@ MAX_PROVIDER_ANSWER_CHARS = 4096
 MIN_PROVIDER_OUTPUT_TOKENS = 1024
 MIN_PROVIDER_REPAIR_OUTPUT_TOKENS = 1536
 MAX_PROVIDER_OUTPUT_TOKENS = 3072
+MAX_VERIFICATION_SUPPORT_QUOTE_CHARS = 120
 COMPACT_PROVIDER_TRUNCATED = "COMPACT_PROVIDER_TRUNCATED"
 COMPACT_PROVIDER_PARSE_FAILED = "COMPACT_PROVIDER_PARSE_FAILED"
 SEMANTIC_REVIEW_PARSE_FAILED = "SEMANTIC_REVIEW_PARSE_FAILED"
@@ -822,26 +823,87 @@ def _claim_local_evidence_ids(claim: Mapping[str, Any]) -> list[str]:
 
 
 def _verification_candidate(candidate: Mapping[str, Any]) -> dict[str, Any]:
-    compact = dict(candidate)
-    compact["claims"] = [
+    compact_claims = [
         _compact_partial_claim(claim)
         for claim in legacy._list(candidate.get("claims"), "verification claims")
     ]
-    return compact
+    selected_evidence_ids = list(
+        dict.fromkeys(
+            str(ref.get("evidence_id", ""))
+            for claim in compact_claims
+            for ref in legacy._list(
+                claim.get("support_refs"), "verification support refs"
+            )
+            if str(ref.get("evidence_id", ""))
+        )
+    )
+    if not selected_evidence_ids:
+        selected_evidence_ids = [
+            str(item)
+            for item in legacy._list(
+                candidate.get("selected_evidence_ids"), "verification selected evidence"
+            )
+            if str(item)
+        ]
+    return {
+        "schema_version": str(candidate.get("schema_version", "aq3-provider-candidate/v3")),
+        "status": str(candidate.get("status", "answer_candidate")),
+        "relation": candidate.get("relation"),
+        "selected_evidence_ids": selected_evidence_ids,
+        "answer_text": str(candidate.get("answer_text", "")),
+        "claims": compact_claims,
+        "missing_facets": [
+            str(item)
+            for item in legacy._list(candidate.get("missing_facets", []), "verification missing facets")
+            if str(item)
+        ],
+        "abstention_reason": candidate.get("abstention_reason"),
+        "unanswered_dimensions": [
+            str(item)
+            for item in legacy._list(
+                candidate.get("unanswered_dimensions", []),
+                "verification unanswered dimensions",
+            )
+            if str(item)
+        ][:16],
+    }
 
 
 def _compact_partial_claim(claim: Mapping[str, Any]) -> dict[str, Any]:
-    compact = dict(claim)
-    compact["support_refs"] = [
-        _compact_partial_ref(ref)
-        for ref in legacy._list(claim.get("support_refs"), "partial support refs")
+    compact = {
+        "claim_id": str(claim.get("claim_id", "")),
+        "claim_role": str(claim.get("claim_role", "direct")),
+        "claim_type": str(claim.get("claim_type", "EVIDENCE_FACT")),
+        "surface_text": str(claim.get("surface_text", "")),
+        "facet_ids": [
+            str(item)
+            for item in legacy._list(claim.get("facet_ids", []), "partial facets")
+            if str(item)
+        ],
+        "support_mode": str(claim.get("support_mode", "exact_quote")),
+        "support_refs": [
+            _compact_partial_ref(ref)
+            for ref in legacy._list(claim.get("support_refs"), "partial support refs")
+        ],
+    }
+    unanswered = [
+        str(item)
+        for item in legacy._list(
+            claim.get("unanswered_dimensions", []), "partial unanswered dimensions"
+        )
+        if str(item)
     ]
+    if unanswered:
+        compact["unanswered_dimensions"] = unanswered[:8]
     return compact
 
 
 def _compact_partial_ref(ref: Mapping[str, Any]) -> dict[str, Any]:
     exact_quote = str(ref.get("exact_quote", ""))
-    compact_quote = legacy._first_exact_evidence_quote(exact_quote, max_chars=240)
+    compact_quote = legacy._first_exact_evidence_quote(
+        exact_quote,
+        max_chars=MAX_VERIFICATION_SUPPORT_QUOTE_CHARS,
+    )
     return {
         "evidence_id": str(ref.get("evidence_id", "")),
         "locator_id": str(ref.get("locator_id", "")),

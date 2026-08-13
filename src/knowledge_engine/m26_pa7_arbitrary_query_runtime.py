@@ -2398,9 +2398,9 @@ def _minimum_evidence_rule(intent_class: str) -> dict[str, Any]:
         return {"minimum_evidence": 2, "minimum_distinct_source_identities": 2}
     if intent_class == "graph_relationship":
         return {
-            "minimum_evidence": 3,
+            "minimum_evidence": 1,
             "requires_graph_edge": True,
-            "requires_both_endpoint_evidence": True,
+            "requires_complete_graph_edge_fact": True,
         }
     if intent_class == "provenance_source_trace":
         return {"minimum_evidence": 2, "requires_passage": True, "requires_provenance": True}

@@ -27,6 +27,7 @@ from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _semantic_requirements,
     _semantic_review_payload,
     _synthesize_and_verify,
+    _verification_candidate,
     _visible_semantic_failures,
 )
 from knowledge_engine.m26_production_answer_bundle import ProductionAnswerBundle
@@ -398,6 +399,11 @@ def test_graph_edge_evidence_unit_includes_endpoint_display_labels() -> None:
         "Harness Theory Part 1 (article_1) precedes Harness Theory Part 2 (article_2)"
         in item["passage_text"]
     )
+    graph_rule = legacy._minimum_evidence_rule("graph_relationship")
+    assert graph_rule["minimum_evidence"] == 1
+    assert graph_rule["requires_graph_edge"] is True
+    assert graph_rule["requires_complete_graph_edge_fact"] is True
+    assert "requires_both_endpoint_evidence" not in graph_rule
 
 
 def test_nc01_cited_but_irrelevant_disconnect_answer_is_rejected() -> None:
@@ -1726,6 +1732,76 @@ def test_runtime_bound_structured_candidate_compacts_before_legacy_verification(
         "verification_failure_codes_by_attempt"
     ]
     assert closure["failures"] == []
+
+
+def test_verification_candidate_publishes_minimal_bounded_schema() -> None:
+    question = "Explain how several supplied notes fit together."
+    intent_class = "direct_grounded_knowledge"
+    required_facets = legacy._required_facet_ids(
+        question=question,
+        intent_class=intent_class,
+    )
+    evidence = [
+        _rich_passage(
+            f"ev_{index}",
+            (
+                "This supplied note describes a grounded production behavior with enough "
+                "specific words to serve as an exact support quote for verification. "
+            )
+            * 8,
+            f"note-{index}",
+        )
+        for index in range(10)
+    ]
+    label_map = {f"e{index + 1}": item for index, item in enumerate(evidence)}
+    snippet_map = {
+        str(item["evidence_id"]): str(item["passage_text"]) for item in evidence
+    }
+    claims = [
+        {
+            "claim_id": f"claim_{index}",
+            "claim_type": "EVIDENCE_SYNTHESIS",
+            "surface_text": (
+                "Several supplied notes jointly describe grounded production "
+                f"behavior {index}."
+            ),
+            "evidence_labels": list(label_map),
+            "covers": required_facets,
+        }
+        for index in range(1, 6)
+    ]
+    candidate = _runtime_bound_candidate(
+        answer=" ".join(str(claim["surface_text"]) for claim in claims),
+        question=question,
+        intent_class=intent_class,
+        used_items=(),
+        claims=claims,
+        label_map=label_map,
+        snippet_map=snippet_map,
+    )
+
+    published = _verification_candidate(candidate)
+    provider_text = json.dumps(published, ensure_ascii=False, separators=(",", ":"))
+
+    assert len(provider_text) < 12_000
+    assert set(published) == {
+        "schema_version",
+        "status",
+        "relation",
+        "selected_evidence_ids",
+        "answer_text",
+        "claims",
+        "missing_facets",
+        "abstention_reason",
+        "unanswered_dimensions",
+    }
+    assert all("evidence_labels" not in claim for claim in published["claims"])
+    assert all("covers" not in claim for claim in published["claims"])
+    assert all(
+        len(ref["exact_quote"]) <= 120
+        for claim in published["claims"]
+        for ref in claim["support_refs"]
+    )
 
 
 def test_runtime_bound_graph_claim_preserves_provider_selected_edge_only_support() -> None:
