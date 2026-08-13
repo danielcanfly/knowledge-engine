@@ -10,6 +10,7 @@ on:
       - ".github/workflows/m26-pa7-explicit-pages-deploy.yml"
       - "scripts/m26_pa7_access_browser_session_contract.py"
       - "scripts/m26_pa7_evidence_privacy_hygiene.py"
+      - "src/knowledge_engine/m26_pa7_final_web_readiness.py"
       - "tests/test_m26_pa7_access_browser_session_contract.py"
       - "tests/test_m26_pa7_final_web_readiness.py"
 
@@ -46,11 +47,13 @@ jobs:
           python -m ruff check \
             scripts/m26_pa7_access_browser_session_contract.py \
             scripts/m26_pa7_evidence_privacy_hygiene.py \
+            src/knowledge_engine/m26_pa7_final_web_readiness.py \
             tests/test_m26_pa7_access_browser_session_contract.py \
             tests/test_m26_pa7_final_web_readiness.py
           python -m compileall -q \
             scripts/m26_pa7_access_browser_session_contract.py \
             scripts/m26_pa7_evidence_privacy_hygiene.py \
+            src/knowledge_engine/m26_pa7_final_web_readiness.py \
             tests/test_m26_pa7_access_browser_session_contract.py \
             tests/test_m26_pa7_final_web_readiness.py
           python -m pytest -q \
@@ -69,7 +72,7 @@ jobs:
             ! grep -E '^(source/|foundation/|release/|r2/|qdrant/|production/|channels/|packages/|workers/|pages/)' /tmp/changed.txt
             exit 0
           fi
-          ! grep -Ev '^(\.github/workflows/(m26-pa7-access-redirect-repair|m26-pa-7-final-web-product-readiness|m26-pa7-explicit-backend-redeploy|m26-pa7-explicit-pages-deploy)\.yml|scripts/m26_pa7_(access_browser_session_contract|evidence_privacy_hygiene)\.py|tests/test_(m26_pa7_access_browser_session_contract|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
+          ! grep -Ev '^(\.github/workflows/(m26-pa7-access-redirect-repair|m26-pa-7-final-web-product-readiness|m26-pa7-explicit-backend-redeploy|m26-pa7-explicit-pages-deploy)\.yml|scripts/m26_pa7_(access_browser_session_contract|evidence_privacy_hygiene)\.py|src/knowledge_engine/m26_pa7_final_web_readiness\.py|tests/test_(m26_pa7_access_browser_session_contract|m26_pa7_final_web_readiness)\.py)$' /tmp/changed.txt
 
   repair_access_redirect_contract:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'

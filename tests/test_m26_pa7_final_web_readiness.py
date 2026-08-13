@@ -671,6 +671,7 @@ def test_access_redirect_repair_workflow_enforces_cookie_contract() -> None:
     assert "workflow_dispatch:" in workflow
     assert ".github/workflows/m26-pa7-explicit-backend-redeploy.yml" in workflow
     assert ".github/workflows/m26-pa7-explicit-pages-deploy.yml" in workflow
+    assert "src/knowledge_engine/m26_pa7_final_web_readiness.py" in workflow
     assert "repair_access_redirect_contract" in workflow
     assert "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'" in workflow
     assert "CLOUDFLARE_ACCESS_READ_TOKEN" in workflow
