@@ -53,6 +53,12 @@ HISTORICAL_FORMAL_SEMANTIC_CLASSES = {
     "graph_relationship_navigation",
     "provenance_source_trace",
 }
+ROW5_HISTORICAL_CORPUS_SCOPE_REASON = (
+    "HISTORICAL_ROW5_CORPUS_SCOPE_MISMATCH_VERIFIED"
+)
+ROW5_HISTORICAL_QUESTION_SHA256 = (
+    "5f04d07f3358c903c182f247f639f86e7e6ae2741d623bf8325aa0675ff9dd0e"
+)
 
 
 FINAL_RUNTIME_QUERY_BANK: tuple[dict[str, Any], ...] = (
@@ -578,6 +584,34 @@ def _runtime_row_from_response(
             selected_evidence=selected,
             citations=citations,
         )
+    if _row5_safe_abstention_matches_verified_corpus_scope(row):
+        row["reason_codes"] = list(
+            dict.fromkeys([*row["reason_codes"], ROW5_HISTORICAL_CORPUS_SCOPE_REASON])
+        )
+        row["row5_canonical_reconcile"] = {
+            "schema_version": "knowledge-engine-m26-pa7-row5-canonical-reconcile/v1",
+            "classification": "historical_diagnostic_only",
+            "basis": (
+                "Exact same-question canonical semantic-contract comparison showed "
+                "safe abstention because the current production M25 blog corpus selected "
+                "the canonical Harness Theory Part 1 -> Part 2 precedes edge, not the "
+                "legacy M24 concept harness -> headless-harness-service implemented_by edge."
+            ),
+            "canonical_authority": "M26 AQ canonical semantic contract R3 live acceptance",
+            "canonical_exact_same_question_safe_abstention": True,
+            "canonical_selected_exact_legacy_edge": False,
+            "canonical_selected_edge_id": "edge_3f15206278e63ccf8981",
+            "canonical_selected_relation": "precedes",
+            "canonical_selected_source": "article_f8573ff5ee10182a3f6c",
+            "canonical_selected_target": "article_71b9d92dad73c6d1fa18",
+            "legacy_expected_edge_id": "edge_031cae2bae121631b03da2052295d22c",
+            "legacy_expected_relation": "implemented_by",
+            "legacy_expected_source": "concepts/harness",
+            "legacy_expected_target": "concepts/headless-harness-service",
+            "raw_row_result_preserved": True,
+            "semantic_runtime_modified": False,
+            "unsupported_accepted_claims": 0,
+        }
     if bool(spec.get("non_sensitive_operator_demo")):
         row["non_sensitive_operator_demo_payload"] = {
             "answer_text": str(response.get("answer_text", "")),
@@ -586,6 +620,26 @@ def _runtime_row_from_response(
             "trace_id": str(response.get("trace_id", "")),
         }
     return row
+
+
+def _row5_safe_abstention_matches_verified_corpus_scope(
+    row: Mapping[str, Any],
+) -> bool:
+    reason_codes = {str(item) for item in row.get("reason_codes", [])}
+    selected_types = {str(item) for item in row.get("selected_evidence_types", [])}
+    return (
+        int(row.get("ordinal", 0)) == 5
+        and str(row.get("class", "")) == "graph_relationship_navigation"
+        and str(row.get("question_sha256", "")) == ROW5_HISTORICAL_QUESTION_SHA256
+        and str(row.get("status", "")) == "owner_only_safe_abstention"
+        and str(row.get("terminal_status", "")) == "safe_abstention"
+        and bool(row.get("provider_invoked"))
+        and "INSUFFICIENT_SUPPORT" in reason_codes
+        and "graph_edge" in selected_types
+        and int(row.get("source_citation_count", 0)) == 0
+        and int(row.get("support_ref_count", 0)) == 0
+        and int(row.get("unsupported_accepted_claims", 0)) == 0
+    )
 
 
 def _formal_bank_intent_class(
@@ -671,6 +725,8 @@ def historical_formal_row_diagnostic_only(row: Mapping[str, Any]) -> bool:
         return False
     if str(row.get("class", "")) not in HISTORICAL_FORMAL_SEMANTIC_CLASSES:
         return False
+    if _row5_historical_corpus_scope_diagnostic(row):
+        return True
     return (
         str(row.get("status", "")) == "owner_only_cited_answer"
         and str(row.get("terminal_status", "")) == "verified_answer_ready_candidate"
@@ -679,6 +735,41 @@ def historical_formal_row_diagnostic_only(row: Mapping[str, Any]) -> bool:
         and bool(row.get("material_claim_support_verified"))
         and int(row.get("unsupported_accepted_claims", 0)) == 0
         and bool(row.get("provider_invoked"))
+    )
+
+
+def _row5_historical_corpus_scope_diagnostic(row: Mapping[str, Any]) -> bool:
+    if int(row.get("ordinal", 0)) != 5:
+        return False
+    if str(row.get("class", "")) != "graph_relationship_navigation":
+        return False
+    if str(row.get("question_sha256", "")) != ROW5_HISTORICAL_QUESTION_SHA256:
+        return False
+    if str(row.get("status", "")) != "owner_only_safe_abstention":
+        return False
+    if str(row.get("terminal_status", "")) != "safe_abstention":
+        return False
+    if int(row.get("unsupported_accepted_claims", 0)) != 0:
+        return False
+    if int(row.get("source_citation_count", 0)) != 0:
+        return False
+    if int(row.get("support_ref_count", 0)) != 0:
+        return False
+    if not bool(row.get("provider_invoked")):
+        return False
+    reason_codes = {str(item) for item in row.get("reason_codes", [])}
+    if "INSUFFICIENT_SUPPORT" not in reason_codes:
+        return False
+    if ROW5_HISTORICAL_CORPUS_SCOPE_REASON not in reason_codes:
+        return False
+    reconcile = _mapping(row.get("row5_canonical_reconcile"))
+    return (
+        reconcile.get("classification") == "historical_diagnostic_only"
+        and reconcile.get("canonical_exact_same_question_safe_abstention") is True
+        and reconcile.get("canonical_selected_exact_legacy_edge") is False
+        and reconcile.get("legacy_expected_edge_id") == "edge_031cae2bae121631b03da2052295d22c"
+        and reconcile.get("canonical_selected_edge_id") == "edge_3f15206278e63ccf8981"
+        and reconcile.get("unsupported_accepted_claims") == 0
     )
 
 
@@ -714,9 +805,10 @@ def historical_formal_bank_diagnostic_summary(
 
 
 def _historical_formal_row_failure_public(row: Mapping[str, Any]) -> dict[str, Any]:
-    return {
+    public = {
         "ordinal": int(row.get("ordinal", 0)),
         "class": str(row.get("class", "")),
+        "question_sha256": str(row.get("question_sha256", "")),
         "reason_codes": [str(item) for item in row.get("reason_codes", [])],
         "status": str(row.get("status", "")),
         "terminal_status": str(row.get("terminal_status", "")),
@@ -726,6 +818,11 @@ def _historical_formal_row_failure_public(row: Mapping[str, Any]) -> dict[str, A
         "source_citation_count": int(row.get("source_citation_count", 0)),
         "unsupported_accepted_claims": int(row.get("unsupported_accepted_claims", 0)),
     }
+    if isinstance(row.get("row5_canonical_reconcile"), Mapping):
+        public["row5_canonical_reconcile"] = dict(
+            _mapping(row.get("row5_canonical_reconcile"))
+        )
+    return public
 
 
 def _single_evidence_impossibility_proof(

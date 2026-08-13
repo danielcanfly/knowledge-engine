@@ -359,6 +359,76 @@ def test_historical_formal_bank_failure_is_diagnostic_without_rewriting_row() ->
     assert "canonical semantic contract R3" in summary["canonical_product_authority"]
 
 
+def test_row5_verified_corpus_scope_mismatch_is_diagnostic_without_passing_row() -> None:
+    spec = final_formal_query_specs()[4]
+    response = {
+        "citation_locator_valid": True,
+        "citations": [],
+        "distinct_source_count": 8,
+        "intent_class": "graph_relationship",
+        "material_claim_support_verified": True,
+        "multi_evidence_verification": {
+            "claim_count": 0,
+            "support_ref_count": 0,
+            "unsupported_accepted_claims": 0,
+        },
+        "provider_call_count": 1,
+        "provider_invoked": True,
+        "question_sha256": spec["question_sha256"],
+        "reason_codes": ["INSUFFICIENT_SUPPORT"],
+        "relationship_summary": {},
+        "safe_abstention": True,
+        "selected_evidence": [
+            {
+                "evidence_type": "graph_edge",
+                "source_identity": "graph_v2:edge_3f15206278e63ccf8981",
+            },
+            {"evidence_type": "passage", "source_identity": "source-a"},
+        ],
+        "selected_evidence_count": 2,
+        "status": "owner_only_safe_abstention",
+        "terminal_status": "safe_abstention",
+        "trace_id": "m26pa7aq_test_row5_corpus_scope",
+        "unsupported_accepted_claims": 0,
+    }
+
+    row = _runtime_row_from_response(spec=spec, response=response)
+    summary = historical_formal_bank_diagnostic_summary([row])
+
+    assert row["pass"] is False
+    assert row["row5_canonical_reconcile"]["raw_row_result_preserved"] is True
+    assert historical_formal_row_diagnostic_only(row) is True
+    assert summary["non_blocking"] is True
+    assert summary["diagnostic_failed_rows"][0]["row5_canonical_reconcile"][
+        "canonical_selected_exact_legacy_edge"
+    ] is False
+
+
+def test_safe_abstention_with_graph_edge_is_not_blanket_diagnostic() -> None:
+    row = {
+        "class": "graph_relationship_navigation",
+        "ordinal": 5,
+        "pass": False,
+        "provider_invoked": True,
+        "question_sha256": "0" * 64,
+        "reason_codes": [
+            "INSUFFICIENT_SUPPORT",
+            "HISTORICAL_ROW5_CORPUS_SCOPE_MISMATCH_VERIFIED",
+        ],
+        "source_citation_count": 0,
+        "status": "owner_only_safe_abstention",
+        "support_ref_count": 0,
+        "terminal_status": "safe_abstention",
+        "unsupported_accepted_claims": 0,
+    }
+
+    summary = historical_formal_bank_diagnostic_summary([row])
+
+    assert historical_formal_row_diagnostic_only(row) is False
+    assert summary["non_blocking"] is False
+    assert summary["blocking_failed_row_count"] == 1
+
+
 def test_security_or_unsupported_formal_failures_remain_blocking() -> None:
     row = {
         "class": "prompt_injection_privacy",
