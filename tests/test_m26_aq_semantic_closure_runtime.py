@@ -20,6 +20,7 @@ from knowledge_engine.m26_aq_semantic_contract import (
 )
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     SemanticRequirement,
+    _bounded_publication_candidate,
     _parse_compact_provider_result,
     _requirement_support_failures,
     _response_from_verification,
@@ -1726,8 +1727,76 @@ def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
     claim_case = task["claim_cases"][0]
 
     assert claim_case["allowed_evidence_ids"] == ["ev_router"]
+    assert claim_case["allowed_evidence_labels"] == ["local_1"]
+    assert claim_case["evidence_id_by_label"] == {"local_1": "ev_router"}
+    assert claim_case["evidence"][0]["evidence_label"] == "local_1"
     assert "ev1" not in payload["system"]
     assert "ev1" not in payload["messages"][0]["content"]
+
+
+def test_semantic_review_claim_local_labels_are_canonicalized() -> None:
+    question = "Explain router snapshots."
+    evidence = [
+        _rich_passage(
+            "ev_router",
+            "The router stores graph snapshots.",
+            "router-note",
+        ),
+    ]
+
+    def synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        router_label = str(task["evidence"][0]["id"])
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": "The router keeps graph snapshots.",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router keeps graph snapshots.",
+                    "evidence_labels": [router_label],
+                    "covers": ["router_snapshots"],
+                }
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    def review(task: dict[str, Any]) -> dict[str, Any]:
+        claim_case = task["claim_cases"][0]
+        assert claim_case["allowed_evidence_labels"] == ["local_1"]
+        return {
+            "schema_version": "m26-claim-entailment-review/v1",
+            "claim_judgments": [
+                {
+                    "claim_id": str(claim_case["claim_id"]),
+                    "verdict": "ENTAILED",
+                    "evidence_ids": ["local_1"],
+                }
+            ],
+            "visible_coverage": {
+                "verdict": "COVERED",
+                "uncovered_assertions": [],
+            },
+        }
+
+    provider = _ScriptedSemanticClosureProvider([synthesis], review_result=review)
+
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-claim-local-review-label",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    semantic_review = answer["multi_evidence_verification"]["semantic_review"]
+    assert answer["status"] == "owner_only_cited_answer"
+    assert semantic_review["claim_judgments"][0]["evidence_ids"] == ["ev_router"]
+    assert closure["failures"] == []
 
 
 def test_semantic_review_out_of_local_evidence_ids_fail_closed() -> None:
@@ -1942,12 +2011,13 @@ def test_verification_candidate_publishes_minimal_bounded_schema() -> None:
             "claim_type": "EVIDENCE_SYNTHESIS",
             "surface_text": (
                 "Several supplied notes jointly describe grounded production "
-                f"behavior {index}."
+                f"behavior {index} with enough visible specificity to stress the "
+                "legacy verification publication bound."
             ),
             "evidence_labels": list(label_map),
             "covers": required_facets,
         }
-        for index in range(1, 6)
+        for index in range(1, 13)
     ]
     candidate = _runtime_bound_candidate(
         answer=" ".join(str(claim["surface_text"]) for claim in claims),
@@ -1959,10 +2029,12 @@ def test_verification_candidate_publishes_minimal_bounded_schema() -> None:
         snippet_map=snippet_map,
     )
 
-    published = _verification_candidate(candidate)
+    bounded, support_ref_limit = _bounded_publication_candidate(candidate)
+    published = _verification_candidate(bounded)
     provider_text = json.dumps(published, ensure_ascii=False, separators=(",", ":"))
 
     assert len(provider_text) < 12_000
+    assert support_ref_limit is not None
     assert set(published) == {
         "schema_version",
         "status",
@@ -1976,6 +2048,10 @@ def test_verification_candidate_publishes_minimal_bounded_schema() -> None:
     }
     assert all("evidence_labels" not in claim for claim in published["claims"])
     assert all("covers" not in claim for claim in published["claims"])
+    assert all(
+        len(claim["support_refs"]) == support_ref_limit
+        for claim in published["claims"]
+    )
     assert all(
         len(ref["exact_quote"]) <= 120
         for claim in published["claims"]

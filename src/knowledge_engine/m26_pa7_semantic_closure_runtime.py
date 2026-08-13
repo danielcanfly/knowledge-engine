@@ -40,6 +40,9 @@ MIN_PROVIDER_OUTPUT_TOKENS = 1024
 MIN_PROVIDER_REPAIR_OUTPUT_TOKENS = 1536
 MAX_PROVIDER_OUTPUT_TOKENS = 3072
 MAX_VERIFICATION_SUPPORT_QUOTE_CHARS = 120
+MAX_VERIFICATION_PROVIDER_TEXT_CHARS = 11_500
+VERIFICATION_SUPPORT_QUOTE_LIMITS = (96, 72, 48, 32, 24, 16, 8, 4, 1)
+RUNTIME_BOUND_SUPPORT_REF_LIMITS = (4, 3, 2, 1)
 COMPACT_PROVIDER_TRUNCATED = "COMPACT_PROVIDER_TRUNCATED"
 COMPACT_PROVIDER_PARSE_FAILED = "COMPACT_PROVIDER_PARSE_FAILED"
 SEMANTIC_REVIEW_PARSE_FAILED = "SEMANTIC_REVIEW_PARSE_FAILED"
@@ -428,6 +431,9 @@ def _synthesize_and_verify(
                 unanswered_dimensions=unanswered_dimensions,
                 semantic_failures=[],
             )
+            candidate, bounded_support_ref_limit = _bounded_publication_candidate(
+                candidate
+            )
             semantic_review, review_raw = _call_semantic_entailment_review(
                 provider_client=provider_client,
                 question=question,
@@ -435,10 +441,15 @@ def _synthesize_and_verify(
                 candidate=candidate,
                 evidence=evidence,
             )
+            claim_by_id = _candidate_claim_by_id(candidate)
+            semantic_review = _canonicalize_semantic_review_evidence_refs(
+                semantic_review,
+                claim_by_id,
+            )
             calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
             if _semantic_review_has_out_of_local_evidence(
                 semantic_review,
-                _candidate_claim_by_id(candidate),
+                claim_by_id,
             ):
                 failures.append("M26-PA7-ME-065")
                 if attempt == 1:
@@ -529,6 +540,7 @@ def _synthesize_and_verify(
                     else "not_needed"
                 ),
                 "deterministic_evidence_synthesis_used": False,
+                "bounded_publication_support_ref_limit": bounded_support_ref_limit,
                 "provider_contract": "compact_runtime_bound_semantic_closure/v1",
                 "semantic_review": dict(verified.get("semantic_review", {})),
             }
@@ -545,6 +557,7 @@ def _synthesize_and_verify(
                 "failures": [],
                 "provider_contract": "compact_runtime_bound_semantic_closure/v1",
                 "semantic_review": dict(verified.get("semantic_review", {})),
+                "bounded_publication_support_ref_limit": bounded_support_ref_limit,
                 "broad_deterministic_fallback_used": False,
             }
             if partial_answer:
@@ -699,6 +712,10 @@ def _supported_review_partial_candidate(
     if not claims:
         return None, {}, []
     claim_by_id = {str(claim.get("claim_id", "")): claim for claim in claims}
+    semantic_review = _canonicalize_semantic_review_evidence_refs(
+        semantic_review,
+        claim_by_id,
+    )
     if _semantic_review_has_out_of_local_evidence(semantic_review, claim_by_id):
         return None, {}, []
     supported_ids: list[str] = []
@@ -812,6 +829,43 @@ def _semantic_review_has_out_of_local_evidence(
     return False
 
 
+def _canonicalize_semantic_review_evidence_refs(
+    semantic_review: Mapping[str, Any],
+    claim_by_id: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    canonical = dict(semantic_review)
+    canonical_judgments: list[dict[str, Any]] = []
+    for raw in legacy._list(
+        semantic_review.get("claim_judgments"),
+        "semantic review judgments",
+    ):
+        judgment = legacy._object(raw, "semantic review judgment")
+        claim_id = str(judgment.get("claim_id", ""))
+        claim = claim_by_id.get(claim_id)
+        allowed = set(_claim_local_evidence_ids(claim)) if claim else set()
+        alias_by_label = _claim_local_evidence_aliases(claim) if claim else {}
+        evidence_ids: list[str] = []
+        for raw_evidence_id in legacy._list(
+            judgment.get("evidence_ids"),
+            "semantic review evidence ids",
+        ):
+            evidence_ref = str(raw_evidence_id)
+            if evidence_ref in allowed:
+                evidence_ids.append(evidence_ref)
+            elif evidence_ref in alias_by_label:
+                evidence_ids.append(alias_by_label[evidence_ref])
+            else:
+                evidence_ids.append(evidence_ref)
+        canonical_judgments.append(
+            {
+                **dict(judgment),
+                "evidence_ids": list(dict.fromkeys(evidence_ids)),
+            }
+        )
+    canonical["claim_judgments"] = canonical_judgments
+    return canonical
+
+
 def _claim_local_evidence_ids(claim: Mapping[str, Any]) -> list[str]:
     return list(
         dict.fromkeys(
@@ -822,11 +876,85 @@ def _claim_local_evidence_ids(claim: Mapping[str, Any]) -> list[str]:
     )
 
 
+def _claim_local_evidence_aliases(claim: Mapping[str, Any]) -> dict[str, str]:
+    return {
+        f"local_{index}": evidence_id
+        for index, evidence_id in enumerate(_claim_local_evidence_ids(claim), start=1)
+    }
+
+
+def _bounded_publication_candidate(
+    candidate: Mapping[str, Any],
+) -> tuple[dict[str, Any], int | None]:
+    candidate_dict = dict(candidate)
+    if _json_size(_verification_candidate(candidate_dict)) <= MAX_VERIFICATION_PROVIDER_TEXT_CHARS:
+        return candidate_dict, None
+    bounded: dict[str, Any] | None = None
+    for support_ref_limit in RUNTIME_BOUND_SUPPORT_REF_LIMITS:
+        bounded = _candidate_with_support_ref_limit(
+            candidate_dict,
+            support_ref_limit=support_ref_limit,
+        )
+        if _json_size(_verification_candidate(bounded)) <= MAX_VERIFICATION_PROVIDER_TEXT_CHARS:
+            return bounded, support_ref_limit
+    if bounded is None:
+        return candidate_dict, None
+    return bounded, RUNTIME_BOUND_SUPPORT_REF_LIMITS[-1]
+
+
+def _candidate_with_support_ref_limit(
+    candidate: Mapping[str, Any],
+    *,
+    support_ref_limit: int,
+) -> dict[str, Any]:
+    claims: list[dict[str, Any]] = []
+    selected_evidence_ids: list[str] = []
+    for raw_claim in legacy._list(candidate.get("claims"), "bounded publication claims"):
+        claim = dict(legacy._object(raw_claim, "bounded publication claim"))
+        support_refs = [
+            dict(legacy._object(ref, "bounded publication support ref"))
+            for ref in legacy._list(
+                claim.get("support_refs"),
+                "bounded publication support refs",
+            )
+        ][:support_ref_limit]
+        claim["support_refs"] = support_refs
+        claims.append(claim)
+        selected_evidence_ids.extend(
+            str(ref.get("evidence_id", ""))
+            for ref in support_refs
+            if str(ref.get("evidence_id", ""))
+        )
+    return {
+        **dict(candidate),
+        "claims": claims,
+        "selected_evidence_ids": list(dict.fromkeys(selected_evidence_ids)),
+    }
+
+
 def _verification_candidate(candidate: Mapping[str, Any]) -> dict[str, Any]:
-    compact_claims = [
-        _compact_partial_claim(claim)
-        for claim in legacy._list(candidate.get("claims"), "verification claims")
-    ]
+    raw_claims = legacy._list(candidate.get("claims"), "verification claims")
+    verification: dict[str, Any] | None = None
+    for quote_limit in (MAX_VERIFICATION_SUPPORT_QUOTE_CHARS, *VERIFICATION_SUPPORT_QUOTE_LIMITS):
+        compact_claims = [
+            _compact_partial_claim(claim, quote_limit=quote_limit)
+            for claim in raw_claims
+        ]
+        verification = _verification_candidate_from_compact_claims(
+            candidate,
+            compact_claims,
+        )
+        if _json_size(verification) <= MAX_VERIFICATION_PROVIDER_TEXT_CHARS:
+            return verification
+    if verification is None:
+        verification = _verification_candidate_from_compact_claims(candidate, [])
+    return verification
+
+
+def _verification_candidate_from_compact_claims(
+    candidate: Mapping[str, Any],
+    compact_claims: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
     selected_evidence_ids = list(
         dict.fromkeys(
             str(ref.get("evidence_id", ""))
@@ -869,7 +997,19 @@ def _verification_candidate(candidate: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _compact_partial_claim(claim: Mapping[str, Any]) -> dict[str, Any]:
+def _json_size(value: Mapping[str, Any]) -> int:
+    return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+
+
+def _compact_partial_claim(
+    claim: Mapping[str, Any],
+    *,
+    quote_limit: int = MAX_VERIFICATION_SUPPORT_QUOTE_CHARS,
+) -> dict[str, Any]:
+    support_refs = [
+        _compact_partial_ref(ref, quote_limit=quote_limit)
+        for ref in legacy._list(claim.get("support_refs"), "partial support refs")
+    ]
     compact = {
         "claim_id": str(claim.get("claim_id", "")),
         "claim_role": str(claim.get("claim_role", "direct")),
@@ -881,10 +1021,7 @@ def _compact_partial_claim(claim: Mapping[str, Any]) -> dict[str, Any]:
             if str(item)
         ],
         "support_mode": str(claim.get("support_mode", "exact_quote")),
-        "support_refs": [
-            _compact_partial_ref(ref)
-            for ref in legacy._list(claim.get("support_refs"), "partial support refs")
-        ],
+        "support_refs": support_refs,
     }
     unanswered = [
         str(item)
@@ -898,11 +1035,15 @@ def _compact_partial_claim(claim: Mapping[str, Any]) -> dict[str, Any]:
     return compact
 
 
-def _compact_partial_ref(ref: Mapping[str, Any]) -> dict[str, Any]:
+def _compact_partial_ref(
+    ref: Mapping[str, Any],
+    *,
+    quote_limit: int = MAX_VERIFICATION_SUPPORT_QUOTE_CHARS,
+) -> dict[str, Any]:
     exact_quote = str(ref.get("exact_quote", ""))
     compact_quote = legacy._first_exact_evidence_quote(
         exact_quote,
-        max_chars=MAX_VERIFICATION_SUPPORT_QUOTE_CHARS,
+        max_chars=quote_limit,
     )
     return {
         "evidence_id": str(ref.get("evidence_id", "")),
@@ -1100,6 +1241,7 @@ def _semantic_review_payload(
                 }
             local_evidence.append(
                 {
+                    "evidence_label": f"local_{len(local_evidence) + 1}",
                     "evidence_id": evidence_id,
                     "locator_id": str(ref.get("locator_id", "")),
                     "evidence_type": str(item.get("evidence_type", "passage")),
@@ -1113,12 +1255,19 @@ def _semantic_review_payload(
         allowed_evidence_ids = [
             str(item.get("evidence_id", "")) for item in local_evidence
         ]
+        allowed_evidence_labels = [
+            str(item.get("evidence_label", "")) for item in local_evidence
+        ]
         claim_cases.append(
             {
                 "claim_id": str(claim.get("claim_id", "")),
                 "claim_type": str(claim.get("claim_type", "")),
                 "surface_text": str(claim.get("surface_text", "")),
                 "allowed_evidence_ids": allowed_evidence_ids,
+                "allowed_evidence_labels": allowed_evidence_labels,
+                "evidence_id_by_label": dict(
+                    zip(allowed_evidence_labels, allowed_evidence_ids, strict=False)
+                ),
                 "evidence": local_evidence,
             }
         )
@@ -1130,9 +1279,11 @@ def _semantic_review_payload(
         "claim_cases": claim_cases,
         "review_protocol": {
             "evidence_ids_rule": (
-                "For an ENTAILED judgment, copy exact evidence_id strings only from "
-                "that claim case's allowed_evidence_ids. Unknown or cross-claim IDs "
-                "are invalid."
+                "For an ENTAILED judgment, evidence_ids must contain only either "
+                "exact evidence_id strings from that claim case's allowed_evidence_ids "
+                "or exact claim-local labels from allowed_evidence_labels. Claim-local "
+                "labels are aliases for that same case's evidence_id_by_label entries. "
+                "Unknown or cross-claim IDs or labels are invalid."
             ),
         },
         "output": {
@@ -1159,10 +1310,11 @@ def _semantic_review_payload(
         "polarity, graph direction, or endpoint mutation is not entailed. Also report "
         "whether every material KB-dependent assertion visible in answer_text is covered "
         "by a structured claim. For each ENTAILED judgment, evidence_ids must be an array "
-        "of exact evidence_id strings copied from that claim case's allowed_evidence_ids. "
+        "of exact evidence_id strings from that claim case's allowed_evidence_ids, or exact "
+        "claim-local labels from that claim case's allowed_evidence_labels. "
         "If no allowed local evidence entails the claim, use INSUFFICIENT or CONTRADICTED "
-        "instead of ENTAILED. Do not invent claim IDs or evidence IDs; never output example "
-        "labels unless that exact string is present in the claim case."
+        "instead of ENTAILED. Do not invent claim IDs, evidence IDs, or evidence labels; "
+        "never output example labels unless that exact string is present in the claim case."
     )
     return {
         "model": "MiniMax-M3",
