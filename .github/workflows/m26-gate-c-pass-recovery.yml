@@ -1,0 +1,132 @@
+name: M26 Gate C Pass Recovery
+
+on:
+  push:
+    branches:
+      - "gpt-m26/gate-c-pass-recovery-work"
+
+permissions:
+  contents: write
+
+jobs:
+  patch_validate_commit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gpt-m26/gate-c-pass-recovery-work
+          fetch-depth: 20
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply generic semantic-runtime contract repair
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py")
+          text = path.read_text(encoding="utf-8")
+
+          old = "max_provider_calls: int = 2,"
+          assert text.count(old) == 1, f"unexpected provider-budget occurrences: {text.count(old)}"
+          text = text.replace(old, "max_provider_calls: int = 4,", 1)
+
+          old_sig = "def _verify_model_explanation_surface(*, surface_text: str, answer_text: str) -> None:"
+          assert text.count(old_sig) == 1, "model explanation verifier signature drifted"
+          text = text.replace(
+              old_sig,
+              "def _verify_model_explanation_surface(\n"
+              "    *, surface_text: str, answer_text: str, question: str\n"
+              ") -> None:",
+              1,
+          )
+
+          old_numbers = '''    numbers = set(re.findall(r"\\b\\d+(?:\\.\\d+)?\\b", visible_text))\n    if numbers:\n        raise _verification_failure(\n            "M26-PA7-ME-033",\n            "model explanation introduces unsupported number",\n        )'''
+          new_numbers = '''    numbers = set(re.findall(r"\\b\\d+(?:\\.\\d+)?\\b", visible_text))\n    question_numbers = set(re.findall(r"\\b\\d+(?:\\.\\d+)?\\b", question))\n    unsupported_numbers = numbers - question_numbers\n    if unsupported_numbers:\n        raise _verification_failure(\n            "M26-PA7-ME-033",\n            "model explanation introduces unsupported number",\n        )'''
+          assert text.count(old_numbers) == 1, "model explanation numeric guard drifted"
+          text = text.replace(old_numbers, new_numbers, 1)
+
+          call_a = '''            _verify_model_explanation_surface(\n                surface_text=surface_text,\n                answer_text=str(parsed.get("answer_text") or ""),\n            )'''
+          call_a_new = '''            _verify_model_explanation_surface(\n                surface_text=surface_text,\n                answer_text=str(parsed.get("answer_text") or ""),\n                question=question,\n            )'''
+          assert text.count(call_a) == 1, "provider candidate model-explanation call drifted"
+          text = text.replace(call_a, call_a_new, 1)
+
+          call_b = '''        _verify_model_explanation_surface(surface_text=surface, answer_text=surface)'''
+          call_b_new = '''        _verify_model_explanation_surface(\n            surface_text=surface, answer_text=surface, question=question\n        )'''
+          assert text.count(call_b) == 1, "claim verifier model-explanation call drifted"
+          text = text.replace(call_b, call_b_new, 1)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Install test dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Verify repaired invariants
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import inspect
+          import knowledge_engine.m26_pa7_arbitrary_query_runtime as runtime
+
+          sig = inspect.signature(runtime.run_owner_arbitrary_query)
+          assert sig.parameters["max_provider_calls"].default == 4
+
+          question = "Does Harness Theory Part 1 entail Harness Theory Part 2?"
+          text = "The evidence does not establish whether Harness Theory Part 1 entails Harness Theory Part 2."
+          runtime._verify_model_explanation_surface(
+              surface_text=text,
+              answer_text=text,
+              question=question,
+          )
+
+          bad = "The evidence does not establish whether Harness Theory Part 3 entails Harness Theory Part 2."
+          try:
+              runtime._verify_model_explanation_surface(
+                  surface_text=bad,
+                  answer_text=bad,
+                  question=question,
+              )
+          except Exception as exc:
+              assert "M26-PA7-ME-033" in str(exc), str(exc)
+          else:
+              raise AssertionError("new unsupported number was accepted")
+          PY
+          python -m py_compile src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
+          ruff check src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
+
+      - name: Run full AQ regression population
+        run: |
+          set -euo pipefail
+          python -m pytest --showlocals \
+            tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_pa_7_arbitrary_query_runtime.py \
+            tests/test_m26_pa7_ask_api.py \
+            tests/test_m26_pa7_final_web_readiness.py \
+            tests/test_m26_pa_7_corrective_formal_product_readiness.py \
+            tests/test_m26_pa_7_production_promotion_closure.py \
+            tests/test_m26_pa_7_reconciliation.py \
+            tests/test_m26_aq_semantic_closure_runtime.py \
+            tests/test_m26_aq_semantic_runtime_patch_v3.py \
+            tests/test_m26_aq_universal_answerability_patch.py \
+            tests/test_m26_aq_final_universal_recovery_patch.py \
+            tests/test_m26_aq_production_route_final_recovery.py \
+            tests/test_m26_aq_surface_guard.py \
+            tests/test_m26_aq_production_deploy_lock.py \
+            tests/test_m26_aq_production_entrypoint.py \
+            tests/test_m26_aq_final_closure_harness.py \
+            tests/test_m26_aq_simplified_product_contract.py
+
+      - name: Commit validated source-only repair
+        run: |
+          set -euo pipefail
+          git config user.name "huaihsuanbusiness"
+          git config user.email "38602668+huaihsuanbusiness@users.noreply.github.com"
+          git rm .github/workflows/m26-gate-c-pass-recovery.yml
+          git add src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
+          git diff --cached --check
+          git commit -m "Align M26 semantic repair budget and numeric boundary"
+          git push origin HEAD:gpt-m26/gate-c-pass-recovery-work
