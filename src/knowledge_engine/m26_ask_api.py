@@ -118,7 +118,7 @@ def run_owner_query_for_web(
     provider_client: ProviderClient | None = None,
     dense_channel: DenseChannel | None = None,
     require_remote_dense: bool = False,
-    max_provider_calls: int = 2,
+    max_provider_calls: int = 4,
     max_cost: Decimal = Decimal("0.10"),
 ) -> dict[str, Any]:
     question = validate_query_request(request_payload)

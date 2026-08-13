@@ -407,3 +407,24 @@ def test_production_api_mounts_same_owner_only_m26_backend(monkeypatch) -> None:
     assert admitted.json()["canonical_runtime"]["entrypoint"].endswith(
         "run_owner_arbitrary_query"
     )
+
+
+def test_web_query_default_provider_budget_matches_semantic_repair_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_runtime(**kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return _dto_runtime_fixture()
+
+    monkeypatch.setattr(m26_ask_api, "run_owner_arbitrary_query", fake_runtime)
+    run_owner_query_for_web(
+        root=ROOT,
+        gate_path=GATE_PATH,
+        request_payload={"question": "Explain the supported relationship."},
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExactSpanProvider(),
+        dense_channel=LocalDenseProjectionChannel(),
+    )
+    assert captured["max_provider_calls"] == 4
