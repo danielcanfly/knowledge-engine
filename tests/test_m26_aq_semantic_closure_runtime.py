@@ -25,6 +25,7 @@ from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _response_from_verification,
     _runtime_bound_candidate,
     _semantic_requirements,
+    _semantic_review_payload,
     _synthesize_and_verify,
     _visible_semantic_failures,
 )
@@ -1443,6 +1444,230 @@ def test_semantic_review_final_rejection_publishes_entailed_claims_as_partial() 
     assert "monitor rejects events" not in answer["answer_text"].casefold()
     assert answer["multi_evidence_verification"]["dropped_claim_ids"] == ["claim_2"]
     assert closure["partial_answer"] is True
+    assert closure["failures"] == []
+
+
+def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
+    question = "Explain router snapshots."
+    evidence = [
+        _rich_passage(
+            "ev_router",
+            "The router stores graph snapshots.",
+            "router-note",
+        ),
+    ]
+    candidate = _runtime_bound_candidate(
+        answer="The router keeps graph snapshots.",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        used_items=(),
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "surface_text": "The router keeps graph snapshots.",
+                "evidence_labels": ["e1"],
+                "covers": ["router_snapshots"],
+            }
+        ],
+        label_map={"e1": evidence[0]},
+        snippet_map={"ev_router": evidence[0]["passage_text"]},
+    )
+
+    payload = _semantic_review_payload(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        candidate=candidate,
+        evidence=evidence,
+    )
+    task = json.loads(payload["messages"][0]["content"])
+    claim_case = task["claim_cases"][0]
+
+    assert claim_case["allowed_evidence_ids"] == ["ev_router"]
+    assert "ev1" not in payload["system"]
+    assert "ev1" not in payload["messages"][0]["content"]
+
+
+def test_semantic_review_out_of_local_evidence_ids_fail_closed() -> None:
+    question = "Explain router snapshots and monitor events."
+    evidence = [
+        _rich_passage(
+            "ev_router",
+            "The router stores graph snapshots.",
+            "router-note",
+        ),
+        _rich_passage(
+            "ev_monitor",
+            "The monitor accepts events.",
+            "monitor-note",
+        ),
+    ]
+
+    def synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        labels = {
+            "router": next(
+                str(item["id"]) for item in task["evidence"] if "router" in item["text"]
+            ),
+            "monitor": next(
+                str(item["id"]) for item in task["evidence"] if "monitor" in item["text"]
+            ),
+        }
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": (
+                "The router keeps graph snapshots. The monitor accepts events."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router keeps graph snapshots.",
+                    "evidence_labels": [labels["router"]],
+                    "covers": ["router_snapshots"],
+                },
+                {
+                    "claim_id": "claim_2",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The monitor accepts events.",
+                    "evidence_labels": [labels["monitor"]],
+                    "covers": ["monitor_events"],
+                },
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    def review(task: dict[str, Any]) -> dict[str, Any]:
+        judgments = []
+        for case in task["claim_cases"]:
+            local_ids = [str(item["evidence_id"]) for item in case["evidence"]]
+            if str(case["claim_id"]) == "claim_1":
+                evidence_ids = [local_ids[0], "not-local-to-this-claim"]
+            else:
+                evidence_ids = ["not-local-to-this-claim"]
+            judgments.append(
+                {
+                    "claim_id": str(case["claim_id"]),
+                    "verdict": "ENTAILED",
+                    "evidence_ids": evidence_ids,
+                }
+            )
+        return {
+            "schema_version": "m26-claim-entailment-review/v1",
+            "claim_judgments": judgments,
+            "visible_coverage": {
+                "verdict": "UNCOVERED",
+                "uncovered_assertions": ["diagnostic only"],
+            },
+        }
+
+    provider = _ScriptedSemanticClosureProvider(
+        [synthesis, synthesis],
+        review_result=review,
+    )
+
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-claim-local-review-partial",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["answer_source"] == "safe_abstention"
+    assert answer["answer_text"] == ""
+    assert "M26-PA7-ME-065" in closure["failures"]
+    assert "M26-PA7-ME-065" in answer["reason_codes"]
+
+
+def test_runtime_bound_structured_candidate_compacts_before_legacy_verification() -> None:
+    question = "Explain how several supplied notes fit together."
+    intent_class = "direct_grounded_knowledge"
+    required_facets = legacy._required_facet_ids(
+        question=question,
+        intent_class=intent_class,
+    )
+    long_sentence = (
+        "This supplied note describes a grounded production behavior with enough "
+        "specific words to serve as an exact support quote for verification. "
+    )
+    evidence = [
+        _rich_passage(
+            f"ev_{index}",
+            long_sentence * 8,
+            f"note-{index}",
+        )
+        for index in range(10)
+    ]
+
+    def synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        labels = [str(item["id"]) for item in task["evidence"]]
+        claims = [
+            {
+                "claim_id": f"claim_{index}",
+                "claim_type": "EVIDENCE_SYNTHESIS",
+                "surface_text": (
+                    f"Several supplied notes jointly describe grounded production "
+                    f"behavior {index}."
+                ),
+                "evidence_labels": labels,
+                "covers": required_facets,
+            }
+            for index in range(1, 4)
+        ]
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": " ".join(claim["surface_text"] for claim in claims),
+            "claims": claims,
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    def review(task: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "schema_version": "m26-claim-entailment-review/v1",
+            "claim_judgments": [
+                {
+                    "claim_id": str(case["claim_id"]),
+                    "verdict": "ENTAILED",
+                    "evidence_ids": [
+                        str(item["evidence_id"]) for item in case["evidence"]
+                    ],
+                }
+                for case in task["claim_cases"]
+            ],
+            "visible_coverage": {
+                "verdict": "COVERED",
+                "uncovered_assertions": [],
+            },
+        }
+
+    provider = _ScriptedSemanticClosureProvider(
+        [synthesis],
+        review_result=review,
+    )
+
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-compact-verification-candidate",
+        intent_class=intent_class,
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert answer["reason_codes"] == []
+    assert "M26-PA7-ME-001" not in answer["multi_evidence_verification"][
+        "verification_failure_codes_by_attempt"
+    ]
     assert closure["failures"] == []
 
 

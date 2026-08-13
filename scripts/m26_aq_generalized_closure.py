@@ -18,6 +18,7 @@ if __package__:
         EXPECTED_GRAPH_SHA256,
         EXPECTED_NODE_COUNT,
         EXPECTED_RELEASE_ID,
+        MAX_SEMANTIC_CLOSURE_PROVIDER_CALLS,
         _provider_telemetry,
         _validate_visible_semantics,
         _zero_mutations,
@@ -29,6 +30,7 @@ else:
         EXPECTED_GRAPH_SHA256,
         EXPECTED_NODE_COUNT,
         EXPECTED_RELEASE_ID,
+        MAX_SEMANTIC_CLOSURE_PROVIDER_CALLS,
         _provider_telemetry,
         _validate_visible_semantics,
         _zero_mutations,
@@ -159,7 +161,7 @@ def _validate_answer_row(row: dict[str, Any], failures: list[str], expected_sha:
         failures.append(f"{case_id}:empty_answer")
     if not row.get("citations"):
         failures.append(f"{case_id}:missing_citations")
-    if provider_calls < 1 or provider_calls > 2:
+    if provider_calls < 1 or provider_calls > MAX_SEMANTIC_CLOSURE_PROVIDER_CALLS:
         failures.append(f"{case_id}:provider_call_count")
 
     integrity = _mapping(row.get("integrity"))

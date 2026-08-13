@@ -435,6 +435,15 @@ def _synthesize_and_verify(
                 evidence=evidence,
             )
             calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
+            if _semantic_review_has_out_of_local_evidence(
+                semantic_review,
+                _candidate_claim_by_id(candidate),
+            ):
+                failures.append("M26-PA7-ME-065")
+                if attempt == 1:
+                    repair_attempted = True
+                    continue
+                break
             review_failures = _semantic_review_blocking_failures(semantic_review)
             if review_failures:
                 failures.extend(review_failures)
@@ -465,7 +474,7 @@ def _synthesize_and_verify(
                     intent_class=intent_class,
                     evidence=evidence,
                     provider_text=json.dumps(
-                        candidate,
+                        _verification_candidate(candidate),
                         ensure_ascii=False,
                         separators=(",", ":"),
                     ),
@@ -630,7 +639,7 @@ def _verified_supported_review_partial(
             intent_class=intent_class,
             evidence=evidence,
             provider_text=json.dumps(
-                partial_candidate,
+                _verification_candidate(partial_candidate),
                 ensure_ascii=False,
                 separators=(",", ":"),
             ),
@@ -689,6 +698,8 @@ def _supported_review_partial_candidate(
     if not claims:
         return None, {}, []
     claim_by_id = {str(claim.get("claim_id", "")): claim for claim in claims}
+    if _semantic_review_has_out_of_local_evidence(semantic_review, claim_by_id):
+        return None, {}, []
     supported_ids: list[str] = []
     dropped_ids: list[str] = []
     filtered_judgments: list[dict[str, Any]] = []
@@ -764,6 +775,59 @@ def _supported_review_partial_candidate(
         partial_review,
         dropped_ids,
     )
+
+
+def _candidate_claim_by_id(candidate: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    return {
+        str(claim.get("claim_id", "")): claim
+        for claim in legacy._list(candidate.get("claims"), "candidate claims")
+        if isinstance(claim, Mapping) and str(claim.get("claim_id", ""))
+    }
+
+
+def _semantic_review_has_out_of_local_evidence(
+    semantic_review: Mapping[str, Any],
+    claim_by_id: Mapping[str, Mapping[str, Any]],
+) -> bool:
+    for raw in legacy._list(
+        semantic_review.get("claim_judgments"),
+        "semantic review judgments",
+    ):
+        judgment = legacy._object(raw, "semantic review judgment")
+        claim_id = str(judgment.get("claim_id", ""))
+        claim = claim_by_id.get(claim_id)
+        if claim is None:
+            continue
+        allowed = set(_claim_local_evidence_ids(claim))
+        evidence_ids = set(
+            str(item)
+            for item in legacy._list(
+                judgment.get("evidence_ids"),
+                "semantic review evidence ids",
+            )
+        )
+        if not evidence_ids.issubset(allowed):
+            return True
+    return False
+
+
+def _claim_local_evidence_ids(claim: Mapping[str, Any]) -> list[str]:
+    return list(
+        dict.fromkeys(
+            str(ref.get("evidence_id", ""))
+            for ref in legacy._list(claim.get("support_refs"), "claim local support refs")
+            if isinstance(ref, Mapping) and str(ref.get("evidence_id", ""))
+        )
+    )
+
+
+def _verification_candidate(candidate: Mapping[str, Any]) -> dict[str, Any]:
+    compact = dict(candidate)
+    compact["claims"] = [
+        _compact_partial_claim(claim)
+        for claim in legacy._list(candidate.get("claims"), "verification claims")
+    ]
+    return compact
 
 
 def _compact_partial_claim(claim: Mapping[str, Any]) -> dict[str, Any]:
@@ -973,11 +1037,15 @@ def _semantic_review_payload(
                     "graph_fact": graph_fact,
                 }
             )
+        allowed_evidence_ids = [
+            str(item.get("evidence_id", "")) for item in local_evidence
+        ]
         claim_cases.append(
             {
                 "claim_id": str(claim.get("claim_id", "")),
                 "claim_type": str(claim.get("claim_type", "")),
                 "surface_text": str(claim.get("surface_text", "")),
+                "allowed_evidence_ids": allowed_evidence_ids,
                 "evidence": local_evidence,
             }
         )
@@ -987,13 +1055,20 @@ def _semantic_review_payload(
         "intent_class": intent_class,
         "answer_text": str(candidate.get("answer_text", "")),
         "claim_cases": claim_cases,
+        "review_protocol": {
+            "evidence_ids_rule": (
+                "For an ENTAILED judgment, copy exact evidence_id strings only from "
+                "that claim case's allowed_evidence_ids. Unknown or cross-claim IDs "
+                "are invalid."
+            ),
+        },
         "output": {
             "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
             "claim_judgments": [
                 {
                     "claim_id": "claim_1",
                     "verdict": "ENTAILED|CONTRADICTED|INSUFFICIENT|GENERIC_EXPLANATION",
-                    "evidence_ids": ["ev1"],
+                    "evidence_ids": [],
                 }
             ],
             "visible_coverage": {
@@ -1010,7 +1085,11 @@ def _semantic_review_payload(
         "be entailed; contradiction, strengthening, identity, quantity, time, causality, "
         "polarity, graph direction, or endpoint mutation is not entailed. Also report "
         "whether every material KB-dependent assertion visible in answer_text is covered "
-        "by a structured claim. Do not invent claim IDs or evidence IDs."
+        "by a structured claim. For each ENTAILED judgment, evidence_ids must be an array "
+        "of exact evidence_id strings copied from that claim case's allowed_evidence_ids. "
+        "If no allowed local evidence entails the claim, use INSUFFICIENT or CONTRADICTED "
+        "instead of ENTAILED. Do not invent claim IDs or evidence IDs; never output example "
+        "labels unless that exact string is present in the claim case."
     )
     return {
         "model": "MiniMax-M3",

@@ -29,6 +29,7 @@ EXPECTED_GRAPH_EDGE = "edge_3f15206278e63ccf8981"
 ANSWER_SOURCE = "provider_verified_runtime_bound_semantic_closure"
 PARTIAL_ANSWER_SOURCE = "provider_verified_runtime_bound_partial_semantic_closure"
 ACCEPTED_ANSWER_SOURCES = {ANSWER_SOURCE, PARTIAL_ANSWER_SOURCE}
+MAX_SEMANTIC_CLOSURE_PROVIDER_CALLS = 4
 _TRANSIENT_REQUEST_ERRORS = (
     ConnectionResetError,
     TimeoutError,
@@ -606,7 +607,7 @@ def validate(*, input_path: Path, gate_path: Path, expected_sha: str) -> None:
             failures.append(f"{case_id}:wrong_answer_source")
         if not str(row.get("answer_text", "")).strip():
             failures.append(f"{case_id}:empty_answer")
-        if provider_calls < 1 or provider_calls > 2:
+        if provider_calls < 1 or provider_calls > MAX_SEMANTIC_CLOSURE_PROVIDER_CALLS:
             failures.append(f"{case_id}:provider_call_count")
         if not row.get("citations"):
             failures.append(f"{case_id}:missing_citations")

@@ -199,6 +199,20 @@ def test_blackbox_false_premise_answer_need_not_begin_with_no(
     assert failures == []
 
 
+def test_answer_row_accepts_full_semantic_closure_provider_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_generalized_module()
+    monkeypatch.setattr(module, "_validate_visible_semantics", lambda row: [])
+    failures: list[str] = []
+    row = _answered_row(module, "GPT-E-BB09")
+    row["accounting"] = {"provider_call_count": 4}
+
+    module._validate_answer_row(row, failures, "sha")
+
+    assert failures == []
+
+
 def test_blackbox_safe_abstention_may_use_one_bounded_provider_call() -> None:
     module = _load_generalized_module()
     failures: list[str] = []
