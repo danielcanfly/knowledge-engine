@@ -546,7 +546,7 @@ def run_owner_arbitrary_query(
     provider_client: ProviderClient | None = None,
     dense_channel: DenseChannel | None = None,
     require_remote_dense: bool = False,
-    max_provider_calls: int = 2,
+    max_provider_calls: int = 4,
     max_cost: Decimal = Decimal("0.10"),
     answer_bundle: ProductionAnswerBundle | None = None,
 ) -> dict[str, Any]:
@@ -2585,6 +2585,7 @@ def _verify_multi_evidence_provider_output(
             _verify_model_explanation_surface(
                 surface_text=surface_text,
                 answer_text=str(parsed.get("answer_text") or ""),
+                question=question,
             )
         requested_facets = {
             str(item)
@@ -3421,7 +3422,9 @@ def _verify_claim_surface_semantics(
     if not surface or len(surface) > 1_200:
         raise _verification_failure("M26-PA7-ME-030", "claim surface text is invalid")
     if claim_type == "MODEL_EXPLANATION" and not support_refs:
-        _verify_model_explanation_surface(surface_text=surface, answer_text=surface)
+        _verify_model_explanation_surface(
+            surface_text=surface, answer_text=surface, question=question
+        )
         return
     if claim_type == "MODEL_EXPLANATION" and support_refs:
         raise _verification_failure(
@@ -3702,7 +3705,9 @@ def _normalized_graph_endpoint(text: str) -> str:
     return re.sub(r"\s+", " ", normalized).strip()
 
 
-def _verify_model_explanation_surface(*, surface_text: str, answer_text: str) -> None:
+def _verify_model_explanation_surface(
+    *, surface_text: str, answer_text: str, question: str = ""
+) -> None:
     visible_text = re.sub(r"\s+", " ", f"{answer_text} {surface_text}").strip()
     if _secret_like(visible_text):
         raise _verification_failure(
@@ -3716,7 +3721,9 @@ def _verify_model_explanation_surface(*, surface_text: str, answer_text: str) ->
             "model explanation falsely attributes a source claim",
         )
     numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", visible_text))
-    if numbers:
+    question_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", question))
+    unsupported_numbers = numbers - question_numbers
+    if unsupported_numbers:
         raise _verification_failure(
             "M26-PA7-ME-033",
             "model explanation introduces unsupported number",
