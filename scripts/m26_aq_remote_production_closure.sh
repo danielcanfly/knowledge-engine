@@ -191,25 +191,37 @@ echo "AQ_STAGE=frozen_population_validated"
 collect_once blackbox pilot/m26/m26-aq-gpt-e-black-box-questions.json "$blackbox_path"
 echo "AQ_STAGE=blackbox_population_collected"
 
+blackbox_validation_status=0
 PYTHONPATH=src python3 scripts/m26_aq_generalized_closure.py \
   --input "$blackbox_path" \
   --expected-sha "$EXPECTED_DEPLOY_SHA" \
-  --minimum 20
-echo "AQ_STAGE=blackbox_population_validated"
+  --minimum 20 || blackbox_validation_status=$?
+if [ "$blackbox_validation_status" = "0" ]; then
+  echo "AQ_STAGE=blackbox_population_validated"
+else
+  echo "AQ_STAGE=blackbox_population_diagnostic_failed"
+  echo "AQ_DIAGNOSTIC_OBSOLETE_CLOSURE_AUTHORITY=blackbox:$blackbox_validation_status"
+fi
 
 targeted_questions="pilot/m26/m26-aq-universal-answerability-targeted-questions.json"
 [ -s "$targeted_questions" ] || fail "targeted_questions_missing"
 collect_once targeted "$targeted_questions" "$targeted_path"
 echo "AQ_STAGE=targeted_population_collected"
 
+targeted_validation_status=0
 PYTHONPATH=src python3 scripts/m26_aq_targeted_answerability_closure.py \
   --input "$targeted_path" \
   --questions "$targeted_questions" \
   --expected-sha "$EXPECTED_DEPLOY_SHA" \
   --summary "$targeted_summary_path" \
   --csv "$targeted_csv_path" \
-  --raw-answers "$targeted_raw_answers_path"
-echo "AQ_STAGE=targeted_population_validated"
+  --raw-answers "$targeted_raw_answers_path" || targeted_validation_status=$?
+if [ "$targeted_validation_status" = "0" ]; then
+  echo "AQ_STAGE=targeted_population_validated"
+else
+  echo "AQ_STAGE=targeted_population_diagnostic_failed"
+  echo "AQ_DIAGNOSTIC_OBSOLETE_CLOSURE_AUTHORITY=targeted:$targeted_validation_status"
+fi
 
 routed_code="$(curl --silent --show-error \
   -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \

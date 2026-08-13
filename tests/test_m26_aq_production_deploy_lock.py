@@ -98,6 +98,25 @@ def test_final_closure_holds_host_lock_through_live_collection() -> None:
     assert lock_position < deploy_position < collect_position
 
 
+def test_final_closure_treats_historical_blackbox_and_targeted_as_diagnostics() -> None:
+    workflow = Path(
+        ".github/workflows/m26-aq-final-production-closure.yml"
+    ).read_text(encoding="utf-8")
+    remote = Path("scripts/m26_aq_remote_production_closure.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "scripts/m26_aq_final_closure.py validate" in remote
+    assert "AQ_STAGE=frozen_population_validated" in remote
+    assert "blackbox_population_diagnostic_failed" in remote
+    assert "targeted_population_diagnostic_failed" in remote
+    assert "AQ_DIAGNOSTIC_OBSOLETE_CLOSURE_AUTHORITY=blackbox" in remote
+    assert "AQ_DIAGNOSTIC_OBSOLETE_CLOSURE_AUTHORITY=targeted" in remote
+
+    assert "AQ_WORKFLOW_BLACKBOX_DIAGNOSTIC=obsolete_closure_authority" in workflow
+    assert "AQ_WORKFLOW_TARGETED_DIAGNOSTIC=obsolete_closure_authority" in workflow
+
+
 def test_final_closure_uses_canonical_named_tunnel_without_recording_it() -> None:
     workflow = Path(
         ".github/workflows/m26-aq-final-production-closure.yml"

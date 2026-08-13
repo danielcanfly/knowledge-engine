@@ -619,18 +619,26 @@ jobs:
             --gate pilot/m26/m26-pa-7-resolved-production-gate.json \
             --expected-sha "$EXPECTED_DEPLOY_SHA"
 
-          python scripts/m26_aq_generalized_closure.py \
+          if python scripts/m26_aq_generalized_closure.py \
             --input /tmp/m26-aq-gpt-e-blackbox-live-closure.json \
             --expected-sha "$EXPECTED_DEPLOY_SHA" \
-            --minimum 20
+            --minimum 20; then
+            echo "AQ_WORKFLOW_BLACKBOX_DIAGNOSTIC=pass"
+          else
+            echo "AQ_WORKFLOW_BLACKBOX_DIAGNOSTIC=obsolete_closure_authority"
+          fi
 
-          python scripts/m26_aq_targeted_answerability_closure.py \
+          if python scripts/m26_aq_targeted_answerability_closure.py \
             --input /tmp/m26-aq-targeted-live-closure.json \
             --questions pilot/m26/m26-aq-universal-answerability-targeted-questions.json \
             --expected-sha "$EXPECTED_DEPLOY_SHA" \
             --summary /tmp/m26-aq-targeted-summary.json \
             --csv /tmp/m26-aq-targeted-results.csv \
-            --raw-answers /tmp/m26-aq-targeted-raw-answers.md
+            --raw-answers /tmp/m26-aq-targeted-raw-answers.md; then
+            echo "AQ_WORKFLOW_TARGETED_DIAGNOSTIC=pass"
+          else
+            echo "AQ_WORKFLOW_TARGETED_DIAGNOSTIC=obsolete_closure_authority"
+          fi
 
       - name: Upload production closure evidence
         if: always()
