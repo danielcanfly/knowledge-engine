@@ -1690,22 +1690,11 @@ def _precedes_relation_candidate(
     edge = _best_precedes_edge(evidence, endpoint_proof)
     if edge is None:
         return None
-    endpoint_items = [
-        item
-        for item in evidence
-        if item.get("evidence_type") == "passage"
-        and str(item.get("concept_id", ""))
-        in {
-            str(endpoint_proof.get("edge_source", "")),
-            str(endpoint_proof.get("edge_target", "")),
-        }
-    ]
     refs: list[dict[str, str]] = []
-    for item in [edge, *endpoint_items[:2]]:
-        ref = _support_ref(item)
-        if ref is not None:
-            refs.append(ref)
-    if len(refs) < 2:
+    ref = _support_ref(edge)
+    if ref is not None:
+        refs.append(ref)
+    if not refs:
         return None
     entities = canonical_question_entities(question)
     left = entities[0] if len(entities) >= 1 else "the first note"
@@ -1723,7 +1712,7 @@ def _precedes_relation_candidate(
         "claims": [
             {
                 "claim_id": "claim_1",
-                "claim_role": "relationship",
+                "claim_role": "direct",
                 "surface_text": surface,
                 "facet_ids": legacy._required_facet_ids(
                     question=question,
@@ -1747,28 +1736,13 @@ def _precedes_boundary_candidate(
 ) -> dict[str, Any] | None:
     del requirements
     edge = _best_precedes_edge(evidence, endpoint_proof)
-    boundary = _best_text_item(
-        evidence,
-        ("precedes", "ordering", "sequence", "dependency", "causality", "requirement"),
-    )
-    endpoint_items = [
-        item
-        for item in evidence
-        if item.get("evidence_type") == "passage"
-        and str(item.get("concept_id", ""))
-        in {
-            str(endpoint_proof.get("edge_source", "")),
-            str(endpoint_proof.get("edge_target", "")),
-        }
-    ]
     refs: list[dict[str, str]] = []
-    for item in [edge, *endpoint_items[:2], boundary]:
-        if item is None:
-            continue
-        ref = _support_ref(item)
-        if ref is not None:
-            refs.append(ref)
-    if edge is None or boundary is None or len(refs) < 2:
+    if edge is None:
+        return None
+    ref = _support_ref(edge)
+    if ref is not None:
+        refs.append(ref)
+    if not refs:
         return None
     entities = canonical_question_entities(question)
     left = entities[0] if len(entities) >= 1 else "the first item"
@@ -1789,7 +1763,7 @@ def _precedes_boundary_candidate(
         "claims": [
             {
                 "claim_id": "claim_1",
-                "claim_role": "relationship",
+                "claim_role": "direct",
                 "surface_text": surface,
                 "facet_ids": legacy._required_facet_ids(
                     question=question,

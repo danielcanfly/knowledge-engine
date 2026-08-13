@@ -3371,9 +3371,14 @@ def _infer_covered_facets(
             (item for item in support_items if item.get("evidence_type") == "graph_edge"), None
         )
         if edge is not None:
-            if str(edge.get("edge_source", "")) in passage_concepts:
+            complete_edge_fact = bool(
+                str(edge.get("edge_source", ""))
+                and str(edge.get("edge_target", ""))
+                and str(edge.get("relation_type", ""))
+            )
+            if complete_edge_fact or str(edge.get("edge_source", "")) in passage_concepts:
                 facets.append("source_endpoint")
-            if str(edge.get("edge_target", "")) in passage_concepts:
+            if complete_edge_fact or str(edge.get("edge_target", "")) in passage_concepts:
                 facets.append("target_endpoint")
             facets.append("relation_semantics")
         return facets
@@ -5233,6 +5238,12 @@ def _graph_edge_evidence_item(
         f"with confidence {edge.get('confidence')} and review "
         f"{edge.get('review_status', 'approved')}."
     )
+    if relation_type == "precedes":
+        statement += (
+            " As a graph-artifact fact, this precedes relation records ordering, "
+            "sequence, or navigation only; by itself it does not prove dependency, "
+            "causality, implementation, or requirement between the endpoints."
+        )
     text_sha = sha256_bytes(statement.encode("utf-8"))
     locator_id = (
         "m26pa7edge_"

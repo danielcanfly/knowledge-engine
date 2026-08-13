@@ -399,11 +399,135 @@ def test_graph_edge_evidence_unit_includes_endpoint_display_labels() -> None:
         "Harness Theory Part 1 (article_1) precedes Harness Theory Part 2 (article_2)"
         in item["passage_text"]
     )
+    assert "graph-artifact fact" in item["passage_text"]
+    assert "does not prove dependency" in item["passage_text"]
     graph_rule = legacy._minimum_evidence_rule("graph_relationship")
     assert graph_rule["minimum_evidence"] == 1
     assert graph_rule["requires_graph_edge"] is True
     assert graph_rule["requires_complete_graph_edge_fact"] is True
     assert "requires_both_endpoint_evidence" not in graph_rule
+
+
+def test_compound_graph_edge_unit_covers_endpoint_facets_without_passages() -> None:
+    bundle = _minimal_answer_bundle(
+        documents=[
+            {
+                "concept_id": "article_1",
+                "title": "Harness Theory Part 1",
+                "section_id": "article_1",
+            },
+            {
+                "concept_id": "article_2",
+                "title": "Harness Theory Part 2",
+                "section_id": "article_2",
+            },
+        ]
+    )
+    edge = legacy._graph_edge_evidence_item(
+        bundle=bundle,
+        edge={
+            "edge_id": "edge_precedes",
+            "source": "article_1",
+            "target": "article_2",
+            "relation_type": "precedes",
+            "confidence": 1.0,
+            "review_status": "approved",
+        },
+        trace_id="trace-compound-edge-facets",
+        ordinal=1,
+    )
+    question = (
+        "The production graph says Harness Theory Part 1 precedes Part 2. "
+        "What can we safely infer from that edge, and what can't we infer?"
+    )
+    surface = (
+        "The relation graph records Harness Theory Part 1 as preceding Harness "
+        "Theory Part 2, so the safe inference is ordering or sequence/navigation "
+        "only. That precedes edge does not by itself prove dependency, causality, "
+        "implementation, or requirement."
+    )
+    candidate = {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "relation": "precedes",
+        "selected_evidence_ids": [edge["evidence_id"]],
+        "answer_text": f"{surface} [[claim_1]].",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_role": "direct",
+                "surface_text": surface,
+                "facet_ids": legacy._required_facet_ids(
+                    question=question,
+                    intent_class="graph_relationship",
+                ),
+                "support_mode": "graph_edge_compound_fact",
+                "support_refs": [
+                    {
+                        "evidence_id": edge["evidence_id"],
+                        "locator_id": edge["locator_id"],
+                        "exact_quote": edge["passage_text"],
+                        "uncertainty": "low",
+                    }
+                ],
+            }
+        ],
+        "missing_facets": [],
+        "abstention_reason": None,
+    }
+
+    verified = legacy._verify_multi_evidence_provider_output(
+        trace_id="trace-compound-edge-facets",
+        question=question,
+        intent_class="graph_relationship",
+        evidence=[edge],
+        provider_text=json.dumps(candidate),
+    )
+
+    assert set(verified["covered_facets"]) >= {
+        "graph_edge",
+        "source_endpoint",
+        "target_endpoint",
+        "relation_semantics",
+    }
+    assert verified["material_claims"][0]["support_verdict"] == (
+        "supported_exact_multi_evidence_bundle"
+    )
+
+
+def test_precedes_boundary_recovery_uses_graph_edge_unit_only() -> None:
+    edge = _graph_edge("ev_edge", "Harness Theory Part 1", "Harness Theory Part 2", "precedes")
+    edge["passage_text"] = (
+        "Production graph navigation edge edge_precedes states Harness Theory "
+        "Part 1 precedes Harness Theory Part 2. As a graph-artifact fact, this "
+        "precedes relation records ordering, sequence, or navigation only; by "
+        "itself it does not prove dependency, causality, implementation, or "
+        "requirement between the endpoints."
+    )
+    question = (
+        "The production graph says Harness Theory Part 1 precedes Part 2. "
+        "What can we safely infer from that edge, and what can't we infer?"
+    )
+    requirements = _semantic_requirements(question, "graph_relationship")
+
+    candidate = _supported_semantic_recovery_candidate(
+        question=question,
+        intent_class="graph_relationship",
+        evidence=[edge],
+        requirements=requirements,
+        endpoint_proof={
+            "required": True,
+            "matched": True,
+            "edge_id": "ev_edge",
+            "edge_source": "Harness Theory Part 1",
+            "edge_target": "Harness Theory Part 2",
+            "relation_type": "precedes",
+        },
+    )
+
+    assert candidate is not None
+    refs = candidate["claims"][0]["support_refs"]
+    assert {ref["evidence_id"] for ref in refs} == {"ev_edge"}
 
 
 def test_nc01_cited_but_irrelevant_disconnect_answer_is_rejected() -> None:

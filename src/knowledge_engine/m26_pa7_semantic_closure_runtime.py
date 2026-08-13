@@ -1085,8 +1085,16 @@ def _semantic_review_payload(
                     "edge_id": str(item.get("edge_id", "")),
                     "edge_source": str(item.get("edge_source", "")),
                     "edge_target": str(item.get("edge_target", "")),
+                    "edge_source_label": str(item.get("edge_source_label", "")),
+                    "edge_target_label": str(item.get("edge_target_label", "")),
                     "relation_type": str(item.get("relation_type", "")),
+                    "provenance": "graph_artifact_fact",
                 }
+                if str(item.get("relation_type", "")) == "precedes":
+                    graph_fact["semantic_boundary"] = (
+                        "ordering_sequence_navigation_only_not_dependency_causality_"
+                        "implementation_or_requirement"
+                    )
             local_evidence.append(
                 {
                     "evidence_id": evidence_id,
