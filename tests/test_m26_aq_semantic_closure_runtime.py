@@ -125,7 +125,7 @@ class _SemanticReviewRepairProvider:
         for case in claim_cases:
             claim_id = str(case["claim_id"])
             local_ids = [str(item["evidence_id"]) for item in case["evidence"]]
-            surface = str(case["surface_text"]).casefold()
+            surface = str(case.get("claim_text", case.get("surface_text", ""))).casefold()
             if "rejects" in surface:
                 judgments.append(
                     {
@@ -802,6 +802,86 @@ def test_compact_provider_contract_rejects_extra_keys() -> None:
         assert "unknown keys" in str(exc)
     else:
         raise AssertionError("extra provider key should fail closed")
+
+
+def test_phase1_provider_contract_uses_answer_anchors_not_claim_surface_text() -> None:
+    payload, _, _ = closure_runtime._compact_provider_payload(
+        question="Explain router graph snapshots.",
+        intent_class="direct_grounded_knowledge",
+        evidence=[
+            _rich_passage(
+                "router",
+                "The router stores graph snapshots for controlled execution.",
+                "router-note",
+            )
+        ],
+        requirements=[],
+        repair=False,
+        previous_failures=[],
+    )
+
+    task = json.loads(payload["messages"][0]["content"])
+    assert task["output"]["schema_version"] == "m26-fas-synthesis/v2"
+    assert "surface_text" not in task["output"]["claims"][0]
+    assert "[[claim_id]]" in task["output"]["answer_text"]
+    assert "claims must not include surface_text" in payload["system"]
+
+
+def test_phase1_runtime_binds_claim_surface_from_answer_anchor() -> None:
+    evidence = _rich_passage(
+        "router",
+        "The router stores graph snapshots for controlled execution.",
+        "router-note",
+    )
+
+    candidate = _runtime_bound_candidate(
+        answer="The router keeps graph snapshots [[claim_1]].",
+        question="Explain router graph snapshots.",
+        intent_class="direct_grounded_knowledge",
+        used_items=[],
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "evidence_labels": ["e1"],
+                "covers": ["router_snapshots"],
+            }
+        ],
+        label_map={"e1": evidence},
+        snippet_map={"router": evidence["passage_text"]},
+        requirements=[],
+    )
+
+    assert candidate["answer_text"] == "The router keeps graph snapshots [[claim_1]]."
+    assert candidate["claims"][0]["surface_text"] == "The router keeps graph snapshots."
+    assert candidate["claims"][0]["support_refs"][0]["evidence_id"] == "router"
+
+
+def test_phase1_runtime_fails_closed_when_claim_has_no_answer_anchor() -> None:
+    evidence = _rich_passage(
+        "router",
+        "The router stores graph snapshots for controlled execution.",
+        "router-note",
+    )
+
+    with pytest.raises(ValueError, match="missing answer anchor"):
+        _runtime_bound_candidate(
+            answer="The router keeps graph snapshots.",
+            question="Explain router graph snapshots.",
+            intent_class="direct_grounded_knowledge",
+            used_items=[],
+            claims=[
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "evidence_labels": ["e1"],
+                    "covers": ["router_snapshots"],
+                }
+            ],
+            label_map={"e1": evidence},
+            snippet_map={"router": evidence["passage_text"]},
+            requirements=[],
+        )
 
 
 def test_graph_false_premise_contract_binds_full_named_entities() -> None:
@@ -1513,7 +1593,7 @@ def test_provider_abstain_with_available_evidence_safely_abstains_without_quote_
     assert answer["answer_source"] == "safe_abstention"
     assert answer["safe_abstention"] is True
     verification = answer["multi_evidence_verification"]
-    assert verification["provider_contract"] == "compact_runtime_bound_semantic_closure/v1"
+    assert verification["provider_contract"] == "compact_runtime_bound_semantic_closure/v2"
     assert closure["broad_deterministic_fallback_used"] is False
     assert "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE" in closure["failures"]
     assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
@@ -1568,7 +1648,10 @@ def test_semantic_review_one_repair_preserves_supported_partial() -> None:
     assert answer["answer_source"] == "provider_verified_runtime_bound_partial_semantic_closure"
     assert answer["repair_attempted"] is True
     assert "router keeps graph snapshots" in answer["answer_text"].casefold()
-    assert "unsupported boundary" in answer["answer_text"].casefold()
+    assert "unsupported boundary" not in answer["answer_text"].casefold()
+    assert answer["multi_evidence_verification"]["unanswered_dimensions"] == [
+        "monitor_events"
+    ]
     assert closure["partial_answer"] is True
     first_review_cases = {
         str(case["claim_id"]): {
@@ -1729,9 +1812,15 @@ def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
     assert claim_case["allowed_evidence_ids"] == ["ev_router"]
     assert claim_case["allowed_evidence_labels"] == ["local_1"]
     assert claim_case["evidence_id_by_label"] == {"local_1": "ev_router"}
+    assert claim_case["claim_text"] == "The router keeps graph snapshots."
+    assert "surface_text" not in claim_case
     assert claim_case["evidence"][0]["evidence_label"] == "local_1"
     assert "ev1" not in payload["system"]
     assert "ev1" not in payload["messages"][0]["content"]
+    assert task["output"]["schema_version"] == "m26-claim-entailment-review/v2"
+    assert "judgments" in task["output"]
+    assert "claim_judgments" not in task["output"]
+    assert payload["max_tokens"] == 1024
 
 
 def test_semantic_review_protocol_defines_model_explanation_verdict() -> None:
@@ -1758,9 +1847,57 @@ def test_semantic_review_protocol_defines_model_explanation_verdict() -> None:
 
     assert claim_case["claim_type"] == "MODEL_EXPLANATION"
     assert claim_case["allowed_evidence_ids"] == []
+    assert claim_case["claim_text"] == "The router selection and DAG execution compose."
     assert "GENERIC_EXPLANATION" in task["review_protocol"]["model_explanation_rule"]
     assert "return verdict GENERIC_EXPLANATION with evidence_ids []" in payload["system"]
     assert "MODEL_EXPLANATION glue claim" in payload["system"]
+
+
+def test_compact_semantic_review_output_canonicalizes_to_fail_closed_v1_shape() -> None:
+    review = closure_runtime._parse_semantic_review_result(
+        json.dumps(
+            {
+                "schema_version": "m26-claim-entailment-review/v2",
+                "judgments": [
+                    {
+                        "claim_id": "claim_1",
+                        "verdict": "ENTAILED",
+                        "evidence_ids": ["local_1"],
+                    }
+                ],
+                "coverage_verdict": "COVERED",
+            }
+        )
+    )
+
+    assert review == {
+        "schema_version": "m26-claim-entailment-review/v1",
+        "claim_judgments": [
+            {
+                "claim_id": "claim_1",
+                "verdict": "ENTAILED",
+                "evidence_ids": ["local_1"],
+            }
+        ],
+        "visible_coverage": {
+            "verdict": "COVERED",
+            "uncovered_assertions": [],
+        },
+    }
+
+
+def test_compact_semantic_review_output_unknown_key_fails_closed() -> None:
+    with pytest.raises(ValueError, match="SEMANTIC_REVIEW_PARSE_FAILED"):
+        closure_runtime._parse_semantic_review_result(
+            json.dumps(
+                {
+                    "schema_version": "m26-claim-entailment-review/v2",
+                    "judgments": [],
+                    "coverage_verdict": "COVERED",
+                    "extra": "bad",
+                }
+            )
+        )
 
 
 def test_semantic_review_claim_local_labels_are_canonicalized() -> None:
@@ -3262,8 +3399,9 @@ def test_tesc_partial_candidate_keeps_supported_a_and_explicit_unsupported_b_bou
 
     assert candidate["status"] == "partial_candidate"
     assert "Durable state preserves workflow progress" in candidate["answer_text"]
-    assert "Unsupported boundary" in candidate["answer_text"]
-    assert "observability" in candidate["answer_text"]
+    assert "Unsupported boundary" not in candidate["answer_text"]
+    assert "observability" not in candidate["answer_text"]
+    assert candidate["unanswered_dimensions"] == ["observability"]
     assert all(
         "observability status" not in str(claim.get("surface_text", "")).casefold()
         for claim in candidate["claims"]

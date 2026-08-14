@@ -343,12 +343,14 @@ def test_canonical_path_uses_typed_compact_synthesis_payload() -> None:
     assert provider.calls
     payload = provider.calls[0]["payload"]
     task = json.loads(payload["messages"][0]["content"])
-    assert task["output"]["schema_version"] == "m26-fas-synthesis/v1"
+    assert task["output"]["schema_version"] == "m26-fas-synthesis/v2"
     assert task["output"]["claims"][0]["claim_type"] == (
         "EVIDENCE_FACT|EVIDENCE_SYNTHESIS|MODEL_EXPLANATION"
     )
+    assert "surface_text" not in task["output"]["claims"][0]
     assert task["output"]["claims"][0]["evidence_labels"] == ["e1"]
     assert task["output"]["claims"][0]["covers"] == []
+    assert "[[claim_id]]" in task["output"]["answer_text"]
     assert payload["max_tokens"] > 512
 
 
@@ -558,7 +560,10 @@ def test_supported_partial_answer_states_unsupported_boundary() -> None:
             "durable-note",
         )
     ]
-    partial = "Durable state helps because it preserves progress after a disconnect."
+    partial = (
+        "Durable state helps because it preserves progress after a disconnect [[claim_1]]. "
+        "The available evidence does not establish the verification side [[claim_2]]."
+    )
     provider = _SequenceTypedProvider(
         [
             _typed_body(
@@ -572,6 +577,13 @@ def test_supported_partial_answer_states_unsupported_boundary() -> None:
                         "evidence_labels": ["e1"],
                         "covers": ["explanatory_answer"],
                         "unanswered_dimensions": ["verification side"],
+                    },
+                    {
+                        "claim_id": "claim_2",
+                        "claim_type": "MODEL_EXPLANATION",
+                        "evidence_labels": [],
+                        "covers": ["verification_completion"],
+                        "unanswered_dimensions": ["verification side"],
                     }
                 ],
                 unanswered_dimensions=["verification side"],
@@ -583,8 +595,14 @@ def test_supported_partial_answer_states_unsupported_boundary() -> None:
 
     assert len(_synthesis_calls(provider)) == 1
     assert answer["status"] == "owner_only_cited_answer"
-    assert "Unsupported boundary" in answer["answer_text"]
+    assert "available evidence does not establish the verification side" in answer[
+        "answer_text"
+    ]
+    assert "Unsupported boundary" not in answer["answer_text"]
     assert answer["multi_evidence_verification"]["partial_answer"] is True
+    assert answer["multi_evidence_verification"]["unanswered_dimensions"] == [
+        "verification side"
+    ]
     assert closure["partial_answer"] is True
 
 
