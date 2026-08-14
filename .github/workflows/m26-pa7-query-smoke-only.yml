@@ -63,22 +63,27 @@ jobs:
           REMOTE_CLEANUP
           }
           trap cleanup_remote EXIT
+          remote_log="$WORK_DIR/evidence/remote-run.stderr"
           set +e
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' 2> "$remote_log"
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          container_id="$(docker compose ps -q knowledge-engine | head -n 1)"
-          test -n "$container_id"
-          docker cp /tmp/m26-q01-paired-variant-a.tgz "$container_id":/tmp/m26-q01-paired-variant-a.tgz
-          docker cp /tmp/m26-q01-paired-variant-b.tgz "$container_id":/tmp/m26-q01-paired-variant-b.tgz
-          docker cp /tmp/m26-q01-paired-controller.tgz "$container_id":/tmp/m26-q01-paired-controller.tgz
           docker compose exec -T knowledge-engine bash -lc '
             set -euo pipefail
             rm -rf /tmp/m26-q01-paired-A /tmp/m26-q01-paired-B /tmp/m26-q01-paired-controller /tmp/m26-q01-paired-stability.json /tmp/m26-q01-paired-stability-error.json
             mkdir -p /tmp/m26-q01-paired-A /tmp/m26-q01-paired-B /tmp/m26-q01-paired-controller
-            tar -xzf /tmp/m26-q01-paired-variant-a.tgz -C /tmp/m26-q01-paired-A
-            tar -xzf /tmp/m26-q01-paired-variant-b.tgz -C /tmp/m26-q01-paired-B
-            tar -xzf /tmp/m26-q01-paired-controller.tgz -C /tmp/m26-q01-paired-controller
+          '
+          docker compose exec -T knowledge-engine bash -lc \
+            'set -euo pipefail; tar -xzf - -C /tmp/m26-q01-paired-A' \
+            < /tmp/m26-q01-paired-variant-a.tgz
+          docker compose exec -T knowledge-engine bash -lc \
+            'set -euo pipefail; tar -xzf - -C /tmp/m26-q01-paired-B' \
+            < /tmp/m26-q01-paired-variant-b.tgz
+          docker compose exec -T knowledge-engine bash -lc \
+            'set -euo pipefail; tar -xzf - -C /tmp/m26-q01-paired-controller' \
+            < /tmp/m26-q01-paired-controller.tgz
+          docker compose exec -T knowledge-engine bash -lc '
+            set -euo pipefail
             cd /tmp/m26-q01-paired-controller
             set +e
             python m26_q01_paired_stability.py \
@@ -101,22 +106,76 @@ jobs:
           REMOTE
           remote_status=$?
           set -e
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-q01-paired-stability.json"
+          set +e
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-q01-paired-stability.json" 2>> "$remote_log"
           set -euo pipefail
           cd "$DEPLOY_PATH"
           docker compose exec -T knowledge-engine bash -lc \
             'set -euo pipefail; cat /tmp/m26-q01-paired-stability.json'
           REMOTE
-          if ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-q01-paired-stability-error.json"
+          profile_read_status=$?
+          set -e
+          if [ "$profile_read_status" -ne 0 ] || [ ! -s "$WORK_DIR/evidence/m26-q01-paired-stability.json" ]; then
+            python3 - "$WORK_DIR/evidence/m26-q01-paired-stability.json" "$remote_status" "$profile_read_status" "$remote_log" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          log = Path(sys.argv[4])
+          stderr_tail = log.read_text(errors="replace")[-4000:] if log.exists() else ""
+          path.write_text(json.dumps({
+              "schema_version": "m26-q01-paired-stability/v1",
+              "case_id": "R3-Q01",
+              "case_count": 0,
+              "execution_order": [],
+              "variant_summary": {"A": {"run_count": 0}, "B": {"run_count": 0}},
+              "rows": [],
+              "diagnostic_controller_exception": {
+                  "exception_class": "diagnostic_carrier_no_profile_artifact",
+                  "remote_status": int(sys.argv[2]),
+                  "profile_read_status": int(sys.argv[3]),
+                  "stderr_tail_sha256": hashlib.sha256(stderr_tail.encode()).hexdigest(),
+              },
+              "protected_knowledge_mutations": 0,
+              "sequential_concurrency": 1,
+              "raw_questions_recorded": False,
+              "raw_answers_recorded": False,
+              "raw_evidence_recorded": False,
+              "raw_prompts_recorded": False,
+              "raw_provider_text_recorded": False,
+          }, indent=2, sort_keys=True) + "\n")
+          PY
+          fi
+          set +e
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-q01-paired-stability-error.json" 2>> "$remote_log"
           set -euo pipefail
           cd "$DEPLOY_PATH"
           docker compose exec -T knowledge-engine bash -lc \
             'set -euo pipefail; cat /tmp/m26-q01-paired-stability-error.json'
           REMOTE
-          then
-            :
-          else
-            printf '%s\n' '{"schema_version":"m26-q01-paired-stability-errors/v1","error_count":0}' > "$WORK_DIR/evidence/m26-q01-paired-stability-error.json"
+          error_read_status=$?
+          set -e
+          if [ "$error_read_status" -ne 0 ] || [ ! -s "$WORK_DIR/evidence/m26-q01-paired-stability-error.json" ]; then
+            python3 - "$WORK_DIR/evidence/m26-q01-paired-stability-error.json" "$remote_status" "$error_read_status" "$remote_log" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          log = Path(sys.argv[4])
+          stderr_tail = log.read_text(errors="replace")[-4000:] if log.exists() else ""
+          Path(sys.argv[1]).write_text(json.dumps({
+              "schema_version": "m26-q01-paired-stability-errors/v1",
+              "error_count": 1,
+              "errors": [{
+                  "exception_class": "diagnostic_carrier_no_error_artifact",
+                  "remote_status": int(sys.argv[2]),
+                  "error_read_status": int(sys.argv[3]),
+                  "stderr_tail_sha256": hashlib.sha256(stderr_tail.encode()).hexdigest(),
+              }],
+              "raw_questions_recorded": False,
+              "raw_answers_recorded": False,
+              "raw_evidence_recorded": False,
+              "raw_prompts_recorded": False,
+              "raw_provider_text_recorded": False,
+          }, indent=2, sort_keys=True) + "\n")
+          PY
           fi
           exit "$remote_status"
 
