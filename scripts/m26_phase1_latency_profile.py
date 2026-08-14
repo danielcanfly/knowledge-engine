@@ -291,6 +291,68 @@ def _histograms(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _semantic_review_verdict_summary(
+    verification: Mapping[str, Any],
+) -> dict[str, Any]:
+    review = verification.get("semantic_review", {})
+    if not isinstance(review, Mapping):
+        return {
+            "claim_judgment_count": 0,
+            "claim_verdict_counts": {},
+            "coverage_verdict": "",
+            "evidence_id_reference_count": 0,
+        }
+    verdicts = Counter()
+    evidence_ref_count = 0
+    judgments = review.get("claim_judgments", [])
+    if isinstance(judgments, Sequence) and not isinstance(judgments, (str, bytes)):
+        for judgment in judgments:
+            if not isinstance(judgment, Mapping):
+                continue
+            verdicts[str(judgment.get("verdict", ""))] += 1
+            evidence_ids = judgment.get("evidence_ids", [])
+            if isinstance(evidence_ids, Sequence) and not isinstance(
+                evidence_ids, (str, bytes)
+            ):
+                evidence_ref_count += len(evidence_ids)
+    coverage = review.get("visible_coverage", {})
+    coverage_verdict = (
+        str(coverage.get("verdict", "")) if isinstance(coverage, Mapping) else ""
+    )
+    return {
+        "claim_judgment_count": sum(verdicts.values()),
+        "claim_verdict_counts": dict(sorted(verdicts.items())),
+        "coverage_verdict": coverage_verdict,
+        "evidence_id_reference_count": evidence_ref_count,
+    }
+
+
+def _semantic_review_verdict_totals(
+    rows: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    claim_verdicts = Counter()
+    coverage_verdicts = Counter()
+    judgment_count = 0
+    evidence_ref_count = 0
+    for row in rows:
+        summary = row.get("semantic_review_verdict_summary", {})
+        if not isinstance(summary, Mapping):
+            continue
+        judgment_count += int(summary.get("claim_judgment_count", 0))
+        evidence_ref_count += int(summary.get("evidence_id_reference_count", 0))
+        for verdict, count in dict(summary.get("claim_verdict_counts", {})).items():
+            claim_verdicts[str(verdict)] += int(count)
+        coverage_verdict = str(summary.get("coverage_verdict", ""))
+        if coverage_verdict:
+            coverage_verdicts[coverage_verdict] += 1
+    return {
+        "claim_judgment_count": judgment_count,
+        "claim_verdict_counts": dict(sorted(claim_verdicts.items())),
+        "coverage_verdict_counts": dict(sorted(coverage_verdicts.items())),
+        "evidence_id_reference_count": evidence_ref_count,
+    }
+
+
 def _install_stage_wrappers(profiler: Phase1Profiler) -> Callable[[], None]:
     original_bundle = runtime.load_production_answer_bundle
     original_lexical = runtime.retrieve_wiki_first
@@ -428,6 +490,9 @@ def _run_case(
                 else []
             ),
         },
+        "semantic_review_verdict_summary": _semantic_review_verdict_summary(
+            verification if isinstance(verification, Mapping) else {}
+        ),
     }
 
 
@@ -490,6 +555,7 @@ def main() -> int:
         "stage_pareto": _stage_pareto(answer_rows),
         "provider_pareto": _provider_pareto(answer_rows),
         "repair_and_first_review_histograms": _histograms(answer_rows),
+        "semantic_review_verdict_totals": _semantic_review_verdict_totals(answer_rows),
         "rows": rows,
     }
     args.output.write_text(
