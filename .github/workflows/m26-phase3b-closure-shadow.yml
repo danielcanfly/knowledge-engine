@@ -1,0 +1,102 @@
+name: M26 Phase 3B Closure Shadow Sentinels
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-phase3b-closure-shadow.yml"
+      - "scripts/m26_phase3b_closure_shadow.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-phase3b-closure-shadow-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  closure_shadow_sentinels:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.head_ref == 'gpt-m26/phase3b-closure-shadow')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: m23-r3-diagnostic
+    env:
+      WORK_DIR: /tmp/m26-phase3b-closure-shadow
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+          show-progress: false
+
+      - name: Prepare isolated source
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK_DIR/evidence"
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+          git archive --format=tar.gz --output="$WORK_DIR/source.tgz" HEAD src pilot scripts/m26_phase3b_closure_shadow.py pyproject.toml
+          scp "$WORK_DIR/source.tgz" oracle-knowledge:/tmp/m26-phase3b-closure-shadow-source.tgz
+
+      - name: Run frozen-A versus M2.7-highspeed closure sentinels
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          docker compose exec -T knowledge-engine bash -lc '
+            set -euo pipefail
+            rm -rf /tmp/m26-phase3b-closure-shadow /tmp/m26-phase3b-closure-shadow.json
+            mkdir -p /tmp/m26-phase3b-closure-shadow
+            tar -xzf - -C /tmp/m26-phase3b-closure-shadow
+          ' < /tmp/m26-phase3b-closure-shadow-source.tgz
+          docker compose exec -T knowledge-engine bash -lc '
+            set -euo pipefail
+            cd /tmp/m26-phase3b-closure-shadow
+            PYTHONPATH=/tmp/m26-phase3b-closure-shadow/src:${PYTHONPATH:-} \
+              python scripts/m26_phase3b_closure_shadow.py \
+                --root /tmp/m26-phase3b-closure-shadow \
+                --output /tmp/m26-phase3b-closure-shadow.json
+          ' </dev/null
+          REMOTE
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-phase3b-closure-shadow.json"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          docker compose exec -T knowledge-engine bash -lc 'cat /tmp/m26-phase3b-closure-shadow.json' </dev/null
+          rm -f /tmp/m26-phase3b-closure-shadow-source.tgz
+          REMOTE
+
+      - name: Validate sanitized Phase 3B sentinel artifact
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path(os.environ['WORK_DIR']) / 'evidence/m26-phase3b-closure-shadow.json'
+          data = json.loads(path.read_text())
+          assert data['pair_count'] == 4
+          assert data['a_closure_model'] == 'MiniMax-M3'
+          assert data['b_closure_model'] == 'MiniMax-M2.7-highspeed'
+          assert data['reviewer_model_both_variants'] == 'MiniMax-M3'
+          assert data['authority'] == 'A_frozen_closure_and_frozen_M3_reviewer'
+          assert data['protected_knowledge_mutations'] == 0
+          for key in ('raw_questions_recorded','raw_answers_recorded','raw_evidence_recorded','raw_prompts_recorded','raw_provider_text_recorded'):
+              assert data[key] is False
+          PY
+
+      - name: Upload Phase 3B sentinel evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-phase3b-closure-shadow-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/m26-phase3b-closure-shadow/evidence
+          if-no-files-found: error
+          retention-days: 30
