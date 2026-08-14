@@ -67,22 +67,18 @@ jobs:
           ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
+          container_id="$(docker compose ps -q knowledge-engine | head -n 1)"
+          test -n "$container_id"
+          docker cp /tmp/m26-q01-paired-variant-a.tgz "$container_id":/tmp/m26-q01-paired-variant-a.tgz
+          docker cp /tmp/m26-q01-paired-variant-b.tgz "$container_id":/tmp/m26-q01-paired-variant-b.tgz
+          docker cp /tmp/m26-q01-paired-controller.tgz "$container_id":/tmp/m26-q01-paired-controller.tgz
           docker compose exec -T knowledge-engine bash -lc '
             set -euo pipefail
             rm -rf /tmp/m26-q01-paired-A /tmp/m26-q01-paired-B /tmp/m26-q01-paired-controller /tmp/m26-q01-paired-stability.json /tmp/m26-q01-paired-stability-error.json
             mkdir -p /tmp/m26-q01-paired-A /tmp/m26-q01-paired-B /tmp/m26-q01-paired-controller
-          '
-          docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; tar -xzf - -C /tmp/m26-q01-paired-A' \
-            < /tmp/m26-q01-paired-variant-a.tgz
-          docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; tar -xzf - -C /tmp/m26-q01-paired-B' \
-            < /tmp/m26-q01-paired-variant-b.tgz
-          docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; tar -xzf - -C /tmp/m26-q01-paired-controller' \
-            < /tmp/m26-q01-paired-controller.tgz
-          docker compose exec -T knowledge-engine bash -lc '
-            set -euo pipefail
+            tar -xzf /tmp/m26-q01-paired-variant-a.tgz -C /tmp/m26-q01-paired-A
+            tar -xzf /tmp/m26-q01-paired-variant-b.tgz -C /tmp/m26-q01-paired-B
+            tar -xzf /tmp/m26-q01-paired-controller.tgz -C /tmp/m26-q01-paired-controller
             cd /tmp/m26-q01-paired-controller
             set +e
             python m26_q01_paired_stability.py \
