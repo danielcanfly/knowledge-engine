@@ -4,7 +4,9 @@ import argparse
 import json
 import math
 import os
+import re
 import time
+import traceback
 from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal
@@ -139,6 +141,74 @@ def _usage_int(usage: Mapping[str, Any], *keys: str) -> int:
         if isinstance(value, (int, float)):
             return int(value)
     return 0
+
+
+def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    tmp.replace(path)
+
+
+def _sanitized_reason_codes(exc: BaseException) -> list[str]:
+    codes: list[str] = []
+    code = getattr(exc, "code", None)
+    if code:
+        codes.append(str(code))
+    text = str(exc)
+    codes.extend(
+        re.findall(
+            r"M26-PA7-ME-\d+|SEMANTIC_[A-Z0-9_]+|PA7_[A-Z0-9_]+|[A-Z][A-Z0-9_]{3,}",
+            text,
+        )
+    )
+    if not codes:
+        codes.append(type(exc).__name__)
+    return list(dict.fromkeys(str(item) for item in codes if str(item)))
+
+
+def _sanitized_traceback(exc: BaseException) -> list[dict[str, Any]]:
+    if exc.__traceback__ is None:
+        return []
+    frames = []
+    for frame in traceback.extract_tb(exc.__traceback__):
+        frames.append(
+            {
+                "file": Path(frame.filename).name,
+                "line": int(frame.lineno),
+                "function": str(frame.name),
+            }
+        )
+    return frames[-12:]
+
+
+def _error_receipt(
+    *,
+    exc: BaseException,
+    case: Mapping[str, Any] | None,
+    stage_reached: str,
+    provider_call_count: int,
+    repair_attempted: bool,
+) -> dict[str, Any]:
+    return {
+        "schema_version": "m26-latency-phase1-sanitized-error/v1",
+        "case_id": str(case.get("case_id", "")) if isinstance(case, Mapping) else "",
+        "expected": str(case.get("expected", "")) if isinstance(case, Mapping) else "",
+        "exception_class": type(exc).__name__,
+        "reason_codes": _sanitized_reason_codes(exc),
+        "stage_reached": stage_reached,
+        "provider_call_count": provider_call_count,
+        "repair_attempted": repair_attempted,
+        "sanitized_traceback": _sanitized_traceback(exc),
+        "raw_questions_recorded": False,
+        "raw_answers_recorded": False,
+        "raw_evidence_recorded": False,
+        "raw_prompts_recorded": False,
+        "raw_provider_text_recorded": False,
+    }
 
 
 def _percentile(values: Sequence[int | float], q: float) -> float:
@@ -423,6 +493,64 @@ def _run_case(
             require_remote_dense=require_remote_dense,
             max_cost=Decimal("0.25"),
         )
+    except Exception as exc:
+        stage_reached = (
+            str(profiler.stage_timings[-1].get("stage", "request_dispatch"))
+            if profiler.stage_timings
+            else "request_dispatch"
+        )
+        provider_call_count = len(
+            [
+                call
+                for call in profiler.provider_calls
+                if call.get("call_class") in SEMANTIC_CALLS
+            ]
+        )
+        repair_attempted = any(
+            call.get("call_class") == "aq_semantic_closure_repair"
+            for call in profiler.provider_calls
+        )
+        receipt = _error_receipt(
+            exc=exc,
+            case=case,
+            stage_reached=stage_reached,
+            provider_call_count=provider_call_count,
+            repair_attempted=repair_attempted,
+        )
+        return {
+            "case_id": str(case.get("case_id", "")),
+            "class": str(case.get("class", "")),
+            "expected": str(case.get("expected", "")),
+            "question_sha256": canonical_sha256(str(case.get("question", ""))),
+            "status": "diagnostic_exception",
+            "terminal_status": "diagnostic_exception",
+            "safe_abstention": True,
+            "answer_source": "diagnostic_exception",
+            "total_latency_ms": _elapsed_ms(started),
+            "provider_call_count": provider_call_count,
+            "repair_attempted": repair_attempted,
+            "selected_evidence_count": 0,
+            "claim_count": 0,
+            "citation_count": 0,
+            "unsupported_accepted_claims": 0,
+            "provider_contract": "",
+            "natural_answer_fallback_used": False,
+            "stage_timings": profiler.stage_timings,
+            "provider_calls": profiler.provider_calls,
+            "provider_attempt_telemetry_count": 0,
+            "multi_evidence_verification": {
+                "repair_trigger": [],
+                "verification_failure_codes_by_attempt": receipt["reason_codes"],
+            },
+            "semantic_review_verdict_summary": {
+                "claim_judgment_count": 0,
+                "claim_verdict_counts": {},
+                "coverage_verdict": "",
+                "evidence_id_reference_count": 0,
+            },
+            "diagnostic_failure": True,
+            "diagnostic_failure_receipt": receipt,
+        }
     finally:
         restore()
     total_latency_ms = _elapsed_ms(started)
@@ -496,59 +624,77 @@ def _run_case(
     }
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--root", type=Path, default=Path("."))
-    parser.add_argument("--questions", type=Path, required=True)
-    parser.add_argument("--limit", type=int, default=10)
-    parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
+def _row_failure(row: Mapping[str, Any]) -> dict[str, Any] | None:
+    if row.get("diagnostic_failure"):
+        receipt = row.get("diagnostic_failure_receipt", {})
+        return {
+            "case_id": str(row.get("case_id", "")),
+            "reason": "diagnostic_exception",
+            "status": str(row.get("status", "")),
+            "exception_class": str(receipt.get("exception_class", ""))
+            if isinstance(receipt, Mapping)
+            else "",
+            "reason_codes": list(receipt.get("reason_codes", []))
+            if isinstance(receipt, Mapping)
+            else [],
+            "stage_reached": str(receipt.get("stage_reached", ""))
+            if isinstance(receipt, Mapping)
+            else "",
+        }
+    expected = str(row.get("expected", ""))
+    if expected == "answer":
+        if row.get("status") != "owner_only_cited_answer":
+            return {
+                "case_id": str(row.get("case_id", "")),
+                "reason": "answer_status",
+                "status": str(row.get("status", "")),
+                "reason_codes": list(
+                    row.get("multi_evidence_verification", {}).get(
+                        "verification_failure_codes_by_attempt", []
+                    )
+                )
+                if isinstance(row.get("multi_evidence_verification"), Mapping)
+                else [],
+            }
+        if int(row.get("unsupported_accepted_claims", 0)) != 0:
+            return {
+                "case_id": str(row.get("case_id", "")),
+                "reason": "unsupported_claim",
+                "unsupported_accepted_claims": int(
+                    row.get("unsupported_accepted_claims", 0)
+                ),
+            }
+    elif row.get("case_id") in {"R3-Q10", "R3-Q11"} and not row.get(
+        "safe_abstention"
+    ):
+        return {
+            "case_id": str(row.get("case_id", "")),
+            "reason": "safe_abstention",
+            "status": str(row.get("status", "")),
+        }
+    return None
 
-    root = args.root.resolve()
-    gate_path = root / DEFAULT_GATE_PATH
-    owner_hash = os.environ["KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"]
-    provider = MiniMaxClient(
-        os.environ.get("MINIMAX_API_KEY", ""),
-        max_calls=64,
-        max_cost=Decimal("2.00"),
-    )
-    dense_channel = legacy.dense_channel_from_env(
-        require_remote=os.environ.get("M26_QUERY_REQUIRE_REMOTE_DENSE", "").lower()
-        == "true"
-    )
-    cases = _selected_cases(_load_cases(args.questions), args.limit)
-    rows = []
-    failures = []
-    for case in cases:
-        row = _run_case(
-            root=root,
-            gate_path=gate_path,
-            case=case,
-            owner_subject_hash=owner_hash,
-            provider_client=provider,
-            dense_channel=dense_channel,
-            require_remote_dense=False,
-        )
-        rows.append(row)
-        expected = row["expected"]
-        if expected == "answer":
-            if row["status"] != "owner_only_cited_answer":
-                failures.append({"case_id": row["case_id"], "reason": "answer_status"})
-            if row["unsupported_accepted_claims"] != 0:
-                failures.append({"case_id": row["case_id"], "reason": "unsupported_claim"})
-        elif row["case_id"] in {"R3-Q10", "R3-Q11"}:
-            if not row["safe_abstention"]:
-                failures.append({"case_id": row["case_id"], "reason": "safe_abstention"})
+
+def _build_artifact(
+    *,
+    rows: Sequence[Mapping[str, Any]],
+    failures: Sequence[Mapping[str, Any]],
+    error_receipts: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
     answer_rows = [row for row in rows if row.get("expected") == "answer"]
-    artifact = {
+    return {
         "schema_version": "m26-latency-phase1-profile/v1",
         "case_count": len(rows),
         "answerable_profile_case_count": len(answer_rows),
         "failure_count": len(failures),
-        "failures": failures,
+        "failures": list(failures),
+        "error_receipt_count": len(error_receipts),
+        "error_receipts": list(error_receipts),
         "sequential_concurrency": 1,
         "raw_questions_recorded": False,
         "raw_answers_recorded": False,
+        "raw_evidence_recorded": False,
+        "raw_prompts_recorded": False,
         "raw_provider_text_recorded": False,
         "protected_knowledge_mutations": 0,
         "totals": _summary([row["total_latency_ms"] for row in answer_rows]),
@@ -556,12 +702,100 @@ def main() -> int:
         "provider_pareto": _provider_pareto(answer_rows),
         "repair_and_first_review_histograms": _histograms(answer_rows),
         "semantic_review_verdict_totals": _semantic_review_verdict_totals(answer_rows),
-        "rows": rows,
+        "rows": [dict(row) for row in rows],
     }
-    args.output.write_text(
-        json.dumps(artifact, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+
+
+def _write_error_output(
+    path: Path | None,
+    error_receipts: Sequence[Mapping[str, Any]],
+) -> None:
+    if path is None:
+        return
+    _atomic_write_json(
+        path,
+        {
+            "schema_version": "m26-latency-phase1-sanitized-errors/v1",
+            "error_count": len(error_receipts),
+            "errors": list(error_receipts),
+            "raw_questions_recorded": False,
+            "raw_answers_recorded": False,
+            "raw_evidence_recorded": False,
+            "raw_prompts_recorded": False,
+            "raw_provider_text_recorded": False,
+        },
     )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", type=Path, default=Path("."))
+    parser.add_argument("--questions", type=Path, required=True)
+    parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--error-output", type=Path)
+    args = parser.parse_args()
+
+    rows: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    error_receipts: list[dict[str, Any]] = []
+    try:
+        root = args.root.resolve()
+        gate_path = root / DEFAULT_GATE_PATH
+        owner_hash = os.environ["KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"]
+        provider = MiniMaxClient(
+            os.environ.get("MINIMAX_API_KEY", ""),
+            max_calls=64,
+            max_cost=Decimal("2.00"),
+        )
+        dense_channel = legacy.dense_channel_from_env(
+            require_remote=os.environ.get("M26_QUERY_REQUIRE_REMOTE_DENSE", "").lower()
+            == "true"
+        )
+        cases = _selected_cases(_load_cases(args.questions), args.limit)
+        for case in cases:
+            row = _run_case(
+                root=root,
+                gate_path=gate_path,
+                case=case,
+                owner_subject_hash=owner_hash,
+                provider_client=provider,
+                dense_channel=dense_channel,
+                require_remote_dense=False,
+            )
+            rows.append(row)
+            receipt = row.get("diagnostic_failure_receipt")
+            if isinstance(receipt, Mapping):
+                error_receipts.append(dict(receipt))
+            failure = _row_failure(row)
+            if failure is not None:
+                failures.append(failure)
+                break
+    except Exception as exc:
+        receipt = _error_receipt(
+            exc=exc,
+            case=None,
+            stage_reached="profile_setup_or_artifact",
+            provider_call_count=0,
+            repair_attempted=False,
+        )
+        error_receipts.append(receipt)
+        failures.append(
+            {
+                "case_id": "",
+                "reason": "profile_setup_or_artifact",
+                "exception_class": receipt["exception_class"],
+                "reason_codes": receipt["reason_codes"],
+                "stage_reached": receipt["stage_reached"],
+            }
+        )
+    artifact = _build_artifact(
+        rows=rows,
+        failures=failures,
+        error_receipts=error_receipts,
+    )
+    _atomic_write_json(args.output, artifact)
+    _write_error_output(args.error_output, error_receipts)
     print(json.dumps({"output": str(args.output), "case_count": len(rows)}))
     return 0 if not failures else 1
 

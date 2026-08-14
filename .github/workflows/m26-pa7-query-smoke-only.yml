@@ -51,24 +51,35 @@ jobs:
           tar --exclude='.git' -czf "$WORK_DIR/source.tgz" \
             src scripts pilot pyproject.toml
           scp "$WORK_DIR/source.tgz" oracle-knowledge:/tmp/m26-latency-phase1-source.tgz
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_HEAD_SHA='$EXPECTED_HEAD_SHA' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-latency-phase1-profile.json"
+          cleanup_remote() {
+            ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE_CLEANUP' >/dev/null 2>&1 || true
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          rm -f /tmp/m26-latency-phase1-source.tgz || true
+          docker compose exec -T knowledge-engine bash -lc \
+            'rm -rf /tmp/m26-latency-phase1-source /tmp/m26-latency-phase1-profile.json /tmp/m26-latency-phase1-profile-error.json' \
+            >/dev/null 2>&1 || true
+          REMOTE_CLEANUP
+          }
+          trap cleanup_remote EXIT
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_HEAD_SHA='$EXPECTED_HEAD_SHA' bash -se" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
           container_id="$(docker compose ps -q knowledge-engine | head -n 1)"
           test -n "$container_id"
-          cleanup() {
-            rm -f /tmp/m26-latency-phase1-source.tgz || true
-            docker compose exec -T knowledge-engine bash -lc \
-              'rm -rf /tmp/m26-latency-phase1-source /tmp/m26-latency-phase1-profile.json' \
-              >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
           docker compose exec -T knowledge-engine bash -lc '
             set -euo pipefail
-            rm -rf /tmp/m26-latency-phase1-source /tmp/m26-latency-phase1-profile.json
+            rm -rf /tmp/m26-latency-phase1-source /tmp/m26-latency-phase1-profile.json /tmp/m26-latency-phase1-profile-error.json
             mkdir -p /tmp/m26-latency-phase1-source
             tar -xzf - -C /tmp/m26-latency-phase1-source
           ' < /tmp/m26-latency-phase1-source.tgz
+          REMOTE
+          set +e
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_HEAD_SHA='$EXPECTED_HEAD_SHA' bash -se" <<'REMOTE' \
+            > "$WORK_DIR/m26-latency-phase1-profile-run.stdout" \
+            2> "$WORK_DIR/m26-latency-phase1-profile-run.stderr"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
           docker compose exec -T knowledge-engine bash -lc '
             set -euo pipefail
             cd /tmp/m26-latency-phase1-source
@@ -78,11 +89,29 @@ jobs:
                 --root /tmp/m26-latency-phase1-source \
                 --questions pilot/m26/m26-aq-final-r3-questions.json \
                 --limit 10 \
-                --output /tmp/m26-latency-phase1-profile.json
-          ' >/dev/null
+                --output /tmp/m26-latency-phase1-profile.json \
+                --error-output /tmp/m26-latency-phase1-profile-error.json
+          '
+          REMOTE
+          profile_status=$?
+          set -e
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-latency-phase1-profile.json"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
           docker compose exec -T knowledge-engine bash -lc \
             'set -euo pipefail; cat /tmp/m26-latency-phase1-profile.json'
           REMOTE
+          if ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-latency-phase1-profile-error.json"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          docker compose exec -T knowledge-engine bash -lc \
+            'set -euo pipefail; cat /tmp/m26-latency-phase1-profile-error.json'
+          REMOTE
+          then
+            :
+          else
+            printf '%s\n' '{"schema_version":"m26-latency-phase1-sanitized-errors/v1","error_count":0,"errors":[]}' > "$WORK_DIR/evidence/m26-latency-phase1-profile-error.json"
+          fi
           python3 - <<'PY' > "$WORK_DIR/evidence/profile-summary.json"
           import json
           import os
@@ -96,10 +125,13 @@ jobs:
               "protected_knowledge_mutations": profile.get("protected_knowledge_mutations"),
               "raw_questions_recorded": profile.get("raw_questions_recorded"),
               "raw_answers_recorded": profile.get("raw_answers_recorded"),
+              "raw_evidence_recorded": profile.get("raw_evidence_recorded"),
+              "raw_prompts_recorded": profile.get("raw_prompts_recorded"),
               "raw_provider_text_recorded": profile.get("raw_provider_text_recorded"),
               "sequential_concurrency": profile.get("sequential_concurrency"),
           }, indent=2, sort_keys=True))
           PY
+          exit "$profile_status"
 
       - name: Upload latency profile evidence
         if: always()
@@ -125,6 +157,8 @@ jobs:
               or profile.get("protected_knowledge_mutations") != 0
               or profile.get("raw_questions_recorded") is not False
               or profile.get("raw_answers_recorded") is not False
+              or profile.get("raw_evidence_recorded") is not False
+              or profile.get("raw_prompts_recorded") is not False
               or profile.get("raw_provider_text_recorded") is not False
               or profile.get("sequential_concurrency") != 1
           )
