@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: m26-pa7-query-smoke-only-${{ github.ref }}
@@ -20,7 +19,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.head_ref == 'gpt/m26-pa7-full-graph-title-normalization')
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 14
     environment: m23-r3-diagnostic
     env:
       WORK_DIR: /tmp/m26-pa7-query-smoke-only
@@ -46,248 +45,87 @@ jobs:
           bash scripts/configure_oracle_ssh.sh
           printf '%s\n' "$EXPECTED_HEAD_SHA" > "$WORK_DIR/evidence/query-smoke-head-sha.txt"
 
-      - name: Smoke current Oracle backend query route
+      - name: Run isolated Phase 1 latency profile
         run: |
           set -euo pipefail
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_HEAD_SHA='$EXPECTED_HEAD_SHA' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/query-smoke-only.json"
+          tar --exclude='.git' -czf "$WORK_DIR/source.tgz" \
+            src scripts pilot pyproject.toml
+          scp "$WORK_DIR/source.tgz" oracle-knowledge:/tmp/m26-latency-phase1-source.tgz
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_HEAD_SHA='$EXPECTED_HEAD_SHA' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-latency-phase1-profile.json"
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          set -a
-          . ./.env
-          set +a
-          : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
-          : "${KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH:?missing owner hash}"
-          tmp_dir="$(mktemp -d)"
-          trap 'rm -rf "$tmp_dir"' EXIT
-          health_code="$(curl --silent --show-error \
-            -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
-            -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
-            -o "$tmp_dir/health.json" \
-            -w '%{http_code}' \
-            http://127.0.0.1:8080/api/m26/health || true)"
-          query_code="$(curl --silent --show-error \
-            -H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" \
-            -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH" \
-            -H "content-type: application/json" \
-            -o "$tmp_dir/query.json" \
-            -w '%{http_code}' \
-            --data '{"question":"Compare routers and adaptive planning for permission-first controls."}' \
-            http://127.0.0.1:8080/api/m26/query || true)"
-          if [ "$query_code" != "200" ]; then
-            docker compose logs --tail=200 knowledge-engine > "$tmp_dir/query-runtime-raw.log" 2>&1 || true
-            python3 - "$tmp_dir/query-runtime-raw.log" "$tmp_dir/query-runtime-sanitized.log" <<'PY'
-          import re
-          import sys
-          from pathlib import Path
-          source = Path(sys.argv[1])
-          target = Path(sys.argv[2])
-          text = source.read_text(errors="replace") if source.exists() else ""
-          patterns = [
-              (re.compile(r'(?i)bearer\s+[a-z0-9._~+/=-]{8,}'), 'Bearer [REDACTED]'),
-              (re.compile(r'(?i)(token|secret|password|api[_-]?key)=([^\s]+)'), r'\1=[REDACTED]'),
-              (re.compile(r'gh[pousr]_[A-Za-z0-9_]{20,}'), '[REDACTED_GITHUB_TOKEN]'),
-              (re.compile(r'sk-[A-Za-z0-9_-]{16,}'), '[REDACTED_OPENAI_STYLE_KEY]'),
-          ]
-          for pattern, repl in patterns:
-              text = pattern.sub(repl, text)
-          target.write_text(text[-12000:] or 'no backend logs captured\n', encoding='utf-8')
-          PY
-            docker compose exec -T knowledge-engine python - <<'PY' > "$tmp_dir/query-direct-diagnostic.json" 2> "$tmp_dir/query-direct-diagnostic.stderr" || true
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-
-          from knowledge_engine.m26_ask_api import DEFAULT_GATE_PATH, run_owner_query_for_web
-
-          question = "Compare routers and adaptive planning for permission-first controls."
-          try:
-              root = Path(os.environ.get("KNOWLEDGE_ENGINE_ROOT", ".")).resolve()
-              gate_path = Path(os.environ.get("M26_PA7_GATE_PATH", DEFAULT_GATE_PATH.as_posix()))
-              if not gate_path.is_absolute():
-                  gate_path = root / gate_path
-              response = run_owner_query_for_web(
-                  root=root,
-                  gate_path=gate_path,
-                  request_payload={"question": question},
-                  owner_subject_hash=os.environ.get("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", ""),
-                  require_remote_dense=os.environ.get("M26_QUERY_REQUIRE_REMOTE_DENSE", "").lower() == "true",
-              )
-              print(json.dumps({
-                  "status": "pass",
-                  "response_schema_version": response.get("schema_version"),
-                  "response_status": response.get("status"),
-                  "terminal_status": response.get("terminal_status"),
-                  "trace_id_present": bool(response.get("trace_id")),
-                  "reason_codes": response.get("reason_codes", []),
-                  "citation_count": len(response.get("citations", [])),
-                  "source_count": len(response.get("sources", [])),
-              }, sort_keys=True))
-          except Exception as exc:
-              message = str(exc)
-              print(json.dumps({
-                  "status": "exception",
-                  "exception_type": type(exc).__name__,
-                  "exception_module": type(exc).__module__,
-                  "reason_code": getattr(exc, "reason_code", None),
-                  "message_sha256": hashlib.sha256(message.encode("utf-8", "replace")).hexdigest(),
-              }, sort_keys=True))
-          PY
-          else
-            printf 'query passed; no runtime log captured\n' > "$tmp_dir/query-runtime-sanitized.log"
-            printf '{"status":"not_needed"}\n' > "$tmp_dir/query-direct-diagnostic.json"
-            printf '' > "$tmp_dir/query-direct-diagnostic.stderr"
-          fi
-          python3 - "$tmp_dir/health.json" "$tmp_dir/query.json" "$tmp_dir/query-runtime-sanitized.log" "$tmp_dir/query-direct-diagnostic.json" "$tmp_dir/query-direct-diagnostic.stderr" "$health_code" "$query_code" <<'PY'
-          import json
-          import os
-          import re
-          import sys
-          from pathlib import Path
-
-          def read_json(path):
-              try:
-                  return json.loads(Path(path).read_text())
-              except Exception:
-                  return {}
-
-          def reason(payload):
-              detail = payload.get("detail") if isinstance(payload, dict) else None
-              if isinstance(detail, dict):
-                  return detail.get("reason_code")
-              if isinstance(payload, dict):
-                  return payload.get("reason_code")
-              return None
-
-          def exception_hint(log_text):
-              matches = re.findall(r'([A-Za-z_][A-Za-z0-9_]*(?:Error|Exception))', log_text)
-              ignored = {"Exception", "BaseException"}
-              for item in reversed(matches):
-                  if item not in ignored:
-                      return item
-              return None
-
-          health = read_json(sys.argv[1])
-          query = read_json(sys.argv[2])
-          log_text = Path(sys.argv[3]).read_text(errors="replace")
-          direct = read_json(sys.argv[4])
-          direct_stderr = Path(sys.argv[5]).read_text(errors="replace")[:2000]
-          health_code = sys.argv[6]
-          query_code = sys.argv[7]
-          runtime = query.get("canonical_runtime", {}) if isinstance(query, dict) else {}
-          reasons = query.get("reason_codes", []) if isinstance(query, dict) else []
-          evidence = {
-              "schema_version": "knowledge-engine-m26-pa7-query-smoke-only/v3",
-              "status": "pass",
-              "expected_head_sha": os.environ["EXPECTED_HEAD_SHA"],
-              "health_http_status": health_code,
-              "health_status": health.get("status"),
-              "health_build_sha": health.get("canonical_runtime", {}).get("build_sha"),
-              "query_http_status": query_code,
-              "query_reason_code": reason(query),
-              "query_schema_version": query.get("schema_version") if isinstance(query, dict) else None,
-              "query_status": query.get("status") if isinstance(query, dict) else None,
-              "query_terminal_status": query.get("terminal_status") if isinstance(query, dict) else None,
-              "query_trace_id_present": bool(query.get("trace_id")) if isinstance(query, dict) else False,
-              "query_reason_codes": reasons if isinstance(reasons, list) else [],
-              "query_runtime_build_sha": runtime.get("build_sha") if isinstance(runtime, dict) else None,
-              "query_citation_count": len(query.get("citations", [])) if isinstance(query, dict) else 0,
-              "query_source_count": len(query.get("sources", [])) if isinstance(query, dict) else 0,
-              "query_exception_hint": exception_hint(log_text),
-              "direct_diagnostic_status": direct.get("status"),
-              "direct_exception_type": direct.get("exception_type"),
-              "direct_exception_module": direct.get("exception_module"),
-              "direct_reason_code": direct.get("reason_code"),
-              "direct_response_status": direct.get("response_status"),
-              "direct_terminal_status": direct.get("terminal_status"),
-              "direct_trace_id_present": direct.get("trace_id_present"),
-              "direct_stderr_present": bool(direct_stderr.strip()),
-              "sanitized_runtime_log_captured": query_code != "200",
-              "protected_knowledge_mutations": 0,
-              "raw_answer_text_recorded": False,
-              "raw_token_recorded": False,
-          }
-          if evidence["health_http_status"] != "200":
-              evidence["status"] = "fail_health_http"
-          elif evidence["query_http_status"] != "200":
-              evidence["status"] = "fail_query_http"
-          elif evidence["query_schema_version"] != "knowledge-engine-m26-pa7-ask-web-response/v1":
-              evidence["status"] = "fail_query_schema"
-          elif not evidence["query_trace_id_present"]:
-              evidence["status"] = "fail_query_trace"
-          print(json.dumps(evidence, indent=2, sort_keys=True))
-          PY
-          cp "$tmp_dir/query-runtime-sanitized.log" /tmp/query-runtime-sanitized.log
-          cp "$tmp_dir/query-direct-diagnostic.json" /tmp/query-direct-diagnostic.json
-          cp "$tmp_dir/query-direct-diagnostic.stderr" /tmp/query-direct-diagnostic.stderr
+          container_id="$(docker compose ps -q knowledge-engine | head -n 1)"
+          test -n "$container_id"
+          docker compose exec -T knowledge-engine bash -lc '
+            set -euo pipefail
+            rm -rf /tmp/m26-latency-phase1-source /tmp/m26-latency-phase1-profile.json
+            mkdir -p /tmp/m26-latency-phase1-source
+            tar -xzf - -C /tmp/m26-latency-phase1-source
+          ' < /tmp/m26-latency-phase1-source.tgz
+          docker compose exec -T knowledge-engine bash -lc '
+            set -euo pipefail
+            cd /tmp/m26-latency-phase1-source
+            EXPECTED_HEAD_SHA="'"$EXPECTED_HEAD_SHA"'" \
+            PYTHONPATH=/tmp/m26-latency-phase1-source/src:${PYTHONPATH:-} \
+              python scripts/m26_phase1_latency_profile.py \
+                --root /tmp/m26-latency-phase1-source \
+                --questions pilot/m26/m26-aq-final-r3-questions.json \
+                --limit 10 \
+                --output /tmp/m26-latency-phase1-profile.json
+          ' >/dev/null
+          docker compose exec -T knowledge-engine bash -lc \
+            'set -euo pipefail; cat /tmp/m26-latency-phase1-profile.json'
           REMOTE
-          scp oracle-knowledge:/tmp/query-runtime-sanitized.log "$WORK_DIR/evidence/query-runtime-sanitized.log" || true
-          scp oracle-knowledge:/tmp/query-direct-diagnostic.json "$WORK_DIR/evidence/query-direct-diagnostic.json" || true
-          scp oracle-knowledge:/tmp/query-direct-diagnostic.stderr "$WORK_DIR/evidence/query-direct-diagnostic.stderr" || true
+          python3 - <<'PY' > "$WORK_DIR/evidence/profile-summary.json"
+          import json
+          import os
+          from pathlib import Path
+          profile = json.loads((Path(os.environ["WORK_DIR"]) / "evidence/m26-latency-phase1-profile.json").read_text())
+          print(json.dumps({
+              "schema_version": "m26-latency-phase1-profile-summary/v1",
+              "case_count": profile.get("case_count"),
+              "answerable_profile_case_count": profile.get("answerable_profile_case_count"),
+              "failure_count": profile.get("failure_count"),
+              "protected_knowledge_mutations": profile.get("protected_knowledge_mutations"),
+              "raw_questions_recorded": profile.get("raw_questions_recorded"),
+              "raw_answers_recorded": profile.get("raw_answers_recorded"),
+              "raw_provider_text_recorded": profile.get("raw_provider_text_recorded"),
+              "sequential_concurrency": profile.get("sequential_concurrency"),
+          }, indent=2, sort_keys=True))
+          PY
 
-      - name: Upload query smoke evidence
-        id: upload
+      - name: Upload latency profile evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m26-pa7-query-smoke-only-${{ github.event.pull_request.head.sha || github.sha }}
+          name: m26-latency-phase1-profile-${{ github.event.pull_request.head.sha || github.sha }}
           path: /tmp/m26-pa7-query-smoke-only/evidence
           if-no-files-found: error
           retention-days: 30
 
-      - name: Report query smoke evidence on PA7 issue
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
-          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+      - name: Fail if latency profile failed
         run: |
           set -euo pipefail
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           import os
           from pathlib import Path
-          work = Path(os.environ["WORK_DIR"]) / "evidence"
-          smoke_path = work / "query-smoke-only.json"
-          smoke = json.loads(smoke_path.read_text()) if smoke_path.exists() else {"status": "missing"}
-          body = "\n".join([
-              "### M26.PA.7 query smoke-only result",
-              "",
-              f"- expected head SHA: `{smoke.get('expected_head_sha')}`",
-              f"- smoke status: `{smoke.get('status')}`",
-              f"- health build SHA: `{smoke.get('health_build_sha')}`",
-              f"- query HTTP status: `{smoke.get('query_http_status')}`",
-              f"- query reason code: `{smoke.get('query_reason_code')}`",
-              f"- query exception hint: `{smoke.get('query_exception_hint')}`",
-              f"- direct diagnostic status: `{smoke.get('direct_diagnostic_status')}`",
-              f"- direct exception: `{smoke.get('direct_exception_module')}.{smoke.get('direct_exception_type')}`",
-              f"- direct reason code: `{smoke.get('direct_reason_code')}`",
-              f"- direct response status: `{smoke.get('direct_response_status')}`",
-              f"- direct terminal status: `{smoke.get('direct_terminal_status')}`",
-              f"- query status: `{smoke.get('query_status')}`",
-              f"- query terminal status: `{smoke.get('query_terminal_status')}`",
-              f"- query trace present: `{smoke.get('query_trace_id_present')}`",
-              f"- query citations: `{smoke.get('query_citation_count')}`",
-              f"- query sources: `{smoke.get('query_source_count')}`",
-              f"- sanitized runtime log captured: `{smoke.get('sanitized_runtime_log_captured')}`",
-              f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
-              f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
-              "- protected knowledge mutations: `0`",
-              "- raw answer text recorded: `false`",
-              "- raw token recorded: `false`",
-          ])
-          (work / "issue-comment.md").write_text(body, encoding="utf-8")
-          PY
-          gh issue comment 1268 --repo "$GITHUB_REPOSITORY" --body-file "$WORK_DIR/evidence/issue-comment.md"
-
-      - name: Fail if query smoke failed
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          smoke = json.loads((Path(os.environ["WORK_DIR"]) / "evidence/query-smoke-only.json").read_text())
-          if smoke.get("status") != "pass":
-              raise SystemExit(json.dumps(smoke, sort_keys=True))
+          profile = json.loads((Path(os.environ["WORK_DIR"]) / "evidence/m26-latency-phase1-profile.json").read_text())
+          failed = (
+              profile.get("case_count") != 12
+              or profile.get("answerable_profile_case_count") != 10
+              or profile.get("failure_count") != 0
+              or profile.get("protected_knowledge_mutations") != 0
+              or profile.get("raw_questions_recorded") is not False
+              or profile.get("raw_answers_recorded") is not False
+              or profile.get("raw_provider_text_recorded") is not False
+              or profile.get("sequential_concurrency") != 1
+          )
+          if failed:
+              raise SystemExit(json.dumps({
+                  "case_count": profile.get("case_count"),
+                  "answerable_profile_case_count": profile.get("answerable_profile_case_count"),
+                  "failure_count": profile.get("failure_count"),
+                  "failures": profile.get("failures"),
+              }, sort_keys=True))
           PY
