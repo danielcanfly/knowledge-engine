@@ -48,6 +48,8 @@ COMPACT_PROVIDER_PARSE_FAILED = "COMPACT_PROVIDER_PARSE_FAILED"
 SEMANTIC_REVIEW_PARSE_FAILED = "SEMANTIC_REVIEW_PARSE_FAILED"
 SEMANTIC_REVIEW_SCHEMA_VERSION = legacy.SEMANTIC_REVIEW_SCHEMA_VERSION
 SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
+COMPACT_CLOSURE_SCHEMA_VERSION = "m26-fas-synthesis/segments/v1"
+SEMANTIC_SEGMENT_ROLES = {"material_claim", "model_explanation"}
 PARTIAL_SEMANTIC_CLOSURE_SOURCE = (
     "provider_verified_runtime_bound_partial_semantic_closure"
 )
@@ -411,19 +413,18 @@ def _synthesize_and_verify(
                 break
 
             provider_status = str(parsed["status"])
-            answer = _normalize_compact_provider_visible_answer(
-                _parsed_provider_answer_text(parsed)
-            )
-            claims = _parsed_provider_claims(parsed)
+            segments = _parsed_provider_segments(parsed)
+            answer = _visible_answer_from_segments(segments)
             unanswered_dimensions = _parsed_provider_unanswered_dimensions(
-                parsed, claims
+                parsed, segments
             )
             candidate = _runtime_bound_candidate(
                 answer=answer,
                 question=question,
                 intent_class=intent_class,
                 used_items=(),
-                claims=claims,
+                claims=None,
+                segments=segments,
                 label_map=label_map,
                 snippet_map=snippet_map,
                 provider_status=provider_status,
@@ -1054,16 +1055,13 @@ def _compact_partial_ref(
 
 
 def _partial_answer_text(claims: Sequence[Mapping[str, Any]]) -> str:
-    sentences: list[str] = []
+    segments: list[str] = []
     for claim in claims:
-        claim_id = str(claim.get("claim_id", ""))
         surface = re.sub(r"\s+", " ", str(claim.get("surface_text", ""))).strip()
-        if not claim_id or not surface:
+        if not surface:
             continue
-        if not re.search(r"[.!?。]$", surface):
-            surface += "."
-        sentences.append(f"{surface} [[{claim_id}]]")
-    return " ".join(sentences)
+        segments.append(surface)
+    return " ".join(segments)
 
 
 def _compact_provider_payload(
@@ -1116,14 +1114,15 @@ def _compact_provider_payload(
         "evidence": packed,
         "repair": list(previous_failures)[-8:] if repair else [],
         "output": {
-            "schema_version": "m26-fas-synthesis/v1",
+            "schema_version": COMPACT_CLOSURE_SCHEMA_VERSION,
             "status": "answer|partial|abstain",
-            "answer_text": "",
-            "claims": [
+            "segments": [
                 {
+                    "segment_id": "s1",
+                    "semantic_role": "material_claim",
                     "claim_id": "claim_1",
                     "claim_type": "EVIDENCE_FACT|EVIDENCE_SYNTHESIS|MODEL_EXPLANATION",
-                    "surface_text": "",
+                    "text": "Provider-authored visible prose.",
                     "evidence_labels": ["e1"],
                     "covers": [],
                 }
@@ -1134,13 +1133,17 @@ def _compact_provider_payload(
     }
     system = (
         "Answer only from supplied evidence. Return exactly one compact JSON object with "
-        "keys schema_version, status, answer_text, claims, unanswered_dimensions, and "
-        "abstention_reason. status is answer, partial, or abstain. Each claim must include "
-        "claim_id, claim_type, surface_text, evidence_labels, and covers. Use claim_type "
-        "values EVIDENCE_FACT, EVIDENCE_SYNTHESIS, or MODEL_EXPLANATION. answer_text must "
-        "be natural prose, not a quote collage. Evidence labels such as e1 or e2 belong only "
-        "in evidence_labels and must not appear in the visible answer text. Address every "
-        "must_state item explicitly. If support is insufficient, abstain."
+        "keys schema_version, status, segments, unanswered_dimensions, and "
+        "abstention_reason. status is answer, partial, or abstain. Every visible prose "
+        "unit must appear exactly once as a segment text; do not include answer_text, "
+        "claims, surface_text, or inline [[claim_id]] anchors. Each segment must include "
+        "segment_id, semantic_role, and text. semantic_role must be material_claim or "
+        "model_explanation. For material_claim segments include exactly one claim_id, a "
+        "claim_type value EVIDENCE_FACT or EVIDENCE_SYNTHESIS, evidence_labels, and covers. "
+        "For model_explanation segments include claim_id, claim_type MODEL_EXPLANATION, "
+        "evidence_labels [], and covers. Evidence labels such as e1 or e2 belong only in "
+        "evidence_labels and must not appear in visible text. Address every must_state item "
+        "explicitly. If support is insufficient, abstain."
     )
     max_tokens = _compact_provider_output_tokens(
         question=question,
@@ -1405,6 +1408,75 @@ def _call_semantic_entailment_review(
     return review, {**dict(raw), "call_class": SEMANTIC_REVIEW_CALL_CLASS}
 
 
+def _validate_provider_segments(raw_segments: Sequence[Any]) -> None:
+    seen_segment_ids: set[str] = set()
+    seen_claim_ids: set[str] = set()
+    seen_texts: set[str] = set()
+    for index, raw_segment in enumerate(raw_segments, start=1):
+        if not isinstance(raw_segment, Mapping):
+            raise ValueError("compact provider segment must be object")
+        segment = dict(raw_segment)
+        if "surface_text" in segment:
+            raise ValueError("compact provider segment must not include surface_text")
+        if "answer_text" in segment:
+            raise ValueError("compact provider segment must not include answer_text")
+        segment_id = str(segment.get("segment_id") or "").strip()
+        if not segment_id:
+            raise ValueError(f"provider segment {index} missing segment_id")
+        if segment_id in seen_segment_ids:
+            raise ValueError("provider segment_id duplicated")
+        seen_segment_ids.add(segment_id)
+        role = str(segment.get("semantic_role") or "").strip()
+        if role not in SEMANTIC_SEGMENT_ROLES:
+            raise ValueError(f"provider segment {segment_id} has invalid semantic_role")
+        text = str(segment.get("text") or "").strip()
+        if not text:
+            raise ValueError(f"provider segment {segment_id} missing text")
+        if legacy.CLAIM_ANCHOR_RE.search(text):
+            raise ValueError("provider segment text contains inline claim anchor")
+        if text in seen_texts:
+            raise ValueError("provider segment text duplicated")
+        seen_texts.add(text)
+        claim_id = str(segment.get("claim_id") or "").strip()
+        if not claim_id:
+            raise ValueError(f"provider segment {segment_id} missing claim_id")
+        if claim_id in seen_claim_ids:
+            raise ValueError("provider claim_id duplicated")
+        seen_claim_ids.add(claim_id)
+        claim_type = str(segment.get("claim_type") or "").strip()
+        if role == "material_claim":
+            if claim_type not in {"EVIDENCE_FACT", "EVIDENCE_SYNTHESIS"}:
+                raise ValueError(
+                    f"provider segment {segment_id} has invalid claim_type"
+                )
+        else:
+            if claim_type != "MODEL_EXPLANATION":
+                raise ValueError(
+                    f"provider segment {segment_id} has invalid model explanation type"
+                )
+        raw_evidence_labels = segment.get("evidence_labels", [])
+        if raw_evidence_labels is None:
+            raw_evidence_labels = []
+        if not isinstance(raw_evidence_labels, list):
+            raise ValueError(
+                f"provider segment {segment_id} has invalid claim-local evidence labels"
+            )
+        evidence_labels = [
+            str(label).strip() for label in raw_evidence_labels if str(label).strip()
+        ]
+        if role == "material_claim" and not evidence_labels:
+            raise ValueError(
+                f"provider segment {segment_id} missing claim-local evidence labels"
+            )
+        if role == "model_explanation" and evidence_labels:
+            raise ValueError(
+                f"provider segment {segment_id} model explanation has evidence labels"
+            )
+        raw_covers = segment.get("covers", [])
+        if raw_covers is not None and not isinstance(raw_covers, list):
+            raise ValueError(f"provider segment {segment_id} covers must be list")
+
+
 def _parse_compact_provider_result(text: str) -> dict[str, Any]:
     stripped = str(text).strip()
     if not stripped:
@@ -1419,11 +1491,8 @@ def _parse_compact_provider_result(text: str) -> dict[str, Any]:
         raise ValueError("compact provider JSON must be an object")
     allowed_keys = {
         "status",
-        "answer",
-        "used",
         "schema_version",
-        "answer_text",
-        "claims",
+        "segments",
         "unanswered_dimensions",
         "abstention_reason",
     }
@@ -1432,34 +1501,27 @@ def _parse_compact_provider_result(text: str) -> dict[str, Any]:
     status = str(value.get("status", ""))
     if status not in {"answer", "partial", "abstain", "answer_candidate", "partial_candidate"}:
         raise ValueError("compact provider status invalid")
-    answer_text = str(value.get("answer_text", value.get("answer", "")))
-    if status != "abstain" and (not answer_text.strip() or len(answer_text) > MAX_PROVIDER_ANSWER_CHARS):
+    if value.get("schema_version") != COMPACT_CLOSURE_SCHEMA_VERSION:
+        raise ValueError("compact provider schema_version invalid")
+    raw_segments = value.get("segments", [])
+    if raw_segments is None:
+        raw_segments = []
+    if not isinstance(raw_segments, list):
+        raise ValueError("compact provider segments must be list")
+    if status != "abstain" and not raw_segments:
+        raise ValueError("compact provider segments required")
+    _validate_provider_segments(raw_segments)
+    answer_text = _visible_answer_from_segments(
+        [dict(item) for item in raw_segments if isinstance(item, Mapping)]
+    )
+    if status != "abstain" and (
+        not answer_text.strip() or len(answer_text) > MAX_PROVIDER_ANSWER_CHARS
+    ):
         raise ValueError("compact provider answer invalid")
-    raw_used = value.get("used")
-    if raw_used is not None and not isinstance(raw_used, list):
-        raise ValueError("compact provider used must be list")
-    raw_claims = value.get("claims")
-    if raw_claims is not None and not isinstance(raw_claims, list):
-        raise ValueError("compact provider claims must be list")
     raw_unanswered = value.get("unanswered_dimensions")
     if raw_unanswered is not None and not isinstance(raw_unanswered, list):
         raise ValueError("compact provider unanswered_dimensions must be list")
     return dict(value)
-
-
-def _normalize_compact_provider_visible_answer(answer: str) -> str:
-    text = re.sub(
-        r"\s*[\[(（]\s*(?:e\d+(?:\s*[,;，、]\s*e\d+)*)\s*[\])）]",
-        "",
-        str(answer),
-    )
-    text = re.sub(
-        r"\s*(?:e\d+(?:\s*[,;，、]\s*e\d+)*)\s*(?=(?:[。.!?]|$|\s))",
-        " ",
-        text,
-        flags=re.I,
-    )
-    return re.sub(r"\s+", " ", text).strip()
 
 
 def _compact_call_telemetry(
@@ -1503,6 +1565,61 @@ def _compact_call_telemetry(
     }
 
 
+def _claims_from_segments(
+    segments: Sequence[Mapping[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    source_segments = list(segments or [])
+    _validate_provider_segments(source_segments)
+    claims: list[dict[str, Any]] = []
+    for raw_segment in source_segments:
+        segment = dict(raw_segment)
+        role = str(segment.get("semantic_role", "")).strip()
+        claim_type = str(segment.get("claim_type", "")).strip()
+        claims.append(
+            {
+                "segment_id": str(segment.get("segment_id", "")).strip(),
+                "semantic_role": role,
+                "claim_id": str(segment.get("claim_id", "")).strip(),
+                "claim_type": claim_type,
+                "surface_text": str(segment.get("text", "")).strip(),
+                "evidence_labels": [
+                    str(label).strip()
+                    for label in legacy._list(
+                        segment.get("evidence_labels", []),
+                        "segment evidence labels",
+                    )
+                    if str(label).strip()
+                ],
+                "covers": [
+                    str(item)
+                    for item in legacy._list(
+                        segment.get("covers", []), "segment covers"
+                    )
+                    if str(item)
+                ],
+                "claim_role": (
+                    "model_explanation"
+                    if role == "model_explanation"
+                    else str(segment.get("claim_role", "")).strip()
+                ),
+                "support_mode": (
+                    "model_explanation"
+                    if role == "model_explanation"
+                    else str(segment.get("support_mode", "")).strip()
+                ),
+                "unanswered_dimensions": [
+                    str(item)
+                    for item in legacy._list(
+                        segment.get("unanswered_dimensions", []),
+                        "segment unanswered dimensions",
+                    )
+                    if str(item)
+                ],
+            }
+        )
+    return claims
+
+
 def _runtime_bound_candidate(
     *,
     answer: str,
@@ -1512,6 +1629,7 @@ def _runtime_bound_candidate(
     claims: Sequence[Mapping[str, Any]] | None,
     label_map: Mapping[str, Mapping[str, Any]],
     snippet_map: Mapping[str, str],
+    segments: Sequence[Mapping[str, Any]] | None = None,
     provider_status: str = "answer",
     requirements: Sequence[SemanticRequirement] = (),
     unanswered_dimensions: Sequence[str] = (),
@@ -1519,7 +1637,11 @@ def _runtime_bound_candidate(
 ) -> dict[str, Any]:
     del used_items
     relation: str | None = None
-    source_claims = list(claims or [])
+    source_claims = (
+        _claims_from_segments(segments)
+        if segments is not None
+        else list(claims or [])
+    )
     if not source_claims:
         raise ValueError("provider structured claims required for publication")
     selected_items: list[Mapping[str, Any]] = []
@@ -1648,29 +1770,9 @@ def _runtime_bound_candidate(
             semantic_failures=semantic_failures,
         )
         if missing:
-            boundary = (
-                "Unsupported boundary: the available evidence does not establish "
-                + ", ".join(missing[:4])
-                + "."
+            unanswered_dimensions = list(
+                dict.fromkeys([*unanswered_dimensions, *missing])
             )
-            claim_records.append(
-                {
-                    "claim_id": f"claim_{len(claim_records) + 1}",
-                    "claim_type": "MODEL_EXPLANATION",
-                    "claim_role": "model_explanation",
-                    "surface_text": boundary,
-                    "facet_ids": legacy._required_facet_ids(
-                        question=question,
-                        intent_class=intent_class,
-                    )[:1],
-                    "support_mode": "model_explanation",
-                    "evidence_labels": [],
-                    "covers": [],
-                    "unanswered_dimensions": list(missing),
-                    "support_refs": [],
-                }
-            )
-            answer = _append_partial_boundary(answer, boundary)
     return {
         "schema_version": "aq3-provider-candidate/v3",
         "status": (
@@ -1688,72 +1790,54 @@ def _runtime_bound_candidate(
         "abstention_reason": None,
         "unanswered_dimensions": [
             str(item)
-            for claim in claim_records
-            for item in legacy._list(
-                claim.get("unanswered_dimensions", []), "unanswered dimensions"
-            )
+            for item in [
+                *unanswered_dimensions,
+                *[
+                    claim_item
+                    for claim in claim_records
+                    for claim_item in legacy._list(
+                        claim.get("unanswered_dimensions", []),
+                        "unanswered dimensions",
+                    )
+                ],
+            ]
             if str(item)
         ],
     }
 
 
-def _parsed_provider_answer_text(parsed: Mapping[str, Any]) -> str:
-    for key in ("answer_text", "answer"):
-        answer = str(parsed.get(key, "")).strip()
-        if answer:
-            return answer
-    return ""
-
-
-def _parsed_provider_claims(parsed: Mapping[str, Any]) -> list[dict[str, Any]]:
-    claims = parsed.get("claims", [])
+def _parsed_provider_segments(parsed: Mapping[str, Any]) -> list[dict[str, Any]]:
+    segments = parsed.get("segments", [])
     return [
         dict(item)
-        for item in claims
+        for item in segments
         if isinstance(item, Mapping)
     ]
 
 
+def _visible_answer_from_segments(segments: Sequence[Mapping[str, Any]]) -> str:
+    return " ".join(
+        str(segment.get("text", "")).strip()
+        for segment in segments
+        if str(segment.get("text", "")).strip()
+    ).strip()
+
+
 def _parsed_provider_unanswered_dimensions(
     parsed: Mapping[str, Any],
-    claims: Sequence[Mapping[str, Any]],
+    segments: Sequence[Mapping[str, Any]],
 ) -> list[str]:
     values: list[str] = []
     raw_unanswered = parsed.get("unanswered_dimensions", [])
     if isinstance(raw_unanswered, Sequence) and not isinstance(raw_unanswered, (str, bytes)):
         values.extend(str(item) for item in raw_unanswered if str(item))
-    for claim in claims:
-        raw_claim_unanswered = claim.get("unanswered_dimensions", [])
-        if isinstance(raw_claim_unanswered, Sequence) and not isinstance(
-            raw_claim_unanswered, (str, bytes)
+    for segment in segments:
+        raw_segment_unanswered = segment.get("unanswered_dimensions", [])
+        if isinstance(raw_segment_unanswered, Sequence) and not isinstance(
+            raw_segment_unanswered, (str, bytes)
         ):
-            values.extend(str(item) for item in raw_claim_unanswered if str(item))
+            values.extend(str(item) for item in raw_segment_unanswered if str(item))
     return list(dict.fromkeys(values))
-
-
-def _parsed_provider_used_labels(
-    parsed: Mapping[str, Any],
-    claims: Sequence[Mapping[str, Any]],
-) -> list[str]:
-    raw_used = parsed.get("used")
-    if isinstance(raw_used, Sequence) and not isinstance(raw_used, (str, bytes)):
-        labels = [str(item) for item in raw_used if str(item)]
-        if labels:
-            return labels
-    labels: list[str] = []
-    for claim in claims:
-        for label in legacy._list(
-            claim.get("evidence_labels", []), "claim evidence labels"
-        ):
-            value = str(label)
-            if value and value not in labels:
-                labels.append(value)
-    if labels:
-        return labels
-    raw_selected = parsed.get("selected_evidence_ids")
-    if isinstance(raw_selected, Sequence) and not isinstance(raw_selected, (str, bytes)):
-        return [str(item) for item in raw_selected if str(item)]
-    return []
 
 
 def _partial_answer_has_substantial_value(
@@ -1802,16 +1886,6 @@ def _partial_missing_dimension_labels(
     return list(dict.fromkeys(labels))
 
 
-def _append_partial_boundary(answer: str, boundary: str) -> str:
-    answer = str(answer).strip()
-    boundary = str(boundary).strip()
-    if not answer:
-        return boundary
-    if boundary.casefold() in answer.casefold():
-        return answer
-    return f"{answer} {boundary}"
-
-
 def _infer_claim_role(*, intent_class: str, claim_type: str) -> str:
     if claim_type == "MODEL_EXPLANATION":
         return "model_explanation"
@@ -1838,20 +1912,6 @@ def _infer_claim_type(intent_class: str, claim: Mapping[str, Any]) -> str:
     if intent_class in {"cross_document_comparison", "complementary_synthesis", "graph_relationship", "temporal_conflict"}:
         return "EVIDENCE_SYNTHESIS"
     return "EVIDENCE_FACT"
-
-
-def _anchor_material_sentences(answer: str) -> str:
-    sentences = [
-        item.strip()
-        for item in re.split(r"(?<=[.!?])\s+", str(answer).strip())
-        if item.strip()
-    ]
-    if not sentences:
-        return ""
-    return " ".join(
-        item if legacy.CLAIM_ANCHOR_RE.search(item) else f"{item} [[claim_1]]"
-        for item in sentences
-    )
 
 
 def _semantic_requirements(

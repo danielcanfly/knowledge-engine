@@ -12,6 +12,7 @@ from knowledge_engine.m26_verified_answer_citation_gate import sha256_bytes
 
 EXPECTED_ENTRYPOINT = "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
 SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
+SEGMENT_SCHEMA_VERSION = "m26-fas-synthesis/segments/v1"
 
 
 class _CompactAbstainingProvider:
@@ -23,7 +24,15 @@ class _CompactAbstainingProvider:
         self.calls += 1
         self.cost += Decimal("0.00001")
         return {
-            "text": json.dumps({"status": "abstain", "answer": "", "used": []}),
+            "text": json.dumps(
+                {
+                    "schema_version": SEGMENT_SCHEMA_VERSION,
+                    "status": "abstain",
+                    "segments": [],
+                    "unanswered_dimensions": [],
+                    "abstention_reason": None,
+                }
+            ),
             "usage": {"input_tokens": 16, "output_tokens": 4},
             "cost_usd": "0.00001",
             "latency_ms": 1,
@@ -287,14 +296,15 @@ def test_canonical_provider_paraphrase_does_not_require_patch_v2(monkeypatch: An
     ]
     provider = _TypedCompactProvider(
         {
-            "schema_version": "m26-fas-synthesis/v1",
+            "schema_version": SEGMENT_SCHEMA_VERSION,
             "status": "answer",
-            "answer_text": answer_text,
-            "claims": [
+            "segments": [
                 {
+                    "segment_id": "s1",
+                    "semantic_role": "material_claim",
                     "claim_id": "claim_1",
                     "claim_type": "EVIDENCE_FACT",
-                    "surface_text": answer_text,
+                    "text": answer_text,
                     "evidence_labels": ["e1"],
                     "covers": ["graphology_storage"],
                 }

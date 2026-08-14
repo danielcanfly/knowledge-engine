@@ -21,6 +21,7 @@ from knowledge_engine.m26_aq_semantic_contract import (
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     SemanticRequirement,
     _bounded_publication_candidate,
+    _compact_provider_payload,
     _parse_compact_provider_result,
     _requirement_support_failures,
     _response_from_verification,
@@ -34,6 +35,50 @@ from knowledge_engine.m26_pa7_semantic_closure_runtime import (
 from knowledge_engine.m26_production_answer_bundle import ProductionAnswerBundle
 from knowledge_engine.m26_verified_answer_citation_gate import sha256_bytes
 
+SEGMENT_SCHEMA_VERSION = "m26-fas-synthesis/segments/v1"
+
+
+def _segment_body_from_legacy(body: dict[str, Any]) -> dict[str, Any]:
+    if "segments" in body:
+        return body
+    claims = [
+        dict(claim)
+        for claim in body.get("claims", [])
+        if isinstance(claim, dict)
+    ]
+    segments = []
+    for index, claim in enumerate(claims, start=1):
+        claim_type = str(claim.get("claim_type", "EVIDENCE_FACT"))
+        segments.append(
+            {
+                "segment_id": f"s{index}",
+                "semantic_role": (
+                    "model_explanation"
+                    if claim_type == "MODEL_EXPLANATION"
+                    else "material_claim"
+                ),
+                "claim_id": str(claim.get("claim_id", f"claim_{index}")),
+                "claim_type": claim_type,
+                "text": str(claim.get("surface_text", "")),
+                "evidence_labels": (
+                    []
+                    if claim_type == "MODEL_EXPLANATION"
+                    else list(claim.get("evidence_labels", []))
+                ),
+                "covers": list(claim.get("covers", [])),
+                "unanswered_dimensions": list(
+                    claim.get("unanswered_dimensions", [])
+                ),
+            }
+        )
+    return {
+        "schema_version": SEGMENT_SCHEMA_VERSION,
+        "status": str(body.get("status", "answer")),
+        "segments": segments,
+        "unanswered_dimensions": list(body.get("unanswered_dimensions", [])),
+        "abstention_reason": body.get("abstention_reason"),
+    }
+
 
 class _AbstainingProvider:
     def __init__(self) -> None:
@@ -42,7 +87,11 @@ class _AbstainingProvider:
     def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
         self.calls.append((payload, call_class))
         return {
-            "text": json.dumps({"status": "abstain", "answer": "", "used": []}),
+            "text": json.dumps(
+                _segment_body_from_legacy(
+                    {"status": "abstain", "answer_text": "", "claims": []}
+                )
+            ),
             "usage": {"prompt_tokens": 1, "completion_tokens": 1},
             "cost_usd": "0.00",
             "call_class": call_class,
@@ -112,7 +161,7 @@ class _SemanticReviewRepairProvider:
                     "abstention_reason": None,
                 }
             return {
-                "text": json.dumps(body),
+                "text": json.dumps(_segment_body_from_legacy(body)),
                 "usage": {"input_tokens": 10, "output_tokens": 10},
                 "cost_usd": "0.001",
                 "call_class": call_class,
@@ -188,7 +237,7 @@ class _ScriptedSemanticClosureProvider:
                 result = {"status": "abstain", "answer_text": "", "claims": []}
             body = result(task) if callable(result) else result
             return {
-                "text": json.dumps(body),
+                "text": json.dumps(_segment_body_from_legacy(body)),
                 "usage": {"input_tokens": 10, "output_tokens": 10},
                 "cost_usd": "0.001",
                 "call_class": call_class,
@@ -784,19 +833,122 @@ def test_controlled_lifecycle_requirements_do_not_attach_to_venture_state_questi
 
 def test_compact_provider_contract_accepts_small_json() -> None:
     parsed = _parse_compact_provider_result(
-        '{"status":"answer","answer":"A short grounded answer.","used":["e1","e2"]}'
+        json.dumps(
+            {
+                "schema_version": SEGMENT_SCHEMA_VERSION,
+                "status": "answer",
+                "segments": [
+                    {
+                        "segment_id": "s1",
+                        "semantic_role": "material_claim",
+                        "claim_id": "claim_1",
+                        "claim_type": "EVIDENCE_FACT",
+                        "text": "A short grounded answer.",
+                        "evidence_labels": ["e1"],
+                        "covers": [],
+                    }
+                ],
+                "unanswered_dimensions": [],
+                "abstention_reason": None,
+            }
+        )
     )
-    assert parsed == {
-        "status": "answer",
-        "answer": "A short grounded answer.",
-        "used": ["e1", "e2"],
-    }
+    assert parsed["status"] == "answer"
+    assert parsed["segments"][0]["text"] == "A short grounded answer."
+
+
+def test_legacy_claim_surface_contract_fails_closed() -> None:
+    with pytest.raises(ValueError, match="unknown keys"):
+        _parse_compact_provider_result(
+            json.dumps(
+                {
+                    "schema_version": "m26-fas-synthesis/v1",
+                    "status": "answer",
+                    "answer_text": "A short grounded answer.",
+                    "claims": [
+                        {
+                            "claim_id": "claim_1",
+                            "claim_type": "EVIDENCE_FACT",
+                            "surface_text": "A short grounded answer.",
+                            "evidence_labels": ["e1"],
+                            "covers": [],
+                        }
+                    ],
+                }
+            )
+        )
+
+
+def test_segment_contract_rejects_inline_claim_anchors() -> None:
+    with pytest.raises(ValueError, match="inline claim anchor"):
+        _parse_compact_provider_result(
+            json.dumps(
+                {
+                    "schema_version": SEGMENT_SCHEMA_VERSION,
+                    "status": "answer",
+                    "segments": [
+                        {
+                            "segment_id": "s1",
+                            "semantic_role": "material_claim",
+                            "claim_id": "claim_1",
+                            "claim_type": "EVIDENCE_FACT",
+                            "text": "The router keeps snapshots [[claim_1]].",
+                            "evidence_labels": ["e1"],
+                            "covers": [],
+                        }
+                    ],
+                    "unanswered_dimensions": [],
+                    "abstention_reason": None,
+                }
+            )
+        )
+
+
+def test_segment_contract_rejects_duplicate_visible_prose() -> None:
+    with pytest.raises(ValueError, match="text duplicated"):
+        _parse_compact_provider_result(
+            json.dumps(
+                {
+                    "schema_version": SEGMENT_SCHEMA_VERSION,
+                    "status": "answer",
+                    "segments": [
+                        {
+                            "segment_id": "s1",
+                            "semantic_role": "material_claim",
+                            "claim_id": "claim_1",
+                            "claim_type": "EVIDENCE_FACT",
+                            "text": "The router keeps snapshots.",
+                            "evidence_labels": ["e1"],
+                            "covers": [],
+                        },
+                        {
+                            "segment_id": "s2",
+                            "semantic_role": "material_claim",
+                            "claim_id": "claim_2",
+                            "claim_type": "EVIDENCE_FACT",
+                            "text": "The router keeps snapshots.",
+                            "evidence_labels": ["e1"],
+                            "covers": [],
+                        },
+                    ],
+                    "unanswered_dimensions": [],
+                    "abstention_reason": None,
+                }
+            )
+        )
 
 
 def test_compact_provider_contract_rejects_extra_keys() -> None:
     try:
         _parse_compact_provider_result(
-            '{"status":"answer","answer":"x","used":["e1"],"extra":"bad"}'
+            json.dumps(
+                {
+                    "schema_version": SEGMENT_SCHEMA_VERSION,
+                    "status": "answer",
+                    "segments": [],
+                    "extra": "bad",
+                }
+            )
         )
     except ValueError as exc:
         assert "unknown keys" in str(exc)
@@ -1568,7 +1720,7 @@ def test_semantic_review_one_repair_preserves_supported_partial() -> None:
     assert answer["answer_source"] == "provider_verified_runtime_bound_partial_semantic_closure"
     assert answer["repair_attempted"] is True
     assert "router keeps graph snapshots" in answer["answer_text"].casefold()
-    assert "unsupported boundary" in answer["answer_text"].casefold()
+    assert "unsupported boundary" not in answer["answer_text"].casefold()
     assert closure["partial_answer"] is True
     first_review_cases = {
         str(case["claim_id"]): {
@@ -1732,6 +1884,58 @@ def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
     assert claim_case["evidence"][0]["evidence_label"] == "local_1"
     assert "ev1" not in payload["system"]
     assert "ev1" not in payload["messages"][0]["content"]
+
+
+def test_segment_binding_supplies_exact_provider_text_to_frozen_reviewer() -> None:
+    question = "Explain router snapshots."
+    evidence = [
+        _rich_passage(
+            "ev_router",
+            "The router stores graph snapshots.",
+            "router-note",
+        ),
+    ]
+    segment_text = "The router keeps graph snapshots."
+    candidate = _runtime_bound_candidate(
+        answer=segment_text,
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        used_items=(),
+        claims=None,
+        segments=[
+            {
+                "segment_id": "s1",
+                "semantic_role": "material_claim",
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "text": segment_text,
+                "evidence_labels": ["e1"],
+                "covers": ["router_snapshots"],
+            }
+        ],
+        label_map={"e1": evidence[0]},
+        snippet_map={"ev_router": evidence[0]["passage_text"]},
+    )
+
+    payload = _semantic_review_payload(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        candidate=candidate,
+        evidence=evidence,
+    )
+    task = json.loads(payload["messages"][0]["content"])
+
+    assert candidate["answer_text"] == segment_text
+    assert candidate["claims"][0]["surface_text"] == segment_text
+    assert task["claim_cases"][0]["surface_text"] == segment_text
+    assert "claims" not in json.loads(_compact_provider_payload(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=[],
+        repair=False,
+        previous_failures=[],
+    )[0]["messages"][0]["content"])["output"]
 
 
 def test_semantic_review_protocol_defines_model_explanation_verdict() -> None:
@@ -3262,8 +3466,8 @@ def test_tesc_partial_candidate_keeps_supported_a_and_explicit_unsupported_b_bou
 
     assert candidate["status"] == "partial_candidate"
     assert "Durable state preserves workflow progress" in candidate["answer_text"]
-    assert "Unsupported boundary" in candidate["answer_text"]
-    assert "observability" in candidate["answer_text"]
+    assert "Unsupported boundary" not in candidate["answer_text"]
+    assert "observability" in candidate["unanswered_dimensions"]
     assert all(
         "observability status" not in str(claim.get("surface_text", "")).casefold()
         for claim in candidate["claims"]
