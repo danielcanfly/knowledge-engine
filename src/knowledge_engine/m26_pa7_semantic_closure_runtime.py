@@ -1121,7 +1121,7 @@ def _compact_provider_payload(
                     "segment_id": "s1",
                     "semantic_role": "material_claim",
                     "claim_id": "claim_1",
-                    "claim_type": "EVIDENCE_FACT|EVIDENCE_SYNTHESIS|MODEL_EXPLANATION",
+                    "claim_type": "EVIDENCE_FACT|EVIDENCE_SYNTHESIS",
                     "text": "Provider-authored visible prose.",
                     "evidence_labels": ["e1"],
                     "covers": [],
@@ -1138,9 +1138,17 @@ def _compact_provider_payload(
         "unit must appear exactly once as a segment text; do not include answer_text, "
         "claims, surface_text, or inline [[claim_id]] anchors. Each segment must include "
         "segment_id, semantic_role, and text. semantic_role must be material_claim or "
-        "model_explanation. For material_claim segments include exactly one claim_id, a "
-        "claim_type value EVIDENCE_FACT or EVIDENCE_SYNTHESIS, evidence_labels, and covers. "
-        "For model_explanation segments include claim_id, claim_type MODEL_EXPLANATION, "
+        "model_explanation. Use model_explanation only for genuinely generic connective "
+        "or explanatory prose whose truth does not depend on supplied KB evidence. A "
+        "segment must be material_claim if it refers to corpus-specific entities, document "
+        "titles, numbered or versioned entities, identifiers, graph nodes, supplied graph "
+        "relations, what supplied evidence entails or does not entail, or a supported "
+        "negation, limitation, boundary, comparison, or non-inference; material_claim also "
+        "applies to any segment that would require KB evidence to verify. If uncertain "
+        "between material_claim and model_explanation, choose material_claim and bind "
+        "evidence. For material_claim segments include exactly one claim_id, a claim_type "
+        "value EVIDENCE_FACT or EVIDENCE_SYNTHESIS, evidence_labels, and covers. For "
+        "model_explanation segments include claim_id, claim_type MODEL_EXPLANATION, "
         "evidence_labels [], and covers. Evidence labels such as e1 or e2 belong only in "
         "evidence_labels and must not appear in visible text. Address every must_state item "
         "explicitly. If support is insufficient, abstain."

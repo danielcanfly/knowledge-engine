@@ -298,6 +298,37 @@ def test_model_explanation_claim_type_survives_verification() -> None:
     assert closure["failures"] == []
 
 
+def test_numbered_corpus_statement_miscast_as_model_explanation_still_fails_closed() -> None:
+    question = "What does Part 2 establish?"
+    evidence = [
+        _passage(
+            "e1",
+            "Part 2 establishes the verification boundary.",
+            "numbered-boundary-note",
+        )
+    ]
+    provider = _TypedProvider(
+        claim_type="MODEL_EXPLANATION",
+        answer_text="Part 2 establishes the verification boundary.",
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "MODEL_EXPLANATION",
+                "surface_text": "Part 2 establishes the verification boundary.",
+                "evidence_labels": [],
+                "covers": [],
+            }
+        ],
+    )
+
+    answer, closure = _run_typed_synthesis(question, evidence, provider)
+
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["unsupported_accepted_claims"] == 0
+    assert "M26-PA7-ME-033" in answer["reason_codes"]
+    assert "M26-PA7-ME-033" in closure["failures"]
+
+
 def test_canonical_path_uses_typed_compact_synthesis_payload() -> None:
     question = "Why do durable state and verification solve different reliability problems?"
     evidence = [
@@ -340,12 +371,85 @@ def test_canonical_path_uses_typed_compact_synthesis_payload() -> None:
     assert "claims" not in task["output"]
     assert "answer_text" not in task["output"]
     assert task["output"]["segments"][0]["claim_type"] == (
-        "EVIDENCE_FACT|EVIDENCE_SYNTHESIS|MODEL_EXPLANATION"
+        "EVIDENCE_FACT|EVIDENCE_SYNTHESIS"
     )
     assert task["output"]["segments"][0]["semantic_role"] == "material_claim"
     assert task["output"]["segments"][0]["evidence_labels"] == ["e1"]
     assert task["output"]["segments"][0]["covers"] == []
     assert payload["max_tokens"] > 512
+
+
+def test_compact_segment_role_contract_keeps_evidence_boundaries_material() -> None:
+    question = "What relation does the supplied evidence support and not support?"
+    evidence = [
+        _passage(
+            "e1",
+            "Part 1 defines ingestion. Part 2 defines verification. The graph links "
+            "Part 2 to the verification boundary, not to the ingestion boundary.",
+            "numbered-relation-note",
+        ),
+    ]
+    provider = _TypedProvider(
+        claim_type="EVIDENCE_SYNTHESIS",
+        answer_text="Part 2 is tied to verification, not ingestion.",
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_SYNTHESIS",
+                "surface_text": "Part 2 is tied to verification, not ingestion.",
+                "evidence_labels": ["e1"],
+                "covers": ["relation_boundary"],
+            }
+        ],
+    )
+
+    _run_typed_synthesis(question, evidence, provider)
+    payload = provider.calls[0]["payload"]
+    task = json.loads(payload["messages"][0]["content"])
+    system = payload["system"]
+
+    assert task["output"]["segments"][0]["semantic_role"] == "material_claim"
+    assert task["output"]["segments"][0]["claim_type"] == (
+        "EVIDENCE_FACT|EVIDENCE_SYNTHESIS"
+    )
+    assert "numbered or versioned entities" in system
+    assert "supplied graph relations" in system
+    assert "what supplied evidence entails or does not entail" in system
+    assert "supported negation, limitation, boundary, comparison, or non-inference" in system
+    assert "If uncertain between material_claim and model_explanation" in system
+    assert "choose material_claim and bind evidence" in system
+
+
+def test_compact_segment_role_contract_allows_evidence_independent_glue() -> None:
+    question = "How can the pieces fit together?"
+    evidence = [
+        _passage(
+            "e1",
+            "The router selects evidence. The verifier checks supported claims.",
+            "glue-note",
+        ),
+    ]
+    provider = _TypedProvider(
+        claim_type="MODEL_EXPLANATION",
+        answer_text="Together, those steps form a check-and-balance.",
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "MODEL_EXPLANATION",
+                "surface_text": "Together, those steps form a check-and-balance.",
+                "evidence_labels": [],
+                "covers": [],
+            }
+        ],
+    )
+
+    _run_typed_synthesis(question, evidence, provider)
+    system = provider.calls[0]["payload"]["system"]
+
+    assert "Use model_explanation only for genuinely generic connective" in system
+    assert "truth does not depend on supplied KB evidence" in system
+    assert "claim_type MODEL_EXPLANATION" in system
+    assert "evidence_labels []" in system
 
 
 def test_max_tokens_truncation_gets_larger_bounded_repair_budget() -> None:
