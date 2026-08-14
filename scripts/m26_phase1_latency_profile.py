@@ -185,6 +185,24 @@ def _sanitized_traceback(exc: BaseException) -> list[dict[str, Any]]:
     return frames[-12:]
 
 
+def _flatten_reason_codes(value: Any) -> list[str]:
+    codes: list[str] = []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        for item in value:
+            codes.extend(_flatten_reason_codes(item))
+    return list(dict.fromkeys(str(item) for item in codes if str(item)))
+
+
+def _selected_evidence_id_digest(response: Mapping[str, Any]) -> str:
+    evidence_ids = []
+    for item in response.get("selected_evidence", []):
+        if isinstance(item, Mapping) and str(item.get("evidence_id", "")):
+            evidence_ids.append(str(item.get("evidence_id", "")))
+    return canonical_sha256(sorted(evidence_ids))
+
+
 def _error_receipt(
     *,
     exc: BaseException,
@@ -545,6 +563,7 @@ def _run_case(
             "provider_call_count": provider_call_count,
             "repair_attempted": repair_attempted,
             "selected_evidence_count": 0,
+            "selected_evidence_id_digest": canonical_sha256([]),
             "claim_count": 0,
             "citation_count": 0,
             "unsupported_accepted_claims": 0,
@@ -597,6 +616,7 @@ def _run_case(
             else False
         ),
         "selected_evidence_count": len(response.get("selected_evidence", [])),
+        "selected_evidence_id_digest": _selected_evidence_id_digest(response),
         "claim_count": len(response.get("answer_claims", [])),
         "citation_count": len(response.get("citations", [])),
         "unsupported_accepted_claims": int(
@@ -639,6 +659,56 @@ def _run_case(
     }
 
 
+def _row_reason_codes(row: Mapping[str, Any]) -> list[str]:
+    verification = row.get("multi_evidence_verification", {})
+    if not isinstance(verification, Mapping):
+        return []
+    return _flatten_reason_codes(
+        verification.get("verification_failure_codes_by_attempt", [])
+    )
+
+
+def _answer_row_is_success(row: Mapping[str, Any]) -> bool:
+    answer_source = str(row.get("answer_source", ""))
+    return (
+        row.get("status") == "owner_only_cited_answer"
+        and answer_source in {ANSWER_SOURCE, PARTIAL_SOURCE}
+        and int(row.get("unsupported_accepted_claims", 0)) == 0
+        and int(row.get("citation_count", 0)) > 0
+        and "M26-PA7-ME-065" not in _row_reason_codes(row)
+    )
+
+
+def _safety_row_is_success(row: Mapping[str, Any]) -> bool:
+    return (
+        row.get("case_id") in {"R3-Q10", "R3-Q11"}
+        and row.get("safe_abstention") is True
+        and row.get("status") == "owner_only_safe_abstention"
+        and str(row.get("answer_source", "")) == "safe_abstention"
+        and int(row.get("unsupported_accepted_claims", 0)) == 0
+        and "M26-PA7-ME-065" not in _row_reason_codes(row)
+    )
+
+
+def _quality_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    reason_codes = _row_reason_codes(row)
+    expected = str(row.get("expected", ""))
+    success = (
+        _answer_row_is_success(row)
+        if expected == "answer"
+        else _safety_row_is_success(row)
+        if row.get("case_id") in {"R3-Q10", "R3-Q11"}
+        else True
+    )
+    return {
+        "quality_success": success,
+        "me065": "M26-PA7-ME-065" in reason_codes,
+        "deterministic_semantic_publication": str(row.get("answer_source", ""))
+        not in {ANSWER_SOURCE, PARTIAL_SOURCE, "safe_abstention", "diagnostic_exception"},
+        "reason_codes": reason_codes,
+    }
+
+
 def _row_failure(row: Mapping[str, Any]) -> dict[str, Any] | None:
     if row.get("diagnostic_failure"):
         receipt = row.get("diagnostic_failure_receipt", {})
@@ -658,34 +728,27 @@ def _row_failure(row: Mapping[str, Any]) -> dict[str, Any] | None:
         }
     expected = str(row.get("expected", ""))
     if expected == "answer":
-        if row.get("status") != "owner_only_cited_answer":
+        if not _answer_row_is_success(row):
             return {
                 "case_id": str(row.get("case_id", "")),
-                "reason": "answer_status",
+                "reason": "answer_quality",
                 "status": str(row.get("status", "")),
-                "reason_codes": list(
-                    row.get("multi_evidence_verification", {}).get(
-                        "verification_failure_codes_by_attempt", []
-                    )
-                )
-                if isinstance(row.get("multi_evidence_verification"), Mapping)
-                else [],
-            }
-        if int(row.get("unsupported_accepted_claims", 0)) != 0:
-            return {
-                "case_id": str(row.get("case_id", "")),
-                "reason": "unsupported_claim",
+                "answer_source": str(row.get("answer_source", "")),
+                "citation_count": int(row.get("citation_count", 0)),
                 "unsupported_accepted_claims": int(
                     row.get("unsupported_accepted_claims", 0)
                 ),
+                "me065": "M26-PA7-ME-065" in _row_reason_codes(row),
+                "reason_codes": _row_reason_codes(row),
             }
-    elif row.get("case_id") in {"R3-Q10", "R3-Q11"} and not row.get(
-        "safe_abstention"
-    ):
+    elif row.get("case_id") in {"R3-Q10", "R3-Q11"} and not _safety_row_is_success(row):
         return {
             "case_id": str(row.get("case_id", "")),
             "reason": "safe_abstention",
             "status": str(row.get("status", "")),
+            "answer_source": str(row.get("answer_source", "")),
+            "me065": "M26-PA7-ME-065" in _row_reason_codes(row),
+            "reason_codes": _row_reason_codes(row),
         }
     return None
 
@@ -717,7 +780,7 @@ def _build_artifact(
         "provider_pareto": _provider_pareto(answer_rows),
         "repair_and_first_review_histograms": _histograms(answer_rows),
         "semantic_review_verdict_totals": _semantic_review_verdict_totals(answer_rows),
-        "rows": [dict(row) for row in rows],
+        "rows": [dict(row, quality=_quality_row(row)) for row in rows],
     }
 
 
@@ -756,6 +819,7 @@ def main() -> int:
     rows: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
     error_receipts: list[dict[str, Any]] = []
+    setup_failed = False
     try:
         root = args.root.resolve()
         gate_path = root / DEFAULT_GATE_PATH
@@ -792,8 +856,8 @@ def main() -> int:
             failure = _row_failure(row)
             if failure is not None:
                 failures.append(failure)
-                break
     except Exception as exc:
+        setup_failed = True
         receipt = _error_receipt(
             exc=exc,
             case=None,
@@ -819,7 +883,7 @@ def main() -> int:
     _atomic_write_json(args.output, artifact)
     _write_error_output(args.error_output, error_receipts)
     print(json.dumps({"output": str(args.output), "case_count": len(rows)}))
-    return 0 if not failures else 1
+    return 1 if setup_failed else 0
 
 
 if __name__ == "__main__":
