@@ -23,7 +23,7 @@ jobs:
     environment: m23-r3-diagnostic
     env:
       WORK_DIR: /tmp/m26-pa7-query-smoke-only
-      PHASE1B_CANDIDATE_SHA: 24a9565af2e2c920a5f928219ecee5cd4c7b3c1c
+      PHASE1B_CANDIDATE_SHA: 705fd13fc23c73043587c0d322826c085c119284
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
