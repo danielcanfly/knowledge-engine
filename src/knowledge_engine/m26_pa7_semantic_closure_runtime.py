@@ -47,7 +47,6 @@ COMPACT_PROVIDER_TRUNCATED = "COMPACT_PROVIDER_TRUNCATED"
 COMPACT_PROVIDER_PARSE_FAILED = "COMPACT_PROVIDER_PARSE_FAILED"
 SEMANTIC_REVIEW_PARSE_FAILED = "SEMANTIC_REVIEW_PARSE_FAILED"
 SEMANTIC_REVIEW_SCHEMA_VERSION = legacy.SEMANTIC_REVIEW_SCHEMA_VERSION
-COMPACT_SEMANTIC_REVIEW_SCHEMA_VERSION = "m26-claim-entailment-review/v2"
 SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
 COMPACT_CLOSURE_SCHEMA_VERSION = "m26-fas-synthesis/v2"
 COMPACT_PROVIDER_CONTRACT = "compact_runtime_bound_semantic_closure/v2"
@@ -433,6 +432,9 @@ def _synthesize_and_verify(
                 requirements=requirements,
                 unanswered_dimensions=unanswered_dimensions,
                 semantic_failures=[],
+                allow_legacy_surface_text=(
+                    str(parsed.get("schema_version", "")) == "m26-fas-synthesis/v1"
+                ),
             )
             candidate, bounded_support_ref_limit = _bounded_publication_candidate(
                 candidate
@@ -1268,7 +1270,7 @@ def _semantic_review_payload(
             {
                 "claim_id": str(claim.get("claim_id", "")),
                 "claim_type": str(claim.get("claim_type", "")),
-                "claim_text": str(claim.get("surface_text", "")),
+                "surface_text": str(claim.get("surface_text", "")),
                 "allowed_evidence_ids": allowed_evidence_ids,
                 "allowed_evidence_labels": allowed_evidence_labels,
                 "evidence_id_by_label": dict(
@@ -1303,21 +1305,23 @@ def _semantic_review_payload(
             ),
         },
         "output": {
-            "schema_version": COMPACT_SEMANTIC_REVIEW_SCHEMA_VERSION,
-            "judgments": [
+            "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
+            "claim_judgments": [
                 {
                     "claim_id": "claim_1",
                     "verdict": "ENTAILED|CONTRADICTED|INSUFFICIENT|GENERIC_EXPLANATION",
                     "evidence_ids": [],
                 }
             ],
-            "coverage_verdict": "COVERED|UNCOVERED",
-            "uncovered_assertions": [],
+            "visible_coverage": {
+                "verdict": "COVERED|UNCOVERED",
+                "uncovered_assertions": [],
+            },
         },
     }
     system = (
         "You are the bounded M26 claim semantic-entailment reviewer. Return exactly one "
-        "compact JSON object. Judge each claim_text's meaning against only that claim case's local "
+        "JSON object. Judge each claim's meaning against only that claim case's local "
         "evidence array. The user question, other claim surfaces, and other claim cases "
         "are context only and are not evidence. Paraphrase, voice, and order changes may "
         "be entailed; contradiction, strengthening, identity, quantity, time, causality, "
@@ -1331,14 +1335,13 @@ def _semantic_review_payload(
         "If no allowed local evidence entails the claim, use INSUFFICIENT or CONTRADICTED "
         "instead of ENTAILED. Do not invent claim IDs, evidence IDs, or evidence labels; "
         "never output example labels unless that exact string is present in the claim case. "
-        "Return schema_version, judgments, coverage_verdict, and uncovered_assertions only. "
-        "For COVERED, uncovered_assertions may be omitted or []. Only list material "
-        "KB-dependent assertions that are not represented by any structured claim; a listed "
-        "MODEL_EXPLANATION glue claim is not by itself an uncovered assertion."
+        "For visible_coverage, only list material KB-dependent assertions that are not "
+        "represented by any structured claim; a listed MODEL_EXPLANATION glue claim is "
+        "not by itself an uncovered assertion."
     )
     return {
         "model": "MiniMax-M3",
-        "max_tokens": 1024,
+        "max_tokens": 2048,
         "temperature": 0,
         "stream": False,
         "system": system,
@@ -1362,56 +1365,7 @@ def _parse_semantic_review_result(text: str) -> dict[str, Any]:
         raise ValueError("semantic review output contains trailing text")
     if not isinstance(value, Mapping):
         raise ValueError("semantic review JSON must be an object")
-    return _canonical_semantic_review_result(value)
-
-
-def _canonical_semantic_review_result(value: Mapping[str, Any]) -> dict[str, Any]:
-    schema_version = str(value.get("schema_version", ""))
-    if schema_version == SEMANTIC_REVIEW_SCHEMA_VERSION:
-        return dict(value)
-    if schema_version != COMPACT_SEMANTIC_REVIEW_SCHEMA_VERSION:
-        return dict(value)
-    allowed = {
-        "schema_version",
-        "judgments",
-        "claim_judgments",
-        "coverage_verdict",
-        "visible_coverage",
-        "uncovered_assertions",
-    }
-    if set(value) - allowed:
-        raise ValueError(SEMANTIC_REVIEW_PARSE_FAILED)
-    raw_judgments = value.get("judgments", value.get("claim_judgments", []))
-    judgments = [
-        dict(legacy._object(item, "compact semantic review judgment"))
-        for item in legacy._list(raw_judgments, "compact semantic review judgments")
-    ]
-    if "visible_coverage" in value:
-        coverage_obj = legacy._object(
-            value.get("visible_coverage"),
-            "compact semantic review coverage",
-        )
-        coverage_verdict = str(coverage_obj.get("verdict", ""))
-        uncovered = coverage_obj.get("uncovered_assertions", [])
-    else:
-        coverage_verdict = str(value.get("coverage_verdict", ""))
-        uncovered = value.get("uncovered_assertions", [])
-    if coverage_verdict == "COVERED" and uncovered is None:
-        uncovered = []
-    return {
-        "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
-        "claim_judgments": judgments,
-        "visible_coverage": {
-            "verdict": coverage_verdict,
-            "uncovered_assertions": [
-                str(item)
-                for item in legacy._list(
-                    uncovered or [], "compact semantic uncovered assertions"
-                )
-                if str(item)
-            ],
-        },
-    }
+    return dict(value)
 
 
 def _semantic_review_blocking_failures(review: Mapping[str, Any]) -> list[str]:
@@ -1570,6 +1524,7 @@ def _runtime_bound_candidate(
     requirements: Sequence[SemanticRequirement] = (),
     unanswered_dimensions: Sequence[str] = (),
     semantic_failures: Sequence[str] = (),
+    allow_legacy_surface_text: bool = False,
 ) -> dict[str, Any]:
     del used_items
     relation: str | None = None
@@ -1597,7 +1552,11 @@ def _runtime_bound_candidate(
         claim_id = str(claim.get("claim_id") or "").strip()
         if not claim_id:
             raise ValueError(f"provider claim {index} missing claim_id")
-        surface_text = _provider_authored_claim_surface(answer=answer, claim=claim)
+        surface_text = _provider_authored_claim_surface(
+            answer=answer,
+            claim=claim,
+            allow_legacy_surface_text=allow_legacy_surface_text,
+        )
         if not surface_text:
             raise ValueError(
                 f"provider claim {claim_id} missing provider-authored answer span"
@@ -1903,6 +1862,7 @@ def _provider_authored_claim_surface(
     *,
     answer: str,
     claim: Mapping[str, Any],
+    allow_legacy_surface_text: bool = False,
 ) -> str:
     claim_id = str(claim.get("claim_id") or "").strip()
     spans = _answer_spans_for_claim(answer=answer, claim_id=claim_id)
@@ -1911,7 +1871,7 @@ def _provider_authored_claim_surface(
     if len(spans) > 1:
         raise ValueError(f"provider claim {claim_id} has ambiguous answer anchors")
     legacy_surface = str(claim.get("surface_text") or "").strip()
-    if legacy_surface:
+    if allow_legacy_surface_text and legacy_surface:
         return legacy_surface
     raise ValueError(f"provider claim {claim_id} missing answer anchor")
 

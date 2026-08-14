@@ -1248,6 +1248,70 @@ def test_generic_model_explanation_without_support_refs_is_accepted() -> None:
     assert verified["material_claims"][0]["support_refs"] == []
 
 
+def test_natural_answer_strips_only_uncited_unsupported_model_explanation_anchor() -> None:
+    answer = runtime_module._verified_natural_answer_text(
+        "This is provider-authored generic framing [[claim_1]].",
+        citations=[],
+        material_claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "MODEL_EXPLANATION",
+                "support_refs": [],
+            }
+        ],
+        fallback="deterministic fallback must not be used",
+        semantic_review_verified=True,
+    )
+
+    assert answer == "This is provider-authored generic framing ."
+    assert "deterministic fallback" not in answer
+
+
+@pytest.mark.parametrize("claim_type", ["EVIDENCE_FACT", "EVIDENCE_SYNTHESIS"])
+def test_uncited_evidence_anchor_still_fails_me043(claim_type: str) -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verified_natural_answer_text(
+            "This evidence-backed sentence lacks a citation [[claim_1]].",
+            citations=[],
+            material_claims=[
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": claim_type,
+                    "support_refs": [],
+                }
+            ],
+            fallback="fallback",
+            semantic_review_verified=True,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-043"
+
+
+def test_supported_model_explanation_anchor_still_requires_citation() -> None:
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verified_natural_answer_text(
+            "This supported model explanation lacks a citation [[claim_1]].",
+            citations=[],
+            material_claims=[
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "MODEL_EXPLANATION",
+                    "support_refs": [
+                        {
+                            "evidence_id": "ev_router",
+                            "locator_id": "loc_router",
+                            "exact_quote": "The router stores graph snapshots.",
+                        }
+                    ],
+                }
+            ],
+            fallback="fallback",
+            semantic_review_verified=True,
+        )
+
+    assert exc.value.code == "M26-PA7-ME-043"
+
+
 def test_fas5_direct_fact_with_correct_support_passes() -> None:
     evidence = [_citation_binding_evidence()[0]]
     provider_text = json.dumps(

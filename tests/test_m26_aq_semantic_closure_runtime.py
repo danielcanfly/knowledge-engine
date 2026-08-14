@@ -884,6 +884,65 @@ def test_phase1_runtime_fails_closed_when_claim_has_no_answer_anchor() -> None:
         )
 
 
+def test_phase1_v2_claim_surface_text_without_answer_anchor_cannot_publish() -> None:
+    evidence = _rich_passage(
+        "router",
+        "The router stores graph snapshots for controlled execution.",
+        "router-note",
+    )
+
+    with pytest.raises(ValueError, match="missing answer anchor"):
+        _runtime_bound_candidate(
+            answer="The answer omits the claim anchor.",
+            question="Explain router graph snapshots.",
+            intent_class="direct_grounded_knowledge",
+            used_items=[],
+            claims=[
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router keeps graph snapshots.",
+                    "evidence_labels": ["e1"],
+                    "covers": ["router_snapshots"],
+                }
+            ],
+            label_map={"e1": evidence},
+            snippet_map={"router": evidence["passage_text"]},
+            requirements=[],
+            allow_legacy_surface_text=False,
+        )
+
+
+def test_phase1_legacy_claim_surface_text_fallback_is_fixture_only() -> None:
+    evidence = _rich_passage(
+        "router",
+        "The router stores graph snapshots for controlled execution.",
+        "router-note",
+    )
+
+    candidate = _runtime_bound_candidate(
+        answer="The answer predates claim anchors.",
+        question="Explain router graph snapshots.",
+        intent_class="direct_grounded_knowledge",
+        used_items=[],
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "surface_text": "The router keeps graph snapshots.",
+                "evidence_labels": ["e1"],
+                "covers": ["router_snapshots"],
+            }
+        ],
+        label_map={"e1": evidence},
+        snippet_map={"router": evidence["passage_text"]},
+        requirements=[],
+        allow_legacy_surface_text=True,
+    )
+
+    assert candidate["claims"][0]["surface_text"] == "The router keeps graph snapshots."
+
+
 def test_graph_false_premise_contract_binds_full_named_entities() -> None:
     question = (
         "The production graph says Harness Theory Part 1 precedes Harness Theory Part 2. "
@@ -1798,6 +1857,7 @@ def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
         ],
         label_map={"e1": evidence[0]},
         snippet_map={"ev_router": evidence[0]["passage_text"]},
+        allow_legacy_surface_text=True,
     )
 
     payload = _semantic_review_payload(
@@ -1812,15 +1872,16 @@ def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
     assert claim_case["allowed_evidence_ids"] == ["ev_router"]
     assert claim_case["allowed_evidence_labels"] == ["local_1"]
     assert claim_case["evidence_id_by_label"] == {"local_1": "ev_router"}
-    assert claim_case["claim_text"] == "The router keeps graph snapshots."
-    assert "surface_text" not in claim_case
+    assert claim_case["surface_text"] == "The router keeps graph snapshots."
+    assert "claim_text" not in claim_case
     assert claim_case["evidence"][0]["evidence_label"] == "local_1"
     assert "ev1" not in payload["system"]
     assert "ev1" not in payload["messages"][0]["content"]
-    assert task["output"]["schema_version"] == "m26-claim-entailment-review/v2"
-    assert "judgments" in task["output"]
-    assert "claim_judgments" not in task["output"]
-    assert payload["max_tokens"] == 1024
+    assert task["output"]["schema_version"] == "m26-claim-entailment-review/v1"
+    assert "claim_judgments" in task["output"]
+    assert "judgments" not in task["output"]
+    assert "visible_coverage" in task["output"]
+    assert payload["max_tokens"] == 2048
 
 
 def test_semantic_review_protocol_defines_model_explanation_verdict() -> None:
@@ -1847,57 +1908,10 @@ def test_semantic_review_protocol_defines_model_explanation_verdict() -> None:
 
     assert claim_case["claim_type"] == "MODEL_EXPLANATION"
     assert claim_case["allowed_evidence_ids"] == []
-    assert claim_case["claim_text"] == "The router selection and DAG execution compose."
+    assert claim_case["surface_text"] == "The router selection and DAG execution compose."
     assert "GENERIC_EXPLANATION" in task["review_protocol"]["model_explanation_rule"]
     assert "return verdict GENERIC_EXPLANATION with evidence_ids []" in payload["system"]
     assert "MODEL_EXPLANATION glue claim" in payload["system"]
-
-
-def test_compact_semantic_review_output_canonicalizes_to_fail_closed_v1_shape() -> None:
-    review = closure_runtime._parse_semantic_review_result(
-        json.dumps(
-            {
-                "schema_version": "m26-claim-entailment-review/v2",
-                "judgments": [
-                    {
-                        "claim_id": "claim_1",
-                        "verdict": "ENTAILED",
-                        "evidence_ids": ["local_1"],
-                    }
-                ],
-                "coverage_verdict": "COVERED",
-            }
-        )
-    )
-
-    assert review == {
-        "schema_version": "m26-claim-entailment-review/v1",
-        "claim_judgments": [
-            {
-                "claim_id": "claim_1",
-                "verdict": "ENTAILED",
-                "evidence_ids": ["local_1"],
-            }
-        ],
-        "visible_coverage": {
-            "verdict": "COVERED",
-            "uncovered_assertions": [],
-        },
-    }
-
-
-def test_compact_semantic_review_output_unknown_key_fails_closed() -> None:
-    with pytest.raises(ValueError, match="SEMANTIC_REVIEW_PARSE_FAILED"):
-        closure_runtime._parse_semantic_review_result(
-            json.dumps(
-                {
-                    "schema_version": "m26-claim-entailment-review/v2",
-                    "judgments": [],
-                    "coverage_verdict": "COVERED",
-                    "extra": "bad",
-                }
-            )
-        )
 
 
 def test_semantic_review_claim_local_labels_are_canonicalized() -> None:
@@ -2193,6 +2207,7 @@ def test_verification_candidate_publishes_minimal_bounded_schema() -> None:
         claims=claims,
         label_map=label_map,
         snippet_map=snippet_map,
+        allow_legacy_surface_text=True,
     )
 
     bounded, support_ref_limit = _bounded_publication_candidate(candidate)
@@ -2262,6 +2277,7 @@ def test_runtime_bound_graph_claim_preserves_provider_selected_edge_only_support
             "ev_part_1": part_1["passage_text"],
             "ev_part_2": part_2["passage_text"],
         },
+        allow_legacy_surface_text=True,
     )
 
     support_ids = {
