@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -33,6 +34,9 @@ CACHE_READ_RATE = Decimal("0.06")
 OUTPUT_RATE = Decimal("1.20")
 RETRY_DELAYS = (2, 5, 15)
 
+_HTTP_CLIENT: httpx.Client | None = None
+_HTTP_CLIENT_LOCK = threading.Lock()
+
 
 class LiveGateError(RuntimeError):
     pass
@@ -43,6 +47,27 @@ class ProviderClient(Protocol):
     cost: Decimal
 
     def call(self, payload: Mapping[str, Any], call_class: str) -> dict[str, Any]: ...
+
+
+def prepare_minimax_http_client() -> httpx.Client:
+    """Return the process-scoped MiniMax transport with connection pooling enabled."""
+    global _HTTP_CLIENT
+    if _HTTP_CLIENT is not None:
+        return _HTTP_CLIENT
+    with _HTTP_CLIENT_LOCK:
+        if _HTTP_CLIENT is None:
+            _HTTP_CLIENT = httpx.Client()
+        return _HTTP_CLIENT
+
+
+def close_minimax_http_client() -> None:
+    """Close and clear the process-scoped MiniMax transport at process shutdown."""
+    global _HTTP_CLIENT
+    with _HTTP_CLIENT_LOCK:
+        client = _HTTP_CLIENT
+        _HTTP_CLIENT = None
+    if client is not None:
+        client.close()
 
 
 def _canonical(value: Any) -> str:
@@ -162,7 +187,7 @@ class MiniMaxClient:
             self.calls += 1
             started = time.monotonic()
             try:
-                response = httpx.post(
+                response = prepare_minimax_http_client().post(
                     ENDPOINT,
                     headers={
                         "Authorization": f"Bearer {self.api_key}",
