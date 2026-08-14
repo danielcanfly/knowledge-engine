@@ -18,7 +18,7 @@ jobs:
     env:
       WORK_DIR: /tmp/m26-pa7-query-smoke-only
       VARIANT_A_SHA: ece922091417539ea05eb23e87efb61307bdaf2d
-      VARIANT_B_SHA: 24a9565af2e2c920a5f928219ecee5cd4c7b3c1c
+      VARIANT_B_SHA: 705fd13fc23c73043587c0d322826c085c119284
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
@@ -98,10 +98,10 @@ jobs:
             status=$?
             set -e
             if [ ! -s /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability.json ]; then
-              printf "%s\n" "{\"schema_version\":\"m26-failed-row-paired-stability/v1\",\"case_ids\":[\"R3-Q02\",\"R3-Q05\",\"R3-Q08\",\"R3-Q09\"],\"case_count\":0,\"execution_order\":[],\"case_summary\":{},\"rows\":[],\"diagnostic_controller_exception\":{\"exception_class\":\"controller_no_artifact\"},\"protected_knowledge_mutations\":0,\"sequential_concurrency\":1,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability.json
+              printf "%s\n" "{\"schema_version\":\"m26-role-contract-paired-stability/v1\",\"case_ids\":[\"R3-Q05\",\"R3-Q09\"],\"case_count\":0,\"execution_order\":[],\"case_summary\":{},\"rows\":[],\"diagnostic_controller_exception\":{\"exception_class\":\"controller_no_artifact\"},\"protected_knowledge_mutations\":0,\"sequential_concurrency\":1,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability.json
             fi
             if [ ! -s /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability-error.json ]; then
-              printf "%s\n" "{\"schema_version\":\"m26-failed-row-paired-stability-errors/v1\",\"error_count\":0,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability-error.json
+              printf "%s\n" "{\"schema_version\":\"m26-role-contract-paired-stability-errors/v1\",\"error_count\":0,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability-error.json
             fi
             printf "%s\n" "__M26_PROFILE_BEGIN__"
             cat /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability.json
@@ -131,8 +131,8 @@ jobs:
               profile_path.write_text(profile.strip() + "\n")
           else:
               profile_path.write_text(json.dumps({
-              "schema_version": "m26-failed-row-paired-stability/v1",
-              "case_ids": ["R3-Q02", "R3-Q05", "R3-Q08", "R3-Q09"],
+              "schema_version": "m26-role-contract-paired-stability/v1",
+              "case_ids": ["R3-Q05", "R3-Q09"],
               "case_count": 0,
               "execution_order": [],
               "case_summary": {},
@@ -154,7 +154,7 @@ jobs:
               error_path.write_text(errors.strip() + "\n")
           else:
               error_path.write_text(json.dumps({
-              "schema_version": "m26-failed-row-paired-stability-errors/v1",
+              "schema_version": "m26-role-contract-paired-stability-errors/v1",
               "error_count": 1,
               "errors": [{
                   "exception_class": "diagnostic_carrier_no_error_stream",
@@ -187,7 +187,7 @@ jobs:
           import os
           from pathlib import Path
           profile = json.loads((Path(os.environ["WORK_DIR"]) / "evidence/m26-failed-row-paired-stability.json").read_text())
-          expected_cases = ["R3-Q02", "R3-Q05", "R3-Q08", "R3-Q09"]
+          expected_cases = ["R3-Q05", "R3-Q09"]
           expected_order = [
               f"{case_id}:{variant}{iteration}"
               for case_id in expected_cases
@@ -196,7 +196,7 @@ jobs:
           ]
           failed = (
               profile.get("case_ids") != expected_cases
-              or profile.get("case_count") != 40
+              or profile.get("case_count") != 20
               or profile.get("execution_order") != expected_order
               or profile.get("protected_knowledge_mutations") != 0
               or profile.get("raw_questions_recorded") is not False

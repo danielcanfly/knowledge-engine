@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Any
 
 
-CASE_IDS = ["R3-Q02", "R3-Q05", "R3-Q08", "R3-Q09"]
-SCHEMA_VERSION = "m26-failed-row-paired-stability/v1"
-ERROR_SCHEMA_VERSION = "m26-failed-row-paired-stability-errors/v1"
+CASE_IDS = ["R3-Q05", "R3-Q09"]
+SCHEMA_VERSION = "m26-role-contract-paired-stability/v1"
+ERROR_SCHEMA_VERSION = "m26-role-contract-paired-stability-errors/v1"
 SEMANTIC_CALLS = {
     "aq_semantic_closure",
     "aq_semantic_closure_repair",
