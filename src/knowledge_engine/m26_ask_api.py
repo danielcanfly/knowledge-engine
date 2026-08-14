@@ -19,6 +19,7 @@ from .m26_aq_semantic_contract import (
     semantic_contract_fingerprint,
     run_owner_arbitrary_query,
 )
+from .m26_pa5_v8_live import close_minimax_http_client, prepare_minimax_http_client
 from .m26_pa7_arbitrary_query_runtime import (
     MAX_QUERY_CHARS,
     DenseChannel,
@@ -90,6 +91,12 @@ def _owner_graph_runtime() -> Runtime:
             settings.relation_aware_expansion_enabled
         ),
     )
+
+
+def _preload_query_runtime() -> None:
+    """Materialize durable query dependencies before the service becomes ready."""
+    load_production_answer_bundle()
+    prepare_minimax_http_client()
 
 
 def validate_query_request(payload: Any, *, max_chars: int = MAX_QUERY_CHARS) -> str:
@@ -394,6 +401,9 @@ def register_m26_ask_routes(
         if require_remote_dense is not None
         else os.environ.get("M26_QUERY_REQUIRE_REMOTE_DENSE", "").lower() == "true"
     )
+
+    app.router.add_event_handler("startup", _preload_query_runtime)
+    app.router.add_event_handler("shutdown", close_minimax_http_client)
 
     @app.get("/api/m26/health")
     async def health(request: Request) -> dict[str, Any]:
