@@ -1367,10 +1367,17 @@ def _parse_semantic_review_result(text: str) -> dict[str, Any]:
 
 def _canonical_semantic_review_result(value: Mapping[str, Any]) -> dict[str, Any]:
     schema_version = str(value.get("schema_version", ""))
-    if schema_version == SEMANTIC_REVIEW_SCHEMA_VERSION:
+    has_v1_body = "claim_judgments" in value and "visible_coverage" in value
+    has_compact_body = "judgments" in value or "coverage_verdict" in value
+    if schema_version == SEMANTIC_REVIEW_SCHEMA_VERSION and has_v1_body:
         return dict(value)
-    if schema_version != COMPACT_SEMANTIC_REVIEW_SCHEMA_VERSION:
-        return dict(value)
+    if schema_version not in {
+        SEMANTIC_REVIEW_SCHEMA_VERSION,
+        COMPACT_SEMANTIC_REVIEW_SCHEMA_VERSION,
+    }:
+        raise ValueError(SEMANTIC_REVIEW_PARSE_FAILED)
+    if not has_compact_body:
+        raise ValueError(SEMANTIC_REVIEW_PARSE_FAILED)
     allowed = {
         "schema_version",
         "judgments",
