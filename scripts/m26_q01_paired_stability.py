@@ -15,7 +15,9 @@ from pathlib import Path
 from typing import Any
 
 
-Q01_CASE_ID = "R3-Q01"
+CASE_ID = "R3-Q04"
+SCHEMA_VERSION = "m26-q04-paired-stability/v1"
+ERROR_SCHEMA_VERSION = "m26-q04-paired-stability-errors/v1"
 SEMANTIC_CALLS = {
     "aq_semantic_closure",
     "aq_semantic_closure_repair",
@@ -110,15 +112,15 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     tmp.replace(path)
 
 
-def _load_q01(root: Path) -> dict[str, Any]:
+def _load_case(root: Path) -> dict[str, Any]:
     payload = json.loads(
         (root / "pilot/m26/m26-aq-final-r3-questions.json").read_text()
     )
     rows = payload.get("questions", payload)
     for row in rows:
-        if str(row.get("case_id")) == Q01_CASE_ID:
+        if str(row.get("case_id")) == CASE_ID:
             return dict(row)
-    raise SystemExit("R3-Q01 not found")
+    raise SystemExit(f"{CASE_ID} not found")
 
 
 def _review_summary(review: Mapping[str, Any]) -> dict[str, Any]:
@@ -182,6 +184,87 @@ def _reason_codes(response: Mapping[str, Any], closure: Mapping[str, Any]) -> li
     return list(dict.fromkeys(codes))
 
 
+def _as_list(value: Any) -> list[Any]:
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return list(value)
+    return []
+
+
+def _sanitized_enum_list(values: Any) -> list[str]:
+    out: list[str] = []
+    for value in _as_list(values):
+        text = str(value)
+        if (
+            text.startswith("M26-PA7-ME-")
+            or text.startswith("SEMANTIC_")
+            or text.startswith("COMPACT_PROVIDER")
+            or text in {"BOUNDED_REPAIR_EXHAUSTED", "PROVIDER_CALL_FAILED"}
+        ):
+            out.append(text)
+    return list(dict.fromkeys(out))
+
+
+def _closure_failure_enums_by_attempt(
+    response: Mapping[str, Any],
+    closure: Mapping[str, Any],
+) -> list[list[str]]:
+    verification = (
+        response.get("multi_evidence_verification", {})
+        if isinstance(response.get("multi_evidence_verification"), Mapping)
+        else {}
+    )
+    by_attempt = _as_list(verification.get("verification_failure_codes_by_attempt", []))
+    if by_attempt and all(
+        isinstance(item, Sequence) and not isinstance(item, (str, bytes))
+        for item in by_attempt
+    ):
+        attempts = [_sanitized_enum_list(item) for item in by_attempt]
+    else:
+        attempts = [_sanitized_enum_list(by_attempt)]
+    final_attempt = _sanitized_enum_list(
+        closure.get("failures", [])
+        or closure.get("pre_recovery_failures", [])
+        or closure.get("pre_partial_failures", [])
+    )
+    if (
+        response.get("repair_attempted")
+        or verification.get("bounded_repair_attempted")
+    ) and final_attempt:
+        attempts.append(final_attempt)
+    return attempts
+
+
+def _coverage_verdicts_by_attempt(
+    review_summaries: Sequence[Mapping[str, Any]],
+) -> list[str]:
+    return [str(item.get("visible_coverage_verdict", "")) for item in review_summaries]
+
+
+def _me065_by_attempt(failure_enums: Sequence[Sequence[str]]) -> list[bool]:
+    return ["M26-PA7-ME-065" in set(attempt) for attempt in failure_enums]
+
+
+def _legacy_reason_from_exception(exc: BaseException) -> dict[str, str]:
+    return {
+        "exception_class": type(exc).__name__,
+        "reason_code": str(
+            getattr(exc, "reason_code", "")
+            or getattr(exc, "code", "")
+            or type(exc).__name__
+        ),
+    }
+
+
+def _final_blocking_reason(response: Mapping[str, Any], codes: Sequence[str]) -> str:
+    if response.get("status") == "owner_only_cited_answer":
+        return ""
+    if codes:
+        return str(codes[-1])
+    if response.get("status"):
+        return str(response.get("status"))
+    return "UNKNOWN_FINAL_BLOCKING_REASON"
+
+
 def _run_child(args: argparse.Namespace) -> int:
     root = Path(args.variant_root).resolve()
     sys.path.insert(0, str(root / "src"))
@@ -211,7 +294,19 @@ def _run_child(args: argparse.Namespace) -> int:
         require_remote=os.environ.get("M26_QUERY_REQUIRE_REMOTE_DENSE", "").lower()
         == "true"
     )
-    case = _load_q01(root)
+    legacy_verifier_exceptions: list[dict[str, str]] = []
+    original_verify = legacy._verify_multi_evidence_provider_output
+
+    def verify_with_reason(*verify_args: Any, **verify_kwargs: Any) -> Any:
+        try:
+            return original_verify(*verify_args, **verify_kwargs)
+        except Exception as exc:
+            legacy_verifier_exceptions.append(_legacy_reason_from_exception(exc))
+            raise
+
+    legacy._verify_multi_evidence_provider_output = verify_with_reason
+
+    case = _load_case(root)
     started = time.monotonic()
     try:
         response = run_owner_query_for_web(
@@ -235,11 +330,15 @@ def _run_child(args: argparse.Namespace) -> int:
             if isinstance(item, Mapping) and str(item.get("evidence_id", ""))
         )
         codes = _reason_codes(response, closure)
+        closure_failure_enums_by_attempt = _closure_failure_enums_by_attempt(
+            response,
+            closure,
+        )
         grouped_calls = _provider_call_groups(observed_provider.calls)
         row = {
             "variant": str(args.variant),
             "iteration": int(args.iteration),
-            "case_id": Q01_CASE_ID,
+            "case_id": CASE_ID,
             "status": str(response.get("status", "")),
             "terminal_status": str(response.get("terminal_status", "")),
             "safe_abstention": bool(response.get("safe_abstention", True)),
@@ -271,12 +370,28 @@ def _run_child(args: argparse.Namespace) -> int:
             "first_review_verdict_histogram": (
                 review_summaries[0]["verdict_histogram"] if review_summaries else {}
             ),
+            "second_review_verdict_histogram": (
+                review_summaries[1]["verdict_histogram"]
+                if len(review_summaries) > 1
+                else {}
+            ),
             "visible_coverage_verdict": (
                 review_summaries[0]["visible_coverage_verdict"]
                 if review_summaries
                 else ""
             ),
+            "visible_coverage_verdict_by_attempt": _coverage_verdicts_by_attempt(
+                review_summaries
+            ),
             "me065": "M26-PA7-ME-065" in codes,
+            "me065_by_attempt": _me065_by_attempt(
+                closure_failure_enums_by_attempt
+            ),
+            "semantic_closure_failure_enums_by_attempt": (
+                closure_failure_enums_by_attempt
+            ),
+            "legacy_verifier_exception_reason_codes": legacy_verifier_exceptions,
+            "final_blocking_reason": _final_blocking_reason(response, codes),
             "repair_trigger_enum": [
                 code
                 for code in codes
@@ -301,7 +416,7 @@ def _run_child(args: argparse.Namespace) -> int:
         row = {
             "variant": str(args.variant),
             "iteration": int(args.iteration),
-            "case_id": Q01_CASE_ID,
+            "case_id": CASE_ID,
             "status": "diagnostic_exception",
             "terminal_status": "diagnostic_exception",
             "exception_class": type(exc).__name__,
@@ -326,8 +441,16 @@ def _run_child(args: argparse.Namespace) -> int:
             "selected_evidence_id_digest": _digest_json([]),
             "total_latency_ms": _elapsed_ms(started),
             "first_review_verdict_histogram": {},
+            "second_review_verdict_histogram": {},
             "visible_coverage_verdict": "",
+            "visible_coverage_verdict_by_attempt": _coverage_verdicts_by_attempt(
+                review_summaries
+            ),
             "me065": False,
+            "me065_by_attempt": [],
+            "semantic_closure_failure_enums_by_attempt": [],
+            "legacy_verifier_exception_reason_codes": legacy_verifier_exceptions,
+            "final_blocking_reason": type(exc).__name__,
             "repair_trigger_enum": [type(exc).__name__],
             "final_reviewer_verdict_histogram": {},
             "review_summaries": review_summaries,
@@ -338,6 +461,8 @@ def _run_child(args: argparse.Namespace) -> int:
             "raw_provider_text_recorded": False,
             **_provider_call_groups(observed_provider.calls),
         }
+    finally:
+        legacy._verify_multi_evidence_provider_output = original_verify
     print(json.dumps(row, sort_keys=True))
     return 0
 
@@ -386,7 +511,7 @@ def _run_controller(args: argparse.Namespace) -> int:
                 {
                     "variant": variant,
                     "iteration": iteration,
-                    "case_id": Q01_CASE_ID,
+                    "case_id": CASE_ID,
                     "status": "diagnostic_child_no_output",
                     "terminal_status": "diagnostic_child_no_output",
                     "child_returncode": child.returncode,
@@ -412,7 +537,7 @@ def _run_controller(args: argparse.Namespace) -> int:
     _atomic_write_json(
         Path(args.error_output),
         {
-            "schema_version": "m26-q01-paired-stability-errors/v1",
+            "schema_version": ERROR_SCHEMA_VERSION,
             "error_count": len(
                 [row for row in rows if str(row.get("status", "")).startswith("diagnostic_")]
             ),
@@ -431,6 +556,25 @@ def _artifact(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     by_variant: dict[str, list[Mapping[str, Any]]] = {"A": [], "B": []}
     for row in rows:
         by_variant.setdefault(str(row.get("variant", "")), []).append(row)
+    paired_digest_match = {}
+    for iteration in range(1, 6):
+        a_digest = next(
+            (
+                str(row.get("selected_evidence_id_digest", ""))
+                for row in rows
+                if row.get("variant") == "A" and row.get("iteration") == iteration
+            ),
+            "",
+        )
+        b_digest = next(
+            (
+                str(row.get("selected_evidence_id_digest", ""))
+                for row in rows
+                if row.get("variant") == "B" and row.get("iteration") == iteration
+            ),
+            "",
+        )
+        paired_digest_match[str(iteration)] = bool(a_digest and a_digest == b_digest)
     variant_summary = {}
     for variant, variant_rows in by_variant.items():
         successes = [
@@ -468,13 +612,14 @@ def _artifact(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             "selected_evidence_digest_counts": dict(sorted(digests.items())),
         }
     return {
-        "schema_version": "m26-q01-paired-stability/v1",
-        "case_id": Q01_CASE_ID,
+        "schema_version": SCHEMA_VERSION,
+        "case_id": CASE_ID,
         "case_count": len(rows),
         "execution_order": [
             f"{row.get('variant')}{row.get('iteration')}" for row in rows
         ],
         "variant_summary": variant_summary,
+        "paired_selected_evidence_digest_match": paired_digest_match,
         "rows": [dict(row) for row in rows],
         "protected_knowledge_mutations": 0,
         "sequential_concurrency": 1,
@@ -507,8 +652,8 @@ def main() -> int:
         return _run_controller(args)
     except Exception as exc:
         receipt = {
-            "schema_version": "m26-q01-paired-stability/v1",
-            "case_id": Q01_CASE_ID,
+            "schema_version": SCHEMA_VERSION,
+            "case_id": CASE_ID,
             "case_count": 0,
             "execution_order": [],
             "variant_summary": {"A": {"run_count": 0}, "B": {"run_count": 0}},
@@ -536,7 +681,7 @@ def main() -> int:
         _atomic_write_json(
             Path(args.error_output),
             {
-                "schema_version": "m26-q01-paired-stability-errors/v1",
+                "schema_version": ERROR_SCHEMA_VERSION,
                 "error_count": 1,
                 "errors": [receipt["diagnostic_controller_exception"]],
                 "raw_questions_recorded": False,
