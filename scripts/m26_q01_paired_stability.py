@@ -503,7 +503,51 @@ def main() -> int:
         raise SystemExit("variant roots are required")
     if args.output is None or args.error_output is None:
         raise SystemExit("output paths are required")
-    return _run_controller(args)
+    try:
+        return _run_controller(args)
+    except Exception as exc:
+        receipt = {
+            "schema_version": "m26-q01-paired-stability/v1",
+            "case_id": Q01_CASE_ID,
+            "case_count": 0,
+            "execution_order": [],
+            "variant_summary": {"A": {"run_count": 0}, "B": {"run_count": 0}},
+            "rows": [],
+            "diagnostic_controller_exception": {
+                "exception_class": type(exc).__name__,
+                "sanitized_traceback": [
+                    {
+                        "file": Path(frame.filename).name,
+                        "line": int(frame.lineno),
+                        "function": str(frame.name),
+                    }
+                    for frame in traceback.extract_tb(exc.__traceback__)[-8:]
+                ],
+            },
+            "protected_knowledge_mutations": 0,
+            "sequential_concurrency": 1,
+            "raw_questions_recorded": False,
+            "raw_answers_recorded": False,
+            "raw_evidence_recorded": False,
+            "raw_prompts_recorded": False,
+            "raw_provider_text_recorded": False,
+        }
+        _atomic_write_json(Path(args.output), receipt)
+        _atomic_write_json(
+            Path(args.error_output),
+            {
+                "schema_version": "m26-q01-paired-stability-errors/v1",
+                "error_count": 1,
+                "errors": [receipt["diagnostic_controller_exception"]],
+                "raw_questions_recorded": False,
+                "raw_answers_recorded": False,
+                "raw_evidence_recorded": False,
+                "raw_prompts_recorded": False,
+                "raw_provider_text_recorded": False,
+            },
+        )
+        print(json.dumps({"output": str(args.output), "case_count": 0}))
+        return 1
 
 
 if __name__ == "__main__":
