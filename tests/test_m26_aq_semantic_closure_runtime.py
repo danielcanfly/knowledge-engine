@@ -1886,6 +1886,31 @@ def test_compact_semantic_review_output_canonicalizes_to_fail_closed_v1_shape() 
     }
 
 
+def test_compact_semantic_review_output_accepts_v1_label_with_compact_body() -> None:
+    review = closure_runtime._parse_semantic_review_result(
+        json.dumps(
+            {
+                "schema_version": "m26-claim-entailment-review/v1",
+                "judgments": [
+                    {
+                        "claim_id": "claim_1",
+                        "verdict": "ENTAILED",
+                        "evidence_ids": ["ev_router"],
+                    }
+                ],
+                "coverage_verdict": "COVERED",
+            }
+        )
+    )
+
+    assert review["schema_version"] == "m26-claim-entailment-review/v1"
+    assert review["claim_judgments"][0]["evidence_ids"] == ["ev_router"]
+    assert review["visible_coverage"] == {
+        "verdict": "COVERED",
+        "uncovered_assertions": [],
+    }
+
+
 def test_compact_semantic_review_output_unknown_key_fails_closed() -> None:
     with pytest.raises(ValueError, match="SEMANTIC_REVIEW_PARSE_FAILED"):
         closure_runtime._parse_semantic_review_result(
