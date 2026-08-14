@@ -189,6 +189,11 @@ def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
             if isinstance(runtime_response.get("graph_observability"), Mapping)
             else {}
         ),
+        "runtime_observability": dict(
+            runtime_response.get("runtime_observability", {})
+            if isinstance(runtime_response.get("runtime_observability"), Mapping)
+            else {}
+        ),
         "identities": {
             "production_release_id": runtime_response.get("production_release_id"),
             "production_manifest_sha256": runtime_response.get("production_manifest_sha256"),
