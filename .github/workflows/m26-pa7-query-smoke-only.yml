@@ -56,6 +56,13 @@ jobs:
           cd "$DEPLOY_PATH"
           container_id="$(docker compose ps -q knowledge-engine | head -n 1)"
           test -n "$container_id"
+          cleanup() {
+            rm -f /tmp/m26-latency-phase1-source.tgz || true
+            docker compose exec -T knowledge-engine bash -lc \
+              'rm -rf /tmp/m26-latency-phase1-source /tmp/m26-latency-phase1-profile.json' \
+              >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
           docker compose exec -T knowledge-engine bash -lc '
             set -euo pipefail
             rm -rf /tmp/m26-latency-phase1-source /tmp/m26-latency-phase1-profile.json
