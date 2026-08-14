@@ -58,48 +58,48 @@ jobs:
           cd "$DEPLOY_PATH"
           rm -f /tmp/m26-q01-paired-variant-a.tgz /tmp/m26-q01-paired-variant-b.tgz /tmp/m26-q01-paired-controller.tgz || true
           docker compose exec -T knowledge-engine bash -lc \
-            'rm -rf /tmp/m26-q01-paired-A /tmp/m26-q01-paired-B /tmp/m26-q01-paired-controller /tmp/m26-q01-paired-stability.json /tmp/m26-q01-paired-stability-error.json' \
+            'rm -rf /var/lib/knowledge-engine/cache/m26-q01-paired-A /var/lib/knowledge-engine/cache/m26-q01-paired-B /var/lib/knowledge-engine/cache/m26-q01-paired-controller /var/lib/knowledge-engine/cache/m26-q01-paired-stability.json /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json' \
             >/dev/null 2>&1 || true
           REMOTE_CLEANUP
           }
           trap cleanup_remote EXIT
-          remote_log="$WORK_DIR/evidence/remote-run.stderr"
+          remote_log="$WORK_DIR/remote-run.stderr"
           set +e
           ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' 2> "$remote_log"
           set -euo pipefail
           cd "$DEPLOY_PATH"
           docker compose exec -T knowledge-engine bash -lc '
             set -euo pipefail
-            rm -rf /tmp/m26-q01-paired-A /tmp/m26-q01-paired-B /tmp/m26-q01-paired-controller /tmp/m26-q01-paired-stability.json /tmp/m26-q01-paired-stability-error.json
-            mkdir -p /tmp/m26-q01-paired-A /tmp/m26-q01-paired-B /tmp/m26-q01-paired-controller
+            rm -rf /var/lib/knowledge-engine/cache/m26-q01-paired-A /var/lib/knowledge-engine/cache/m26-q01-paired-B /var/lib/knowledge-engine/cache/m26-q01-paired-controller /var/lib/knowledge-engine/cache/m26-q01-paired-stability.json /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json
+            mkdir -p /var/lib/knowledge-engine/cache/m26-q01-paired-A /var/lib/knowledge-engine/cache/m26-q01-paired-B /var/lib/knowledge-engine/cache/m26-q01-paired-controller
           '
           docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; tar -xzf - -C /tmp/m26-q01-paired-A' \
+            'set -euo pipefail; tar -xzf - -C /var/lib/knowledge-engine/cache/m26-q01-paired-A' \
             < /tmp/m26-q01-paired-variant-a.tgz
           docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; tar -xzf - -C /tmp/m26-q01-paired-B' \
+            'set -euo pipefail; tar -xzf - -C /var/lib/knowledge-engine/cache/m26-q01-paired-B' \
             < /tmp/m26-q01-paired-variant-b.tgz
           docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; tar -xzf - -C /tmp/m26-q01-paired-controller' \
+            'set -euo pipefail; tar -xzf - -C /var/lib/knowledge-engine/cache/m26-q01-paired-controller' \
             < /tmp/m26-q01-paired-controller.tgz
           docker compose exec -T knowledge-engine bash -lc '
             set -euo pipefail
-            cd /tmp/m26-q01-paired-controller
+            cd /var/lib/knowledge-engine/cache/m26-q01-paired-controller
             set +e
             python m26_q01_paired_stability.py \
-              --variant-a-root /tmp/m26-q01-paired-A \
-              --variant-b-root /tmp/m26-q01-paired-B \
-              --output /tmp/m26-q01-paired-stability.json \
-              --error-output /tmp/m26-q01-paired-stability-error.json \
-              > /tmp/m26-q01-paired-controller.stdout \
-              2> /tmp/m26-q01-paired-controller.stderr
+              --variant-a-root /var/lib/knowledge-engine/cache/m26-q01-paired-A \
+              --variant-b-root /var/lib/knowledge-engine/cache/m26-q01-paired-B \
+              --output /var/lib/knowledge-engine/cache/m26-q01-paired-stability.json \
+              --error-output /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json \
+              > /var/lib/knowledge-engine/cache/m26-q01-paired-controller.stdout \
+              2> /var/lib/knowledge-engine/cache/m26-q01-paired-controller.stderr
             status=$?
             set -e
-            if [ ! -s /tmp/m26-q01-paired-stability.json ]; then
-              printf "%s\n" "{\"schema_version\":\"m26-q01-paired-stability/v1\",\"case_id\":\"R3-Q01\",\"case_count\":0,\"execution_order\":[],\"variant_summary\":{\"A\":{\"run_count\":0},\"B\":{\"run_count\":0}},\"rows\":[],\"diagnostic_controller_exception\":{\"exception_class\":\"controller_no_artifact\"},\"protected_knowledge_mutations\":0,\"sequential_concurrency\":1,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /tmp/m26-q01-paired-stability.json
+            if [ ! -s /var/lib/knowledge-engine/cache/m26-q01-paired-stability.json ]; then
+              printf "%s\n" "{\"schema_version\":\"m26-q01-paired-stability/v1\",\"case_id\":\"R3-Q01\",\"case_count\":0,\"execution_order\":[],\"variant_summary\":{\"A\":{\"run_count\":0},\"B\":{\"run_count\":0}},\"rows\":[],\"diagnostic_controller_exception\":{\"exception_class\":\"controller_no_artifact\"},\"protected_knowledge_mutations\":0,\"sequential_concurrency\":1,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /var/lib/knowledge-engine/cache/m26-q01-paired-stability.json
             fi
-            if [ ! -s /tmp/m26-q01-paired-stability-error.json ]; then
-              printf "%s\n" "{\"schema_version\":\"m26-q01-paired-stability-errors/v1\",\"error_count\":0,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /tmp/m26-q01-paired-stability-error.json
+            if [ ! -s /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json ]; then
+              printf "%s\n" "{\"schema_version\":\"m26-q01-paired-stability-errors/v1\",\"error_count\":0,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json
             fi
             exit "$status"
           '
@@ -111,7 +111,7 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_PATH"
           docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; cat /tmp/m26-q01-paired-stability.json'
+            'set -euo pipefail; cat /var/lib/knowledge-engine/cache/m26-q01-paired-stability.json'
           REMOTE
           profile_read_status=$?
           set -e
@@ -150,7 +150,7 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_PATH"
           docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; cat /tmp/m26-q01-paired-stability-error.json'
+            'set -euo pipefail; cat /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json'
           REMOTE
           error_read_status=$?
           set -e
