@@ -87,6 +87,10 @@ class Phase1Profiler:
                 "pre_review_stage_reached": "provider_returned",
                 "pre_review_failure_enum": "",
                 "failing_claim_id": "",
+                "answer_sentence_count": 0,
+                "multi_anchor_sentence_count": 0,
+                "max_anchors_per_sentence": 0,
+                "reviewer_blocked_claims": [],
             }
         )
 
@@ -252,6 +256,17 @@ def _error_receipt(
         "raw_prompts_recorded": False,
         "raw_provider_text_recorded": False,
     }
+
+
+def _public_pre_review_traces(
+    traces: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    public: list[dict[str, Any]] = []
+    for trace in traces:
+        item = dict(trace)
+        item.pop("_claim_boundary_metadata", None)
+        public.append(item)
+    return public
 
 
 def _percentile(values: Sequence[int | float], q: float) -> float:
@@ -420,6 +435,67 @@ def _anchor_counts(answer: str) -> tuple[int, int]:
     return len(anchors), len(set(anchors))
 
 
+def _answer_sentence_anchor_stats(answer: str) -> dict[str, Any]:
+    sentences = [
+        item.strip()
+        for item in re.split(r"(?<=[.!?。])\s+", str(answer).strip())
+        if item.strip()
+    ]
+    anchor_counts = [
+        len(legacy.CLAIM_ANCHOR_RE.findall(sentence)) for sentence in sentences
+    ]
+    return {
+        "answer_sentence_count": len(sentences),
+        "multi_anchor_sentence_count": len(
+            [count for count in anchor_counts if count > 1]
+        ),
+        "max_anchors_per_sentence": max(anchor_counts) if anchor_counts else 0,
+    }
+
+
+def _anchors_in_claim_sentence(*, answer: str, claim_id: str) -> int:
+    anchor = f"[[{claim_id}]]"
+    for sentence in [
+        item.strip()
+        for item in re.split(r"(?<=[.!?。])\s+", str(answer).strip())
+        if item.strip()
+    ]:
+        if anchor in sentence:
+            return len(legacy.CLAIM_ANCHOR_RE.findall(sentence))
+    return 0
+
+
+def _claim_boundary_metadata(candidate: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    answer = str(candidate.get("answer_text", ""))
+    claims = [
+        dict(claim)
+        for claim in legacy._list(candidate.get("claims"), "structural trace claims")
+        if isinstance(claim, Mapping)
+    ]
+    surface_sha_counts = Counter(
+        canonical_sha256(str(claim.get("surface_text", ""))) for claim in claims
+    )
+    metadata: dict[str, dict[str, Any]] = {}
+    for claim in claims:
+        claim_id = str(claim.get("claim_id", ""))
+        surface = str(claim.get("surface_text", ""))
+        surface_sha = canonical_sha256(surface)
+        if claim_id:
+            metadata[claim_id] = {
+                "claim_id": claim_id,
+                "anchors_in_bound_sentence": _anchors_in_claim_sentence(
+                    answer=answer,
+                    claim_id=claim_id,
+                ),
+                "bound_surface_char_count": len(surface),
+                "bound_surface_sha256": surface_sha,
+                "same_bound_surface_claim_count": int(
+                    surface_sha_counts.get(surface_sha, 0)
+                ),
+            }
+    return metadata
+
+
 def _set_pre_review_failure(
     trace: dict[str, Any] | None,
     failure_enum: str,
@@ -574,6 +650,8 @@ def _pre_review_trace_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, An
     stage_counts = Counter()
     attempt_count = 0
     reviewer_reached_count = 0
+    reviewer_blocked_claim_count = 0
+    reviewer_blocked_shared_boundary_count = 0
     for row in rows:
         for trace in row.get("pre_review_traces", []):
             if not isinstance(trace, Mapping):
@@ -587,11 +665,24 @@ def _pre_review_trace_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, An
             failure_enum = str(trace.get("pre_review_failure_enum", ""))
             if failure_enum:
                 failure_enums[failure_enum] += 1
+            for blocked_claim in trace.get("reviewer_blocked_claims", []):
+                if not isinstance(blocked_claim, Mapping):
+                    continue
+                reviewer_blocked_claim_count += 1
+                if (
+                    int(blocked_claim.get("anchors_in_bound_sentence", 0)) > 1
+                    or int(blocked_claim.get("same_bound_surface_claim_count", 0)) > 1
+                ):
+                    reviewer_blocked_shared_boundary_count += 1
     return {
         "attempt_count": attempt_count,
         "reviewer_reached_count": reviewer_reached_count,
         "failure_enum_counts": dict(sorted(failure_enums.items())),
         "stage_reached_counts": dict(sorted(stage_counts.items())),
+        "reviewer_blocked_claim_count": reviewer_blocked_claim_count,
+        "reviewer_blocked_shared_boundary_count": (
+            reviewer_blocked_shared_boundary_count
+        ),
     }
 
 
@@ -607,6 +698,7 @@ def _install_stage_wrappers(profiler: Phase1Profiler) -> Callable[[], None]:
     original_runtime_bound = runtime._runtime_bound_candidate
     original_bounded_publication = runtime._bounded_publication_candidate
     original_semantic_review = runtime._call_semantic_entailment_review
+    original_review_blocking = runtime._semantic_review_blocking_failures
 
     runtime.load_production_answer_bundle = lambda *a, **kw: profiler.observe_stage(
         "production_bundle_load_and_gate", original_bundle, *a, **kw
@@ -681,6 +773,10 @@ def _install_stage_wrappers(profiler: Phase1Profiler) -> Callable[[], None]:
             raise
         if trace is not None:
             trace["pre_review_stage_reached"] = "runtime_bound_candidate_success"
+            trace.update(
+                _answer_sentence_anchor_stats(str(candidate.get("answer_text", "")))
+            )
+            trace["_claim_boundary_metadata"] = _claim_boundary_metadata(candidate)
         return candidate
 
     def bounded_publication_with_trace(*args: Any, **kwargs: Any) -> Any:
@@ -702,10 +798,30 @@ def _install_stage_wrappers(profiler: Phase1Profiler) -> Callable[[], None]:
             trace["pre_review_stage_reached"] = "semantic_reviewer_reached"
         return original_semantic_review(*args, **kwargs)
 
+    def review_blocking_with_trace(review: Mapping[str, Any]) -> list[str]:
+        failures = original_review_blocking(review)
+        trace = profiler.active_pre_review_trace()
+        if trace is not None:
+            boundary_by_claim = trace.get("_claim_boundary_metadata", {})
+            blocked_claims: list[dict[str, Any]] = []
+            if isinstance(boundary_by_claim, Mapping):
+                for failure in failures:
+                    text = str(failure)
+                    if not text.startswith("SEMANTIC_REVIEW_BLOCKED:"):
+                        continue
+                    parts = text.split(":")
+                    claim_id = parts[1] if len(parts) > 1 else ""
+                    metadata = boundary_by_claim.get(claim_id)
+                    if isinstance(metadata, Mapping):
+                        blocked_claims.append(dict(metadata))
+            trace["reviewer_blocked_claims"] = blocked_claims
+        return failures
+
     runtime._parse_compact_provider_result = parse_compact_with_trace
     runtime._runtime_bound_candidate = runtime_bound_with_trace
     runtime._bounded_publication_candidate = bounded_publication_with_trace
     runtime._call_semantic_entailment_review = semantic_review_with_trace
+    runtime._semantic_review_blocking_failures = review_blocking_with_trace
 
     def restore() -> None:
         runtime.load_production_answer_bundle = original_bundle
@@ -719,6 +835,7 @@ def _install_stage_wrappers(profiler: Phase1Profiler) -> Callable[[], None]:
         runtime._runtime_bound_candidate = original_runtime_bound
         runtime._bounded_publication_candidate = original_bounded_publication
         runtime._call_semantic_entailment_review = original_semantic_review
+        runtime._semantic_review_blocking_failures = original_review_blocking
 
     return restore
 
@@ -791,7 +908,9 @@ def _run_case(
             "natural_answer_fallback_used": False,
             "stage_timings": profiler.stage_timings,
             "provider_calls": profiler.provider_calls,
-            "pre_review_traces": profiler.pre_review_traces,
+            "pre_review_traces": _public_pre_review_traces(
+                profiler.pre_review_traces
+            ),
             "provider_attempt_telemetry_count": 0,
             "multi_evidence_verification": {
                 "repair_trigger": [],
@@ -858,7 +977,7 @@ def _run_case(
         ),
         "stage_timings": profiler.stage_timings,
         "provider_calls": profiler.provider_calls,
-        "pre_review_traces": profiler.pre_review_traces,
+        "pre_review_traces": _public_pre_review_traces(profiler.pre_review_traces),
         "provider_attempt_telemetry_count": len(provider_attempts)
         if isinstance(provider_attempts, Sequence)
         else 0,
