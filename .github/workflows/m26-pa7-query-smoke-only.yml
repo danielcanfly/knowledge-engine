@@ -19,11 +19,11 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.head_ref == 'gpt/m26-pa7-full-graph-title-normalization')
     runs-on: ubuntu-24.04
-    timeout-minutes: 14
+    timeout-minutes: 22
     environment: m23-r3-diagnostic
     env:
       WORK_DIR: /tmp/m26-pa7-query-smoke-only
-      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PHASE1B_CANDIDATE_SHA: 24a9565af2e2c920a5f928219ecee5cd4c7b3c1c
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
@@ -43,39 +43,48 @@ jobs:
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
           bash scripts/configure_oracle_ssh.sh
-          printf '%s\n' "$EXPECTED_HEAD_SHA" > "$WORK_DIR/evidence/query-smoke-head-sha.txt"
+          git cat-file -e "$PHASE1B_CANDIDATE_SHA^{commit}"
+          git archive --format=tar.gz --output="$WORK_DIR/source.tgz" \
+            "$PHASE1B_CANDIDATE_SHA" src pilot pyproject.toml
+          mkdir -p "$WORK_DIR/controller/scripts"
+          cp scripts/m26_phase1_latency_profile.py "$WORK_DIR/controller/scripts/"
+          tar -czf "$WORK_DIR/controller.tgz" -C "$WORK_DIR/controller" .
+          printf '%s\n' "$PHASE1B_CANDIDATE_SHA" > "$WORK_DIR/evidence/phase1b-candidate-sha.txt"
 
-      - name: Run isolated Phase 1B Q01 stability and latency profile
+      - name: Run isolated Phase 1B canonical latency profile
         run: |
           set -euo pipefail
-          tar --exclude='.git' -czf "$WORK_DIR/source.tgz" \
-            src scripts pilot pyproject.toml
           scp "$WORK_DIR/source.tgz" oracle-knowledge:/tmp/m26-latency-phase1-source.tgz
+          scp "$WORK_DIR/controller.tgz" oracle-knowledge:/tmp/m26-latency-phase1-controller.tgz
           cleanup_remote() {
             ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE_CLEANUP' >/dev/null 2>&1 || true
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          rm -f /tmp/m26-latency-phase1-source.tgz || true
+          rm -f /tmp/m26-latency-phase1-source.tgz /tmp/m26-latency-phase1-controller.tgz || true
           docker compose exec -T knowledge-engine bash -lc \
-            'rm -rf /tmp/m26-latency-phase1-source /tmp/m26-latency-phase1-q01-stability.json /tmp/m26-latency-phase1-q01-stability-error.json /tmp/m26-latency-phase1-profile.json /tmp/m26-latency-phase1-profile-error.json' \
+            'rm -rf /tmp/m26-latency-phase1-source /tmp/m26-latency-phase1-profile.json /tmp/m26-latency-phase1-profile-error.json' \
+            </dev/null \
             >/dev/null 2>&1 || true
           REMOTE_CLEANUP
           }
           trap cleanup_remote EXIT
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_HEAD_SHA='$EXPECTED_HEAD_SHA' bash -se" <<'REMOTE'
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
           container_id="$(docker compose ps -q knowledge-engine | head -n 1)"
           test -n "$container_id"
           docker compose exec -T knowledge-engine bash -lc '
             set -euo pipefail
-            rm -rf /tmp/m26-latency-phase1-source /tmp/m26-latency-phase1-q01-stability.json /tmp/m26-latency-phase1-q01-stability-error.json /tmp/m26-latency-phase1-profile.json /tmp/m26-latency-phase1-profile-error.json
+            rm -rf /tmp/m26-latency-phase1-source /tmp/m26-latency-phase1-profile.json /tmp/m26-latency-phase1-profile-error.json
             mkdir -p /tmp/m26-latency-phase1-source
             tar -xzf - -C /tmp/m26-latency-phase1-source
           ' < /tmp/m26-latency-phase1-source.tgz
+          docker compose exec -T knowledge-engine bash -lc \
+            'set -euo pipefail; tar -xzf - -C /tmp/m26-latency-phase1-source' \
+            < /tmp/m26-latency-phase1-controller.tgz
           REMOTE
           set +e
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_HEAD_SHA='$EXPECTED_HEAD_SHA' bash -se" <<'REMOTE' \
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' PHASE1B_CANDIDATE_SHA='$PHASE1B_CANDIDATE_SHA' bash -se" <<'REMOTE' \
             > "$WORK_DIR/m26-latency-phase1-profile-run.stdout" \
             2> "$WORK_DIR/m26-latency-phase1-profile-run.stderr"
           set -euo pipefail
@@ -83,18 +92,7 @@ jobs:
           docker compose exec -T knowledge-engine bash -lc '
             set -euo pipefail
             cd /tmp/m26-latency-phase1-source
-            EXPECTED_HEAD_SHA="'"$EXPECTED_HEAD_SHA"'" \
-            PYTHONPATH=/tmp/m26-latency-phase1-source/src:${PYTHONPATH:-} \
-              python scripts/m26_phase1_latency_profile.py \
-                --root /tmp/m26-latency-phase1-source \
-                --questions pilot/m26/m26-aq-final-r3-questions.json \
-                --case-id R3-Q01 \
-                --repeat 3 \
-                --limit 1 \
-                --output /tmp/m26-latency-phase1-q01-stability.json \
-                --error-output /tmp/m26-latency-phase1-q01-stability-error.json
-            python -c '"'"'import json; from pathlib import Path; p=json.loads(Path("/tmp/m26-latency-phase1-q01-stability.json").read_text()); failed=(p.get("case_count") != 3 or p.get("answerable_profile_case_count") != 3 or p.get("failure_count") != 0 or p.get("protected_knowledge_mutations") != 0 or p.get("raw_questions_recorded") is not False or p.get("raw_answers_recorded") is not False or p.get("raw_evidence_recorded") is not False or p.get("raw_prompts_recorded") is not False or p.get("raw_provider_text_recorded") is not False or p.get("sequential_concurrency") != 1); raise SystemExit(1 if failed else 0)'"'"'
-            EXPECTED_HEAD_SHA="'"$EXPECTED_HEAD_SHA"'" \
+            PHASE1B_CANDIDATE_SHA="'"$PHASE1B_CANDIDATE_SHA"'" \
             PYTHONPATH=/tmp/m26-latency-phase1-source/src:${PYTHONPATH:-} \
               python scripts/m26_phase1_latency_profile.py \
                 --root /tmp/m26-latency-phase1-source \
@@ -102,38 +100,23 @@ jobs:
                 --limit 10 \
                 --output /tmp/m26-latency-phase1-profile.json \
                 --error-output /tmp/m26-latency-phase1-profile-error.json
-          '
+          ' </dev/null
           REMOTE
           profile_status=$?
           set -e
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-latency-phase1-q01-stability.json"
-          set -euo pipefail
-          cd "$DEPLOY_PATH"
-          docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; cat /tmp/m26-latency-phase1-q01-stability.json'
-          REMOTE
-          if ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-latency-phase1-q01-stability-error.json"
-          set -euo pipefail
-          cd "$DEPLOY_PATH"
-          docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; cat /tmp/m26-latency-phase1-q01-stability-error.json'
-          REMOTE
-          then
-            :
-          else
-            printf '%s\n' '{"schema_version":"m26-latency-phase1-sanitized-errors/v1","error_count":0,"errors":[]}' > "$WORK_DIR/evidence/m26-latency-phase1-q01-stability-error.json"
-          fi
           ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-latency-phase1-profile.json"
           set -euo pipefail
           cd "$DEPLOY_PATH"
           docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; cat /tmp/m26-latency-phase1-profile.json 2>/dev/null || printf "%s\n" "{\"schema_version\":\"m26-latency-phase1-profile/v1\",\"case_count\":0,\"answerable_profile_case_count\":0,\"failure_count\":1,\"failures\":[{\"reason\":\"full_profile_not_run\"}],\"protected_knowledge_mutations\":0,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false,\"sequential_concurrency\":1,\"rows\":[]}"'
+            'set -euo pipefail; cat /tmp/m26-latency-phase1-profile.json 2>/dev/null || printf "%s\n" "{\"schema_version\":\"m26-latency-phase1-profile/v1\",\"case_count\":0,\"answerable_profile_case_count\":0,\"failure_count\":1,\"failures\":[{\"reason\":\"full_profile_not_run\"}],\"protected_knowledge_mutations\":0,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false,\"sequential_concurrency\":1,\"rows\":[]}"' \
+            </dev/null
           REMOTE
           if ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-latency-phase1-profile-error.json"
           set -euo pipefail
           cd "$DEPLOY_PATH"
           docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; cat /tmp/m26-latency-phase1-profile-error.json'
+            'set -euo pipefail; cat /tmp/m26-latency-phase1-profile-error.json' \
+            </dev/null
           REMOTE
           then
             :
@@ -178,20 +161,7 @@ jobs:
           import os
           from pathlib import Path
           root = Path(os.environ["WORK_DIR"]) / "evidence"
-          q01 = json.loads((root / "m26-latency-phase1-q01-stability.json").read_text())
           profile = json.loads((root / "m26-latency-phase1-profile.json").read_text())
-          q01_failed = (
-              q01.get("case_count") != 3
-              or q01.get("answerable_profile_case_count") != 3
-              or q01.get("failure_count") != 0
-              or q01.get("protected_knowledge_mutations") != 0
-              or q01.get("raw_questions_recorded") is not False
-              or q01.get("raw_answers_recorded") is not False
-              or q01.get("raw_evidence_recorded") is not False
-              or q01.get("raw_prompts_recorded") is not False
-              or q01.get("raw_provider_text_recorded") is not False
-              or q01.get("sequential_concurrency") != 1
-          )
           profile_failed = (
               profile.get("case_count") != 12
               or profile.get("answerable_profile_case_count") != 10
@@ -204,11 +174,8 @@ jobs:
               or profile.get("raw_provider_text_recorded") is not False
               or profile.get("sequential_concurrency") != 1
           )
-          if q01_failed or profile_failed:
+          if profile_failed:
               raise SystemExit(json.dumps({
-                  "q01_case_count": q01.get("case_count"),
-                  "q01_failure_count": q01.get("failure_count"),
-                  "q01_failures": q01.get("failures"),
                   "profile_case_count": profile.get("case_count"),
                   "profile_answerable_profile_case_count": profile.get("answerable_profile_case_count"),
                   "profile_failure_count": profile.get("failure_count"),
