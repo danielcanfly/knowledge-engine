@@ -43,6 +43,7 @@ jobs:
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
           bash scripts/configure_oracle_ssh.sh
+          git fetch --no-tags --depth=1 origin "$PHASE1B_CANDIDATE_SHA"
           git cat-file -e "$PHASE1B_CANDIDATE_SHA^{commit}"
           git archive --format=tar.gz --output="$WORK_DIR/source.tgz" \
             "$PHASE1B_CANDIDATE_SHA" src pilot pyproject.toml
