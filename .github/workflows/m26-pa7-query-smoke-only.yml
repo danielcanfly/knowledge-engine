@@ -63,9 +63,10 @@ jobs:
           REMOTE_CLEANUP
           }
           trap cleanup_remote EXIT
+          remote_stdout="$WORK_DIR/remote-run.stdout"
           remote_log="$WORK_DIR/remote-run.stderr"
           set +e
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' 2> "$remote_log"
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$remote_stdout" 2> "$remote_log"
           set -euo pipefail
           cd "$DEPLOY_PATH"
           docker compose exec -T knowledge-engine bash -lc '
@@ -101,28 +102,34 @@ jobs:
             if [ ! -s /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json ]; then
               printf "%s\n" "{\"schema_version\":\"m26-q01-paired-stability-errors/v1\",\"error_count\":0,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json
             fi
+            printf "%s\n" "__M26_PROFILE_BEGIN__"
+            cat /var/lib/knowledge-engine/cache/m26-q01-paired-stability.json
+            printf "%s\n" "__M26_ERROR_BEGIN__"
+            cat /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json
             exit "$status"
           '
           REMOTE
           remote_status=$?
           set -e
-          set +e
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-q01-paired-stability.json" 2>> "$remote_log"
-          set -euo pipefail
-          cd "$DEPLOY_PATH"
-          docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; cat /var/lib/knowledge-engine/cache/m26-q01-paired-stability.json'
-          REMOTE
-          profile_read_status=$?
-          set -e
-          if [ "$profile_read_status" -ne 0 ] || [ ! -s "$WORK_DIR/evidence/m26-q01-paired-stability.json" ]; then
-            python3 - "$WORK_DIR/evidence/m26-q01-paired-stability.json" "$remote_status" "$profile_read_status" "$remote_log" <<'PY'
+          python3 - "$remote_stdout" "$remote_log" "$WORK_DIR/evidence/m26-q01-paired-stability.json" "$WORK_DIR/evidence/m26-q01-paired-stability-error.json" "$remote_status" <<'PY'
           import hashlib, json, sys
           from pathlib import Path
-          path = Path(sys.argv[1])
-          log = Path(sys.argv[4])
+          stdout = Path(sys.argv[1]).read_text(errors="replace")
+          log = Path(sys.argv[2])
+          profile_path = Path(sys.argv[3])
+          error_path = Path(sys.argv[4])
+          remote_status = int(sys.argv[5])
           stderr_tail = log.read_text(errors="replace")[-4000:] if log.exists() else ""
-          path.write_text(json.dumps({
+          profile = ""
+          errors = ""
+          if "__M26_PROFILE_BEGIN__" in stdout:
+              after_profile = stdout.split("__M26_PROFILE_BEGIN__", 1)[1].lstrip()
+              if "__M26_ERROR_BEGIN__" in after_profile:
+                  profile, errors = after_profile.split("__M26_ERROR_BEGIN__", 1)
+          if profile.strip():
+              profile_path.write_text(profile.strip() + "\n")
+          else:
+              profile_path.write_text(json.dumps({
               "schema_version": "m26-q01-paired-stability/v1",
               "case_id": "R3-Q01",
               "case_count": 0,
@@ -130,9 +137,8 @@ jobs:
               "variant_summary": {"A": {"run_count": 0}, "B": {"run_count": 0}},
               "rows": [],
               "diagnostic_controller_exception": {
-                  "exception_class": "diagnostic_carrier_no_profile_artifact",
-                  "remote_status": int(sys.argv[2]),
-                  "profile_read_status": int(sys.argv[3]),
+                  "exception_class": "diagnostic_carrier_no_profile_stream",
+                  "remote_status": remote_status,
                   "stderr_tail_sha256": hashlib.sha256(stderr_tail.encode()).hexdigest(),
               },
               "protected_knowledge_mutations": 0,
@@ -142,31 +148,16 @@ jobs:
               "raw_evidence_recorded": False,
               "raw_prompts_recorded": False,
               "raw_provider_text_recorded": False,
-          }, indent=2, sort_keys=True) + "\n")
-          PY
-          fi
-          set +e
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-q01-paired-stability-error.json" 2>> "$remote_log"
-          set -euo pipefail
-          cd "$DEPLOY_PATH"
-          docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; cat /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json'
-          REMOTE
-          error_read_status=$?
-          set -e
-          if [ "$error_read_status" -ne 0 ] || [ ! -s "$WORK_DIR/evidence/m26-q01-paired-stability-error.json" ]; then
-            python3 - "$WORK_DIR/evidence/m26-q01-paired-stability-error.json" "$remote_status" "$error_read_status" "$remote_log" <<'PY'
-          import hashlib, json, sys
-          from pathlib import Path
-          log = Path(sys.argv[4])
-          stderr_tail = log.read_text(errors="replace")[-4000:] if log.exists() else ""
-          Path(sys.argv[1]).write_text(json.dumps({
+              }, indent=2, sort_keys=True) + "\n")
+          if errors.strip():
+              error_path.write_text(errors.strip() + "\n")
+          else:
+              error_path.write_text(json.dumps({
               "schema_version": "m26-q01-paired-stability-errors/v1",
               "error_count": 1,
               "errors": [{
-                  "exception_class": "diagnostic_carrier_no_error_artifact",
-                  "remote_status": int(sys.argv[2]),
-                  "error_read_status": int(sys.argv[3]),
+                  "exception_class": "diagnostic_carrier_no_error_stream",
+                  "remote_status": remote_status,
                   "stderr_tail_sha256": hashlib.sha256(stderr_tail.encode()).hexdigest(),
               }],
               "raw_questions_recorded": False,
@@ -174,9 +165,8 @@ jobs:
               "raw_evidence_recorded": False,
               "raw_prompts_recorded": False,
               "raw_provider_text_recorded": False,
-          }, indent=2, sort_keys=True) + "\n")
+              }, indent=2, sort_keys=True) + "\n")
           PY
-          fi
           exit "$remote_status"
 
       - name: Upload paired stability evidence
