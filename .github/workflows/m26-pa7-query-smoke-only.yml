@@ -11,9 +11,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  paired_q04_stability:
+  paired_failed_row_stability:
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 60
     environment: m23-r3-diagnostic
     env:
       WORK_DIR: /tmp/m26-pa7-query-smoke-only
@@ -46,19 +46,19 @@ jobs:
           printf '%s\n' "$VARIANT_A_SHA" > "$WORK_DIR/evidence/variant-a-sha.txt"
           printf '%s\n' "$VARIANT_B_SHA" > "$WORK_DIR/evidence/variant-b-sha.txt"
 
-      - name: Run paired Q04 stability diagnostic
+      - name: Run paired failed-row stability diagnostic
         run: |
           set -euo pipefail
-          scp "$WORK_DIR/variant-a.tgz" oracle-knowledge:/tmp/m26-q04-paired-variant-a.tgz
-          scp "$WORK_DIR/variant-b.tgz" oracle-knowledge:/tmp/m26-q04-paired-variant-b.tgz
-          scp "$WORK_DIR/controller.tgz" oracle-knowledge:/tmp/m26-q04-paired-controller.tgz
+          scp "$WORK_DIR/variant-a.tgz" oracle-knowledge:/tmp/m26-failed-row-paired-variant-a.tgz
+          scp "$WORK_DIR/variant-b.tgz" oracle-knowledge:/tmp/m26-failed-row-paired-variant-b.tgz
+          scp "$WORK_DIR/controller.tgz" oracle-knowledge:/tmp/m26-failed-row-paired-controller.tgz
           cleanup_remote() {
             ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE_CLEANUP' >/dev/null 2>&1 || true
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          rm -f /tmp/m26-q04-paired-variant-a.tgz /tmp/m26-q04-paired-variant-b.tgz /tmp/m26-q04-paired-controller.tgz || true
+          rm -f /tmp/m26-failed-row-paired-variant-a.tgz /tmp/m26-failed-row-paired-variant-b.tgz /tmp/m26-failed-row-paired-controller.tgz || true
           docker compose exec -T knowledge-engine bash -lc \
-            'rm -rf /var/lib/knowledge-engine/cache/m26-q04-paired-A /var/lib/knowledge-engine/cache/m26-q04-paired-B /var/lib/knowledge-engine/cache/m26-q04-paired-controller /var/lib/knowledge-engine/cache/m26-q04-paired-stability.json /var/lib/knowledge-engine/cache/m26-q04-paired-stability-error.json' \
+            'rm -rf /var/lib/knowledge-engine/cache/m26-failed-row-paired-A /var/lib/knowledge-engine/cache/m26-failed-row-paired-B /var/lib/knowledge-engine/cache/m26-failed-row-paired-controller /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability.json /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability-error.json' \
             </dev/null \
             >/dev/null 2>&1 || true
           REMOTE_CLEANUP
@@ -72,47 +72,47 @@ jobs:
           cd "$DEPLOY_PATH"
           docker compose exec -T knowledge-engine bash -lc '
             set -euo pipefail
-            rm -rf /var/lib/knowledge-engine/cache/m26-q04-paired-A /var/lib/knowledge-engine/cache/m26-q04-paired-B /var/lib/knowledge-engine/cache/m26-q04-paired-controller /var/lib/knowledge-engine/cache/m26-q04-paired-stability.json /var/lib/knowledge-engine/cache/m26-q04-paired-stability-error.json
-            mkdir -p /var/lib/knowledge-engine/cache/m26-q04-paired-A /var/lib/knowledge-engine/cache/m26-q04-paired-B /var/lib/knowledge-engine/cache/m26-q04-paired-controller
+            rm -rf /var/lib/knowledge-engine/cache/m26-failed-row-paired-A /var/lib/knowledge-engine/cache/m26-failed-row-paired-B /var/lib/knowledge-engine/cache/m26-failed-row-paired-controller /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability.json /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability-error.json
+            mkdir -p /var/lib/knowledge-engine/cache/m26-failed-row-paired-A /var/lib/knowledge-engine/cache/m26-failed-row-paired-B /var/lib/knowledge-engine/cache/m26-failed-row-paired-controller
           ' </dev/null
           docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; tar -xzf - -C /var/lib/knowledge-engine/cache/m26-q04-paired-A' \
-            < /tmp/m26-q04-paired-variant-a.tgz
+            'set -euo pipefail; tar -xzf - -C /var/lib/knowledge-engine/cache/m26-failed-row-paired-A' \
+            < /tmp/m26-failed-row-paired-variant-a.tgz
           docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; tar -xzf - -C /var/lib/knowledge-engine/cache/m26-q04-paired-B' \
-            < /tmp/m26-q04-paired-variant-b.tgz
+            'set -euo pipefail; tar -xzf - -C /var/lib/knowledge-engine/cache/m26-failed-row-paired-B' \
+            < /tmp/m26-failed-row-paired-variant-b.tgz
           docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; tar -xzf - -C /var/lib/knowledge-engine/cache/m26-q04-paired-controller' \
-            < /tmp/m26-q04-paired-controller.tgz
+            'set -euo pipefail; tar -xzf - -C /var/lib/knowledge-engine/cache/m26-failed-row-paired-controller' \
+            < /tmp/m26-failed-row-paired-controller.tgz
           docker compose exec -T knowledge-engine bash -lc '
             set -euo pipefail
-            cd /var/lib/knowledge-engine/cache/m26-q04-paired-controller
+            cd /var/lib/knowledge-engine/cache/m26-failed-row-paired-controller
             set +e
             python m26_q01_paired_stability.py \
-              --variant-a-root /var/lib/knowledge-engine/cache/m26-q04-paired-A \
-              --variant-b-root /var/lib/knowledge-engine/cache/m26-q04-paired-B \
-              --output /var/lib/knowledge-engine/cache/m26-q04-paired-stability.json \
-              --error-output /var/lib/knowledge-engine/cache/m26-q04-paired-stability-error.json \
-              > /var/lib/knowledge-engine/cache/m26-q04-paired-controller.stdout \
-              2> /var/lib/knowledge-engine/cache/m26-q04-paired-controller.stderr
+              --variant-a-root /var/lib/knowledge-engine/cache/m26-failed-row-paired-A \
+              --variant-b-root /var/lib/knowledge-engine/cache/m26-failed-row-paired-B \
+              --output /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability.json \
+              --error-output /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability-error.json \
+              > /var/lib/knowledge-engine/cache/m26-failed-row-paired-controller.stdout \
+              2> /var/lib/knowledge-engine/cache/m26-failed-row-paired-controller.stderr
             status=$?
             set -e
-            if [ ! -s /var/lib/knowledge-engine/cache/m26-q04-paired-stability.json ]; then
-              printf "%s\n" "{\"schema_version\":\"m26-q04-paired-stability/v1\",\"case_id\":\"R3-Q04\",\"case_count\":0,\"execution_order\":[],\"variant_summary\":{\"A\":{\"run_count\":0},\"B\":{\"run_count\":0}},\"rows\":[],\"diagnostic_controller_exception\":{\"exception_class\":\"controller_no_artifact\"},\"protected_knowledge_mutations\":0,\"sequential_concurrency\":1,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /var/lib/knowledge-engine/cache/m26-q04-paired-stability.json
+            if [ ! -s /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability.json ]; then
+              printf "%s\n" "{\"schema_version\":\"m26-failed-row-paired-stability/v1\",\"case_ids\":[\"R3-Q02\",\"R3-Q05\",\"R3-Q08\",\"R3-Q09\"],\"case_count\":0,\"execution_order\":[],\"case_summary\":{},\"rows\":[],\"diagnostic_controller_exception\":{\"exception_class\":\"controller_no_artifact\"},\"protected_knowledge_mutations\":0,\"sequential_concurrency\":1,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability.json
             fi
-            if [ ! -s /var/lib/knowledge-engine/cache/m26-q04-paired-stability-error.json ]; then
-              printf "%s\n" "{\"schema_version\":\"m26-q04-paired-stability-errors/v1\",\"error_count\":0,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /var/lib/knowledge-engine/cache/m26-q04-paired-stability-error.json
+            if [ ! -s /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability-error.json ]; then
+              printf "%s\n" "{\"schema_version\":\"m26-failed-row-paired-stability-errors/v1\",\"error_count\":0,\"raw_questions_recorded\":false,\"raw_answers_recorded\":false,\"raw_evidence_recorded\":false,\"raw_prompts_recorded\":false,\"raw_provider_text_recorded\":false}" > /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability-error.json
             fi
             printf "%s\n" "__M26_PROFILE_BEGIN__"
-            cat /var/lib/knowledge-engine/cache/m26-q04-paired-stability.json
+            cat /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability.json
             printf "%s\n" "__M26_ERROR_BEGIN__"
-            cat /var/lib/knowledge-engine/cache/m26-q04-paired-stability-error.json
+            cat /var/lib/knowledge-engine/cache/m26-failed-row-paired-stability-error.json
             exit "$status"
           ' </dev/null
           REMOTE
           remote_status=$?
           set -e
-          python3 - "$remote_stdout" "$remote_log" "$WORK_DIR/evidence/m26-q04-paired-stability.json" "$WORK_DIR/evidence/m26-q04-paired-stability-error.json" "$remote_status" <<'PY'
+          python3 - "$remote_stdout" "$remote_log" "$WORK_DIR/evidence/m26-failed-row-paired-stability.json" "$WORK_DIR/evidence/m26-failed-row-paired-stability-error.json" "$remote_status" <<'PY'
           import hashlib, json, sys
           from pathlib import Path
           stdout = Path(sys.argv[1]).read_text(errors="replace")
@@ -131,11 +131,11 @@ jobs:
               profile_path.write_text(profile.strip() + "\n")
           else:
               profile_path.write_text(json.dumps({
-              "schema_version": "m26-q04-paired-stability/v1",
-              "case_id": "R3-Q04",
+              "schema_version": "m26-failed-row-paired-stability/v1",
+              "case_ids": ["R3-Q02", "R3-Q05", "R3-Q08", "R3-Q09"],
               "case_count": 0,
               "execution_order": [],
-              "variant_summary": {"A": {"run_count": 0}, "B": {"run_count": 0}},
+              "case_summary": {},
               "rows": [],
               "diagnostic_controller_exception": {
                   "exception_class": "diagnostic_carrier_no_profile_stream",
@@ -154,7 +154,7 @@ jobs:
               error_path.write_text(errors.strip() + "\n")
           else:
               error_path.write_text(json.dumps({
-              "schema_version": "m26-q04-paired-stability-errors/v1",
+              "schema_version": "m26-failed-row-paired-stability-errors/v1",
               "error_count": 1,
               "errors": [{
                   "exception_class": "diagnostic_carrier_no_error_stream",
@@ -174,7 +174,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m26-q04-paired-stability-${{ github.sha }}
+          name: m26-failed-row-paired-stability-${{ github.sha }}
           path: /tmp/m26-pa7-query-smoke-only/evidence
           if-no-files-found: error
           retention-days: 30
@@ -186,10 +186,18 @@ jobs:
           import json
           import os
           from pathlib import Path
-          profile = json.loads((Path(os.environ["WORK_DIR"]) / "evidence/m26-q04-paired-stability.json").read_text())
+          profile = json.loads((Path(os.environ["WORK_DIR"]) / "evidence/m26-failed-row-paired-stability.json").read_text())
+          expected_cases = ["R3-Q02", "R3-Q05", "R3-Q08", "R3-Q09"]
+          expected_order = [
+              f"{case_id}:{variant}{iteration}"
+              for case_id in expected_cases
+              for iteration in range(1, 6)
+              for variant in ("A", "B")
+          ]
           failed = (
-              profile.get("case_count") != 10
-              or profile.get("execution_order") != ["A1", "B1", "A2", "B2", "A3", "B3", "A4", "B4", "A5", "B5"]
+              profile.get("case_ids") != expected_cases
+              or profile.get("case_count") != 40
+              or profile.get("execution_order") != expected_order
               or profile.get("protected_knowledge_mutations") != 0
               or profile.get("raw_questions_recorded") is not False
               or profile.get("raw_answers_recorded") is not False
@@ -202,6 +210,6 @@ jobs:
               raise SystemExit(json.dumps({
                   "case_count": profile.get("case_count"),
                   "execution_order": profile.get("execution_order"),
-                  "variant_summary": profile.get("variant_summary"),
+                  "case_summary": profile.get("case_summary"),
               }, sort_keys=True))
           PY

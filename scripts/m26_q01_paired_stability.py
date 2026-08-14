@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Any
 
 
-CASE_ID = "R3-Q04"
-SCHEMA_VERSION = "m26-q04-paired-stability/v1"
-ERROR_SCHEMA_VERSION = "m26-q04-paired-stability-errors/v1"
+CASE_IDS = ["R3-Q02", "R3-Q05", "R3-Q08", "R3-Q09"]
+SCHEMA_VERSION = "m26-failed-row-paired-stability/v1"
+ERROR_SCHEMA_VERSION = "m26-failed-row-paired-stability-errors/v1"
 SEMANTIC_CALLS = {
     "aq_semantic_closure",
     "aq_semantic_closure_repair",
@@ -112,15 +112,15 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     tmp.replace(path)
 
 
-def _load_case(root: Path) -> dict[str, Any]:
+def _load_case(root: Path, case_id: str) -> dict[str, Any]:
     payload = json.loads(
         (root / "pilot/m26/m26-aq-final-r3-questions.json").read_text()
     )
     rows = payload.get("questions", payload)
     for row in rows:
-        if str(row.get("case_id")) == CASE_ID:
+        if str(row.get("case_id")) == case_id:
             return dict(row)
-    raise SystemExit(f"{CASE_ID} not found")
+    raise SystemExit(f"{case_id} not found")
 
 
 def _review_summary(review: Mapping[str, Any]) -> dict[str, Any]:
@@ -306,7 +306,8 @@ def _run_child(args: argparse.Namespace) -> int:
 
     legacy._verify_multi_evidence_provider_output = verify_with_reason
 
-    case = _load_case(root)
+    case_id = str(args.case_id)
+    case = _load_case(root, case_id)
     started = time.monotonic()
     try:
         response = run_owner_query_for_web(
@@ -338,7 +339,7 @@ def _run_child(args: argparse.Namespace) -> int:
         row = {
             "variant": str(args.variant),
             "iteration": int(args.iteration),
-            "case_id": CASE_ID,
+            "case_id": case_id,
             "status": str(response.get("status", "")),
             "terminal_status": str(response.get("terminal_status", "")),
             "safe_abstention": bool(response.get("safe_abstention", True)),
@@ -416,7 +417,7 @@ def _run_child(args: argparse.Namespace) -> int:
         row = {
             "variant": str(args.variant),
             "iteration": int(args.iteration),
-            "case_id": CASE_ID,
+            "case_id": case_id,
             "status": "diagnostic_exception",
             "terminal_status": "diagnostic_exception",
             "exception_class": type(exc).__name__,
@@ -485,53 +486,56 @@ def _run_controller(args: argparse.Namespace) -> int:
         "A": str(Path(args.variant_a_root).resolve()),
         "B": str(Path(args.variant_b_root).resolve()),
     }
-    for variant, iteration in order:
-        child = subprocess.run(
-            [
-                sys.executable,
-                str(Path(__file__).resolve()),
-                "--child",
-                "--variant",
-                variant,
-                "--iteration",
-                str(iteration),
-                "--variant-root",
-                roots[variant],
-            ],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=os.environ.copy(),
-        )
-        if child.stdout.strip():
-            rows.append(json.loads(child.stdout.strip().splitlines()[-1]))
-        else:
-            rows.append(
-                {
-                    "variant": variant,
-                    "iteration": iteration,
-                    "case_id": CASE_ID,
-                    "status": "diagnostic_child_no_output",
-                    "terminal_status": "diagnostic_child_no_output",
-                    "child_returncode": child.returncode,
-                    "stderr_digest": _digest_json(child.stderr[-2000:]),
-                    "provider_call_count": 0,
-                    "repair_attempted": False,
-                    "claim_count": 0,
-                    "citation_count": 0,
-                    "unsupported_accepted_claims": 0,
-                    "selected_evidence_count": 0,
-                    "selected_evidence_id_digest": _digest_json([]),
-                    "me065": False,
-                    "repair_trigger_enum": ["diagnostic_child_no_output"],
-                    "raw_questions_recorded": False,
-                    "raw_answers_recorded": False,
-                    "raw_evidence_recorded": False,
-                    "raw_prompts_recorded": False,
-                    "raw_provider_text_recorded": False,
-                }
+    for case_id in CASE_IDS:
+        for variant, iteration in order:
+            child = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve()),
+                    "--child",
+                    "--case-id",
+                    case_id,
+                    "--variant",
+                    variant,
+                    "--iteration",
+                    str(iteration),
+                    "--variant-root",
+                    roots[variant],
+                ],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=os.environ.copy(),
             )
+            if child.stdout.strip():
+                rows.append(json.loads(child.stdout.strip().splitlines()[-1]))
+            else:
+                rows.append(
+                    {
+                        "variant": variant,
+                        "iteration": iteration,
+                        "case_id": case_id,
+                        "status": "diagnostic_child_no_output",
+                        "terminal_status": "diagnostic_child_no_output",
+                        "child_returncode": child.returncode,
+                        "stderr_digest": _digest_json(child.stderr[-2000:]),
+                        "provider_call_count": 0,
+                        "repair_attempted": False,
+                        "claim_count": 0,
+                        "citation_count": 0,
+                        "unsupported_accepted_claims": 0,
+                        "selected_evidence_count": 0,
+                        "selected_evidence_id_digest": _digest_json([]),
+                        "me065": False,
+                        "repair_trigger_enum": ["diagnostic_child_no_output"],
+                        "raw_questions_recorded": False,
+                        "raw_answers_recorded": False,
+                        "raw_evidence_recorded": False,
+                        "raw_prompts_recorded": False,
+                        "raw_provider_text_recorded": False,
+                    }
+                )
     artifact = _artifact(rows)
     _atomic_write_json(Path(args.output), artifact)
     _atomic_write_json(
@@ -553,72 +557,83 @@ def _run_controller(args: argparse.Namespace) -> int:
 
 
 def _artifact(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    by_variant: dict[str, list[Mapping[str, Any]]] = {"A": [], "B": []}
-    for row in rows:
-        by_variant.setdefault(str(row.get("variant", "")), []).append(row)
     paired_digest_match = {}
-    for iteration in range(1, 6):
-        a_digest = next(
-            (
-                str(row.get("selected_evidence_id_digest", ""))
-                for row in rows
-                if row.get("variant") == "A" and row.get("iteration") == iteration
-            ),
-            "",
-        )
-        b_digest = next(
-            (
-                str(row.get("selected_evidence_id_digest", ""))
-                for row in rows
-                if row.get("variant") == "B" and row.get("iteration") == iteration
-            ),
-            "",
-        )
-        paired_digest_match[str(iteration)] = bool(a_digest and a_digest == b_digest)
-    variant_summary = {}
-    for variant, variant_rows in by_variant.items():
-        successes = [
-            row
-            for row in variant_rows
-            if row.get("status") == "owner_only_cited_answer"
-            and int(row.get("unsupported_accepted_claims", 0)) == 0
-            and row.get("me065") is False
-        ]
-        digests = Counter(
-            str(row.get("selected_evidence_id_digest", "")) for row in variant_rows
-        )
-        variant_summary[variant] = {
-            "run_count": len(variant_rows),
-            "success_count": len(successes),
-            "safe_abstention_count": len(
-                [
-                    row
-                    for row in variant_rows
-                    if row.get("status") == "owner_only_safe_abstention"
-                ]
-            ),
-            "diagnostic_exception_count": len(
-                [
-                    row
-                    for row in variant_rows
-                    if str(row.get("status", "")).startswith("diagnostic_")
-                ]
-            ),
-            "me065_count": len([row for row in variant_rows if row.get("me065")]),
-            "unsupported_accepted_claims_total": sum(
-                int(row.get("unsupported_accepted_claims", 0))
+    case_summary = {}
+    for case_id in CASE_IDS:
+        case_rows = [row for row in rows if str(row.get("case_id", "")) == case_id]
+        paired_digest_match[case_id] = {}
+        for iteration in range(1, 6):
+            a_digest = next(
+                (
+                    str(row.get("selected_evidence_id_digest", ""))
+                    for row in case_rows
+                    if row.get("variant") == "A" and row.get("iteration") == iteration
+                ),
+                "",
+            )
+            b_digest = next(
+                (
+                    str(row.get("selected_evidence_id_digest", ""))
+                    for row in case_rows
+                    if row.get("variant") == "B" and row.get("iteration") == iteration
+                ),
+                "",
+            )
+            paired_digest_match[case_id][str(iteration)] = bool(
+                a_digest and a_digest == b_digest
+            )
+        variant_summary = {}
+        for variant in ("A", "B"):
+            variant_rows = [
+                row for row in case_rows if str(row.get("variant", "")) == variant
+            ]
+            successes = [
+                row
                 for row in variant_rows
-            ),
-            "selected_evidence_digest_counts": dict(sorted(digests.items())),
+                if row.get("status") == "owner_only_cited_answer"
+                and int(row.get("unsupported_accepted_claims", 0)) == 0
+                and row.get("me065") is False
+            ]
+            digests = Counter(
+                str(row.get("selected_evidence_id_digest", "")) for row in variant_rows
+            )
+            variant_summary[variant] = {
+                "run_count": len(variant_rows),
+                "success_count": len(successes),
+                "safe_abstention_count": len(
+                    [
+                        row
+                        for row in variant_rows
+                        if row.get("status") == "owner_only_safe_abstention"
+                    ]
+                ),
+                "diagnostic_exception_count": len(
+                    [
+                        row
+                        for row in variant_rows
+                        if str(row.get("status", "")).startswith("diagnostic_")
+                    ]
+                ),
+                "me065_count": len([row for row in variant_rows if row.get("me065")]),
+                "unsupported_accepted_claims_total": sum(
+                    int(row.get("unsupported_accepted_claims", 0))
+                    for row in variant_rows
+                ),
+                "selected_evidence_digest_counts": dict(sorted(digests.items())),
+            }
+        case_summary[case_id] = {
+            "case_count": len(case_rows),
+            "variant_summary": variant_summary,
         }
     return {
         "schema_version": SCHEMA_VERSION,
-        "case_id": CASE_ID,
+        "case_ids": list(CASE_IDS),
         "case_count": len(rows),
         "execution_order": [
-            f"{row.get('variant')}{row.get('iteration')}" for row in rows
+            f"{row.get('case_id')}:{row.get('variant')}{row.get('iteration')}"
+            for row in rows
         ],
-        "variant_summary": variant_summary,
+        "case_summary": case_summary,
         "paired_selected_evidence_digest_match": paired_digest_match,
         "rows": [dict(row) for row in rows],
         "protected_knowledge_mutations": 0,
@@ -638,6 +653,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--error-output", type=Path)
     parser.add_argument("--child", action="store_true")
+    parser.add_argument("--case-id", default="")
     parser.add_argument("--variant", default="")
     parser.add_argument("--iteration", type=int, default=0)
     parser.add_argument("--variant-root", type=Path)
@@ -653,10 +669,10 @@ def main() -> int:
     except Exception as exc:
         receipt = {
             "schema_version": SCHEMA_VERSION,
-            "case_id": CASE_ID,
+            "case_ids": list(CASE_IDS),
             "case_count": 0,
             "execution_order": [],
-            "variant_summary": {"A": {"run_count": 0}, "B": {"run_count": 0}},
+            "case_summary": {},
             "rows": [],
             "diagnostic_controller_exception": {
                 "exception_class": type(exc).__name__,
