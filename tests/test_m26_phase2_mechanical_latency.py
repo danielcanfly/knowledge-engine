@@ -23,8 +23,12 @@ class _FakeResponse:
         }
 
 
+class _RetryableResponse:
+    status_code = 500
+
+
 class _FakeHttpClient:
-    instances: list["_FakeHttpClient"] = []
+    instances: list[_FakeHttpClient] = []
 
     def __init__(self) -> None:
         self.posts = 0
@@ -40,10 +44,22 @@ class _FakeHttpClient:
         self.closed = True
 
 
+class _RetryThenSuccessHttpClient(_FakeHttpClient):
+    instances: list[_RetryThenSuccessHttpClient] = []
+
+    def post(self, *args: Any, **kwargs: Any) -> _FakeResponse | _RetryableResponse:
+        del args, kwargs
+        self.posts += 1
+        if self.posts == 1:
+            return _RetryableResponse()
+        return _FakeResponse()
+
+
 @pytest.fixture(autouse=True)
 def _reset_process_client() -> None:
     live.close_minimax_http_client()
     _FakeHttpClient.instances.clear()
+    _RetryThenSuccessHttpClient.instances.clear()
     yield
     live.close_minimax_http_client()
 
@@ -59,6 +75,23 @@ def test_minimax_client_reuses_one_process_http_client(monkeypatch: pytest.Monke
     assert len(_FakeHttpClient.instances) == 1
     assert _FakeHttpClient.instances[0].posts == 2
     assert provider.calls == 2
+
+
+def test_minimax_retry_preserves_backoff_and_call_accounting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleeps: list[int] = []
+    monkeypatch.setattr(live.httpx, "Client", _RetryThenSuccessHttpClient)
+    monkeypatch.setattr(live.time, "sleep", sleeps.append)
+    provider = live.MiniMaxClient("test-key", max_calls=4, max_cost=Decimal("1"))
+
+    result = provider.call({"model": live.MODEL, "messages": []}, "selection")
+
+    assert len(_RetryThenSuccessHttpClient.instances) == 1
+    assert _RetryThenSuccessHttpClient.instances[0].posts == 2
+    assert sleeps == [live.RETRY_DELAYS[0]]
+    assert provider.calls == 2
+    assert result["network_attempt"] == 2
 
 
 def test_process_http_client_closes_and_recreates(monkeypatch: pytest.MonkeyPatch) -> None:
