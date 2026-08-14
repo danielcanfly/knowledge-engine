@@ -402,8 +402,8 @@ def register_m26_ask_routes(
         else os.environ.get("M26_QUERY_REQUIRE_REMOTE_DENSE", "").lower() == "true"
     )
 
-    app.add_event_handler("startup", _preload_query_runtime)
-    app.add_event_handler("shutdown", close_minimax_http_client)
+    app.router.add_event_handler("startup", _preload_query_runtime)
+    app.router.add_event_handler("shutdown", close_minimax_http_client)
 
     @app.get("/api/m26/health")
     async def health(request: Request) -> dict[str, Any]:
