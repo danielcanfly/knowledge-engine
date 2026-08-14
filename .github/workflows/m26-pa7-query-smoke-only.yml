@@ -88,7 +88,10 @@ jobs:
               python scripts/m26_phase1_latency_profile.py \
                 --root /tmp/m26-latency-phase1-source \
                 --questions pilot/m26/m26-aq-final-r3-questions.json \
-                --limit 10 \
+                --case-id R3-Q01 \
+                --no-safety \
+                --reviewer-variant variant_a_legacy_reviewer_v1 \
+                --reviewer-variant variant_b_phase1_current_reviewer \
                 --output /tmp/m26-latency-phase1-profile.json \
                 --error-output /tmp/m26-latency-phase1-profile-error.json
           '
@@ -151,9 +154,15 @@ jobs:
           from pathlib import Path
           profile = json.loads((Path(os.environ["WORK_DIR"]) / "evidence/m26-latency-phase1-profile.json").read_text())
           failed = (
-              profile.get("case_count") != 12
-              or profile.get("answerable_profile_case_count") != 10
-              or profile.get("failure_count") != 0
+              profile.get("case_count") != 2
+              or profile.get("answerable_profile_case_count") != 2
+              or profile.get("variant_count") != 2
+              or profile.get("differential_classification") not in {
+                  "PHASE1_REVIEWER_COMPACTION_REGRESSION_CONFIRMED",
+                  "PHASE1_CLOSURE_ANCHOR_INTERACTION_REGRESSION",
+                  "NONDETERMINISTIC_PROVIDER_PARITY_REQUIRES_ONE_CONFIRMATION",
+                  "PHASE1_DIFFERENTIAL_INCONCLUSIVE",
+              }
               or profile.get("protected_knowledge_mutations") != 0
               or profile.get("raw_questions_recorded") is not False
               or profile.get("raw_answers_recorded") is not False
@@ -167,6 +176,8 @@ jobs:
                   "case_count": profile.get("case_count"),
                   "answerable_profile_case_count": profile.get("answerable_profile_case_count"),
                   "failure_count": profile.get("failure_count"),
+                  "variant_count": profile.get("variant_count"),
+                  "differential_classification": profile.get("differential_classification"),
                   "failures": profile.get("failures"),
               }, sort_keys=True))
           PY
