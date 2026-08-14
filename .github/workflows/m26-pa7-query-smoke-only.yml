@@ -59,6 +59,7 @@ jobs:
           rm -f /tmp/m26-q01-paired-variant-a.tgz /tmp/m26-q01-paired-variant-b.tgz /tmp/m26-q01-paired-controller.tgz || true
           docker compose exec -T knowledge-engine bash -lc \
             'rm -rf /var/lib/knowledge-engine/cache/m26-q01-paired-A /var/lib/knowledge-engine/cache/m26-q01-paired-B /var/lib/knowledge-engine/cache/m26-q01-paired-controller /var/lib/knowledge-engine/cache/m26-q01-paired-stability.json /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json' \
+            </dev/null \
             >/dev/null 2>&1 || true
           REMOTE_CLEANUP
           }
@@ -73,7 +74,7 @@ jobs:
             set -euo pipefail
             rm -rf /var/lib/knowledge-engine/cache/m26-q01-paired-A /var/lib/knowledge-engine/cache/m26-q01-paired-B /var/lib/knowledge-engine/cache/m26-q01-paired-controller /var/lib/knowledge-engine/cache/m26-q01-paired-stability.json /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json
             mkdir -p /var/lib/knowledge-engine/cache/m26-q01-paired-A /var/lib/knowledge-engine/cache/m26-q01-paired-B /var/lib/knowledge-engine/cache/m26-q01-paired-controller
-          '
+          ' </dev/null
           docker compose exec -T knowledge-engine bash -lc \
             'set -euo pipefail; tar -xzf - -C /var/lib/knowledge-engine/cache/m26-q01-paired-A' \
             < /tmp/m26-q01-paired-variant-a.tgz
@@ -107,7 +108,7 @@ jobs:
             printf "%s\n" "__M26_ERROR_BEGIN__"
             cat /var/lib/knowledge-engine/cache/m26-q01-paired-stability-error.json
             exit "$status"
-          '
+          ' </dev/null
           REMOTE
           remote_status=$?
           set -e
