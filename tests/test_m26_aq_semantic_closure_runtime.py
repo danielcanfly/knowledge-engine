@@ -884,6 +884,65 @@ def test_phase1_runtime_fails_closed_when_claim_has_no_answer_anchor() -> None:
         )
 
 
+def test_phase1_v2_claim_surface_text_without_answer_anchor_cannot_publish() -> None:
+    evidence = _rich_passage(
+        "router",
+        "The router stores graph snapshots for controlled execution.",
+        "router-note",
+    )
+
+    with pytest.raises(ValueError, match="missing answer anchor"):
+        _runtime_bound_candidate(
+            answer="The answer omits the claim anchor.",
+            question="Explain router graph snapshots.",
+            intent_class="direct_grounded_knowledge",
+            used_items=[],
+            claims=[
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router keeps graph snapshots.",
+                    "evidence_labels": ["e1"],
+                    "covers": ["router_snapshots"],
+                }
+            ],
+            label_map={"e1": evidence},
+            snippet_map={"router": evidence["passage_text"]},
+            requirements=[],
+            allow_legacy_surface_text=False,
+        )
+
+
+def test_phase1_legacy_claim_surface_text_fallback_is_fixture_only() -> None:
+    evidence = _rich_passage(
+        "router",
+        "The router stores graph snapshots for controlled execution.",
+        "router-note",
+    )
+
+    candidate = _runtime_bound_candidate(
+        answer="The answer predates claim anchors.",
+        question="Explain router graph snapshots.",
+        intent_class="direct_grounded_knowledge",
+        used_items=[],
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "surface_text": "The router keeps graph snapshots.",
+                "evidence_labels": ["e1"],
+                "covers": ["router_snapshots"],
+            }
+        ],
+        label_map={"e1": evidence},
+        snippet_map={"router": evidence["passage_text"]},
+        requirements=[],
+        allow_legacy_surface_text=True,
+    )
+
+    assert candidate["claims"][0]["surface_text"] == "The router keeps graph snapshots."
+
+
 def test_graph_false_premise_contract_binds_full_named_entities() -> None:
     question = (
         "The production graph says Harness Theory Part 1 precedes Harness Theory Part 2. "
@@ -1798,6 +1857,7 @@ def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
         ],
         label_map={"e1": evidence[0]},
         snippet_map={"ev_router": evidence[0]["passage_text"]},
+        allow_legacy_surface_text=True,
     )
 
     payload = _semantic_review_payload(
@@ -1817,9 +1877,10 @@ def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
     assert claim_case["evidence"][0]["evidence_label"] == "local_1"
     assert "ev1" not in payload["system"]
     assert "ev1" not in payload["messages"][0]["content"]
-    assert task["output"]["schema_version"] == "m26-claim-entailment-review/v2"
+    assert "schema_version" not in task["output"]
     assert "judgments" in task["output"]
     assert "claim_judgments" not in task["output"]
+    assert "Return judgments, coverage_verdict" in payload["system"]
     assert payload["max_tokens"] == 1024
 
 
@@ -1857,7 +1918,6 @@ def test_compact_semantic_review_output_canonicalizes_to_fail_closed_v1_shape() 
     review = closure_runtime._parse_semantic_review_result(
         json.dumps(
             {
-                "schema_version": "m26-claim-entailment-review/v2",
                 "judgments": [
                     {
                         "claim_id": "claim_1",
@@ -1886,11 +1946,11 @@ def test_compact_semantic_review_output_canonicalizes_to_fail_closed_v1_shape() 
     }
 
 
-def test_compact_semantic_review_output_accepts_v1_label_with_compact_body() -> None:
+def test_compact_semantic_review_output_accepts_optional_compact_schema_version() -> None:
     review = closure_runtime._parse_semantic_review_result(
         json.dumps(
             {
-                "schema_version": "m26-claim-entailment-review/v1",
+                "schema_version": "m26-claim-entailment-review/v2",
                 "judgments": [
                     {
                         "claim_id": "claim_1",
@@ -1911,6 +1971,25 @@ def test_compact_semantic_review_output_accepts_v1_label_with_compact_body() -> 
     }
 
 
+def test_compact_semantic_review_output_v1_label_with_compact_body_fails_closed() -> None:
+    with pytest.raises(ValueError, match="SEMANTIC_REVIEW_PARSE_FAILED"):
+        closure_runtime._parse_semantic_review_result(
+            json.dumps(
+                {
+                    "schema_version": "m26-claim-entailment-review/v1",
+                    "judgments": [
+                        {
+                            "claim_id": "claim_1",
+                            "verdict": "ENTAILED",
+                            "evidence_ids": ["ev_router"],
+                        }
+                    ],
+                    "coverage_verdict": "COVERED",
+                }
+            )
+        )
+
+
 def test_compact_semantic_review_output_unknown_key_fails_closed() -> None:
     with pytest.raises(ValueError, match="SEMANTIC_REVIEW_PARSE_FAILED"):
         closure_runtime._parse_semantic_review_result(
@@ -1922,6 +2001,107 @@ def test_compact_semantic_review_output_unknown_key_fails_closed() -> None:
                     "extra": "bad",
                 }
             )
+        )
+
+
+def test_compact_semantic_review_output_unknown_schema_body_fails_closed() -> None:
+    with pytest.raises(ValueError, match="SEMANTIC_REVIEW_PARSE_FAILED"):
+        closure_runtime._parse_semantic_review_result(
+            json.dumps(
+                {
+                    "schema_version": "unknown-review/v9",
+                    "judgments": [
+                        {
+                            "claim_id": "claim_1",
+                            "verdict": "ENTAILED",
+                            "evidence_ids": ["ev_router"],
+                        }
+                    ],
+                    "coverage_verdict": "COVERED",
+                }
+            )
+        )
+
+
+def test_compact_semantic_review_output_mixed_v1_v2_body_fails_closed() -> None:
+    with pytest.raises(ValueError, match="SEMANTIC_REVIEW_PARSE_FAILED"):
+        closure_runtime._parse_semantic_review_result(
+            json.dumps(
+                {
+                    "judgments": [
+                        {
+                            "claim_id": "claim_1",
+                            "verdict": "ENTAILED",
+                            "evidence_ids": ["ev_router"],
+                        }
+                    ],
+                    "coverage_verdict": "COVERED",
+                    "claim_judgments": [],
+                    "visible_coverage": {
+                        "verdict": "COVERED",
+                        "uncovered_assertions": [],
+                    },
+                }
+            )
+        )
+
+
+def test_compact_semantic_review_output_missing_judgments_fails_closed() -> None:
+    with pytest.raises(ValueError, match="SEMANTIC_REVIEW_PARSE_FAILED"):
+        closure_runtime._parse_semantic_review_result(
+            json.dumps({"coverage_verdict": "COVERED"})
+        )
+
+
+def test_compact_semantic_review_output_malformed_coverage_fails_closed() -> None:
+    with pytest.raises(ValueError, match="SEMANTIC_REVIEW_PARSE_FAILED"):
+        closure_runtime._parse_semantic_review_result(
+            json.dumps(
+                {
+                    "judgments": [
+                        {
+                            "claim_id": "claim_1",
+                            "verdict": "ENTAILED",
+                            "evidence_ids": ["ev_router"],
+                        }
+                    ],
+                    "coverage_verdict": "MAYBE",
+                }
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "judgments",
+    [
+        [
+            {"claim_id": "claim_1", "verdict": "ENTAILED", "evidence_ids": []},
+            {"claim_id": "claim_1", "verdict": "ENTAILED", "evidence_ids": []},
+        ],
+        [{"claim_id": "claim_1", "verdict": "ENTAILED", "evidence_ids": []}],
+        [
+            {"claim_id": "claim_1", "verdict": "ENTAILED", "evidence_ids": []},
+            {"claim_id": "claim_3", "verdict": "ENTAILED", "evidence_ids": []},
+        ],
+    ],
+)
+def test_semantic_review_claim_set_mismatch_fails_closed(
+    judgments: list[dict[str, Any]],
+) -> None:
+    with pytest.raises(ValueError, match="SEMANTIC_REVIEW_PARSE_FAILED"):
+        closure_runtime._validate_semantic_review_claim_set(
+            {
+                "schema_version": "m26-claim-entailment-review/v1",
+                "claim_judgments": judgments,
+                "visible_coverage": {
+                    "verdict": "COVERED",
+                    "uncovered_assertions": [],
+                },
+            },
+            {
+                "claim_1": {"claim_id": "claim_1"},
+                "claim_2": {"claim_id": "claim_2"},
+            },
         )
 
 
@@ -2218,6 +2398,7 @@ def test_verification_candidate_publishes_minimal_bounded_schema() -> None:
         claims=claims,
         label_map=label_map,
         snippet_map=snippet_map,
+        allow_legacy_surface_text=True,
     )
 
     bounded, support_ref_limit = _bounded_publication_candidate(candidate)
@@ -2287,6 +2468,7 @@ def test_runtime_bound_graph_claim_preserves_provider_selected_edge_only_support
             "ev_part_1": part_1["passage_text"],
             "ev_part_2": part_2["passage_text"],
         },
+        allow_legacy_surface_text=True,
     )
 
     support_ids = {
