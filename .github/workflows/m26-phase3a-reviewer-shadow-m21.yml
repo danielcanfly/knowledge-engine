@@ -1,0 +1,104 @@
+name: M26 Phase 3A Reviewer Shadow M2.1
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-phase3a-reviewer-shadow-m21.yml"
+      - "scripts/m26_phase3a_reviewer_shadow.py"
+      - "scripts/m26_phase3a_reviewer_shadow_m21.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-phase3a-reviewer-shadow-m21-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reviewer_shadow_m21:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.head_ref == 'gpt-m26/phase3a-reviewer-shadow')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: m23-r3-diagnostic
+    env:
+      WORK_DIR: /tmp/m26-phase3a-reviewer-shadow-m21
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+          show-progress: false
+
+      - name: Prepare isolated source
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK_DIR/evidence"
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+          git archive --format=tar.gz --output="$WORK_DIR/source.tgz" HEAD src pilot scripts/m26_phase3a_reviewer_shadow.py scripts/m26_phase3a_reviewer_shadow_m21.py pyproject.toml
+          scp "$WORK_DIR/source.tgz" oracle-knowledge:/tmp/m26-phase3a-reviewer-shadow-m21-source.tgz
+
+      - name: Run frozen-A versus M2.1-highspeed B reviewer shadow
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          docker compose exec -T knowledge-engine bash -lc '
+            set -euo pipefail
+            rm -rf /tmp/m26-phase3a-reviewer-shadow-m21 /tmp/m26-phase3a-reviewer-shadow-m21.json
+            mkdir -p /tmp/m26-phase3a-reviewer-shadow-m21
+            tar -xzf - -C /tmp/m26-phase3a-reviewer-shadow-m21
+          ' < /tmp/m26-phase3a-reviewer-shadow-m21-source.tgz
+          docker compose exec -T knowledge-engine bash -lc '
+            set -euo pipefail
+            cd /tmp/m26-phase3a-reviewer-shadow-m21
+            PYTHONPATH=/tmp/m26-phase3a-reviewer-shadow-m21/src:${PYTHONPATH:-} \
+              python scripts/m26_phase3a_reviewer_shadow_m21.py \
+                --root /tmp/m26-phase3a-reviewer-shadow-m21 \
+                --output /tmp/m26-phase3a-reviewer-shadow-m21.json
+          ' </dev/null
+          REMOTE
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/m26-phase3a-reviewer-shadow-m21.json"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          docker compose exec -T knowledge-engine bash -lc 'cat /tmp/m26-phase3a-reviewer-shadow-m21.json' </dev/null
+          rm -f /tmp/m26-phase3a-reviewer-shadow-m21-source.tgz
+          REMOTE
+
+      - name: Validate sanitized M2.1 reviewer shadow artifact
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path(os.environ['WORK_DIR']) / 'evidence/m26-phase3a-reviewer-shadow-m21.json'
+          data = json.loads(path.read_text())
+          assert data['case_count'] == 10
+          assert data['authority'] == 'A_frozen_reviewer_only'
+          assert data['a_model'] == 'MiniMax-M3'
+          assert data['b_model'] == 'MiniMax-M2.1-highspeed'
+          assert data['protected_knowledge_mutations'] == 0
+          for key in ('raw_questions_recorded','raw_answers_recorded','raw_evidence_recorded','raw_prompts_recorded','raw_provider_text_recorded'):
+              assert data[key] is False
+          assert data['unsupported_accepted_claims'] == 0
+          assert data['me065_count'] == 0
+          PY
+
+      - name: Upload Phase 3A M2.1 shadow evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-phase3a-reviewer-shadow-m21-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/m26-phase3a-reviewer-shadow-m21/evidence
+          if-no-files-found: error
+          retention-days: 30
