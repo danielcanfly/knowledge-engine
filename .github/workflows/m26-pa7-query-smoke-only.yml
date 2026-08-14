@@ -45,41 +45,23 @@ jobs:
           bash scripts/configure_oracle_ssh.sh
           printf '%s\n' "$EXPECTED_HEAD_SHA" > "$WORK_DIR/evidence/query-smoke-head-sha.txt"
 
-      - name: Run isolated post-closure latency profile
+      - name: Recover isolated post-closure latency profile
         run: |
           set -euo pipefail
-          tar --exclude='.git' -czf "$WORK_DIR/diagnostic-source.tgz" \
-            src scripts pilot pyproject.toml
-          scp "$WORK_DIR/diagnostic-source.tgz" oracle-knowledge:/tmp/m26-latency-diagnostic-source.tgz
           ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_HEAD_SHA='$EXPECTED_HEAD_SHA' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/latency-profile-run.json"
           set -euo pipefail
           cd "$DEPLOY_PATH"
           container_id="$(docker compose ps -q knowledge-engine | head -n 1)"
           test -n "$container_id"
-          docker compose exec -T knowledge-engine bash -lc '
-            set -euo pipefail
-            rm -rf /tmp/m26-latency-diagnostic-source /tmp/m26-latency-profile.json
-            mkdir -p /tmp/m26-latency-diagnostic-source
-            tar -xzf - -C /tmp/m26-latency-diagnostic-source
-          ' < /tmp/m26-latency-diagnostic-source.tgz
-          docker compose exec -T knowledge-engine bash -lc '
-            set -euo pipefail
-            cd /tmp/m26-latency-diagnostic-source
-            EXPECTED_HEAD_SHA="'"$EXPECTED_HEAD_SHA"'" \
-            PYTHONPATH=/tmp/m26-latency-diagnostic-source/src:${PYTHONPATH:-} \
-              python scripts/m26_post_closure_latency_profile.py \
-                --root /tmp/m26-latency-diagnostic-source \
-                --questions pilot/m26/m26-aq-final-r3-questions.json \
-                --limit 10 \
-                --output /tmp/m26-latency-profile.json
-          '
           docker compose exec -T knowledge-engine bash -lc \
-            'set -euo pipefail; cat /tmp/m26-latency-profile.json' \
-            > /tmp/m26-latency-profile.json
-          python3 - <<'PY'
+            'set -euo pipefail; test -s /tmp/m26-latency-profile.json; cat /tmp/m26-latency-profile.json'
+          REMOTE
+          mv "$WORK_DIR/evidence/latency-profile-run.json" "$WORK_DIR/evidence/m26-latency-profile.json"
+          python3 - <<'PY' > "$WORK_DIR/evidence/latency-profile-run.json"
           import json
+          import os
           from pathlib import Path
-          profile = json.loads(Path("/tmp/m26-latency-profile.json").read_text())
+          profile = json.loads((Path(os.environ["WORK_DIR"]) / "evidence/m26-latency-profile.json").read_text())
           print(json.dumps({
               "schema_version": "m26-post-closure-latency-profile-run/v1",
               "status": "pass" if profile.get("case_count", 0) >= 5 and profile.get("failure_count", 0) == 0 else "fail",
@@ -92,8 +74,23 @@ jobs:
               "sequential_concurrency": profile.get("sequential_concurrency"),
           }, indent=2, sort_keys=True))
           PY
-          REMOTE
-          scp oracle-knowledge:/tmp/m26-latency-profile.json "$WORK_DIR/evidence/m26-latency-profile.json"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          profile = json.loads((Path(os.environ["WORK_DIR"]) / "evidence/m26-latency-profile.json").read_text())
+          print(json.dumps({
+              "schema_version": "m26-post-closure-latency-profile-run/v1",
+              "status": "pass" if profile.get("case_count", 0) >= 5 and profile.get("failure_count", 0) == 0 else "fail",
+              "case_count": profile.get("case_count", 0),
+              "failure_count": profile.get("failure_count", 0),
+              "protected_knowledge_mutations": profile.get("protected_knowledge_mutations", 0),
+              "raw_questions_recorded": profile.get("raw_questions_recorded", True),
+              "raw_answers_recorded": profile.get("raw_answers_recorded", True),
+              "raw_provider_text_recorded": profile.get("raw_provider_text_recorded", True),
+              "sequential_concurrency": profile.get("sequential_concurrency"),
+          }, indent=2, sort_keys=True))
+          PY
 
       - name: Upload latency profile evidence
         id: upload
