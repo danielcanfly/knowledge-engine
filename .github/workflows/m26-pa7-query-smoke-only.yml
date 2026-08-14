@@ -56,12 +56,14 @@ jobs:
           cd "$DEPLOY_PATH"
           container_id="$(docker compose ps -q knowledge-engine | head -n 1)"
           test -n "$container_id"
-          docker cp /tmp/m26-latency-diagnostic-source.tgz "$container_id":/tmp/m26-latency-diagnostic-source.tgz
           docker compose exec -T knowledge-engine bash -lc '
             set -euo pipefail
             rm -rf /tmp/m26-latency-diagnostic-source /tmp/m26-latency-profile.json
             mkdir -p /tmp/m26-latency-diagnostic-source
-            tar -xzf /tmp/m26-latency-diagnostic-source.tgz -C /tmp/m26-latency-diagnostic-source
+            tar -xzf - -C /tmp/m26-latency-diagnostic-source
+          ' < /tmp/m26-latency-diagnostic-source.tgz
+          docker compose exec -T knowledge-engine bash -lc '
+            set -euo pipefail
             cd /tmp/m26-latency-diagnostic-source
             EXPECTED_HEAD_SHA="'"$EXPECTED_HEAD_SHA"'" \
             PYTHONPATH=/tmp/m26-latency-diagnostic-source/src:${PYTHONPATH:-} \
@@ -71,7 +73,9 @@ jobs:
                 --limit 10 \
                 --output /tmp/m26-latency-profile.json
           '
-          docker cp "$container_id":/tmp/m26-latency-profile.json /tmp/m26-latency-profile.json
+          docker compose exec -T knowledge-engine bash -lc \
+            'set -euo pipefail; cat /tmp/m26-latency-profile.json' \
+            > /tmp/m26-latency-profile.json
           python3 - <<'PY'
           import json
           from pathlib import Path
