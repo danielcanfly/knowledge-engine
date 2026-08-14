@@ -1,0 +1,126 @@
+name: M26 Latency Phase1 Profile
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-latency-phase1-profile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase1_profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    environment: m23-r3-diagnostic
+    env:
+      WORK_DIR: /tmp/m26-latency-phase1-profile
+      EXPECTED_HEAD_SHA: ${{ github.sha }}
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 10
+          show-progress: false
+
+      - name: Prepare SSH
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK_DIR/evidence"
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+          printf '%s\n' "$EXPECTED_HEAD_SHA" > "$WORK_DIR/evidence/head-sha.txt"
+
+      - name: Run isolated Phase 1 latency profile
+        run: |
+          set -euo pipefail
+          tar --exclude='.git' -czf "$WORK_DIR/source.tgz" \
+            src scripts pilot pyproject.toml
+          scp "$WORK_DIR/source.tgz" oracle-knowledge:/tmp/m26-latency-phase1-source.tgz
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_HEAD_SHA='$EXPECTED_HEAD_SHA' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/profile-run.json"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          container_id="$(docker compose ps -q knowledge-engine | head -n 1)"
+          test -n "$container_id"
+          docker compose exec -T knowledge-engine bash -lc '
+            set -euo pipefail
+            rm -rf /tmp/m26-latency-phase1-source /tmp/m26-latency-phase1-profile.json
+            mkdir -p /tmp/m26-latency-phase1-source
+            tar -xzf - -C /tmp/m26-latency-phase1-source
+          ' < /tmp/m26-latency-phase1-source.tgz
+          docker compose exec -T knowledge-engine bash -lc '
+            set -euo pipefail
+            cd /tmp/m26-latency-phase1-source
+            EXPECTED_HEAD_SHA="'"$EXPECTED_HEAD_SHA"'" \
+            PYTHONPATH=/tmp/m26-latency-phase1-source/src:${PYTHONPATH:-} \
+              python scripts/m26_phase1_latency_profile.py \
+                --root /tmp/m26-latency-phase1-source \
+                --questions pilot/m26/m26-aq-final-r3-questions.json \
+                --limit 10 \
+                --output /tmp/m26-latency-phase1-profile.json
+          '
+          docker compose exec -T knowledge-engine bash -lc \
+            'set -euo pipefail; cat /tmp/m26-latency-phase1-profile.json'
+          REMOTE
+          mv "$WORK_DIR/evidence/profile-run.json" "$WORK_DIR/evidence/m26-latency-phase1-profile.json"
+          python3 - <<'PY' > "$WORK_DIR/evidence/profile-summary.json"
+          import json
+          import os
+          from pathlib import Path
+          profile = json.loads((Path(os.environ["WORK_DIR"]) / "evidence/m26-latency-phase1-profile.json").read_text())
+          print(json.dumps({
+              "schema_version": "m26-latency-phase1-profile-summary/v1",
+              "case_count": profile.get("case_count"),
+              "answerable_profile_case_count": profile.get("answerable_profile_case_count"),
+              "failure_count": profile.get("failure_count"),
+              "protected_knowledge_mutations": profile.get("protected_knowledge_mutations"),
+              "raw_questions_recorded": profile.get("raw_questions_recorded"),
+              "raw_answers_recorded": profile.get("raw_answers_recorded"),
+              "raw_provider_text_recorded": profile.get("raw_provider_text_recorded"),
+              "sequential_concurrency": profile.get("sequential_concurrency"),
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Upload Phase 1 latency evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-latency-phase1-profile-${{ github.sha }}
+          path: /tmp/m26-latency-phase1-profile/evidence
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail if Phase 1 profile failed
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          profile = json.loads((Path(os.environ["WORK_DIR"]) / "evidence/m26-latency-phase1-profile.json").read_text())
+          failed = (
+              profile.get("case_count") != 12
+              or profile.get("answerable_profile_case_count") != 10
+              or profile.get("failure_count") != 0
+              or profile.get("protected_knowledge_mutations") != 0
+              or profile.get("raw_questions_recorded") is not False
+              or profile.get("raw_answers_recorded") is not False
+              or profile.get("raw_provider_text_recorded") is not False
+              or profile.get("sequential_concurrency") != 1
+          )
+          if failed:
+              raise SystemExit(json.dumps({
+                  "case_count": profile.get("case_count"),
+                  "answerable_profile_case_count": profile.get("answerable_profile_case_count"),
+                  "failure_count": profile.get("failure_count"),
+                  "failures": profile.get("failures"),
+              }, sort_keys=True))
+          PY
