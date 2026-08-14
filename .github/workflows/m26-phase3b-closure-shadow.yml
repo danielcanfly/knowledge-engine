@@ -46,7 +46,7 @@ jobs:
           git archive --format=tar.gz --output="$WORK_DIR/source.tgz" HEAD src pilot scripts/m26_phase3b_closure_shadow.py pyproject.toml
           scp "$WORK_DIR/source.tgz" oracle-knowledge:/tmp/m26-phase3b-closure-shadow-source.tgz
 
-      - name: Run frozen-A versus M2.7-highspeed closure sentinels
+      - name: Run frozen-A versus M2.5-highspeed closure sentinels
         run: |
           set -euo pipefail
           ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
@@ -84,7 +84,7 @@ jobs:
           data = json.loads(path.read_text())
           assert data['pair_count'] == 4
           assert data['a_closure_model'] == 'MiniMax-M3'
-          assert data['b_closure_model'] == 'MiniMax-M2.7-highspeed'
+          assert data['b_closure_model'] == 'MiniMax-M2.5-highspeed'
           assert data['reviewer_model_both_variants'] == 'MiniMax-M3'
           assert data['authority'] == 'A_frozen_closure_and_frozen_M3_reviewer'
           assert data['protected_knowledge_mutations'] == 0
