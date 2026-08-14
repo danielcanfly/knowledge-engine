@@ -47,7 +47,10 @@ COMPACT_PROVIDER_TRUNCATED = "COMPACT_PROVIDER_TRUNCATED"
 COMPACT_PROVIDER_PARSE_FAILED = "COMPACT_PROVIDER_PARSE_FAILED"
 SEMANTIC_REVIEW_PARSE_FAILED = "SEMANTIC_REVIEW_PARSE_FAILED"
 SEMANTIC_REVIEW_SCHEMA_VERSION = legacy.SEMANTIC_REVIEW_SCHEMA_VERSION
+COMPACT_SEMANTIC_REVIEW_SCHEMA_VERSION = "m26-claim-entailment-review/v2"
 SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
+COMPACT_CLOSURE_SCHEMA_VERSION = "m26-fas-synthesis/v2"
+COMPACT_PROVIDER_CONTRACT = "compact_runtime_bound_semantic_closure/v2"
 PARTIAL_SEMANTIC_CLOSURE_SOURCE = (
     "provider_verified_runtime_bound_partial_semantic_closure"
 )
@@ -541,7 +544,7 @@ def _synthesize_and_verify(
                 ),
                 "deterministic_evidence_synthesis_used": False,
                 "bounded_publication_support_ref_limit": bounded_support_ref_limit,
-                "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                "provider_contract": COMPACT_PROVIDER_CONTRACT,
                 "semantic_review": dict(verified.get("semantic_review", {})),
             }
             if partial_answer:
@@ -555,7 +558,7 @@ def _synthesize_and_verify(
                 "support_proof": final_support_proof,
                 "endpoint_proof": dict(endpoint_proof),
                 "failures": [],
-                "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                "provider_contract": COMPACT_PROVIDER_CONTRACT,
                 "semantic_review": dict(verified.get("semantic_review", {})),
                 "bounded_publication_support_ref_limit": bounded_support_ref_limit,
                 "broad_deterministic_fallback_used": False,
@@ -589,7 +592,7 @@ def _synthesize_and_verify(
         if deterministic is not None:
             deterministic["multi_evidence_verification"] = {
                 **dict(deterministic.get("multi_evidence_verification", {})),
-                "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                "provider_contract": COMPACT_PROVIDER_CONTRACT,
             }
             closure = {
                 "schema_version": "m26-aq-semantic-closure/v1",
@@ -598,7 +601,7 @@ def _synthesize_and_verify(
                 "endpoint_proof": dict(endpoint_proof),
                 "failures": [],
                 "pre_recovery_failures": sorted(set(failures)),
-                "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                "provider_contract": COMPACT_PROVIDER_CONTRACT,
                 "broad_deterministic_fallback_used": True,
             }
             return deterministic, closure
@@ -612,7 +615,7 @@ def _synthesize_and_verify(
     abstention["answer_source"] = "safe_abstention"
     abstention["multi_evidence_verification"] = {
         **dict(abstention.get("multi_evidence_verification", {})),
-        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+        "provider_contract": COMPACT_PROVIDER_CONTRACT,
     }
     closure = {
         "schema_version": "m26-aq-semantic-closure/v1",
@@ -620,7 +623,7 @@ def _synthesize_and_verify(
         "support_proof": final_support_proof,
         "endpoint_proof": dict(endpoint_proof),
         "failures": final_failures,
-        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+        "provider_contract": COMPACT_PROVIDER_CONTRACT,
         "broad_deterministic_fallback_used": False,
     }
     return abstention, closure
@@ -677,7 +680,7 @@ def _verified_supported_review_partial(
         "repair_trigger": pre_partial_failures,
         "repair_result": "semantic_review_supported_partial",
         "deterministic_evidence_synthesis_used": False,
-        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+        "provider_contract": COMPACT_PROVIDER_CONTRACT,
         "semantic_review": dict(verified.get("semantic_review", {})),
         "partial_answer": True,
         "dropped_claim_count": len(dropped_claim_ids),
@@ -690,7 +693,7 @@ def _verified_supported_review_partial(
         "endpoint_proof": dict(endpoint_proof),
         "failures": [],
         "pre_partial_failures": pre_partial_failures,
-        "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+        "provider_contract": COMPACT_PROVIDER_CONTRACT,
         "semantic_review": dict(verified.get("semantic_review", {})),
         "broad_deterministic_fallback_used": False,
         "partial_answer": True,
@@ -1116,14 +1119,13 @@ def _compact_provider_payload(
         "evidence": packed,
         "repair": list(previous_failures)[-8:] if repair else [],
         "output": {
-            "schema_version": "m26-fas-synthesis/v1",
+            "schema_version": COMPACT_CLOSURE_SCHEMA_VERSION,
             "status": "answer|partial|abstain",
-            "answer_text": "",
+            "answer_text": "Natural prose with [[claim_id]] anchors after the exact sentence/span each claim describes.",
             "claims": [
                 {
                     "claim_id": "claim_1",
                     "claim_type": "EVIDENCE_FACT|EVIDENCE_SYNTHESIS|MODEL_EXPLANATION",
-                    "surface_text": "",
                     "evidence_labels": ["e1"],
                     "covers": [],
                 }
@@ -1136,11 +1138,15 @@ def _compact_provider_payload(
         "Answer only from supplied evidence. Return exactly one compact JSON object with "
         "keys schema_version, status, answer_text, claims, unanswered_dimensions, and "
         "abstention_reason. status is answer, partial, or abstain. Each claim must include "
-        "claim_id, claim_type, surface_text, evidence_labels, and covers. Use claim_type "
-        "values EVIDENCE_FACT, EVIDENCE_SYNTHESIS, or MODEL_EXPLANATION. answer_text must "
-        "be natural prose, not a quote collage. Evidence labels such as e1 or e2 belong only "
-        "in evidence_labels and must not appear in the visible answer text. Address every "
-        "must_state item explicitly. If support is insufficient, abstain."
+        "claim_id, claim_type, evidence_labels, and covers; claims must not include "
+        "surface_text or any duplicate natural-language claim prose. Use claim_type values "
+        "EVIDENCE_FACT, EVIDENCE_SYNTHESIS, or MODEL_EXPLANATION. answer_text is the single "
+        "provider-authored natural-text representation and must be natural prose, not a quote "
+        "collage. Put each claim's exact [[claim_id]] anchor immediately after the answer "
+        "sentence or span that expresses that claim; the runtime will bind claims only by "
+        "stripping or joining those exact anchored answer spans. Evidence labels such as e1 "
+        "or e2 belong only in evidence_labels and must not appear in the visible answer text. "
+        "Address every must_state item explicitly. If support is insufficient, abstain."
     )
     max_tokens = _compact_provider_output_tokens(
         question=question,
@@ -1262,7 +1268,7 @@ def _semantic_review_payload(
             {
                 "claim_id": str(claim.get("claim_id", "")),
                 "claim_type": str(claim.get("claim_type", "")),
-                "surface_text": str(claim.get("surface_text", "")),
+                "claim_text": str(claim.get("surface_text", "")),
                 "allowed_evidence_ids": allowed_evidence_ids,
                 "allowed_evidence_labels": allowed_evidence_labels,
                 "evidence_id_by_label": dict(
@@ -1297,23 +1303,21 @@ def _semantic_review_payload(
             ),
         },
         "output": {
-            "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
-            "claim_judgments": [
+            "schema_version": COMPACT_SEMANTIC_REVIEW_SCHEMA_VERSION,
+            "judgments": [
                 {
                     "claim_id": "claim_1",
                     "verdict": "ENTAILED|CONTRADICTED|INSUFFICIENT|GENERIC_EXPLANATION",
                     "evidence_ids": [],
                 }
             ],
-            "visible_coverage": {
-                "verdict": "COVERED|UNCOVERED",
-                "uncovered_assertions": [],
-            },
+            "coverage_verdict": "COVERED|UNCOVERED",
+            "uncovered_assertions": [],
         },
     }
     system = (
         "You are the bounded M26 claim semantic-entailment reviewer. Return exactly one "
-        "JSON object. Judge each claim's meaning against only that claim case's local "
+        "compact JSON object. Judge each claim_text's meaning against only that claim case's local "
         "evidence array. The user question, other claim surfaces, and other claim cases "
         "are context only and are not evidence. Paraphrase, voice, and order changes may "
         "be entailed; contradiction, strengthening, identity, quantity, time, causality, "
@@ -1327,13 +1331,14 @@ def _semantic_review_payload(
         "If no allowed local evidence entails the claim, use INSUFFICIENT or CONTRADICTED "
         "instead of ENTAILED. Do not invent claim IDs, evidence IDs, or evidence labels; "
         "never output example labels unless that exact string is present in the claim case. "
-        "For visible_coverage, only list material KB-dependent assertions that are not "
-        "represented by any structured claim; a listed MODEL_EXPLANATION glue claim is "
-        "not by itself an uncovered assertion."
+        "Return schema_version, judgments, coverage_verdict, and uncovered_assertions only. "
+        "For COVERED, uncovered_assertions may be omitted or []. Only list material "
+        "KB-dependent assertions that are not represented by any structured claim; a listed "
+        "MODEL_EXPLANATION glue claim is not by itself an uncovered assertion."
     )
     return {
         "model": "MiniMax-M3",
-        "max_tokens": 2048,
+        "max_tokens": 1024,
         "temperature": 0,
         "stream": False,
         "system": system,
@@ -1357,7 +1362,56 @@ def _parse_semantic_review_result(text: str) -> dict[str, Any]:
         raise ValueError("semantic review output contains trailing text")
     if not isinstance(value, Mapping):
         raise ValueError("semantic review JSON must be an object")
-    return dict(value)
+    return _canonical_semantic_review_result(value)
+
+
+def _canonical_semantic_review_result(value: Mapping[str, Any]) -> dict[str, Any]:
+    schema_version = str(value.get("schema_version", ""))
+    if schema_version == SEMANTIC_REVIEW_SCHEMA_VERSION:
+        return dict(value)
+    if schema_version != COMPACT_SEMANTIC_REVIEW_SCHEMA_VERSION:
+        return dict(value)
+    allowed = {
+        "schema_version",
+        "judgments",
+        "claim_judgments",
+        "coverage_verdict",
+        "visible_coverage",
+        "uncovered_assertions",
+    }
+    if set(value) - allowed:
+        raise ValueError(SEMANTIC_REVIEW_PARSE_FAILED)
+    raw_judgments = value.get("judgments", value.get("claim_judgments", []))
+    judgments = [
+        dict(legacy._object(item, "compact semantic review judgment"))
+        for item in legacy._list(raw_judgments, "compact semantic review judgments")
+    ]
+    if "visible_coverage" in value:
+        coverage_obj = legacy._object(
+            value.get("visible_coverage"),
+            "compact semantic review coverage",
+        )
+        coverage_verdict = str(coverage_obj.get("verdict", ""))
+        uncovered = coverage_obj.get("uncovered_assertions", [])
+    else:
+        coverage_verdict = str(value.get("coverage_verdict", ""))
+        uncovered = value.get("uncovered_assertions", [])
+    if coverage_verdict == "COVERED" and uncovered is None:
+        uncovered = []
+    return {
+        "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
+        "claim_judgments": judgments,
+        "visible_coverage": {
+            "verdict": coverage_verdict,
+            "uncovered_assertions": [
+                str(item)
+                for item in legacy._list(
+                    uncovered or [], "compact semantic uncovered assertions"
+                )
+                if str(item)
+            ],
+        },
+    }
 
 
 def _semantic_review_blocking_failures(review: Mapping[str, Any]) -> list[str]:
@@ -1543,9 +1597,11 @@ def _runtime_bound_candidate(
         claim_id = str(claim.get("claim_id") or "").strip()
         if not claim_id:
             raise ValueError(f"provider claim {index} missing claim_id")
-        surface_text = str(claim.get("surface_text") or "").strip()
+        surface_text = _provider_authored_claim_surface(answer=answer, claim=claim)
         if not surface_text:
-            raise ValueError(f"provider claim {claim_id} missing surface_text")
+            raise ValueError(
+                f"provider claim {claim_id} missing provider-authored answer span"
+            )
         claim_type = str(claim.get("claim_type") or "").strip()
         if claim_type not in {
             "EVIDENCE_FACT",
@@ -1648,29 +1704,7 @@ def _runtime_bound_candidate(
             semantic_failures=semantic_failures,
         )
         if missing:
-            boundary = (
-                "Unsupported boundary: the available evidence does not establish "
-                + ", ".join(missing[:4])
-                + "."
-            )
-            claim_records.append(
-                {
-                    "claim_id": f"claim_{len(claim_records) + 1}",
-                    "claim_type": "MODEL_EXPLANATION",
-                    "claim_role": "model_explanation",
-                    "surface_text": boundary,
-                    "facet_ids": legacy._required_facet_ids(
-                        question=question,
-                        intent_class=intent_class,
-                    )[:1],
-                    "support_mode": "model_explanation",
-                    "evidence_labels": [],
-                    "covers": [],
-                    "unanswered_dimensions": list(missing),
-                    "support_refs": [],
-                }
-            )
-            answer = _append_partial_boundary(answer, boundary)
+            unanswered_dimensions = list(dict.fromkeys([*unanswered_dimensions, *missing]))
     return {
         "schema_version": "aq3-provider-candidate/v3",
         "status": (
@@ -1688,14 +1722,19 @@ def _runtime_bound_candidate(
         "abstention_reason": None,
         "unanswered_dimensions": [
             str(item)
-            for claim in claim_records
-            for item in legacy._list(
-                claim.get("unanswered_dimensions", []), "unanswered dimensions"
-            )
+            for item in [
+                *unanswered_dimensions,
+                *[
+                    claim_item
+                    for claim in claim_records
+                    for claim_item in legacy._list(
+                        claim.get("unanswered_dimensions", []), "unanswered dimensions"
+                    )
+                ],
+            ]
             if str(item)
         ],
     }
-
 
 def _parsed_provider_answer_text(parsed: Mapping[str, Any]) -> str:
     for key in ("answer_text", "answer"):
@@ -1838,6 +1877,43 @@ def _infer_claim_type(intent_class: str, claim: Mapping[str, Any]) -> str:
     if intent_class in {"cross_document_comparison", "complementary_synthesis", "graph_relationship", "temporal_conflict"}:
         return "EVIDENCE_SYNTHESIS"
     return "EVIDENCE_FACT"
+
+
+def _answer_spans_for_claim(*, answer: str, claim_id: str) -> list[str]:
+    anchor = f"[[{claim_id}]]"
+    if anchor not in str(answer):
+        return []
+    spans: list[str] = []
+    for sentence in re.split(r"(?<=[.!?。])\s+", str(answer).strip()):
+        if anchor not in sentence:
+            continue
+        visible = legacy.CLAIM_ANCHOR_RE.sub("", sentence)
+        visible = re.sub(r"\s+", " ", visible).strip()
+        visible = re.sub(r"\s+([,.;:!?。])", r"\1", visible).strip()
+        if visible:
+            spans.append(visible)
+    if spans:
+        return spans
+    visible = legacy.CLAIM_ANCHOR_RE.sub("", str(answer))
+    visible = re.sub(r"\s+", " ", visible).strip()
+    return [visible] if visible else []
+
+
+def _provider_authored_claim_surface(
+    *,
+    answer: str,
+    claim: Mapping[str, Any],
+) -> str:
+    claim_id = str(claim.get("claim_id") or "").strip()
+    spans = _answer_spans_for_claim(answer=answer, claim_id=claim_id)
+    if len(spans) == 1:
+        return spans[0]
+    if len(spans) > 1:
+        raise ValueError(f"provider claim {claim_id} has ambiguous answer anchors")
+    legacy_surface = str(claim.get("surface_text") or "").strip()
+    if legacy_surface:
+        return legacy_surface
+    raise ValueError(f"provider claim {claim_id} missing answer anchor")
 
 
 def _anchor_material_sentences(answer: str) -> str:

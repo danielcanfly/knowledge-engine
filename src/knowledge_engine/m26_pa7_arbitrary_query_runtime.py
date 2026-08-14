@@ -3979,7 +3979,12 @@ def _verified_natural_answer_text(
         citations_by_claim.setdefault(str(citation.get("claim_id", "")), []).append(
             f"[{citation.get('citation_id')}]"
         )
-    claim_ids = {str(claim.get("claim_id", "")) for claim in material_claims}
+    claim_by_id = {
+        str(claim.get("claim_id", "")): claim
+        for claim in material_claims
+        if str(claim.get("claim_id", ""))
+    }
+    claim_ids = set(claim_by_id)
     anchors = set(CLAIM_ANCHOR_RE.findall(answer))
     if anchors:
         if not anchors.issubset(claim_ids):
@@ -3988,6 +3993,16 @@ def _verified_natural_answer_text(
             )
         for claim_id in sorted(anchors, key=len, reverse=True):
             if claim_id not in citations_by_claim:
+                claim = claim_by_id.get(claim_id, {})
+                if (
+                    str(claim.get("claim_type", "")) == "MODEL_EXPLANATION"
+                    and not _list(
+                        claim.get("support_refs", []),
+                        "natural answer model explanation support refs",
+                    )
+                ):
+                    answer = answer.replace(f"[[{claim_id}]]", "")
+                    continue
                 raise _verification_failure(
                     "M26-PA7-ME-043", "natural answer citation marker mismatch"
                 )
