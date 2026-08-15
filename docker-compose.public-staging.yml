@@ -1,3 +1,5 @@
+name: m26-public-api-staging-d6288072
+
 services:
   m26-public-api-staging:
     build: .
