@@ -2781,6 +2781,7 @@ def run_owner_arbitrary_query(
     max_provider_calls: int = 4,
     max_cost: Decimal = Decimal("0.10"),
     answer_bundle: ProductionAnswerBundle | None = None,
+    event_sink: legacy.RuntimeEventSink | None = None,
 ) -> dict[str, Any]:
     import time
 
@@ -2795,6 +2796,7 @@ def run_owner_arbitrary_query(
     identities = legacy._object(
         validated_gate.get("production_identities"), "gate.production_identities"
     )
+    legacy._emit_runtime_event(event_sink, "stage.started", stage="admission")
     admission = legacy.evaluate_owner_admission(
         validated_gate,
         {
@@ -2811,6 +2813,12 @@ def run_owner_arbitrary_query(
             "owner_subject_hash": owner_subject_hash,
         }
     )[:32]
+    legacy._emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="admission",
+        status="admitted" if admission["admitted"] else "denied",
+    )
 
     if not admission["admitted"]:
         return _response_with_contract(
@@ -2884,6 +2892,7 @@ def run_owner_arbitrary_query(
                 )
             )
 
+    legacy._emit_runtime_event(event_sink, "stage.started", stage="retrieval")
     bundle = answer_bundle or load_production_answer_bundle()
     runtime._assert_full_production_graph(bundle)
     dense = (
@@ -2918,6 +2927,12 @@ def run_owner_arbitrary_query(
         intent_class=intent_class,
         requirements=requirements,
     )
+    legacy._emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="retrieval",
+        selected_evidence_count=len(evidence),
+    )
 
     if not evidence or not legacy._has_meaningful_overlap(normalized_question, evidence):
         verification = legacy._verified_abstention(
@@ -2929,7 +2944,7 @@ def run_owner_arbitrary_query(
             calls=[],
             repair_attempted=False,
         )
-        return _response_with_contract(
+        response = _response_with_contract(
             runtime._response_from_verification(
                 gate=validated_gate,
                 bundle=bundle,
@@ -2950,7 +2965,17 @@ def run_owner_arbitrary_query(
                 },
             )
         )
+        legacy._emit_runtime_event(
+            event_sink,
+            "stage.completed",
+            stage="publication",
+            status=response.get("status", ""),
+        )
+        return response
 
+    legacy._emit_runtime_event(event_sink, "stage.started", stage="closure")
+    legacy._emit_runtime_event(event_sink, "stage.started", stage="review")
+    legacy._emit_runtime_event(event_sink, "stage.started", stage="verification")
     verification, closure = synthesize_and_verify(
         question=normalized_question,
         trace_id=trace_id,
@@ -2960,7 +2985,25 @@ def run_owner_arbitrary_query(
         requirements=requirements,
         endpoint_proof=endpoint_proof,
     )
-    return _response_with_contract(
+    legacy._emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="review",
+        status=verification.get("status", ""),
+    )
+    legacy._emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="verification",
+        status=verification.get("terminal_status", ""),
+    )
+    legacy._emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="closure",
+        terminal_status=verification.get("terminal_status", ""),
+    )
+    response = _response_with_contract(
         runtime._response_from_verification(
             gate=validated_gate,
             bundle=bundle,
@@ -2975,3 +3018,10 @@ def run_owner_arbitrary_query(
             semantic_closure=closure,
         )
     )
+    legacy._emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="publication",
+        status=response.get("status", ""),
+    )
+    return response
