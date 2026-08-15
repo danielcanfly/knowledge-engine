@@ -19,6 +19,11 @@ from .m26_aq_semantic_contract import (
     semantic_contract_fingerprint,
     run_owner_arbitrary_query,
 )
+from .m26_cloudflare_provider_router import (
+    CloudflareFallbackRequired,
+    build_provider_routing_client,
+    provider_status_dto,
+)
 from .m26_pa5_v8_live import close_minimax_http_client, prepare_minimax_http_client
 from .m26_pa7_arbitrary_query_runtime import (
     MAX_QUERY_CHARS,
@@ -130,6 +135,32 @@ def run_owner_query_for_web(
     max_cost: Decimal = Decimal("0.10"),
 ) -> dict[str, Any]:
     question = validate_query_request(request_payload)
+    if provider_client is None and not _should_use_default_provider_routing():
+        runtime_response = run_owner_arbitrary_query(
+            root=root,
+            gate=load_json(gate_path),
+            question=question,
+            owner_subject_hash=owner_subject_hash,
+            public_request=public_request,
+            provider_client=provider_client,
+            dense_channel=dense_channel,
+            require_remote_dense=require_remote_dense,
+            max_provider_calls=max_provider_calls,
+            max_cost=max_cost,
+        )
+        return build_web_query_dto(runtime_response)
+    if provider_client is None:
+        return _run_owner_query_for_web_with_default_provider_routing(
+            root=root,
+            gate_path=gate_path,
+            question=question,
+            owner_subject_hash=owner_subject_hash,
+            public_request=public_request,
+            dense_channel=dense_channel,
+            require_remote_dense=require_remote_dense,
+            max_provider_calls=max_provider_calls,
+            max_cost=max_cost,
+        )
     runtime_response = run_owner_arbitrary_query(
         root=root,
         gate=load_json(gate_path),
@@ -142,6 +173,58 @@ def run_owner_query_for_web(
         max_provider_calls=max_provider_calls,
         max_cost=max_cost,
     )
+    return build_web_query_dto(runtime_response)
+
+
+def _should_use_default_provider_routing() -> bool:
+    return bool(os.environ.get("MINIMAX_API_KEY"))
+
+
+def _run_owner_query_for_web_with_default_provider_routing(
+    *,
+    root: Path,
+    gate_path: Path,
+    question: str,
+    owner_subject_hash: str,
+    public_request: bool,
+    dense_channel: DenseChannel | None,
+    require_remote_dense: bool,
+    max_provider_calls: int,
+    max_cost: Decimal,
+) -> dict[str, Any]:
+    gate = load_json(gate_path)
+    routing_client = build_provider_routing_client(
+        max_provider_calls=max_provider_calls,
+        max_cost=max_cost,
+    )
+    try:
+        runtime_response = run_owner_arbitrary_query(
+            root=root,
+            gate=gate,
+            question=question,
+            owner_subject_hash=owner_subject_hash,
+            public_request=public_request,
+            provider_client=routing_client,
+            dense_channel=dense_channel,
+            require_remote_dense=require_remote_dense,
+            max_provider_calls=max_provider_calls,
+            max_cost=max_cost,
+        )
+    except CloudflareFallbackRequired:
+        runtime_response = run_owner_arbitrary_query(
+            root=root,
+            gate=gate,
+            question=question,
+            owner_subject_hash=owner_subject_hash,
+            public_request=public_request,
+            provider_client=routing_client,
+            dense_channel=dense_channel,
+            require_remote_dense=require_remote_dense,
+            max_provider_calls=max_provider_calls,
+            max_cost=max_cost,
+        )
+    runtime_response = dict(runtime_response)
+    runtime_response["provider_routing"] = routing_client.telemetry()
     return build_web_query_dto(runtime_response)
 
 
@@ -222,6 +305,7 @@ def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
             ),
             "latency_ms": int(runtime_response.get("latency_ms", 0)),
         },
+        "provider_routing": dict(_mapping(runtime_response.get("provider_routing"))),
         "privacy": dict(_mapping(runtime_response.get("privacy"))),
         "mutations": dict(_mapping(runtime_response.get("mutations"))),
         "integrity": {
@@ -267,6 +351,7 @@ def build_health_dto(*, root: Path, gate_path: Path) -> dict[str, Any]:
             "production_pointer_mutations": 0,
             "qdrant_write_operations": 0,
         },
+        "provider_routing": provider_status_dto(),
     }
 
 
