@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
@@ -133,6 +133,7 @@ def run_owner_query_for_web(
     require_remote_dense: bool = False,
     max_provider_calls: int = SEMANTIC_CLOSURE_MAX_PROVIDER_CALLS,
     max_cost: Decimal = Decimal("0.10"),
+    event_sink: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     question = validate_query_request(request_payload)
     if provider_client is None and not _should_use_default_provider_routing():
@@ -147,6 +148,7 @@ def run_owner_query_for_web(
             require_remote_dense=require_remote_dense,
             max_provider_calls=max_provider_calls,
             max_cost=max_cost,
+            event_sink=event_sink,
         )
         return build_web_query_dto(runtime_response)
     if provider_client is None:
@@ -160,6 +162,7 @@ def run_owner_query_for_web(
             require_remote_dense=require_remote_dense,
             max_provider_calls=max_provider_calls,
             max_cost=max_cost,
+            event_sink=event_sink,
         )
     runtime_response = run_owner_arbitrary_query(
         root=root,
@@ -172,6 +175,7 @@ def run_owner_query_for_web(
         require_remote_dense=require_remote_dense,
         max_provider_calls=max_provider_calls,
         max_cost=max_cost,
+        event_sink=event_sink,
     )
     return build_web_query_dto(runtime_response)
 
@@ -191,6 +195,7 @@ def _run_owner_query_for_web_with_default_provider_routing(
     require_remote_dense: bool,
     max_provider_calls: int,
     max_cost: Decimal,
+    event_sink: Callable[[Mapping[str, Any]], None] | None,
 ) -> dict[str, Any]:
     gate = load_json(gate_path)
     routing_client = build_provider_routing_client(
@@ -209,6 +214,7 @@ def _run_owner_query_for_web_with_default_provider_routing(
             require_remote_dense=require_remote_dense,
             max_provider_calls=max_provider_calls,
             max_cost=max_cost,
+            event_sink=event_sink,
         )
     except CloudflareFallbackRequired:
         runtime_response = run_owner_arbitrary_query(
@@ -222,6 +228,7 @@ def _run_owner_query_for_web_with_default_provider_routing(
             require_remote_dense=require_remote_dense,
             max_provider_calls=max_provider_calls,
             max_cost=max_cost,
+            event_sink=event_sink,
         )
     runtime_response = dict(runtime_response)
     runtime_response["provider_routing"] = routing_client.telemetry()

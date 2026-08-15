@@ -6,7 +6,7 @@ import os
 import re
 import time
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -169,6 +169,22 @@ ORDER_SURFACE_TERMS = {
     "sequence",
     "series",
 }
+
+RuntimeEventSink = Callable[[Mapping[str, Any]], None]
+
+
+def _emit_runtime_event(
+    event_sink: RuntimeEventSink | None,
+    event_type: str,
+    **fields: Any,
+) -> None:
+    if event_sink is None:
+        return
+    try:
+        event_sink({"type": event_type, **fields})
+    except Exception:
+        # Observability must never change the frozen runtime's behavior.
+        return
 
 
 def _graph_relation_metadata(relation_type: str) -> dict[str, Any]:
@@ -574,6 +590,7 @@ def run_owner_arbitrary_query(
     max_provider_calls: int = 2,
     max_cost: Decimal = Decimal("0.10"),
     answer_bundle: ProductionAnswerBundle | None = None,
+    event_sink: RuntimeEventSink | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     normalized_question = _normalize_request_question(question)
@@ -581,6 +598,7 @@ def run_owner_arbitrary_query(
     intent_class = _intent_class(normalized_question)
     validated_gate = _validate_gate(root, gate)
     identities = _object(validated_gate.get("production_identities"), "gate.production_identities")
+    _emit_runtime_event(event_sink, "stage.started", stage="admission")
     admission = evaluate_owner_admission(
         validated_gate,
         {
@@ -599,6 +617,12 @@ def run_owner_arbitrary_query(
                 "owner_subject_hash": owner_subject_hash,
             }
         )[:32]
+    )
+    _emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="admission",
+        status="admitted" if admission["admitted"] else "denied",
     )
     if not admission["admitted"]:
         return _base_response(
@@ -672,6 +696,7 @@ def run_owner_arbitrary_query(
             }
             return response
 
+    _emit_runtime_event(event_sink, "stage.started", stage="retrieval")
     bundle = answer_bundle or load_production_answer_bundle()
     if bundle.release_id != FULL_PRODUCTION_RELEASE_ID:
         raise PA7ArbitraryQueryError(
@@ -702,6 +727,12 @@ def run_owner_arbitrary_query(
         question=normalized_question,
         intent_class=intent_class,
     )
+    _emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="retrieval",
+        selected_evidence_count=len(evidence),
+    )
     if not evidence or not _has_meaningful_overlap(normalized_question, evidence):
         return {
             **_base_response(
@@ -725,6 +756,7 @@ def run_owner_arbitrary_query(
             ),
         }
 
+    _emit_runtime_event(event_sink, "stage.started", stage="closure")
     verification = _synthesize_and_verify(
         root=root,
         question=normalized_question,
@@ -732,6 +764,13 @@ def run_owner_arbitrary_query(
         intent_class=intent_class,
         evidence=evidence,
         provider_client=provider,
+        event_sink=event_sink,
+    )
+    _emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="closure",
+        terminal_status=verification.get("terminal_status", ""),
     )
     response = {
         **_base_response(
@@ -770,6 +809,12 @@ def run_owner_arbitrary_query(
     response["latency_ms"] = max(
         int(response["latency_ms"]),
         int((time.monotonic() - started) * 1000),
+    )
+    _emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="publication",
+        status=response.get("status", ""),
     )
     return response
 
@@ -1054,12 +1099,41 @@ def _synthesize_and_verify(
     intent_class: str,
     evidence: Sequence[Mapping[str, Any]],
     provider_client: ProviderClient,
+    event_sink: RuntimeEventSink | None = None,
 ) -> dict[str, Any]:
     policy = load_pa7_json(root / PA4_POLICY_PATH)
     calls: list[dict[str, Any]] = []
     failures: list[str] = []
     repair_attempted = False
     for attempt in (1, 2):
+        if attempt == 2:
+            _emit_runtime_event(
+                event_sink,
+                "repair.started",
+                reason_codes=sorted(set(failures)),
+            )
+            _emit_runtime_event(event_sink, "stage.started", stage="repair")
+        _emit_runtime_event(
+            event_sink,
+            "stage.started",
+            stage="review",
+            attempt=attempt,
+        )
+        model_role = (
+            "semantic_reviewer"
+            if "semantic" in str(
+                "pa7_multi_evidence_query_repair" if attempt == 2 else "pa7_multi_evidence_query"
+            )
+            else "closure"
+        )
+        _emit_runtime_event(
+            event_sink,
+            "model.started",
+            role=model_role,
+            provider=_provider_identity(provider_client, role=model_role),
+            model=_model_identity(provider_client, role=model_role),
+            attempt=attempt,
+        )
         payload = _build_multi_evidence_provider_payload(
             policy=policy,
             question=question,
@@ -1076,12 +1150,42 @@ def _synthesize_and_verify(
             )
             normalized = _normalize_provider_result(result)
             calls.append(normalized)
+            _emit_runtime_event(
+                event_sink,
+                "stage.completed",
+                stage="review",
+                attempt=attempt,
+                status="provider_response",
+            )
+            _emit_runtime_event(
+                event_sink,
+                "model.completed",
+                role=model_role,
+                provider=_provider_identity(provider_client, role=model_role),
+                model=_model_identity(provider_client, role=model_role),
+                attempt=attempt,
+                status="ok",
+                latency_ms=normalized.get("latency_ms"),
+            )
+            _emit_runtime_event(
+                event_sink,
+                "stage.started",
+                stage="verification",
+                attempt=attempt,
+            )
             verified = _verify_multi_evidence_provider_output(
                 trace_id=trace_id,
                 question=question,
                 intent_class=intent_class,
                 evidence=evidence,
                 provider_text=normalized["provider_text"],
+            )
+            _emit_runtime_event(
+                event_sink,
+                "stage.completed",
+                stage="verification",
+                attempt=attempt,
+                status=verified.get("terminal_status", "verified"),
             )
             if verified["terminal_status"] == "safe_abstention":
                 failures.extend(str(code) for code in verified["reason_codes"])
@@ -1096,7 +1200,11 @@ def _synthesize_and_verify(
                     allow_after_repair_failure=False,
                 )
                 if deterministic is not None:
+                    if attempt == 2:
+                        _emit_runtime_event(event_sink, "stage.completed", stage="repair", status="verified")
                     return deterministic
+                if attempt == 2:
+                    _emit_runtime_event(event_sink, "stage.completed", stage="repair", status="abstained")
                 return _verified_abstention(
                     reason_codes=verified["reason_codes"],
                     calls=calls,
@@ -1117,10 +1225,14 @@ def _synthesize_and_verify(
                 "repair_result": "verified" if repair_attempted else "not_needed",
                 "deterministic_evidence_synthesis_used": False,
             }
+            if attempt == 2:
+                _emit_runtime_event(event_sink, "stage.completed", stage="repair", status="verified")
             return answer
         except VerifiedAnswerGateError as exc:
             failures.append(exc.code)
             if _is_question_evidence_relevance_hard_stop(exc):
+                if attempt == 2:
+                    _emit_runtime_event(event_sink, "stage.completed", stage="repair", status="abstained")
                 return _verified_abstention(
                     reason_codes=[exc.code, QUESTION_EVIDENCE_RELEVANCE_HARD_STOP],
                     calls=calls,
@@ -1140,13 +1252,17 @@ def _synthesize_and_verify(
                 allow_after_repair_failure=True,
             )
             if deterministic is not None:
+                _emit_runtime_event(event_sink, "stage.completed", stage="repair", status="verified")
                 return deterministic
+            _emit_runtime_event(event_sink, "stage.completed", stage="repair", status="abstained")
             return _verified_abstention(
                 reason_codes=[*failures, "BOUNDED_REPAIR_EXHAUSTED"],
                 calls=calls,
                 repair_attempted=True,
             )
         except (LiveGateError, httpx.HTTPError, KeyError, ValueError) as exc:
+            if attempt == 2:
+                _emit_runtime_event(event_sink, "stage.completed", stage="repair", status="abstained")
             return _verified_abstention(
                 reason_codes=[type(exc).__name__, "PROVIDER_CALL_FAILED"],
                 calls=calls,
@@ -1157,6 +1273,38 @@ def _synthesize_and_verify(
         calls=calls,
         repair_attempted=True,
     )
+
+
+def _provider_identity(provider_client: ProviderClient, *, role: str) -> str:
+    if role == "semantic_reviewer":
+        return "minimax-m3"
+    telemetry = getattr(provider_client, "telemetry", None)
+    if callable(telemetry):
+        try:
+            value = telemetry()
+            if isinstance(value, Mapping):
+                return str(value.get("closure_provider_final") or value.get("closure_provider_initial") or "unknown")
+        except Exception:
+            pass
+    return "unknown"
+
+
+def _model_identity(provider_client: ProviderClient, *, role: str) -> str:
+    if role == "semantic_reviewer":
+        return "MiniMax-M3"
+    telemetry = getattr(provider_client, "telemetry", None)
+    if callable(telemetry):
+        try:
+            value = telemetry()
+            if isinstance(value, Mapping):
+                attempts = value.get("provider_attempts")
+                if isinstance(attempts, list) and attempts:
+                    last = attempts[-1]
+                    if isinstance(last, Mapping) and last.get("model"):
+                        return str(last["model"])
+        except Exception:
+            pass
+    return "unknown"
 
 
 def _deterministic_evidence_synthesis(
