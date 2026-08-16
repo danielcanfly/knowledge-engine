@@ -13,7 +13,7 @@ permissions:
 jobs:
   diagnostic:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 6
     environment: m23-r3-diagnostic
     env:
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
@@ -31,79 +31,59 @@ jobs:
           set -euo pipefail
           bash scripts/configure_oracle_ssh.sh
 
-      - name: Compare remote-dense binding and execute isolated read-only search
+      - name: Classify facade remote-dense 429 read-only
         run: |
           set -euo pipefail
-          ssh oracle-knowledge 'bash -se' <<'REMOTE' | tee /tmp/track1-remote-dense-diagnostic.txt
+          ssh oracle-knowledge 'bash -se' <<'REMOTE' | tee /tmp/track1-remote-dense-429.txt
           set -euo pipefail
           FACADE=m26-public-api-staging-d6288072
-          BACKEND=m26-cloudflare-primary-staging-d6288072
           PROD=llm_wiki-knowledge-engine-1
-          echo 'track1_remote_dense_diagnostic=v1'
-
-          for c in "$FACADE" "$BACKEND"; do
-            echo "container=$c"
-            docker exec "$c" python - <<'PY' || true
-          PY
-            docker exec -i "$c" python - <<'PY'
-          import hashlib, os
-          keys = [
-              'CLOUDFLARE_ACCOUNT_ID',
-              'CLOUDFLARE_AI_TOKEN',
-              'CLOUDFLARE_API_TOKEN',
-              'QDRANT_URL',
-              'QDRANT_API_KEY_READ',
-              'QDRANT_READ_ONLY_API_KEY',
-              'QDRANT_API_KEY',
-              'M26_PA7_DENSE_COLLECTION',
-              'QDRANT_COLLECTION',
-              'QDRANT_COLLECTION_NAME',
-              'M26_QUERY_REQUIRE_REMOTE_DENSE',
-              'M26_PUBLIC_FORCE_LOCAL_DENSE',
-          ]
-          for key in keys:
-              value = os.environ.get(key, '')
-              digest = hashlib.sha256(value.encode()).hexdigest()[:16] if value else ''
-              print(f'env:{key}:present={str(bool(value)).lower()}:sha16={digest}:len={len(value)}')
-
+          docker exec -i "$FACADE" python - <<'PY'
+          import json
           from knowledge_engine.m26_pa7_arbitrary_query_runtime import dense_channel_from_env
           from knowledge_engine.m26_production_answer_bundle import load_production_answer_bundle
+
           try:
               dense = dense_channel_from_env(require_remote=True)
-              bundle = load_production_answer_bundle()
-              result = dense.search(
+              dense.search(
                   question='What should a router define for permission-first controls?',
-                  bundle=bundle,
+                  bundle=load_production_answer_bundle(),
                   top_k=8,
               )
-              ident = result.get('backend_identity', {})
               print('dense_search=success')
-              print(f'dense_backend={ident.get("backend", "")}')
-              print(f'dense_remote={ident.get("remote", "")}')
-              print(f'dense_candidate_count={len(result.get("candidates", []))}')
           except Exception as exc:
               print('dense_search=failed')
               print(f'exception_type={type(exc).__name__}')
-              print(f'exception_code={getattr(exc, "code", "")}')
               response = getattr(exc, 'response', None)
               if response is not None:
                   print(f'http_status={getattr(response, "status_code", "")}')
-                  request = getattr(response, 'request', None)
-                  url = getattr(request, 'url', None)
-                  print(f'http_host={getattr(url, "host", "") if url is not None else ""}')
+                  print(f'retry_after={response.headers.get("retry-after", "")}')
+                  print(f'ratelimit_reset={response.headers.get("ratelimit-reset", "")}')
+                  try:
+                      payload = response.json()
+                  except Exception:
+                      payload = {}
+                  if isinstance(payload, dict):
+                      errors = payload.get('errors', [])
+                      safe = []
+                      if isinstance(errors, list):
+                          for item in errors[:4]:
+                              if isinstance(item, dict):
+                                  safe.append({
+                                      'code': item.get('code'),
+                                      'message': str(item.get('message', ''))[:300],
+                                  })
+                      print('cloudflare_errors=' + json.dumps(safe, sort_keys=True))
           PY
-          done
-
-          echo "facade_health=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/v1/health || true)"
-          echo "backend_health=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/v1/health || true)"
-          echo "production_health=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/health || true)"
+          echo "facade_health=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/v1/health)"
+          echo "production_health=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/health)"
           echo 'production_mutations=0'
           REMOTE
 
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: track1-remote-dense-readonly-diagnostic-${{ github.sha }}
-          path: /tmp/track1-remote-dense-diagnostic.txt
+          name: track1-remote-dense-429-${{ github.sha }}
+          path: /tmp/track1-remote-dense-429.txt
           retention-days: 7
           if-no-files-found: error
