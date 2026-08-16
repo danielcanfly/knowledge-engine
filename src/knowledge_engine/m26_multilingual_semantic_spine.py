@@ -31,7 +31,8 @@ class CanonicalSemanticContext:
     detected_input_language: str
     semantic_question_source: SemanticQuestionSource
     intent_class: str
-    semantic_requirements: tuple[SemanticRequirementSummary, ...]
+    semantic_requirements: tuple[Any, ...]
+    semantic_requirement_summaries: tuple[SemanticRequirementSummary, ...]
     semantic_requirement_ids: tuple[str, ...]
     question_contract: Mapping[str, Any]
     question_contract_facet_ids: tuple[str, ...]
@@ -103,10 +104,10 @@ def build_canonical_semantic_context(
         )
     except Exception as exc:  # pragma: no cover - exact exception type belongs to authority
         return _failure("SEMANTIC_AUTHORITY_EXCEPTION", str(exc))
-    requirement_result = _summarize_requirements(requirements)
+    requirement_result = _preserve_and_summarize_requirements(requirements)
     if isinstance(requirement_result, CanonicalSemanticSpineResult):
         return requirement_result
-    requirement_summaries = requirement_result
+    authoritative_requirements, requirement_summaries = requirement_result
 
     try:
         question_contract = authorities.question_contract_builder(  # type: ignore[union-attr]
@@ -139,7 +140,8 @@ def build_canonical_semantic_context(
         detected_input_language=envelope.detected_input_language,
         semantic_question_source=source,
         intent_class=intent_class,
-        semantic_requirements=requirement_summaries,
+        semantic_requirements=authoritative_requirements,
+        semantic_requirement_summaries=requirement_summaries,
         semantic_requirement_ids=requirement_ids,
         question_contract=question_contract,
         question_contract_facet_ids=facet_ids,
@@ -207,16 +209,20 @@ def _validate_authorities(
     return None
 
 
-def _summarize_requirements(
+def _preserve_and_summarize_requirements(
     requirements: Sequence[Any],
-) -> tuple[SemanticRequirementSummary, ...] | CanonicalSemanticSpineResult:
+) -> (
+    tuple[tuple[Any, ...], tuple[SemanticRequirementSummary, ...]]
+    | CanonicalSemanticSpineResult
+):
     if isinstance(requirements, (str, bytes)) or not isinstance(requirements, Sequence):
         return _failure(
             "SEMANTIC_REQUIREMENTS_INVALID",
             "semantic requirement authority returned malformed requirements",
         )
+    authoritative_requirements = tuple(requirements)
     summaries: list[SemanticRequirementSummary] = []
-    for requirement in requirements:
+    for requirement in authoritative_requirements:
         requirement_id = getattr(requirement, "requirement_id", None)
         if not isinstance(requirement_id, str) or not requirement_id.strip():
             return _failure(
@@ -229,7 +235,7 @@ def _summarize_requirements(
                 exact_phrase=str(getattr(requirement, "exact_phrase", "")),
             )
         )
-    return tuple(summaries)
+    return authoritative_requirements, tuple(summaries)
 
 
 def _validate_question_contract(

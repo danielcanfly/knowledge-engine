@@ -20,6 +20,9 @@ from knowledge_engine.m26_multilingual_semantic_spine import (
 @dataclass(frozen=True)
 class FakeRequirement:
     requirement_id: str
+    instruction: str = ""
+    evidence_terms: tuple[str, ...] = ()
+    visible_patterns: tuple[str, ...] = ()
     exact_phrase: str = ""
 
 
@@ -38,7 +41,7 @@ class RecordingAuthorities:
     def requirements(self, question: str, intent_class: str) -> list[FakeRequirement]:
         self.requirement_questions.append((question, intent_class))
         return [
-            FakeRequirement("entity_router", "router"),
+            FakeRequirement("entity_router", exact_phrase="router"),
             FakeRequirement("semantic_boundary"),
         ]
 
@@ -206,6 +209,83 @@ def test_intent_and_requirement_authorities_receive_expected_questions() -> None
     )
 
 
+def test_requirement_authority_is_invoked_once_and_exact_result_is_retained() -> None:
+    authorities = RecordingAuthorities()
+    authoritative = [
+        FakeRequirement(
+            requirement_id="authority_once",
+            instruction="Preserve the exact authority-owned instruction.",
+            evidence_terms=("authority", "once"),
+            visible_patterns=(r"\bauthority\b",),
+            exact_phrase="authority once",
+        )
+    ]
+
+    def requirements(question: str, intent_class: str) -> list[FakeRequirement]:
+        authorities.requirement_questions.append((question, intent_class))
+        return authoritative
+
+    result = build_canonical_semantic_context(
+        envelope(
+            original="請保留 requirement。",
+            canonical="How should the authority requirement be preserved?",
+            detected="mixed",
+        ),
+        authorities=SemanticAuthorityDependencies(
+            intent_classifier=authorities.intent,
+            question_contract_builder=authorities.question_contract,
+            requirement_deriver=requirements,
+            contract_fingerprint_provider=authorities.fingerprint,
+        ),
+    )
+
+    assert result.ok is True
+    assert result.context is not None
+    assert len(authorities.requirement_questions) == 1
+    assert result.context.semantic_requirements == tuple(authoritative)
+    assert result.context.semantic_requirements[0] is authoritative[0]
+
+
+def test_full_requirement_fields_remain_available_from_context() -> None:
+    authorities = RecordingAuthorities()
+    requirement = FakeRequirement(
+        requirement_id="full_field_requirement",
+        instruction="Distinctive instruction text must remain available.",
+        evidence_terms=("term-a", "term-b"),
+        visible_patterns=(r"\bterm-a\b", r"\bterm-b\b"),
+        exact_phrase="Term-A",
+    )
+
+    result = build_canonical_semantic_context(
+        envelope(
+            original="請保留所有欄位。",
+            canonical="How should all authority requirement fields be preserved?",
+            detected="mixed",
+        ),
+        authorities=SemanticAuthorityDependencies(
+            intent_classifier=authorities.intent,
+            question_contract_builder=authorities.question_contract,
+            requirement_deriver=lambda question, intent: [requirement],
+            contract_fingerprint_provider=authorities.fingerprint,
+        ),
+    )
+
+    assert result.ok is True
+    assert result.context is not None
+    retained = result.context.semantic_requirements[0]
+    assert retained is requirement
+    assert retained.requirement_id == "full_field_requirement"
+    assert retained.instruction == "Distinctive instruction text must remain available."
+    assert retained.evidence_terms == ("term-a", "term-b")
+    assert retained.visible_patterns == (r"\bterm-a\b", r"\bterm-b\b")
+    assert retained.exact_phrase == "Term-A"
+    assert result.context.semantic_requirement_ids == ("full_field_requirement",)
+    assert result.context.semantic_requirement_summaries[0].requirement_id == (
+        "full_field_requirement"
+    )
+    assert result.context.semantic_requirement_summaries[0].exact_phrase == "Term-A"
+
+
 def test_question_contract_and_future_closure_question_use_canonical_english() -> None:
     authorities = RecordingAuthorities()
     canonical = "Which edge says Node-A precedes Node-B?"
@@ -224,6 +304,43 @@ def test_question_contract_and_future_closure_question_use_canonical_english() -
     assert result.context.closure_question_en == canonical
     assert authorities.contract_questions == [(canonical, "graph_relationship")]
     assert result.context.question_contract_facet_ids == ("direct_answer",)
+
+
+def test_full_question_contract_is_preserved_and_facet_ids_are_projection_only() -> None:
+    authorities = RecordingAuthorities()
+    question_contract = {
+        "required_facets": [
+            {"facet_id": "direct_answer", "required": True, "terms": ["router"]},
+            {"facet_id": "source_boundary", "required": False, "terms": ["source"]},
+        ],
+        "material_claim_policy": "fixture policy survives",
+        "graph_relation_policy": "fixture graph policy survives",
+    }
+
+    result = build_canonical_semantic_context(
+        envelope(
+            original="Router 如何工作？",
+            canonical="How does the router work?",
+            detected="mixed",
+        ),
+        authorities=SemanticAuthorityDependencies(
+            intent_classifier=authorities.intent,
+            question_contract_builder=lambda **kwargs: question_contract,
+            requirement_deriver=authorities.requirements,
+            contract_fingerprint_provider=authorities.fingerprint,
+        ),
+    )
+
+    assert result.ok is True
+    assert result.context is not None
+    assert result.context.question_contract is question_contract
+    assert result.context.question_contract["material_claim_policy"] == (
+        "fixture policy survives"
+    )
+    assert result.context.question_contract_facet_ids == (
+        "direct_answer",
+        "source_boundary",
+    )
 
 
 def test_empty_requirement_result_is_retained_without_track2_invention() -> None:
@@ -251,6 +368,8 @@ def test_empty_requirement_result_is_retained_without_track2_invention() -> None
 
     assert result.ok is True
     assert result.context is not None
+    assert result.context.semantic_requirements == ()
+    assert result.context.semantic_requirement_summaries == ()
     assert result.context.semantic_requirement_ids == ()
 
 
@@ -456,6 +575,10 @@ def test_actual_authority_requirement_ids_and_contract_fingerprint_parity() -> N
         assert english.context.semantic_requirement_ids == (
             multilingual.context.semantic_requirement_ids
         )
+        assert tuple(
+            requirement.requirement_id
+            for requirement in english.context.semantic_requirements
+        ) == english.context.semantic_requirement_ids
         assert english.context.semantic_contract_fingerprint == (
             multilingual.context.semantic_contract_fingerprint
         )
@@ -481,3 +604,30 @@ def test_actual_authority_matches_direct_frozen_calls_for_generalized_question()
     assert result.context.semantic_requirement_ids == tuple(
         requirement.requirement_id for requirement in expected_requirements
     )
+
+
+def test_actual_frozen_requirement_fields_are_preserved_without_reconstruction() -> None:
+    question = (
+        "What is the difference between a production router and an adaptive replanner "
+        "when a route changes after execution starts?"
+    )
+    intent = legacy._intent_class(question)
+    expected_requirements = derive_semantic_requirements(question, intent)
+
+    result = build_canonical_semantic_context(
+        envelope(original="請比較 router 與 replanner。", canonical=question, detected="mixed")
+    )
+
+    assert result.ok is True
+    assert result.context is not None
+    assert len(result.context.semantic_requirements) == len(expected_requirements)
+    for retained, expected in zip(
+        result.context.semantic_requirements,
+        expected_requirements,
+        strict=True,
+    ):
+        assert retained.requirement_id == expected.requirement_id
+        assert retained.instruction == expected.instruction
+        assert retained.evidence_terms == expected.evidence_terms
+        assert retained.visible_patterns == expected.visible_patterns
+        assert retained.exact_phrase == expected.exact_phrase
