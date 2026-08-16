@@ -1,0 +1,201 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from knowledge_engine.m26_multilingual_canonicalization import (
+    CanonicalizationRequest,
+    CanonicalizationResult,
+    extract_preservation_markers,
+)
+from knowledge_engine.m26_multilingual_language_envelope import (
+    build_language_envelope,
+    detect_input_language,
+)
+
+
+class FakeCanonicalizer:
+    def __init__(self, canonical: str = "What is the supported canonical question?") -> None:
+        self.canonical = canonical
+        self.calls: list[CanonicalizationRequest] = []
+
+    def canonicalize(self, request: CanonicalizationRequest) -> CanonicalizationResult:
+        self.calls.append(request)
+        return CanonicalizationResult(
+            canonical_question_en=self.canonical,
+            status="ok",
+            telemetry={"fake": True},
+        )
+
+
+class FailingCanonicalizer:
+    def canonicalize(self, request: CanonicalizationRequest) -> CanonicalizationResult:
+        del request
+        return CanonicalizationResult(
+            canonical_question_en="",
+            status="failed",
+            failure_code="CANONICALIZER_UNAVAILABLE",
+            failure_detail="deterministic test failure",
+        )
+
+
+def test_plain_english_passes_through_without_provider_call() -> None:
+    provider = FakeCanonicalizer("Should not be used")
+    envelope = build_language_envelope(
+        "How does the router choose a path?",
+        canonicalization_provider=provider,
+    )
+
+    assert envelope.original_question == "How does the router choose a path?"
+    assert envelope.canonical_question_en == "How does the router choose a path?"
+    assert envelope.requested_answer_language == "en"
+    assert envelope.detected_input_language == "en"
+    assert envelope.canonicalization_applied is False
+    assert envelope.canonicalization_status == "ok"
+    assert provider.calls == []
+
+
+def test_traditional_chinese_input_uses_canonicalizer_and_requests_zh_tw() -> None:
+    provider = FakeCanonicalizer("How does LangGraph preserve API-42 state across 2 steps?")
+    original = "LangGraph 如何在 2 個 steps 中保留 API-42 狀態？"
+
+    envelope = build_language_envelope(original, canonicalization_provider=provider)
+
+    assert envelope.original_question == original
+    assert envelope.canonical_question_en == (
+        "How does LangGraph preserve API-42 state across 2 steps?"
+    )
+    assert envelope.requested_answer_language == "zh-TW"
+    assert envelope.detected_input_language == "mixed"
+    assert envelope.canonicalization_applied is True
+    assert envelope.ok is True
+    assert provider.calls[0].original_question == original
+
+
+def test_natural_mixed_input_defaults_to_zh_tw() -> None:
+    provider = FakeCanonicalizer(
+        "When comparing the router and replanner, which handles DAG-7 first?"
+    )
+    envelope = build_language_envelope(
+        "Router 和 replanner 比較時，哪個先處理 DAG-7？",
+        canonicalization_provider=provider,
+    )
+
+    assert envelope.detected_input_language == "mixed"
+    assert envelope.requested_answer_language == "zh-TW"
+    assert envelope.canonicalization_applied is True
+    assert "DAG-7" in envelope.canonical_question_en
+
+
+def test_explicit_english_answer_language_override_is_internal_only() -> None:
+    provider = FakeCanonicalizer("What does the MCP Server do?")
+    envelope = build_language_envelope(
+        "MCP Server 做什麼？",
+        answer_language="en",
+        canonicalization_provider=provider,
+    )
+
+    assert envelope.requested_answer_language == "en"
+    assert envelope.detected_input_language == "mixed"
+    assert envelope.canonicalization_applied is True
+
+
+def test_preservation_markers_cover_names_models_acronyms_ids_numbers_urls_and_code() -> None:
+    question = (
+        "請比較 LangGraph 和 Cloudflare Workers AI 在 API-42 的 90 秒限制，"
+        "URL https://example.test/a 與 `router.plan()` 是否保留？"
+    )
+
+    markers = extract_preservation_markers(question)
+
+    for expected in (
+        "LangGraph",
+        "Cloudflare Workers AI",
+        "API-42",
+        "90",
+        "https://example.test/a",
+        "router.plan()",
+    ):
+        assert expected in markers
+
+
+def test_marker_loss_fails_closed_for_model_product_and_technical_identifiers() -> None:
+    provider = FakeCanonicalizer("What is preserved?")
+    envelope = build_language_envelope(
+        "MiniMax-M3 與 CF-120B 哪個處理 2 個 segments？",
+        canonicalization_provider=provider,
+    )
+
+    assert envelope.ok is False
+    assert envelope.canonicalization_status == "failed"
+    assert envelope.failure_code == "CANONICALIZATION_MARKER_LOSS"
+
+
+def test_negation_comparison_relation_synthesis_and_modality_are_carried_by_contract() -> None:
+    provider = FakeCanonicalizer(
+        "Do not treat Part 2 as preceding Part 1; compare router and replanner, "
+        "and explain how they should work together when evidence is insufficient."
+    )
+    original = (
+        "不要把 Part 2 說成 precedes Part 1；請比較 router 和 replanner，"
+        "並說明 evidence 不足時它們應該如何一起工作。"
+    )
+
+    envelope = build_language_envelope(original, canonicalization_provider=provider)
+
+    canonical = envelope.canonical_question_en.casefold()
+    assert "do not" in canonical
+    assert "part 2" in canonical and "preceding part 1" in canonical
+    assert "compare router and replanner" in canonical
+    assert "work together" in canonical
+    assert "should" in canonical
+    assert "insufficient" in canonical
+
+
+def test_canonicalization_failure_is_explicit_and_does_not_invent_english() -> None:
+    envelope = build_language_envelope(
+        "這個問題需要 canonicalization。",
+        canonicalization_provider=FailingCanonicalizer(),
+    )
+
+    assert envelope.ok is False
+    assert envelope.canonical_question_en == ""
+    assert envelope.failure_code == "CANONICALIZER_UNAVAILABLE"
+    assert envelope.telemetry["canonicalization_status"] == "failed"
+
+
+def test_non_english_without_provider_fails_closed() -> None:
+    envelope = build_language_envelope("這個問題沒有 provider。")
+
+    assert envelope.ok is False
+    assert envelope.failure_code == "CANONICALIZATION_PROVIDER_REQUIRED"
+    assert envelope.telemetry["canonicalization_provider_invoked"] is False
+
+
+def test_original_question_is_never_overwritten() -> None:
+    original = "  Router 如何保留 `state.id`？  "
+    provider = FakeCanonicalizer("How does the router preserve `state.id`?")
+
+    envelope = build_language_envelope(original, canonicalization_provider=provider)
+
+    assert envelope.original_question == original
+    assert envelope.canonical_question_en == "How does the router preserve `state.id`?"
+
+
+def test_no_benchmark_specific_mappings_in_phase1_modules() -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = "\n".join(
+        (root / path).read_text(encoding="utf-8")
+        for path in (
+            "src/knowledge_engine/m26_multilingual_language_envelope.py",
+            "src/knowledge_engine/m26_multilingual_canonicalization.py",
+        )
+    )
+
+    for forbidden in ("Q01", "Q03", "Q04", "Q06", "Q08", "差別"):
+        assert forbidden not in source
+
+
+def test_language_detection_distinguishes_english_zh_tw_and_mixed() -> None:
+    assert detect_input_language("How does routing work?") == "en"
+    assert detect_input_language("這是中文問題嗎？") == "zh-TW"
+    assert detect_input_language("Router 會如何處理？") == "mixed"
