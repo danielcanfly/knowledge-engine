@@ -1,0 +1,109 @@
+name: Track1 Staging Master Flag Readonly Probe
+
+on:
+  push:
+    branches:
+      - codex/m26-public-api-v1-staging-20260815
+    paths:
+      - .github/workflows/track1-staging-master-flag-readonly-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: m23-r3-diagnostic
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          show-progress: false
+
+      - name: Configure bounded Oracle SSH
+        run: |
+          set -euo pipefail
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "missing_required_connection_material=$name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+
+      - name: Read-only Track 1 staging flag probe
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          STAGING_REPO=/home/ubuntu/LLM_Wiki_staging_m26_cloudflare_d6288072
+          FACADE=m26-public-api-staging-d6288072
+          BACKEND=m26-cloudflare-primary-staging-d6288072
+          PROD=llm_wiki-knowledge-engine-1
+
+          echo 'track1_probe_schema=track1-staging-master-flags/v1'
+          echo "staging_repo_present=$(test -d "$STAGING_REPO/.git" && echo true || echo false)"
+          if test -d "$STAGING_REPO/.git"; then
+            echo "staging_repo_head=$(git -C "$STAGING_REPO" rev-parse HEAD)"
+            echo "staging_repo_branch=$(git -C "$STAGING_REPO" branch --show-current)"
+          fi
+
+          for c in "$FACADE" "$BACKEND" "$PROD"; do
+            echo "container_${c}_present=$(docker inspect "$c" >/dev/null 2>&1 && echo true || echo false)"
+            if docker inspect "$c" >/dev/null 2>&1; then
+              echo "container_${c}_image_id=$(docker inspect -f '{{.Image}}' "$c")"
+              echo "container_${c}_status=$(docker inspect -f '{{.State.Status}}' "$c")"
+              echo "container_${c}_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$c")"
+            fi
+          done
+
+          flag_line="$(docker inspect "$FACADE" -f '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep '^M26_PUBLIC_FORCE_LOCAL_DENSE=' || true)"
+          if test -z "$flag_line"; then
+            echo 'M26_PUBLIC_FORCE_LOCAL_DENSE=<unset>'
+          else
+            case "$flag_line" in
+              M26_PUBLIC_FORCE_LOCAL_DENSE=true|M26_PUBLIC_FORCE_LOCAL_DENSE=TRUE|M26_PUBLIC_FORCE_LOCAL_DENSE=True)
+                echo 'M26_PUBLIC_FORCE_LOCAL_DENSE=true'
+                ;;
+              *)
+                echo 'M26_PUBLIC_FORCE_LOCAL_DENSE=false'
+                ;;
+            esac
+          fi
+
+          req_line="$(docker inspect "$FACADE" -f '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep '^M26_QUERY_REQUIRE_REMOTE_DENSE=' || true)"
+          if test -z "$req_line"; then
+            echo 'facade_M26_QUERY_REQUIRE_REMOTE_DENSE=<unset>'
+          else
+            case "$req_line" in
+              M26_QUERY_REQUIRE_REMOTE_DENSE=true|M26_QUERY_REQUIRE_REMOTE_DENSE=TRUE|M26_QUERY_REQUIRE_REMOTE_DENSE=True)
+                echo 'facade_M26_QUERY_REQUIRE_REMOTE_DENSE=true'
+                ;;
+              *)
+                echo 'facade_M26_QUERY_REQUIRE_REMOTE_DENSE=false'
+                ;;
+            esac
+          fi
+
+          backend_req_line="$(docker inspect "$BACKEND" -f '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep '^M26_QUERY_REQUIRE_REMOTE_DENSE=' || true)"
+          if test -z "$backend_req_line"; then
+            echo 'backend_M26_QUERY_REQUIRE_REMOTE_DENSE=<unset>'
+          else
+            case "$backend_req_line" in
+              M26_QUERY_REQUIRE_REMOTE_DENSE=true|M26_QUERY_REQUIRE_REMOTE_DENSE=TRUE|M26_QUERY_REQUIRE_REMOTE_DENSE=True)
+                echo 'backend_M26_QUERY_REQUIRE_REMOTE_DENSE=true'
+                ;;
+              *)
+                echo 'backend_M26_QUERY_REQUIRE_REMOTE_DENSE=false'
+                ;;
+            esac
+          fi
+
+          echo "facade_health_http=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/v1/health || true)"
+          echo "backend_health_http=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/v1/health || true)"
+          echo "production_health_http=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/health || true)"
+          echo 'production_mutations=0'
+          REMOTE
