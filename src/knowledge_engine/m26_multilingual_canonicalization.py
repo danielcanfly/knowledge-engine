@@ -3,13 +3,55 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Literal, Protocol
 
 CANONICALIZATION_SCHEMA_VERSION = "m26-multilingual-canonicalization/v1"
+FidelityState = Literal["preserved", "not_applicable", "failed"]
+VALID_FIDELITY_STATES = frozenset({"preserved", "not_applicable", "failed"})
+REQUIRED_SEMANTIC_FIDELITY_DIMENSIONS = (
+    "intent",
+    "identity_terms",
+    "technical_identifiers",
+    "numbers_and_units",
+    "comparison_direction",
+    "relationship_direction",
+    "negation",
+    "modality_qualifiers",
+    "multi_part_synthesis",
+    "graph_entity_references",
+)
 
 
 class CanonicalizationProvider(Protocol):
     def canonicalize(self, request: CanonicalizationRequest) -> CanonicalizationResult: ...
+
+
+@dataclass(frozen=True)
+class SemanticFidelityContract:
+    intent: FidelityState
+    identity_terms: FidelityState
+    technical_identifiers: FidelityState
+    numbers_and_units: FidelityState
+    comparison_direction: FidelityState
+    relationship_direction: FidelityState
+    negation: FidelityState
+    modality_qualifiers: FidelityState
+    multi_part_synthesis: FidelityState
+    graph_entity_references: FidelityState
+
+    def as_mapping(self) -> dict[str, str]:
+        return {
+            "intent": self.intent,
+            "identity_terms": self.identity_terms,
+            "technical_identifiers": self.technical_identifiers,
+            "numbers_and_units": self.numbers_and_units,
+            "comparison_direction": self.comparison_direction,
+            "relationship_direction": self.relationship_direction,
+            "negation": self.negation,
+            "modality_qualifiers": self.modality_qualifiers,
+            "multi_part_synthesis": self.multi_part_synthesis,
+            "graph_entity_references": self.graph_entity_references,
+        }
 
 
 @dataclass(frozen=True)
@@ -25,6 +67,7 @@ class CanonicalizationResult:
     canonical_question_en: str
     status: str
     telemetry: Mapping[str, object] = field(default_factory=dict)
+    semantic_fidelity: SemanticFidelityContract | Mapping[str, object] | None = None
     failure_code: str = ""
     failure_detail: str = ""
 
@@ -71,6 +114,9 @@ def validate_canonicalization_result(
     canonical = " ".join(result.canonical_question_en.strip().split())
     if not canonical:
         return explicit_failure("CANONICALIZATION_EMPTY", "canonical English question is empty")
+    fidelity_failure = validate_semantic_fidelity(result.semantic_fidelity)
+    if fidelity_failure is not None:
+        return fidelity_failure
     missing = [
         marker
         for marker in request.preservation_markers
@@ -86,13 +132,64 @@ def validate_canonicalization_result(
         status="ok",
         failure_code="",
         failure_detail="",
+        semantic_fidelity=result.semantic_fidelity,
         telemetry={
+            **dict(result.telemetry),
             "schema_version": CANONICALIZATION_SCHEMA_VERSION,
             "status": "ok",
             "preservation_marker_count": len(request.preservation_markers),
-            **dict(result.telemetry),
         },
     )
+
+
+def validate_semantic_fidelity(
+    fidelity: SemanticFidelityContract | Mapping[str, object] | None,
+) -> CanonicalizationResult | None:
+    if fidelity is None:
+        return explicit_failure(
+            "CANONICALIZATION_FIDELITY_MISSING",
+            "canonicalization result omitted semantic fidelity contract",
+        )
+    if isinstance(fidelity, SemanticFidelityContract):
+        mapping = fidelity.as_mapping()
+    elif isinstance(fidelity, Mapping):
+        mapping = dict(fidelity)
+    else:
+        return explicit_failure(
+            "CANONICALIZATION_FIDELITY_INVALID",
+            "semantic fidelity contract must be a typed contract or mapping",
+        )
+
+    dimensions = set(REQUIRED_SEMANTIC_FIDELITY_DIMENSIONS)
+    missing = [
+        dimension
+        for dimension in REQUIRED_SEMANTIC_FIDELITY_DIMENSIONS
+        if dimension not in mapping
+    ]
+    if missing:
+        return explicit_failure(
+            "CANONICALIZATION_FIDELITY_MISSING",
+            "semantic fidelity contract omitted required dimension",
+        )
+    unexpected = sorted(set(mapping) - dimensions)
+    if unexpected:
+        return explicit_failure(
+            "CANONICALIZATION_FIDELITY_INVALID",
+            "semantic fidelity contract included unknown dimension",
+        )
+    for dimension in REQUIRED_SEMANTIC_FIDELITY_DIMENSIONS:
+        state = mapping[dimension]
+        if state not in VALID_FIDELITY_STATES:
+            return explicit_failure(
+                "CANONICALIZATION_FIDELITY_INVALID",
+                "semantic fidelity contract included malformed dimension state",
+            )
+        if state == "failed":
+            return explicit_failure(
+                "CANONICALIZATION_SEMANTIC_LOSS",
+                f"semantic fidelity dimension failed: {dimension}",
+            )
+    return None
 
 
 def extract_preservation_markers(question: str) -> list[str]:

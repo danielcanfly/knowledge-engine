@@ -41,7 +41,6 @@ def build_language_envelope(
     canonicalization_provider: CanonicalizationProvider | None = None,
 ) -> LanguageEnvelope:
     original_question = str(question)
-    normalized_question = " ".join(original_question.strip().split())
     detected = detect_input_language(original_question)
     requested = requested_answer_language(
         detected_input_language=detected,
@@ -50,7 +49,7 @@ def build_language_envelope(
     if detected == "en":
         return LanguageEnvelope(
             original_question=original_question,
-            canonical_question_en=normalized_question,
+            canonical_question_en=original_question,
             requested_answer_language=requested,
             detected_input_language=detected,
             canonicalization_applied=False,

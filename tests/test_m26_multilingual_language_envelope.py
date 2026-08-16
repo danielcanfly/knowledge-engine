@@ -2,20 +2,50 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from knowledge_engine.m26_multilingual_canonicalization import (
+    CANONICALIZATION_SCHEMA_VERSION,
+    REQUIRED_SEMANTIC_FIDELITY_DIMENSIONS,
     CanonicalizationRequest,
     CanonicalizationResult,
+    SemanticFidelityContract,
+    bounded_canonicalization_request,
     extract_preservation_markers,
+    validate_canonicalization_result,
 )
 from knowledge_engine.m26_multilingual_language_envelope import (
     build_language_envelope,
     detect_input_language,
 )
 
+_DEFAULT_FIDELITY = object()
+
+
+def complete_fidelity(**overrides: str) -> SemanticFidelityContract:
+    values = {
+        dimension: "preserved"
+        for dimension in REQUIRED_SEMANTIC_FIDELITY_DIMENSIONS
+    }
+    values.update(overrides)
+    return SemanticFidelityContract(**values)
+
 
 class FakeCanonicalizer:
-    def __init__(self, canonical: str = "What is the supported canonical question?") -> None:
+    def __init__(
+        self,
+        canonical: str = "What is the supported canonical question?",
+        *,
+        semantic_fidelity: object = _DEFAULT_FIDELITY,
+        telemetry: dict[str, object] | None = None,
+    ) -> None:
         self.canonical = canonical
+        self.semantic_fidelity = (
+            complete_fidelity()
+            if semantic_fidelity is _DEFAULT_FIDELITY
+            else semantic_fidelity
+        )
+        self.telemetry = telemetry or {"fake": True}
         self.calls: list[CanonicalizationRequest] = []
 
     def canonicalize(self, request: CanonicalizationRequest) -> CanonicalizationResult:
@@ -23,7 +53,8 @@ class FakeCanonicalizer:
         return CanonicalizationResult(
             canonical_question_en=self.canonical,
             status="ok",
-            telemetry={"fake": True},
+            telemetry=self.telemetry,
+            semantic_fidelity=self.semantic_fidelity,
         )
 
 
@@ -54,6 +85,20 @@ def test_plain_english_passes_through_without_provider_call() -> None:
     assert provider.calls == []
 
 
+def test_plain_english_preserves_exact_input_without_provider_call() -> None:
+    provider = FakeCanonicalizer("Should not be used")
+    original = "  How   does the router\nchoose a path?  "
+
+    envelope = build_language_envelope(original, canonicalization_provider=provider)
+
+    assert envelope.original_question == original
+    assert envelope.canonical_question_en == original
+    assert envelope.requested_answer_language == "en"
+    assert envelope.detected_input_language == "en"
+    assert envelope.canonicalization_applied is False
+    assert provider.calls == []
+
+
 def test_traditional_chinese_input_uses_canonicalizer_and_requests_zh_tw() -> None:
     provider = FakeCanonicalizer("How does LangGraph preserve API-42 state across 2 steps?")
     original = "LangGraph 如何在 2 個 steps 中保留 API-42 狀態？"
@@ -69,6 +114,46 @@ def test_traditional_chinese_input_uses_canonicalizer_and_requests_zh_tw() -> No
     assert envelope.canonicalization_applied is True
     assert envelope.ok is True
     assert provider.calls[0].original_question == original
+
+
+def test_all_applicable_semantic_dimensions_preserved_are_accepted() -> None:
+    provider = FakeCanonicalizer(
+        "Do not treat Part 2 as preceding Part 1; compare router and replanner, "
+        "and explain how they should work together when evidence is insufficient.",
+        semantic_fidelity=complete_fidelity(),
+    )
+    original = (
+        "不要把 Part 2 說成 precedes Part 1；請比較 router 和 replanner，"
+        "並說明 evidence 不足時它們應該如何一起工作。"
+    )
+
+    envelope = build_language_envelope(original, canonicalization_provider=provider)
+
+    assert envelope.ok is True
+    assert envelope.canonicalization_status == "ok"
+    assert len(provider.calls) == 1
+
+
+def test_not_applicable_semantic_dimensions_are_accepted() -> None:
+    provider = FakeCanonicalizer(
+        "What does API-42 do in 2 steps?",
+        semantic_fidelity=complete_fidelity(
+            comparison_direction="not_applicable",
+            relationship_direction="not_applicable",
+            negation="not_applicable",
+            modality_qualifiers="not_applicable",
+            multi_part_synthesis="not_applicable",
+            graph_entity_references="not_applicable",
+        ),
+    )
+
+    envelope = build_language_envelope(
+        "API-42 在 2 個 steps 中做什麼？",
+        canonicalization_provider=provider,
+    )
+
+    assert envelope.ok is True
+    assert envelope.failure_code == ""
 
 
 def test_natural_mixed_input_defaults_to_zh_tw() -> None:
@@ -130,6 +215,86 @@ def test_marker_loss_fails_closed_for_model_product_and_technical_identifiers() 
     assert envelope.failure_code == "CANONICALIZATION_MARKER_LOSS"
 
 
+@pytest.mark.parametrize(
+    ("dimension", "description"),
+    (
+        ("negation", "drops negation"),
+        ("relationship_direction", "reverses relationship direction"),
+        ("comparison_direction", "reverses comparison subject or object"),
+        ("multi_part_synthesis", "drops a required synthesis component"),
+        ("modality_qualifiers", "loses modality or qualifier"),
+        ("intent", "reports a failed applicable dimension"),
+    ),
+)
+def test_semantic_fidelity_failed_dimensions_fail_closed(
+    dimension: str,
+    description: str,
+) -> None:
+    provider = FakeCanonicalizer(
+        f"This provider result {description}.",
+        semantic_fidelity=complete_fidelity(**{dimension: "failed"}),
+    )
+
+    envelope = build_language_envelope(
+        "請不要改變關係方向、比較方向、限制條件或多段需求。",
+        canonicalization_provider=provider,
+    )
+
+    assert envelope.ok is False
+    assert envelope.canonicalization_status == "failed"
+    assert envelope.failure_code == "CANONICALIZATION_SEMANTIC_LOSS"
+    assert dimension in envelope.failure_detail
+
+
+def test_missing_semantic_fidelity_contract_fails_closed() -> None:
+    provider = FakeCanonicalizer(
+        "Do not change the relationship, comparison, qualifier, or synthesis.",
+        semantic_fidelity=None,
+    )
+
+    envelope = build_language_envelope(
+        "請不要改變關係方向、比較方向、限制條件或多段需求。",
+        canonicalization_provider=provider,
+    )
+
+    assert envelope.ok is False
+    assert envelope.failure_code == "CANONICALIZATION_FIDELITY_MISSING"
+
+
+def test_missing_required_semantic_fidelity_dimension_fails_closed() -> None:
+    fidelity = complete_fidelity().as_mapping()
+    del fidelity["graph_entity_references"]
+    provider = FakeCanonicalizer(
+        "Do not change the relationship, comparison, qualifier, or synthesis.",
+        semantic_fidelity=fidelity,
+    )
+
+    envelope = build_language_envelope(
+        "請不要改變關係方向、比較方向、限制條件或多段需求。",
+        canonicalization_provider=provider,
+    )
+
+    assert envelope.ok is False
+    assert envelope.failure_code == "CANONICALIZATION_FIDELITY_MISSING"
+
+
+def test_invalid_semantic_fidelity_state_fails_closed() -> None:
+    fidelity = complete_fidelity().as_mapping()
+    fidelity["negation"] = "maybe"
+    provider = FakeCanonicalizer(
+        "Do not change the relationship, comparison, qualifier, or synthesis.",
+        semantic_fidelity=fidelity,
+    )
+
+    envelope = build_language_envelope(
+        "請不要改變關係方向、比較方向、限制條件或多段需求。",
+        canonicalization_provider=provider,
+    )
+
+    assert envelope.ok is False
+    assert envelope.failure_code == "CANONICALIZATION_FIDELITY_INVALID"
+
+
 def test_negation_comparison_relation_synthesis_and_modality_are_carried_by_contract() -> None:
     provider = FakeCanonicalizer(
         "Do not treat Part 2 as preceding Part 1; compare router and replanner, "
@@ -149,6 +314,35 @@ def test_negation_comparison_relation_synthesis_and_modality_are_carried_by_cont
     assert "work together" in canonical
     assert "should" in canonical
     assert "insufficient" in canonical
+
+
+def test_provider_telemetry_cannot_override_adapter_owned_validation_keys() -> None:
+    request = bounded_canonicalization_request(
+        original_question="API-42 如何在 2 個 steps 中工作？",
+        detected_input_language="mixed",
+        requested_answer_language="zh-TW",
+    )
+
+    result = validate_canonicalization_result(
+        request=request,
+        result=CanonicalizationResult(
+            canonical_question_en="How does API-42 work in 2 steps?",
+            status="ok",
+            telemetry={
+                "schema_version": "provider-owned",
+                "status": "provider-owned",
+                "preservation_marker_count": 999,
+            },
+            semantic_fidelity=complete_fidelity(),
+        ),
+    )
+
+    assert result.ok is True
+    assert result.telemetry["schema_version"] == CANONICALIZATION_SCHEMA_VERSION
+    assert result.telemetry["status"] == "ok"
+    assert result.telemetry["preservation_marker_count"] == len(
+        request.preservation_markers
+    )
 
 
 def test_canonicalization_failure_is_explicit_and_does_not_invent_english() -> None:
