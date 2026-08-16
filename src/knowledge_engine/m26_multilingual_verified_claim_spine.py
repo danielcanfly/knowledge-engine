@@ -16,13 +16,27 @@ VerifiedClaimSpineStatus = Literal[
 
 
 @dataclass(frozen=True)
+class CanonicalSupportEvidenceRef:
+    citation_id: str
+    evidence_id: str
+    locator_id: str
+    source_identity: str = ""
+    source_id: str = ""
+
+
+@dataclass(frozen=True)
 class CanonicalVerifiedClaim:
     claim_id: str
     surface_text: str
     claim_role: str
     claim_type: str
-    support_refs: tuple[Mapping[str, Any], ...]
+    facet_ids: tuple[str, ...]
+    support_mode: str
+    support_ref_count: int
+    source_identities: tuple[str, ...]
+    citation_ids: tuple[str, ...]
     citations: tuple[Mapping[str, Any], ...]
+    support_evidence_refs: tuple[CanonicalSupportEvidenceRef, ...]
     publication_eligible: bool
 
 
@@ -116,10 +130,6 @@ def project_verified_claim_spine(
     material_claim_support_verified = bool(
         verification.get("material_claim_support_verified", True)
     )
-    try:
-        citations = tuple(_mapping_items(verification.get("citations", ()), "citations"))
-    except ValueError as exc:
-        return _failure("VERIFIED_CLAIM_SPINE_VERIFICATION_SCHEMA_INVALID", str(exc))
     semantic_review = _semantic_review(verification, closure)
     dropped_claim_ids, dropped_claim_count = _partial_drop_metadata(verification, closure)
 
@@ -137,7 +147,7 @@ def project_verified_claim_spine(
             citation_locator_valid=citation_locator_valid,
             material_claim_support_verified=material_claim_support_verified,
             canonical_claims=(),
-            citations=citations,
+            citations=(),
             semantic_review=semantic_review,
             dropped_claim_ids=dropped_claim_ids,
             dropped_claim_count=dropped_claim_count,
@@ -150,6 +160,11 @@ def project_verified_claim_spine(
     )
     if integrity_failure is not None:
         return integrity_failure
+
+    try:
+        citations = tuple(_mapping_items(verification.get("citations", ()), "citations"))
+    except ValueError as exc:
+        return _failure("VERIFIED_CLAIM_SPINE_VERIFICATION_SCHEMA_INVALID", str(exc))
 
     try:
         raw_claims = _mapping_items(verification.get("answer_claims", ()), "answer_claims")
@@ -234,6 +249,11 @@ def _canonical_claims(
     raw_claims: Sequence[Mapping[str, Any]],
     citations: tuple[Mapping[str, Any], ...],
 ) -> tuple[CanonicalVerifiedClaim, ...] | CanonicalVerifiedClaimSpineResult:
+    citation_index_result = _citation_index(citations)
+    if isinstance(citation_index_result, CanonicalVerifiedClaimSpineResult):
+        return citation_index_result
+    citation_index = citation_index_result
+
     claims: list[CanonicalVerifiedClaim] = []
     for raw_claim in raw_claims:
         claim_id = str(raw_claim.get("claim_id", "")).strip()
@@ -242,55 +262,145 @@ def _canonical_claims(
                 "VERIFIED_CLAIM_SPINE_CLAIM_ID_MISSING",
                 "accepted verified claim omitted a stable claim_id",
             )
-        try:
-            support_refs = tuple(
-                _mapping_items(raw_claim.get("support_refs", ()), "claim support_refs")
-            )
-        except ValueError as exc:
-            return _failure("VERIFIED_CLAIM_SPINE_VERIFICATION_SCHEMA_INVALID", str(exc))
-        if not support_refs:
+        citation_ids_result = _claim_citation_ids(raw_claim, claim_id)
+        if isinstance(citation_ids_result, CanonicalVerifiedClaimSpineResult):
+            return citation_ids_result
+        citation_ids = citation_ids_result
+        support_ref_count_result = _claim_support_ref_count(raw_claim, citation_ids)
+        if isinstance(support_ref_count_result, CanonicalVerifiedClaimSpineResult):
+            return support_ref_count_result
+        support_ref_count = support_ref_count_result
+        if support_ref_count != len(citation_ids):
             return _failure(
-                "VERIFIED_CLAIM_SPINE_SUPPORT_MAPPING_MISSING",
-                "accepted verified claim omitted authoritative support_refs",
+                "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+                "accepted claim support_ref_count did not match unique citation_ids",
             )
-        mapped_citations = _citations_for_support_refs(support_refs, citations)
-        if not mapped_citations:
+        mapped_citations = tuple(citation_index.get(citation_id) for citation_id in citation_ids)
+        if any(citation is None for citation in mapped_citations):
             return _failure(
-                "VERIFIED_CLAIM_SPINE_SUPPORT_MAPPING_MISSING",
-                "accepted verified claim support_refs did not map to accepted citations",
+                "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+                "accepted claim referenced an unknown citation_id",
             )
+        citations_for_claim = tuple(
+            citation for citation in mapped_citations if citation is not None
+        )
+        if any(
+            str(citation.get("claim_id", "")).strip() != claim_id
+            for citation in citations_for_claim
+        ):
+            return _failure(
+                "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+                "accepted claim referenced a citation owned by another claim",
+            )
+        support_evidence_refs = tuple(
+            CanonicalSupportEvidenceRef(
+                citation_id=str(citation["citation_id"]),
+                evidence_id=str(citation["evidence_id"]),
+                locator_id=str(citation["locator_id"]),
+                source_identity=str(citation.get("source_identity", "")),
+                source_id=str(citation.get("source_id", "")),
+            )
+            for citation in citations_for_claim
+        )
         claims.append(
             CanonicalVerifiedClaim(
                 claim_id=claim_id,
                 surface_text=str(raw_claim.get("surface_text", "")),
                 claim_role=str(raw_claim.get("claim_role", "")),
                 claim_type=str(raw_claim.get("claim_type", "")),
-                support_refs=support_refs,
-                citations=mapped_citations,
+                facet_ids=_string_tuple(raw_claim.get("facet_ids", ())),
+                support_mode=str(raw_claim.get("support_mode", "")),
+                support_ref_count=support_ref_count,
+                source_identities=_string_tuple(raw_claim.get("source_identities", ())),
+                citation_ids=citation_ids,
+                citations=citations_for_claim,
+                support_evidence_refs=support_evidence_refs,
                 publication_eligible=True,
             )
         )
     return tuple(claims)
 
 
-def _citations_for_support_refs(
-    support_refs: tuple[Mapping[str, Any], ...],
+def _citation_index(
     citations: tuple[Mapping[str, Any], ...],
-) -> tuple[Mapping[str, Any], ...]:
-    support_keys = {
-        (str(ref.get("evidence_id", "")), str(ref.get("locator_id", "")))
-        for ref in support_refs
-    }
-    matched = [
-        citation
-        for citation in citations
-        if (
-            str(citation.get("evidence_id", "")),
-            str(citation.get("locator_id", "")),
+) -> dict[str, Mapping[str, Any]] | CanonicalVerifiedClaimSpineResult:
+    index: dict[str, Mapping[str, Any]] = {}
+    for citation in citations:
+        citation_id = str(citation.get("citation_id", "")).strip()
+        claim_id = str(citation.get("claim_id", "")).strip()
+        evidence_id = str(citation.get("evidence_id", "")).strip()
+        locator_id = str(citation.get("locator_id", "")).strip()
+        if not citation_id or not claim_id or not evidence_id or not locator_id:
+            return _failure(
+                "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+                "accepted citation omitted citation_id, claim_id, evidence_id, or locator_id",
+            )
+        if citation_id in index:
+            return _failure(
+                "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+                "accepted verification contained duplicate citation_id entries",
+            )
+        index[citation_id] = citation
+    return index
+
+
+def _claim_citation_ids(
+    raw_claim: Mapping[str, Any],
+    claim_id: str,
+) -> tuple[str, ...] | CanonicalVerifiedClaimSpineResult:
+    raw_citation_ids = raw_claim.get("citation_ids")
+    if isinstance(raw_citation_ids, (str, bytes)) or not isinstance(raw_citation_ids, Sequence):
+        return _failure(
+            "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+            f"accepted claim {claim_id} omitted public citation_ids",
         )
-        in support_keys
-    ]
-    return tuple(matched)
+    if any(not isinstance(citation_id, str) for citation_id in raw_citation_ids):
+        return _failure(
+            "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+            f"accepted claim {claim_id} contained malformed citation_ids",
+        )
+    citation_ids = tuple(citation_id.strip() for citation_id in raw_citation_ids)
+    if any(not citation_id for citation_id in citation_ids):
+        return _failure(
+            "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+            f"accepted claim {claim_id} contained an empty citation_id",
+        )
+    if len(set(citation_ids)) != len(citation_ids):
+        return _failure(
+            "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+            f"accepted claim {claim_id} contained duplicate citation_ids",
+        )
+    if not citation_ids:
+        return _failure(
+            "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+            f"accepted claim {claim_id} had no authoritative citation_ids",
+        )
+    return citation_ids
+
+
+def _claim_support_ref_count(
+    raw_claim: Mapping[str, Any],
+    citation_ids: tuple[str, ...],
+) -> int | CanonicalVerifiedClaimSpineResult:
+    value = raw_claim.get("support_ref_count", len(citation_ids))
+    if isinstance(value, bool):
+        return _failure(
+            "VERIFIED_CLAIM_SPINE_VERIFICATION_SCHEMA_INVALID",
+            "accepted claim support_ref_count was malformed",
+        )
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return _failure(
+            "VERIFIED_CLAIM_SPINE_VERIFICATION_SCHEMA_INVALID",
+            "accepted claim support_ref_count was malformed",
+        )
+    if count > 0 and not citation_ids:
+        return _failure(
+            "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+            "accepted claim had support_ref_count without citation_ids",
+        )
+    return count
 
 
 def _semantic_review(

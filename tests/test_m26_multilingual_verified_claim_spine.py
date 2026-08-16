@@ -84,28 +84,39 @@ def verified_claim(
     *,
     claim_id: str = "claim-router",
     surface_text: str = "The router preserves API-42 state.",
+    citation_ids: list[str] | None = None,
+    support_ref_count: int = 1,
 ) -> dict[str, Any]:
+    if citation_ids is None:
+        citation_ids = [f"{claim_id}_ref_1"]
     return {
         "claim_id": claim_id,
         "claim_role": "direct",
         "claim_type": "EVIDENCE_FACT",
         "surface_text": surface_text,
-        "support_refs": [
-            {
-                "evidence_id": "ev-router",
-                "locator_id": "loc-router",
-                "exact_quote": "The router preserves API-42 state.",
-                "uncertainty": "low",
-            }
-        ],
+        "facet_ids": ["direct_answer"],
+        "support_mode": "exact_quote",
+        "support_ref_count": support_ref_count,
+        "source_identities": ["source-router#section-router"],
+        "citation_ids": citation_ids,
     }
 
 
-def citation() -> dict[str, Any]:
+def citation(
+    *,
+    citation_id: str = "claim-router_ref_1",
+    claim_id: str = "claim-router",
+    evidence_id: str = "ev-router",
+    locator_id: str = "loc-router",
+) -> dict[str, Any]:
     return {
-        "evidence_id": "ev-router",
-        "locator_id": "loc-router",
+        "citation_id": citation_id,
+        "claim_id": claim_id,
+        "claim_role": "direct",
+        "evidence_id": evidence_id,
+        "locator_id": locator_id,
         "source_id": "source-router",
+        "source_identity": "source-router#section-router",
     }
 
 
@@ -214,8 +225,15 @@ def test_verified_full_result_preserves_claim_identity_text_support_and_citation
     claim = result.spine.canonical_claims[0]
     assert claim.claim_id == "claim-router"
     assert claim.surface_text == "The router preserves API-42 state."
-    assert claim.support_refs == tuple(verified_claim()["support_refs"])
+    assert claim.facet_ids == ("direct_answer",)
+    assert claim.support_mode == "exact_quote"
+    assert claim.support_ref_count == 1
+    assert claim.source_identities == ("source-router#section-router",)
+    assert claim.citation_ids == ("claim-router_ref_1",)
     assert claim.citations == (citation(),)
+    assert claim.support_evidence_refs[0].citation_id == "claim-router_ref_1"
+    assert claim.support_evidence_refs[0].evidence_id == "ev-router"
+    assert claim.support_evidence_refs[0].locator_id == "loc-router"
     assert claim.publication_eligible is True
     assert result.spine.publication_eligible_claim_count == 1
     assert result.spine.semantic_review == closure_result()["semantic_review"]
@@ -251,6 +269,20 @@ def test_verified_partial_keeps_only_retained_claims_and_preserves_drop_metadata
                 surface_text="The retained claim is verified.",
             )
         ],
+        citations=[
+            citation(
+                citation_id="claim-kept_ref_1",
+                claim_id="claim-kept",
+                evidence_id="ev-kept",
+                locator_id="loc-kept",
+            ),
+            citation(
+                citation_id="claim-dropped_ref_1",
+                claim_id="claim-dropped",
+                evidence_id="ev-dropped",
+                locator_id="loc-dropped",
+            ),
+        ],
         multi_evidence_verification={
             "partial_answer": True,
             "dropped_claim_count": 1,
@@ -267,6 +299,8 @@ def test_verified_partial_keeps_only_retained_claims_and_preserves_drop_metadata
     assert result.status == "verified_partial"
     assert result.spine is not None
     assert [claim.claim_id for claim in result.spine.canonical_claims] == ["claim-kept"]
+    assert result.spine.canonical_claims[0].citation_ids == ("claim-kept_ref_1",)
+    assert result.spine.canonical_claims[0].support_evidence_refs[0].evidence_id == "ev-kept"
     assert "claim-dropped" not in [
         claim.claim_id for claim in result.spine.canonical_claims
     ]
@@ -357,7 +391,7 @@ def test_missing_semantic_contract_fingerprint_fails_closed() -> None:
 
 def test_missing_claim_support_mapping_fails_closed() -> None:
     claim = verified_claim()
-    claim["support_refs"] = []
+    claim.pop("citation_ids")
 
     result = project_verified_claim_spine(
         context=context(),
@@ -366,7 +400,7 @@ def test_missing_claim_support_mapping_fails_closed() -> None:
     )
 
     assert result.status == "failed"
-    assert result.failure_code == "VERIFIED_CLAIM_SPINE_SUPPORT_MAPPING_MISSING"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
 
 
 def test_missing_citation_for_support_mapping_fails_closed() -> None:
@@ -377,7 +411,7 @@ def test_missing_citation_for_support_mapping_fails_closed() -> None:
     )
 
     assert result.status == "failed"
-    assert result.failure_code == "VERIFIED_CLAIM_SPINE_SUPPORT_MAPPING_MISSING"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
 
 
 def test_missing_claim_id_fails_closed() -> None:
@@ -413,6 +447,202 @@ def test_malformed_verified_claim_schema_fails_closed() -> None:
 
     assert result.status == "failed"
     assert result.failure_code == "VERIFIED_CLAIM_SPINE_VERIFICATION_SCHEMA_INVALID"
+
+
+def test_claim_empty_citation_ids_with_support_count_fails_closed() -> None:
+    claim = verified_claim(citation_ids=[], support_ref_count=1)
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(answer_claims=[claim]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
+
+
+def test_claim_malformed_citation_ids_fails_closed() -> None:
+    claim = verified_claim()
+    claim["citation_ids"] = [{"citation_id": "claim-router_ref_1"}]
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(answer_claims=[claim]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
+
+
+def test_claim_unknown_citation_id_fails_closed() -> None:
+    claim = verified_claim(citation_ids=["unknown-citation"])
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(answer_claims=[claim]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
+
+
+def test_claim_cannot_borrow_another_claims_citation() -> None:
+    claim = verified_claim(citation_ids=["claim-other_ref_1"])
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(
+            answer_claims=[claim],
+            citations=[citation(citation_id="claim-other_ref_1", claim_id="claim-other")],
+        ),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
+
+
+def test_duplicate_claim_citation_id_fails_closed() -> None:
+    claim = verified_claim(
+        citation_ids=["claim-router_ref_1", "claim-router_ref_1"],
+        support_ref_count=2,
+    )
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(answer_claims=[claim]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
+
+
+def test_support_ref_count_mismatch_fails_closed() -> None:
+    claim = verified_claim(support_ref_count=2)
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(answer_claims=[claim]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
+
+
+def test_malformed_citation_item_fails_closed() -> None:
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(citations=["not-a-citation"]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_VERIFICATION_SCHEMA_INVALID"
+
+
+def test_citation_missing_citation_id_fails_closed() -> None:
+    item = citation()
+    item.pop("citation_id")
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(citations=[item]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
+
+
+def test_citation_missing_claim_id_fails_closed() -> None:
+    item = citation()
+    item.pop("claim_id")
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(citations=[item]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
+
+
+def test_citation_missing_evidence_id_fails_closed() -> None:
+    item = citation()
+    item.pop("evidence_id")
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(citations=[item]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
+
+
+def test_citation_missing_locator_id_fails_closed() -> None:
+    item = citation()
+    item.pop("locator_id")
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(citations=[item]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
+
+
+def test_two_claim_mapping_remains_claim_local() -> None:
+    claim_a = verified_claim(
+        claim_id="claim-a",
+        surface_text="Claim A is verified.",
+        citation_ids=["claim-a_ref_1"],
+    )
+    claim_b = verified_claim(
+        claim_id="claim-b",
+        surface_text="Claim B is verified.",
+        citation_ids=["claim-b_ref_1"],
+    )
+    citation_a = citation(
+        citation_id="claim-a_ref_1",
+        claim_id="claim-a",
+        evidence_id="ev-a",
+        locator_id="loc-a",
+    )
+    citation_b = citation(
+        citation_id="claim-b_ref_1",
+        claim_id="claim-b",
+        evidence_id="ev-b",
+        locator_id="loc-b",
+    )
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(
+            answer_claims=[claim_a, claim_b],
+            citations=[citation_a, citation_b],
+        ),
+        closure=closure_result(),
+    )
+
+    assert result.status == "verified_full"
+    assert result.spine is not None
+    [canonical_a, canonical_b] = result.spine.canonical_claims
+    assert canonical_a.citations == (citation_a,)
+    assert canonical_b.citations == (citation_b,)
+    assert canonical_a.support_evidence_refs[0].evidence_id == "ev-a"
+    assert canonical_b.support_evidence_refs[0].evidence_id == "ev-b"
+    assert canonical_a.publication_eligible is True
+    assert canonical_b.publication_eligible is True
 
 
 def test_me065_style_result_cannot_become_publication_eligible_claims() -> None:
