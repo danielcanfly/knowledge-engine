@@ -98,8 +98,74 @@ def _patch_answer(monkeypatch: pytest.MonkeyPatch, dto: dict[str, Any] | None = 
         sink = kwargs.get("event_sink")
         if sink is not None:
             sink({"type": "stage.started", "stage": "retrieval"})
-            sink({"type": "stage.completed", "stage": "retrieval", "selected_evidence_count": 1})
-            sink({"type": "stage.completed", "stage": "verification", "status": "verified"})
+            sink(
+                {
+                    "type": "stage.completed",
+                    "stage": "retrieval",
+                    "selected_evidence_count": 1,
+                }
+            )
+            sink({"type": "stage.started", "stage": "closure", "attempt": 1})
+            sink(
+                {
+                    "type": "model.started",
+                    "role": "closure",
+                    "provider": "cloudflare",
+                    "model": "@cf/openai/gpt-oss-120b",
+                    "attempt": 1,
+                    "fallback_used": False,
+                    "fallback_reason": "NONE",
+                }
+            )
+            sink(
+                {
+                    "type": "model.completed",
+                    "role": "closure",
+                    "provider": "cloudflare",
+                    "model": "@cf/openai/gpt-oss-120b",
+                    "attempt": 1,
+                    "status": "completed",
+                    "latency_ms": 12,
+                    "fallback_used": False,
+                    "fallback_reason": "NONE",
+                }
+            )
+            sink({"type": "stage.completed", "stage": "closure", "attempt": 1})
+            sink({"type": "stage.started", "stage": "review", "attempt": 1})
+            sink(
+                {
+                    "type": "model.started",
+                    "role": "semantic_reviewer",
+                    "provider": "minimax-m3",
+                    "model": "MiniMax-M3",
+                    "attempt": 1,
+                    "fallback_used": False,
+                    "fallback_reason": "NONE",
+                }
+            )
+            sink(
+                {
+                    "type": "model.completed",
+                    "role": "semantic_reviewer",
+                    "provider": "minimax-m3",
+                    "model": "MiniMax-M3",
+                    "attempt": 1,
+                    "status": "completed",
+                    "latency_ms": 8,
+                    "fallback_used": False,
+                    "fallback_reason": "NONE",
+                }
+            )
+            sink({"type": "stage.completed", "stage": "review", "attempt": 1})
+            sink({"type": "stage.started", "stage": "verification", "attempt": 1})
+            sink(
+                {
+                    "type": "stage.completed",
+                    "stage": "verification",
+                    "attempt": 1,
+                    "status": "verified",
+                }
+            )
         return dto or _answer_dto()
 
     monkeypatch.setattr(m26_public_api, "run_owner_query_for_web", fake_run)
