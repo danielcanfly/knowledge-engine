@@ -9,7 +9,7 @@ services:
     command:
       [
         "uvicorn",
-        "knowledge_engine.m26_public_api:app",
+        "knowledge_engine.m26_public_api_execution_truth:app",
         "--host",
         "0.0.0.0",
         "--port",
