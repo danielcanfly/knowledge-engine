@@ -37,7 +37,7 @@ jobs:
       - name: Read-only Track 1 staging flag probe
         run: |
           set -euo pipefail
-          ssh oracle-knowledge 'bash -se' <<'REMOTE'
+          ssh oracle-knowledge 'bash -se' <<'REMOTE' | tee /tmp/track1-staging-probe.txt
           set -euo pipefail
           STAGING_REPO=/home/ubuntu/LLM_Wiki_staging_m26_cloudflare_d6288072
           FACADE=m26-public-api-staging-d6288072
@@ -107,3 +107,11 @@ jobs:
           echo "production_health_http=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/health || true)"
           echo 'production_mutations=0'
           REMOTE
+
+      - name: Upload bounded probe evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: track1-staging-master-flag-readonly-probe-${{ github.sha }}
+          path: /tmp/track1-staging-probe.txt
+          if-no-files-found: error
+          retention-days: 7
