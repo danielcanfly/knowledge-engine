@@ -1,4 +1,4 @@
-name: Track1 Remote Dense Readonly Diagnostic
+name: Track1 Controlled Provider Truth Diagnostic
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
 jobs:
   diagnostic:
     runs-on: ubuntu-24.04
-    timeout-minutes: 6
+    timeout-minutes: 12
     environment: m23-r3-diagnostic
     env:
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
@@ -31,51 +31,130 @@ jobs:
           set -euo pipefail
           bash scripts/configure_oracle_ssh.sh
 
-      - name: Classify facade remote-dense 429 read-only
+      - name: Collect same-execution provider truth with explicit test-only retrieval double
         run: |
           set -euo pipefail
-          ssh oracle-knowledge 'bash -se' <<'REMOTE' | tee /tmp/track1-remote-dense-429.txt
+          ssh oracle-knowledge 'bash -se' <<'REMOTE' | tee /tmp/track1-controlled-provider-truth.txt
           set -euo pipefail
           FACADE=m26-public-api-staging-d6288072
+          BACKEND=m26-cloudflare-primary-staging-d6288072
           PROD=llm_wiki-knowledge-engine-1
+
           docker exec -i "$FACADE" python - <<'PY'
           import json
-          from knowledge_engine.m26_pa7_arbitrary_query_runtime import dense_channel_from_env
-          from knowledge_engine.m26_production_answer_bundle import load_production_answer_bundle
+          import os
+          from decimal import Decimal
+          from pathlib import Path
 
-          try:
-              dense = dense_channel_from_env(require_remote=True)
-              dense.search(
-                  question='What should a router define for permission-first controls?',
-                  bundle=load_production_answer_bundle(),
-                  top_k=8,
-              )
-              print('dense_search=success')
-          except Exception as exc:
-              print('dense_search=failed')
-              print(f'exception_type={type(exc).__name__}')
-              response = getattr(exc, 'response', None)
-              if response is not None:
-                  print(f'http_status={getattr(response, "status_code", "")}')
-                  print(f'retry_after={response.headers.get("retry-after", "")}')
-                  print(f'ratelimit_reset={response.headers.get("ratelimit-reset", "")}')
-                  try:
-                      payload = response.json()
-                  except Exception:
-                      payload = {}
-                  if isinstance(payload, dict):
-                      errors = payload.get('errors', [])
-                      safe = []
-                      if isinstance(errors, list):
-                          for item in errors[:4]:
-                              if isinstance(item, dict):
-                                  safe.append({
-                                      'code': item.get('code'),
-                                      'message': str(item.get('message', ''))[:300],
-                                  })
-                      print('cloudflare_errors=' + json.dumps(safe, sort_keys=True))
+          from knowledge_engine import m26_public_api_execution_truth as truth
+          from knowledge_engine.m26_pa7_arbitrary_query_runtime import LocalDenseProjectionChannel
+
+          questions = [
+              'What should a router define for permission-first controls?',
+              'How does a state machine make legal transitions explicit?',
+              'What distinction separates execution structure from node-level decision logic?',
+              'How do routers and directed acyclic graphs complement each other for permission-first execution?',
+          ]
+
+          owner = os.environ['KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH']
+          root = Path('/app')
+          gate = root / 'pilot/m26/m26-pa-7-resolved-production-gate.json'
+          selected = None
+          selected_events = None
+          terminal = None
+          error_class = ''
+
+          for ordinal, question in enumerate(questions, start=1):
+              events = []
+              previous_sink = getattr(truth._TLS, 'raw_sink', None)
+              previous_attempt = getattr(truth._TLS, 'attempt', 1)
+              truth._TLS.raw_sink = events.append
+              truth._TLS.attempt = 1
+              try:
+                  dto = truth._ORIGINAL_PUBLIC_RUN_OWNER_QUERY_FOR_WEB(
+                      root=root,
+                      gate_path=gate,
+                      request_payload={'question': question},
+                      owner_subject_hash=owner,
+                      public_request=True,
+                      provider_client=None,
+                      dense_channel=LocalDenseProjectionChannel(),
+                      require_remote_dense=False,
+                      max_provider_calls=8,
+                      max_cost=Decimal('0.20'),
+                      event_sink=truth._truth_filter(events.append),
+                  )
+                  terminal = 'safe_abstention' if dto.get('safe_abstention') else 'completed'
+                  error_class = ''
+              except Exception as exc:
+                  terminal = 'exception'
+                  error_class = type(exc).__name__
+              finally:
+                  truth._TLS.raw_sink = previous_sink
+                  truth._TLS.attempt = previous_attempt
+
+              model_events = [event for event in events if event.get('type') in {'model.started', 'model.completed'}]
+              if model_events:
+                  selected = ordinal
+                  selected_events = events
+                  break
+
+          if selected is None or selected_events is None:
+              raise SystemExit('no_actual_provider_boundary_reached')
+
+          safe_fields = {
+              'type', 'stage', 'role', 'provider', 'model', 'attempt', 'status',
+              'fallback_used', 'fallback_reason', 'error_class', 'latency_ms',
+          }
+          sanitized = [
+              {key: event[key] for key in safe_fields if key in event}
+              for event in selected_events
+              if event.get('type') in {
+                  'stage.started', 'stage.completed', 'repair.started',
+                  'model.started', 'model.completed',
+              }
+          ]
+
+          model_started = [event for event in sanitized if event.get('type') == 'model.started']
+          if not model_started:
+              raise SystemExit('missing_model_started')
+          if model_started[0].get('role') != 'closure':
+              raise SystemExit('first_model_not_closure')
+          if model_started[0].get('provider') != 'cloudflare':
+              raise SystemExit('first_closure_not_cloudflare')
+          if model_started[0].get('model') != '@cf/openai/gpt-oss-120b':
+              raise SystemExit('first_closure_model_mismatch')
+
+          fallback_closure = [
+              event for event in model_started
+              if event.get('role') == 'closure'
+              and event.get('provider') == 'minimax-m3'
+              and event.get('fallback_used') is True
+          ]
+          reviewer = [
+              event for event in model_started
+              if event.get('role') == 'semantic_reviewer'
+              and event.get('provider') == 'minimax-m3'
+              and event.get('model') == 'MiniMax-M3'
+          ]
+          verification = [
+              event for event in sanitized
+              if event.get('type') == 'stage.started' and event.get('stage') == 'verification'
+          ]
+
+          print('track1_controlled_provider_truth=v1')
+          print(f'question_bank_ordinal={selected}')
+          print(f'terminal_class={terminal}')
+          print(f'exception_class={error_class}')
+          print('cloudflare_closure_started=true')
+          print(f'minimax_fallback_closure_started={str(bool(fallback_closure)).lower()}')
+          print(f'minimax_reviewer_started={str(bool(reviewer)).lower()}')
+          print(f'verification_started={str(bool(verification)).lower()}')
+          print('sanitized_events=' + json.dumps(sanitized, sort_keys=True, separators=(',', ':')))
           PY
+
           echo "facade_health=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/v1/health)"
+          echo "backend_health=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/v1/health)"
           echo "production_health=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/v1/health)"
           echo 'production_mutations=0'
           REMOTE
@@ -83,7 +162,7 @@ jobs:
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: track1-remote-dense-429-${{ github.sha }}
-          path: /tmp/track1-remote-dense-429.txt
+          name: track1-controlled-provider-truth-${{ github.sha }}
+          path: /tmp/track1-controlled-provider-truth.txt
           retention-days: 7
           if-no-files-found: error
