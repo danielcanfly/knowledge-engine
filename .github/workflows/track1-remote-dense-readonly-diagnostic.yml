@@ -76,7 +76,7 @@ jobs:
                       gate_path=gate,
                       request_payload={'question': question},
                       owner_subject_hash=owner,
-                      public_request=True,
+                      public_request=False,
                       provider_client=None,
                       dense_channel=LocalDenseProjectionChannel(),
                       require_remote_dense=False,
