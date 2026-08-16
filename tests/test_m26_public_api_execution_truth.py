@@ -139,7 +139,9 @@ def test_attempt_two_emits_repair_only_when_repair_closure_really_starts() -> No
     assert model_started["attempt"] == 2
 
 
-def test_verification_stage_wraps_actual_deterministic_verifier(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_verification_stage_wraps_actual_deterministic_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     events, previous_sink, previous_attempt = _capture()
     truth._TLS.attempt = 2  # noqa: SLF001
 
