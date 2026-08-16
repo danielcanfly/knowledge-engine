@@ -17,6 +17,7 @@ from .m26_multilingual_equivalence import (
     build_requested_language_equivalence_request,
     build_requested_language_realization_request,
     evaluate_marker_preservation,
+    parse_requested_language_equivalence_review_item,
     review_authorizes_claim,
 )
 from .m26_multilingual_verified_claim_spine import (
@@ -108,6 +109,11 @@ def build_verified_requested_language_publication(
     requested_language = _normalize_requested_language(
         canonical_spine.requested_answer_language
     )
+    if requested_language is None:
+        return _failure(
+            "REQUESTED_LANGUAGE_INVALID",
+            "requested answer language must be en or zh-TW",
+        )
     publication_claims = _publication_claims(canonical_spine.canonical_claims)
     if canonical_spine.status == "abstained" or not publication_claims:
         return _abstained_result(
@@ -260,8 +266,10 @@ def _publication_claims(
     return tuple(claim for claim in canonical_claims if claim.publication_eligible)
 
 
-def _normalize_requested_language(value: str) -> RequestedLanguage:
-    return "en" if value == "en" else "zh-TW"
+def _normalize_requested_language(value: str) -> RequestedLanguage | None:
+    if value in {"en", "zh-TW"}:
+        return value
+    return None
 
 
 def _english_visible_claim(
@@ -410,40 +418,7 @@ def _validate_review_response(
 
 
 def _coerce_review(item: Any) -> RequestedLanguageEquivalenceReview | None:
-    if isinstance(item, RequestedLanguageEquivalenceReview):
-        return item
-    if not isinstance(item, Mapping):
-        return None
-    required = ("equivalence", "no_material_factual_expansion", "no_contradiction")
-    if any(field not in item for field in required):
-        return None
-    claim_id = str(item.get("claim_id", "")).strip()
-    if not claim_id:
-        return None
-    return RequestedLanguageEquivalenceReview(
-        claim_id=claim_id,
-        equivalence=str(item["equivalence"]),  # type: ignore[arg-type]
-        no_material_factual_expansion=bool(item["no_material_factual_expansion"]),
-        no_contradiction=bool(item["no_contradiction"]),
-        negation_preserved=_semantic_value(item.get("negation_preserved")),
-        modality_preserved=_semantic_value(item.get("modality_preserved")),
-        comparison_direction_preserved=_semantic_value(
-            item.get("comparison_direction_preserved")
-        ),
-        relationship_direction_preserved=_semantic_value(
-            item.get("relationship_direction_preserved")
-        ),
-        numeric_identity_preserved=_semantic_value(item.get("numeric_identity_preserved")),
-        entity_identity_preserved=_semantic_value(item.get("entity_identity_preserved")),
-        failure_code=str(item.get("failure_code", "")),
-        failure_detail=str(item.get("failure_detail", "")),
-    )
-
-
-def _semantic_value(value: Any) -> Literal["true", "false", "not_applicable"]:
-    if value in {"true", "false", "not_applicable"}:
-        return value
-    return "not_applicable"
+    return parse_requested_language_equivalence_review_item(item)
 
 
 def _response_items(response: Any, field_name: str, label: str) -> tuple[Any, ...]:
@@ -481,7 +456,11 @@ def _response_field(
                     break
     if value is None:
         return None
-    return str(value)
+    if not isinstance(value, str):
+        return None
+    if field_name == "claim_id" and not value.strip():
+        return None
+    return value
 
 
 def _finalize_result(

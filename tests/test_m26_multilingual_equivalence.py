@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from knowledge_engine.m26_multilingual_equivalence import (
     RequestedLanguageEquivalenceReview,
     RequestedLanguageRealizationRequest,
@@ -71,6 +73,24 @@ def test_equivalence_request_schema_preserves_canonical_and_realized_texts() -> 
     assert not hasattr(request.claims[0], "citation_ids")
 
 
+def test_realization_request_rejects_invalid_requested_language() -> None:
+    with pytest.raises(ValueError, match="requested_answer_language must be en or zh-TW"):
+        build_requested_language_realization_request(
+            requested_answer_language="fr",  # type: ignore[arg-type]
+            canonical_claims=(claim_a(),),
+        )
+
+
+def test_equivalence_request_rejects_invalid_requested_language() -> None:
+    with pytest.raises(ValueError, match="requested_answer_language must be en or zh-TW"):
+        build_requested_language_equivalence_request(
+            requested_answer_language="fr",  # type: ignore[arg-type]
+            canonical_claims=(claim_a(),),
+            realized_text_by_claim_id={"claim-a": "請保留 API-42 與 LLM。"},
+            marker_preservation_status_by_claim_id={"claim-a": "pass"},
+        )
+
+
 def test_marker_preservation_pass_and_fail() -> None:
     verdict, missing = evaluate_marker_preservation(
         canonical_surface_text_en="API-42 uses the LLM model.",
@@ -115,7 +135,56 @@ def test_review_authorizes_only_pass_without_factual_expansion_or_contradiction(
         equivalence="pass",
         no_material_factual_expansion=False,
         no_contradiction=True,
+        negation_preserved="true",
+        modality_preserved="not_applicable",
+        comparison_direction_preserved="not_applicable",
+        relationship_direction_preserved="not_applicable",
+        numeric_identity_preserved="true",
+        entity_identity_preserved="true",
     )
 
     assert review_authorizes_claim(passing) is True
     assert review_authorizes_claim(failing) is False
+
+
+def test_typed_review_malformed_values_cannot_authorize() -> None:
+    boolean_string = RequestedLanguageEquivalenceReview(
+        claim_id="claim-a",
+        equivalence="pass",
+        no_material_factual_expansion="false",  # type: ignore[arg-type]
+        no_contradiction=True,
+        negation_preserved="true",
+        modality_preserved="not_applicable",
+        comparison_direction_preserved="not_applicable",
+        relationship_direction_preserved="not_applicable",
+        numeric_identity_preserved="true",
+        entity_identity_preserved="true",
+    )
+    invalid_dimension = RequestedLanguageEquivalenceReview(
+        claim_id="claim-a",
+        equivalence="pass",
+        no_material_factual_expansion=True,
+        no_contradiction=True,
+        negation_preserved="unknown",  # type: ignore[arg-type]
+        modality_preserved="not_applicable",
+        comparison_direction_preserved="not_applicable",
+        relationship_direction_preserved="not_applicable",
+        numeric_identity_preserved="true",
+        entity_identity_preserved="true",
+    )
+    invalid_equivalence = RequestedLanguageEquivalenceReview(
+        claim_id="claim-a",
+        equivalence="PASS",  # type: ignore[arg-type]
+        no_material_factual_expansion=True,
+        no_contradiction=True,
+        negation_preserved="true",
+        modality_preserved="not_applicable",
+        comparison_direction_preserved="not_applicable",
+        relationship_direction_preserved="not_applicable",
+        numeric_identity_preserved="true",
+        entity_identity_preserved="true",
+    )
+
+    assert review_authorizes_claim(boolean_string) is False
+    assert review_authorizes_claim(invalid_dimension) is False
+    assert review_authorizes_claim(invalid_equivalence) is False

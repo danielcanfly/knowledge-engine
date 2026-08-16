@@ -227,6 +227,23 @@ def review_for(
     )
 
 
+def strict_review_payload(**overrides: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "claim_id": "claim-a",
+        "equivalence": "pass",
+        "no_material_factual_expansion": True,
+        "no_contradiction": True,
+        "negation_preserved": "not_applicable",
+        "modality_preserved": "not_applicable",
+        "comparison_direction_preserved": "not_applicable",
+        "relationship_direction_preserved": "not_applicable",
+        "numeric_identity_preserved": "true",
+        "entity_identity_preserved": "true",
+    }
+    payload.update(overrides)
+    return payload
+
+
 def test_realizer_request_contains_only_public_claim_identity_and_canonical_text() -> None:
     realizer = RecordingRealizer(
         response=realized_response(
@@ -332,6 +349,29 @@ def test_realizer_response_malformed_item_fails_closed() -> None:
     assert result.failure_code == "REQUESTED_LANGUAGE_REALIZATION_SCHEMA_INVALID"
 
 
+def test_realizer_response_requires_string_fields() -> None:
+    realizer = RecordingRealizer(
+        response={
+            "claims": [
+                {
+                    "claim_id": 1,
+                    "requested_language_text": 2,
+                }
+            ]
+        }
+    )
+    reviewer = RecordingReviewer(response=RequestedLanguageEquivalenceReviewResponse())
+
+    result = build_verified_requested_language_publication(
+        canonical_spine=full_spine(canonical_claims=(claim_a(),)),
+        realizer=realizer,
+        equivalence_reviewer=reviewer,
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "REQUESTED_LANGUAGE_REALIZATION_SCHEMA_INVALID"
+
+
 def test_empty_realized_text_drops_claim() -> None:
     realizer = RecordingRealizer(
         response=realized_response(
@@ -404,9 +444,170 @@ def test_no_new_claim_can_appear() -> None:
 
 
 @pytest.mark.parametrize(
+    "field_name,bad_value",
+    [
+        ("no_material_factual_expansion", "false"),
+        ("no_material_factual_expansion", "true"),
+        ("no_material_factual_expansion", 1),
+        ("no_material_factual_expansion", 0),
+        ("no_material_factual_expansion", None),
+        ("no_contradiction", "false"),
+        ("no_contradiction", "true"),
+        ("no_contradiction", 1),
+        ("no_contradiction", 0),
+        ("no_contradiction", None),
+    ],
+)
+def test_raw_review_boolean_fields_require_actual_booleans(
+    field_name: str,
+    bad_value: Any,
+) -> None:
+    reviewer = RecordingReviewer(
+        response={"reviews": [strict_review_payload(**{field_name: bad_value})]}
+    )
+
+    result = build_verified_requested_language_publication(
+        canonical_spine=full_spine(canonical_claims=(claim_a(),)),
+        realizer=RecordingRealizer(
+            response=realized_response(("claim-a", "請保留 API-42 與 LLM。"))
+        ),
+        equivalence_reviewer=reviewer,
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "REQUESTED_LANGUAGE_REVIEW_SCHEMA_INVALID"
+
+
+def test_raw_review_equivalence_must_be_exact() -> None:
+    malformed_reviews = [
+        strict_review_payload(),
+        strict_review_payload(equivalence="PASS"),
+        strict_review_payload(equivalence=True),
+        strict_review_payload(equivalence="unknown"),
+    ]
+    malformed_reviews[0].pop("equivalence")
+
+    for payload in malformed_reviews:
+        reviewer = RecordingReviewer(response={"reviews": [payload]})
+        result = build_verified_requested_language_publication(
+            canonical_spine=full_spine(canonical_claims=(claim_a(),)),
+            realizer=RecordingRealizer(
+                response=realized_response(("claim-a", "請保留 API-42 與 LLM。"))
+            ),
+            equivalence_reviewer=reviewer,
+        )
+        assert result.status == "failed"
+        assert result.failure_code == "REQUESTED_LANGUAGE_REVIEW_SCHEMA_INVALID"
+
+
+@pytest.mark.parametrize(
+    "field_name,bad_value",
+    [
+        ("negation_preserved", "unknown"),
+        ("negation_preserved", True),
+        ("negation_preserved", None),
+        ("modality_preserved", "unknown"),
+        ("modality_preserved", True),
+        ("modality_preserved", None),
+        ("comparison_direction_preserved", "unknown"),
+        ("comparison_direction_preserved", True),
+        ("comparison_direction_preserved", None),
+        ("relationship_direction_preserved", "unknown"),
+        ("relationship_direction_preserved", True),
+        ("relationship_direction_preserved", None),
+        ("numeric_identity_preserved", "unknown"),
+        ("numeric_identity_preserved", True),
+        ("numeric_identity_preserved", None),
+        ("entity_identity_preserved", "unknown"),
+        ("entity_identity_preserved", True),
+        ("entity_identity_preserved", None),
+    ],
+)
+def test_raw_review_semantic_dimensions_require_explicit_valid_values(
+    field_name: str,
+    bad_value: Any,
+) -> None:
+    payload = strict_review_payload(**{field_name: bad_value})
+    if bad_value is None:
+        payload.pop(field_name)
+    reviewer = RecordingReviewer(response={"reviews": [payload]})
+
+    result = build_verified_requested_language_publication(
+        canonical_spine=full_spine(canonical_claims=(claim_a(),)),
+        realizer=RecordingRealizer(
+            response=realized_response(("claim-a", "請保留 API-42 與 LLM。"))
+        ),
+        equivalence_reviewer=reviewer,
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "REQUESTED_LANGUAGE_REVIEW_SCHEMA_INVALID"
+
+
+def test_valid_negative_review_drops_claim() -> None:
+    reviewer = RecordingReviewer(
+        response={"reviews": [strict_review_payload(equivalence="fail")]}
+    )
+
+    result = build_verified_requested_language_publication(
+        canonical_spine=full_spine(canonical_claims=(claim_a(),)),
+        realizer=RecordingRealizer(
+            response=realized_response(("claim-a", "請保留 API-42 與 LLM。"))
+        ),
+        equivalence_reviewer=reviewer,
+    )
+
+    assert result.ok
+    assert result.publication is not None
+    assert result.publication.status == "abstained"
+    assert result.publication.visible_claims == ()
+
+
+def test_typed_malformed_review_object_fails_closed() -> None:
+    malformed_review = RequestedLanguageEquivalenceReview(
+        claim_id="claim-a",
+        equivalence="pass",
+        no_material_factual_expansion="false",  # type: ignore[arg-type]
+        no_contradiction=True,
+        negation_preserved="true",
+        modality_preserved="not_applicable",
+        comparison_direction_preserved="not_applicable",
+        relationship_direction_preserved="not_applicable",
+        numeric_identity_preserved="true",
+        entity_identity_preserved="true",
+    )
+
+    result = build_verified_requested_language_publication(
+        canonical_spine=full_spine(canonical_claims=(claim_a(),)),
+        realizer=RecordingRealizer(
+            response=realized_response(("claim-a", "請保留 API-42 與 LLM。"))
+        ),
+        equivalence_reviewer=RecordingReviewer(
+            response=RequestedLanguageEquivalenceReviewResponse(
+                reviews=(malformed_review,)
+            )
+        ),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "REQUESTED_LANGUAGE_REVIEW_SCHEMA_INVALID"
+
+
+def test_invalid_requested_language_fails_closed() -> None:
+    result = build_verified_requested_language_publication(
+        canonical_spine=full_spine(requested_answer_language="fr"),
+        realizer=None,
+        equivalence_reviewer=None,
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "REQUESTED_LANGUAGE_INVALID"
+
+
+@pytest.mark.parametrize(
     "surface_text, realized_text",
-        [
-            ("API-42 uses the router.", "請保留 API-42。"),
+    [
+        ("API-42 uses the router.", "請保留 API-42。"),
             ("The LLM model is stable.", "請保留 The LLM。"),
             ("ModelX-7 preserves state.", "請保留 ModelX-7。"),
             ("Version 3 is stable.", "版本 3 穩定。"),

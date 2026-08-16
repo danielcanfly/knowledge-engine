@@ -62,12 +62,12 @@ class RequestedLanguageEquivalenceReview:
     equivalence: EquivalenceVerdict
     no_material_factual_expansion: bool
     no_contradiction: bool
-    negation_preserved: SemanticVerdict = "not_applicable"
-    modality_preserved: SemanticVerdict = "not_applicable"
-    comparison_direction_preserved: SemanticVerdict = "not_applicable"
-    relationship_direction_preserved: SemanticVerdict = "not_applicable"
-    numeric_identity_preserved: SemanticVerdict = "not_applicable"
-    entity_identity_preserved: SemanticVerdict = "not_applicable"
+    negation_preserved: SemanticVerdict
+    modality_preserved: SemanticVerdict
+    comparison_direction_preserved: SemanticVerdict
+    relationship_direction_preserved: SemanticVerdict
+    numeric_identity_preserved: SemanticVerdict
+    entity_identity_preserved: SemanticVerdict
     failure_code: str = ""
     failure_detail: str = ""
 
@@ -95,6 +95,9 @@ def build_requested_language_realization_claim(
     canonical_surface_text_en: str,
     requested_answer_language: RequestedLanguage,
 ) -> RequestedLanguageRealizationClaim:
+    requested_answer_language = _strict_requested_language(requested_answer_language)
+    if requested_answer_language is None:
+        raise ValueError("requested_answer_language must be en or zh-TW")
     return RequestedLanguageRealizationClaim(
         canonical_claim_id=canonical_claim_id,
         canonical_surface_text_en=canonical_surface_text_en,
@@ -110,6 +113,9 @@ def build_requested_language_realization_request(
     requested_answer_language: RequestedLanguage,
     canonical_claims: Sequence[Any],
 ) -> RequestedLanguageRealizationRequest:
+    requested_answer_language = _strict_requested_language(requested_answer_language)
+    if requested_answer_language is None:
+        raise ValueError("requested_answer_language must be en or zh-TW")
     return RequestedLanguageRealizationRequest(
         requested_answer_language=requested_answer_language,
         claims=tuple(
@@ -133,6 +139,9 @@ def build_requested_language_equivalence_request(
     realized_text_by_claim_id: Mapping[str, str],
     marker_preservation_status_by_claim_id: Mapping[str, MarkerPreservationVerdict],
 ) -> RequestedLanguageEquivalenceReviewRequest:
+    requested_answer_language = _strict_requested_language(requested_answer_language)
+    if requested_answer_language is None:
+        raise ValueError("requested_answer_language must be en or zh-TW")
     claims = []
     for claim in canonical_claims:
         claim_id = _claim_field(claim, "claim_id")
@@ -175,23 +184,86 @@ def evaluate_marker_preservation(
 
 
 def review_authorizes_claim(review: RequestedLanguageEquivalenceReview) -> bool:
-    if review.equivalence != "pass":
+    parsed = parse_requested_language_equivalence_review_item(review)
+    if parsed is None:
         return False
-    if not review.no_material_factual_expansion:
+    if parsed.equivalence != "pass":
         return False
-    if not review.no_contradiction:
+    if parsed.no_material_factual_expansion is not True:
+        return False
+    if parsed.no_contradiction is not True:
         return False
     for field_value in (
-        review.negation_preserved,
-        review.modality_preserved,
-        review.comparison_direction_preserved,
-        review.relationship_direction_preserved,
-        review.numeric_identity_preserved,
-        review.entity_identity_preserved,
+        parsed.negation_preserved,
+        parsed.modality_preserved,
+        parsed.comparison_direction_preserved,
+        parsed.relationship_direction_preserved,
+        parsed.numeric_identity_preserved,
+        parsed.entity_identity_preserved,
     ):
         if field_value == "false":
             return False
     return True
+
+
+def parse_requested_language_equivalence_review_item(
+    item: Any,
+) -> RequestedLanguageEquivalenceReview | None:
+    if isinstance(item, RequestedLanguageEquivalenceReview):
+        return (
+            item
+            if _validate_requested_language_equivalence_review_fields(item) is not None
+            else None
+        )
+    if not isinstance(item, Mapping):
+        return None
+    claim_id = _strict_str(item, "claim_id")
+    equivalence = _strict_enum(item, "equivalence", {"pass", "fail"})
+    no_material_factual_expansion = _strict_bool(
+        item, "no_material_factual_expansion"
+    )
+    no_contradiction = _strict_bool(item, "no_contradiction")
+    negation_preserved = _strict_semantic_verdict(item, "negation_preserved")
+    modality_preserved = _strict_semantic_verdict(item, "modality_preserved")
+    comparison_direction_preserved = _strict_semantic_verdict(
+        item, "comparison_direction_preserved"
+    )
+    relationship_direction_preserved = _strict_semantic_verdict(
+        item, "relationship_direction_preserved"
+    )
+    numeric_identity_preserved = _strict_semantic_verdict(
+        item, "numeric_identity_preserved"
+    )
+    entity_identity_preserved = _strict_semantic_verdict(
+        item, "entity_identity_preserved"
+    )
+    if None in {
+        claim_id,
+        equivalence,
+        no_material_factual_expansion,
+        no_contradiction,
+        negation_preserved,
+        modality_preserved,
+        comparison_direction_preserved,
+        relationship_direction_preserved,
+        numeric_identity_preserved,
+        entity_identity_preserved,
+    }:
+        return None
+    return RequestedLanguageEquivalenceReview(
+        claim_id=claim_id,
+        equivalence=equivalence,  # type: ignore[arg-type]
+        no_material_factual_expansion=no_material_factual_expansion,
+        no_contradiction=no_contradiction,
+        negation_preserved=negation_preserved,  # type: ignore[arg-type]
+        modality_preserved=modality_preserved,  # type: ignore[arg-type]
+        comparison_direction_preserved=comparison_direction_preserved,  # type: ignore[arg-type]
+        relationship_direction_preserved=relationship_direction_preserved,  # type: ignore[arg-type]
+        numeric_identity_preserved=numeric_identity_preserved,  # type: ignore[arg-type]
+        entity_identity_preserved=entity_identity_preserved,  # type: ignore[arg-type]
+        failure_code=_optional_str(item, "failure_code"),
+        failure_detail=_optional_str(item, "failure_detail"),
+    )
 
 
 def has_visible_markers(text: str, markers: Sequence[str]) -> bool:
@@ -202,3 +274,90 @@ def _claim_field(claim: Any, field_name: str) -> str:
     if isinstance(claim, Mapping):
         return str(claim[field_name])
     return str(getattr(claim, field_name))
+
+
+def _strict_requested_language(value: Any) -> RequestedLanguage | None:
+    if value in {"en", "zh-TW"}:
+        return value
+    return None
+
+
+def _validate_requested_language_equivalence_review_fields(
+    review: RequestedLanguageEquivalenceReview,
+) -> RequestedLanguageEquivalenceReview | None:
+    claim_id = _strict_str(review, "claim_id")
+    equivalence = _strict_enum(review, "equivalence", {"pass", "fail"})
+    no_material_factual_expansion = _strict_bool(
+        review, "no_material_factual_expansion"
+    )
+    no_contradiction = _strict_bool(review, "no_contradiction")
+    negation_preserved = _strict_semantic_verdict(review, "negation_preserved")
+    modality_preserved = _strict_semantic_verdict(review, "modality_preserved")
+    comparison_direction_preserved = _strict_semantic_verdict(
+        review, "comparison_direction_preserved"
+    )
+    relationship_direction_preserved = _strict_semantic_verdict(
+        review, "relationship_direction_preserved"
+    )
+    numeric_identity_preserved = _strict_semantic_verdict(review, "numeric_identity_preserved")
+    entity_identity_preserved = _strict_semantic_verdict(review, "entity_identity_preserved")
+    if None in {
+        claim_id,
+        equivalence,
+        no_material_factual_expansion,
+        no_contradiction,
+        negation_preserved,
+        modality_preserved,
+        comparison_direction_preserved,
+        relationship_direction_preserved,
+        numeric_identity_preserved,
+        entity_identity_preserved,
+    }:
+        return None
+    return review
+
+
+def _strict_str(item: Any, field_name: str) -> str | None:
+    value = _field_value(item, field_name)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
+
+
+def _optional_str(item: Any, field_name: str) -> str:
+    value = _field_value(item, field_name)
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _strict_bool(item: Any, field_name: str) -> bool | None:
+    value = _field_value(item, field_name)
+    if isinstance(value, bool):
+        return value
+    return None
+
+
+def _strict_enum(item: Any, field_name: str, allowed: set[str]) -> str | None:
+    value = _field_value(item, field_name)
+    if not isinstance(value, str) or value not in allowed:
+        return None
+    return value
+
+
+def _strict_semantic_verdict(item: Any, field_name: str) -> SemanticVerdict | None:
+    value = _field_value(item, field_name)
+    if not isinstance(value, str) or value not in {"true", "false", "not_applicable"}:
+        return None
+    return value  # type: ignore[return-value]
+
+
+def _field_value(item: Any, field_name: str) -> Any:
+    if isinstance(item, Mapping):
+        return item.get(field_name, _MISSING)
+    if hasattr(item, field_name):
+        return getattr(item, field_name)
+    return _MISSING
+
+
+_MISSING = object()
