@@ -258,7 +258,7 @@ def _fuse_observations(
     observations: list[tuple[RetrievalQuery, RetrievalHit]],
 ) -> tuple[FusedRetrievalCandidate, ...]:
     by_id: dict[str, list[CandidateContribution]] = {}
-    for query, hit in observations:
+    for query, hit in _dedupe_observations_by_vote(observations):
         contribution = CandidateContribution(
             channel=query.channel,
             query_representation=query.query_representation,
@@ -283,6 +283,28 @@ def _fuse_observations(
             candidates,
             key=lambda candidate: (-candidate.fusion_score, candidate.candidate_id),
         )
+    )
+
+
+def _dedupe_observations_by_vote(
+    observations: list[tuple[RetrievalQuery, RetrievalHit]],
+) -> tuple[tuple[RetrievalQuery, RetrievalHit], ...]:
+    by_vote: dict[tuple[str, str, str], tuple[RetrievalQuery, RetrievalHit]] = {}
+    for query, hit in observations:
+        key = (hit.candidate_id, query.channel, query.query_representation)
+        current = by_vote.get(key)
+        if current is None or _observation_sort_key(hit) < _observation_sort_key(current[1]):
+            by_vote[key] = (query, hit)
+    return tuple(by_vote.values())
+
+
+def _observation_sort_key(hit: RetrievalHit) -> tuple[int, int, float, str]:
+    raw_score = hit.raw_score_if_available
+    return (
+        hit.rank,
+        1 if raw_score is None else 0,
+        -(raw_score if raw_score is not None else 0.0),
+        hit.candidate_id,
     )
 
 

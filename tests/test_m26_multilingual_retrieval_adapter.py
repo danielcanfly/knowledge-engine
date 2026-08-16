@@ -4,7 +4,11 @@ from dataclasses import fields
 from pathlib import Path
 
 from knowledge_engine.m26_multilingual_language_envelope import LanguageEnvelope
+from knowledge_engine.m26_multilingual_observability import (
+    build_retrieval_observability_snapshot,
+)
 from knowledge_engine.m26_multilingual_retrieval_adapter import (
+    RRF_RANK_CONSTANT,
     CandidateUnionResult,
     RetrievalChannelResult,
     RetrievalHit,
@@ -184,6 +188,167 @@ def test_raw_dense_scores_are_not_blindly_summed_for_fusion() -> None:
 
     assert result.candidates[0].fusion_score != 300.0
     assert result.candidates[0].fusion_score < 1.0
+
+
+def test_same_query_duplicate_does_not_double_vote() -> None:
+    dense = RecordingRetriever(
+        {
+            ("dense", "original"): RetrievalChannelResult(
+                hits=(
+                    RetrievalHit("doc-a", rank=1, raw_score_if_available=0.8),
+                    RetrievalHit("doc-a", rank=4, raw_score_if_available=0.9),
+                )
+            ),
+        }
+    )
+
+    result = build_candidate_union(
+        successful_envelope(),
+        dense_retriever=dense,
+        lexical_retriever=RecordingRetriever(),
+        graph_retriever=RecordingRetriever(),
+    )
+
+    candidate = result.candidates[0]
+    original_dense_votes = [
+        contribution
+        for contribution in candidate.contributions
+        if contribution.channel == "dense"
+        and contribution.query_representation == "original"
+    ]
+    assert [candidate.candidate_id for candidate in result.candidates] == ["doc-a"]
+    assert len(original_dense_votes) == 1
+    assert original_dense_votes[0].rank == 1
+    assert candidate.fusion_score == 1 / (RRF_RANK_CONSTANT + 1)
+
+
+def test_cross_query_duplicate_still_contributes_twice() -> None:
+    dense = RecordingRetriever(
+        {
+            ("dense", "original"): RetrievalChannelResult(
+                hits=(RetrievalHit("doc-a", rank=1),)
+            ),
+            ("dense", "canonical_en"): RetrievalChannelResult(
+                hits=(RetrievalHit("doc-a", rank=2),)
+            ),
+        }
+    )
+
+    result = build_candidate_union(
+        successful_envelope(),
+        dense_retriever=dense,
+        lexical_retriever=RecordingRetriever(),
+        graph_retriever=RecordingRetriever(),
+    )
+
+    candidate = result.candidates[0]
+    assert [candidate.candidate_id for candidate in result.candidates] == ["doc-a"]
+    assert candidate.contribution_count == 2
+    assert candidate.fusion_score == (
+        1 / (RRF_RANK_CONSTANT + 1)
+        + 1 / (RRF_RANK_CONSTANT + 2)
+    )
+
+
+def test_cross_channel_duplicate_still_contributes_separately() -> None:
+    dense = RecordingRetriever(
+        {
+            ("dense", "canonical_en"): RetrievalChannelResult(
+                hits=(RetrievalHit("doc-a", rank=1),)
+            ),
+        }
+    )
+    lexical = RecordingRetriever(
+        {
+            ("lexical", "canonical_en"): RetrievalChannelResult(
+                hits=(RetrievalHit("doc-a", rank=1),)
+            ),
+        }
+    )
+    graph = RecordingRetriever(
+        {
+            ("graph", "canonical_en"): RetrievalChannelResult(
+                hits=(RetrievalHit("doc-a", rank=2),)
+            ),
+        }
+    )
+
+    result = build_candidate_union(
+        successful_envelope(),
+        dense_retriever=dense,
+        lexical_retriever=lexical,
+        graph_retriever=graph,
+    )
+
+    candidate = result.candidates[0]
+    assert [candidate.candidate_id for candidate in result.candidates] == ["doc-a"]
+    assert candidate.contribution_count == 3
+    assert {
+        (contribution.channel, contribution.query_representation)
+        for contribution in candidate.contributions
+    } == {
+        ("dense", "canonical_en"),
+        ("lexical", "canonical_en"),
+        ("graph", "canonical_en"),
+    }
+
+
+def test_same_query_duplicate_ordering_is_deterministic() -> None:
+    def fused_ranks(hits: tuple[RetrievalHit, ...]) -> tuple[int, ...]:
+        dense = RecordingRetriever(
+            {
+                ("dense", "original"): RetrievalChannelResult(hits=hits),
+            }
+        )
+        result = build_candidate_union(
+            successful_envelope(),
+            dense_retriever=dense,
+            lexical_retriever=RecordingRetriever(),
+            graph_retriever=RecordingRetriever(),
+        )
+        return tuple(
+            contribution.rank
+            for contribution in result.candidates[0].contributions
+            if contribution.channel == "dense"
+            and contribution.query_representation == "original"
+        )
+
+    forward = (
+        RetrievalHit("doc-a", rank=4, raw_score_if_available=0.9),
+        RetrievalHit("doc-a", rank=1, raw_score_if_available=0.2),
+    )
+    reverse = tuple(reversed(forward))
+
+    assert fused_ranks(forward) == (1,)
+    assert fused_ranks(reverse) == (1,)
+
+
+def test_observability_counts_voting_contributions_after_same_query_dedupe() -> None:
+    dense = RecordingRetriever(
+        {
+            ("dense", "original"): RetrievalChannelResult(
+                hits=(RetrievalHit("doc-a", rank=1), RetrievalHit("doc-a", rank=4))
+            ),
+            ("dense", "canonical_en"): RetrievalChannelResult(
+                hits=(RetrievalHit("doc-a", rank=2),)
+            ),
+        }
+    )
+
+    result = build_candidate_union(
+        successful_envelope(),
+        dense_retriever=dense,
+        lexical_retriever=RecordingRetriever(),
+        graph_retriever=RecordingRetriever(),
+    )
+    snapshot = build_retrieval_observability_snapshot(result)
+
+    assert snapshot.union_contribution_by_source == {
+        "dense:original": 1,
+        "dense:canonical_en": 1,
+    }
+    assert snapshot.original_dense_candidates[0].rank == 1
+    assert snapshot.original_canonical_dense_overlap_ids == ("doc-a",)
 
 
 def test_duplicate_identity_is_deduped_and_both_provenance_records_survive() -> None:
