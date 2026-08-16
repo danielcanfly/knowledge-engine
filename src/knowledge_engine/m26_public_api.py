@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
@@ -30,7 +31,11 @@ from .m26_cloudflare_provider_router import (
     MINIMAX_PROVIDER,
     provider_status_dto,
 )
-from .m26_pa7_arbitrary_query_runtime import MAX_QUERY_CHARS, PA7ArbitraryQueryError
+from .m26_pa7_arbitrary_query_runtime import (
+    MAX_QUERY_CHARS,
+    LocalDenseProjectionChannel,
+    PA7ArbitraryQueryError,
+)
 
 EVENT_SCHEMA_VERSION = "danielcanfly-answers-events/v1"
 PROBLEM_TYPE_BASE = "https://api-staging.danielcanfly.com/problems/"
@@ -551,6 +556,9 @@ async def _answer_event_stream(
 
     async def worker() -> None:
         try:
+            kwargs: dict[str, Any] = {}
+            if os.environ.get("M26_PUBLIC_FORCE_LOCAL_DENSE", "").lower() == "true":
+                kwargs["dense_channel"] = LocalDenseProjectionChannel()
             dto = await asyncio.to_thread(
                 run_owner_query_for_web,
                 root=app_root,
@@ -558,6 +566,7 @@ async def _answer_event_stream(
                 request_payload={"question": question},
                 owner_subject_hash=os.environ["KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"],
                 event_sink=sink,
+                **kwargs,
             )
             event_queue.put({"type": "_dto", "dto": dto})
         except Exception as exc:
@@ -617,6 +626,8 @@ async def _answer_event_stream(
                 code = (
                     str(error.reason_code)
                     if isinstance(error, PA7ArbitraryQueryError)
+                    else "RETRIEVAL_RUNTIME_FAILED"
+                    if isinstance(error, httpx.HTTPError)
                     else "INTERNAL_RUNTIME_FAILED"
                 )
                 yield emit(
