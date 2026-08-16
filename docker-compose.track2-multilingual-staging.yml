@@ -1,0 +1,46 @@
+name: m26-track2-multilingual-staging-73b4c49d
+
+services:
+  m26-track2-multilingual-staging:
+    build: .
+    image: knowledge-engine:m26-track2-multilingual-staging-73b4c49d
+    container_name: m26-track2-multilingual-staging-73b4c49d
+    restart: unless-stopped
+    command:
+      [
+        "uvicorn",
+        "knowledge_engine.m26_multilingual_public_api:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080"
+      ]
+    env_file:
+      - path: .env.track2-multilingual-staging.73b4c49d
+        required: false
+    ports:
+      - "127.0.0.1:18082:8080"
+    volumes:
+      - m26-track2-multilingual-quota:/var/lib/knowledge-engine/public-api
+      - m26-track2-multilingual-cache:/var/lib/knowledge-engine/cache
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/health', timeout=3)"
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  m26-track2-multilingual-quota:
+  m26-track2-multilingual-cache:
