@@ -24,6 +24,10 @@ from .m26_multilingual_runtime import (
     MultilingualRuntimeResult,
     run_track2_multilingual_request,
 )
+from .m26_multilingual_staging_dependencies import (
+    build_track2_staging_runtime_dependencies,
+    track2_runtime_readiness,
+)
 
 TRACK2_PUBLIC_HEALTH_SCHEMA = "danielcanfly-track2-multilingual-health/v1"
 TRACK2_PUBLIC_REQUEST_SCHEMA = "danielcanfly-track2-multilingual-answer-request/v1"
@@ -44,6 +48,7 @@ FORBIDDEN_SELECTION_FIELDS = {
 }
 
 Track2Runner = Callable[..., MultilingualRuntimeResult]
+RuntimeDependencyFactory = Callable[..., MultilingualRuntimeDependencies]
 
 
 def create_app(
@@ -52,6 +57,9 @@ def create_app(
     gate_path: Path | None = None,
     quota_ledger: public_api.PublicQuotaLedger | None = None,
     runtime_dependencies: MultilingualRuntimeDependencies | None = None,
+    runtime_dependency_factory: RuntimeDependencyFactory = (
+        build_track2_staging_runtime_dependencies
+    ),
     track2_runner: Track2Runner = run_track2_multilingual_request,
 ) -> FastAPI:
     app_root = (root or Path(os.environ.get("KNOWLEDGE_ENGINE_ROOT", "."))).resolve()
@@ -68,7 +76,10 @@ def create_app(
             )
         )
     )
-    dependencies = runtime_dependencies or MultilingualRuntimeDependencies()
+    dependencies = runtime_dependencies or runtime_dependency_factory(
+        root=app_root,
+        gate_path=resolved_gate_path,
+    )
     app = FastAPI(title="M26 Track 2 Multilingual Public Answers API", version="1.0.0")
     app.state.track2_public_root = app_root
     app.state.track2_public_gate_path = resolved_gate_path
@@ -96,6 +107,7 @@ def create_app(
                 "production_mutated": False,
                 "production_multilingual_enabled": False,
                 "answers_url": "/v1/answers",
+                "runtime_readiness": track2_runtime_readiness(dependencies),
                 "limits": public_api._limits_dto(),  # noqa: SLF001
             },
             headers=public_api._response_headers(origin=origin),  # noqa: SLF001

@@ -16,8 +16,14 @@ services:
         "8080"
       ]
     env_file:
+      - path: /Users/huaihsuanhuang/Desktop/.env
+        required: false
       - path: .env.track2-multilingual-staging.73b4c49d
         required: false
+    environment:
+      M26_TRACK2_CANDIDATE_SHA: ${M26_TRACK2_CANDIDATE_SHA:-local_unset}
+      M26_PUBLIC_IP_HMAC_SECRET: ${M26_PUBLIC_IP_HMAC_SECRET:-}
+      KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH: ${KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH:-}
     ports:
       - "127.0.0.1:18082:8080"
     volumes:
