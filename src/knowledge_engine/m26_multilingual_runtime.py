@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from itertools import count
 from typing import Any, Literal
 
 from .m26_multilingual_canonicalization import CanonicalizationProvider
@@ -33,6 +34,8 @@ from .m26_multilingual_verified_claim_spine import (
 RuntimeStatus = Literal["completed", "partial", "abstained", "failed"]
 EventSink = Callable[[Mapping[str, Any]], None]
 EvidenceSelector = Callable[[CandidateUnionResult, LanguageEnvelope], Sequence[Mapping[str, Any]]]
+ClosureProviderClientFactory = Callable[[], Any]
+_CLOSURE_PROVIDER_CLIENT_SEQUENCE = count(1)
 
 
 @dataclass(frozen=True)
@@ -80,6 +83,7 @@ class MultilingualRuntimeDependencies:
         default_factory=SemanticAuthorityDependencies
     )
     closure_provider_client: Any = None
+    closure_provider_client_factory: ClosureProviderClientFactory | None = None
     closure_runner: Callable[..., tuple[Mapping[str, Any], Mapping[str, Any]]] | None = None
     endpoint_proof: Mapping[str, Any] = field(default_factory=dict)
     requested_language_realizer: Any = None
@@ -174,20 +178,31 @@ def run_track2_multilingual_request(
             telemetry={"retrieval": retrieval_telemetry},
         )
 
-    if dependencies.closure_provider_client is None or dependencies.closure_runner is None:
+    (
+        closure_provider_client,
+        closure_provider_telemetry,
+    ) = _closure_provider_client_for_request(dependencies)
+    if closure_provider_client is None or dependencies.closure_runner is None:
         return _failed(
             "CANONICAL_CLOSURE_DEPENDENCY_MISSING",
             "Track 2 closure authority dependencies are unavailable",
             envelope=envelope,
-            telemetry={"retrieval": retrieval_telemetry},
+            telemetry={
+                "retrieval": retrieval_telemetry,
+                "closure_provider": closure_provider_telemetry,
+            },
         )
     spine_result = build_canonical_verified_claim_spine(
         context=context_result.context,
         selected_authorized_evidence=selected,
-        provider_client=dependencies.closure_provider_client,
+        provider_client=closure_provider_client,
         endpoint_proof=dependencies.endpoint_proof,
         trace_id=trace_id or f"track2-{uuid.uuid4().hex}",
         closure_runner=dependencies.closure_runner,
+    )
+    closure_provider_telemetry = _closure_provider_telemetry_after_request(
+        closure_provider_client,
+        closure_provider_telemetry,
     )
     _emit(
         event_sink,
@@ -200,7 +215,10 @@ def run_track2_multilingual_request(
             spine_result.failure_code,
             spine_result.failure_detail,
             envelope=envelope,
-            telemetry={"retrieval": retrieval_telemetry},
+            telemetry={
+                "retrieval": retrieval_telemetry,
+                "closure_provider": closure_provider_telemetry,
+            },
         )
 
     publication_result = build_verified_requested_language_publication(
@@ -219,6 +237,7 @@ def run_track2_multilingual_request(
         spine=spine_result.spine,
         publication_result=publication_result,
         retrieval_observability=retrieval_telemetry,
+        closure_provider_observability=closure_provider_telemetry,
     )
 
 
@@ -252,6 +271,33 @@ def _select_evidence(
     return tuple(dict(item) for item in selected if isinstance(item, Mapping))
 
 
+def _closure_provider_client_for_request(
+    dependencies: MultilingualRuntimeDependencies,
+) -> tuple[Any, dict[str, Any]]:
+    if dependencies.closure_provider_client_factory is not None:
+        return dependencies.closure_provider_client_factory(), {
+            "client_source": "factory",
+            "client_instance_sequence": next(_CLOSURE_PROVIDER_CLIENT_SEQUENCE),
+        }
+    return dependencies.closure_provider_client, {
+        "client_source": "explicit_client"
+        if dependencies.closure_provider_client is not None
+        else "missing",
+        "client_instance_sequence": None,
+    }
+
+
+def _closure_provider_telemetry_after_request(
+    client: Any,
+    observability: Mapping[str, Any],
+) -> dict[str, Any]:
+    telemetry = dict(observability)
+    calls = getattr(client, "calls", None)
+    if isinstance(calls, int):
+        telemetry["closure_call_count_for_request"] = calls
+    return telemetry
+
+
 def _selector_trace_telemetry(
     dependencies: MultilingualRuntimeDependencies,
 ) -> dict[str, Any]:
@@ -277,6 +323,7 @@ def _publication_to_runtime_result(
     spine: CanonicalVerifiedClaimSpine,
     publication_result: VerifiedRequestedLanguagePublicationResult,
     retrieval_observability: Mapping[str, Any],
+    closure_provider_observability: Mapping[str, Any],
 ) -> MultilingualRuntimeResult:
     if publication_result.publication is None:
         return _failed(
@@ -284,7 +331,10 @@ def _publication_to_runtime_result(
             publication_result.failure_detail,
             envelope=envelope,
             spine=spine,
-            telemetry={"retrieval": dict(retrieval_observability)},
+            telemetry={
+                "retrieval": dict(retrieval_observability),
+                "closure_provider": dict(closure_provider_observability),
+            },
         )
     publication = publication_result.publication
     status: RuntimeStatus
@@ -338,6 +388,7 @@ def _publication_to_runtime_result(
             "language_dropped_claim_count": len(publication.language_dropped_claim_ids),
             "final_visible_language": publication.requested_answer_language,
             "retrieval": dict(retrieval_observability),
+            "closure_provider": dict(closure_provider_observability),
             "publication": dict(publication.telemetry),
         },
     )

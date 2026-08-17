@@ -439,9 +439,11 @@ def build_track2_staging_runtime_dependencies(
         identifier_retriever=StagingLexicalRetriever(trace),
         evidence_selector=FrozenEvidenceSelectorAdapter(trace),
         semantic_authorities=DEFAULT_SEMANTIC_AUTHORITIES,
-        closure_provider_client=build_provider_routing_client(
-            max_provider_calls=4,
-            max_cost=Decimal("0.10"),
+        closure_provider_client_factory=(
+            lambda: build_provider_routing_client(
+                max_provider_calls=4,
+                max_cost=Decimal("0.10"),
+            )
         ),
         closure_runner=synthesize_and_verify,
         endpoint_proof=trace.endpoint_proof,
@@ -459,7 +461,10 @@ def track2_runtime_readiness(
         "lexical_ready": dependencies.lexical_retriever is not None,
         "graph_ready": dependencies.graph_retriever is not None,
         "evidence_selector_ready": dependencies.evidence_selector is not None,
-        "closure_ready": dependencies.closure_provider_client is not None
+        "closure_ready": (
+            dependencies.closure_provider_client_factory is not None
+            or dependencies.closure_provider_client is not None
+        )
         and dependencies.closure_runner is not None
         and isinstance(dependencies.endpoint_proof, Mapping),
         "realizer_ready": dependencies.requested_language_realizer is not None,

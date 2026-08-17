@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -363,6 +363,21 @@ def test_english_auto_and_en_route_to_track1_without_track2_calls(
 ) -> None:
     bundle = _dependencies()
     calls: list[Mapping[str, Any]] = []
+    factory_calls = 0
+
+    def closure_provider_client_factory() -> object:
+        nonlocal factory_calls
+        factory_calls += 1
+        return object()
+
+    bundle = replace(
+        bundle,
+        dependencies=replace(
+            bundle.dependencies,
+            closure_provider_client=None,
+            closure_provider_client_factory=closure_provider_client_factory,
+        ),
+    )
 
     def fake_track1(**kwargs: Any) -> dict[str, Any]:
         calls.append(kwargs)
@@ -396,6 +411,7 @@ def test_english_auto_and_en_route_to_track1_without_track2_calls(
     assert bundle.graph.calls == []
     assert bundle.realizer.calls == []
     assert bundle.reviewer.calls == []
+    assert factory_calls == 0
 
 
 def test_zh_tw_auto_runs_track2_and_raw_mapping_pass_authorizes_claim(

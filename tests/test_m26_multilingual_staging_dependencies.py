@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -125,6 +126,47 @@ def test_readiness_false_when_mandatory_dependency_missing() -> None:
     )
     assert readiness["multilingual_runtime_ready"] is False
     assert "MINIMAX_API_KEY" not in str(readiness)
+
+
+def test_readiness_accepts_closure_provider_factory() -> None:
+    readiness = track2_runtime_readiness(
+        m26_multilingual_public_api.MultilingualRuntimeDependencies(
+            canonicalization_provider=object(),
+            dense_retriever=object(),
+            lexical_retriever=object(),
+            graph_retriever=object(),
+            evidence_selector=lambda union, envelope: (),
+            closure_provider_client_factory=lambda: object(),
+            closure_runner=lambda **kwargs: ({}, {}),
+            endpoint_proof={},
+            requested_language_realizer=object(),
+            equivalence_reviewer=object(),
+        )
+    )
+
+    assert readiness["closure_ready"] is True
+    assert readiness["multilingual_runtime_ready"] is True
+
+
+def test_readiness_rejects_missing_closure_provider_factory_and_client() -> None:
+    readiness = track2_runtime_readiness(
+        m26_multilingual_public_api.MultilingualRuntimeDependencies(
+            canonicalization_provider=object(),
+            dense_retriever=object(),
+            lexical_retriever=object(),
+            graph_retriever=object(),
+            evidence_selector=lambda union, envelope: (),
+            closure_provider_client=None,
+            closure_provider_client_factory=None,
+            closure_runner=lambda **kwargs: ({}, {}),
+            endpoint_proof={},
+            requested_language_realizer=object(),
+            equivalence_reviewer=object(),
+        )
+    )
+
+    assert readiness["closure_ready"] is False
+    assert readiness["multilingual_runtime_ready"] is False
 
 
 def test_health_exposes_sanitized_runtime_readiness() -> None:
@@ -615,11 +657,52 @@ def test_build_track2_staging_runtime_dependencies_uses_accepted_closure_runner(
         "knowledge_engine.m26_multilingual_staging_dependencies.legacy.dense_channel_from_env",
         lambda require_remote=True: RecordingDenseChannel(),
     )
+    calls: list[dict[str, Any]] = []
+
+    def factory_client(**kwargs: Any) -> object:
+        calls.append(kwargs)
+        return object()
+
     monkeypatch.setattr(
         "knowledge_engine.m26_multilingual_staging_dependencies.build_provider_routing_client",
-        lambda **kwargs: object(),
+        factory_client,
     )
 
     deps = build_track2_staging_runtime_dependencies()
     assert deps.closure_runner is synthesize_and_verify
+    assert deps.closure_provider_client is None
+    assert deps.closure_provider_client_factory is not None
     assert deps.evidence_selector is not None
+    assert calls == []
+    assert deps.closure_provider_client_factory() is not None
+    assert calls[0]["max_provider_calls"] == 4
+    assert calls[0]["max_cost"] == Decimal("0.10")
+
+
+def test_staging_closure_provider_factory_returns_request_local_clients_with_shared_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MINIMAX_API_KEY", "test-key")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct")
+    monkeypatch.setenv("CLOUDFLARE_WORKER_AI_RESTFUL_API_KEY", "token")
+    monkeypatch.setenv("QDRANT_URL", "https://example.invalid")
+    monkeypatch.setenv("QDRANT_API_KEY_READ", "qdrant-key")
+    monkeypatch.setenv("M26_PA7_DENSE_COLLECTION", "collection")
+    monkeypatch.setattr(
+        "knowledge_engine.m26_multilingual_staging_dependencies.load_production_answer_bundle",
+        lambda: FakeBundle(),
+    )
+    monkeypatch.setattr(
+        "knowledge_engine.m26_multilingual_staging_dependencies.legacy.dense_channel_from_env",
+        lambda require_remote=True: RecordingDenseChannel(),
+    )
+
+    deps = build_track2_staging_runtime_dependencies()
+
+    assert deps.closure_provider_client_factory is not None
+    request1_client = deps.closure_provider_client_factory()
+    request2_client = deps.closure_provider_client_factory()
+    assert request1_client is not request2_client
+    assert request1_client.state is request2_client.state
+    assert request1_client.fallback is not request2_client.fallback
+    assert request1_client.reviewer is not request2_client.reviewer
