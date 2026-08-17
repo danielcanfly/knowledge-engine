@@ -13,6 +13,7 @@ from knowledge_engine.m26_multilingual_canonicalization import (
     CanonicalizationRequest,
 )
 from knowledge_engine.m26_multilingual_retrieval_adapter import (
+    CandidateContribution,
     CandidateUnionResult,
     FusedRetrievalCandidate,
     RetrievalChannelResult,
@@ -27,7 +28,10 @@ from knowledge_engine.m26_multilingual_staging_dependencies import (
     LiveRequestedLanguageRealizer,
     SingleAttemptMiniMaxLanguageClient,
     StagingDenseRetriever,
+    StagingGraphRetriever,
     Track2StagingTrace,
+    _dense_result_from_union,
+    _selector_projection_summary,
     build_track2_staging_runtime_dependencies,
     track2_runtime_readiness,
 )
@@ -332,6 +336,173 @@ def test_dense_original_and_canonical_adapter_calls_once_each() -> None:
     assert trace.dense_channel.calls == ["原始問題", "Canonical question"]
 
 
+def test_selector_dense_projection_excludes_non_dense_channels() -> None:
+    union = CandidateUnionResult(
+        status="ok",
+        mode="multilingual_dual_query",
+        candidates=(
+            FusedRetrievalCandidate(
+                candidate_id="dense-doc",
+                fusion_score=9.0,
+                contributions=(
+                    CandidateContribution("dense", "canonical_en", 2, 0.72, 0.25),
+                    CandidateContribution("lexical", "canonical_en", 1, 4.0, 0.5),
+                ),
+            ),
+            FusedRetrievalCandidate(
+                candidate_id="lexical-doc",
+                fusion_score=8.0,
+                contributions=(
+                    CandidateContribution("lexical", "canonical_en", 1, 4.0, 0.5),
+                ),
+            ),
+            FusedRetrievalCandidate(
+                candidate_id="graph-doc",
+                fusion_score=7.0,
+                contributions=(
+                    CandidateContribution("graph", "canonical_en", 1, 3.0, 0.5),
+                ),
+            ),
+            FusedRetrievalCandidate(
+                candidate_id="identifier-doc",
+                fusion_score=6.0,
+                contributions=(
+                    CandidateContribution("identifier", "original", 1, 3.0, 0.5),
+                ),
+            ),
+        ),
+    )
+    dense_result = _dense_result_from_union(
+        union,
+        dense_results={
+            "canonical_en": {
+                "backend_identity": {"backend": "qdrant_dense_read_only"},
+                "candidates": [
+                    {
+                        "section_id": "dense-doc",
+                        "score": 0.72,
+                        "point_id_sha256": "real-point",
+                    }
+                ],
+            }
+        },
+    )
+    assert [item["section_id"] for item in dense_result["candidates"]] == ["dense-doc"]
+    assert dense_result["candidates"][0]["score"] == 0.25
+    assert dense_result["candidates"][0]["point_id_sha256"] == "real-point"
+    assert (
+        dense_result["candidates"][0]["track2_dense_projection"][
+            "phase2_fusion_score_observability_only"
+        ]
+        == 9.0
+    )
+
+
+def test_selector_dense_projection_is_invariant_to_lexical_and_graph_rank_changes() -> None:
+    def projected_score(*, lexical_rank: int, graph_rank: int) -> float:
+        union = CandidateUnionResult(
+            status="ok",
+            mode="multilingual_dual_query",
+            candidates=(
+                FusedRetrievalCandidate(
+                    candidate_id="doc-a",
+                    fusion_score=99.0,
+                    contributions=(
+                        CandidateContribution("dense", "canonical_en", 3, 0.6, 0.111),
+                        CandidateContribution(
+                            "lexical",
+                            "canonical_en",
+                            lexical_rank,
+                            3.0,
+                            1.0 / (60 + lexical_rank),
+                        ),
+                        CandidateContribution(
+                            "graph",
+                            "canonical_en",
+                            graph_rank,
+                            2.0,
+                            1.0 / (60 + graph_rank),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        dense_result = _dense_result_from_union(union, dense_results={})
+        return dense_result["candidates"][0]["score"]
+
+    assert projected_score(lexical_rank=1, graph_rank=1) == projected_score(
+        lexical_rank=8,
+        graph_rank=7,
+    )
+
+
+def test_selector_dense_projection_merges_original_and_canonical_dense_only() -> None:
+    union = CandidateUnionResult(
+        status="ok",
+        mode="multilingual_dual_query",
+        candidates=(
+            FusedRetrievalCandidate(
+                candidate_id="doc-a",
+                fusion_score=10.0,
+                contributions=(
+                    CandidateContribution("dense", "original", 1, 0.8, 0.2),
+                    CandidateContribution("dense", "canonical_en", 4, 0.5, 0.125),
+                    CandidateContribution("identifier", "original", 1, 5.0, 0.5),
+                ),
+            ),
+        ),
+    )
+    dense_result = _dense_result_from_union(union, dense_results={})
+    projected = dense_result["candidates"][0]
+    assert projected["score"] == 0.325
+    assert projected["track2_dense_projection"]["source_representations"] == [
+        "canonical_en",
+        "original",
+    ]
+
+
+def test_selector_projection_summary_reports_option_a_invariants() -> None:
+    union = CandidateUnionResult(
+        status="ok",
+        mode="multilingual_dual_query",
+        candidates=(
+            FusedRetrievalCandidate(
+                candidate_id="doc-a",
+                fusion_score=1.0,
+                contributions=(
+                    CandidateContribution("dense", "canonical_en", 1, 0.9, 0.5),
+                ),
+            ),
+        ),
+    )
+    dense_result = _dense_result_from_union(union, dense_results={})
+    summary = _selector_projection_summary(union=union, dense_result=dense_result)
+    assert summary["fusion_score_is_not_dense_score"] is True
+    assert summary["false_dense_provenance"] == 0
+    assert summary["lexical_double_count"] == 0
+    assert summary["graph_double_count"] == 0
+    assert summary["frozen_selector_source_changed"] is False
+
+
+def test_staging_graph_retriever_delegates_scoring_to_frozen_selector() -> None:
+    trace = Track2StagingTrace(
+        dense_channel=RecordingDenseChannel(),
+        bundle=FakeBundle(),
+    )
+    retriever = StagingGraphRetriever(trace)
+    result = retriever(
+        RetrievalQuery(
+            channel="graph",
+            query_representation="canonical_en",
+            query_text="How does API-42 relate to API-43?",
+        )
+    )
+    assert result.hits == ()
+    assert trace.graph_results["canonical_en"]["status"] == (
+        "delegated_to_frozen_selector_graph_authority"
+    )
+
+
 def test_frozen_evidence_selector_invokes_frozen_selector_seam(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -349,7 +520,13 @@ def test_frozen_evidence_selector_invokes_frozen_selector_seam(
     }
     trace.dense_results["canonical_en"] = {
         "backend_identity": {"backend": "dense"},
-        "candidates": [{"section_id": "doc-a", "score": 1.0}],
+        "candidates": [
+            {
+                "section_id": "doc-a",
+                "score": 1.0,
+                "point_id_sha256": "real-dense-point",
+            }
+        ],
     }
     recorded: dict[str, Any] = {}
 
@@ -389,7 +566,10 @@ def test_frozen_evidence_selector_invokes_frozen_selector_seam(
                 FusedRetrievalCandidate(
                     candidate_id="doc-a",
                     fusion_score=1.0,
-                    contributions=(),
+                    contributions=(
+                        CandidateContribution("dense", "canonical_en", 1, 1.0, 0.25),
+                        CandidateContribution("lexical", "canonical_en", 1, 1.0, 0.5),
+                    ),
                 ),
             ),
         ),
@@ -405,8 +585,17 @@ def test_frozen_evidence_selector_invokes_frozen_selector_seam(
     )
     assert adapter.frozen_symbol == "m26_pa7_arbitrary_query_runtime._select_evidence"
     assert recorded["kwargs"]["question"] == "How does API-42 work?"
+    assert recorded["kwargs"]["dense_result"]["candidates"][0]["score"] == 0.25
+    assert (
+        recorded["kwargs"]["dense_result"]["candidates"][0]["point_id_sha256"]
+        == "real-dense-point"
+    )
     assert evidence[0]["section_id"] == "doc-a"
     assert trace.endpoint_proof == {"required": False, "matched": False}
+    assert trace.selector_projection_summary["fusion_score_is_not_dense_score"] is True
+    assert trace.selector_provenance_trace[0]["real_channel_contributions"][0][
+        "channel"
+    ] == "dense"
 
 
 def test_build_track2_staging_runtime_dependencies_uses_accepted_closure_runner(

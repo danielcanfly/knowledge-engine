@@ -139,6 +139,8 @@ def run_track2_multilingual_request(
         union,
         selected_evidence_ids=tuple(str(item.get("evidence_id", "")) for item in selected),
     )
+    retrieval_telemetry = dict(retrieval_observability.as_dict())
+    retrieval_telemetry.update(_selector_trace_telemetry(dependencies))
     _emit(
         event_sink,
         "stage.completed",
@@ -151,7 +153,7 @@ def run_track2_multilingual_request(
             "NO_SELECTED_AUTHORIZED_EVIDENCE",
             "no authorized evidence survived frozen selection boundary",
             envelope=envelope,
-            telemetry={"retrieval": retrieval_observability.as_dict()},
+            telemetry={"retrieval": retrieval_telemetry},
         )
 
     context_result = build_canonical_semantic_context(
@@ -169,7 +171,7 @@ def run_track2_multilingual_request(
             context_result.failure_code,
             context_result.failure_detail,
             envelope=envelope,
-            telemetry={"retrieval": retrieval_observability.as_dict()},
+            telemetry={"retrieval": retrieval_telemetry},
         )
 
     if dependencies.closure_provider_client is None or dependencies.closure_runner is None:
@@ -177,7 +179,7 @@ def run_track2_multilingual_request(
             "CANONICAL_CLOSURE_DEPENDENCY_MISSING",
             "Track 2 closure authority dependencies are unavailable",
             envelope=envelope,
-            telemetry={"retrieval": retrieval_observability.as_dict()},
+            telemetry={"retrieval": retrieval_telemetry},
         )
     spine_result = build_canonical_verified_claim_spine(
         context=context_result.context,
@@ -198,7 +200,7 @@ def run_track2_multilingual_request(
             spine_result.failure_code,
             spine_result.failure_detail,
             envelope=envelope,
-            telemetry={"retrieval": retrieval_observability.as_dict()},
+            telemetry={"retrieval": retrieval_telemetry},
         )
 
     publication_result = build_verified_requested_language_publication(
@@ -216,7 +218,7 @@ def run_track2_multilingual_request(
         envelope=envelope,
         spine=spine_result.spine,
         publication_result=publication_result,
-        retrieval_observability=retrieval_observability.as_dict(),
+        retrieval_observability=retrieval_telemetry,
     )
 
 
@@ -248,6 +250,25 @@ def _select_evidence(
         return ()
     selected = dependencies.evidence_selector(union, envelope)
     return tuple(dict(item) for item in selected if isinstance(item, Mapping))
+
+
+def _selector_trace_telemetry(
+    dependencies: MultilingualRuntimeDependencies,
+) -> dict[str, Any]:
+    selector = dependencies.evidence_selector
+    trace = getattr(selector, "trace", None)
+    if trace is None:
+        return {}
+    telemetry: dict[str, Any] = {}
+    projection = getattr(trace, "selector_projection_summary", None)
+    if isinstance(projection, Mapping) and projection:
+        telemetry["selector_input_projection"] = dict(projection)
+    provenance = getattr(trace, "selector_provenance_trace", None)
+    if isinstance(provenance, Sequence) and not isinstance(provenance, (str, bytes)):
+        telemetry["selector_provenance_trace"] = [
+            dict(item) for item in provenance if isinstance(item, Mapping)
+        ]
+    return telemetry
 
 
 def _publication_to_runtime_result(

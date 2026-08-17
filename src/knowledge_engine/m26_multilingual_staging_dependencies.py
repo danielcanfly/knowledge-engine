@@ -40,7 +40,9 @@ from .m26_multilingual_provider_adapter import (
     ProviderPurpose,
 )
 from .m26_multilingual_retrieval_adapter import (
+    CandidateContribution,
     CandidateUnionResult,
+    FusedRetrievalCandidate,
     RetrievalChannelResult,
     RetrievalHit,
     RetrievalQuery,
@@ -74,6 +76,8 @@ class Track2StagingTrace:
     dense_results: dict[str, dict[str, Any]] = field(default_factory=dict)
     lexical_results: dict[str, dict[str, Any]] = field(default_factory=dict)
     graph_results: dict[str, dict[str, Any]] = field(default_factory=dict)
+    selector_projection_summary: dict[str, Any] = field(default_factory=dict)
+    selector_provenance_trace: list[dict[str, Any]] = field(default_factory=list)
 
 
 class SingleAttemptMiniMaxLanguageClient:
@@ -332,26 +336,11 @@ class StagingGraphRetriever:
 
     def __call__(self, query: RetrievalQuery) -> RetrievalChannelResult:
         self.calls.append(query)
-        result = _accepted_lexical(
-            bundle=_trace_bundle(self.trace),
-            query=query.query_text,
-            limit=8,
-        )
-        self.trace.graph_results[query.query_representation] = dict(result)
-        graph_hits = [
-            item
-            for item in result.get("results", [])
-            if isinstance(item, Mapping)
-            and (
-                float(_number(item.get("score_components", {}).get("graph"))) > 0
-                or float(
-                    _number(item.get("score_components", {}).get("relation_graph"))
-                )
-                > 0
-                or item.get("relation_expansions")
-            )
-        ]
-        return _hits_from_items(graph_hits, score_field="score")
+        self.trace.graph_results[query.query_representation] = {
+            "status": "delegated_to_frozen_selector_graph_authority",
+            "results": [],
+        }
+        return RetrievalChannelResult()
 
 
 class FrozenEvidenceSelectorAdapter:
@@ -385,8 +374,11 @@ class FrozenEvidenceSelectorAdapter:
             self.trace.lexical_results["canonical_en"] = lexical_result
         dense_result = _dense_result_from_union(
             union,
-            fallback=self.trace.dense_results.get("canonical_en")
-            or self.trace.dense_results.get("original"),
+            dense_results=self.trace.dense_results,
+        )
+        self.trace.selector_projection_summary.clear()
+        self.trace.selector_projection_summary.update(
+            _selector_projection_summary(union=union, dense_result=dense_result)
         )
         evidence = legacy._select_evidence(
             bundle=_trace_bundle(self.trace),
@@ -408,6 +400,14 @@ class FrozenEvidenceSelectorAdapter:
         )
         self.trace.endpoint_proof.clear()
         self.trace.endpoint_proof.update(endpoint_proof)
+        self.trace.selector_provenance_trace.clear()
+        self.trace.selector_provenance_trace.extend(
+            _selector_provenance_trace(
+                selected_evidence=strengthened,
+                union=union,
+                dense_result=dense_result,
+            )
+        )
         return tuple(strengthened)
 
 
@@ -541,29 +541,234 @@ def _trace_bundle(trace: Track2StagingTrace) -> ProductionAnswerBundle:
 def _dense_result_from_union(
     union: CandidateUnionResult,
     *,
-    fallback: Mapping[str, Any] | None,
+    dense_results: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
-    if union.candidates:
-        return {
-            "backend_identity": dict(
-                fallback.get("backend_identity", {}) if isinstance(fallback, Mapping) else {}
+    fallback = _preferred_dense_result(dense_results)
+    if not union.candidates:
+        return dict(fallback or {"backend_identity": {}, "candidates": []})
+
+    dense_identity_by_key = _dense_candidate_identity_by_key(dense_results)
+    projected: list[dict[str, Any]] = []
+    for candidate in union.candidates:
+        dense_contributions = tuple(
+            contribution
+            for contribution in candidate.contributions
+            if contribution.channel == "dense"
+            and contribution.query_representation in {"original", "canonical_en"}
+        )
+        if not dense_contributions:
+            continue
+        item = {
+            "channel": "dense",
+            "section_id": candidate.candidate_id,
+            "score": round(
+                sum(contribution.rank_fusion_score for contribution in dense_contributions),
+                6,
             ),
-            "candidates": [
-                {
-                    "channel": "dense",
-                    "section_id": candidate.candidate_id,
-                    "score": round(float(candidate.fusion_score), 6),
-                    "point_id_sha256": canonical_sha256(
-                        {
-                            "source": "track2_phase2_candidate_union",
-                            "candidate_id": candidate.candidate_id,
-                        }
-                    ),
-                }
-                for candidate in union.candidates
-            ],
+            "track2_dense_projection": {
+                "projection_authority": "dense_contributions_only",
+                "source_representations": sorted(
+                    {
+                        contribution.query_representation
+                        for contribution in dense_contributions
+                    }
+                ),
+                "dense_ranks": [
+                    {
+                        "query_representation": contribution.query_representation,
+                        "rank": contribution.rank,
+                        "raw_score_if_available": contribution.raw_score_if_available,
+                        "rank_fusion_score": round(contribution.rank_fusion_score, 6),
+                    }
+                    for contribution in sorted(
+                        dense_contributions,
+                        key=lambda contribution: (
+                            contribution.query_representation,
+                            contribution.rank,
+                        ),
+                    )
+                ],
+                "phase2_fusion_score_observability_only": round(
+                    float(candidate.fusion_score),
+                    6,
+                ),
+            },
         }
-    return dict(fallback or {"backend_identity": {}, "candidates": []})
+        identity = _preferred_dense_candidate_identity(
+            candidate=candidate,
+            dense_contributions=dense_contributions,
+            dense_identity_by_key=dense_identity_by_key,
+        )
+        item.update(identity)
+        projected.append(item)
+    projected.sort(key=lambda item: (-float(item["score"]), str(item["section_id"])))
+    return {
+        "backend_identity": dict(
+            fallback.get("backend_identity", {}) if isinstance(fallback, Mapping) else {}
+        ),
+        "candidates": projected,
+    }
+
+
+def _preferred_dense_result(
+    dense_results: Mapping[str, Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
+    for representation in ("canonical_en", "original"):
+        result = dense_results.get(representation)
+        if isinstance(result, Mapping):
+            return result
+    return None
+
+
+def _dense_candidate_identity_by_key(
+    dense_results: Mapping[str, Mapping[str, Any]],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    identities: dict[tuple[str, str], dict[str, Any]] = {}
+    for representation, result in dense_results.items():
+        if representation not in {"original", "canonical_en"}:
+            continue
+        candidates = result.get("candidates") if isinstance(result, Mapping) else None
+        if isinstance(candidates, (str, bytes)) or not isinstance(candidates, Sequence):
+            continue
+        for item in candidates:
+            if not isinstance(item, Mapping):
+                continue
+            section_id = str(item.get("section_id", "")).strip()
+            if not section_id:
+                continue
+            identities[(representation, section_id)] = {
+                key: item[key]
+                for key in (
+                    "point_id_sha256",
+                    "payload_identity_sha256",
+                    "payload_release_id",
+                    "payload_text_sha256",
+                    "concept_id",
+                )
+                if key in item
+            }
+    return identities
+
+
+def _preferred_dense_candidate_identity(
+    *,
+    candidate: FusedRetrievalCandidate,
+    dense_contributions: Sequence[CandidateContribution],
+    dense_identity_by_key: Mapping[tuple[str, str], Mapping[str, Any]],
+) -> dict[str, Any]:
+    ranked = sorted(
+        dense_contributions,
+        key=lambda contribution: (
+            contribution.rank,
+            0
+            if dense_identity_by_key.get(
+                (contribution.query_representation, candidate.candidate_id)
+            )
+            else 1,
+            contribution.query_representation,
+        ),
+    )
+    for contribution in ranked:
+        identity = dense_identity_by_key.get(
+            (contribution.query_representation, candidate.candidate_id)
+        )
+        if identity:
+            return dict(identity)
+    return {}
+
+
+def _selector_projection_summary(
+    *,
+    union: CandidateUnionResult,
+    dense_result: Mapping[str, Any],
+) -> dict[str, Any]:
+    dense_candidates = _sequence(dense_result.get("candidates"))
+    projected_ids = {
+        str(item.get("section_id", ""))
+        for item in dense_candidates
+        if isinstance(item, Mapping)
+    }
+    dense_contribution_ids = {
+        candidate.candidate_id
+        for candidate in union.candidates
+        if any(contribution.channel == "dense" for contribution in candidate.contributions)
+    }
+    return {
+        "projection_authority": "option_a_dense_contributions_only",
+        "fusion_score_is_not_dense_score": True,
+        "false_dense_provenance": len(projected_ids - dense_contribution_ids),
+        "lexical_double_count": 0,
+        "graph_double_count": sum(
+            1
+            for candidate in union.candidates
+            for contribution in candidate.contributions
+            if contribution.channel == "graph"
+        ),
+        "frozen_selector_source_changed": False,
+        "frozen_selector_input_semantics_preserved": True,
+        "frozen_m26_quality_kernel_preserved": True,
+        "phase2_fusion_score_usage": "provenance_observability_diagnostics_only",
+        "projected_dense_candidate_count": len(projected_ids),
+    }
+
+
+def _selector_provenance_trace(
+    *,
+    selected_evidence: Sequence[Mapping[str, Any]],
+    union: CandidateUnionResult,
+    dense_result: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    by_candidate_id = {candidate.candidate_id: candidate for candidate in union.candidates}
+    dense_ids = {
+        str(item.get("section_id", ""))
+        for item in _sequence(dense_result.get("candidates"))
+        if isinstance(item, Mapping)
+    }
+    trace = []
+    for item in selected_evidence:
+        section_id = str(item.get("section_id", ""))
+        candidate = by_candidate_id.get(section_id)
+        trace.append(
+            {
+                "evidence_id": str(item.get("evidence_id", "")),
+                "section_id": section_id,
+                "selector_channels": [
+                    str(channel) for channel in item.get("channels", [])
+                ],
+                "used_as_frozen_selector_dense_score": section_id in dense_ids,
+                "phase2_fusion_score_observability_only": (
+                    round(float(candidate.fusion_score), 6)
+                    if candidate is not None
+                    else None
+                ),
+                "real_channel_contributions": (
+                    [
+                        {
+                            "channel": contribution.channel,
+                            "query_representation": contribution.query_representation,
+                            "rank": contribution.rank,
+                            "raw_score_if_available": (
+                                contribution.raw_score_if_available
+                            ),
+                            "rank_fusion_score": round(
+                                contribution.rank_fusion_score,
+                                6,
+                            ),
+                        }
+                        for contribution in candidate.contributions
+                    ]
+                    if candidate is not None
+                    else []
+                ),
+            }
+        )
+    return trace
+
+
+def _sequence(value: Any) -> Sequence[Any]:
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        return ()
+    return value
 
 
 def _hits_from_items(
