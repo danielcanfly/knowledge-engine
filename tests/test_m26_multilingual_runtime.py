@@ -258,6 +258,35 @@ def test_runtime_does_not_add_retry_loop_around_frozen_closure_runner() -> None:
     assert result.failure_code == "CANONICAL_CLOSURE_AUTHORITY_FAILED"
 
 
+def test_closure_runner_telemetry_does_not_reuse_previous_request_state() -> None:
+    class Runner:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.current_replay_count = -1
+
+        def __call__(self, **kwargs: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+            del kwargs
+            self.calls += 1
+            self.current_replay_count = 1 if self.calls == 1 else 0
+            return _abstaining_verification()
+
+        def telemetry(self) -> Mapping[str, Any]:
+            return {"outer_fallback_replay_count": self.current_replay_count}
+
+    runner = Runner()
+    deps = _dependencies(
+        closure_provider_client_factory=lambda: BudgetedClient(max_calls=4),
+        closure_runner=runner,
+    )
+
+    first = _run(deps)
+    second = _run(deps)
+
+    assert first.telemetry["closure_runner"]["outer_fallback_replay_count"] == 1
+    assert second.telemetry["closure_runner"]["outer_fallback_replay_count"] == 0
+    assert runner.calls == 2
+
+
 def test_explicit_closure_provider_client_remains_backward_compatible() -> None:
     client = BudgetedClient(max_calls=4)
     seen: list[BudgetedClient] = []

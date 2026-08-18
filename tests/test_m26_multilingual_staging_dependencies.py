@@ -264,6 +264,66 @@ def test_requested_language_realizer_preserves_claim_ids() -> None:
     assert [item["claim_id"] for item in result["claims"]] == ["claim-a", "claim-b"]
 
 
+@pytest.mark.parametrize(
+    "claim_ids",
+    [
+        ("ALPHA-17",),
+        ("ALPHA-17", "BETA-42"),
+        ("ALPHA-17", "BETA-42", "Module-X", "Node-Y"),
+    ],
+)
+def test_requested_language_realizer_prompt_requires_dynamic_claim_array(
+    claim_ids: tuple[str, ...],
+) -> None:
+    client = FakeLanguageClient(
+        {
+            "claims": [
+                {
+                    "claim_id": claim_id,
+                    "requested_language_text": f"translated {claim_id}",
+                }
+                for claim_id in claim_ids
+            ]
+        }
+    )
+    realizer = LiveRequestedLanguageRealizer(client)
+    request = type(
+        "Request",
+        (),
+        {
+            "requested_answer_language": "zh-TW",
+            "claims": tuple(
+                type(
+                    "Claim",
+                    (),
+                    {
+                        "canonical_claim_id": claim_id,
+                        "canonical_surface_text_en": f"{claim_id} is active.",
+                        "preservation_markers": (claim_id,),
+                    },
+                )()
+                for claim_id in claim_ids
+            ),
+        },
+    )()
+
+    realizer(request)
+
+    call = client.calls[0]
+    system = call["system"]
+    user = call["user"]
+    contract = user["response_contract"]
+    skeleton = user["required_response_skeleton"]
+    assert '"claims" MUST be an array even when there is only one claim' in system
+    assert "Never flatten claim_id/requested_language_text to the top level" in system
+    assert contract["claims_json_type"] == "array"
+    assert contract["exact_claim_count"] == len(claim_ids)
+    assert contract["exact_claim_ids"] == list(claim_ids)
+    assert contract["one_output_object_per_input_claim"] is True
+    assert contract["flattened_single_claim_object_forbidden"] is True
+    assert [item["claim_id"] for item in skeleton["claims"]] == list(claim_ids)
+
+
 def test_equivalence_reviewer_accepts_complete_raw_pass_mapping() -> None:
     client = FakeLanguageClient(
         {
@@ -308,6 +368,84 @@ def test_equivalence_reviewer_accepts_complete_raw_pass_mapping() -> None:
     assert result["reviews"][0]["equivalence"] == "pass"
 
 
+def test_equivalence_reviewer_prompt_distinguishes_boolean_and_string_verdicts() -> None:
+    client = FakeLanguageClient(
+        {
+            "reviews": [
+                {
+                    "claim_id": "ALPHA-17",
+                    "equivalence": "pass",
+                    "no_material_factual_expansion": True,
+                    "no_contradiction": True,
+                    "negation_preserved": "not_applicable",
+                    "modality_preserved": "true",
+                    "comparison_direction_preserved": "false",
+                    "relationship_direction_preserved": "not_applicable",
+                    "numeric_identity_preserved": "true",
+                    "entity_identity_preserved": "true",
+                }
+            ]
+        }
+    )
+    reviewer = LiveEquivalenceReviewer(client)
+    request = type(
+        "Request",
+        (),
+        {
+            "requested_answer_language": "zh-TW",
+            "claims": (
+                type(
+                    "Claim",
+                    (),
+                    {
+                        "canonical_claim_id": "ALPHA-17",
+                        "canonical_surface_text_en": "ALPHA-17 is active.",
+                        "requested_language_text_zh_tw": "ALPHA-17 已啟用。",
+                        "marker_preservation_status": "pass",
+                        "preservation_markers": ("ALPHA-17",),
+                    },
+                )(),
+            ),
+        },
+    )()
+
+    reviewer(request)
+
+    call = client.calls[0]
+    system = call["system"]
+    contract = call["user"]["response_contract"]
+    field_types = contract["field_types"]
+    example = call["user"]["required_response_example"]["reviews"][0]
+    assert "Do not replace quoted semantic verdict strings with JSON booleans" in system
+    assert contract["exact_review_count"] == 1
+    assert contract["exact_claim_ids"] == ["ALPHA-17"]
+    assert field_types["no_material_factual_expansion"]["json_type"] == "boolean"
+    assert field_types["no_contradiction"]["json_type"] == "boolean"
+    assert field_types["no_material_factual_expansion"]["must_not_be_quoted"] is True
+    assert field_types["no_contradiction"]["must_not_be_quoted"] is True
+    for field_name in (
+        "negation_preserved",
+        "modality_preserved",
+        "comparison_direction_preserved",
+        "relationship_direction_preserved",
+        "numeric_identity_preserved",
+        "entity_identity_preserved",
+    ):
+        assert field_types[field_name]["json_type"] == "string"
+        assert field_types[field_name]["allowed"] == [
+            "true",
+            "false",
+            "not_applicable",
+        ]
+        assert field_types[field_name]["must_not_be_json_boolean"] is True
+        assert isinstance(example[field_name], str)
+    assert example["no_material_factual_expansion"] is True
+    assert example["no_contradiction"] is True
+    assert example["modality_preserved"] == "true"
+    assert example["comparison_direction_preserved"] == "false"
+    assert example["negation_preserved"] == "not_applicable"
+
+
 def test_equivalence_reviewer_fails_closed_on_string_booleans() -> None:
     client = FakeLanguageClient(
         {
@@ -350,6 +488,98 @@ def test_equivalence_reviewer_fails_closed_on_string_booleans() -> None:
     )()
     with pytest.raises(LiveGateError):
         reviewer(request)
+
+
+def test_equivalence_reviewer_fails_closed_on_semantic_boolean_verdicts() -> None:
+    client = FakeLanguageClient(
+        {
+            "reviews": [
+                {
+                    "claim_id": "claim-a",
+                    "equivalence": "pass",
+                    "no_material_factual_expansion": True,
+                    "no_contradiction": True,
+                    "negation_preserved": True,
+                    "modality_preserved": True,
+                    "comparison_direction_preserved": "not_applicable",
+                    "relationship_direction_preserved": "not_applicable",
+                    "numeric_identity_preserved": True,
+                    "entity_identity_preserved": True,
+                }
+            ]
+        }
+    )
+    reviewer = LiveEquivalenceReviewer(client)
+    request = type(
+        "Request",
+        (),
+        {
+            "requested_answer_language": "zh-TW",
+            "claims": (
+                type(
+                    "Claim",
+                    (),
+                    {
+                        "canonical_claim_id": "claim-a",
+                        "canonical_surface_text_en": "Keep API-42.",
+                        "requested_language_text_zh_tw": "請保留 API-42。",
+                        "marker_preservation_status": "pass",
+                        "preservation_markers": ("API-42",),
+                    },
+                )(),
+            ),
+        },
+    )()
+    with pytest.raises(LiveGateError):
+        reviewer(request)
+
+
+def test_requested_language_provider_prompts_do_not_relax_missing_sequences() -> None:
+    realizer = LiveRequestedLanguageRealizer(FakeLanguageClient({"claim_id": "claim-a"}))
+    realization_request = type(
+        "Request",
+        (),
+        {
+            "requested_answer_language": "zh-TW",
+            "claims": (
+                type(
+                    "Claim",
+                    (),
+                    {
+                        "canonical_claim_id": "claim-a",
+                        "canonical_surface_text_en": "Keep API-42.",
+                        "preservation_markers": ("API-42",),
+                    },
+                )(),
+            ),
+        },
+    )()
+    with pytest.raises(LiveGateError):
+        realizer(realization_request)
+
+    reviewer = LiveEquivalenceReviewer(FakeLanguageClient({"claim_id": "claim-a"}))
+    review_request = type(
+        "Request",
+        (),
+        {
+            "requested_answer_language": "zh-TW",
+            "claims": (
+                type(
+                    "Claim",
+                    (),
+                    {
+                        "canonical_claim_id": "claim-a",
+                        "canonical_surface_text_en": "Keep API-42.",
+                        "requested_language_text_zh_tw": "請保留 API-42。",
+                        "marker_preservation_status": "pass",
+                        "preservation_markers": ("API-42",),
+                    },
+                )(),
+            ),
+        },
+    )()
+    with pytest.raises(LiveGateError):
+        reviewer(review_request)
 
 
 def test_single_attempt_language_client_has_no_retry_loop() -> None:

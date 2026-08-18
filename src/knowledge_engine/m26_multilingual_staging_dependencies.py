@@ -356,32 +356,33 @@ class LiveRequestedLanguageRealizer:
         self.client = client
 
     def __call__(self, request: RequestedLanguageRealizationRequest) -> Mapping[str, Any]:
+        claims = [
+            {
+                "claim_id": claim.canonical_claim_id,
+                "canonical_surface_text_en": claim.canonical_surface_text_en,
+                "preservation_markers": list(claim.preservation_markers),
+            }
+            for claim in request.claims
+        ]
         payload = self.client.generate_json(
             purpose="multilingual_requested_language_realization",
             system=(
-                "Return only JSON. Render each canonical English claim in the "
-                "requested language. Preserve claim_id and technical markers. Do "
-                "not add facts, citations, explanations, or new claims."
+                "Return exactly one JSON object. The top-level object MUST contain "
+                '"claims". "claims" MUST be an array even when there is only one '
+                "claim. Return exactly N claim objects in the same order as input. "
+                "Never flatten claim_id/requested_language_text to the top level. "
+                "Never omit, rename, invent, duplicate, or reorder claim IDs. No "
+                "markdown fences. No prose outside the JSON object. Render each "
+                "canonical English claim in the requested language. Preserve "
+                "claim_id and technical markers. Do not add facts, citations, "
+                "explanations, or new claims."
             ),
             user={
                 "schema_version": "m26-track2-requested-language-realization/v1",
                 "requested_answer_language": request.requested_answer_language,
-                "claims": [
-                    {
-                        "claim_id": claim.canonical_claim_id,
-                        "canonical_surface_text_en": claim.canonical_surface_text_en,
-                        "preservation_markers": list(claim.preservation_markers),
-                    }
-                    for claim in request.claims
-                ],
-                "required_response": {
-                    "claims": [
-                        {
-                            "claim_id": "same input claim_id",
-                            "requested_language_text": "string",
-                        }
-                    ]
-                },
+                "claims": claims,
+                "response_contract": _realization_response_contract(claims),
+                "required_response_skeleton": _realization_response_skeleton(claims),
             },
         )
         return {"claims": _strict_claim_items(payload, "requested_language_text")}
@@ -395,29 +396,36 @@ class LiveEquivalenceReviewer:
         self,
         request: RequestedLanguageEquivalenceReviewRequest,
     ) -> Mapping[str, Any]:
+        claims = [
+            {
+                "claim_id": claim.canonical_claim_id,
+                "canonical_surface_text_en": claim.canonical_surface_text_en,
+                "requested_language_text_zh_tw": (
+                    claim.requested_language_text_zh_tw
+                ),
+                "marker_preservation_status": claim.marker_preservation_status,
+                "preservation_markers": list(claim.preservation_markers),
+            }
+            for claim in request.claims
+        ]
         payload = self.client.generate_json(
             purpose="multilingual_equivalence_review",
             system=(
-                "Return only JSON. Strictly review whether requested-language text "
-                "is semantically equivalent to the canonical English claim. Use "
-                "actual booleans for boolean fields. Do not coerce strings."
+                "Return exactly one JSON object. Top-level key MUST be "
+                '"reviews". "reviews" MUST be an array. Return exactly N review '
+                "objects in the same order as input. Do not flatten. Do not add "
+                "prose or markdown. Use actual unquoted JSON booleans only for "
+                "no_material_factual_expansion and no_contradiction. Do not "
+                "replace quoted semantic verdict strings with JSON booleans. "
+                "Strictly review whether requested-language text is semantically "
+                "equivalent to the canonical English claim."
             ),
             user={
                 "schema_version": "m26-track2-language-equivalence-review/v1",
                 "requested_answer_language": request.requested_answer_language,
-                "claims": [
-                    {
-                        "claim_id": claim.canonical_claim_id,
-                        "canonical_surface_text_en": claim.canonical_surface_text_en,
-                        "requested_language_text_zh_tw": (
-                            claim.requested_language_text_zh_tw
-                        ),
-                        "marker_preservation_status": claim.marker_preservation_status,
-                        "preservation_markers": list(claim.preservation_markers),
-                    }
-                    for claim in request.claims
-                ],
-                "required_response": {"reviews": [_review_schema()]},
+                "claims": claims,
+                "response_contract": _review_response_contract(claims),
+                "required_response_example": _review_response_example(),
             },
         )
         reviews = _strict_review_items(payload)
@@ -1015,6 +1023,108 @@ def _strict_review_items(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return reviews
+
+
+def _realization_response_contract(
+    claims: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "top_level_json_type": "object",
+        "only_top_level_key": "claims",
+        "claims_json_type": "array",
+        "exact_claim_count": len(claims),
+        "exact_claim_ids": [str(claim.get("claim_id", "")) for claim in claims],
+        "preserve_input_order": True,
+        "one_output_object_per_input_claim": True,
+        "flattened_single_claim_object_forbidden": True,
+        "markdown_forbidden": True,
+        "prose_outside_json_forbidden": True,
+    }
+
+
+def _realization_response_skeleton(
+    claims: Sequence[Mapping[str, Any]],
+) -> dict[str, list[dict[str, str]]]:
+    return {
+        "claims": [
+            {
+                "claim_id": str(claim.get("claim_id", "")),
+                "requested_language_text": (
+                    f"<translated {claim.get('claim_id', '')} text>"
+                ),
+            }
+            for claim in claims
+        ]
+    }
+
+
+def _review_response_contract(claims: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    return {
+        "top_level_json_type": "object",
+        "only_top_level_key": "reviews",
+        "reviews_json_type": "array",
+        "exact_review_count": len(claims),
+        "exact_claim_ids": [str(claim.get("claim_id", "")) for claim in claims],
+        "preserve_input_order": True,
+        "one_review_per_input_claim": True,
+        "flattened_review_object_forbidden": True,
+        "markdown_forbidden": True,
+        "prose_outside_json_forbidden": True,
+        "field_types": {
+            "claim_id": {
+                "json_type": "string",
+                "value": "exact input claim_id",
+            },
+            "equivalence": {
+                "json_type": "string",
+                "allowed": ["pass", "fail"],
+            },
+            "no_material_factual_expansion": {
+                "json_type": "boolean",
+                "allowed": [True, False],
+                "must_not_be_quoted": True,
+            },
+            "no_contradiction": {
+                "json_type": "boolean",
+                "allowed": [True, False],
+                "must_not_be_quoted": True,
+            },
+            "negation_preserved": _semantic_verdict_field_contract(),
+            "modality_preserved": _semantic_verdict_field_contract(),
+            "comparison_direction_preserved": _semantic_verdict_field_contract(),
+            "relationship_direction_preserved": _semantic_verdict_field_contract(),
+            "numeric_identity_preserved": _semantic_verdict_field_contract(),
+            "entity_identity_preserved": _semantic_verdict_field_contract(),
+        },
+    }
+
+
+def _semantic_verdict_field_contract() -> dict[str, Any]:
+    return {
+        "json_type": "string",
+        "allowed": ["true", "false", "not_applicable"],
+        "must_be_quoted_string": True,
+        "must_not_be_json_boolean": True,
+    }
+
+
+def _review_response_example() -> dict[str, list[dict[str, Any]]]:
+    return {
+        "reviews": [
+            {
+                "claim_id": "EXACT_CLAIM_ID",
+                "equivalence": "pass",
+                "no_material_factual_expansion": True,
+                "no_contradiction": True,
+                "negation_preserved": "not_applicable",
+                "modality_preserved": "true",
+                "comparison_direction_preserved": "false",
+                "relationship_direction_preserved": "not_applicable",
+                "numeric_identity_preserved": "true",
+                "entity_identity_preserved": "true",
+            }
+        ]
+    }
 
 
 def _review_schema() -> dict[str, str]:
