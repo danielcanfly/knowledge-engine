@@ -4,7 +4,7 @@ import json
 import os
 import re
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -22,6 +22,7 @@ from .m26_aq_semantic_contract import (
 from .m26_cloudflare_provider_router import (
     MINIMAX_MODEL,
     MINIMAX_PROVIDER,
+    CloudflareFallbackRequired,
     build_provider_routing_client,
 )
 from .m26_multilingual_canonicalization import (
@@ -78,6 +79,139 @@ class Track2StagingTrace:
     graph_results: dict[str, dict[str, Any]] = field(default_factory=dict)
     selector_projection_summary: dict[str, Any] = field(default_factory=dict)
     selector_provenance_trace: list[dict[str, Any]] = field(default_factory=list)
+
+
+class Track2ClosureProviderFallbackReplayRunner:
+    """Replay one closure execution after a routed Cloudflare fallback signal."""
+
+    def __init__(
+        self,
+        closure_runner: Callable[..., tuple[Mapping[str, Any], Mapping[str, Any]]]
+        = synthesize_and_verify,
+    ) -> None:
+        self._closure_runner = closure_runner
+        self.calls = 0
+        self.outer_fallback_replay_count = 0
+        self._last_telemetry: dict[str, Any] = {
+            "outer_fallback_replay_count": 0,
+            "outer_closure_execution_count": 0,
+            "same_request_local_provider_client": False,
+            "fallback_replay_semantic_inputs_identical": False,
+            "primary_route": "",
+            "fallback_route": "",
+            "cloudflare_fallback_required": False,
+            "fallback_evidence_digest_match": None,
+        }
+
+    def __call__(self, **kwargs: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+        self.calls += 1
+        self.outer_fallback_replay_count = 0
+        input_digest = _closure_replay_input_digest(kwargs)
+        provider_client = kwargs.get("provider_client")
+        telemetry = {
+            "outer_fallback_replay_count": 0,
+            "outer_closure_execution_count": 1,
+            "same_request_local_provider_client": True,
+            "fallback_replay_semantic_inputs_identical": None,
+            "primary_route": "",
+            "fallback_route": "",
+            "cloudflare_fallback_required": False,
+            "fallback_evidence_digest_match": None,
+        }
+        try:
+            return self._closure_runner(**kwargs)
+        except CloudflareFallbackRequired:
+            self.outer_fallback_replay_count = 1
+            telemetry.update(
+                {
+                    "outer_fallback_replay_count": 1,
+                    "outer_closure_execution_count": 2,
+                    "cloudflare_fallback_required": True,
+                    "fallback_replay_semantic_inputs_identical": (
+                        input_digest == _closure_replay_input_digest(kwargs)
+                    ),
+                    "same_request_local_provider_client": (
+                        provider_client is kwargs.get("provider_client")
+                    ),
+                }
+            )
+            try:
+                result = self._closure_runner(**kwargs)
+            except Exception:
+                _update_provider_routing_replay_telemetry(
+                    telemetry,
+                    provider_client,
+                )
+                raise
+            _update_provider_routing_replay_telemetry(telemetry, provider_client)
+            self._last_telemetry = dict(telemetry)
+            return result
+        finally:
+            self._last_telemetry = dict(telemetry)
+
+    def telemetry(self) -> Mapping[str, Any]:
+        return dict(self._last_telemetry)
+
+
+def _closure_replay_input_digest(kwargs: Mapping[str, Any]) -> str:
+    evidence_ids = [
+        str(item.get("evidence_id", ""))
+        for item in kwargs.get("evidence", ())
+        if isinstance(item, Mapping)
+    ]
+    requirements = [
+        _requirement_replay_projection(item)
+        for item in kwargs.get("requirements", ())
+    ]
+    endpoint_proof = kwargs.get("endpoint_proof", {})
+    return canonical_sha256(
+        {
+            "question": str(kwargs.get("question", "")),
+            "trace_id": str(kwargs.get("trace_id", "")),
+            "intent_class": str(kwargs.get("intent_class", "")),
+            "selected_evidence_ids": evidence_ids,
+            "requirements": requirements,
+            "endpoint_proof": dict(endpoint_proof)
+            if isinstance(endpoint_proof, Mapping)
+            else {},
+        }
+    )
+
+
+def _requirement_replay_projection(requirement: Any) -> dict[str, Any]:
+    if isinstance(requirement, Mapping):
+        return {
+            "requirement_id": str(requirement.get("requirement_id", "")),
+            "instruction": str(requirement.get("instruction", "")),
+            "evidence_terms": list(requirement.get("evidence_terms", ())),
+            "visible_patterns": list(requirement.get("visible_patterns", ())),
+        }
+    return {
+        "requirement_id": str(getattr(requirement, "requirement_id", "")),
+        "instruction": str(getattr(requirement, "instruction", "")),
+        "evidence_terms": list(getattr(requirement, "evidence_terms", ())),
+        "visible_patterns": list(getattr(requirement, "visible_patterns", ())),
+    }
+
+
+def _update_provider_routing_replay_telemetry(
+    telemetry: dict[str, Any],
+    provider_client: Any,
+) -> None:
+    provider_telemetry = getattr(provider_client, "telemetry", None)
+    if not callable(provider_telemetry):
+        return
+    try:
+        snapshot = provider_telemetry()
+    except Exception:  # pragma: no cover - observability must not change runtime behavior
+        return
+    if not isinstance(snapshot, Mapping):
+        return
+    telemetry["primary_route"] = str(snapshot.get("closure_provider_initial", ""))
+    telemetry["fallback_route"] = str(snapshot.get("closure_provider_final", ""))
+    telemetry["fallback_evidence_digest_match"] = snapshot.get(
+        "fallback_evidence_digest_match"
+    )
 
 
 class SingleAttemptMiniMaxLanguageClient:
@@ -445,7 +579,7 @@ def build_track2_staging_runtime_dependencies(
                 max_cost=Decimal("0.10"),
             )
         ),
-        closure_runner=synthesize_and_verify,
+        closure_runner=Track2ClosureProviderFallbackReplayRunner(),
         endpoint_proof=trace.endpoint_proof,
         requested_language_realizer=LiveRequestedLanguageRealizer(language_client),
         equivalence_reviewer=LiveEquivalenceReviewer(language_client),

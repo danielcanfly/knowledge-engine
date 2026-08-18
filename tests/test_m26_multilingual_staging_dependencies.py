@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -9,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from knowledge_engine import m26_multilingual_public_api
-from knowledge_engine.m26_aq_semantic_contract import synthesize_and_verify
+from knowledge_engine.m26_cloudflare_provider_router import CloudflareFallbackRequired
 from knowledge_engine.m26_multilingual_canonicalization import (
     CanonicalizationRequest,
 )
@@ -30,6 +31,7 @@ from knowledge_engine.m26_multilingual_staging_dependencies import (
     SingleAttemptMiniMaxLanguageClient,
     StagingDenseRetriever,
     StagingGraphRetriever,
+    Track2ClosureProviderFallbackReplayRunner,
     Track2StagingTrace,
     _dense_result_from_union,
     _selector_projection_summary,
@@ -669,7 +671,9 @@ def test_build_track2_staging_runtime_dependencies_uses_accepted_closure_runner(
     )
 
     deps = build_track2_staging_runtime_dependencies()
-    assert deps.closure_runner is synthesize_and_verify
+    assert isinstance(deps.closure_runner, Track2ClosureProviderFallbackReplayRunner)
+    assert deps.closure_runner.calls == 0
+    assert deps.closure_runner.telemetry()["outer_fallback_replay_count"] == 0
     assert deps.closure_provider_client is None
     assert deps.closure_provider_client_factory is not None
     assert deps.evidence_selector is not None
@@ -706,3 +710,129 @@ def test_staging_closure_provider_factory_returns_request_local_clients_with_sha
     assert request1_client.state is request2_client.state
     assert request1_client.fallback is not request2_client.fallback
     assert request1_client.reviewer is not request2_client.reviewer
+
+
+def test_track2_closure_provider_fallback_replay_runner_replays_once() -> None:
+    calls: list[dict[str, Any]] = []
+
+    class ProviderClient:
+        def telemetry(self) -> Mapping[str, Any]:
+            return {
+                "closure_provider_initial": "cloudflare",
+                "closure_provider_final": "minimax-m3",
+                "fallback_evidence_digest_match": True,
+            }
+
+    provider_client = ProviderClient()
+
+    def wrapped(**kwargs: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise CloudflareFallbackRequired("CLOUDFLARE_HTTP_500")
+        return (
+            {
+                "safe_abstention": True,
+                "reason_codes": [],
+                "semantic_contract_fingerprint": "fp",
+            },
+            {
+                "semantic_contract": {"fingerprint": "fp"},
+                "support_proof": [],
+                "failures": [],
+            },
+        )
+
+    runner = Track2ClosureProviderFallbackReplayRunner(closure_runner=wrapped)
+    kwargs = {
+        "question": "What is API-42?",
+        "trace_id": "trace-1",
+        "intent_class": "direct_grounded_knowledge",
+        "evidence": [{"evidence_id": "ev-1"}],
+        "provider_client": provider_client,
+        "requirements": [{"requirement_id": "req-1"}],
+        "endpoint_proof": {"endpoint": "test"},
+    }
+
+    verification, closure = runner(**kwargs)
+
+    assert verification["safe_abstention"] is True
+    assert closure["semantic_contract"]["fingerprint"] == "fp"
+    assert runner.calls == 1
+    assert runner.outer_fallback_replay_count == 1
+    assert len(calls) == 2
+    assert calls[0]["provider_client"] is provider_client
+    assert calls[1]["provider_client"] is provider_client
+    telemetry = runner.telemetry()
+    assert telemetry["outer_fallback_replay_count"] == 1
+    assert telemetry["outer_closure_execution_count"] == 2
+    assert telemetry["same_request_local_provider_client"] is True
+    assert telemetry["fallback_replay_semantic_inputs_identical"] is True
+    assert telemetry["primary_route"] == "cloudflare"
+    assert telemetry["fallback_route"] == "minimax-m3"
+    assert telemetry["fallback_evidence_digest_match"] is True
+
+
+def test_track2_closure_provider_fallback_replay_runner_passes_through_without_replay() -> None:
+    calls = 0
+
+    def wrapped(**kwargs: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+        nonlocal calls
+        del kwargs
+        calls += 1
+        return (
+            {
+                "safe_abstention": True,
+                "reason_codes": [],
+                "semantic_contract_fingerprint": "fp",
+            },
+            {
+                "semantic_contract": {"fingerprint": "fp"},
+                "support_proof": [],
+                "failures": [],
+            },
+        )
+
+    runner = Track2ClosureProviderFallbackReplayRunner(closure_runner=wrapped)
+
+    verification, closure = runner(
+        question="What is API-42?",
+        trace_id="trace-2",
+        intent_class="direct_grounded_knowledge",
+        evidence=[{"evidence_id": "ev-2"}],
+        provider_client=object(),
+        requirements=[{"requirement_id": "req-2"}],
+        endpoint_proof={"endpoint": "test"},
+    )
+
+    assert verification["safe_abstention"] is True
+    assert closure["semantic_contract"]["fingerprint"] == "fp"
+    assert calls == 1
+    assert runner.outer_fallback_replay_count == 0
+    assert runner.telemetry()["outer_fallback_replay_count"] == 0
+
+
+def test_track2_closure_provider_fallback_replay_runner_fails_closed_on_second_fallback() -> None:
+    calls = 0
+
+    def wrapped(**kwargs: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+        nonlocal calls
+        del kwargs
+        calls += 1
+        raise CloudflareFallbackRequired("CLOUDFLARE_HTTP_500")
+
+    runner = Track2ClosureProviderFallbackReplayRunner(closure_runner=wrapped)
+
+    with pytest.raises(CloudflareFallbackRequired):
+        runner(
+            question="What is API-42?",
+            trace_id="trace-3",
+            intent_class="direct_grounded_knowledge",
+            evidence=[{"evidence_id": "ev-3"}],
+            provider_client=object(),
+            requirements=[{"requirement_id": "req-3"}],
+            endpoint_proof={"endpoint": "test"},
+        )
+
+    assert calls == 2
+    assert runner.outer_fallback_replay_count == 1
+    assert runner.telemetry()["outer_fallback_replay_count"] == 1

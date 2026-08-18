@@ -204,6 +204,7 @@ def run_track2_multilingual_request(
         closure_provider_client,
         closure_provider_telemetry,
     )
+    closure_runner_telemetry = _closure_runner_telemetry(dependencies.closure_runner)
     _emit(
         event_sink,
         "stage.completed",
@@ -218,6 +219,7 @@ def run_track2_multilingual_request(
             telemetry={
                 "retrieval": retrieval_telemetry,
                 "closure_provider": closure_provider_telemetry,
+                "closure_runner": closure_runner_telemetry,
             },
         )
 
@@ -238,6 +240,7 @@ def run_track2_multilingual_request(
         publication_result=publication_result,
         retrieval_observability=retrieval_telemetry,
         closure_provider_observability=closure_provider_telemetry,
+        closure_runner_observability=closure_runner_telemetry,
     )
 
 
@@ -295,7 +298,28 @@ def _closure_provider_telemetry_after_request(
     calls = getattr(client, "calls", None)
     if isinstance(calls, int):
         telemetry["closure_call_count_for_request"] = calls
+    provider_telemetry = getattr(client, "telemetry", None)
+    if callable(provider_telemetry):
+        try:
+            routing_telemetry = provider_telemetry()
+        except Exception:  # pragma: no cover - observability must not change runtime behavior
+            routing_telemetry = None
+        if isinstance(routing_telemetry, Mapping):
+            telemetry["provider_routing"] = dict(routing_telemetry)
     return telemetry
+
+
+def _closure_runner_telemetry(runner: Any) -> dict[str, Any]:
+    telemetry = getattr(runner, "telemetry", None)
+    if not callable(telemetry):
+        return {}
+    try:
+        value = telemetry()
+    except Exception:  # pragma: no cover - observability must not change runtime behavior
+        return {}
+    if isinstance(value, Mapping):
+        return dict(value)
+    return {}
 
 
 def _selector_trace_telemetry(
@@ -324,6 +348,7 @@ def _publication_to_runtime_result(
     publication_result: VerifiedRequestedLanguagePublicationResult,
     retrieval_observability: Mapping[str, Any],
     closure_provider_observability: Mapping[str, Any],
+    closure_runner_observability: Mapping[str, Any],
 ) -> MultilingualRuntimeResult:
     if publication_result.publication is None:
         return _failed(
@@ -334,6 +359,7 @@ def _publication_to_runtime_result(
             telemetry={
                 "retrieval": dict(retrieval_observability),
                 "closure_provider": dict(closure_provider_observability),
+                "closure_runner": dict(closure_runner_observability),
             },
         )
     publication = publication_result.publication
@@ -389,6 +415,7 @@ def _publication_to_runtime_result(
             "final_visible_language": publication.requested_answer_language,
             "retrieval": dict(retrieval_observability),
             "closure_provider": dict(closure_provider_observability),
+            "closure_runner": dict(closure_runner_observability),
             "publication": dict(publication.telemetry),
         },
     )

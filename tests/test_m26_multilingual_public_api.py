@@ -125,6 +125,16 @@ class RawPassReviewer:
         }
 
 
+class RecordingClosureRunner:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self, **kwargs: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+        del kwargs
+        self.calls += 1
+        return _closure_runner()
+
+
 def _semantic_authorities() -> SemanticAuthorityDependencies:
     return SemanticAuthorityDependencies(
         intent_classifier=lambda question: "direct_grounded_knowledge",
@@ -201,6 +211,7 @@ def _dependencies() -> DependencyBundle:
     identifier = RecordingRetriever("identifier")
     realizer = RecordingRealizer()
     reviewer = RawPassReviewer()
+    closure_runner = RecordingClosureRunner()
 
     def selector(
         union: CandidateUnionResult,
@@ -227,7 +238,7 @@ def _dependencies() -> DependencyBundle:
             evidence_selector=selector,
             semantic_authorities=_semantic_authorities(),
             closure_provider_client=object(),
-            closure_runner=_closure_runner,
+            closure_runner=closure_runner,
             endpoint_proof={"endpoint": "test"},
             requested_language_realizer=realizer,
             equivalence_reviewer=reviewer,
@@ -412,6 +423,7 @@ def test_english_auto_and_en_route_to_track1_without_track2_calls(
     assert bundle.realizer.calls == []
     assert bundle.reviewer.calls == []
     assert factory_calls == 0
+    assert bundle.dependencies.closure_runner.calls == 0
 
 
 def test_zh_tw_auto_runs_track2_and_raw_mapping_pass_authorizes_claim(
