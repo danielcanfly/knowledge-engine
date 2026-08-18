@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import pytest
+
 from knowledge_engine.m26_multilingual_semantic_spine import CanonicalSemanticContext
 from knowledge_engine.m26_multilingual_verified_claim_spine import (
     build_canonical_verified_claim_spine,
@@ -86,20 +88,39 @@ def verified_claim(
     surface_text: str = "The router preserves API-42 state.",
     citation_ids: list[str] | None = None,
     support_ref_count: int = 1,
+    claim_type: str = "EVIDENCE_FACT",
+    source_identities: list[str] | None = None,
 ) -> dict[str, Any]:
     if citation_ids is None:
         citation_ids = [f"{claim_id}_ref_1"]
+    if source_identities is None:
+        source_identities = ["source-router#section-router"]
     return {
         "claim_id": claim_id,
         "claim_role": "direct",
-        "claim_type": "EVIDENCE_FACT",
+        "claim_type": claim_type,
         "surface_text": surface_text,
         "facet_ids": ["direct_answer"],
         "support_mode": "exact_quote",
         "support_ref_count": support_ref_count,
-        "source_identities": ["source-router#section-router"],
+        "source_identities": source_identities,
         "citation_ids": citation_ids,
     }
+
+
+def citation_free_model_explanation(
+    *,
+    claim_id: str = "claim-generic",
+    surface_text: str = "This answer uses the selected evidence to explain the boundary.",
+) -> dict[str, Any]:
+    return verified_claim(
+        claim_id=claim_id,
+        surface_text=surface_text,
+        citation_ids=[],
+        support_ref_count=0,
+        claim_type="MODEL_EXPLANATION",
+        source_identities=[],
+    )
 
 
 def citation(
@@ -238,6 +259,31 @@ def test_verified_full_result_preserves_claim_identity_text_support_and_citation
     assert result.spine.publication_eligible_claim_count == 1
     assert result.spine.semantic_review == closure_result()["semantic_review"]
     assert result.spine.closure["support_proof"] == closure_result()["support_proof"]
+
+
+def test_cited_evidence_synthesis_claim_is_retained() -> None:
+    synthesis_claim = verified_claim(
+        claim_id="claim-synth",
+        surface_text="The router and cache are both verified.",
+        claim_type="EVIDENCE_SYNTHESIS",
+        citation_ids=["claim-synth_ref_1"],
+        support_ref_count=1,
+    )
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(
+            answer_claims=[synthesis_claim],
+            citations=[citation(citation_id="claim-synth_ref_1", claim_id="claim-synth")],
+        ),
+        closure=closure_result(),
+    )
+
+    assert result.status == "verified_full"
+    assert result.spine is not None
+    assert [claim.claim_id for claim in result.spine.canonical_claims] == ["claim-synth"]
+    assert result.spine.canonical_claims[0].claim_type == "EVIDENCE_SYNTHESIS"
+    assert result.spine.publication_eligible_claim_count == 1
 
 
 def test_canonical_claims_come_only_from_verified_claim_objects() -> None:
@@ -395,7 +441,7 @@ def test_missing_claim_support_mapping_fails_closed() -> None:
 
     result = project_verified_claim_spine(
         context=context(),
-        verification=verified_answer(answer_claims=[claim]),
+        verification=verified_answer(answer_claims=[claim], citations=[]),
         closure=closure_result(),
     )
 
@@ -460,6 +506,167 @@ def test_claim_empty_citation_ids_with_support_count_fails_closed() -> None:
 
     assert result.status == "failed"
     assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
+
+
+def test_uncited_evidence_fact_with_zero_support_count_fails_closed() -> None:
+    claim = verified_claim(citation_ids=[], support_ref_count=0)
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(answer_claims=[claim], citations=[]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code == "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING"
+
+
+def test_citation_free_model_explanation_is_conservatively_omitted() -> None:
+    claim = citation_free_model_explanation()
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(answer_claims=[claim]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "abstained"
+    assert result.spine is not None
+    assert result.spine.canonical_claims == ()
+    assert result.spine.publication_eligible_claim_count == 0
+    assert result.spine.dropped_claim_ids == ("claim-generic",)
+    assert result.spine.dropped_claim_count == 1
+    assert (
+        result.spine.telemetry["track2_citation_free_model_explanation_omitted_count"]
+        == 1
+    )
+    assert result.spine.telemetry[
+        "track2_citation_free_model_explanation_omitted_claim_ids"
+    ] == ("claim-generic",)
+
+
+def test_material_and_generic_claims_keep_material_and_drop_generic() -> None:
+    kept = verified_claim(
+        claim_id="claim-kept",
+        surface_text="The router preserves API-42 state.",
+        citation_ids=["claim-kept_ref_1"],
+        support_ref_count=1,
+    )
+    dropped = citation_free_model_explanation(claim_id="claim-drop")
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(
+            answer_claims=[kept, dropped],
+            citations=[citation(citation_id="claim-kept_ref_1", claim_id="claim-kept")],
+        ),
+        closure=closure_result(),
+    )
+
+    assert result.status == "verified_partial"
+    assert result.spine is not None
+    assert [claim.claim_id for claim in result.spine.canonical_claims] == ["claim-kept"]
+    assert result.spine.publication_eligible_claim_count == 1
+    assert result.spine.dropped_claim_ids == ("claim-drop",)
+    assert result.spine.dropped_claim_count == 1
+
+
+def test_multiple_generic_model_explanations_abstain_without_failure() -> None:
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(
+            answer_claims=[
+                citation_free_model_explanation(claim_id="claim-a"),
+                citation_free_model_explanation(claim_id="claim-b"),
+            ],
+            citations=[],
+        ),
+        closure=closure_result(),
+    )
+
+    assert result.status == "abstained"
+    assert result.spine is not None
+    assert result.spine.canonical_claims == ()
+    assert result.spine.dropped_claim_ids == ("claim-a", "claim-b")
+    assert result.spine.dropped_claim_count == 2
+
+
+def test_existing_partial_drop_metadata_and_new_omission_are_merged() -> None:
+    kept = verified_claim(
+        claim_id="claim-kept",
+        surface_text="The router preserves API-42 state.",
+        citation_ids=["claim-kept_ref_1"],
+        support_ref_count=1,
+    )
+    dropped = citation_free_model_explanation(claim_id="claim-omitted")
+    verification = verified_answer(
+        answer_claims=[kept, dropped],
+        citations=[citation(citation_id="claim-kept_ref_1", claim_id="claim-kept")],
+        multi_evidence_verification={
+            "partial_answer": True,
+            "dropped_claim_count": 1,
+            "dropped_claim_ids": ["claim-existing-drop"],
+            "semantic_review": {"status": "partial"},
+        },
+    )
+
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verification,
+        closure=closure_result(partial_answer=True),
+    )
+
+    assert result.status == "verified_partial"
+    assert result.spine is not None
+    assert [claim.claim_id for claim in result.spine.canonical_claims] == ["claim-kept"]
+    assert result.spine.dropped_claim_ids == ("claim-existing-drop", "claim-omitted")
+    assert result.spine.dropped_claim_count == 2
+    assert (
+        result.spine.telemetry["track2_citation_free_model_explanation_omitted_claim_ids"]
+        == ("claim-omitted",)
+    )
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        verified_claim(
+            claim_id="claim-bad-1",
+            claim_type="MODEL_EXPLANATION",
+            citation_ids=["claim-bad-1_ref_1"],
+            support_ref_count=1,
+            source_identities=[],
+        ),
+        verified_claim(
+            claim_id="claim-bad-2",
+            claim_type="MODEL_EXPLANATION",
+            citation_ids=[],
+            support_ref_count=1,
+            source_identities=[],
+        ),
+        verified_claim(
+            claim_id="claim-bad-3",
+            claim_type="MODEL_EXPLANATION",
+            citation_ids=[],
+            support_ref_count=0,
+            source_identities=["source-bad#section-bad"],
+        ),
+    ],
+)
+def test_model_explanation_with_support_or_owned_source_fails_closed(
+    claim: dict[str, Any],
+) -> None:
+    result = project_verified_claim_spine(
+        context=context(),
+        verification=verified_answer(answer_claims=[claim]),
+        closure=closure_result(),
+    )
+
+    assert result.status == "failed"
+    assert result.failure_code in {
+        "VERIFIED_CLAIM_SPINE_MODEL_EXPLANATION_SUPPORT_INVALID",
+        "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+    }
 
 
 def test_claim_malformed_citation_ids_fails_closed() -> None:

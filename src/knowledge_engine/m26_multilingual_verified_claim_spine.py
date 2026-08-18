@@ -81,6 +81,12 @@ class CanonicalVerifiedClaimSpineResult:
 ClosureRunner = Callable[..., tuple[Mapping[str, Any], Mapping[str, Any]]]
 
 
+@dataclass(frozen=True)
+class CanonicalClaimProjection:
+    canonical_claims: tuple[CanonicalVerifiedClaim, ...]
+    omitted_model_explanation_claim_ids: tuple[str, ...] = ()
+
+
 def build_canonical_verified_claim_spine(
     *,
     context: CanonicalSemanticContext,
@@ -173,12 +179,43 @@ def project_verified_claim_spine(
     claim_result = _canonical_claims(raw_claims, citations)
     if isinstance(claim_result, CanonicalVerifiedClaimSpineResult):
         return claim_result
-    if not claim_result:
+    omitted_model_explanation_claim_ids = claim_result.omitted_model_explanation_claim_ids
+    dropped_claim_ids, dropped_claim_count = _merged_dropped_metadata(
+        dropped_claim_ids,
+        dropped_claim_count,
+        omitted_model_explanation_claim_ids,
+    )
+    if not claim_result.canonical_claims:
+        if omitted_model_explanation_claim_ids:
+            return _spine_result(
+                status="abstained",
+                context=context,
+                verification=verification,
+                closure=closure,
+                answer_source=answer_source,
+                safe_abstention=True,
+                reason_codes=reason_codes,
+                repair_attempted=repair_attempted,
+                unsupported_accepted_claims=unsupported_accepted_claims,
+                citation_locator_valid=citation_locator_valid,
+                material_claim_support_verified=material_claim_support_verified,
+                canonical_claims=(),
+                citations=citations,
+                semantic_review=semantic_review,
+                dropped_claim_ids=dropped_claim_ids,
+                dropped_claim_count=dropped_claim_count,
+                omitted_model_explanation_claim_ids=omitted_model_explanation_claim_ids,
+            )
         return _failure(
             "VERIFIED_CLAIM_SPINE_NO_VERIFIED_CLAIMS",
             "accepted non-abstention verification contained no verified claims",
         )
-    status = "verified_partial" if _is_partial_answer(verification, closure) else "verified_full"
+    status = (
+        "verified_partial"
+        if _is_partial_answer(verification, closure)
+        or omitted_model_explanation_claim_ids
+        else "verified_full"
+    )
     return _spine_result(
         status=status,
         context=context,
@@ -191,11 +228,12 @@ def project_verified_claim_spine(
         unsupported_accepted_claims=unsupported_accepted_claims,
         citation_locator_valid=citation_locator_valid,
         material_claim_support_verified=material_claim_support_verified,
-        canonical_claims=claim_result,
+        canonical_claims=claim_result.canonical_claims,
         citations=citations,
         semantic_review=semantic_review,
         dropped_claim_ids=dropped_claim_ids,
         dropped_claim_count=dropped_claim_count,
+        omitted_model_explanation_claim_ids=omitted_model_explanation_claim_ids,
     )
 
 
@@ -248,13 +286,14 @@ def _integrity_failure(
 def _canonical_claims(
     raw_claims: Sequence[Mapping[str, Any]],
     citations: tuple[Mapping[str, Any], ...],
-) -> tuple[CanonicalVerifiedClaim, ...] | CanonicalVerifiedClaimSpineResult:
+) -> CanonicalClaimProjection | CanonicalVerifiedClaimSpineResult:
     citation_index_result = _citation_index(citations)
     if isinstance(citation_index_result, CanonicalVerifiedClaimSpineResult):
         return citation_index_result
     citation_index = citation_index_result
 
     claims: list[CanonicalVerifiedClaim] = []
+    omitted_model_explanation_claim_ids: list[str] = []
     for raw_claim in raw_claims:
         claim_id = str(raw_claim.get("claim_id", "")).strip()
         if not claim_id:
@@ -270,6 +309,23 @@ def _canonical_claims(
         if isinstance(support_ref_count_result, CanonicalVerifiedClaimSpineResult):
             return support_ref_count_result
         support_ref_count = support_ref_count_result
+        if _is_supported_model_explanation(raw_claim, citation_ids, support_ref_count):
+            return _failure(
+                "VERIFIED_CLAIM_SPINE_MODEL_EXPLANATION_SUPPORT_INVALID",
+                "accepted MODEL_EXPLANATION carried corpus support",
+            )
+        if not citation_ids:
+            if _is_citation_free_model_explanation(
+                raw_claim,
+                citation_ids,
+                support_ref_count,
+            ):
+                omitted_model_explanation_claim_ids.append(claim_id)
+                continue
+            return _failure(
+                "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
+                "accepted material claim had no authoritative citation_ids",
+            )
         if support_ref_count != len(citation_ids):
             return _failure(
                 "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
@@ -318,7 +374,10 @@ def _canonical_claims(
                 publication_eligible=True,
             )
         )
-    return tuple(claims)
+    return CanonicalClaimProjection(
+        canonical_claims=tuple(claims),
+        omitted_model_explanation_claim_ids=tuple(omitted_model_explanation_claim_ids),
+    )
 
 
 def _citation_index(
@@ -370,11 +429,6 @@ def _claim_citation_ids(
             "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
             f"accepted claim {claim_id} contained duplicate citation_ids",
         )
-    if not citation_ids:
-        return _failure(
-            "VERIFIED_CLAIM_SPINE_CITATION_MAPPING_MISSING",
-            f"accepted claim {claim_id} had no authoritative citation_ids",
-        )
     return citation_ids
 
 
@@ -401,6 +455,31 @@ def _claim_support_ref_count(
             "accepted claim had support_ref_count without citation_ids",
         )
     return count
+
+
+def _is_citation_free_model_explanation(
+    raw_claim: Mapping[str, Any],
+    citation_ids: tuple[str, ...],
+    support_ref_count: int,
+) -> bool:
+    if str(raw_claim.get("claim_type", "")).strip() != "MODEL_EXPLANATION":
+        return False
+    if support_ref_count != 0 or citation_ids:
+        return False
+    source_identities = _string_tuple(raw_claim.get("source_identities", ()))
+    return not source_identities
+
+
+def _is_supported_model_explanation(
+    raw_claim: Mapping[str, Any],
+    citation_ids: tuple[str, ...],
+    support_ref_count: int,
+) -> bool:
+    if str(raw_claim.get("claim_type", "")).strip() != "MODEL_EXPLANATION":
+        return False
+    return support_ref_count > 0 or bool(citation_ids) or bool(
+        _string_tuple(raw_claim.get("source_identities", ()))
+    )
 
 
 def _semantic_review(
@@ -438,6 +517,21 @@ def _partial_drop_metadata(
     return dropped_ids, dropped_count
 
 
+def _merged_dropped_metadata(
+    dropped_claim_ids: tuple[str, ...],
+    dropped_claim_count: int,
+    omitted_model_explanation_claim_ids: tuple[str, ...],
+) -> tuple[tuple[str, ...], int]:
+    if not omitted_model_explanation_claim_ids:
+        return dropped_claim_ids, dropped_claim_count
+    merged_ids = _dedupe_ordered(
+        (*dropped_claim_ids, *omitted_model_explanation_claim_ids)
+    )
+    if dropped_claim_ids:
+        return merged_ids, len(merged_ids)
+    return merged_ids, dropped_claim_count + len(omitted_model_explanation_claim_ids)
+
+
 def _is_partial_answer(
     verification: Mapping[str, Any],
     closure: Mapping[str, Any],
@@ -472,6 +566,7 @@ def _spine_result(
     semantic_review: Mapping[str, Any],
     dropped_claim_ids: tuple[str, ...],
     dropped_claim_count: int,
+    omitted_model_explanation_claim_ids: tuple[str, ...] = (),
 ) -> CanonicalVerifiedClaimSpineResult:
     spine = CanonicalVerifiedClaimSpine(
         status=status,
@@ -505,6 +600,12 @@ def _spine_result(
             "publication_eligible_claim_count": sum(
                 1 for claim in canonical_claims if claim.publication_eligible
             ),
+            "track2_citation_free_model_explanation_omitted_count": len(
+                omitted_model_explanation_claim_ids
+            ),
+            "track2_citation_free_model_explanation_omitted_claim_ids": (
+                omitted_model_explanation_claim_ids
+            ),
         },
     )
     return CanonicalVerifiedClaimSpineResult(status=status, spine=spine)
@@ -527,6 +628,16 @@ def _string_tuple(value: Any) -> tuple[str, ...]:
     if not isinstance(value, Sequence):
         return ()
     return tuple(str(item) for item in value if str(item))
+
+
+def _dedupe_ordered(values: Sequence[str]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            ordered.append(value)
+    return tuple(ordered)
 
 
 def _failure(code: str, detail: str) -> CanonicalVerifiedClaimSpineResult:

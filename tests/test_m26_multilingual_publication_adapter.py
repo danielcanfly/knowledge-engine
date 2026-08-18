@@ -864,6 +864,36 @@ def test_partial_upstream_all_retained_pass_verified_partial() -> None:
     assert result.publication.canonical_dropped_claim_ids == ("claim-b",)
 
 
+def test_conservative_omission_partial_spine_sends_only_retained_claim_ids() -> None:
+    realizer = RecordingRealizer(
+        response=realized_response(("claim-a", "請保留 API-42 與 LLM。"))
+    )
+    reviewer = RecordingReviewer(
+        response=RequestedLanguageEquivalenceReviewResponse(
+            reviews=(review_for("claim-a"),)
+        )
+    )
+
+    result = build_verified_requested_language_publication(
+        canonical_spine=full_spine(
+            status="verified_partial",
+            canonical_claims=(claim_a(),),
+            dropped_claim_ids=("claim-generic",),
+            dropped_claim_count=1,
+        ),
+        realizer=realizer,
+        equivalence_reviewer=reviewer,
+    )
+
+    assert result.ok
+    assert result.publication is not None
+    assert result.publication.status == "verified_partial"
+    assert [claim.canonical_claim_id for claim in realizer.calls[0].claims] == ["claim-a"]
+    assert [claim.canonical_claim_id for claim in reviewer.calls[0].claims] == ["claim-a"]
+    assert "claim-generic" not in result.publication.visible_answer_text
+    assert result.publication.canonical_dropped_claim_ids == ("claim-generic",)
+
+
 def test_full_upstream_one_chinese_claim_fails_verified_partial() -> None:
     realizer = RecordingRealizer(
         response=realized_response(
@@ -937,6 +967,36 @@ def test_upstream_abstained_skips_realizer_and_reviewer() -> None:
     assert realizer.calls == []
     assert reviewer.calls == []
     assert result.publication.visible_claims == ()
+
+
+def test_conservative_omission_zero_retained_material_skips_publication_providers() -> None:
+    realizer = RecordingRealizer(
+        response=realized_response(("claim-a", "請保留 API-42 與 LLM。"))
+    )
+    reviewer = RecordingReviewer(
+        response=RequestedLanguageEquivalenceReviewResponse(
+            reviews=(review_for("claim-a"),)
+        )
+    )
+
+    result = build_verified_requested_language_publication(
+        canonical_spine=full_spine(
+            status="abstained",
+            canonical_claims=(),
+            safe_abstention=True,
+            reason_codes=("TRACK2_CITATION_FREE_MODEL_EXPLANATION_OMITTED",),
+        ),
+        realizer=realizer,
+        equivalence_reviewer=reviewer,
+    )
+
+    assert result.ok
+    assert result.publication is not None
+    assert result.publication.status == "abstained"
+    assert result.publication.visible_claims == ()
+    assert result.publication.visible_claim_count == 0
+    assert realizer.calls == []
+    assert reviewer.calls == []
 
 
 def test_no_english_fallback_on_zh_tw_failure() -> None:
