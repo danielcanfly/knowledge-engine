@@ -65,9 +65,12 @@ _NUMBER_RE = re.compile(r"(?<![A-Za-z0-9_.-])[-+]?\d+(?:\.\d+)?(?![A-Za-z0-9_.-]
 _COMPARISON_RE = re.compile(r"<=|>=|<|>|=")
 _PLACEHOLDER_RE = re.compile(r"__M26TG\d+__")
 
-_NEGATION_SOURCE = ("不", "非", "沒有", "無", "未", "不能", "不可")
+_HIGH_CONFIDENCE_NEGATION_RE = re.compile(
+    r"(?:沒有|不能|不可|不會|不應|不該|不是|不含|不包含|無法|未能)"
+)
 _NEGATION_EN = re.compile(
-    r"\b(?:not|no|never|without|cannot|can't|won't|mustn't|isn't|aren't|doesn't|don't|didn't)\b",
+    r"\b(?:not|no|never|without|cannot|can't|won't|mustn't|isn't|aren't|doesn't|"
+    r"don't|didn't|lack|lacks|lacking|absent|missing|neither|nor|deny|denies|denied)\b",
     re.I,
 )
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
@@ -244,6 +247,7 @@ def validate_translation_invariants(
         "number_preservation": True,
         "comparison_boundary_preservation": True,
         "negation_token_not_obviously_lost": True,
+        "negation_requires_semantic_review": False,
     }
     if not provider_success:
         return _failed(
@@ -292,13 +296,11 @@ def validate_translation_invariants(
                 checks,
             )
 
-    if _source_has_negation(original_text) and not _NEGATION_EN.search(restored_text):
+    source_has_negation = _source_has_high_confidence_negation(original_text)
+    english_has_negation = bool(_NEGATION_EN.search(restored_text))
+    if source_has_negation and not english_has_negation:
         checks["negation_token_not_obviously_lost"] = False
-        return _failed(
-            "TRANSLATION_INVARIANT_FAILED",
-            "source negation was present but no deterministic English negation token was found",
-            checks,
-        )
+        checks["negation_requires_semantic_review"] = True
 
     if _PLACEHOLDER_RE.search(restored_text):
         checks["placeholder_leak_absent"] = False
@@ -318,8 +320,8 @@ def _component_has_zh_tw_predicate_context(text: str, start: int, end: int) -> b
     return bool(grammar.search(right))
 
 
-def _source_has_negation(text: str) -> bool:
-    return any(token in text for token in _NEGATION_SOURCE)
+def _source_has_high_confidence_negation(text: str) -> bool:
+    return bool(_HIGH_CONFIDENCE_NEGATION_RE.search(text))
 
 
 def _failed(

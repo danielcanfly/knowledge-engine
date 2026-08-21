@@ -289,7 +289,6 @@ def test_protected_spans_restore_urls_hashes_versions_model_ids_numbers_and_code
         ("Use __M26TG0__ and __M26TG0__ twice.", "TRANSLATION_INVARIANT_FAILED"),
         ("Use __M26TG999__.", "TRANSLATION_INVARIANT_FAILED"),
         ("", "TRANSLATION_OUTPUT_INVALID"),
-        ("Affirmative translation survived __M26TG0__.", "TRANSLATION_INVARIANT_FAILED"),
     ],
 )
 def test_gateway_fails_closed_for_invariant_failures(translated: str, code: str) -> None:
@@ -723,6 +722,162 @@ def test_staging_api_returns_sanitized_503_for_auth_failure(
     detail = response.json()["detail"]
     assert detail["code"] == "TRANSLATION_PROVIDER_CONFIG_MISSING"
     assert "raw adc" not in json.dumps(detail).lower()
+
+
+@pytest.mark.parametrize(
+    ("env_updates", "expected_code"),
+    [
+        ({}, "TRANSLATION_PROVIDER_CONFIG_MISSING"),
+        (
+            {
+                "M26_TRANSLATION_GOOGLE_PROJECT_ID": "proj",
+                "M26_TRANSLATION_TIMEOUT_SECONDS": "not-a-number",
+            },
+            "TRANSLATION_PROVIDER_CONFIG_MISSING",
+        ),
+        (
+            {
+                "M26_TRANSLATION_GOOGLE_PROJECT_ID": "proj",
+                "M26_TRANSLATION_GOOGLE_MODEL": "general/nmt",
+            },
+            "TRANSLATION_PROVIDER_CONFIG_MISSING",
+        ),
+    ],
+)
+def test_provider_factory_configuration_failures_are_sanitized_503(
+    monkeypatch: pytest.MonkeyPatch,
+    env_updates: dict[str, str],
+    expected_code: str,
+) -> None:
+    from knowledge_engine import m26_ask_api
+
+    downstream_calls = 0
+
+    def fake_run_owner_query_for_web(**kwargs: Any) -> dict[str, Any]:
+        nonlocal downstream_calls
+        downstream_calls += 1
+        return {"answer_text": "bad"}
+
+    monkeypatch.setenv("M26_QUERY_BACKEND_TOKEN", "test")
+    monkeypatch.setenv("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", "owner")
+    monkeypatch.delenv("M26_TRANSLATION_GOOGLE_PROJECT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    monkeypatch.delenv("GCLOUD_PROJECT", raising=False)
+    monkeypatch.delenv("M26_TRANSLATION_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("M26_TRANSLATION_GOOGLE_MODEL", raising=False)
+    for key, value in env_updates.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(m26_ask_api, "run_owner_query_for_web", fake_run_owner_query_for_web)
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/translation-gateway/query",
+        headers={
+            "authorization": "Bearer test",
+            "x-m26-owner-subject-hash": "owner",
+        },
+        json={"question": "版本 v1.4.2 是什麼？"},
+    )
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["code"] == expected_code
+    assert detail["message"] == "M26 translation gateway failed closed before sealed runtime"
+    assert downstream_calls == 0
+
+
+def test_provider_factory_failure_does_not_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("M26_QUERY_BACKEND_TOKEN", "test")
+    monkeypatch.setenv("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", "owner")
+    factory_calls = 0
+
+    def broken_factory() -> Any:
+        nonlocal factory_calls
+        factory_calls += 1
+        raise TranslationProviderError(
+            "TRANSLATION_PROVIDER_CONFIG_MISSING",
+            "sanitized factory failure",
+        )
+
+    app = create_app(provider_factory=broken_factory)
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/translation-gateway/query",
+        headers={
+            "authorization": "Bearer test",
+            "x-m26-owner-subject-hash": "owner",
+        },
+        json={"question": "版本 v1.4.2 是什麼？"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "TRANSLATION_PROVIDER_CONFIG_MISSING"
+    assert factory_calls == 1
+
+
+@pytest.mark.parametrize(
+    ("source", "english"),
+    [
+        ("這個結果非常重要嗎？", "Is this result very important?"),
+        ("未來要支援哪些模型？", "Which models should be supported in the future?"),
+        (
+            "無論哪個 provider 都要 fail closed 嗎？",
+            "Should it fail closed regardless of the provider?",
+        ),
+    ],
+)
+def test_negation_guard_does_not_hard_fail_non_negative_compounds(
+    source: str,
+    english: str,
+) -> None:
+    provider = FakeProvider(english)
+    seen: list[str] = []
+
+    result = run_translation_gateway(
+        question=source,
+        provider=provider,
+        downstream=lambda question: seen.append(question) or {"answer_text": "ok"},
+    )
+
+    assert result.ok
+    assert seen == [english]
+    assert result.observability["invariant_checks"]["negation_requires_semantic_review"] is False
+
+
+def test_negation_guard_accepts_lacks_as_valid_negative_realization() -> None:
+    provider = FakeProvider("the evidence lacks a necessary constraint")
+    seen: list[str] = []
+
+    result = run_translation_gateway(
+        question="evidence 沒有包含必要限制",
+        provider=provider,
+        downstream=lambda question: seen.append(question) or {"answer_text": "ok"},
+    )
+
+    assert result.ok
+    assert seen == ["the evidence lacks a necessary constraint"]
+    checks = result.observability["invariant_checks"]
+    assert checks["negation_token_not_obviously_lost"] is True
+    assert checks["negation_requires_semantic_review"] is False
+
+
+def test_negation_guard_flags_obvious_loss_for_semantic_review_without_hard_fail() -> None:
+    provider = FakeProvider("the evidence includes a necessary constraint")
+    seen: list[str] = []
+
+    result = run_translation_gateway(
+        question="evidence 沒有包含必要限制",
+        provider=provider,
+        downstream=lambda question: seen.append(question) or {"answer_text": "ok"},
+    )
+
+    assert result.ok
+    assert seen == ["the evidence includes a necessary constraint"]
+    checks = result.observability["invariant_checks"]
+    assert checks["negation_token_not_obviously_lost"] is False
+    assert checks["negation_requires_semantic_review"] is True
 
 
 def test_provider_failure_does_not_retry_translation_request() -> None:

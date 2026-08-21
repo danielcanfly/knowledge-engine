@@ -22,10 +22,12 @@ from .m26_google_translation_provider import (
     GoogleTranslationLLMProvider,
     TranslationProvider,
     TranslationProviderConfig,
+    TranslationProviderError,
 )
 from .m26_translation_gateway import (
     TRANSLATION_GATEWAY_SCHEMA,
     TranslationGatewayError,
+    TranslationGatewayFailure,
     run_owner_translation_gateway_for_web,
 )
 
@@ -110,28 +112,44 @@ def create_app(
             raise _http_error(status.HTTP_400_BAD_REQUEST, "M26_TG_REQUEST_FIELD_DENIED")
         try:
             validate_query_request(payload)
+            provider = _app_translation_provider(app)
             return run_owner_translation_gateway_for_web(
                 root=app.state.root,
                 gate_path=app.state.gate_path,
                 request_payload=payload,
                 owner_subject_hash=owner_hash,
-                provider=_app_translation_provider(app),
+                provider=provider,
                 correlation_id=str(uuid.uuid4()),
             )
-        except TranslationGatewayError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={
-                    "code": exc.reason_code,
-                    "message": "M26 translation gateway failed closed before sealed runtime",
-                    "observability": exc.failure.observability,
-                },
+        except TranslationProviderError as exc:
+            raise _translation_gateway_http_error(
+                TranslationGatewayFailure(
+                    reason_code=exc.reason_code,
+                    message="translation provider configuration failed",
+                    observability={
+                        "schema_version": TRANSLATION_GATEWAY_SCHEMA,
+                        "gateway_failure_code": exc.reason_code,
+                    },
+                )
             ) from exc
+        except TranslationGatewayError as exc:
+            raise _translation_gateway_http_error(exc.failure) from exc
 
     return app
 
 
 app = create_app()
+
+
+def _translation_gateway_http_error(failure: TranslationGatewayFailure) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "code": failure.reason_code,
+            "message": "M26 translation gateway failed closed before sealed runtime",
+            "observability": failure.observability,
+        },
+    )
 
 
 __all__ = [
