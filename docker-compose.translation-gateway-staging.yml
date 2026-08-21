@@ -1,0 +1,51 @@
+name: m26-translation-gateway-staging-291ef671
+
+services:
+  m26-translation-gateway-staging:
+    build: .
+    image: knowledge-engine:m26-translation-gateway-staging-291ef671
+    container_name: m26-translation-gateway-staging-291ef671
+    restart: unless-stopped
+    command:
+      [
+        "uvicorn",
+        "knowledge_engine.m26_translation_gateway_public_api:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080"
+      ]
+    env_file:
+      - path: /Users/huaihsuanhuang/Desktop/.env
+        required: false
+      - path: .env.translation-gateway-staging.291ef671
+        required: false
+    environment:
+      APP_ENV: staging
+      M26_TRANSLATION_GATEWAY_CANDIDATE_SHA: ${M26_TRANSLATION_GATEWAY_CANDIDATE_SHA:-291ef67111e3e27ad0665114f35660618c09544a}
+      M26_TRANSLATION_GATEWAY_PRODUCTION_READY: "false"
+      M26_TRANSLATION_GATEWAY_PRODUCTION_ENABLED: "false"
+    ports:
+      - "127.0.0.1:18083:8080"
+    volumes:
+      - m26-translation-gateway-cache:/var/lib/knowledge-engine/cache
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/translation-gateway/health', timeout=3)"
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  m26-translation-gateway-cache:
