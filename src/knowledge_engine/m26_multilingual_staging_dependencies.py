@@ -59,6 +59,8 @@ from .m26_production_answer_bundle import (
 from .m26_verified_answer_citation_gate import canonical_sha256
 
 DEFAULT_STAGING_ENV_FILE = Path("/Users/huaihsuanhuang/Desktop/.env")
+TRACK2_REQUIRE_REMOTE_DENSE_ENV = "M26_TRACK2_REQUIRE_REMOTE_DENSE"
+_TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
 LANGUAGE_MODEL_MAX_TOKENS = 900
 LANGUAGE_PROVIDER_CALL_CLASSES = {
     "multilingual_canonicalization": "m26_track2_multilingual_canonicalization",
@@ -222,8 +224,6 @@ class SingleAttemptMiniMaxLanguageClient:
         telemetry: LanguageProviderTelemetry | None = None,
         timeout: float = 60.0,
     ) -> None:
-        if not api_key:
-            raise LiveGateError("MINIMAX_API_KEY missing")
         self.api_key = api_key
         self.telemetry = telemetry or LanguageProviderTelemetry()
         self.timeout = timeout
@@ -268,6 +268,8 @@ class SingleAttemptMiniMaxLanguageClient:
         user: Mapping[str, Any],
         max_tokens: int,
     ) -> Mapping[str, Any]:
+        if not self.api_key:
+            raise LiveGateError("MINIMAX_API_KEY missing")
         response = prepare_minimax_http_client().post(
             ENDPOINT,
             headers={
@@ -563,7 +565,9 @@ def build_track2_staging_runtime_dependencies(
     _load_env_file(env_file or _env_file_from_env())
     _normalize_r2_endpoint_for_staging()
     os.environ.setdefault("M26_PA7_DENSE_COLLECTION", FULL_PRODUCTION_QDRANT_COLLECTION)
-    dense_channel = legacy.dense_channel_from_env(require_remote=True)
+    dense_channel = legacy.dense_channel_from_env(
+        require_remote=_track2_remote_dense_required()
+    )
     trace = Track2StagingTrace(
         dense_channel=dense_channel,
         endpoint_proof={"required": False, "matched": False},
@@ -622,6 +626,13 @@ def track2_runtime_readiness(
         **readiness,
         "multilingual_runtime_ready": all(readiness.values()),
     }
+
+
+def _track2_remote_dense_required() -> bool:
+    return (
+        os.environ.get(TRACK2_REQUIRE_REMOTE_DENSE_ENV, "").strip().lower()
+        in _TRUE_ENV_VALUES
+    )
 
 
 def _env_file_from_env() -> Path:

@@ -60,6 +60,9 @@ packages = ["src/knowledge_engine"]
 testpaths = ["tests"]
 pythonpath = [".", "tests"]
 addopts = "-ra --strict-markers"
+markers = [
+    "live_remote_dense: requires explicit live remote dense configuration; skipped unless M26_TRACK2_REQUIRE_REMOTE_DENSE is enabled",
+]
 
 [tool.ruff]
 target-version = "py311"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import zipfile
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -24,6 +25,8 @@ _LEGACY_AQ_FORMAL_FIXTURE_MODULES = {
 }
 _FIXED_ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 _LEGACY_PROVIDER_SCHEMA = "aq3-provider-candidate/v3"
+_LIVE_REMOTE_DENSE_ENV = "M26_TRACK2_REQUIRE_REMOTE_DENSE"
+_TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
 _LEGACY_FIXTURE_FACETS = {
     "direct_answer",
     "entity_role",
@@ -43,6 +46,27 @@ _LEGACY_FIXTURE_FACETS = {
     "ordering_boundary",
     "non_entailment_boundary",
 }
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config,
+    items: list[pytest.Item],
+) -> None:
+    del config
+    remote_dense_enabled = (
+        os.environ.get(_LIVE_REMOTE_DENSE_ENV, "").strip().lower() in _TRUE_ENV_VALUES
+    )
+    if remote_dense_enabled:
+        return
+    skip_live_remote_dense = pytest.mark.skip(
+        reason=(
+            "requires M26_TRACK2_REQUIRE_REMOTE_DENSE=true and safe live remote "
+            "dense configuration"
+        )
+    )
+    for item in items:
+        if "live_remote_dense" in item.keywords:
+            item.add_marker(skip_live_remote_dense)
 
 
 @pytest.fixture(autouse=True)

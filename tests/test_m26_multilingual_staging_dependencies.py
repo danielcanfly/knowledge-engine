@@ -9,7 +9,12 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from knowledge_engine import m26_multilingual_public_api
+from knowledge_engine import (
+    m26_multilingual_public_api,
+)
+from knowledge_engine import (
+    m26_pa7_arbitrary_query_runtime as legacy,
+)
 from knowledge_engine.m26_cloudflare_provider_router import CloudflareFallbackRequired
 from knowledge_engine.m26_multilingual_canonicalization import (
     CanonicalizationRequest,
@@ -169,6 +174,66 @@ def test_readiness_rejects_missing_closure_provider_factory_and_client() -> None
 
     assert readiness["closure_ready"] is False
     assert readiness["multilingual_runtime_ready"] is False
+
+
+def test_staging_runtime_dependencies_do_not_require_remote_dense_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    for key in (
+        "M26_TRACK2_REQUIRE_REMOTE_DENSE",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_AI_TOKEN",
+        "QDRANT_URL",
+        "QDRANT_API_KEY",
+        "QDRANT_API_KEY_READ",
+        "QDRANT_READ_ONLY_API_KEY",
+        "M26_PA7_DENSE_COLLECTION",
+        "QDRANT_COLLECTION",
+        "QDRANT_COLLECTION_NAME",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    deps = build_track2_staging_runtime_dependencies(
+        env_file=tmp_path / "missing.env"
+    )
+
+    assert isinstance(deps.dense_retriever, StagingDenseRetriever)
+    assert isinstance(
+        deps.dense_retriever.trace.dense_channel,
+        legacy.LocalDenseProjectionChannel,
+    )
+
+
+def test_staging_runtime_dependencies_require_remote_dense_when_gate_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    for key in (
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_AI_TOKEN",
+        "QDRANT_URL",
+        "QDRANT_API_KEY",
+        "QDRANT_API_KEY_READ",
+        "QDRANT_READ_ONLY_API_KEY",
+        "M26_PA7_DENSE_COLLECTION",
+        "QDRANT_COLLECTION",
+        "QDRANT_COLLECTION_NAME",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("M26_TRACK2_REQUIRE_REMOTE_DENSE", "true")
+
+    with pytest.raises(legacy.PA7ArbitraryQueryError) as excinfo:
+        build_track2_staging_runtime_dependencies(env_file=tmp_path / "missing.env")
+
+    message = str(excinfo.value)
+    assert "PA7_REMOTE_DENSE_CONFIG_MISSING" in message
+    assert "cloudflare_account_id" in message
+    assert "cloudflare_api_token" in message
+    assert "qdrant_api_key" in message
+    assert "qdrant_url" in message
 
 
 def test_health_exposes_sanitized_runtime_readiness() -> None:
@@ -585,6 +650,18 @@ def test_requested_language_provider_prompts_do_not_relax_missing_sequences() ->
 def test_single_attempt_language_client_has_no_retry_loop() -> None:
     client = SingleAttemptMiniMaxLanguageClient(api_key="test-key")
     assert client.max_network_attempts == 1
+
+
+def test_single_attempt_language_client_defers_missing_key_until_live_call() -> None:
+    client = SingleAttemptMiniMaxLanguageClient(api_key="")
+    assert client.max_network_attempts == 1
+
+    with pytest.raises(LiveGateError, match="MINIMAX_API_KEY missing"):
+        client.generate_json(
+            purpose="multilingual_canonicalization",
+            system="Return JSON.",
+            user={},
+        )
 
 
 def test_dense_original_and_canonical_adapter_calls_once_each() -> None:
