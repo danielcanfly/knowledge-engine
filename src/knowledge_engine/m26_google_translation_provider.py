@@ -118,6 +118,8 @@ class GoogleTranslationLLMProvider:
         self._access_token = access_token
         self._token_source = token_source
         self._client = client
+        self._owns_client = client is None
+        self._client_lock = threading.Lock()
         self.calls = 0
 
     def translate(self, request: TranslationRequest) -> TranslationProviderResult:
@@ -129,7 +131,20 @@ class GoogleTranslationLLMProvider:
                 "translation target or MIME type is invalid",
                 start,
             )
-        token = self._access_token or self._bearer_token()
+        try:
+            token = self._access_token or self._bearer_token()
+        except TranslationProviderError as exc:
+            return self._failed(
+                exc.reason_code,
+                "translation authentication failed",
+                start,
+            )
+        except Exception:
+            return self._failed(
+                "TRANSLATION_PROVIDER_FAILED",
+                "translation authentication failed",
+                start,
+            )
         endpoint = (
             f"https://translation.googleapis.com/v3/projects/{self.config.project_id}"
             f"/locations/{self.config.location}:translateText"
@@ -151,12 +166,12 @@ class GoogleTranslationLLMProvider:
                     timeout=self.config.timeout_seconds,
                 )
             else:
-                with httpx.Client(timeout=self.config.timeout_seconds) as client:
-                    response = client.post(
-                        endpoint,
-                        json=body,
-                        headers={"Authorization": f"Bearer {token}"},
-                    )
+                response = self._http_client().post(
+                    endpoint,
+                    json=body,
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=self.config.timeout_seconds,
+                )
         except httpx.TimeoutException:
             return self._failed("TRANSLATION_TIMEOUT", "translation request timed out", start)
         except httpx.HTTPError:
@@ -206,11 +221,21 @@ class GoogleTranslationLLMProvider:
             latency_ms=_latency_ms(start),
         )
 
-
     def _bearer_token(self) -> str:
         if self._token_source is None:
             self._token_source = ADCBearerTokenSource()
         return self._token_source.token()
+
+    def _http_client(self) -> httpx.Client:
+        if self._client is None:
+            with self._client_lock:
+                if self._client is None:
+                    self._client = httpx.Client(timeout=self.config.timeout_seconds)
+        return self._client
+
+    def close(self) -> None:
+        if self._owns_client and self._client is not None:
+            self._client.close()
 
 
 class ADCBearerTokenSource:
@@ -227,7 +252,15 @@ class ADCBearerTokenSource:
                 credentials = _default_adc_credentials()
                 self._credentials = credentials
             if not _credentials_valid(credentials):
-                credentials.refresh(self._request())
+                try:
+                    credentials.refresh(self._request())
+                except TranslationProviderError:
+                    raise
+                except Exception as exc:
+                    raise TranslationProviderError(
+                        "TRANSLATION_PROVIDER_FAILED",
+                        "Application Default Credentials refresh failed",
+                    ) from exc
                 self.refresh_count += 1
             token = getattr(credentials, "token", "")
             if not token:
@@ -251,9 +284,15 @@ def _default_adc_credentials() -> Any:
             "TRANSLATION_PROVIDER_CONFIG_MISSING",
             "google-auth is required for Application Default Credentials",
         ) from exc
-    credentials, _project = google.auth.default(
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
+    try:
+        credentials, _project = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+    except Exception as exc:
+        raise TranslationProviderError(
+            "TRANSLATION_PROVIDER_CONFIG_MISSING",
+            "Application Default Credentials are unavailable",
+        ) from exc
     return credentials
 
 
@@ -265,7 +304,13 @@ def _google_auth_request() -> Any:
             "TRANSLATION_PROVIDER_CONFIG_MISSING",
             "google-auth requests transport is required for ADC refresh",
         ) from exc
-    return google.auth.transport.requests.Request()
+    try:
+        return google.auth.transport.requests.Request()
+    except Exception as exc:
+        raise TranslationProviderError(
+            "TRANSLATION_PROVIDER_FAILED",
+            "google-auth requests transport is unavailable",
+        ) from exc
 
 
 def _credentials_valid(credentials: Any) -> bool:

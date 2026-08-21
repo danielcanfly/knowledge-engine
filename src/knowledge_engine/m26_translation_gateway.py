@@ -200,7 +200,7 @@ def run_owner_translation_gateway_for_web(
     dense_channel: Any = None,
     require_remote_dense: bool = False,
     max_provider_calls: int | None = None,
-    max_cost: Decimal = Decimal("0.10"),
+    max_cost: Decimal | None = None,
     correlation_id: str = "",
 ) -> dict[str, Any]:
     from .m26_ask_api import run_owner_query_for_web, validate_query_request
@@ -217,10 +217,11 @@ def run_owner_translation_gateway_for_web(
             "provider_client": provider_client,
             "dense_channel": dense_channel,
             "require_remote_dense": require_remote_dense,
-            "max_cost": max_cost,
         }
         if max_provider_calls is not None:
             kwargs["max_provider_calls"] = max_provider_calls
+        if max_cost is not None:
+            kwargs["max_cost"] = max_cost
         return run_owner_query_for_web(**kwargs)
 
     result = run_translation_gateway(

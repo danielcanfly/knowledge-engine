@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import threading
 import uuid
+from collections.abc import Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +18,11 @@ from .m26_ask_api import (
     _http_error,
     validate_query_request,
 )
+from .m26_google_translation_provider import (
+    GoogleTranslationLLMProvider,
+    TranslationProvider,
+    TranslationProviderConfig,
+)
 from .m26_translation_gateway import (
     TRANSLATION_GATEWAY_SCHEMA,
     TranslationGatewayError,
@@ -25,16 +33,52 @@ ALLOWED_FIELDS = {"question"}
 MAX_BODY_BYTES = 4096
 
 
+def _default_provider_factory() -> TranslationProvider:
+    return GoogleTranslationLLMProvider(TranslationProviderConfig.from_env())
+
+
+def _app_translation_provider(app: FastAPI) -> TranslationProvider:
+    provider = getattr(app.state, "translation_provider", None)
+    if provider is not None:
+        return provider
+    with app.state.translation_provider_lock:
+        provider = getattr(app.state, "translation_provider", None)
+        if provider is None:
+            provider = app.state.translation_provider_factory()
+            app.state.translation_provider = provider
+        return provider
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> Any:
+    try:
+        yield
+    finally:
+        provider = getattr(app.state, "translation_provider", None)
+        close = getattr(provider, "close", None)
+        if callable(close):
+            close()
+
+
 def create_app(
     *,
     root: Path | None = None,
     gate_path: Path | None = None,
+    translation_provider: TranslationProvider | None = None,
+    provider_factory: Callable[[], TranslationProvider] | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="M26 Translation-In Gateway Staging API", version="1.0.0")
+    app = FastAPI(
+        title="M26 Translation-In Gateway Staging API",
+        version="1.0.0",
+        lifespan=_lifespan,
+    )
     app.state.root = root or Path.cwd()
     app.state.gate_path = gate_path or Path(
         os.environ.get("M26_PA7_GATE_PATH", DEFAULT_GATE_PATH.as_posix())
     )
+    app.state.translation_provider = translation_provider
+    app.state.translation_provider_factory = provider_factory or _default_provider_factory
+    app.state.translation_provider_lock = threading.Lock()
 
     @app.get("/v1/translation-gateway/health")
     async def health() -> dict[str, Any]:
@@ -71,6 +115,7 @@ def create_app(
                 gate_path=app.state.gate_path,
                 request_payload=payload,
                 owner_subject_hash=owner_hash,
+                provider=_app_translation_provider(app),
                 correlation_id=str(uuid.uuid4()),
             )
         except TranslationGatewayError as exc:

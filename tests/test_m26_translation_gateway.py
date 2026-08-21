@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -12,6 +14,7 @@ from knowledge_engine.m26_google_translation_provider import (
     ADCBearerTokenSource,
     GoogleTranslationLLMProvider,
     TranslationProviderConfig,
+    TranslationProviderError,
     TranslationProviderResult,
 )
 from knowledge_engine.m26_translation_gateway import (
@@ -91,6 +94,7 @@ def test_owner_gateway_english_bypass_omits_downstream_provider_call_limit(
     assert len(calls) == 1
     assert calls[0]["request_payload"] == {"question": "What is the M26 PA7 status?"}
     assert "max_provider_calls" not in calls[0]
+    assert "max_cost" not in calls[0]
 
 
 def test_owner_gateway_translated_and_canonical_calls_have_same_downstream_contract(
@@ -130,6 +134,34 @@ def test_owner_gateway_translated_and_canonical_calls_have_same_downstream_contr
     assert translated_call["request_payload"] == {"question": "What is the M26 PA7 status?"}
     assert "max_provider_calls" not in english_call
     assert "max_provider_calls" not in translated_call
+    assert "max_cost" not in english_call
+    assert "max_cost" not in translated_call
+
+
+def test_owner_gateway_allows_explicit_internal_downstream_limit_injection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from knowledge_engine import m26_ask_api
+
+    calls: list[dict[str, Any]] = []
+
+    def fake_run_owner_query_for_web(**kwargs: Any) -> dict[str, Any]:
+        calls.append(kwargs)
+        return {"answer_text": "ok"}
+
+    monkeypatch.setattr(m26_ask_api, "run_owner_query_for_web", fake_run_owner_query_for_web)
+
+    run_owner_translation_gateway_for_web(
+        root=type("Pathish", (), {})(),
+        gate_path=type("Pathish", (), {})(),
+        request_payload={"question": "What is the M26 PA7 status?"},
+        owner_subject_hash="owner",
+        max_provider_calls=4,
+        max_cost=Decimal("0.10"),
+    )
+
+    assert calls[0]["max_provider_calls"] == 4
+    assert calls[0]["max_cost"] is not None
 
 
 def test_zh_tw_translation_invokes_provider_once_and_passes_english_to_sealed_path() -> None:
@@ -399,6 +431,23 @@ class FakeCredentials:
         self.valid = True
 
 
+class RefreshFailureCredentials:
+    token = ""
+    valid = False
+
+    def refresh(self, request: Any) -> None:
+        raise RuntimeError("raw credential refresh exploded")
+
+
+class MissingTokenCredentials:
+    token = ""
+    valid = False
+
+    def refresh(self, request: Any) -> None:
+        self.valid = True
+        self.token = ""
+
+
 def test_adc_token_source_reuses_valid_credentials() -> None:
     credentials = FakeCredentials()
     source = ADCBearerTokenSource(credentials=credentials, auth_request=object())
@@ -453,6 +502,77 @@ def test_provider_reuses_adc_source_without_hidden_translation_retry() -> None:
     assert credentials.refreshes == 1
 
 
+def test_api_request_lifecycle_reuses_app_scoped_provider_token_source_and_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from knowledge_engine import m26_ask_api
+
+    monkeypatch.setenv("M26_QUERY_BACKEND_TOKEN", "test")
+    monkeypatch.setenv("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", "owner")
+    downstream_questions: list[str] = []
+    http_calls = 0
+    factory_calls = 0
+    providers: list[GoogleTranslationLLMProvider] = []
+    credentials = FakeCredentials()
+
+    def fake_run_owner_query_for_web(**kwargs: Any) -> dict[str, Any]:
+        downstream_questions.append(kwargs["request_payload"]["question"])
+        return {"answer_text": "ok"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal http_calls
+        http_calls += 1
+        payload = json.loads(request.content.decode())
+        protected_text = payload["contents"][0]
+        assert request.headers["authorization"] == "Bearer token-1"
+        return httpx.Response(
+            200,
+            json={"translations": [{"translatedText": f"What is {protected_text}?"}]},
+        )
+
+    def provider_factory() -> GoogleTranslationLLMProvider:
+        nonlocal factory_calls
+        factory_calls += 1
+        provider = GoogleTranslationLLMProvider(
+            TranslationProviderConfig(project_id="proj"),
+            token_source=ADCBearerTokenSource(credentials=credentials, auth_request=object()),
+            client=httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+        providers.append(provider)
+        return provider
+
+    monkeypatch.setattr(m26_ask_api, "run_owner_query_for_web", fake_run_owner_query_for_web)
+    app = create_app(provider_factory=provider_factory)
+    client = TestClient(app)
+    headers = {
+        "authorization": "Bearer test",
+        "x-m26-owner-subject-hash": "owner",
+    }
+
+    response_1 = client.post(
+        "/v1/translation-gateway/query",
+        headers=headers,
+        json={"question": "版本 v1.4.2 是什麼？"},
+    )
+    response_2 = client.post(
+        "/v1/translation-gateway/query",
+        headers=headers,
+        json={"question": "版本 v1.4.2 是什麼？"},
+    )
+
+    assert response_1.status_code == 200
+    assert response_2.status_code == 200
+    assert factory_calls == 1
+    assert len(providers) == 1
+    assert providers[0].calls == 2
+    assert http_calls == 2
+    assert credentials.refreshes == 1
+    assert downstream_questions == [
+        "What is 版本 v1.4.2 是什麼？?",
+        "What is 版本 v1.4.2 是什麼？?",
+    ]
+
+
 def test_provider_without_injected_token_uses_adc_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -494,6 +614,115 @@ def test_provider_without_injected_token_uses_adc_path(
     assert result.ok
     assert captured_auth == ["Bearer token-1"]
     assert credentials.refreshes == 1
+
+
+@pytest.mark.parametrize(
+    ("provider_factory", "expected_code"),
+    [
+        (
+            lambda: GoogleTranslationLLMProvider(
+                TranslationProviderConfig(project_id="proj"),
+                client=httpx.Client(
+                    transport=httpx.MockTransport(lambda request: httpx.Response(200))
+                ),
+            ),
+            "TRANSLATION_PROVIDER_CONFIG_MISSING",
+        ),
+        (
+            lambda: GoogleTranslationLLMProvider(
+                TranslationProviderConfig(project_id="proj"),
+                token_source=ADCBearerTokenSource(
+                    credentials=RefreshFailureCredentials(),
+                    auth_request=object(),
+                ),
+                client=httpx.Client(
+                    transport=httpx.MockTransport(lambda request: httpx.Response(200))
+                ),
+            ),
+            "TRANSLATION_PROVIDER_FAILED",
+        ),
+        (
+            lambda: GoogleTranslationLLMProvider(
+                TranslationProviderConfig(project_id="proj"),
+                token_source=ADCBearerTokenSource(
+                    credentials=MissingTokenCredentials(),
+                    auth_request=object(),
+                ),
+                client=httpx.Client(
+                    transport=httpx.MockTransport(lambda request: httpx.Response(200))
+                ),
+            ),
+            "TRANSLATION_PROVIDER_CONFIG_MISSING",
+        ),
+    ],
+)
+def test_auth_failures_fail_closed_before_downstream(
+    monkeypatch: pytest.MonkeyPatch,
+    provider_factory: Any,
+    expected_code: str,
+) -> None:
+    if expected_code == "TRANSLATION_PROVIDER_CONFIG_MISSING":
+        monkeypatch.setattr(
+            google_provider_module,
+            "_default_adc_credentials",
+            lambda: (_ for _ in ()).throw(
+                TranslationProviderError(
+                    "TRANSLATION_PROVIDER_CONFIG_MISSING",
+                    "sanitized adc discovery failed",
+                )
+            ),
+        )
+    provider = provider_factory()
+    seen: list[str] = []
+
+    result = run_translation_gateway(
+        question="版本 v1.4.2 是什麼？",
+        provider=provider,
+        downstream=lambda question: seen.append(question) or {"answer_text": "bad"},
+    )
+
+    assert not result.ok
+    assert result.failure_code == expected_code
+    assert seen == []
+    assert provider.calls == 1
+
+
+def test_staging_api_returns_sanitized_503_for_auth_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("M26_QUERY_BACKEND_TOKEN", "test")
+    monkeypatch.setenv("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", "owner")
+    monkeypatch.setattr(
+        google_provider_module,
+        "_default_adc_credentials",
+        lambda: (_ for _ in ()).throw(
+            TranslationProviderError(
+                "TRANSLATION_PROVIDER_CONFIG_MISSING",
+                "sanitized adc discovery failed",
+            )
+        ),
+    )
+    app = create_app(
+        provider_factory=lambda: GoogleTranslationLLMProvider(
+            TranslationProviderConfig(project_id="proj"),
+            client=httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200))),
+        )
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/translation-gateway/query",
+        headers={
+            "authorization": "Bearer test",
+            "x-m26-owner-subject-hash": "owner",
+        },
+        json={"question": "版本 v1.4.2 是什麼？"},
+    )
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["code"] == "TRANSLATION_PROVIDER_CONFIG_MISSING"
+    assert "raw adc" not in json.dumps(detail).lower()
 
 
 def test_provider_failure_does_not_retry_translation_request() -> None:
