@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   validate-spec:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu,latest
     env:
       BATCH_SPEC: ${{ inputs.batch_spec || 'review_batches/agent-architecture-six-dimensions-v1.json' }}
     steps:
@@ -59,7 +59,7 @@ jobs:
               raise SystemExit('batch schema_version must be 1.0')
           for section in ('content_source', 'knowledge_source', 'synthesis', 'resolution'):
               if not isinstance(payload.get(section), dict):
-                  raise SystemExit(f'batch section is missing: {section}')
+                raise SystemExit(f'batch section is missing: {section}')
           for section, key in (
               ('content_source', 'commit_sha'),
               ('knowledge_source', 'commit_sha'),
@@ -72,8 +72,8 @@ jobs:
               raise SystemExit('batch must contain supported claims')
           for claim in claims:
               for key in ('claim_id', 'text', 'evidence_quote'):
-                  if not isinstance(claim.get(key), str) or not claim[key].strip():
-                      raise SystemExit(f'claim field is missing: {key}')
+                if not isinstance(claim.get(key), str) or not claim[key].strip():
+                    raise SystemExit(f'claim field is missing: {key}')
           if payload['resolution'].get('expected_status') != 'pending_human_review':
               raise SystemExit('real-content batch must stop at human approval')
           print(json.dumps({'status': 'valid', 'batch_id': payload['batch_id']}))
@@ -92,7 +92,7 @@ jobs:
       R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
       R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
       R2_REGION: auto
-      SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+      SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN }}
       BATCH_SPEC: ${{ inputs.batch_spec || 'review_batches/agent-architecture-six-dimensions-v1.json' }}
     steps:
       - name: Check out exact Engine revision
@@ -148,7 +148,7 @@ jobs:
         with:
           repository: ${{ steps.spec.outputs.source_repository }}
           ref: ${{ steps.spec.outputs.source_sha }}
-          token: ${{ secrets.SOURCE_READ_TOKEN }}
+          token: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN }}
           path: knowledge-source
           persist-credentials: false
 
