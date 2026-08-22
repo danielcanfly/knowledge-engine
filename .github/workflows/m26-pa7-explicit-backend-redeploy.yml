@@ -88,6 +88,7 @@ jobs:
           python -m py_compile src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
           python -m py_compile src/knowledge_engine/m26_pa7_final_web_readiness.py
           python -m py_compile src/knowledge_engine/m26_production_answer_bundle.py
+          python -m py_compile src/knowledge_engine/m26_production_api.py
           node --check pilot/m24/internal-product-deployment/site/m26-ask.js
           node --check pilot/m24/internal-product-deployment/site/m26-full-graph.js
           node --check pilot/m24/internal-product-deployment/site/_worker.js
@@ -136,6 +137,7 @@ jobs:
           scripts/m26_pa7_named_backend_tunnel.py
           src/knowledge_engine/m23_cloudflare_qdrant.py
           src/knowledge_engine/m26_ask_api.py
+          src/knowledge_engine/m26_production_api.py
           src/knowledge_engine/m26_pa7_final_web_readiness.py
           src/knowledge_engine/m26_translation_gateway_public_api.py
           src/knowledge_engine/m26_translation_gateway_streaming_staging.py
