@@ -1,12 +1,26 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import yaml
 from fastapi.testclient import TestClient
 
 from knowledge_engine import m26_translation_gateway_public_api as public_api
-from knowledge_engine.m26_production_api import app as production_app
 
 
-def test_production_entrypoint_exposes_canonical_answers_surface_and_streams_sse(
+def test_public_staging_compose_runs_canonical_public_api_entrypoint() -> None:
+    compose = yaml.safe_load(Path("docker-compose.public-staging.yml").read_text(encoding="utf-8"))
+    service = compose["services"]["m26-public-api-staging"]
+    command = service["command"]
+    healthcheck = service["healthcheck"]["test"]
+
+    assert "knowledge_engine.m26_translation_gateway_public_api:app" in command
+    assert "knowledge_engine.m26_translation_gateway_streaming_staging:app" not in command
+    assert any("/v1/answers/health" in part for part in healthcheck)
+    assert not any("/v1/health" in part for part in healthcheck)
+
+
+def test_public_staging_entrypoint_exposes_canonical_answers_surface_and_streams_sse(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("STAGING_M26_OWNER_SUBJECT_HASH", "owner-hash")
@@ -19,7 +33,7 @@ def test_production_entrypoint_exposes_canonical_answers_surface_and_streams_sse
 
     monkeypatch.setattr(public_api, "_answer_event_stream", fake_answer_event_stream)
 
-    client = TestClient(production_app)
+    client = TestClient(public_api.app)
 
     health = client.get("/v1/answers/health")
     assert health.status_code == 200
