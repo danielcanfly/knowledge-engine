@@ -17,6 +17,7 @@ from knowledge_engine.m26_google_translation_provider import (
     TranslationProviderError,
     TranslationProviderResult,
 )
+from knowledge_engine import m26_translation_gateway_public_api as public_api
 from knowledge_engine.m26_translation_gateway import (
     run_owner_translation_gateway_for_web,
     run_translation_gateway,
@@ -913,6 +914,55 @@ def test_provider_failure_does_not_retry_translation_request() -> None:
     assert result.failure_code == "TRANSLATION_PROVIDER_FAILED"
     assert provider.calls == 1
     assert http_calls == 1
+
+
+def test_public_answers_route_reports_canonical_surface_and_streams_sse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("STAGING_M26_OWNER_SUBJECT_HASH", "owner-hash")
+    monkeypatch.setenv("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", "owner-hash")
+    monkeypatch.setattr(
+        public_api,
+        "run_owner_translation_gateway_for_web",
+        lambda **_: {
+            "answer_text": "A grounded supported answer.",
+            "answer_source": "provider_verified_runtime_bound_semantic_closure",
+            "provider_identity": "MiniMax",
+            "model_identity": "MiniMax-M3",
+            "translation_gateway": {
+                "translation_applied": True,
+                "provider": "Google",
+                "invariant_check_result": "pass",
+            },
+            "runtime_observability": {
+                "stage_timings": [
+                    {"stage": "dense_retrieval"},
+                    {"stage": "semantic_synthesis_and_verification"},
+                ]
+            },
+            "ok": True,
+            "abstained": False,
+        },
+    )
+
+    app = create_app(translation_provider=FakeProvider("unused"))
+    client = TestClient(app)
+
+    health = client.get("/v1/answers/health")
+    assert health.status_code == 200
+    payload = health.json()
+    assert payload["surface"] == "/v1/answers"
+    assert payload["canonical_host"] == "api-staging.danielcanfly.com"
+    assert payload["legacy_api_rag_surface_canonical"] is False
+    assert payload["legacy_namespace_status"] == "retired_compatibility_not_canonical"
+
+    response = client.post("/v1/answers", json={"question": "What is Daniel working on?"})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert "event: meta" in response.text
+    assert "event: progress" in response.text
+    assert "event: answer" in response.text
+    assert "A grounded supported answer." in response.text
 
 
 @pytest.mark.parametrize(
