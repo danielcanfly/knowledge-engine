@@ -2,6 +2,20 @@ name: M26.PA.7 Explicit Backend Redeploy
 
 on:
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type DEPLOY-M26-STAGING-BACKEND
+        required: true
+        type: string
+      source_sha:
+        description: Exact backend SHA to deploy
+        required: true
+        type: string
+      target_host:
+        description: Public staging hostname
+        required: true
+        default: api-staging.danielcanfly.com
+        type: string
   pull_request:
     paths:
       - ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
@@ -47,10 +61,12 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-24.04
+    env:
+      EXPECTED_DEPLOY_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           show-progress: false
 
@@ -65,13 +81,14 @@ jobs:
       - name: Validate backend redeploy boundary
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
           python -m py_compile src/knowledge_engine/m24_product_surface_integration.py
           python -m py_compile src/knowledge_engine/m23_cloudflare_qdrant.py
           python -m py_compile src/knowledge_engine/m26_ask_api.py
           python -m py_compile src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py
           python -m py_compile src/knowledge_engine/m26_pa7_final_web_readiness.py
           python -m py_compile src/knowledge_engine/m26_production_answer_bundle.py
+          python -m py_compile src/knowledge_engine/m26_production_api.py
           node --check pilot/m24/internal-product-deployment/site/m26-ask.js
           node --check pilot/m24/internal-product-deployment/site/m26-full-graph.js
           node --check pilot/m24/internal-product-deployment/site/_worker.js
@@ -107,6 +124,7 @@ jobs:
           .github/workflows/m26-pa7-explicit-pages-deploy.yml
           .github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml
           deploy/deploy.sh
+          docker-compose.public-staging.yml
           pilot/m24/internal-product-deployment/site/_headers
           pilot/m24/internal-product-deployment/site/_worker.js
           pilot/m24/internal-product-deployment/site/full-graph.html
@@ -119,12 +137,17 @@ jobs:
           scripts/m26_pa7_named_backend_tunnel.py
           src/knowledge_engine/m23_cloudflare_qdrant.py
           src/knowledge_engine/m26_ask_api.py
+          src/knowledge_engine/m26_production_api.py
           src/knowledge_engine/m26_pa7_final_web_readiness.py
+          src/knowledge_engine/m26_translation_gateway_public_api.py
+          src/knowledge_engine/m26_translation_gateway_streaming_staging.py
           tests/test_m23_5_cloudflare_qdrant.py
           tests/test_m24_internal_ask_ui_api.py
           tests/test_m26_pa7_access_browser_session_contract.py
           tests/test_m26_pa7_ask_api.py
           tests/test_m26_pa7_final_web_readiness.py
+          tests/test_m26_translation_gateway.py
+          tests/test_m26_translation_gateway_streaming_staging.py
           EOF
           sed -i 's/^          //' /tmp/expected.txt
           python - <<'PY'
@@ -138,17 +161,18 @@ jobs:
 
   redeploy_backend:
     if: >
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' &&
-        (github.head_ref == 'gpt/m26-pa7-observable-backend-redeploy' ||
-         github.head_ref == 'gpt/m26-pa7-full-graph-title-normalization'))
+      github.event_name == 'workflow_dispatch' &&
+      inputs.confirmation == 'DEPLOY-M26-STAGING-BACKEND' &&
+      inputs.source_sha == '6e12bf52f61425b50952ac56fc9f0db64812da0e' &&
+      inputs.target_host == 'api-staging.danielcanfly.com'
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment: m23-r3-diagnostic
     env:
       WORK_DIR: /tmp/m26-pa7-explicit-backend-redeploy
-      EXPECTED_DEPLOY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_DEPLOY_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
+      TARGET_HOST: ${{ inputs.target_host || 'api-staging.danielcanfly.com' }}
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
@@ -156,7 +180,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           show-progress: false
 
@@ -165,6 +189,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$WORK_DIR/evidence"
           test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
+          printf '%s\n' "$TARGET_HOST" > "$WORK_DIR/evidence/backend-target-host.txt"
           for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
@@ -312,6 +337,107 @@ jobs:
           PY
           REMOTE
 
+      - name: Redeploy and verify public staging origin locally on Oracle
+        run: |
+          set -euo pipefail
+          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_DEPLOY_SHA='$EXPECTED_DEPLOY_SHA' bash -se" <<'REMOTE' > "$WORK_DIR/evidence/backend-public-staging-origin.json"
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"
+          test -f docker-compose.public-staging.yml
+          grep -F 'knowledge_engine.m26_translation_gateway_public_api:app' docker-compose.public-staging.yml >/dev/null
+          grep -F '/v1/answers/health' docker-compose.public-staging.yml >/dev/null
+
+          public_env=".env.public-staging.d6288072"
+          if [ ! -f "$public_env" ]; then
+            legacy_env="/home/ubuntu/LLM_Wiki_staging_m26_cloudflare_d6288072/$public_env"
+            test -f "$legacy_env"
+            cp -p "$legacy_env" "$public_env"
+          fi
+
+          live_id="$(docker ps --filter publish=18081 --format '{{.ID}}' | head -n 1 || true)"
+          if [ -n "$live_id" ]; then
+            live_name="$(docker inspect "$live_id" --format '{{.Name}}')"
+            live_service="$(docker inspect "$live_id" --format '{{index .Config.Labels "com.docker.compose.service"}}')"
+            live_workdir="$(docker inspect "$live_id" --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}')"
+            live_compose="$(docker inspect "$live_id" --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}')"
+            test "$live_name" = "/m26-public-api-staging-d6288072"
+            test "$live_service" = "m26-public-api-staging"
+            if [ "$live_workdir" != "$DEPLOY_PATH" ]; then
+              test -f "$live_compose"
+              (cd "$live_workdir" && docker compose -f "$live_compose" down --remove-orphans) >&2
+            fi
+          fi
+
+          docker compose -f docker-compose.public-staging.yml up -d --build --force-recreate --remove-orphans >&2
+
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+          health_code=""
+          for attempt in $(seq 1 30); do
+            health_code="$(curl --silent --show-error \
+              -o "$tmp_dir/public-health.json" \
+              -w '%{http_code}' \
+              http://127.0.0.1:18081/v1/answers/health || true)"
+            if [ "$health_code" = "200" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          live_id="$(docker ps --filter publish=18081 --format '{{.ID}}' | head -n 1 || true)"
+          test -n "$live_id"
+          docker inspect "$live_id" > "$tmp_dir/public-container.json"
+          python3 - "$tmp_dir/public-container.json" "$tmp_dir/public-health.json" "$health_code" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          container = json.loads(Path(sys.argv[1]).read_text())[0]
+          try:
+              health = json.loads(Path(sys.argv[2]).read_text())
+          except Exception:
+              health = {}
+          health_code = sys.argv[3]
+          labels = container.get("Config", {}).get("Labels", {}) or {}
+          cmd = container.get("Config", {}).get("Cmd", []) or []
+          evidence = {
+              "schema_version": "knowledge-engine-m26-public-staging-origin/v1",
+              "status": "pass",
+              "deploy_sha": os.environ["EXPECTED_DEPLOY_SHA"],
+              "compose_file": labels.get("com.docker.compose.project.config_files"),
+              "compose_working_dir": labels.get("com.docker.compose.project.working_dir"),
+              "container_id": container.get("Id"),
+              "container_created": container.get("Created"),
+              "container_command": cmd,
+              "compose_project": labels.get("com.docker.compose.project"),
+              "compose_service": labels.get("com.docker.compose.service"),
+              "local_health_http_status": health_code,
+              "local_health_surface": health.get("surface") if isinstance(health, dict) else None,
+              "local_health_canonical_host": health.get("canonical_host") if isinstance(health, dict) else None,
+              "legacy_api_rag_surface_canonical": health.get("legacy_api_rag_surface_canonical")
+              if isinstance(health, dict)
+              else None,
+          }
+          if "knowledge_engine.m26_translation_gateway_public_api:app" not in cmd:
+              evidence["status"] = "fail_container_command"
+          elif evidence["compose_working_dir"] != os.environ["DEPLOY_PATH"]:
+              evidence["status"] = "fail_compose_working_dir"
+          elif health_code != "200":
+              evidence["status"] = "fail_public_health_http"
+          elif evidence["local_health_surface"] != "/v1/answers":
+              evidence["status"] = "fail_public_health_surface"
+          elif evidence["local_health_canonical_host"] != "api-staging.danielcanfly.com":
+              evidence["status"] = "fail_public_health_canonical_host"
+          elif evidence["legacy_api_rag_surface_canonical"] is not False:
+              evidence["status"] = "fail_legacy_api_rag_canonical"
+          print(json.dumps(evidence, indent=2, sort_keys=True))
+          if evidence["status"] != "pass":
+              raise SystemExit(1)
+          PY
+          REMOTE
+
       - name: Upload backend redeploy evidence
         id: upload
         if: always()
@@ -338,11 +464,19 @@ jobs:
           work = Path(os.environ['WORK_DIR']) / 'evidence'
           smoke_path = work / 'backend-owner-smoke.json'
           smoke = json.loads(smoke_path.read_text()) if smoke_path.exists() else {}
+          public_path = work / 'backend-public-staging-origin.json'
+          public = json.loads(public_path.read_text()) if public_path.exists() else {}
           body = "\n".join([
               "### M26.PA.7 explicit backend redeploy result",
               "",
               f"- deploy SHA: `{smoke.get('deploy_sha', os.environ.get('EXPECTED_DEPLOY_SHA', ''))}`",
               f"- smoke status: `{smoke.get('status', 'missing')}`",
+              f"- public staging origin status: `{public.get('status', 'missing')}`",
+              f"- public staging origin command: `{public.get('container_command')}`",
+              f"- public staging origin working dir: `{public.get('compose_working_dir')}`",
+              f"- public staging local health HTTP status: `{public.get('local_health_http_status')}`",
+              f"- public staging local health surface: `{public.get('local_health_surface')}`",
+              f"- public staging canonical host: `{public.get('local_health_canonical_host')}`",
               f"- health build SHA: `{smoke.get('health_build_sha')}`",
               f"- graph HTTP status: `{smoke.get('graph_http_status')}`",
               f"- graph reason code: `{smoke.get('graph_reason_code')}`",
@@ -374,7 +508,11 @@ jobs:
           import json
           import os
           from pathlib import Path
-          smoke = json.loads((Path(os.environ['WORK_DIR']) / 'evidence/backend-owner-smoke.json').read_text())
+          work = Path(os.environ['WORK_DIR']) / 'evidence'
+          smoke = json.loads((work / 'backend-owner-smoke.json').read_text())
           if smoke.get('status') != 'pass':
               raise SystemExit(json.dumps(smoke, sort_keys=True))
+          public = json.loads((work / 'backend-public-staging-origin.json').read_text())
+          if public.get('status') != 'pass':
+              raise SystemExit(json.dumps(public, sort_keys=True))
           PY
