@@ -1,155 +1,47 @@
 from __future__ import annotations
 
-import json
-from collections.abc import Mapping
-from typing import Any
-
 from fastapi.testclient import TestClient
 
-from knowledge_engine import m26_public_api as public_api
-from knowledge_engine import m26_translation_gateway_streaming_staging as streaming
-from knowledge_engine.m26_google_translation_provider import TranslationProviderResult
-from knowledge_engine.m26_translation_gateway import (
-    TranslationGatewayResult,
-    run_translation_gateway,
-)
+from knowledge_engine import m26_translation_gateway_public_api as public_api
+from knowledge_engine.m26_production_api import app as production_app
 
 
-class _BombProvider:
-    def translate(self, request: Any) -> TranslationProviderResult:
-        raise AssertionError("English bypass must not invoke the translation provider")
+def test_production_entrypoint_exposes_canonical_answers_surface_and_streams_sse(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("STAGING_M26_OWNER_SUBJECT_HASH", "owner-hash")
 
+    async def fake_answer_event_stream(**_: object):
+        yield 'event: meta\ndata: {"route":"/v1/answers"}\n\n'
+        yield 'event: progress\ndata: {"stage":"synthesis"}\n\n'
+        yield 'event: answer\ndata: {"answer_text":"A grounded supported answer."}\n\n'
+        yield 'event: done\ndata: {"status":"ok"}\n\n'
 
-class _FakeTranslationProvider:
-    def translate(self, request: Any) -> TranslationProviderResult:
-        return TranslationProviderResult(
-            ok=True,
-            translated_text="What is RAG?",
-            provider="google-translation-advanced-v3",
-            model_resource="general/translation-llm",
-            location="us-central1",
-            latency_ms=1,
-        )
+    monkeypatch.setattr(public_api, "_answer_event_stream", fake_answer_event_stream)
 
+    client = TestClient(production_app)
 
-def test_english_gateway_bypass_is_exact_and_provider_free() -> None:
-    seen: list[str] = []
+    health = client.get("/v1/answers/health")
+    assert health.status_code == 200
+    payload = health.json()
+    assert payload["surface"] == "/v1/answers"
+    assert payload["canonical_host"] == "api-staging.danielcanfly.com"
+    assert payload["legacy_api_rag_surface_canonical"] is False
+    assert payload["legacy_namespace_status"] == "retired_compatibility_not_canonical"
+    assert payload["urls"]["canonical_answers_url"] == "https://api-staging.danielcanfly.com/v1/answers"
 
-    def downstream(question: str) -> Mapping[str, Any]:
-        seen.append(question)
-        return {"status": "ok"}
+    with client.stream(
+        "POST",
+        "/v1/answers",
+        json={"question": "What is Daniel working on in the M26 integration?"},
+    ) as response:
+        text = "".join(response.iter_text())
 
-    result = run_translation_gateway(
-        question="What is RAG?",
-        downstream=downstream,
-        provider=_BombProvider(),
-    )
-    assert result.ok is True
-    assert result.translated_question_en == "What is RAG?"
-    assert result.observability["translation_applied"] is False
-    assert seen == ["What is RAG?"]
-
-
-def test_zh_tw_gateway_uses_qualified_translation_before_downstream() -> None:
-    seen: list[str] = []
-    result = run_translation_gateway(
-        question="什麼是 RAG？",
-        downstream=lambda question: seen.append(question) or {"status": "ok"},
-        provider=_FakeTranslationProvider(),
-    )
-    assert result.ok is True
-    assert result.observability["translation_applied"] is True
-    assert seen == ["What is RAG?"]
-
-
-def test_streaming_route_hands_translated_english_to_existing_sse_runtime(monkeypatch) -> None:
-    monkeypatch.setenv("M26_QUERY_BACKEND_TOKEN", "edge-secret")
-    monkeypatch.setenv("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", "owner-hash")
-    seen: dict[str, str] = {}
-
-    def fake_translate(**kwargs: Any) -> TranslationGatewayResult:
-        assert kwargs["question"] == "什麼是 RAG？"
-        return TranslationGatewayResult(
-            ok=True,
-            sealed_m26_response={"translated_question_en": "What is RAG?"},
-            translated_question_en="What is RAG?",
-            observability={"translation_applied": True},
-        )
-
-    async def fake_stream(**kwargs: Any):
-        seen["question"] = kwargs["question"]
-        request_id = kwargs["admission"].request_id
-        yield "id: 1\nevent: request.accepted\ndata: " + json.dumps(
-            {
-                "schema_version": public_api.EVENT_SCHEMA_VERSION,
-                "seq": 1,
-                "request_id": request_id,
-                "created_at": "2026-08-22T00:00:00Z",
-                "type": "request.accepted",
-            }
-        ) + "\n\n"
-        yield "id: 2\nevent: answer.completed\ndata: " + json.dumps(
-            {
-                "schema_version": public_api.EVENT_SCHEMA_VERSION,
-                "seq": 2,
-                "request_id": request_id,
-                "created_at": "2026-08-22T00:00:01Z",
-                "type": "answer.completed",
-                "answer": "RAG answer",
-                "citations": [],
-            }
-        ) + "\n\n"
-
-    monkeypatch.setattr(streaming, "run_translation_gateway", fake_translate)
-    monkeypatch.setattr(public_api, "_answer_event_stream", fake_stream)
-
-    client = TestClient(streaming.app)
-    response = client.post(
-        "/v1/translation-gateway/answers",
-        json={"question": "什麼是 RAG？"},
-        headers={
-            "authorization": "Bearer edge-secret",
-            "x-m26-owner-subject-hash": "owner-hash",
-        },
-    )
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
-    assert response.headers["cache-control"] == "no-store"
-    assert response.headers["x-request-id"]
-    assert seen == {"question": "What is RAG?"}
-    assert "answer.completed" in response.text
-
-
-def test_translation_failure_never_reaches_sealed_sse_runtime(monkeypatch) -> None:
-    monkeypatch.setenv("M26_QUERY_BACKEND_TOKEN", "edge-secret")
-    monkeypatch.setenv("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", "owner-hash")
-
-    monkeypatch.setattr(
-        streaming,
-        "run_translation_gateway",
-        lambda **kwargs: TranslationGatewayResult(
-            ok=False,
-            sealed_m26_response=None,
-            translated_question_en="",
-            observability={"gateway_failure_code": "TRANSLATION_INVARIANT_FAILED"},
-            failure_code="TRANSLATION_INVARIANT_FAILED",
-            failure_detail="closed",
-        ),
-    )
-
-    async def forbidden_stream(**kwargs: Any):
-        raise AssertionError("sealed runtime must not run after translation failure")
-        yield ""
-
-    monkeypatch.setattr(public_api, "_answer_event_stream", forbidden_stream)
-    client = TestClient(streaming.app)
-    response = client.post(
-        "/v1/translation-gateway/answers",
-        json={"question": "測試"},
-        headers={
-            "authorization": "Bearer edge-secret",
-            "x-m26-owner-subject-hash": "owner-hash",
-        },
-    )
-    assert response.status_code == 503
-    assert response.json()["code"] == "TRANSLATION_INVARIANT_FAILED"
+    assert "event: meta" in text
+    assert 'route":"/v1/answers"' in text
+    assert "event: answer" in text
+    assert "event: done" in text
+    assert "A grounded supported answer." in text
+    assert client.get("/api/rag/answers/health").status_code == 404

@@ -955,6 +955,7 @@ def test_public_answers_route_reports_canonical_surface_and_streams_sse(
     assert payload["canonical_host"] == "api-staging.danielcanfly.com"
     assert payload["legacy_api_rag_surface_canonical"] is False
     assert payload["legacy_namespace_status"] == "retired_compatibility_not_canonical"
+    assert payload["urls"]["canonical_answers_url"] == "https://api-staging.danielcanfly.com/v1/answers"
 
     response = client.post("/v1/answers", json={"question": "What is Daniel working on?"})
     assert response.status_code == 200
