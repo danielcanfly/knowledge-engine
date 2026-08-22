@@ -9,7 +9,10 @@ from fastapi.testclient import TestClient
 from knowledge_engine import m26_public_api as public_api
 from knowledge_engine import m26_translation_gateway_streaming_staging as streaming
 from knowledge_engine.m26_google_translation_provider import TranslationProviderResult
-from knowledge_engine.m26_translation_gateway import TranslationGatewayResult, run_translation_gateway
+from knowledge_engine.m26_translation_gateway import (
+    TranslationGatewayResult,
+    run_translation_gateway,
+)
 
 
 class _BombProvider:
