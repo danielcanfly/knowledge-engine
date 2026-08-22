@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from knowledge_engine import m26_google_translation_provider as google_provider_module
+from knowledge_engine import m26_translation_gateway_public_api as public_api
 from knowledge_engine.m26_google_translation_provider import (
     ADCBearerTokenSource,
     GoogleTranslationLLMProvider,
@@ -17,7 +18,6 @@ from knowledge_engine.m26_google_translation_provider import (
     TranslationProviderError,
     TranslationProviderResult,
 )
-from knowledge_engine import m26_translation_gateway_public_api as public_api
 from knowledge_engine.m26_translation_gateway import (
     run_owner_translation_gateway_for_web,
     run_translation_gateway,
