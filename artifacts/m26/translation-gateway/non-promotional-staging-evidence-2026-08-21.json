@@ -1,0 +1,32 @@
+{
+  "schema_version": "m26-translation-gateway-non-promotional-staging-evidence/v1",
+  "created_at_utc": "2026-08-21T12:12:50Z",
+  "candidate_sha": "291ef67111e3e27ad0665114f35660618c09544a",
+  "accepted_sealed_english_base": "303b933a84be567571808025f8b4331b7edee105",
+  "status": "translation_gateway_candidate_not_production_ready",
+  "authorization": "NON_PROMOTIONAL_PR_OR_STAGING_INTEGRATION",
+  "passed": {
+    "independent_heldout_semantic_qualification": "HELDOUT_PASS_ZERO_BLOCKERS",
+    "deterministic_phase_b_plumbing": "PHASE_B_DETERMINISTIC_PLUMBING_PASS"
+  },
+  "not_passed": {
+    "live_phase_b_downstream_parity": "PHASE_B_INVALID_HARNESS_OR_ENVIRONMENT",
+    "reason": "SEALED_ENGLISH_DOWNSTREAM_BASELINE_UNSTABLE",
+    "earliest_divergence": "SEMANTIC_CLOSURE_GENERATION_DIVERGENCE"
+  },
+  "production_enablement": {
+    "authorized": false,
+    "production_ready": false,
+    "public_serving_authorized": false
+  },
+  "evidence_packages": {
+    "deterministic_phase_b_worker_package_sha256": "2c2b0228a28919167c90bb3f08205016e37e26479039e9f72ca8bd47b803c06e",
+    "source_handoff_sha256": "8fbfc3d40dd364c6debf31a010c7189ce5b4d19a14a8cf4864050be35b6943ec"
+  },
+  "non_claims": [
+    "not production parity",
+    "not live provider-backed answer correctness",
+    "not production readiness",
+    "not sealed English stability remediation"
+  ]
+}

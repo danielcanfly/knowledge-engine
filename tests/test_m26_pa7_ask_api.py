@@ -281,6 +281,7 @@ def test_web_query_uses_full_semantic_closure_provider_budget(
         return _dto_runtime_fixture(**kwargs)
 
     monkeypatch.setattr(m26_ask_api, "run_owner_arbitrary_query", fake_runtime)
+    monkeypatch.setenv("MINIMAX_API_KEY", "test-minimax-key")
 
     run_owner_query_for_web(
         root=ROOT,

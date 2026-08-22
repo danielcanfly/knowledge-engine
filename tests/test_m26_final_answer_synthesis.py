@@ -11,6 +11,7 @@ from knowledge_engine.m26_pa7_semantic_closure_runtime import (
 from knowledge_engine.m26_verified_answer_citation_gate import sha256_bytes
 
 SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
+SEGMENT_SCHEMA_VERSION = "m26-fas-synthesis/segments/v1"
 
 
 def _passage(evidence_id: str, text: str, source: str) -> dict[str, Any]:
@@ -96,16 +97,11 @@ class _TypedProvider:
                 "call_class": call_class,
             }
         return {
-            "text": json.dumps(
-                {
-                    "schema_version": "m26-fas-synthesis/v1",
-                    "status": "answer",
-                    "answer_text": self.answer_text,
-                    "claims": self.claims,
-                    "unanswered_dimensions": [],
-                    "abstention_reason": None,
-                }
-            ),
+            "text": json.dumps(_typed_body(
+                status="answer",
+                answer_text=self.answer_text,
+                claims=self.claims,
+            )),
             "usage": {"input_tokens": 128, "output_tokens": 48},
             "cost_usd": "0.00001",
             "latency_ms": 4,
@@ -164,8 +160,9 @@ class _TruncatingThenTypedProvider:
         if synthesis_call_count == 1:
             return {
                 "text": (
-                    '{"schema_version":"m26-fas-synthesis/v1","status":"answer",'
-                    '"answer_text":"truncated'
+                    '{"schema_version":"m26-fas-synthesis/segments/v1","status":"answer",'
+                    '"segments":[{"segment_id":"s1","semantic_role":"material_claim",'
+                    '"claim_id":"claim_1","claim_type":"EVIDENCE_FACT","text":"truncated'
                 ),
                 "usage": {
                     "input_tokens": 128,
@@ -178,16 +175,11 @@ class _TruncatingThenTypedProvider:
                 "call_class": call_class,
             }
         return {
-            "text": json.dumps(
-                {
-                    "schema_version": "m26-fas-synthesis/v1",
-                    "status": "answer",
-                    "answer_text": self.answer_text,
-                    "claims": self.claims,
-                    "unanswered_dimensions": [],
-                    "abstention_reason": None,
-                }
-            ),
+            "text": json.dumps(_typed_body(
+                status="answer",
+                answer_text=self.answer_text,
+                claims=self.claims,
+            )),
             "usage": {"input_tokens": 128, "output_tokens": 96},
             "stop_reason": "stop",
             "cost_usd": "0.00001",
@@ -201,14 +193,15 @@ def test_typed_compact_provider_contract_is_accepted() -> None:
     parsed = _parse_compact_provider_result(
         json.dumps(
             {
-                "schema_version": "m26-fas-synthesis/v1",
+                "schema_version": SEGMENT_SCHEMA_VERSION,
                 "status": "answer",
-                "answer_text": "Durable state and verification solve different problems.",
-                "claims": [
+                "segments": [
                     {
+                        "segment_id": "s1",
+                        "semantic_role": "material_claim",
                         "claim_id": "claim_1",
                         "claim_type": "EVIDENCE_SYNTHESIS",
-                        "surface_text": "Durable state and verification solve different problems.",
+                        "text": "Durable state and verification solve different problems.",
                         "evidence_labels": ["e1", "e2"],
                         "covers": ["durable_state", "verification_completion"],
                     }
@@ -220,9 +213,9 @@ def test_typed_compact_provider_contract_is_accepted() -> None:
     )
 
     assert parsed["status"] == "answer"
-    assert parsed["answer_text"].startswith("Durable state")
-    assert parsed["claims"][0]["claim_type"] == "EVIDENCE_SYNTHESIS"
-    assert parsed["claims"][0]["evidence_labels"] == ["e1", "e2"]
+    assert parsed["segments"][0]["text"].startswith("Durable state")
+    assert parsed["segments"][0]["claim_type"] == "EVIDENCE_SYNTHESIS"
+    assert parsed["segments"][0]["evidence_labels"] == ["e1", "e2"]
 
 
 def test_typed_synthesis_preserves_plain_answer_and_supports_synthesis() -> None:
@@ -305,6 +298,37 @@ def test_model_explanation_claim_type_survives_verification() -> None:
     assert closure["failures"] == []
 
 
+def test_numbered_corpus_statement_miscast_as_model_explanation_still_fails_closed() -> None:
+    question = "What does Part 2 establish?"
+    evidence = [
+        _passage(
+            "e1",
+            "Part 2 establishes the verification boundary.",
+            "numbered-boundary-note",
+        )
+    ]
+    provider = _TypedProvider(
+        claim_type="MODEL_EXPLANATION",
+        answer_text="Part 2 establishes the verification boundary.",
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "MODEL_EXPLANATION",
+                "surface_text": "Part 2 establishes the verification boundary.",
+                "evidence_labels": [],
+                "covers": [],
+            }
+        ],
+    )
+
+    answer, closure = _run_typed_synthesis(question, evidence, provider)
+
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["unsupported_accepted_claims"] == 0
+    assert "M26-PA7-ME-033" in answer["reason_codes"]
+    assert "M26-PA7-ME-033" in closure["failures"]
+
+
 def test_canonical_path_uses_typed_compact_synthesis_payload() -> None:
     question = "Why do durable state and verification solve different reliability problems?"
     evidence = [
@@ -343,13 +367,89 @@ def test_canonical_path_uses_typed_compact_synthesis_payload() -> None:
     assert provider.calls
     payload = provider.calls[0]["payload"]
     task = json.loads(payload["messages"][0]["content"])
-    assert task["output"]["schema_version"] == "m26-fas-synthesis/v1"
-    assert task["output"]["claims"][0]["claim_type"] == (
-        "EVIDENCE_FACT|EVIDENCE_SYNTHESIS|MODEL_EXPLANATION"
+    assert task["output"]["schema_version"] == SEGMENT_SCHEMA_VERSION
+    assert "claims" not in task["output"]
+    assert "answer_text" not in task["output"]
+    assert task["output"]["segments"][0]["claim_type"] == (
+        "EVIDENCE_FACT|EVIDENCE_SYNTHESIS"
     )
-    assert task["output"]["claims"][0]["evidence_labels"] == ["e1"]
-    assert task["output"]["claims"][0]["covers"] == []
+    assert task["output"]["segments"][0]["semantic_role"] == "material_claim"
+    assert task["output"]["segments"][0]["evidence_labels"] == ["e1"]
+    assert task["output"]["segments"][0]["covers"] == []
     assert payload["max_tokens"] > 512
+
+
+def test_compact_segment_role_contract_keeps_evidence_boundaries_material() -> None:
+    question = "What relation does the supplied evidence support and not support?"
+    evidence = [
+        _passage(
+            "e1",
+            "Part 1 defines ingestion. Part 2 defines verification. The graph links "
+            "Part 2 to the verification boundary, not to the ingestion boundary.",
+            "numbered-relation-note",
+        ),
+    ]
+    provider = _TypedProvider(
+        claim_type="EVIDENCE_SYNTHESIS",
+        answer_text="Part 2 is tied to verification, not ingestion.",
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_SYNTHESIS",
+                "surface_text": "Part 2 is tied to verification, not ingestion.",
+                "evidence_labels": ["e1"],
+                "covers": ["relation_boundary"],
+            }
+        ],
+    )
+
+    _run_typed_synthesis(question, evidence, provider)
+    payload = provider.calls[0]["payload"]
+    task = json.loads(payload["messages"][0]["content"])
+    system = payload["system"]
+
+    assert task["output"]["segments"][0]["semantic_role"] == "material_claim"
+    assert task["output"]["segments"][0]["claim_type"] == (
+        "EVIDENCE_FACT|EVIDENCE_SYNTHESIS"
+    )
+    assert "numbered or versioned entities" in system
+    assert "supplied graph relations" in system
+    assert "what supplied evidence entails or does not entail" in system
+    assert "supported negation, limitation, boundary, comparison, or non-inference" in system
+    assert "If uncertain between material_claim and model_explanation" in system
+    assert "choose material_claim and bind evidence" in system
+
+
+def test_compact_segment_role_contract_allows_evidence_independent_glue() -> None:
+    question = "How can the pieces fit together?"
+    evidence = [
+        _passage(
+            "e1",
+            "The router selects evidence. The verifier checks supported claims.",
+            "glue-note",
+        ),
+    ]
+    provider = _TypedProvider(
+        claim_type="MODEL_EXPLANATION",
+        answer_text="Together, those steps form a check-and-balance.",
+        claims=[
+            {
+                "claim_id": "claim_1",
+                "claim_type": "MODEL_EXPLANATION",
+                "surface_text": "Together, those steps form a check-and-balance.",
+                "evidence_labels": [],
+                "covers": [],
+            }
+        ],
+    )
+
+    _run_typed_synthesis(question, evidence, provider)
+    system = provider.calls[0]["payload"]["system"]
+
+    assert "Use model_explanation only for genuinely generic connective" in system
+    assert "truth does not depend on supplied KB evidence" in system
+    assert "claim_type MODEL_EXPLANATION" in system
+    assert "evidence_labels []" in system
 
 
 def test_max_tokens_truncation_gets_larger_bounded_repair_budget() -> None:
@@ -581,9 +681,10 @@ def test_supported_partial_answer_states_unsupported_boundary() -> None:
 
     answer, closure = _run_typed_synthesis(question, evidence, provider)
 
-    assert len(_synthesis_calls(provider)) == 1
+    assert len(_synthesis_calls(provider)) == 2
     assert answer["status"] == "owner_only_cited_answer"
-    assert "Unsupported boundary" in answer["answer_text"]
+    assert answer["repair_attempted"] is True
+    assert "Unsupported boundary" not in answer["answer_text"]
     assert answer["multi_evidence_verification"]["partial_answer"] is True
     assert closure["partial_answer"] is True
 
@@ -660,11 +761,44 @@ def _typed_body(
     unanswered_dimensions: list[str] | None = None,
     abstention_reason: str | None = None,
 ) -> dict[str, Any]:
+    claim_surfaces = [
+        str(claim.get("surface_text", "")).strip()
+        for claim in claims
+        if str(claim.get("surface_text", "")).strip()
+    ]
+    joined_claim_surfaces = " ".join(claim_surfaces)
+    segments = []
+    for index, claim in enumerate(claims, start=1):
+        claim_type = str(claim.get("claim_type", "EVIDENCE_FACT"))
+        segment_text = str(claim.get("surface_text", "")).strip()
+        if len(claims) == 1 and answer_text.strip() != joined_claim_surfaces:
+            segment_text = answer_text.strip()
+        segments.append(
+            {
+                "segment_id": f"s{index}",
+                "semantic_role": (
+                    "model_explanation"
+                    if claim_type == "MODEL_EXPLANATION"
+                    else "material_claim"
+                ),
+                "claim_id": str(claim.get("claim_id", f"claim_{index}")),
+                "claim_type": claim_type,
+                "text": segment_text,
+                "evidence_labels": (
+                    []
+                    if claim_type == "MODEL_EXPLANATION"
+                    else list(claim.get("evidence_labels", []))
+                ),
+                "covers": list(claim.get("covers", [])),
+                "unanswered_dimensions": list(
+                    claim.get("unanswered_dimensions", [])
+                ),
+            }
+        )
     return {
-        "schema_version": "m26-fas-synthesis/v1",
+        "schema_version": SEGMENT_SCHEMA_VERSION,
         "status": status,
-        "answer_text": answer_text,
-        "claims": claims,
+        "segments": segments,
         "unanswered_dimensions": unanswered_dimensions or [],
         "abstention_reason": abstention_reason,
     }

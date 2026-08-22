@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
@@ -19,6 +19,12 @@ from .m26_aq_semantic_contract import (
     semantic_contract_fingerprint,
     run_owner_arbitrary_query,
 )
+from .m26_cloudflare_provider_router import (
+    CloudflareFallbackRequired,
+    build_provider_routing_client,
+    provider_status_dto,
+)
+from .m26_pa5_v8_live import close_minimax_http_client, prepare_minimax_http_client
 from .m26_pa7_arbitrary_query_runtime import (
     MAX_QUERY_CHARS,
     DenseChannel,
@@ -92,6 +98,12 @@ def _owner_graph_runtime() -> Runtime:
     )
 
 
+def _preload_query_runtime() -> None:
+    """Materialize durable query dependencies before the service becomes ready."""
+    load_production_answer_bundle()
+    prepare_minimax_http_client()
+
+
 def validate_query_request(payload: Any, *, max_chars: int = MAX_QUERY_CHARS) -> str:
     if not isinstance(payload, Mapping):
         raise M26AskApiError(
@@ -121,8 +133,37 @@ def run_owner_query_for_web(
     require_remote_dense: bool = False,
     max_provider_calls: int = SEMANTIC_CLOSURE_MAX_PROVIDER_CALLS,
     max_cost: Decimal = Decimal("0.10"),
+    event_sink: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     question = validate_query_request(request_payload)
+    if provider_client is None and not _should_use_default_provider_routing():
+        runtime_response = run_owner_arbitrary_query(
+            root=root,
+            gate=load_json(gate_path),
+            question=question,
+            owner_subject_hash=owner_subject_hash,
+            public_request=public_request,
+            provider_client=provider_client,
+            dense_channel=dense_channel,
+            require_remote_dense=require_remote_dense,
+            max_provider_calls=max_provider_calls,
+            max_cost=max_cost,
+            event_sink=event_sink,
+        )
+        return build_web_query_dto(runtime_response)
+    if provider_client is None:
+        return _run_owner_query_for_web_with_default_provider_routing(
+            root=root,
+            gate_path=gate_path,
+            question=question,
+            owner_subject_hash=owner_subject_hash,
+            public_request=public_request,
+            dense_channel=dense_channel,
+            require_remote_dense=require_remote_dense,
+            max_provider_calls=max_provider_calls,
+            max_cost=max_cost,
+            event_sink=event_sink,
+        )
     runtime_response = run_owner_arbitrary_query(
         root=root,
         gate=load_json(gate_path),
@@ -134,7 +175,63 @@ def run_owner_query_for_web(
         require_remote_dense=require_remote_dense,
         max_provider_calls=max_provider_calls,
         max_cost=max_cost,
+        event_sink=event_sink,
     )
+    return build_web_query_dto(runtime_response)
+
+
+def _should_use_default_provider_routing() -> bool:
+    return bool(os.environ.get("MINIMAX_API_KEY"))
+
+
+def _run_owner_query_for_web_with_default_provider_routing(
+    *,
+    root: Path,
+    gate_path: Path,
+    question: str,
+    owner_subject_hash: str,
+    public_request: bool,
+    dense_channel: DenseChannel | None,
+    require_remote_dense: bool,
+    max_provider_calls: int,
+    max_cost: Decimal,
+    event_sink: Callable[[Mapping[str, Any]], None] | None,
+) -> dict[str, Any]:
+    gate = load_json(gate_path)
+    routing_client = build_provider_routing_client(
+        max_provider_calls=max_provider_calls,
+        max_cost=max_cost,
+    )
+    try:
+        runtime_response = run_owner_arbitrary_query(
+            root=root,
+            gate=gate,
+            question=question,
+            owner_subject_hash=owner_subject_hash,
+            public_request=public_request,
+            provider_client=routing_client,
+            dense_channel=dense_channel,
+            require_remote_dense=require_remote_dense,
+            max_provider_calls=max_provider_calls,
+            max_cost=max_cost,
+            event_sink=event_sink,
+        )
+    except CloudflareFallbackRequired:
+        runtime_response = run_owner_arbitrary_query(
+            root=root,
+            gate=gate,
+            question=question,
+            owner_subject_hash=owner_subject_hash,
+            public_request=public_request,
+            provider_client=routing_client,
+            dense_channel=dense_channel,
+            require_remote_dense=require_remote_dense,
+            max_provider_calls=max_provider_calls,
+            max_cost=max_cost,
+            event_sink=event_sink,
+        )
+    runtime_response = dict(runtime_response)
+    runtime_response["provider_routing"] = routing_client.telemetry()
     return build_web_query_dto(runtime_response)
 
 
@@ -215,6 +312,7 @@ def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
             ),
             "latency_ms": int(runtime_response.get("latency_ms", 0)),
         },
+        "provider_routing": dict(_mapping(runtime_response.get("provider_routing"))),
         "privacy": dict(_mapping(runtime_response.get("privacy"))),
         "mutations": dict(_mapping(runtime_response.get("mutations"))),
         "integrity": {
@@ -260,6 +358,7 @@ def build_health_dto(*, root: Path, gate_path: Path) -> dict[str, Any]:
             "production_pointer_mutations": 0,
             "qdrant_write_operations": 0,
         },
+        "provider_routing": provider_status_dto(),
     }
 
 
@@ -394,6 +493,9 @@ def register_m26_ask_routes(
         if require_remote_dense is not None
         else os.environ.get("M26_QUERY_REQUIRE_REMOTE_DENSE", "").lower() == "true"
     )
+
+    app.router.add_event_handler("startup", _preload_query_runtime)
+    app.router.add_event_handler("shutdown", close_minimax_http_client)
 
     @app.get("/api/m26/health")
     async def health(request: Request) -> dict[str, Any]:

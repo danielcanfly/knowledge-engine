@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
   "boto3>=1.35,<2",
   "fastapi>=0.115,<1",
+  "google-auth[requests]>=2.35,<3",
   "httpx>=0.28,<1",
   "jsonschema>=4.23,<5",
   "pypdf==6.14.2",
@@ -59,6 +60,9 @@ packages = ["src/knowledge_engine"]
 testpaths = ["tests"]
 pythonpath = [".", "tests"]
 addopts = "-ra --strict-markers"
+markers = [
+    "live_remote_dense: requires explicit live remote dense configuration; skipped unless M26_TRACK2_REQUIRE_REMOTE_DENSE is enabled",
+]
 
 [tool.ruff]
 target-version = "py311"
