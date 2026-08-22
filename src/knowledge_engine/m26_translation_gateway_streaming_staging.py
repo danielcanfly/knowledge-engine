@@ -90,15 +90,27 @@ async def translation_gateway_answers(request: Request):
 
     body = await request.body()
     if len(body) > MAX_BODY_BYTES:
-        return _json_error(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "M26_TG_BODY_TOO_LARGE", request_id)
+        return _json_error(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            "M26_TG_BODY_TOO_LARGE",
+            request_id,
+        )
     try:
         payload = json.loads(body)
     except Exception:
         return _json_error(status.HTTP_400_BAD_REQUEST, "M26_TG_INVALID_JSON", request_id)
     if not isinstance(payload, dict):
-        return _json_error(status.HTTP_400_BAD_REQUEST, "M26_TG_REQUEST_NOT_JSON_OBJECT", request_id)
+        return _json_error(
+            status.HTTP_400_BAD_REQUEST,
+            "M26_TG_REQUEST_NOT_JSON_OBJECT",
+            request_id,
+        )
     if set(payload) - ALLOWED_FIELDS:
-        return _json_error(status.HTTP_400_BAD_REQUEST, "M26_TG_REQUEST_FIELD_DENIED", request_id)
+        return _json_error(
+            status.HTTP_400_BAD_REQUEST,
+            "M26_TG_REQUEST_FIELD_DENIED",
+            request_id,
+        )
     try:
         question = validate_query_request(payload)
     except M26AskApiError as exc:
