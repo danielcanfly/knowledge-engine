@@ -123,6 +123,7 @@ jobs:
           .github/workflows/m26-pa7-explicit-pages-deploy.yml
           .github/workflows/m26-pa7-owner-access-and-full-graph-repair.yml
           deploy/deploy.sh
+          docker-compose.public-staging.yml
           pilot/m24/internal-product-deployment/site/_headers
           pilot/m24/internal-product-deployment/site/_worker.js
           pilot/m24/internal-product-deployment/site/full-graph.html
@@ -136,11 +137,15 @@ jobs:
           src/knowledge_engine/m23_cloudflare_qdrant.py
           src/knowledge_engine/m26_ask_api.py
           src/knowledge_engine/m26_pa7_final_web_readiness.py
+          src/knowledge_engine/m26_translation_gateway_public_api.py
+          src/knowledge_engine/m26_translation_gateway_streaming_staging.py
           tests/test_m23_5_cloudflare_qdrant.py
           tests/test_m24_internal_ask_ui_api.py
           tests/test_m26_pa7_access_browser_session_contract.py
           tests/test_m26_pa7_ask_api.py
           tests/test_m26_pa7_final_web_readiness.py
+          tests/test_m26_translation_gateway.py
+          tests/test_m26_translation_gateway_streaming_staging.py
           EOF
           sed -i 's/^          //' /tmp/expected.txt
           python - <<'PY'
