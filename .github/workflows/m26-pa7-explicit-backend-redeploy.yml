@@ -163,7 +163,7 @@ jobs:
     if: >
       github.event_name == 'workflow_dispatch' &&
       inputs.confirmation == 'DEPLOY-M26-STAGING-BACKEND' &&
-      inputs.source_sha == 'f0d00fd32009bd4d6b1a951c0f05eb47c891dc79' &&
+      inputs.source_sha == 'fbf9ab94c9c9ad12165e90ae9953d4548fdbbaa9' &&
       inputs.target_host == 'api-staging.danielcanfly.com'
     needs: verify
     runs-on: ubuntu-24.04
