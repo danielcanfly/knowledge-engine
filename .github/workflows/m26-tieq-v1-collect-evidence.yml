@@ -1,0 +1,129 @@
+name: M26 TIEQ V1 Collect Evidence
+
+on:
+  push:
+    branches:
+      - qualification/m26-tieq-v1-20260823
+    paths:
+      - .github/m26-tieq-v1-collect-trigger.txt
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: m26-tieq-v1-collect-evidence
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_HEAD_SHA: 6de8bae448f089b3a428017169e9eda5725faf11
+      TARGET_WORKFLOW: M26 TIEQ V1 Forward Capture
+      TARGET_BRANCH: qualification/m26-tieq-v1-20260823
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: qualification/m26-tieq-v1-20260823
+          fetch-depth: 20
+
+      - name: Locate exact capture run and wait for terminal state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/tieq-collect .github/m26-tieq-v1-collected-evidence
+          run_id=''
+          for i in $(seq 1 30); do
+            run_id="$(gh run list --workflow "$TARGET_WORKFLOW" --branch "$TARGET_BRANCH" --limit 20 --json databaseId,headSha,status,conclusion,event --jq '.[] | select(.headSha == env.TARGET_HEAD_SHA and .event == "push") | .databaseId' | head -1)"
+            if [ -n "$run_id" ]; then break; fi
+            sleep 10
+          done
+          test -n "$run_id" || { echo 'target_capture_run_not_found'; exit 50; }
+          echo "RUN_ID=$run_id" >> "$GITHUB_ENV"
+          for i in $(seq 1 60); do
+            status="$(gh run view "$run_id" --json status --jq .status)"
+            [ "$status" = completed ] && break
+            sleep 10
+          done
+          test "$(gh run view "$run_id" --json status --jq .status)" = completed || { echo 'target_capture_run_not_terminal'; exit 51; }
+          gh run view "$run_id" --json databaseId,workflowName,headSha,headBranch,event,status,conclusion,createdAt,updatedAt,url,jobs > /tmp/tieq-collect/run.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          raw=json.loads(Path('/tmp/tieq-collect/run.json').read_text())
+          jobs=[]
+          for job in raw.get('jobs',[]):
+              jobs.append({
+                  'name':job.get('name'),
+                  'status':job.get('status'),
+                  'conclusion':job.get('conclusion'),
+                  'steps':[{'name':s.get('name'),'status':s.get('status'),'conclusion':s.get('conclusion')} for s in job.get('steps',[])],
+              })
+          out={
+              'schema_version':'m26-tieq-capture-run-metadata/v1',
+              'run_id':raw.get('databaseId'),
+              'workflow_name':raw.get('workflowName'),
+              'head_sha':raw.get('headSha'),
+              'head_branch':raw.get('headBranch'),
+              'event':raw.get('event'),
+              'status':raw.get('status'),
+              'conclusion':raw.get('conclusion'),
+              'created_at':raw.get('createdAt'),
+              'updated_at':raw.get('updatedAt'),
+              'url':raw.get('url'),
+              'jobs':jobs,
+          }
+          Path('.github/m26-tieq-v1-collected-evidence/run_metadata.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          PY
+
+      - name: Download capture artifact if present
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          names="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts" --jq '.artifacts[].name' || true)"
+          printf '%s\n' "$names" > /tmp/tieq-collect/artifact_names.txt
+          artifact_name="$(printf '%s\n' "$names" | grep '^m26-tieq-v1-forward-capture-' | head -1 || true)"
+          if [ -n "$artifact_name" ]; then
+            mkdir -p /tmp/tieq-collect/artifact
+            gh run download "$RUN_ID" -n "$artifact_name" -D /tmp/tieq-collect/artifact
+            cp -R /tmp/tieq-collect/artifact/. .github/m26-tieq-v1-collected-evidence/
+            printf '%s\n' "$artifact_name" > .github/m26-tieq-v1-collected-evidence/artifact_name.txt
+          else
+            printf '%s\n' 'NO_ARTIFACT' > .github/m26-tieq-v1-collected-evidence/artifact_name.txt
+          fi
+
+      - name: Evidence hygiene and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json,re,hashlib
+          root=Path('.github/m26-tieq-v1-collected-evidence')
+          secret_re=re.compile(rb'(eyJ[A-Za-z0-9_-]{20,}\.|ya29\.|gh[pousr]_|sk-[A-Za-z0-9_-]{20,}|-----BEGIN .*PRIVATE KEY-----|sb_secret_)',re.I)
+          hits=[]
+          files=[]
+          for p in sorted(root.rglob('*')):
+              if not p.is_file(): continue
+              data=p.read_bytes()
+              if secret_re.search(data): hits.append(str(p.relative_to(root)))
+              files.append({'path':str(p.relative_to(root)),'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)})
+          if hits:
+              raise SystemExit('SECRET_SHAPE_DETECTED:'+','.join(hits))
+          (root/'COLLECTION_MANIFEST.json').write_text(json.dumps({'schema_version':'m26-tieq-collection-manifest/v1','secret_scan_hits':hits,'files':files},indent=2,sort_keys=True)+'\n')
+          PY
+          git config user.name 'm26-tieq-qualification-bot'
+          git config user.email '38602668+huaihsuanbusiness@users.noreply.github.com'
+          git add .github/m26-tieq-v1-collected-evidence
+          if git diff --cached --quiet; then
+            echo 'no evidence changes to commit'
+          else
+            git commit -m "chore(m26): collect TIEQ forward capture evidence"
+            git push origin HEAD:qualification/m26-tieq-v1-20260823
+          fi
