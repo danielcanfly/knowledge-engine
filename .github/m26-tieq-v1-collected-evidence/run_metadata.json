@@ -1,0 +1,72 @@
+{
+  "conclusion": "failure",
+  "created_at": "2026-08-23T12:15:19Z",
+  "event": "push",
+  "head_branch": "qualification/m26-tieq-v1-20260823",
+  "head_sha": "6de8bae448f089b3a428017169e9eda5725faf11",
+  "jobs": [
+    {
+      "conclusion": "failure",
+      "name": "Qualification-only single Translation-In capture",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Frozen qualification guard",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Require existing Oracle read/exec lane",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Configure SSH",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Capture immutable runtime prestate",
+          "status": "completed"
+        },
+        {
+          "conclusion": "failure",
+          "name": "Execute exactly one frozen Translation-In capture",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Capture immutable runtime poststate",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Build sanitized capture summary and hard-zero proof",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Upload sanitized TIEQ capture evidence",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job",
+          "status": "completed"
+        }
+      ]
+    }
+  ],
+  "run_id": 32638870589,
+  "schema_version": "m26-tieq-capture-run-metadata/v1",
+  "status": "completed",
+  "updated_at": "2026-08-23T12:16:13Z",
+  "url": "https://github.com/danielcanfly/knowledge-engine/actions/runs/32638870589",
+  "workflow_name": "M26 TIEQ V1 Forward Capture"
+}

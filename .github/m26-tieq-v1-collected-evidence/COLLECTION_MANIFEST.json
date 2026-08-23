@@ -1,0 +1,36 @@
+{
+  "files": [
+    {
+      "bytes": 69,
+      "path": "artifact_name.txt",
+      "sha256": "1b7bc921e0c6b0fb3afc5fcf7da63359317a1c4340f366b33cba2fba4fe1acf7"
+    },
+    {
+      "bytes": 1128,
+      "path": "capture_summary.json",
+      "sha256": "d7ac5df9c96bdb1a959985e54c095a222faaacd6ed4c26f4fa78c3a6d43d9602"
+    },
+    {
+      "bytes": 2328,
+      "path": "raw_sanitized/forward_capture.json",
+      "sha256": "e86037671ef13970e5bf9bc362abcc79a391c0d02f850fa701e74d9998ab8989"
+    },
+    {
+      "bytes": 656,
+      "path": "raw_sanitized/runtime_poststate.json",
+      "sha256": "8821cd54946925313af53bd3b174e8f96090aa95e03ce5b7d5994178d56b6f8e"
+    },
+    {
+      "bytes": 656,
+      "path": "raw_sanitized/runtime_prestate.json",
+      "sha256": "8821cd54946925313af53bd3b174e8f96090aa95e03ce5b7d5994178d56b6f8e"
+    },
+    {
+      "bytes": 2069,
+      "path": "run_metadata.json",
+      "sha256": "1d5c62bb7dc5b06492926933c45a412bc3fd9fb0cefff91b9bb2960a5778fc50"
+    }
+  ],
+  "schema_version": "m26-tieq-collection-manifest/v1",
+  "secret_scan_hits": []
+}

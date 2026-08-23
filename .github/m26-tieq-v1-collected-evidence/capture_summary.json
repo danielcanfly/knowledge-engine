@@ -1,0 +1,40 @@
+{
+  "capture_count": 1,
+  "capture_present": true,
+  "exact_translation_produced": true,
+  "hard_zeroes": {
+    "CANONICAL_API_RAG_USAGE": 0,
+    "CODE_CHANGE": 0,
+    "MERGE": 0,
+    "OLD_SUPABASE_PROJECT_RESTORE": 0,
+    "OWNER_ADMISSION_CHANGE": 0,
+    "PRODUCTION_CHANGED": false,
+    "PRODUCTION_CUTOVER": 0,
+    "PRODUCTION_MUTATION": 0,
+    "RUNTIME_CONFIG_CHANGE": 0,
+    "SEALED_ENGLISH_M26_CHANGE": 0,
+    "SECRET_EXPOSURE": 0,
+    "TRANSLATION_LOCATION_CHANGE": 0,
+    "TRANSLATION_MODEL_CHANGE": 0,
+    "TRANSLATION_PROMPT_CHANGE": 0,
+    "TRANSLATION_PROVIDER_CHANGE": 0
+  },
+  "runtime_identity_unchanged": {
+    "production": {
+      "container_id_unchanged": true,
+      "image_id_unchanged": true,
+      "restart_count_unchanged": true,
+      "running_before_after": true,
+      "started_at_unchanged": true
+    },
+    "staging": {
+      "container_id_unchanged": true,
+      "image_id_unchanged": true,
+      "restart_count_unchanged": true,
+      "running_before_after": true,
+      "started_at_unchanged": true
+    }
+  },
+  "schema_version": "m26-tieq-forward-capture-summary/v1",
+  "secret_scan_hits": []
+}
