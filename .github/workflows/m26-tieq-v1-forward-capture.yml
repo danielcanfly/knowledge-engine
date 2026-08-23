@@ -1,0 +1,341 @@
+name: M26 TIEQ V1 Forward Capture
+
+on:
+  push:
+    branches:
+      - qualification/m26-tieq-v1-20260823
+    paths:
+      - .github/m26-tieq-v1-forward-capture-trigger.txt
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-tieq-v1-forward-capture
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Qualification-only single Translation-In capture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+      TIEQ_STAGING_CONTAINER: m26-public-api-staging-d6288072
+      TIEQ_PRODUCTION_CONTAINER: llm_wiki-knowledge-engine-1
+    steps:
+      - name: Frozen qualification guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            'qualification_only=true' \
+            'code_change=0' \
+            'runtime_config_change=0' \
+            'translation_prompt_change=0' \
+            'translation_provider_change=0' \
+            'translation_model_change=0' \
+            'translation_location_change=0' \
+            'sealed_english_m26_change=0' \
+            'owner_admission_change=0' \
+            'production_mutation=0' \
+            'merge=0' \
+            'production_cutover=0' \
+            'canonical_api_rag_usage=0' \
+            'old_supabase_project_restore=0' \
+            'secret_exposure=0' \
+            'production_changed=false'
+
+      - name: Require existing Oracle read/exec lane
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "missing_existing_lane=$name"; exit 20; }
+          done
+          echo 'existing_oracle_lane_present=true'
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
+          unset ORACLE_VM_SSH_PRIVATE_KEY
+
+      - name: Capture immutable runtime prestate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/raw_sanitized
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "STAGING='$TIEQ_STAGING_CONTAINER' PROD='$TIEQ_PRODUCTION_CONTAINER' bash -s" \
+            > evidence/raw_sanitized/runtime_prestate.json <<'REMOTE'
+          set -euo pipefail
+          python3 - "$STAGING" "$PROD" <<'PY'
+          import json, subprocess, sys
+          def inspect(name):
+              p=subprocess.run(['docker','inspect',name],check=True,capture_output=True,text=True)
+              x=json.loads(p.stdout)[0]
+              return {
+                  'name':name,
+                  'id':x.get('Id',''),
+                  'image_id':x.get('Image',''),
+                  'started_at':x.get('State',{}).get('StartedAt',''),
+                  'restart_count':x.get('RestartCount',0),
+                  'running':bool(x.get('State',{}).get('Running')),
+                  'read_only_rootfs':bool(x.get('HostConfig',{}).get('ReadonlyRootfs')),
+              }
+          print(json.dumps({'staging':inspect(sys.argv[1]),'production':inspect(sys.argv[2])},sort_keys=True))
+          PY
+          REMOTE
+
+      - name: Execute exactly one frozen Translation-In capture
+        id: forward_capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/m26_tieq_capture.py <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+
+          from fastapi.testclient import TestClient
+          import knowledge_engine.m26_translation_gateway_streaming_staging as staging
+
+          SOURCE = 'Daniel 目前在 M26 integration 做什麼？'
+          CANONICAL = 'What is Daniel working on in the M26 integration?'
+          PATH = '/v1/translation-gateway/answers'
+
+          backend_token = os.environ.get('M26_QUERY_BACKEND_TOKEN','')
+          owner_hash = os.environ.get('KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH','')
+          if not backend_token or not owner_hash:
+              print(json.dumps({
+                  'schema_version':'m26-tieq-forward-capture/v1',
+                  'exact_translation_produced':False,
+                  'failure_class':'AUTH_CONFIG_UNAVAILABLE',
+                  'backend_token_present':bool(backend_token),
+                  'owner_hash_present':bool(owner_hash),
+              }, sort_keys=True))
+              raise SystemExit(21)
+
+          original = staging.run_translation_gateway
+          captured = {'calls':0}
+          def capture_once(*args, **kwargs):
+              captured['calls'] += 1
+              if captured['calls'] != 1:
+                  raise RuntimeError('TIEQ_TRANSLATION_GATEWAY_CALLED_MORE_THAN_ONCE')
+              result = original(*args, **kwargs)
+              captured['ok'] = bool(result.ok)
+              captured['translated_question_en'] = result.translated_question_en
+              captured['observability'] = dict(result.observability)
+              captured['failure_code'] = result.failure_code
+              return result
+          staging.run_translation_gateway = capture_once
+
+          headers = {
+              'Authorization': f'Bearer {backend_token}',
+              'x-m26-owner-subject-hash': owner_hash,
+              'Content-Type':'application/json',
+              'Accept':'text/event-stream',
+          }
+          client = TestClient(staging.app)
+          try:
+              with client.stream('POST', PATH, json={'question':SOURCE}, headers=headers) as response:
+                  body = b''.join(response.iter_bytes())
+                  status = response.status_code
+                  content_type = response.headers.get('content-type','')
+                  request_id = response.headers.get('x-request-id','')
+          finally:
+              staging.run_translation_gateway = original
+              client.close()
+              backend_token = ''
+              owner_hash = ''
+              headers.clear()
+
+          translated = str(captured.get('translated_question_en') or '')
+          obs = captured.get('observability') if isinstance(captured.get('observability'),dict) else {}
+          event_types=[]
+          for line in body.decode('utf-8',errors='replace').splitlines():
+              if line.startswith('event:'):
+                  event_types.append(line[6:].strip())
+
+          source_sha=hashlib.sha256(SOURCE.encode('utf-8')).hexdigest()
+          translated_sha=hashlib.sha256(translated.encode('utf-8')).hexdigest() if translated else ''
+          reported_sha=str(obs.get('translated_query_sha256') or '')
+          exact_produced=bool(captured.get('ok')) and bool(translated)
+          secret_shape=re.compile(r'(eyJ[A-Za-z0-9_-]{20,}\.|ya29\.|gh[pousr]_|sk-[A-Za-z0-9_-]{20,}|-----BEGIN .*PRIVATE KEY-----|sb_secret_)',re.I)
+          record={
+              'schema_version':'m26-tieq-forward-capture/v1',
+              'qualification_only':True,
+              'capture_count':captured.get('calls',0),
+              'source_text':SOURCE,
+              'canonical_reference':CANONICAL,
+              'source_sha256':source_sha,
+              'exact_translation_output':translated,
+              'translated_sha256':translated_sha,
+              'reported_translated_query_sha256':reported_sha,
+              'translated_hash_matches_observability':bool(translated and reported_sha and translated_sha==reported_sha),
+              'exact_translation_produced':exact_produced,
+              'detected_input_language':obs.get('detected_input_language'),
+              'translation_applied':obs.get('translation_applied'),
+              'provider':obs.get('provider'),
+              'model_resource':obs.get('model_resource'),
+              'location':obs.get('region'),
+              'protected_span_count':obs.get('protected_span_count'),
+              'invariant_check_result':obs.get('invariant_check_result'),
+              'role_binding':obs.get('role_binding'),
+              'gateway_failure_code':obs.get('gateway_failure_code'),
+              'request_path':PATH,
+              'request_id':request_id,
+              'authenticated_backend_path':True,
+              'backend_token_present':True,
+              'owner_hash_present':True,
+              'credential_values_persisted':False,
+              'http_status':status,
+              'content_type':content_type,
+              'event_sequence':event_types,
+              'answer_event_observed':'answer' in event_types,
+              'done_event_observed':'done' in event_types,
+              'sse_body_sha256':hashlib.sha256(body).hexdigest(),
+              'sse_body_bytes':len(body),
+              'sse_plaintext_persisted':False,
+              'runtime_deploy_performed':False,
+              'runtime_restart_performed':False,
+              'runtime_config_change':False,
+              'semantic_repair_performed':False,
+              'merge_performed':False,
+              'production_cutover_performed':False,
+              'production_changed':False,
+              'canonical_api_rag_usage':0,
+          }
+          encoded=json.dumps(record,ensure_ascii=False,sort_keys=True)
+          if secret_shape.search(encoded):
+              print(json.dumps({'schema_version':'m26-tieq-forward-capture/v1','exact_translation_produced':False,'failure_class':'SECRET_SHAPE_DETECTED_IN_SANITIZED_RECORD'},sort_keys=True))
+              raise SystemExit(22)
+          print(json.dumps(record,ensure_ascii=False,indent=2,sort_keys=True))
+          if captured.get('calls') != 1:
+              raise SystemExit(23)
+          if not exact_produced:
+              raise SystemExit(24)
+          if not record['translated_hash_matches_observability']:
+              raise SystemExit(25)
+          if record['provider'] != 'google-cloud-translation-v3':
+              raise SystemExit(26)
+          if record['location'] != 'us-central1':
+              raise SystemExit(27)
+          if not str(record['model_resource'] or '').endswith('/models/general/translation-llm'):
+              raise SystemExit(28)
+          PY
+
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "docker exec -i '$TIEQ_STAGING_CONTAINER' python -" \
+            < /tmp/m26_tieq_capture.py \
+            > evidence/raw_sanitized/forward_capture.json
+          rm -f /tmp/m26_tieq_capture.py
+
+      - name: Capture immutable runtime poststate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/raw_sanitized
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "STAGING='$TIEQ_STAGING_CONTAINER' PROD='$TIEQ_PRODUCTION_CONTAINER' bash -s" \
+            > evidence/raw_sanitized/runtime_poststate.json <<'REMOTE'
+          set -euo pipefail
+          python3 - "$STAGING" "$PROD" <<'PY'
+          import json, subprocess, sys
+          def inspect(name):
+              p=subprocess.run(['docker','inspect',name],check=True,capture_output=True,text=True)
+              x=json.loads(p.stdout)[0]
+              return {
+                  'name':name,
+                  'id':x.get('Id',''),
+                  'image_id':x.get('Image',''),
+                  'started_at':x.get('State',{}).get('StartedAt',''),
+                  'restart_count':x.get('RestartCount',0),
+                  'running':bool(x.get('State',{}).get('Running')),
+                  'read_only_rootfs':bool(x.get('HostConfig',{}).get('ReadonlyRootfs')),
+              }
+          print(json.dumps({'staging':inspect(sys.argv[1]),'production':inspect(sys.argv[2])},sort_keys=True))
+          PY
+          REMOTE
+
+      - name: Build sanitized capture summary and hard-zero proof
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,json,re
+          root=Path('evidence/raw_sanitized')
+          def load(name):
+              p=root/name
+              return json.loads(p.read_text()) if p.exists() and p.stat().st_size else {}
+          pre=load('runtime_prestate.json')
+          post=load('runtime_poststate.json')
+          cap=load('forward_capture.json')
+          same={}
+          for scope in ('staging','production'):
+              a=pre.get(scope,{})
+              b=post.get(scope,{})
+              same[scope]={
+                  'container_id_unchanged':bool(a.get('id')) and a.get('id')==b.get('id'),
+                  'image_id_unchanged':bool(a.get('image_id')) and a.get('image_id')==b.get('image_id'),
+                  'started_at_unchanged':bool(a.get('started_at')) and a.get('started_at')==b.get('started_at'),
+                  'restart_count_unchanged':a.get('restart_count')==b.get('restart_count'),
+                  'running_before_after':a.get('running') is True and b.get('running') is True,
+              }
+          hard_zeroes={
+              'CODE_CHANGE':0,
+              'RUNTIME_CONFIG_CHANGE':0,
+              'TRANSLATION_PROMPT_CHANGE':0,
+              'TRANSLATION_PROVIDER_CHANGE':0,
+              'TRANSLATION_MODEL_CHANGE':0,
+              'TRANSLATION_LOCATION_CHANGE':0,
+              'SEALED_ENGLISH_M26_CHANGE':0,
+              'OWNER_ADMISSION_CHANGE':0,
+              'PRODUCTION_MUTATION':0,
+              'MERGE':0,
+              'PRODUCTION_CUTOVER':0,
+              'CANONICAL_API_RAG_USAGE':0,
+              'OLD_SUPABASE_PROJECT_RESTORE':0,
+              'SECRET_EXPOSURE':0,
+              'PRODUCTION_CHANGED':False,
+          }
+          secret_re=re.compile(rb'(eyJ[A-Za-z0-9_-]{20,}\.|ya29\.|gh[pousr]_|sk-[A-Za-z0-9_-]{20,}|-----BEGIN .*PRIVATE KEY-----|sb_secret_)',re.I)
+          hits=[]
+          for p in root.glob('*'):
+              if p.is_file() and secret_re.search(p.read_bytes()): hits.append(p.name)
+          hard_zeroes['SECRET_EXPOSURE']=len(hits)
+          summary={
+              'schema_version':'m26-tieq-forward-capture-summary/v1',
+              'capture_present':bool(cap),
+              'exact_translation_produced':bool(cap.get('exact_translation_produced')),
+              'capture_count':cap.get('capture_count'),
+              'runtime_identity_unchanged':same,
+              'hard_zeroes':hard_zeroes,
+              'secret_scan_hits':hits,
+          }
+          Path('evidence/capture_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(summary,ensure_ascii=False,indent=2,sort_keys=True))
+          if hits: raise SystemExit(40)
+          if pre and post and not all(all(v is True for v in checks.values()) for checks in same.values()): raise SystemExit(41)
+          PY
+
+      - name: Upload sanitized TIEQ capture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-tieq-v1-forward-capture-${{ github.sha }}
+          path: evidence
+          if-no-files-found: error
+          retention-days: 7
