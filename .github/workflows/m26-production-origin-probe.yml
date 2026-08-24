@@ -1,0 +1,97 @@
+name: M26 Production Origin Topology Probe
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-production-origin-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: m23-r3-diagnostic
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Prepare SSH
+        run: |
+          set -euo pipefail
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+          mkdir -p artifacts/m26-production-origin-probe
+
+      - name: Probe Oracle topology without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="artifacts/m26-production-origin-probe/oracle-topology.txt"
+          ssh oracle-knowledge 'bash -se' <<'REMOTE' > "$out"
+          set -euo pipefail
+          echo '=== identity ==='
+          date -u +%FT%TZ
+          hostname
+          id -un
+
+          echo '=== relevant containers ==='
+          docker ps --format '{{.Names}}|{{.Image}}|{{.Ports}}' | grep -E 'm26|caddy|cloudflared|knowledge' || true
+
+          echo '=== accepted runtime 18081 health ==='
+          status_18081="$(curl --silent --show-error -o /tmp/m26-18081-health.json -w '%{http_code}' http://127.0.0.1:18081/v1/answers/health || true)"
+          echo "status=$status_18081"
+          head -c 2000 /tmp/m26-18081-health.json 2>/dev/null || true
+          echo
+
+          echo '=== likely legacy production listeners ==='
+          for port in 18000 8080 80 443; do
+            echo "-- port=$port"
+            ss -ltn 2>/dev/null | grep -E "[:.]${port}[[:space:]]" || true
+          done
+
+          echo '=== production origin caddy container inspect ==='
+          if docker inspect m26-pa7-backend-https-origin >/dev/null 2>&1; then
+            docker inspect m26-pa7-backend-https-origin --format 'name={{.Name}} image={{.Config.Image}} network={{.HostConfig.NetworkMode}}'
+            echo '-- mounts --'
+            docker inspect m26-pa7-backend-https-origin --format '{{range .Mounts}}{{println .Type .Source "->" .Destination}}{{end}}'
+            echo '-- caddyfile --'
+            docker exec m26-pa7-backend-https-origin sh -lc 'cat /etc/caddy/Caddyfile' 2>/dev/null || true
+            echo '-- adapted caddy config excerpt --'
+            docker exec m26-pa7-backend-https-origin sh -lc 'caddy adapt --config /etc/caddy/Caddyfile --pretty 2>/dev/null | head -c 12000' || true
+          else
+            echo 'm26-pa7-backend-https-origin absent'
+          fi
+
+          echo '=== accepted staging container inspect ==='
+          if docker inspect m26-public-api-staging-d6288072 >/dev/null 2>&1; then
+            docker inspect m26-public-api-staging-d6288072 --format 'name={{.Name}} image={{.Config.Image}} network={{.HostConfig.NetworkMode}}'
+            docker inspect m26-public-api-staging-d6288072 --format '{{range .NetworkSettings.Ports}}{{println .}}{{end}}' || true
+          fi
+
+          echo '=== tunnel inspect ==='
+          if docker inspect m26-pa7-backend-tunnel >/dev/null 2>&1; then
+            docker inspect m26-pa7-backend-tunnel --format 'name={{.Name}} image={{.Config.Image}} network={{.HostConfig.NetworkMode}}'
+          fi
+          REMOTE
+          cat "$out"
+
+      - name: Upload probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-production-origin-probe-${{ github.sha }}
+          path: artifacts/m26-production-origin-probe
+          if-no-files-found: error
+          retention-days: 30
