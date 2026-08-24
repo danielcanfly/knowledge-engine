@@ -47,7 +47,7 @@ jobs:
           id -un
 
           echo '=== relevant containers ==='
-          docker ps --format '{{.Names}}|{{.Image}}|{{.Ports}}' | grep -E 'm26|caddy|cloudflared|knowledge' || true
+          docker ps --format '{{.Names}}|{{.Image}}|{{.Ports}}' | grep -E 'm26|caddy|cloudflared|knowledge|18000' || true
 
           echo '=== accepted runtime 18081 health ==='
           status_18081="$(curl --silent --show-error -o /tmp/m26-18081-health.json -w '%{http_code}' http://127.0.0.1:18081/v1/answers/health || true)"
@@ -55,24 +55,37 @@ jobs:
           head -c 2000 /tmp/m26-18081-health.json 2>/dev/null || true
           echo
 
-          echo '=== likely legacy production listeners ==='
-          for port in 18000 8080 80 443; do
-            echo "-- port=$port"
-            ss -ltn 2>/dev/null | grep -E "[:.]${port}[[:space:]]" || true
-          done
+          echo '=== host listeners with process ownership ==='
+          sudo -n ss -ltnp 2>/dev/null | grep -E ':(80|443|18000|18081|8080)[[:space:]]' || ss -ltn 2>/dev/null | grep -E ':(80|443|18000|18081|8080)[[:space:]]' || true
 
-          echo '=== production origin caddy container inspect ==='
-          if docker inspect m26-pa7-backend-https-origin >/dev/null 2>&1; then
-            docker inspect m26-pa7-backend-https-origin --format 'name={{.Name}} image={{.Config.Image}} network={{.HostConfig.NetworkMode}}'
-            echo '-- mounts --'
-            docker inspect m26-pa7-backend-https-origin --format '{{range .Mounts}}{{println .Type .Source "->" .Destination}}{{end}}'
-            echo '-- caddyfile --'
-            docker exec m26-pa7-backend-https-origin sh -lc 'cat /etc/caddy/Caddyfile' 2>/dev/null || true
-            echo '-- adapted caddy config excerpt --'
-            docker exec m26-pa7-backend-https-origin sh -lc 'caddy adapt --config /etc/caddy/Caddyfile --pretty 2>/dev/null | head -c 12000' || true
+          echo '=== reverse proxy services ==='
+          for svc in nginx caddy apache2; do
+            printf '%s=' "$svc"
+            systemctl is-active "$svc" 2>/dev/null || true
+          done
+          ps -ef | grep -E '[n]ginx|[c]addy|[a]pache|[h]aproxy' || true
+
+          echo '=== nginx production routing excerpt ==='
+          if command -v nginx >/dev/null 2>&1; then
+            sudo -n nginx -T 2>&1 | grep -nE 'api\.danielcanfly\.com|18000|18081|proxy_pass|server_name' -C 10 | head -c 24000 || true
           else
-            echo 'm26-pa7-backend-https-origin absent'
+            echo 'nginx binary absent'
           fi
+
+          echo '=== host caddy config excerpt ==='
+          if command -v caddy >/dev/null 2>&1; then
+            sudo -n caddy adapt --config /etc/caddy/Caddyfile --pretty 2>/dev/null | grep -nE 'api\.danielcanfly\.com|18000|18081|reverse_proxy|upstream' -C 10 | head -c 24000 || true
+          else
+            echo 'caddy binary absent'
+          fi
+
+          echo '=== direct production origin host-header probes ==='
+          for path in /v1/answers/health /health /api/m26/health; do
+            code="$(curl -k --silent --show-error --resolve api.danielcanfly.com:443:127.0.0.1 -o /tmp/m26-origin-body -w '%{http_code}' "https://api.danielcanfly.com${path}" || true)"
+            echo "path=$path status=$code"
+            head -c 1000 /tmp/m26-origin-body 2>/dev/null || true
+            echo
+          done
 
           echo '=== accepted staging container inspect ==='
           if docker inspect m26-public-api-staging-d6288072 >/dev/null 2>&1; then
