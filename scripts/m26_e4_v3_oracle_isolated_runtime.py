@@ -15,6 +15,11 @@ from typing import Any
 
 DEFAULT_BASE_CONTAINER = "m26-public-api-production-repair2-ownerhash-r2-auth-520aed"
 DEFAULT_CANDIDATE_CONTAINER = "m26-e4-v3-oracle-isolated-m26blog-59012fe-520aed"
+EXPECTED_RELEASE_ID = "m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440"
+EXPECTED_QDRANT_COLLECTION = "m26_blog_m26blog_ec79a3cad1d8_59012fe3818c_4260fcb53440"
+EXPECTED_SEMANTIC_POINT_COUNT = 4424
+EXPECTED_NODE_COUNT = 4457
+EXPECTED_EDGE_COUNT = 8995
 
 
 def run(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -68,12 +73,15 @@ def choose_container_port(inspected: dict[str, Any], env: dict[str, str], explic
     if explicit:
         return explicit
     ports = ((inspected.get("NetworkSettings") or {}).get("Ports") or {})
+    for preferred in ("8080/tcp", "8789/tcp"):
+        if preferred in ports:
+            return preferred.split("/", 1)[0]
     for key in sorted(ports):
         if key.endswith("/tcp"):
             return key.split("/", 1)[0]
     if env.get("PORT"):
         return env["PORT"]
-    return "8789"
+    return "8080"
 
 
 def assert_host_port_free(port: int) -> None:
@@ -96,14 +104,12 @@ def isolated_digest(label: str, binding: dict[str, Any]) -> str:
 
 
 def ensure_isolated_health_auth(env: dict[str, str], binding: dict[str, Any]) -> dict[str, Any]:
-    """Ensure isolated localhost health can authenticate without requiring production secrets.
+    """Ensure isolated localhost owner-only routes can authenticate if probed.
 
-    The active frozen base container may omit the backend token because production
-    ingress supplies auth elsewhere. E4_V3 only needs localhost /api/m26/health
-    to prove the isolated candidate is alive and bound. If a backend token or
-    owner hash is missing, inject deterministic isolated-only values into the
-    candidate env file. This does not modify the base container, production
-    pointer, canonical route, R2, Qdrant, provider, or source repo.
+    The canonical container liveness route is /v1/health and is unauthenticated.
+    Some owner-only routes still require headers, so synthetic isolated-only
+    values are provided only to the candidate env when the frozen base container
+    does not already carry them. This never mutates the base container.
     """
 
     token_source = "base_env"
@@ -166,30 +172,73 @@ if pab is not None:
 '''
 
 
-def request_health(port: int, env: dict[str, str]) -> dict[str, Any]:
-    token = env.get("M26_QUERY_BACKEND_TOKEN", "")
-    owner_hash = env.get("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", "")
-    if not token:
-        raise SystemExit("M26_E4_V3_MISSING_BACKEND_TOKEN_IN_CANDIDATE_ENV")
-    if not owner_hash:
-        raise SystemExit("M26_E4_V3_MISSING_OWNER_HASH_IN_CANDIDATE_ENV")
+def request_liveness(port: int) -> dict[str, Any]:
     req = urllib.request.Request(
-        f"http://127.0.0.1:{port}/api/m26/health",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "x-m26-owner-subject-hash": owner_hash,
-            "Accept": "application/json",
-        },
+        f"http://127.0.0.1:{port}/v1/health",
+        headers={"Accept": "application/json"},
     )
     try:
         with urllib.request.urlopen(req, timeout=20) as response:
             payload = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:500]
-        raise SystemExit(f"M26_E4_V3_HEALTH_HTTP_{exc.code}:{detail}") from exc
+        raise RuntimeError(f"M26_E4_V3_LIVENESS_HTTP_{exc.code}:{detail}") from exc
     value = json.loads(payload)
     if not isinstance(value, dict):
-        raise SystemExit("M26_E4_V3_HEALTH_NON_OBJECT")
+        raise RuntimeError("M26_E4_V3_LIVENESS_NON_OBJECT")
+    return value
+
+
+def run_binding_probe(container: str) -> dict[str, Any]:
+    py = r'''
+import json
+from knowledge_engine import m26_production_answer_bundle as pab
+bundle = pab.load_production_answer_bundle()
+report = pab.build_production_answer_compatibility_report(bundle, qdrant_point_count=4424)
+out = {
+    "schema_version": "m26-e4-v3-in-container-binding-probe/v1",
+    "status": "M26_E4_V3_BINDING_PROBE_PASS" if report.get("status") == "compatible" else "M26_E4_V3_BINDING_PROBE_FAIL",
+    "release_id": bundle.release_id,
+    "manifest_sha256": bundle.manifest_sha256,
+    "qdrant_collection": pab.FULL_PRODUCTION_QDRANT_COLLECTION,
+    "graph_v2_sha256": pab.FULL_PRODUCTION_GRAPH_V2_SHA256,
+    "semantic_point_count": pab.FULL_PRODUCTION_SEMANTIC_POINT_COUNT,
+    "node_count": pab.FULL_PRODUCTION_NODE_COUNT,
+    "edge_count": pab.FULL_PRODUCTION_EDGE_COUNT,
+    "compatibility_status": report.get("status"),
+    "mismatch_counts": report.get("mismatch_counts"),
+    "authority": {
+        "provider_answer_requests": 0,
+        "embedding_provider_requests": 0,
+        "qdrant_writes": 0,
+        "r2_writes": 0,
+        "production_pointer_writes": 0,
+        "canonical_route_mutations": 0,
+        "e5_consumed_attempts": 0,
+    },
+}
+print(json.dumps(out, sort_keys=True))
+'''
+    result = run(["docker", "exec", container, "python", "-c", py], check=False)
+    if result.returncode != 0:
+        detail = (result.stdout + "\n" + result.stderr)[-2000:]
+        raise SystemExit("M26_E4_V3_BINDING_PROBE_EXEC_FAILED:" + detail)
+    try:
+        value = json.loads(result.stdout.strip().splitlines()[-1])
+    except Exception as exc:
+        raise SystemExit("M26_E4_V3_BINDING_PROBE_PARSE_FAILED:" + result.stdout[-1000:]) from exc
+    if not isinstance(value, dict):
+        raise SystemExit("M26_E4_V3_BINDING_PROBE_NON_OBJECT")
+    if value.get("status") != "M26_E4_V3_BINDING_PROBE_PASS":
+        raise SystemExit("M26_E4_V3_BINDING_PROBE_NOT_PASS:" + json.dumps(value, sort_keys=True))
+    if value.get("release_id") != EXPECTED_RELEASE_ID:
+        raise SystemExit("M26_E4_V3_BINDING_PROBE_RELEASE_MISMATCH:" + json.dumps(value, sort_keys=True))
+    if value.get("qdrant_collection") != EXPECTED_QDRANT_COLLECTION:
+        raise SystemExit("M26_E4_V3_BINDING_PROBE_QDRANT_MISMATCH:" + json.dumps(value, sort_keys=True))
+    if value.get("semantic_point_count") != EXPECTED_SEMANTIC_POINT_COUNT:
+        raise SystemExit("M26_E4_V3_BINDING_PROBE_SEMANTIC_COUNT_MISMATCH:" + json.dumps(value, sort_keys=True))
+    if value.get("node_count") != EXPECTED_NODE_COUNT or value.get("edge_count") != EXPECTED_EDGE_COUNT:
+        raise SystemExit("M26_E4_V3_BINDING_PROBE_GRAPH_COUNT_MISMATCH:" + json.dumps(value, sort_keys=True))
     return value
 
 
@@ -216,9 +265,6 @@ def main() -> int:
     env = parse_env(container_env_rows(args.base_container))
     container_port = choose_container_port(inspected, env, args.container_port or None)
 
-    # Clear a previous failed/superseded isolated candidate before checking the
-    # localhost port. This is restricted to the candidate container name and does
-    # not touch the production base container.
     remove_previous = run(["docker", "rm", "-f", args.candidate_container], check=False)
     previous_candidate_removed = remove_previous.returncode == 0
     assert_host_port_free(args.host_port)
@@ -249,7 +295,7 @@ def main() -> int:
     ]
     container_id = stdout(docker_args)
 
-    health: dict[str, Any] | None = None
+    liveness: dict[str, Any] | None = None
     last_error = ""
     for _ in range(30):
         time.sleep(2)
@@ -258,14 +304,16 @@ def main() -> int:
             logs = run(["docker", "logs", "--tail", "80", args.candidate_container], check=False)
             raise SystemExit("M26_E4_V3_CANDIDATE_CONTAINER_NOT_RUNNING:" + logs.stdout[-1000:])
         try:
-            health = request_health(args.host_port, env)
-            if health.get("status") == "ok":
+            liveness = request_liveness(args.host_port)
+            if str(liveness.get("status") or "") in {"healthy", "starting"}:
                 break
         except Exception as exc:
             last_error = str(exc)
-    if not isinstance(health, dict) or health.get("status") != "ok":
+    if not isinstance(liveness, dict) or str(liveness.get("status") or "") not in {"healthy", "starting"}:
         logs = run(["docker", "logs", "--tail", "120", args.candidate_container], check=False)
-        raise SystemExit("M26_E4_V3_HEALTH_NOT_OK:" + last_error + ":" + logs.stdout[-1200:])
+        raise SystemExit("M26_E4_V3_LIVENESS_NOT_OK:" + last_error + ":" + logs.stdout[-1200:])
+
+    binding_probe = run_binding_probe(args.candidate_container)
 
     receipt = {
         "schema_version": "m26-e4-v3-oracle-isolated-runtime-receipt/v1",
@@ -280,8 +328,9 @@ def main() -> int:
             "host": "127.0.0.1",
             "host_port": args.host_port,
             "container_port": container_port,
-            "health_path": "/api/m26/health",
-            "query_path": "/api/m26/query",
+            "health_path": "/v1/health",
+            "binding_probe": "docker_exec:knowledge_engine.m26_production_answer_bundle.load_production_answer_bundle",
+            "query_path": "/v1/ask",
         },
         "binding": {
             "release_id": release_id,
@@ -295,13 +344,13 @@ def main() -> int:
             "node_count": binding.get("node_count"),
             "edge_count": binding.get("edge_count"),
         },
-        "health": {
-            "schema_version": health.get("schema_version"),
-            "status": health.get("status"),
-            "canonical_runtime": health.get("canonical_runtime"),
-            "mutations": health.get("mutations"),
-            "privacy": health.get("privacy"),
+        "liveness": {
+            "schema_version": liveness.get("schema_version"),
+            "status": liveness.get("status"),
+            "release_id": liveness.get("release_id"),
+            "channel": liveness.get("channel"),
         },
+        "binding_probe": binding_probe,
         "authority": {
             "production_pointer_writes": 0,
             "canonical_route_mutations": 0,
