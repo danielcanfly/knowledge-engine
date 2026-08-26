@@ -29,8 +29,8 @@ jobs:
           node scripts/m26-e5-one-shot-oracle-runner.mjs \
             --fixture=fixtures/03_EXACT_SIX_CASE_FREEZE.json \
             --output-dir=/tmp/m26-e5-repair1-static
-          test -f /tmp/m26-e5-repair1-static/static_audit.json
-          grep -R -q 'M26_E5_REPAIR1_STATIC_AUDIT_PASS' /tmp/m26-e5-repair1-static
+          test -f /tmp/m26-e5-repair1-static/zero_consumption_static_audit.json
+          grep -q 'M26_E5_REPAIR1_ZERO_CONSUMPTION_STATIC_AUDIT_PASS' /tmp/m26-e5-repair1-static/zero_consumption_static_audit.json
 
       - name: Configure accepted Oracle SSH lane
         run: |
@@ -124,7 +124,6 @@ jobs:
             > /tmp/m26-e5-repair1-execute.log 2>&1
           rc=$?
           set -e
-          # Never permit raw secret-like SSE bytes into the artifact. The runner receipts preserve SHA-256.
           ssh -i ~/.ssh/m26_e5_repair1_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
             "set -euo pipefail; set +x; if [ -d /tmp/m26-e5-repair1-execute ]; then if grep -RIlE '(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|ya29\\.|gh[pousr]_|sk-[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{20,}\\.)' /tmp/m26-e5-repair1-execute --include='*.sse' >/tmp/m26-e5-secretlike-files 2>/dev/null; then xargs -r rm -f </tmp/m26-e5-secretlike-files; fi; tar -C /tmp -czf /tmp/m26-e5-repair1-execute.tgz m26-e5-repair1-execute; else mkdir -p /tmp/m26-e5-repair1-execute; printf '%s\\n' 'EXECUTION_OUTPUT_DIR_MISSING' >/tmp/m26-e5-repair1-execute/plumbing_failure.txt; tar -C /tmp -czf /tmp/m26-e5-repair1-execute.tgz m26-e5-repair1-execute; fi"
@@ -133,7 +132,6 @@ jobs:
           mkdir -p /tmp/m26-e5-repair1-execute-artifact
           tar -C /tmp/m26-e5-repair1-execute-artifact -xzf /tmp/m26-e5-repair1-execute.tgz
           printf '%s\n' "$rc" > /tmp/m26-e5-repair1-execute-artifact/runner_exit_code.txt
-          # Surface only terminal/control lines, never response bodies.
           grep -E 'M26_E5_|M26_ESCALATE_' /tmp/m26-e5-repair1-execute.log || true
 
       - name: Verify terminal and no rerolls
