@@ -26,15 +26,22 @@ jobs:
       EXPECTED_EDGE_COUNT: '8995'
       EXPECTED_BLOG_SOURCE_SHA: f5e20062c1400d7320fe2dbecf6409a0a8c910a7
       EXPECTED_ADMISSION_SHA256: ec79a3cad1d84a936a6420b64c3ec43859ebd296eee992b2654dd8537d62da2d
-      EXPECTED_LEXICAL_DOCUMENTS_SHA256: 1ee4e01f3082db55c6d737a09a28fad6135a418bb80d6465b81535816a0ffc7e
-      EXPECTED_PROVENANCE_SHA256: 60642a498abefca7c0a1762560146ca911e51aa5223c61ce67854f9a4c0d7335
+      EXPECTED_SEMANTIC_INPUTS_SHA256: 0982aaa55893bb2f95a8c0e0571cf5bef8beffb56346c9edf05c5a2e83597012
+      EXPECTED_LEXICAL_DOCUMENTS_SHA256: 1ee4e01ff7b08ef6f54b445112db25565eb8f72b932ec89473947fb7ba4dc3bf
+      EXPECTED_PROVENANCE_SHA256: 60642a49269864271f4a90a133c5f9140edc3abf5195c88b2ea23f20d4bf40f0
       EXPECTED_NODES_SHA256: 58540242ab29e3c884ef1c421f4d25f37c55df4657c045c19762c7b2435ce9a8
       EXPECTED_EDGES_SHA256: 5e7951e70d6fd144ca0f7c7ff32fdb94ce95fb912ab036b5bcb53d29746679cb
+      EXPECTED_SOURCE_INDEX_SHA256: 3b63e70b99b25cc0e83a2ceb56bf8b515402f92774af0a839839abd6cb0b864f
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install runtime validation dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
       - name: Validate dispatch payload and mask signed URL
         run: |
           set -euo pipefail
@@ -62,7 +69,6 @@ jobs:
           python - <<'PY'
           from __future__ import annotations
           import hashlib, json, os, pathlib, urllib.request, zipfile
-
           event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
           payload = event.get('client_payload') or {}
           archive_url = payload['archive_url']
@@ -98,6 +104,7 @@ jobs:
               'provenance': cand / 'provenance.jsonl',
               'nodes': pack / 'candidate-nodes.jsonl',
               'edges': pack / 'candidate-edges.jsonl',
+              'source_index': cand / 'source-index.json',
           }
           missing = {k: str(v) for k, v in required.items() if not v.exists()}
           if missing:
@@ -106,12 +113,16 @@ jobs:
               return hashlib.sha256(path.read_bytes()).hexdigest()
           observed_sha = {name: sha(path) for name, path in required.items() if name not in {'release_manifest', 'derivative_manifest'}}
           expected_sha = {
+              'semantic_inputs': os.environ['EXPECTED_SEMANTIC_INPUTS_SHA256'],
               'lexical_documents': os.environ['EXPECTED_LEXICAL_DOCUMENTS_SHA256'],
               'provenance': os.environ['EXPECTED_PROVENANCE_SHA256'],
               'nodes': os.environ['EXPECTED_NODES_SHA256'],
               'edges': os.environ['EXPECTED_EDGES_SHA256'],
+              'source_index': os.environ['EXPECTED_SOURCE_INDEX_SHA256'],
           }
           sha_mismatches = {k: {'expected': v, 'observed': observed_sha.get(k)} for k, v in expected_sha.items() if observed_sha.get(k) != v}
+          if sha_mismatches:
+              raise SystemExit('source artifact sha mismatch: ' + json.dumps(sha_mismatches, sort_keys=True))
           release = json.loads(required['release_manifest'].read_text(encoding='utf-8'))
           derivative = json.loads(required['derivative_manifest'].read_text(encoding='utf-8'))
           if release.get('release_id') != os.environ['EXPECTED_RELEASE_ID']:
@@ -159,17 +170,14 @@ jobs:
               raise SystemExit('count mismatch: ' + json.dumps(count_mismatches, sort_keys=True))
           redacted_samples = {}
           for key, value in samples.items():
-              if isinstance(value, dict):
-                  redacted_samples[key] = {
-                      'keys': sorted(value.keys()),
-                      'id_fields': {k: value.get(k) for k in sorted(value) if k.endswith('_id') or k in {'source', 'target', 'edge_id', 'section_id', 'concept_id', 'source_id', 'release_id', 'source_commit_sha', 'admission_sha256'}},
-                      'text_fields': {k: len(str(value.get(k, ''))) for k in sorted(value) if k in {'text', 'body', 'content', 'excerpt', 'description', 'title'}},
-                  }
-              else:
-                  redacted_samples[key] = {'type': type(value).__name__}
-          source_index_candidates = sorted(str(p.relative_to(pack)) for p in pack.rglob('*source*index*') if p.is_file())
+              redacted_samples[key] = {
+                  'keys': sorted(value.keys()) if isinstance(value, dict) else [],
+                  'payload_keys': sorted((value.get('payload') or {}).keys()) if isinstance(value, dict) and isinstance(value.get('payload'), dict) else [],
+                  'id_fields': {k: value.get(k) for k in sorted(value) if isinstance(value, dict) and (k.endswith('_id') or k in {'source', 'target', 'edge_id', 'section_id', 'concept_id', 'source_id', 'release_id', 'source_commit_sha', 'admission_sha256'})},
+                  'text_fields': {k: len(str(value.get(k, ''))) for k in sorted(value) if isinstance(value, dict) and k in {'text', 'body', 'content', 'excerpt', 'description', 'title'}},
+              }
           result = {
-              'schema_version': 'm26-e4-source-archive-probe/v1',
+              'schema_version': 'm26-e4-source-archive-probe/v2',
               'status': 'M26_E4_SOURCE_ARCHIVE_SCHEMA_PROBE_PASS',
               'mode': mode,
               'archive_sha256': archive_sha,
@@ -179,33 +187,40 @@ jobs:
               'pack_path': str(pack.relative_to(root)),
               'counts': counts,
               'observed_sha256': observed_sha,
-              'expected_sha256_checked': expected_sha,
-              'sha_mismatches': sha_mismatches,
               'release_manifest': release,
               'derivative_manifest': derivative,
               'sample_shapes': redacted_samples,
-              'source_index_candidates': source_index_candidates,
-              'authority': {
-                  'semantic_requests': 0,
-                  'provider_requests': 0,
-                  'qdrant_writes': 0,
-                  'r2_writes': 0,
-                  'production_pointer_writes': 0,
-                  'canonical_route_mutations': 0,
-                  'source_repo_mutations': 0,
-              },
+              'source_index_candidates': sorted(str(p.relative_to(pack)) for p in pack.rglob('*source*index*') if p.is_file()),
+              'authority': {'semantic_requests': 0, 'provider_requests': 0, 'qdrant_writes': 0, 'r2_writes': 0, 'production_pointer_writes': 0, 'canonical_route_mutations': 0, 'source_repo_mutations': 0},
           }
           outdir = pathlib.Path('/tmp/m26-e4-probe')
           outdir.mkdir(parents=True, exist_ok=True)
           (outdir / 'source-archive-probe.json').write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8')
           print('M26_E4_SOURCE_ARCHIVE_SCHEMA_PROBE_PASS')
-          print(json.dumps({'archive_sha256': archive_sha, 'archive_bytes': len(data), 'counts': counts, 'sha_mismatch_count': len(sha_mismatches), 'source_index_candidates': source_index_candidates}, sort_keys=True))
+          print(json.dumps({'archive_sha256': archive_sha, 'archive_bytes': len(data), 'counts': counts, 'source_index_candidates': result['source_index_candidates']}, sort_keys=True))
           PY
+      - name: Build offline runtime bundle adapter
+        run: |
+          set -euo pipefail
+          python scripts/m26_e4_build_runtime_bundle.py \
+            --source-extract /tmp/m26-e4-source \
+            --output-dir /tmp/m26-e4-runtime-bundle \
+            --repo-root .
       - name: Upload redacted probe evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: m26-e4-source-archive-probe
           path: /tmp/m26-e4-probe/source-archive-probe.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload offline runtime bundle receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-e4-runtime-bundle-offline
+          path: |
+            /tmp/m26-e4-runtime-bundle/m26-e4-runtime-bundle-offline-receipt.json
+            /tmp/m26-e4-runtime-bundle/first/bundle/releases/m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440/manifest.json
           if-no-files-found: error
           retention-days: 14
