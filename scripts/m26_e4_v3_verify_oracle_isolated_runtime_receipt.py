@@ -28,6 +28,7 @@ REQUIRED_ZERO_AUTHORITY = {
     "source_repo_mutations",
     "e5_consumed_attempts",
 }
+ALLOWED_AUTH_BOOTSTRAP_SOURCES = {"base_env", "isolated_synthetic_localhost_only"}
 
 
 def canonical_json_bytes(value: Any) -> bytes:
@@ -73,6 +74,21 @@ def require_zero_authority(authority: Mapping[str, Any], prefix: str) -> dict[st
         if value != 0:
             raise SystemExit(f"{prefix}.{key} must be 0, observed {value!r}")
     return observed
+
+
+def require_auth_bootstrap(receipt: Mapping[str, Any]) -> dict[str, Any]:
+    auth_bootstrap = require_mapping(receipt.get("auth_bootstrap"), "receipt.auth_bootstrap")
+    backend_source = auth_bootstrap.get("backend_token_source")
+    owner_source = auth_bootstrap.get("owner_subject_hash_source")
+    if backend_source not in ALLOWED_AUTH_BOOTSTRAP_SOURCES:
+        raise SystemExit(f"unexpected backend token source: {backend_source!r}")
+    if owner_source not in ALLOWED_AUTH_BOOTSTRAP_SOURCES:
+        raise SystemExit(f"unexpected owner hash source: {owner_source!r}")
+    require_equal(auth_bootstrap.get("secret_values_exposed"), False, "auth_bootstrap.secret_values_exposed")
+    require_equal(auth_bootstrap.get("base_container_env_mutated"), False, "auth_bootstrap.base_container_env_mutated")
+    require_equal(auth_bootstrap.get("candidate_env_only"), True, "auth_bootstrap.candidate_env_only")
+    require_equal(auth_bootstrap.get("localhost_only"), True, "auth_bootstrap.localhost_only")
+    return dict(auth_bootstrap)
 
 
 def main() -> int:
@@ -123,6 +139,7 @@ def main() -> int:
     if EXPECTED_RELEASE_ID not in build_sha or "m26-e4-v3-isolated" not in build_sha:
         raise SystemExit(f"health canonical build_sha not isolated M26 E4 V3: {build_sha!r}")
 
+    auth_bootstrap = require_auth_bootstrap(receipt)
     authority = require_mapping(receipt.get("authority"), "receipt.authority")
     authority_zero = require_zero_authority(authority, "receipt.authority")
 
@@ -141,6 +158,7 @@ def main() -> int:
         "base_container": receipt.get("base_container"),
         "health_status": health.get("status"),
         "health_mutations": dict(health_mutations),
+        "auth_bootstrap": auth_bootstrap,
         "authority_zero": authority_zero,
         "gates": {
             "terminal_marker_present": True,
@@ -148,6 +166,7 @@ def main() -> int:
             "non_production_port": "PASS",
             "health_ok": "PASS",
             "health_no_mutations": "PASS",
+            "isolated_auth_bootstrap": "PASS",
             "authority_no_mutations": "PASS",
             "e5_not_consumed": "PASS",
         },
