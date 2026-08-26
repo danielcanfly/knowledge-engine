@@ -200,6 +200,14 @@ jobs:
             | tee /tmp/m26-e4-v3-oracle-isolated-runtime-receipt.log
           grep -q 'M26_E4_V3_ORACLE_ISOLATED_RUNTIME_PASS' /tmp/m26-e4-v3-oracle-isolated-runtime-receipt.log
 
+      - name: Verify E4 V3 isolated runtime receipt invariants
+        run: |
+          set -euo pipefail
+          python scripts/m26_e4_v3_verify_oracle_isolated_runtime_receipt.py \
+            --receipt-log /tmp/m26-e4-v3-oracle-isolated-runtime-receipt.log \
+            --binding-json /tmp/m26-e4-v3-binding.json \
+            --output /tmp/m26-e4-v3-oracle-isolated-runtime-verification.json
+
       - name: Upload E4 V3 isolated runtime receipt
         if: always()
         uses: actions/upload-artifact@v4
@@ -209,5 +217,6 @@ jobs:
             /tmp/m26-e4-v3-binding.json
             /tmp/m26-e4-v3-binding/m26-e4-runtime-bundle-offline-receipt.json
             /tmp/m26-e4-v3-oracle-isolated-runtime-receipt.log
+            /tmp/m26-e4-v3-oracle-isolated-runtime-verification.json
           if-no-files-found: warn
           retention-days: 14
