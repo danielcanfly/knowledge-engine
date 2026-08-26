@@ -1,0 +1,7 @@
+{
+  "schema_version": "m26-e5-zero-consumption-introspection-trigger/v1",
+  "purpose": "read-only frozen E4 container introspection before any E5 semantic request",
+  "semantic_attempts_consumed": 0,
+  "provider_requests_authorized_by_this_trigger": 0,
+  "production_mutation_authorized": false
+}
