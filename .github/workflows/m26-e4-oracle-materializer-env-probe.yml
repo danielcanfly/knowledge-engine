@@ -1,4 +1,5 @@
 name: M26 E4 Oracle Materializer Env Probe
+# Re-trigger after workflow registration for redacted Oracle credential census.
 
 on:
   repository_dispatch:
