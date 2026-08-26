@@ -110,7 +110,23 @@ jobs:
                   listing = run(['docker','exec',container,'bash','-lc',"find /app /workspace /opt -maxdepth 4 -type f 2>/dev/null | sort | head -500"])
                   if listing.returncode == 0:
                       candidate_paths = listing.stdout.splitlines()
-                  py = "import hashlib,json,pathlib; paths=[]; [paths.extend(sorted(str(x) for x in pathlib.Path(root).rglob('*.py'))) for root in ('/app','/workspace','/opt') if pathlib.Path(root).exists()]; out={};\nfor path in paths:\n    p=pathlib.Path(path)\n    data=p.read_bytes()\n    if b'm26' in data or b'knowledge_engine' in data or b'FULL_PRODUCTION_RELEASE_ID' in data: out[path]=hashlib.sha256(data).hexdigest()\nprint(json.dumps(out, sort_keys=True))"
+                  py = '''
+          import hashlib, json, pathlib
+          paths = []
+          for root in ('/app','/workspace','/opt'):
+              p = pathlib.Path(root)
+              if p.exists():
+                  paths.extend(sorted(str(x) for x in p.rglob('*.py')))
+          out = {}
+          for path in paths:
+              try:
+                  data = pathlib.Path(path).read_bytes()
+              except Exception:
+                  continue
+              if b'm26' in data or b'knowledge_engine' in data or b'FULL_PRODUCTION_RELEASE_ID' in data:
+                  out[path] = hashlib.sha256(data).hexdigest()
+          print(json.dumps(out, sort_keys=True))
+          '''
                   hr = run(['docker','exec',container,'python','-c',py])
                   if hr.returncode == 0:
                       try:
