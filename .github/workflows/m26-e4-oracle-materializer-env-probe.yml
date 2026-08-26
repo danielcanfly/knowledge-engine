@@ -40,117 +40,116 @@ jobs:
           chmod 600 ~/.ssh/m26_e4_oracle
           ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           ssh -i ~/.ssh/m26_e4_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          OUT=/tmp/m26-e4-oracle-env-probe.json
-          cat > /tmp/m26_e4_probe.py <<'PY'
-          import json, pathlib, subprocess
-          container = 'm26-public-api-production-repair2-ownerhash-r2-auth-520aed'
-          names = [
-              'R2_ENDPOINT_URL','R2_BUCKET','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_REGION',
-              'CLOUDFLARE_ACCOUNT_ID','CLOUDFLARE_API_TOKEN','CLOUDFLARE_AI_TOKEN','CF_ACCOUNT_ID','CF_API_TOKEN',
-              'QDRANT_URL','QDRANT_API_KEY','QDRANT_WRITE_API_KEY','QDRANT_API_KEY_WRITE','QDRANT_READ_ONLY_API_KEY','QDRANT_API_KEY_READ',
-              'M26_PA7_DENSE_COLLECTION','M26_ACCEPTED_RUNTIME_CANDIDATE'
-          ]
-          def run(cmd):
-              return subprocess.run(cmd, text=True, capture_output=True)
-          def env_present_from_lines(lines):
-              found = {}
-              for name in names:
-                  prefix = name + '='
-                  vals = [line[len(prefix):] for line in lines if line.startswith(prefix)]
-                  found[name] = {'present': bool(vals), 'length': len(vals[0]) if vals else 0}
-              return found
-          host_files = ['/home/ubuntu/.env.oracle-e2', '/home/ubuntu/.env', '/opt/knowledge-engine/.env', '/app/.env']
-          host = {}
-          for fp in host_files:
-              p = pathlib.Path(fp)
-              if p.is_file():
-                  lines = [line.strip() for line in p.read_text(errors='ignore').splitlines() if '=' in line and not line.lstrip().startswith('#')]
-                  host[fp] = env_present_from_lines(lines)
-          docker_available = run(['bash','-lc','command -v docker >/dev/null']).returncode == 0
-          container_found = False
-          container_env = {}
-          image_id = None
-          image_tags = []
-          container_config = {}
-          runtime_hashes = {}
-          candidate_paths = []
-          if docker_available:
-              res = run(['docker','inspect',container,'--format','{{range .Config.Env}}{{println .}}{{end}}'])
-              container_found = (res.returncode == 0)
-              if container_found:
-                  container_env = env_present_from_lines(res.stdout.splitlines())
-                  raw = run(['docker','inspect',container]).stdout
-                  try:
-                      inspected = json.loads(raw)[0]
-                  except Exception:
-                      inspected = {}
-                  image_id = inspected.get('Image')
-                  cfg = inspected.get('Config') or {}
-                  host_cfg = inspected.get('HostConfig') or {}
-                  net = inspected.get('NetworkSettings') or {}
-                  container_config = {
-                      'name': inspected.get('Name'),
-                      'image': cfg.get('Image'),
-                      'working_dir': cfg.get('WorkingDir'),
-                      'entrypoint': cfg.get('Entrypoint'),
-                      'cmd': cfg.get('Cmd'),
-                      'ports': net.get('Ports'),
-                      'bind_count': len(host_cfg.get('Binds') or []),
-                      'mount_count': len(inspected.get('Mounts') or []),
-                      'restart_policy': host_cfg.get('RestartPolicy'),
-                  }
-                  if image_id:
-                      im = run(['docker','image','inspect',image_id])
-                      if im.returncode == 0:
-                          try:
-                              image_tags = json.loads(im.stdout)[0].get('RepoTags') or []
-                          except Exception:
-                              image_tags = []
-                  listing = run(['docker','exec',container,'bash','-lc',"find /app /workspace /opt -maxdepth 4 -type f 2>/dev/null | sort | head -500"])
-                  if listing.returncode == 0:
-                      candidate_paths = listing.stdout.splitlines()
-                  py = r'''
-          import hashlib, json, pathlib
-          paths = []
-          for root in ('/app','/workspace','/opt'):
-              p = pathlib.Path(root)
-              if p.exists():
-                  paths.extend(sorted(str(x) for x in p.rglob('*.py')))
-          out = {}
-          for path in paths:
-              try:
-                  data = pathlib.Path(path).read_bytes()
-              except Exception:
-                  continue
-              if b'm26' in data or b'knowledge_engine' in data or b'FULL_PRODUCTION_RELEASE_ID' in data:
-                  out[path] = hashlib.sha256(data).hexdigest()
-          print(json.dumps(out, sort_keys=True))
-          '''
-                  hr = run(['docker','exec',container,'python','-c',py])
-                  if hr.returncode == 0:
-                      try:
-                          runtime_hashes = json.loads(hr.stdout)
-                      except Exception:
-                          runtime_hashes = {'parse_error': hr.stdout[:500]}
-          out = {
-              'schema_version':'m26-e4-oracle-env-census/v2',
-              'status':'M26_E4_ORACLE_ENV_AND_IMAGE_CENSUS_COMPLETE',
-              'docker_available': docker_available,
-              'container_found': container_found,
-              'container_env': container_env,
-              'host_files': host,
-              'image': {'id': image_id, 'tags': image_tags},
-              'container_config': container_config,
-              'candidate_file_sample': candidate_paths[:200],
-              'runtime_py_hashes': runtime_hashes,
-              'authority': {'semantic_requests':0,'provider_requests':0,'qdrant_writes':0,'r2_writes':0,'production_pointer_writes':0,'canonical_route_mutations':0}
-          }
-          print(json.dumps(out, sort_keys=True, indent=2))
-          PY
-          sed -i 's/^          //' /tmp/m26_e4_probe.py
-          python3 /tmp/m26_e4_probe.py > "$OUT"
-          cat "$OUT"
+            set -euo pipefail
+            OUT=/tmp/m26-e4-oracle-env-probe.json
+            cat > /tmp/m26_e4_probe.py <<'PY'
+import json, pathlib, subprocess
+container = 'm26-public-api-production-repair2-ownerhash-r2-auth-520aed'
+names = [
+    'R2_ENDPOINT_URL','R2_BUCKET','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_REGION',
+    'CLOUDFLARE_ACCOUNT_ID','CLOUDFLARE_API_TOKEN','CLOUDFLARE_AI_TOKEN','CF_ACCOUNT_ID','CF_API_TOKEN',
+    'QDRANT_URL','QDRANT_API_KEY','QDRANT_WRITE_API_KEY','QDRANT_API_KEY_WRITE','QDRANT_READ_ONLY_API_KEY','QDRANT_API_KEY_READ',
+    'M26_PA7_DENSE_COLLECTION','M26_ACCEPTED_RUNTIME_CANDIDATE'
+]
+def run(cmd):
+    return subprocess.run(cmd, text=True, capture_output=True)
+def env_present_from_lines(lines):
+    found = {}
+    for name in names:
+        prefix = name + '='
+        vals = [line[len(prefix):] for line in lines if line.startswith(prefix)]
+        found[name] = {'present': bool(vals), 'length': len(vals[0]) if vals else 0}
+    return found
+host_files = ['/home/ubuntu/.env.oracle-e2', '/home/ubuntu/.env', '/opt/knowledge-engine/.env', '/app/.env']
+host = {}
+for fp in host_files:
+    p = pathlib.Path(fp)
+    if p.is_file():
+        lines = [line.strip() for line in p.read_text(errors='ignore').splitlines() if '=' in line and not line.lstrip().startswith('#')]
+        host[fp] = env_present_from_lines(lines)
+docker_available = run(['bash','-lc','command -v docker >/dev/null']).returncode == 0
+container_found = False
+container_env = {}
+image_id = None
+image_tags = []
+container_config = {}
+runtime_hashes = {}
+candidate_paths = []
+if docker_available:
+    res = run(['docker','inspect',container,'--format','{{range .Config.Env}}{{println .}}{{end}}'])
+    container_found = (res.returncode == 0)
+    if container_found:
+        container_env = env_present_from_lines(res.stdout.splitlines())
+        raw = run(['docker','inspect',container]).stdout
+        try:
+            inspected = json.loads(raw)[0]
+        except Exception:
+            inspected = {}
+        image_id = inspected.get('Image')
+        cfg = inspected.get('Config') or {}
+        host_cfg = inspected.get('HostConfig') or {}
+        net = inspected.get('NetworkSettings') or {}
+        container_config = {
+            'name': inspected.get('Name'),
+            'image': cfg.get('Image'),
+            'working_dir': cfg.get('WorkingDir'),
+            'entrypoint': cfg.get('Entrypoint'),
+            'cmd': cfg.get('Cmd'),
+            'ports': net.get('Ports'),
+            'bind_count': len(host_cfg.get('Binds') or []),
+            'mount_count': len(inspected.get('Mounts') or []),
+            'restart_policy': host_cfg.get('RestartPolicy'),
+        }
+        if image_id:
+            im = run(['docker','image','inspect',image_id])
+            if im.returncode == 0:
+                try:
+                    image_tags = json.loads(im.stdout)[0].get('RepoTags') or []
+                except Exception:
+                    image_tags = []
+        listing = run(['docker','exec',container,'bash','-lc',"find /app /workspace /opt -maxdepth 4 -type f 2>/dev/null | sort | head -500"])
+        if listing.returncode == 0:
+            candidate_paths = listing.stdout.splitlines()
+        py = r'''
+import hashlib, json, pathlib
+paths = []
+for root in ('/app','/workspace','/opt'):
+    p = pathlib.Path(root)
+    if p.exists():
+        paths.extend(sorted(str(x) for x in p.rglob('*.py')))
+out = {}
+for path in paths:
+    try:
+        data = pathlib.Path(path).read_bytes()
+    except Exception:
+        continue
+    if b'm26' in data or b'knowledge_engine' in data or b'FULL_PRODUCTION_RELEASE_ID' in data:
+        out[path] = hashlib.sha256(data).hexdigest()
+print(json.dumps(out, sort_keys=True))
+'''
+        hr = run(['docker','exec',container,'python','-c',py])
+        if hr.returncode == 0:
+            try:
+                runtime_hashes = json.loads(hr.stdout)
+            except Exception:
+                runtime_hashes = {'parse_error': hr.stdout[:500]}
+out = {
+    'schema_version':'m26-e4-oracle-env-census/v2',
+    'status':'M26_E4_ORACLE_ENV_AND_IMAGE_CENSUS_COMPLETE',
+    'docker_available': docker_available,
+    'container_found': container_found,
+    'container_env': container_env,
+    'host_files': host,
+    'image': {'id': image_id, 'tags': image_tags},
+    'container_config': container_config,
+    'candidate_file_sample': candidate_paths[:200],
+    'runtime_py_hashes': runtime_hashes,
+    'authority': {'semantic_requests':0,'provider_requests':0,'qdrant_writes':0,'r2_writes':0,'production_pointer_writes':0,'canonical_route_mutations':0}
+}
+print(json.dumps(out, sort_keys=True, indent=2))
+PY
+            python3 /tmp/m26_e4_probe.py > "$OUT"
+            cat "$OUT"
           REMOTE
       - name: Assert no production mutation in probe workflow
         run: |
