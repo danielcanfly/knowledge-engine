@@ -2,9 +2,27 @@
 
 ## Status
 
-`M26_E4_V3_ORACLE_ISOLATED_RUNTIME_READY_FOR_MANUAL_RUN`
+`M26_E4_V3_ORACLE_ISOLATED_RUNTIME_READY_FOR_MANUAL_RUN_REPAIR1`
 
 This note is a bounded operator handoff for M26 E4 V3. It does not authorize production pointer mutation, canonical route mutation, E5 execution, homepage promotion, P4/P5 formal qualification, or any rerun of already accepted source work.
+
+## Repair1 context
+
+Run `32988134229` / job `98239079293` reached source identity PASS and binding config PASS, then failed only at the isolated runtime health request:
+
+```text
+M26_E4_V3_MISSING_BACKEND_TOKEN_IN_BASE_ENV
+```
+
+Repair1 does not change source identity, Qdrant/R2 materialization law, production pointer, canonical route, E5, or the frozen base image. It only changes the isolated launcher behavior:
+
+```text
+- remove any previous same-name isolated candidate container before checking host_port, so a failed run does not leave 18187 occupied;
+- if the frozen base container lacks M26_QUERY_BACKEND_TOKEN, inject an isolated synthetic localhost-only health token into the candidate env file only;
+- if the frozen base container lacks KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH, inject an isolated synthetic localhost-only owner hash into the candidate env file only;
+- record auth_bootstrap without exposing token/hash values;
+- verifier must confirm secret_values_exposed=false, base_container_env_mutated=false, candidate_env_only=true, localhost_only=true.
+```
 
 ## Frozen identities
 
@@ -51,7 +69,7 @@ authority.canonical_route_mutations=0
 authority.e5_consumed_attempts=0
 ```
 
-4. Only after E4 materialization PASS, run **M26 E4 V3 Oracle Isolated Runtime**.
+4. Only after E4 materialization PASS, run **M26 E4 V3 Oracle Isolated Runtime** from latest `main`.
 
 Default manual input values:
 
@@ -91,6 +109,7 @@ Do not do any of the following during E4 or E4 V3:
 - Do not mutate channels/production.json.
 - Do not change the canonical public route.
 - Do not run E5 before E4 and E4 V3 both pass.
+- Do not rerun failed jobs from run 32988134229 because that reuses the old commit. Start a fresh manual workflow run from latest main instead.
 - Do not rerun Source G7, 156→180 construction, 142 rewrites, frontend/API wiring, old runtime archaeology, offline adapter rebuild, or zero-reembed judgment.
 - Do not rebuild the frozen semantic runtime image.
 - Do not change source PR #24.
@@ -115,6 +134,10 @@ receipt.health.status=ok
 receipt.health.mutations.canonical_writes=0
 receipt.health.mutations.production_pointer_mutations=0
 receipt.health.mutations.qdrant_write_operations=0
+receipt.auth_bootstrap.secret_values_exposed=false
+receipt.auth_bootstrap.base_container_env_mutated=false
+receipt.auth_bootstrap.candidate_env_only=true
+receipt.auth_bootstrap.localhost_only=true
 receipt.authority.production_pointer_writes=0
 receipt.authority.canonical_route_mutations=0
 receipt.authority.r2_writes=0
