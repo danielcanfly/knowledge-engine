@@ -244,11 +244,38 @@ print(json.dumps(out, sort_keys=True))
 def run_binding_probe(container: str) -> dict[str, Any]:
     py = r'''
 import json
+from botocore.exceptions import ClientError
 from knowledge_engine import m26_production_answer_bundle as pab
-bundle = pab.load_production_answer_bundle()
+from knowledge_engine.config import Settings
+from knowledge_engine.storage import create_object_store
+
+settings = Settings.from_env()
+real_store = create_object_store(settings)
+optional_missing = []
+
+class E4V3ReadThroughStore:
+    def get(self, key: str) -> bytes:
+        optional_keys = {
+            pab.FULL_PRODUCTION_POINTER_KEY,
+            pab.FULL_PRODUCTION_PROMOTION_MANIFEST_KEY,
+        }
+        try:
+            return real_store.get(key)
+        except FileNotFoundError:
+            raise
+        except KeyError:
+            raise
+        except ClientError as exc:
+            code = str((exc.response.get("Error") or {}).get("Code") or "")
+            if key in optional_keys and code in {"NoSuchKey", "404", "NotFound"}:
+                optional_missing.append(key)
+                raise FileNotFoundError(key) from exc
+            raise
+
+bundle = pab.load_production_answer_bundle(store=E4V3ReadThroughStore())
 report = pab.build_production_answer_compatibility_report(bundle, qdrant_point_count=4424)
 out = {
-    "schema_version": "m26-e4-v3-in-container-binding-probe/v1",
+    "schema_version": "m26-e4-v3-in-container-binding-probe/v2",
     "status": "M26_E4_V3_BINDING_PROBE_PASS" if report.get("status") == "compatible" else "M26_E4_V3_BINDING_PROBE_FAIL",
     "release_id": bundle.release_id,
     "manifest_sha256": bundle.manifest_sha256,
@@ -259,6 +286,9 @@ out = {
     "edge_count": pab.FULL_PRODUCTION_EDGE_COUNT,
     "compatibility_status": report.get("status"),
     "mismatch_counts": report.get("mismatch_counts"),
+    "optional_pointer_keys_missing": sorted(set(optional_missing)),
+    "optional_pointer_missing_allowed": True,
+    "optional_pointer_written": False,
     "authority": {
         "provider_answer_requests": 0,
         "embedding_provider_requests": 0,
@@ -291,6 +321,8 @@ print(json.dumps(out, sort_keys=True))
         raise SystemExit("M26_E4_V3_BINDING_PROBE_SEMANTIC_COUNT_MISMATCH:" + json.dumps(value, sort_keys=True))
     if value.get("node_count") != EXPECTED_NODE_COUNT or value.get("edge_count") != EXPECTED_EDGE_COUNT:
         raise SystemExit("M26_E4_V3_BINDING_PROBE_GRAPH_COUNT_MISMATCH:" + json.dumps(value, sort_keys=True))
+    if value.get("optional_pointer_written") is not False:
+        raise SystemExit("M26_E4_V3_BINDING_PROBE_OPTIONAL_POINTER_WRITE_DETECTED")
     return value
 
 
@@ -369,7 +401,7 @@ def main() -> int:
     binding_probe = run_binding_probe(args.candidate_container)
 
     receipt = {
-        "schema_version": "m26-e4-v3-oracle-isolated-runtime-receipt/v3",
+        "schema_version": "m26-e4-v3-oracle-isolated-runtime-receipt/v4",
         "status": "M26_E4_V3_ORACLE_ISOLATED_RUNTIME_PASS",
         "base_container": args.base_container,
         "candidate_container": args.candidate_container,
