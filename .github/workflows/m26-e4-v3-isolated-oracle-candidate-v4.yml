@@ -1,0 +1,182 @@
+name: M26 E4 V3 Isolated Oracle Candidate V4
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/m26-e4-v3-isolated-oracle-candidate-v4.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-e4-v3-isolated-oracle-candidate
+  cancel-in-progress: false
+
+jobs:
+  build-and-audit:
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_REGION: auto
+      ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact repository runtime dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip >/dev/null
+          python -m pip install -e . >/dev/null
+
+      - name: Configure Oracle SSH and snapshot production pointer before candidate writes
+        id: before
+        run: |
+          set -euo pipefail
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "missing $name"; exit 2; }
+          done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/m26_e4_v3_oracle
+          chmod 600 ~/.ssh/m26_e4_v3_oracle
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          sha="$(ssh -i ~/.ssh/m26_e4_v3_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "docker exec m26-public-api-production-repair2-ownerhash-r2-auth-520aed python -c 'from knowledge_engine.config import Settings; from knowledge_engine.storage import create_object_store,sha256_bytes; print(sha256_bytes(create_object_store(Settings.from_env()).get(\"channels/production.json\")))'")"
+          test "$sha" = '4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9' || {
+            echo "M26_E4_V3_PRODUCTION_POINTER_PREWRITE_DRIFT observed=$sha" >&2
+            exit 3
+          }
+          echo "pointer_sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "M26_E4_V3_PRODUCTION_POINTER_PREWRITE_PASS"
+
+      - name: Materialize exact candidate-only R2 binding objects
+        run: |
+          set -euo pipefail
+          for name in R2_ENDPOINT_URL R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
+            test -n "${!name:-}" || { echo "missing $name"; exit 2; }
+          done
+          python - <<'PY'
+          from __future__ import annotations
+          import json
+          from pathlib import Path
+          from knowledge_engine.config import Settings
+          from knowledge_engine.storage import create_object_store, sha256_bytes
+
+          release = 'm26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440'
+          direct = f'releases/{release}/manifest.json'
+          promotion = f'candidate-bindings/{release}/promotion-manifest.json'
+          pointer = f'candidate-bindings/{release}/pointer.json'
+          expected_manifest = '05e5f33e454e2ec5723223862b91729b9e4cb3f3c93068b5533eacae3e699796'
+          expected_pointer = '5e4a2b995519fdae06b94bbcd5243ac8412c77b2e65b9286868ef58b7f06e574'
+
+          store = create_object_store(Settings.from_env())
+          manifest_data = store.get(direct)
+          if sha256_bytes(manifest_data) != expected_manifest:
+              raise SystemExit('M26_E4_V3_DIRECT_MANIFEST_DIGEST_MISMATCH')
+          manifest = json.loads(manifest_data)
+          if manifest.get('release_id') != release:
+              raise SystemExit('M26_E4_V3_DIRECT_MANIFEST_RELEASE_MISMATCH')
+
+          def ensure_exact(key: str, payload: bytes, digest: str) -> str:
+              head = store.head(key)
+              action = 'preexisting_exact'
+              if head is None:
+                  store.put(
+                      key,
+                      payload,
+                      content_type='application/json',
+                      sha256=digest,
+                      only_if_absent=True,
+                  )
+                  action = 'created'
+              observed = sha256_bytes(store.get(key))
+              if observed != digest:
+                  raise SystemExit(
+                      f'M26_E4_V3_BINDING_OBJECT_DIGEST_MISMATCH key={key} '
+                      f'expected={digest} observed={observed}'
+                  )
+              return action
+
+          promotion_action = ensure_exact(promotion, manifest_data, expected_manifest)
+          pointer_obj = {
+              'manifest_key': promotion,
+              'manifest_sha256': expected_manifest,
+              'release_id': release,
+          }
+          pointer_data = (
+              json.dumps(pointer_obj, sort_keys=True, separators=(',', ':')) + '\n'
+          ).encode('utf-8')
+          if sha256_bytes(pointer_data) != expected_pointer:
+              raise SystemExit('M26_E4_V3_POINTER_CONSTRUCTION_DIGEST_MISMATCH')
+          pointer_action = ensure_exact(pointer, pointer_data, expected_pointer)
+
+          receipt = {
+              'schema_version': 'm26-e4-v3-candidate-binding-authority/v1',
+              'status': 'M26_E4_V3_CANDIDATE_BINDING_AUTHORITY_PASS',
+              'release_id': release,
+              'direct_manifest_key': direct,
+              'direct_manifest_sha256': expected_manifest,
+              'candidate_promotion_key': promotion,
+              'candidate_promotion_sha256': expected_manifest,
+              'candidate_promotion_action': promotion_action,
+              'candidate_pointer_key': pointer,
+              'candidate_pointer_sha256': expected_pointer,
+              'candidate_pointer_action': pointer_action,
+              'authority': {
+                  'candidate_namespace_r2_objects': 2,
+                  'production_pointer_writes': 0,
+                  'canonical_route_mutations': 0,
+                  'qdrant_writes': 0,
+                  'provider_answer_requests': 0,
+                  'e5_consumed_attempts': 0,
+              },
+          }
+          Path('m26-e4-v3-binding-authority-receipt.json').write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          print(json.dumps(receipt, sort_keys=True))
+          PY
+
+      - name: Prove canonical production pointer unchanged after candidate R2 writes
+        run: |
+          set -euo pipefail
+          before='${{ steps.before.outputs.pointer_sha }}'
+          after="$(ssh -i ~/.ssh/m26_e4_v3_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "docker exec m26-public-api-production-repair2-ownerhash-r2-auth-520aed python -c 'from knowledge_engine.config import Settings; from knowledge_engine.storage import create_object_store,sha256_bytes; print(sha256_bytes(create_object_store(Settings.from_env()).get(\"channels/production.json\")))'")"
+          test "$after" = "$before" || {
+            echo "M26_E4_V3_PRODUCTION_POINTER_MUTATED_BY_BINDING expected=$before observed=$after" >&2
+            exit 4
+          }
+          echo "M26_E4_V3_PRODUCTION_POINTER_POSTWRITE_PASS"
+
+      - name: Start and audit exact-image isolated Oracle candidate
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/m26_e4_v3_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            scripts/m26_e4_v3_isolated_oracle_candidate_v3.sh \
+            "$ORACLE_VM_USER@$ORACLE_VM_HOST:/tmp/m26_e4_v3_candidate_v4.sh"
+          ssh -i ~/.ssh/m26_e4_v3_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            'bash /tmp/m26_e4_v3_candidate_v4.sh; rc=$?; rm -f /tmp/m26_e4_v3_candidate_v4.sh; exit $rc'
+
+      - name: Upload bounded E4 V3 binding authority receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-e4-v3-binding-authority
+          path: m26-e4-v3-binding-authority-receipt.json
+          if-no-files-found: warn
+          retention-days: 30
