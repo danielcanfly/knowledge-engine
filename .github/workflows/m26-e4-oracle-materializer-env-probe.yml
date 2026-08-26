@@ -1,5 +1,5 @@
 name: M26 E4 Oracle Materializer Env Probe
-# Re-trigger after workflow registration for redacted Oracle credential census.
+# Repair heredoc indentation and re-trigger redacted Oracle credential census.
 
 on:
   repository_dispatch:
@@ -42,7 +42,7 @@ jobs:
           set -euo pipefail
           OUT=/tmp/m26-e4-oracle-env-probe.json
           python3 - <<'PY' > "$OUT"
-          import json, os, subprocess, pathlib
+          import json, subprocess, pathlib
           container = 'm26-public-api-production-repair2-ownerhash-r2-auth-520aed'
           names = [
               'R2_ENDPOINT_URL','R2_BUCKET','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_REGION',
@@ -85,4 +85,4 @@ jobs:
           print(json.dumps(out, sort_keys=True, indent=2))
           PY
           cat "$OUT"
-REMOTE
+          REMOTE
