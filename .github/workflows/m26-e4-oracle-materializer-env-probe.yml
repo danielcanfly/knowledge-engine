@@ -150,3 +150,6 @@ jobs:
           PY
           cat "$OUT"
           REMOTE
+      - name: Assert no production mutation in probe workflow
+        run: |
+          echo 'M26_E4_ORACLE_PROBE_AUTHORITY_READ_ONLY'
