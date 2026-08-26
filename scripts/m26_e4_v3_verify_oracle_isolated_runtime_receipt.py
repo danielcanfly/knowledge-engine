@@ -40,15 +40,24 @@ def sha256_value(value: Any) -> str:
 
 def load_receipt_from_log(path: pathlib.Path) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8", errors="replace")
-    marker = EXPECTED_STATUS
-    pos = text.rfind(marker)
-    if pos < 0:
-        raise SystemExit(f"missing terminal marker {EXPECTED_STATUS}")
-    start = text.find("{", pos)
+    lines = text.splitlines()
+    marker_line_index: int | None = None
+    for idx, line in enumerate(lines):
+        if line.strip() == EXPECTED_STATUS:
+            marker_line_index = idx
+            break
+    if marker_line_index is None:
+        raise SystemExit(f"missing terminal marker line {EXPECTED_STATUS}")
+    after_marker = "\n".join(lines[marker_line_index + 1 :])
+    start = after_marker.find("{")
     if start < 0:
-        raise SystemExit("receipt JSON missing after terminal marker")
+        raise SystemExit("receipt JSON missing after terminal marker line")
     decoder = json.JSONDecoder()
-    value, _ = decoder.raw_decode(text[start:])
+    try:
+        value, _ = decoder.raw_decode(after_marker[start:])
+    except json.JSONDecodeError as exc:
+        preview = after_marker[start : start + 500]
+        raise SystemExit(f"receipt JSON parse failed after marker: {exc}: {preview!r}") from exc
     if not isinstance(value, dict):
         raise SystemExit("receipt JSON is not an object")
     return value
@@ -134,6 +143,10 @@ def main() -> int:
     verify_binding_identity(binding_probe, "binding_probe")
     probe_authority = require_mapping(binding_probe.get("authority"), "binding_probe.authority")
     require_zero_authority(probe_authority, "binding_probe.authority")
+    if binding_probe.get("optional_pointer_missing_allowed") is not True:
+        raise SystemExit("binding_probe.optional_pointer_missing_allowed must be true")
+    if binding_probe.get("optional_pointer_written") is not False:
+        raise SystemExit("binding_probe.optional_pointer_written must be false")
 
     auth_bootstrap = require_mapping(receipt.get("auth_bootstrap"), "receipt.auth_bootstrap")
     require_equal(auth_bootstrap.get("secret_values_exposed"), False, "auth_bootstrap.secret_values_exposed")
@@ -145,7 +158,7 @@ def main() -> int:
     authority_zero = require_zero_authority(authority, "receipt.authority")
 
     verification = {
-        "schema_version": "m26-e4-v3-oracle-isolated-runtime-verification/v3",
+        "schema_version": "m26-e4-v3-oracle-isolated-runtime-verification/v4",
         "status": "M26_E4_V3_ORACLE_ISOLATED_RUNTIME_VERIFICATION_PASS",
         "verified_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "receipt_log_sha256": hashlib.sha256(receipt_log.read_bytes()).hexdigest(),
@@ -168,6 +181,7 @@ def main() -> int:
             "http_server_reachable": "PASS",
             "route_inventory_no_answer_invocation": "PASS",
             "binding_probe_compatible": "PASS",
+            "optional_pointer_missing_no_write": "PASS",
             "auth_bootstrap_isolated": "PASS",
             "authority_no_mutations": "PASS",
             "e5_not_consumed": "PASS",
