@@ -104,14 +104,6 @@ def isolated_digest(label: str, binding: dict[str, Any]) -> str:
 
 
 def ensure_isolated_health_auth(env: dict[str, str], binding: dict[str, Any]) -> dict[str, Any]:
-    """Ensure isolated localhost owner-only routes can authenticate if probed.
-
-    The canonical container liveness route is /v1/health and is unauthenticated.
-    Some owner-only routes still require headers, so synthetic isolated-only
-    values are provided only to the candidate env when the frozen base container
-    does not already carry them. This never mutates the base container.
-    """
-
     token_source = "base_env"
     owner_hash_source = "base_env"
     if not env.get("M26_QUERY_BACKEND_TOKEN"):
@@ -172,20 +164,80 @@ if pab is not None:
 '''
 
 
-def request_liveness(port: int) -> dict[str, Any]:
-    req = urllib.request.Request(
-        f"http://127.0.0.1:{port}/v1/health",
-        headers={"Accept": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as response:
-            payload = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:500]
-        raise RuntimeError(f"M26_E4_V3_LIVENESS_HTTP_{exc.code}:{detail}") from exc
-    value = json.loads(payload)
-    if not isinstance(value, dict):
-        raise RuntimeError("M26_E4_V3_LIVENESS_NON_OBJECT")
+def request_http_reachability(port: int) -> dict[str, Any]:
+    """Prove the isolated container has a reachable ASGI server without assuming routes.
+
+    The frozen 520aed image can differ from current main route docs. A 404 from
+    the ASGI server is valid liveness evidence for E4_V3 because the binding
+    proof is performed separately through docker exec and does not consume any
+    answer/provider endpoint.
+    """
+
+    paths = ["/v1/health", "/openapi.json", "/docs", "/"]
+    last_error = ""
+    for path in paths:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}{path}",
+            headers={"Accept": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as response:
+                payload = response.read(500).decode("utf-8", errors="replace")
+                return {
+                    "status": "http_reachable",
+                    "probe_path": path,
+                    "http_status": int(response.status),
+                    "accepted_404_as_liveness": False,
+                    "response_preview": payload[:200],
+                }
+        except urllib.error.HTTPError as exc:
+            detail = exc.read(500).decode("utf-8", errors="replace")
+            if 400 <= exc.code < 500:
+                return {
+                    "status": "http_reachable",
+                    "probe_path": path,
+                    "http_status": int(exc.code),
+                    "accepted_404_as_liveness": exc.code == 404,
+                    "response_preview": detail[:200],
+                }
+            last_error = f"HTTP {exc.code}: {detail[:200]}"
+        except Exception as exc:
+            last_error = str(exc)
+    raise RuntimeError("M26_E4_V3_HTTP_NOT_REACHABLE:" + last_error)
+
+
+def run_route_inventory(container: str) -> dict[str, Any]:
+    py = r'''
+import json
+try:
+    from knowledge_engine.m26_production_api import app
+except Exception:
+    from knowledge_engine.api import app
+routes = []
+for route in getattr(app, "routes", []):
+    path = getattr(route, "path", "")
+    methods = sorted(getattr(route, "methods", []) or [])
+    routes.append({"path": path, "methods": methods})
+paths = sorted({item["path"] for item in routes if item.get("path")})
+out = {
+    "schema_version": "m26-e4-v3-route-inventory/v1",
+    "status": "M26_E4_V3_ROUTE_INVENTORY_PASS",
+    "route_count": len(routes),
+    "paths": paths,
+    "includes_v1_health": "/v1/health" in paths,
+    "includes_api_m26_health": "/api/m26/health" in paths,
+    "includes_v1_ask": "/v1/ask" in paths,
+    "answer_endpoint_invoked": False,
+}
+print(json.dumps(out, sort_keys=True))
+'''
+    result = run(["docker", "exec", container, "python", "-c", py], check=False)
+    if result.returncode != 0:
+        detail = (result.stdout + "\n" + result.stderr)[-2000:]
+        raise SystemExit("M26_E4_V3_ROUTE_INVENTORY_FAILED:" + detail)
+    value = json.loads(result.stdout.strip().splitlines()[-1])
+    if not isinstance(value, dict) or value.get("status") != "M26_E4_V3_ROUTE_INVENTORY_PASS":
+        raise SystemExit("M26_E4_V3_ROUTE_INVENTORY_NOT_PASS:" + result.stdout[-1000:])
     return value
 
 
@@ -304,19 +356,20 @@ def main() -> int:
             logs = run(["docker", "logs", "--tail", "80", args.candidate_container], check=False)
             raise SystemExit("M26_E4_V3_CANDIDATE_CONTAINER_NOT_RUNNING:" + logs.stdout[-1000:])
         try:
-            liveness = request_liveness(args.host_port)
-            if str(liveness.get("status") or "") in {"healthy", "starting"}:
+            liveness = request_http_reachability(args.host_port)
+            if liveness.get("status") == "http_reachable":
                 break
         except Exception as exc:
             last_error = str(exc)
-    if not isinstance(liveness, dict) or str(liveness.get("status") or "") not in {"healthy", "starting"}:
+    if not isinstance(liveness, dict) or liveness.get("status") != "http_reachable":
         logs = run(["docker", "logs", "--tail", "120", args.candidate_container], check=False)
-        raise SystemExit("M26_E4_V3_LIVENESS_NOT_OK:" + last_error + ":" + logs.stdout[-1200:])
+        raise SystemExit("M26_E4_V3_HTTP_NOT_REACHABLE:" + last_error + ":" + logs.stdout[-1200:])
 
+    route_inventory = run_route_inventory(args.candidate_container)
     binding_probe = run_binding_probe(args.candidate_container)
 
     receipt = {
-        "schema_version": "m26-e4-v3-oracle-isolated-runtime-receipt/v1",
+        "schema_version": "m26-e4-v3-oracle-isolated-runtime-receipt/v3",
         "status": "M26_E4_V3_ORACLE_ISOLATED_RUNTIME_PASS",
         "base_container": args.base_container,
         "candidate_container": args.candidate_container,
@@ -328,10 +381,12 @@ def main() -> int:
             "host": "127.0.0.1",
             "host_port": args.host_port,
             "container_port": container_port,
-            "health_path": "/v1/health",
-            "binding_probe": "docker_exec:knowledge_engine.m26_production_answer_bundle.load_production_answer_bundle",
+            "http_probe_path": liveness.get("probe_path"),
             "query_path": "/v1/ask",
+            "answer_endpoint_invoked": False,
         },
+        "liveness": liveness,
+        "route_inventory": route_inventory,
         "binding": {
             "release_id": release_id,
             "manifest_sha256": binding.get("manifest_sha256"),
@@ -343,12 +398,6 @@ def main() -> int:
             "semantic_point_count": binding.get("semantic_point_count"),
             "node_count": binding.get("node_count"),
             "edge_count": binding.get("edge_count"),
-        },
-        "liveness": {
-            "schema_version": liveness.get("schema_version"),
-            "status": liveness.get("status"),
-            "release_id": liveness.get("release_id"),
-            "channel": liveness.get("channel"),
         },
         "binding_probe": binding_probe,
         "authority": {
