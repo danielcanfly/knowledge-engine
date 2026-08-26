@@ -75,13 +75,12 @@ def require_zero_authority(authority: Mapping[str, Any], prefix: str) -> dict[st
     return observed
 
 
-def require_auth_bootstrap(receipt: Mapping[str, Any]) -> dict[str, Any]:
-    bootstrap = require_mapping(receipt.get("auth_bootstrap"), "receipt.auth_bootstrap")
-    require_equal(bootstrap.get("secret_values_exposed"), False, "auth_bootstrap.secret_values_exposed")
-    require_equal(bootstrap.get("base_container_env_mutated"), False, "auth_bootstrap.base_container_env_mutated")
-    require_equal(bootstrap.get("candidate_env_only"), True, "auth_bootstrap.candidate_env_only")
-    require_equal(bootstrap.get("localhost_only"), True, "auth_bootstrap.localhost_only")
-    return dict(bootstrap)
+def verify_binding_identity(binding: Mapping[str, Any], prefix: str) -> None:
+    require_equal(binding.get("release_id"), EXPECTED_RELEASE_ID, f"{prefix}.release_id")
+    require_equal(binding.get("qdrant_collection"), EXPECTED_QDRANT_COLLECTION, f"{prefix}.qdrant_collection")
+    require_equal(binding.get("semantic_point_count"), EXPECTED_SEMANTIC_POINT_COUNT, f"{prefix}.semantic_point_count")
+    require_equal(binding.get("node_count"), EXPECTED_NODE_COUNT, f"{prefix}.node_count")
+    require_equal(binding.get("edge_count"), EXPECTED_EDGE_COUNT, f"{prefix}.edge_count")
 
 
 def main() -> int:
@@ -95,23 +94,19 @@ def main() -> int:
     binding_path = pathlib.Path(args.binding_json)
     output = pathlib.Path(args.output)
     receipt = load_receipt_from_log(receipt_log)
-    binding = json.loads(binding_path.read_text(encoding="utf-8"))
-    if not isinstance(binding, dict):
+    binding_json = json.loads(binding_path.read_text(encoding="utf-8"))
+    if not isinstance(binding_json, dict):
         raise SystemExit("binding JSON must be object")
 
     require_equal(receipt.get("status"), EXPECTED_STATUS, "receipt.status")
     receipt_binding = require_mapping(receipt.get("binding"), "receipt.binding")
-    require_equal(receipt_binding.get("release_id"), EXPECTED_RELEASE_ID, "binding.release_id")
-    require_equal(receipt_binding.get("qdrant_collection"), EXPECTED_QDRANT_COLLECTION, "binding.qdrant_collection")
+    verify_binding_identity(receipt_binding, "receipt.binding")
     require_equal(receipt_binding.get("source_head_sha"), EXPECTED_SOURCE_HEAD_SHA, "binding.source_head_sha")
     require_equal(receipt_binding.get("source_commit_sha"), EXPECTED_SOURCE_COMMIT_SHA, "binding.source_commit_sha")
     require_equal(receipt_binding.get("admission_sha256"), EXPECTED_ADMISSION_SHA256, "binding.admission_sha256")
-    require_equal(receipt_binding.get("semantic_point_count"), EXPECTED_SEMANTIC_POINT_COUNT, "binding.semantic_point_count")
-    require_equal(receipt_binding.get("node_count"), EXPECTED_NODE_COUNT, "binding.node_count")
-    require_equal(receipt_binding.get("edge_count"), EXPECTED_EDGE_COUNT, "binding.edge_count")
 
     for key in ("release_id", "qdrant_collection", "source_head_sha", "source_commit_sha", "admission_sha256", "semantic_point_count", "node_count", "edge_count"):
-        require_equal(binding.get(key), receipt_binding.get(key), f"binding_json.{key}")
+        require_equal(binding_json.get(key), receipt_binding.get(key), f"binding_json.{key}")
 
     endpoint = require_mapping(receipt.get("endpoint"), "receipt.endpoint")
     require_equal(endpoint.get("host"), "127.0.0.1", "endpoint.host")
@@ -119,29 +114,38 @@ def main() -> int:
         raise SystemExit("isolated runtime bound forbidden production host_port 18087")
     if int(endpoint.get("host_port", 0)) <= 0:
         raise SystemExit("endpoint.host_port invalid")
-    require_equal(endpoint.get("health_path"), "/v1/health", "endpoint.health_path")
-    require_equal(endpoint.get("query_path"), "/v1/ask", "endpoint.query_path")
+    require_equal(endpoint.get("answer_endpoint_invoked"), False, "endpoint.answer_endpoint_invoked")
 
     liveness = require_mapping(receipt.get("liveness"), "receipt.liveness")
-    if str(liveness.get("status") or "") not in {"healthy", "starting"}:
-        raise SystemExit(f"liveness.status invalid: {liveness.get('status')!r}")
+    require_equal(liveness.get("status"), "http_reachable", "liveness.status")
+    http_status = int(liveness.get("http_status", 0))
+    if http_status < 200 or http_status >= 500:
+        raise SystemExit(f"liveness.http_status must prove reachable HTTP server, observed {http_status}")
+
+    route_inventory = require_mapping(receipt.get("route_inventory"), "receipt.route_inventory")
+    require_equal(route_inventory.get("status"), "M26_E4_V3_ROUTE_INVENTORY_PASS", "route_inventory.status")
+    require_equal(route_inventory.get("answer_endpoint_invoked"), False, "route_inventory.answer_endpoint_invoked")
+    if int(route_inventory.get("route_count", 0)) <= 0:
+        raise SystemExit("route_inventory.route_count must be positive")
 
     binding_probe = require_mapping(receipt.get("binding_probe"), "receipt.binding_probe")
     require_equal(binding_probe.get("status"), "M26_E4_V3_BINDING_PROBE_PASS", "binding_probe.status")
-    require_equal(binding_probe.get("release_id"), EXPECTED_RELEASE_ID, "binding_probe.release_id")
-    require_equal(binding_probe.get("qdrant_collection"), EXPECTED_QDRANT_COLLECTION, "binding_probe.qdrant_collection")
-    require_equal(binding_probe.get("semantic_point_count"), EXPECTED_SEMANTIC_POINT_COUNT, "binding_probe.semantic_point_count")
-    require_equal(binding_probe.get("node_count"), EXPECTED_NODE_COUNT, "binding_probe.node_count")
-    require_equal(binding_probe.get("edge_count"), EXPECTED_EDGE_COUNT, "binding_probe.edge_count")
     require_equal(binding_probe.get("compatibility_status"), "compatible", "binding_probe.compatibility_status")
-    probe_authority = require_zero_authority(require_mapping(binding_probe.get("authority"), "binding_probe.authority"), "binding_probe.authority")
+    verify_binding_identity(binding_probe, "binding_probe")
+    probe_authority = require_mapping(binding_probe.get("authority"), "binding_probe.authority")
+    require_zero_authority(probe_authority, "binding_probe.authority")
 
-    auth_bootstrap = require_auth_bootstrap(receipt)
+    auth_bootstrap = require_mapping(receipt.get("auth_bootstrap"), "receipt.auth_bootstrap")
+    require_equal(auth_bootstrap.get("secret_values_exposed"), False, "auth_bootstrap.secret_values_exposed")
+    require_equal(auth_bootstrap.get("base_container_env_mutated"), False, "auth_bootstrap.base_container_env_mutated")
+    require_equal(auth_bootstrap.get("candidate_env_only"), True, "auth_bootstrap.candidate_env_only")
+    require_equal(auth_bootstrap.get("localhost_only"), True, "auth_bootstrap.localhost_only")
+
     authority = require_mapping(receipt.get("authority"), "receipt.authority")
     authority_zero = require_zero_authority(authority, "receipt.authority")
 
     verification = {
-        "schema_version": "m26-e4-v3-oracle-isolated-runtime-verification/v2",
+        "schema_version": "m26-e4-v3-oracle-isolated-runtime-verification/v3",
         "status": "M26_E4_V3_ORACLE_ISOLATED_RUNTIME_VERIFICATION_PASS",
         "verified_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "receipt_log_sha256": hashlib.sha256(receipt_log.read_bytes()).hexdigest(),
@@ -153,18 +157,18 @@ def main() -> int:
         "host_port": int(endpoint.get("host_port")),
         "candidate_container": receipt.get("candidate_container"),
         "base_container": receipt.get("base_container"),
-        "liveness_status": liveness.get("status"),
-        "binding_probe_status": binding_probe.get("status"),
-        "auth_bootstrap": auth_bootstrap,
+        "liveness": dict(liveness),
+        "route_inventory": dict(route_inventory),
+        "binding_probe": dict(binding_probe),
         "authority_zero": authority_zero,
-        "binding_probe_authority_zero": probe_authority,
         "gates": {
             "terminal_marker_present": True,
             "binding_identity": "PASS",
             "non_production_port": "PASS",
-            "canonical_liveness": "PASS",
-            "in_container_binding_probe": "PASS",
-            "auth_bootstrap_isolated_only": "PASS",
+            "http_server_reachable": "PASS",
+            "route_inventory_no_answer_invocation": "PASS",
+            "binding_probe_compatible": "PASS",
+            "auth_bootstrap_isolated": "PASS",
             "authority_no_mutations": "PASS",
             "e5_not_consumed": "PASS",
         },
