@@ -6,6 +6,7 @@ on:
       - m26-e5-execution-plane-repair1-20260827
     paths:
       - .github/workflows/m26-e5-repair1-contract-snapshot.yml
+      - scripts/m26_e5_oracle_contract_snapshot.py
 
 permissions:
   contents: read
