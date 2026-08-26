@@ -1,0 +1,198 @@
+name: M26 E5 Zero Consumption Frozen Runtime Introspection
+
+on:
+  push:
+    branches:
+      - m26-e5-zero-consumption-introspection-20260827
+
+permissions:
+  contents: read
+
+env:
+  ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+  ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+  ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+  EXPECTED_CONTAINER: m26-e4-v3-oracle-isolated-m26blog-59012fe-520aed
+  EXPECTED_IMAGE_ID: sha256:7b2bdc32a3ed769f068b885e171fe31da10f33f1335b778b8bfb89ccb1523919
+  EXPECTED_HOST_PORT: '18187'
+
+jobs:
+  introspect-only:
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - name: Validate SSH wiring without revealing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_SSH_PRIVATE_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "M26_E5_INTROSPECTION_MISSING_ENV:$name"
+              exit 2
+            fi
+          done
+          echo M26_E5_INTROSPECTION_ENV_PASS
+
+      - name: Read-only introspect exact frozen E4 container
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/m26_e5_introspection
+          chmod 600 ~/.ssh/m26_e5_introspection
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          ssh -i ~/.ssh/m26_e5_introspection -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "EXPECTED_CONTAINER='$EXPECTED_CONTAINER' EXPECTED_IMAGE_ID='$EXPECTED_IMAGE_ID' EXPECTED_HOST_PORT='$EXPECTED_HOST_PORT' bash -s" \
+            > /tmp/m26-e5-introspection.json <<'REMOTE'
+          set -euo pipefail
+          C="$EXPECTED_CONTAINER"
+          test "$(docker inspect "$C" --format '{{.State.Running}}')" = true
+          IMAGE_ID="$(docker inspect "$C" --format '{{.Image}}')"
+          test "$IMAGE_ID" = "$EXPECTED_IMAGE_ID"
+          PORT_BINDING="$(docker port "$C" 8080/tcp 2>/dev/null || true)"
+          case "$PORT_BINDING" in
+            *"127.0.0.1:${EXPECTED_HOST_PORT}"*) ;;
+            *) echo "unexpected frozen container port binding" >&2; exit 3;;
+          esac
+
+          docker exec -i "$C" python - <<'PY'
+          from __future__ import annotations
+          import hashlib
+          import importlib
+          import inspect
+          import json
+          import os
+          import pathlib
+          import pkgutil
+          import re
+
+          import knowledge_engine
+          from knowledge_engine.m26_production_api import app
+
+          def sha_bytes(data: bytes) -> str:
+              return hashlib.sha256(data).hexdigest()
+
+          def safe_source(obj):
+              try:
+                  return inspect.getsource(obj)
+              except Exception:
+                  return ""
+
+          route = None
+          for item in getattr(app, "routes", []):
+              if getattr(item, "path", None) == "/v1/answers" and "POST" in (getattr(item, "methods", set()) or set()):
+                  route = item
+                  break
+          if route is None:
+              raise SystemExit("M26_E5_INTROSPECTION_V1_ANSWERS_ROUTE_MISSING")
+
+          endpoint = route.endpoint
+          endpoint_source = safe_source(endpoint)
+          endpoint_module = inspect.getmodule(endpoint)
+          endpoint_globals = getattr(endpoint, "__globals__", {})
+
+          callable_rows = []
+          name_terms = ("answer", "provider", "semantic", "query", "retry", "stream", "translate", "abstain", "safety")
+          for name, value in sorted(endpoint_globals.items()):
+              module_name = str(getattr(value, "__module__", ""))
+              if not callable(value) or not module_name.startswith("knowledge_engine"):
+                  continue
+              if not any(term in name.lower() for term in name_terms):
+                  continue
+              source = safe_source(value)
+              callable_rows.append({
+                  "name": name,
+                  "module": module_name,
+                  "qualname": str(getattr(value, "__qualname__", "")),
+                  "source_sha256": sha_bytes(source.encode("utf-8")) if source else "",
+                  "source": source,
+              })
+
+          package_root = pathlib.Path(knowledge_engine.__file__).resolve().parent
+          file_rows = []
+          answer_route_files = []
+          provider_files = []
+          retry_pattern = re.compile(r"retry|backoff|max_provider_calls|provider_call_count|provider_invoked|for\s+attempt|while\s+.*attempt", re.I)
+          for path in sorted(package_root.glob("*.py")):
+              try:
+                  raw = path.read_bytes()
+                  text = raw.decode("utf-8")
+              except Exception:
+                  continue
+              row = {
+                  "name": path.name,
+                  "sha256": sha_bytes(raw),
+                  "bytes": len(raw),
+                  "contains_v1_answers": "/v1/answers" in text,
+                  "contains_provider_accounting": ("provider_call_count" in text or "provider_invoked" in text),
+                  "contains_retry_term": bool(retry_pattern.search(text)),
+              }
+              if row["contains_v1_answers"]:
+                  answer_route_files.append({**row, "source": text})
+              if row["contains_provider_accounting"] or row["contains_retry_term"]:
+                  excerpts = []
+                  lines = text.splitlines()
+                  for idx, line in enumerate(lines):
+                      if retry_pattern.search(line):
+                          lo, hi = max(0, idx - 2), min(len(lines), idx + 3)
+                          excerpts.append({"line": idx + 1, "text": "\n".join(lines[lo:hi])})
+                  provider_files.append({**row, "excerpts": excerpts[:120]})
+              file_rows.append(row)
+
+          env_names = sorted(k for k in os.environ if any(term in k for term in (
+              "M26", "QDRANT", "GEMINI", "MINIMAX", "CLOUDFLARE", "GOOGLE", "PROVIDER", "MODEL", "OWNER"
+          )))
+
+          out = {
+              "status": "M26_E5_ZERO_CONSUMPTION_INTROSPECTION_PASS",
+              "semantic_http_requests_sent": 0,
+              "provider_requests_sent": 0,
+              "route": {
+                  "path": getattr(route, "path", ""),
+                  "methods": sorted(getattr(route, "methods", set()) or set()),
+                  "endpoint_module": str(getattr(endpoint, "__module__", "")),
+                  "endpoint_qualname": str(getattr(endpoint, "__qualname__", "")),
+                  "endpoint_source_sha256": sha_bytes(endpoint_source.encode("utf-8")) if endpoint_source else "",
+                  "endpoint_source": endpoint_source,
+                  "module_file": str(getattr(endpoint_module, "__file__", "")),
+              },
+              "interesting_endpoint_globals": callable_rows,
+              "package_root": str(package_root),
+              "package_file_inventory": file_rows,
+              "answer_route_files": answer_route_files,
+              "provider_retry_accounting_files": provider_files,
+              "relevant_env_names_only": env_names,
+              "secret_values_exposed": False,
+          }
+          print(json.dumps(out, ensure_ascii=False, sort_keys=True))
+          PY
+          REMOTE
+
+          python - <<'PY'
+          import json
+          p='/tmp/m26-e5-introspection.json'
+          obj=json.load(open(p, encoding='utf-8'))
+          assert obj['status']=='M26_E5_ZERO_CONSUMPTION_INTROSPECTION_PASS'
+          assert obj['semantic_http_requests_sent']==0
+          assert obj['provider_requests_sent']==0
+          assert obj['route']['path']=='/v1/answers'
+          print('M26_E5_ZERO_CONSUMPTION_INTROSPECTION_PASS')
+          print(json.dumps({
+              'route': obj['route']['path'],
+              'endpoint_module': obj['route']['endpoint_module'],
+              'answer_route_files': [x['name'] for x in obj['answer_route_files']],
+              'provider_retry_accounting_files': [x['name'] for x in obj['provider_retry_accounting_files']],
+              'semantic_http_requests_sent': 0,
+              'provider_requests_sent': 0,
+          }, sort_keys=True))
+          PY
+
+      - name: Upload sanitized zero-consumption introspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-e5-zero-consumption-introspection
+          path: /tmp/m26-e5-introspection.json
+          if-no-files-found: error
+          retention-days: 7
