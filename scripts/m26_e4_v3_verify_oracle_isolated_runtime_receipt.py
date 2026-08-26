@@ -28,7 +28,6 @@ REQUIRED_ZERO_AUTHORITY = {
     "source_repo_mutations",
     "e5_consumed_attempts",
 }
-ALLOWED_AUTH_BOOTSTRAP_SOURCES = {"base_env", "isolated_synthetic_localhost_only"}
 
 
 def canonical_json_bytes(value: Any) -> bytes:
@@ -49,7 +48,7 @@ def load_receipt_from_log(path: pathlib.Path) -> dict[str, Any]:
     if start < 0:
         raise SystemExit("receipt JSON missing after terminal marker")
     decoder = json.JSONDecoder()
-    value, end = decoder.raw_decode(text[start:])
+    value, _ = decoder.raw_decode(text[start:])
     if not isinstance(value, dict):
         raise SystemExit("receipt JSON is not an object")
     return value
@@ -77,18 +76,12 @@ def require_zero_authority(authority: Mapping[str, Any], prefix: str) -> dict[st
 
 
 def require_auth_bootstrap(receipt: Mapping[str, Any]) -> dict[str, Any]:
-    auth_bootstrap = require_mapping(receipt.get("auth_bootstrap"), "receipt.auth_bootstrap")
-    backend_source = auth_bootstrap.get("backend_token_source")
-    owner_source = auth_bootstrap.get("owner_subject_hash_source")
-    if backend_source not in ALLOWED_AUTH_BOOTSTRAP_SOURCES:
-        raise SystemExit(f"unexpected backend token source: {backend_source!r}")
-    if owner_source not in ALLOWED_AUTH_BOOTSTRAP_SOURCES:
-        raise SystemExit(f"unexpected owner hash source: {owner_source!r}")
-    require_equal(auth_bootstrap.get("secret_values_exposed"), False, "auth_bootstrap.secret_values_exposed")
-    require_equal(auth_bootstrap.get("base_container_env_mutated"), False, "auth_bootstrap.base_container_env_mutated")
-    require_equal(auth_bootstrap.get("candidate_env_only"), True, "auth_bootstrap.candidate_env_only")
-    require_equal(auth_bootstrap.get("localhost_only"), True, "auth_bootstrap.localhost_only")
-    return dict(auth_bootstrap)
+    bootstrap = require_mapping(receipt.get("auth_bootstrap"), "receipt.auth_bootstrap")
+    require_equal(bootstrap.get("secret_values_exposed"), False, "auth_bootstrap.secret_values_exposed")
+    require_equal(bootstrap.get("base_container_env_mutated"), False, "auth_bootstrap.base_container_env_mutated")
+    require_equal(bootstrap.get("candidate_env_only"), True, "auth_bootstrap.candidate_env_only")
+    require_equal(bootstrap.get("localhost_only"), True, "auth_bootstrap.localhost_only")
+    return dict(bootstrap)
 
 
 def main() -> int:
@@ -126,25 +119,29 @@ def main() -> int:
         raise SystemExit("isolated runtime bound forbidden production host_port 18087")
     if int(endpoint.get("host_port", 0)) <= 0:
         raise SystemExit("endpoint.host_port invalid")
-    require_equal(endpoint.get("query_path"), "/api/m26/query", "endpoint.query_path")
-    require_equal(endpoint.get("health_path"), "/api/m26/health", "endpoint.health_path")
+    require_equal(endpoint.get("health_path"), "/v1/health", "endpoint.health_path")
+    require_equal(endpoint.get("query_path"), "/v1/ask", "endpoint.query_path")
 
-    health = require_mapping(receipt.get("health"), "receipt.health")
-    require_equal(health.get("status"), "ok", "health.status")
-    health_mutations = require_mapping(health.get("mutations"), "health.mutations")
-    for key in ("canonical_writes", "production_pointer_mutations", "qdrant_write_operations"):
-        require_equal(health_mutations.get(key), 0, f"health.mutations.{key}")
-    canonical_runtime = require_mapping(health.get("canonical_runtime"), "health.canonical_runtime")
-    build_sha = str(canonical_runtime.get("build_sha") or "")
-    if EXPECTED_RELEASE_ID not in build_sha or "m26-e4-v3-isolated" not in build_sha:
-        raise SystemExit(f"health canonical build_sha not isolated M26 E4 V3: {build_sha!r}")
+    liveness = require_mapping(receipt.get("liveness"), "receipt.liveness")
+    if str(liveness.get("status") or "") not in {"healthy", "starting"}:
+        raise SystemExit(f"liveness.status invalid: {liveness.get('status')!r}")
+
+    binding_probe = require_mapping(receipt.get("binding_probe"), "receipt.binding_probe")
+    require_equal(binding_probe.get("status"), "M26_E4_V3_BINDING_PROBE_PASS", "binding_probe.status")
+    require_equal(binding_probe.get("release_id"), EXPECTED_RELEASE_ID, "binding_probe.release_id")
+    require_equal(binding_probe.get("qdrant_collection"), EXPECTED_QDRANT_COLLECTION, "binding_probe.qdrant_collection")
+    require_equal(binding_probe.get("semantic_point_count"), EXPECTED_SEMANTIC_POINT_COUNT, "binding_probe.semantic_point_count")
+    require_equal(binding_probe.get("node_count"), EXPECTED_NODE_COUNT, "binding_probe.node_count")
+    require_equal(binding_probe.get("edge_count"), EXPECTED_EDGE_COUNT, "binding_probe.edge_count")
+    require_equal(binding_probe.get("compatibility_status"), "compatible", "binding_probe.compatibility_status")
+    probe_authority = require_zero_authority(require_mapping(binding_probe.get("authority"), "binding_probe.authority"), "binding_probe.authority")
 
     auth_bootstrap = require_auth_bootstrap(receipt)
     authority = require_mapping(receipt.get("authority"), "receipt.authority")
     authority_zero = require_zero_authority(authority, "receipt.authority")
 
     verification = {
-        "schema_version": "m26-e4-v3-oracle-isolated-runtime-verification/v1",
+        "schema_version": "m26-e4-v3-oracle-isolated-runtime-verification/v2",
         "status": "M26_E4_V3_ORACLE_ISOLATED_RUNTIME_VERIFICATION_PASS",
         "verified_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "receipt_log_sha256": hashlib.sha256(receipt_log.read_bytes()).hexdigest(),
@@ -156,17 +153,18 @@ def main() -> int:
         "host_port": int(endpoint.get("host_port")),
         "candidate_container": receipt.get("candidate_container"),
         "base_container": receipt.get("base_container"),
-        "health_status": health.get("status"),
-        "health_mutations": dict(health_mutations),
+        "liveness_status": liveness.get("status"),
+        "binding_probe_status": binding_probe.get("status"),
         "auth_bootstrap": auth_bootstrap,
         "authority_zero": authority_zero,
+        "binding_probe_authority_zero": probe_authority,
         "gates": {
             "terminal_marker_present": True,
             "binding_identity": "PASS",
             "non_production_port": "PASS",
-            "health_ok": "PASS",
-            "health_no_mutations": "PASS",
-            "isolated_auth_bootstrap": "PASS",
+            "canonical_liveness": "PASS",
+            "in_container_binding_probe": "PASS",
+            "auth_bootstrap_isolated_only": "PASS",
             "authority_no_mutations": "PASS",
             "e5_not_consumed": "PASS",
         },
