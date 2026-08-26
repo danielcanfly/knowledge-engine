@@ -1,0 +1,89 @@
+name: M26 E5 Presemantic Oracle Preflight V3
+
+on:
+  push:
+    branches: [m26-e5-one-shot-20260827]
+    paths: [.github/workflows/m26-e5-presemantic-preflight-v3.yml]
+
+permissions:
+  contents: read
+
+env:
+  ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+  ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+  ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+  EXPECTED_CONTAINER: m26-e4-v3-oracle-isolated-m26blog-59012fe-520aed
+  EXPECTED_PORT: '18187'
+  EXPECTED_SOURCE_HEAD: a738f20b16f10925c8adfe4d625be8db30fb269c
+  EXPECTED_RELEASE: m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
+  EXPECTED_QDRANT: m26_blog_m26blog_ec79a3cad1d8_59012fe3818c_4260fcb53440
+  EXPECTED_POINTS: '4424'
+
+jobs:
+  presemantic-v3:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 4
+    steps:
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_SSH_PRIVATE_KEY; do test -n "${!v:-}" || exit 2; done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/m26_e5_oracle
+          chmod 600 ~/.ssh/m26_e5_oracle
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+      - name: Inspect exact answers admission without calling it
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 ssh -i ~/.ssh/m26_e5_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "EXPECTED_CONTAINER='$EXPECTED_CONTAINER' EXPECTED_PORT='$EXPECTED_PORT' EXPECTED_SOURCE_HEAD='$EXPECTED_SOURCE_HEAD' EXPECTED_RELEASE='$EXPECTED_RELEASE' EXPECTED_QDRANT='$EXPECTED_QDRANT' EXPECTED_POINTS='$EXPECTED_POINTS' python3 -" <<'PY'
+          import json,os,subprocess
+          c=os.environ['EXPECTED_CONTAINER']; port=os.environ['EXPECTED_PORT']
+          def sh(*a): return subprocess.check_output(a,text=True,timeout=30).strip()
+          with open('/tmp/m26-e4-v3-binding.json',encoding='utf-8') as f: b=json.load(f)
+          exp={'source_head_sha':os.environ['EXPECTED_SOURCE_HEAD'],'release_id':os.environ['EXPECTED_RELEASE'],'qdrant_collection':os.environ['EXPECTED_QDRANT']}
+          for k,v in exp.items():
+            if b.get(k)!=v: raise SystemExit('BINDING_MISMATCH_'+k)
+          if int(b.get('semantic_point_count',-1))!=int(os.environ['EXPECTED_POINTS']): raise SystemExit('POINT_MISMATCH')
+          if c not in sh('docker','ps','--format','{{.Names}}').splitlines(): raise SystemExit('CONTAINER_NOT_RUNNING')
+          di=json.loads(sh('docker','inspect',c))[0]
+          if not any(r.get('HostIp')=='127.0.0.1' and r.get('HostPort')==port for rows in (((di.get('HostConfig') or {}).get('PortBindings') or {}).values()) for r in (rows or [])): raise SystemExit('PORT_MISMATCH')
+          probe=r'''
+          import inspect,json
+          try:
+            from knowledge_engine.m26_production_api import app
+          except Exception:
+            from knowledge_engine.api import app
+          out={}
+          spec=app.openapi()
+          for pth in ['/v1/answers','/v1/translation-gateway/query']:
+            target=None
+            for r in getattr(app,'routes',[]):
+              if getattr(r,'path','')==pth and 'POST' in (getattr(r,'methods',[]) or []): target=r; break
+            if target is None:
+              out[pth]={'present':False}; continue
+            dep=getattr(target,'dependant',None); ep=target.endpoint
+            headers=[{'name':getattr(p,'name',''),'alias':getattr(p,'alias',''),'required':bool(getattr(p,'required',False))} for p in (getattr(dep,'header_params',[]) or [])]
+            deps=[]
+            for d in (getattr(dep,'dependencies',[]) or []):
+              call=getattr(d,'call',None); deps.append({'name':getattr(call,'__name__',str(call)),'module':getattr(call,'__module__','')})
+            post=((spec.get('paths') or {}).get(pth) or {}).get('post') or {}
+            try: src=inspect.getsource(ep)
+            except Exception: src=''
+            auth_lines=[line.strip() for line in src.splitlines() if any(x in line.lower() for x in ('authorization','token','owner','auth','bearer'))][:40]
+            out[pth]={'present':True,'endpoint':getattr(ep,'__name__',''),'signature':str(inspect.signature(ep)),'headers':headers,'dependencies':deps,'security':post.get('security',spec.get('security',[])),'requestBody':post.get('requestBody',{}),'responses':post.get('responses',{}),'auth_source_lines':auth_lines}
+          print(json.dumps(out,sort_keys=True))
+          '''
+          route=json.loads(sh('docker','exec',c,'python','-c',probe).splitlines()[-1])
+          if not route.get('/v1/answers',{}).get('present'): raise SystemExit('ANSWERS_ROUTE_MISSING')
+          env_names=sorted(x.split('=',1)[0] for x in ((di.get('Config') or {}).get('Env') or []) if '=' in x)
+          auth_names=[x for x in env_names if any(k in x.upper() for k in ('AUTH','TOKEN','OWNER','SUPABASE'))]
+          print(json.dumps({'status':'M26_E5_PRESEMANTIC_PREFLIGHT_V3_PASS','binding':{k:b[k] for k in ('source_head_sha','release_id','qdrant_collection','semantic_point_count')},'container':c,'host_port':int(port),'routes':route,'auth_env_names':auth_names,'semantic_requests_sent':0,'provider_requests_sent':0,'production_pointer_writes':0,'canonical_route_mutations':0},sort_keys=True))
+          PY
+      - name: Zero-consumption assertion
+        run: |
+          echo M26_E5_CONSUMED_CASES=0
+          echo M26_E5_REROLLS=0
