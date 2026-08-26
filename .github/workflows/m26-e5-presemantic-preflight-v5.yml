@@ -1,0 +1,70 @@
+name: M26 E5 Presemantic Oracle Preflight V5
+
+on:
+  push:
+    branches: [m26-e5-one-shot-20260827]
+    paths: [.github/workflows/m26-e5-presemantic-preflight-v5.yml]
+
+permissions:
+  contents: read
+
+env:
+  ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+  ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+  ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+  EXPECTED_CONTAINER: m26-e4-v3-oracle-isolated-m26blog-59012fe-520aed
+
+jobs:
+  presemantic-v5:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 4
+    steps:
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/m26_e5_oracle
+          chmod 600 ~/.ssh/m26_e5_oracle
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+      - name: Read answer stream closure only
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 ssh -i ~/.ssh/m26_e5_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" "EXPECTED_CONTAINER='$EXPECTED_CONTAINER' python3 -" <<'PY'
+          import os,subprocess
+          c=os.environ['EXPECTED_CONTAINER']
+          probe=r'''
+          import inspect,json
+          import knowledge_engine.m26_production_api as mod
+          ep=next(r.endpoint for r in mod.app.routes if getattr(r,'path','')=='/v1/answers' and 'POST' in (getattr(r,'methods',[]) or []))
+          cv=inspect.getclosurevars(ep)
+          items={**cv.nonlocals,**cv.globals}
+          wanted={}
+          for name,obj in items.items():
+            if name in {'_answer_event_stream','_origin_base_url','validate_query_request'} or any(k in name.lower() for k in ('answer','backend','auth','admission','stream')):
+              if callable(obj):
+                try: src=inspect.getsource(obj)
+                except Exception: continue
+                if len(src)<=30000: wanted[name]=src
+              elif isinstance(obj,(str,int,bool,type(None))): wanted[name]=obj
+          # For the stream helper, inspect one more closure layer.
+          aes=items.get('_answer_event_stream')
+          nested={}
+          if callable(aes):
+            cv2=inspect.getclosurevars(aes); items2={**cv2.nonlocals,**cv2.globals}
+            for name,obj in items2.items():
+              if any(k in name.lower() for k in ('backend','auth','admission','token','query','answer','event','stream')) and callable(obj):
+                try: src=inspect.getsource(obj)
+                except Exception: continue
+                if len(src)<=30000: nested[name]=src
+          print(json.dumps({'endpoint_freevars':list(ep.__code__.co_freevars),'sources':wanted,'nested_sources':nested,'semantic_requests':0,'provider_requests':0},sort_keys=True))
+          '''
+          out=subprocess.check_output(['docker','exec',c,'python','-c',probe],text=True,timeout=60)
+          print(out.strip().splitlines()[-1])
+          PY
+      - name: Zero consumption
+        run: |
+          echo M26_E5_CONSUMED_CASES=0
+          echo M26_E5_REROLLS=0
