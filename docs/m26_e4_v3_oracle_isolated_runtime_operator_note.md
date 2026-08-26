@@ -2,11 +2,13 @@
 
 ## Status
 
-`M26_E4_V3_ORACLE_ISOLATED_RUNTIME_READY_FOR_MANUAL_RUN_REPAIR1`
+`M26_E4_V3_ORACLE_ISOLATED_RUNTIME_READY_FOR_MANUAL_RUN_REPAIR2`
 
 This note is a bounded operator handoff for M26 E4 V3. It does not authorize production pointer mutation, canonical route mutation, E5 execution, homepage promotion, P4/P5 formal qualification, or any rerun of already accepted source work.
 
-## Repair1 context
+## Repair history
+
+### Repair1 context
 
 Run `32988134229` / job `98239079293` reached source identity PASS and binding config PASS, then failed only at the isolated runtime health request:
 
@@ -14,7 +16,7 @@ Run `32988134229` / job `98239079293` reached source identity PASS and binding c
 M26_E4_V3_MISSING_BACKEND_TOKEN_IN_BASE_ENV
 ```
 
-Repair1 does not change source identity, Qdrant/R2 materialization law, production pointer, canonical route, E5, or the frozen base image. It only changes the isolated launcher behavior:
+Repair1 did not change source identity, Qdrant/R2 materialization law, production pointer, canonical route, E5, or the frozen base image. It only changed the isolated launcher behavior:
 
 ```text
 - remove any previous same-name isolated candidate container before checking host_port, so a failed run does not leave 18187 occupied;
@@ -23,6 +25,28 @@ Repair1 does not change source identity, Qdrant/R2 materialization law, producti
 - record auth_bootstrap without exposing token/hash values;
 - verifier must confirm secret_values_exposed=false, base_container_env_mutated=false, candidate_env_only=true, localhost_only=true.
 ```
+
+### Repair2 context
+
+Run `32988874205` / job `98241453629` reached source identity PASS and binding config PASS, then failed at the HTTP health path:
+
+```text
+M26_E4_V3_HEALTH_HTTP_404:{"detail":"Not Found"}
+```
+
+Repair2 updates the isolated launcher and verifier to use the canonical production container liveness route from the Dockerfile:
+
+```text
+/v1/health
+```
+
+M26 binding is now verified separately through an in-container, no-answer, no-provider probe:
+
+```text
+docker exec <candidate_container> python -c 'load_production_answer_bundle() + build_production_answer_compatibility_report(...)'
+```
+
+This probe must prove the isolated candidate resolves the M26 180-source release, manifest, Qdrant collection, graph counts, and compatibility status without calling `/v1/ask`, answer provider, embedding provider, R2 write, Qdrant write, source mutation, production pointer mutation, or E5.
 
 ## Frozen identities
 
@@ -109,7 +133,8 @@ Do not do any of the following during E4 or E4 V3:
 - Do not mutate channels/production.json.
 - Do not change the canonical public route.
 - Do not run E5 before E4 and E4 V3 both pass.
-- Do not rerun failed jobs from run 32988134229 because that reuses the old commit. Start a fresh manual workflow run from latest main instead.
+- Do not rerun failed jobs from earlier failed runs because that reuses the old commit. Start a fresh manual workflow run from latest main instead.
+- Do not call /v1/ask or /v1/ask/stream during E4 V3.
 - Do not rerun Source G7, 156→180 construction, 142 rewrites, frontend/API wiring, old runtime archaeology, offline adapter rebuild, or zero-reembed judgment.
 - Do not rebuild the frozen semantic runtime image.
 - Do not change source PR #24.
@@ -130,10 +155,23 @@ receipt.binding.node_count=4457
 receipt.binding.edge_count=8995
 receipt.endpoint.host=127.0.0.1
 receipt.endpoint.host_port != 18087
-receipt.health.status=ok
-receipt.health.mutations.canonical_writes=0
-receipt.health.mutations.production_pointer_mutations=0
-receipt.health.mutations.qdrant_write_operations=0
+receipt.endpoint.health_path=/v1/health
+receipt.endpoint.query_path=/v1/ask
+receipt.liveness.status in {healthy, starting}
+receipt.binding_probe.status=M26_E4_V3_BINDING_PROBE_PASS
+receipt.binding_probe.release_id=m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
+receipt.binding_probe.qdrant_collection=m26_blog_m26blog_ec79a3cad1d8_59012fe3818c_4260fcb53440
+receipt.binding_probe.semantic_point_count=4424
+receipt.binding_probe.node_count=4457
+receipt.binding_probe.edge_count=8995
+receipt.binding_probe.compatibility_status=compatible
+receipt.binding_probe.authority.production_pointer_writes=0
+receipt.binding_probe.authority.canonical_route_mutations=0
+receipt.binding_probe.authority.r2_writes=0
+receipt.binding_probe.authority.qdrant_writes=0
+receipt.binding_probe.authority.embedding_provider_requests=0
+receipt.binding_probe.authority.provider_answer_requests=0
+receipt.binding_probe.authority.e5_consumed_attempts=0
 receipt.auth_bootstrap.secret_values_exposed=false
 receipt.auth_bootstrap.base_container_env_mutated=false
 receipt.auth_bootstrap.candidate_env_only=true
