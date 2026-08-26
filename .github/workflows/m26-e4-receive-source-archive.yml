@@ -1,0 +1,205 @@
+name: M26 E4 Receive Source Archive
+
+on:
+  repository_dispatch:
+    types:
+      - m26_e4_source_archive
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-e4-source-archive-${{ github.event.client_payload.source_head_sha || 'unknown' }}
+  cancel-in-progress: false
+
+jobs:
+  receive-and-probe:
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      EXPECTED_SOURCE_HEAD_SHA: a738f20b16f10925c8adfe4d625be8db30fb269c
+      EXPECTED_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
+      EXPECTED_PACK_SHA256: 59012fe3818cc1c1e45bed4812cef19f00075bb644b7e0b5fe3cb3a68e0498f8
+      EXPECTED_SOURCE_COUNT: '180'
+      EXPECTED_SEMANTIC_COUNT: '4424'
+      EXPECTED_LEXICAL_COUNT: '4424'
+      EXPECTED_NODE_COUNT: '4457'
+      EXPECTED_EDGE_COUNT: '8995'
+      EXPECTED_BLOG_SOURCE_SHA: f5e20062c1400d7320fe2dbecf6409a0a8c910a7
+      EXPECTED_ADMISSION_SHA256: ec79a3cad1d84a936a6420b64c3ec43859ebd296eee992b2654dd8537d62da2d
+      EXPECTED_SEMANTIC_INPUTS_SHA256: 0982aaa5ca16015f297b4314e88bd9401793aa8c47c278fd20257a7e2f486703
+      EXPECTED_LEXICAL_DOCUMENTS_SHA256: 1ee4e01f3082db55c6d737a09a28fad6135a418bb80d6465b81535816a0ffc7e
+      EXPECTED_PROVENANCE_SHA256: 60642a498abefca7c0a1762560146ca911e51aa5223c61ce67854f9a4c0d7335
+      EXPECTED_NODES_SHA256: 58540242ab29e3c884ef1c421f4d25f37c55df4657c045c19762c7b2435ce9a8
+      EXPECTED_EDGES_SHA256: 5e7951e70d6fd144ca0f7c7ff32fdb94ce95fb912ab036b5bcb53d29746679cb
+      MODE: ${{ github.event.client_payload.mode || 'schema_probe' }}
+      ARCHIVE_URL: ${{ github.event.client_payload.archive_url }}
+      PAYLOAD_SOURCE_HEAD_SHA: ${{ github.event.client_payload.source_head_sha }}
+      PAYLOAD_RELEASE_ID: ${{ github.event.client_payload.release_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate dispatch payload without logging archive URL
+        run: |
+          set -euo pipefail
+          test -n "$ARCHIVE_URL"
+          test "$PAYLOAD_SOURCE_HEAD_SHA" = "$EXPECTED_SOURCE_HEAD_SHA"
+          test "$PAYLOAD_RELEASE_ID" = "$EXPECTED_RELEASE_ID"
+          case "$MODE" in schema_probe|materialize) ;; *) echo "unsupported mode=$MODE" >&2; exit 2 ;; esac
+          echo "M26_E4_RECEIVER_PAYLOAD_ACCEPTED mode=$MODE source=$PAYLOAD_SOURCE_HEAD_SHA release=$PAYLOAD_RELEASE_ID"
+      - name: Download and inspect exact source archive
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+          import hashlib, json, os, pathlib, sys, urllib.request, zipfile
+
+          archive_url = os.environ['ARCHIVE_URL']
+          out = pathlib.Path('/tmp/m26-e4-source.zip')
+          req = urllib.request.Request(archive_url, headers={'User-Agent': 'm26-e4-receiver'})
+          with urllib.request.urlopen(req, timeout=180) as response:
+              data = response.read()
+          out.write_bytes(data)
+          archive_sha = hashlib.sha256(data).hexdigest()
+          if len(data) < 1_000_000:
+              raise SystemExit('archive too small for accepted 180-source package')
+          extract = pathlib.Path('/tmp/m26-e4-source')
+          if extract.exists():
+              import shutil; shutil.rmtree(extract)
+          with zipfile.ZipFile(out) as zf:
+              bad = zf.testzip()
+              if bad:
+                  raise SystemExit(f'zip integrity failure at {bad}')
+              zf.extractall(extract)
+          roots = [p for p in extract.iterdir() if p.is_dir()]
+          if len(roots) != 1:
+              raise SystemExit(f'unexpected archive root count={len(roots)}')
+          root = roots[0]
+          pack = root / 'documents' / 'daniel-blog-en-180-f5e20062'
+          cand = pack / 'candidate-release'
+          required = {
+              'release_manifest': cand / 'release-manifest.json',
+              'derivative_manifest': cand / 'derivative-manifest.json',
+              'semantic_inputs': cand / 'semantic-inputs.jsonl',
+              'lexical_documents': cand / 'lexical-documents.jsonl',
+              'provenance': cand / 'provenance.jsonl',
+              'nodes': pack / 'candidate-nodes.jsonl',
+              'edges': pack / 'candidate-edges.jsonl',
+              'source_index': cand / 'source-index.json',
+          }
+          missing = {k: str(v) for k, v in required.items() if not v.exists()}
+          if missing:
+              # Source-index naming has changed in a few historical candidates; keep this a probe finding.
+              alt = sorted(str(p.relative_to(pack)) for p in pack.rglob('*source*index*') if p.is_file())
+              if set(missing) != {'source_index'}:
+                  raise SystemExit('missing required candidate files: ' + json.dumps(missing, sort_keys=True))
+          def sha(path: pathlib.Path) -> str:
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+          checks = {
+              'semantic_inputs': (required['semantic_inputs'], os.environ['EXPECTED_SEMANTIC_INPUTS_SHA256']),
+              'lexical_documents': (required['lexical_documents'], os.environ['EXPECTED_LEXICAL_DOCUMENTS_SHA256']),
+              'provenance': (required['provenance'], os.environ['EXPECTED_PROVENANCE_SHA256']),
+              'nodes': (required['nodes'], os.environ['EXPECTED_NODES_SHA256']),
+              'edges': (required['edges'], os.environ['EXPECTED_EDGES_SHA256']),
+          }
+          observed_sha = {}
+          for name, (path, expected) in checks.items():
+              observed = sha(path)
+              observed_sha[name] = observed
+              if observed != expected:
+                  raise SystemExit(f'{name} sha mismatch: expected {expected}, got {observed}')
+          release = json.loads(required['release_manifest'].read_text(encoding='utf-8'))
+          derivative = json.loads(required['derivative_manifest'].read_text(encoding='utf-8'))
+          if release.get('release_id') != os.environ['EXPECTED_RELEASE_ID']:
+              raise SystemExit('release_id mismatch')
+          if str(release.get('source_count')) != os.environ['EXPECTED_SOURCE_COUNT']:
+              raise SystemExit('source_count mismatch')
+          if release.get('candidate_only') is not True:
+              raise SystemExit('candidate_only must be true')
+          if release.get('production_pointer_authorized') is not False:
+              raise SystemExit('production pointer must not be authorized')
+          if release.get('public_production_traffic_authorized') is not False:
+              raise SystemExit('public production traffic must not be authorized')
+          def read_first_jsonl(path: pathlib.Path):
+              with path.open('r', encoding='utf-8') as f:
+                  for line in f:
+                      line = line.strip()
+                      if line:
+                          return json.loads(line)
+              raise SystemExit(f'empty jsonl: {path}')
+          def count_jsonl(path: pathlib.Path) -> int:
+              with path.open('r', encoding='utf-8') as f:
+                  return sum(1 for line in f if line.strip())
+          samples = {
+              'semantic_inputs': read_first_jsonl(required['semantic_inputs']),
+              'lexical_documents': read_first_jsonl(required['lexical_documents']),
+              'provenance': read_first_jsonl(required['provenance']),
+              'nodes': read_first_jsonl(required['nodes']),
+              'edges': read_first_jsonl(required['edges']),
+          }
+          counts = {
+              'semantic_inputs': count_jsonl(required['semantic_inputs']),
+              'lexical_documents': count_jsonl(required['lexical_documents']),
+              'provenance': count_jsonl(required['provenance']),
+              'nodes': count_jsonl(required['nodes']),
+              'edges': count_jsonl(required['edges']),
+          }
+          if counts['semantic_inputs'] != int(os.environ['EXPECTED_SEMANTIC_COUNT']):
+              raise SystemExit('semantic count mismatch')
+          if counts['lexical_documents'] != int(os.environ['EXPECTED_LEXICAL_COUNT']):
+              raise SystemExit('lexical count mismatch')
+          if counts['nodes'] != int(os.environ['EXPECTED_NODE_COUNT']):
+              raise SystemExit('node count mismatch')
+          if counts['edges'] != int(os.environ['EXPECTED_EDGE_COUNT']):
+              raise SystemExit('edge count mismatch')
+          redacted_samples = {}
+          for key, value in samples.items():
+              if isinstance(value, dict):
+                  redacted_samples[key] = {
+                      'keys': sorted(value.keys()),
+                      'id_fields': {k: value.get(k) for k in sorted(value) if k.endswith('_id') or k in {'source', 'target', 'edge_id', 'section_id', 'concept_id', 'source_id', 'release_id', 'source_commit_sha', 'admission_sha256'}},
+                      'text_fields': {k: len(str(value.get(k, ''))) for k in sorted(value) if k in {'text', 'body', 'content', 'excerpt', 'description', 'title'}},
+                  }
+              else:
+                  redacted_samples[key] = {'type': type(value).__name__}
+          result = {
+              'schema_version': 'm26-e4-source-archive-probe/v1',
+              'status': 'M26_E4_SOURCE_ARCHIVE_SCHEMA_PROBE_PASS',
+              'mode': os.environ['MODE'],
+              'archive_sha256': archive_sha,
+              'archive_bytes': len(data),
+              'source_head_sha': os.environ['EXPECTED_SOURCE_HEAD_SHA'],
+              'release_id': os.environ['EXPECTED_RELEASE_ID'],
+              'pack_path': str(pack.relative_to(root)),
+              'counts': counts,
+              'observed_sha256': observed_sha,
+              'release_manifest': release,
+              'derivative_manifest': derivative,
+              'sample_shapes': redacted_samples,
+              'source_index_candidates': sorted(str(p.relative_to(pack)) for p in pack.rglob('*source*index*') if p.is_file()),
+              'authority': {
+                  'semantic_requests': 0,
+                  'provider_requests': 0,
+                  'qdrant_writes': 0,
+                  'r2_writes': 0,
+                  'production_pointer_writes': 0,
+                  'canonical_route_mutations': 0,
+                  'source_repo_mutations': 0,
+              },
+          }
+          outdir = pathlib.Path('/tmp/m26-e4-probe')
+          outdir.mkdir(parents=True, exist_ok=True)
+          (outdir / 'source-archive-probe.json').write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print('M26_E4_SOURCE_ARCHIVE_SCHEMA_PROBE_PASS')
+          print(json.dumps({'archive_sha256': archive_sha, 'archive_bytes': len(data), 'counts': counts, 'source_index_candidates': result['source_index_candidates']}, sort_keys=True))
+          PY
+      - name: Upload redacted probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-e4-source-archive-probe
+          path: /tmp/m26-e4-probe/source-archive-probe.json
+          if-no-files-found: error
+          retention-days: 14
