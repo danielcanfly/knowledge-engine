@@ -1,0 +1,213 @@
+name: M26 E4 V3 Oracle Isolated Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      host_port:
+        description: 'Oracle localhost port for isolated candidate; must not be production 18087'
+        required: false
+        default: '18187'
+      candidate_container:
+        description: 'Isolated candidate container name'
+        required: false
+        default: 'm26-e4-v3-oracle-isolated-m26blog-59012fe-520aed'
+
+permissions:
+  contents: read
+
+env:
+  APP_ENV: test
+  AUTH_MODE: disabled
+  EXPECTED_SOURCE_HEAD_SHA: a738f20b16f10925c8adfe4d625be8db30fb269c
+  EXPECTED_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
+  EXPECTED_SEMANTIC_INPUTS_SHA256: 0982aaa55893bb2f95a8c0e0571cf5bef8beffb56346c9edf05c5a2e83597012
+  EXPECTED_LEXICAL_DOCUMENTS_SHA256: 1ee4e01ff7b08ef6f54b445112db25565eb8f72b932ec89473947fb7ba4dc3bf
+  EXPECTED_PROVENANCE_SHA256: 60642a49269864271f4a90a133c5f9140edc3abf5195c88b2ea23f20d4bf40f0
+  EXPECTED_NODES_SHA256: 58540242ab29e3c884ef1c421f4d25f37c55df4657c045c19762c7b2435ce9a8
+  EXPECTED_EDGES_SHA256: 5e7951e70d6fd144ca0f7c7ff32fdb94ce95fb912ab036b5bcb53d29746679cb
+  EXPECTED_SOURCE_INDEX_SHA256: 3b63e70b99b25cc0e83a2ceb56bf8b515402f92774af0a839839abd6cb0b864f
+  ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+  ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+  ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+  KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN || secrets.KNOWLEDGE_SOURCE_TOKEN || secrets.SOURCE_REPO_READ_TOKEN }}
+
+concurrency:
+  group: m26-e4-v3-oracle-isolated-runtime
+  cancel-in-progress: false
+
+jobs:
+  isolated-runtime:
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install runtime dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Validate required secrets without revealing values
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          required = [
+              'ORACLE_VM_HOST',
+              'ORACLE_VM_USER',
+              'ORACLE_VM_SSH_PRIVATE_KEY',
+              'KNOWLEDGE_SOURCE_READ_TOKEN',
+          ]
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit('missing required E4_V3 env values: ' + ','.join(missing))
+          print('M26_E4_V3_ORACLE_ISOLATED_RUNTIME_ENV_WIRING_PASS')
+          PY
+
+      - name: Download exact source archive and fail closed on identity
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import urllib.error
+          import urllib.request
+          import zipfile
+          archive_url = (
+              'https://api.github.com/repos/danielcanfly/knowledge-source/zipball/'
+              + os.environ['EXPECTED_SOURCE_HEAD_SHA']
+          )
+          print(f'::add-mask::{archive_url}')
+          token = os.environ['KNOWLEDGE_SOURCE_READ_TOKEN']
+          print(f'::add-mask::{token}')
+          req = urllib.request.Request(
+              archive_url,
+              headers={
+                  'User-Agent': 'm26-e4-v3-oracle-isolated-runtime',
+                  'Accept': 'application/vnd.github+json',
+                  'Authorization': f'Bearer {token}',
+              },
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=180) as response:
+                  data = response.read()
+          except urllib.error.HTTPError as exc:
+              raise SystemExit(f'source archive download failed: HTTP {exc.code}') from exc
+          zpath = pathlib.Path('/tmp/m26-e4-v3-source.zip')
+          zpath.write_bytes(data)
+          extract = pathlib.Path('/tmp/m26-e4-v3-source')
+          if extract.exists():
+              import shutil; shutil.rmtree(extract)
+          with zipfile.ZipFile(zpath) as zf:
+              bad = zf.testzip()
+              if bad:
+                  raise SystemExit(f'zip integrity failure at {bad}')
+              zf.extractall(extract)
+          roots = [p for p in extract.iterdir() if p.is_dir()]
+          if len(roots) != 1:
+              raise SystemExit(f'unexpected source root count: {len(roots)}')
+          pack = roots[0] / 'documents' / 'daniel-blog-en-180-f5e20062'
+          cand = pack / 'candidate-release'
+          files = {
+              'semantic_inputs': cand / 'semantic-inputs.jsonl',
+              'lexical_documents': cand / 'lexical-documents.jsonl',
+              'provenance': cand / 'provenance.jsonl',
+              'nodes': pack / 'candidate-nodes.jsonl',
+              'edges': pack / 'candidate-edges.jsonl',
+              'source_index': cand / 'source-index.json',
+          }
+          for key, path in files.items():
+              if not path.is_file():
+                  raise SystemExit(f'missing {key}')
+              observed = hashlib.sha256(path.read_bytes()).hexdigest()
+              expected = os.environ['EXPECTED_' + key.upper() + '_SHA256']
+              if observed != expected:
+                  raise SystemExit(f'{key} sha mismatch')
+          release = json.loads((cand / 'release-manifest.json').read_text(encoding='utf-8'))
+          if release.get('release_id') != os.environ['EXPECTED_RELEASE_ID']:
+              raise SystemExit('release_id mismatch')
+          if release.get('candidate_only') is not True or release.get('production_pointer_authorized') is not False:
+              raise SystemExit('source release authority mismatch')
+          print('M26_E4_V3_SOURCE_IDENTITY_PASS')
+          print(json.dumps({'archive_sha256': hashlib.sha256(data).hexdigest(), 'archive_bytes': len(data)}, sort_keys=True))
+          PY
+
+      - name: Build isolated runtime binding from frozen source candidate
+        run: |
+          set -euo pipefail
+          python scripts/m26_e4_build_runtime_bundle.py \
+            --source-extract /tmp/m26-e4-v3-source \
+            --output-dir /tmp/m26-e4-v3-binding \
+            --repo-root .
+          python - <<'PY'
+          import json
+          import pathlib
+          receipt_path = pathlib.Path('/tmp/m26-e4-v3-binding/m26-e4-runtime-bundle-offline-receipt.json')
+          receipt = json.loads(receipt_path.read_text(encoding='utf-8'))
+          bundle = receipt['bundle']
+          binding = {
+              'release_id': receipt['release_id'],
+              'manifest_sha256': bundle['manifest_sha256'],
+              'graph_v2_sha256': bundle['artifact_sha256']['graph_v2'],
+              'qdrant_collection': receipt['qdrant_collection'],
+              'source_head_sha': receipt['source_head_sha'],
+              'source_commit_sha': receipt['source_commit_sha'],
+              'admission_sha256': receipt['admission_sha256'],
+              'semantic_point_count': 4424,
+              'node_count': 4457,
+              'edge_count': 8995,
+              'authority': {
+                  'production_pointer_writes': 0,
+                  'canonical_route_mutations': 0,
+                  'r2_writes': 0,
+                  'qdrant_writes': 0,
+                  'provider_requests': 0,
+                  'e5_consumed_attempts': 0,
+              },
+          }
+          out = pathlib.Path('/tmp/m26-e4-v3-binding.json')
+          out.write_text(json.dumps(binding, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print('M26_E4_V3_BINDING_CONFIG_PASS')
+          print(json.dumps({k: binding[k] for k in ['release_id','manifest_sha256','graph_v2_sha256','qdrant_collection']}, sort_keys=True))
+          PY
+
+      - name: Start Oracle isolated runtime candidate
+        run: |
+          set -euo pipefail
+          HOST_PORT='${{ github.event.inputs.host_port || '18187' }}'
+          CANDIDATE_CONTAINER='${{ github.event.inputs.candidate_container || 'm26-e4-v3-oracle-isolated-m26blog-59012fe-520aed' }}'
+          if [ "$HOST_PORT" = '18087' ]; then
+            echo 'host_port 18087 is production and forbidden for E4_V3 isolated runtime'
+            exit 2
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/m26_e4_v3_oracle
+          chmod 600 ~/.ssh/m26_e4_v3_oracle
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          scp -i ~/.ssh/m26_e4_v3_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            scripts/m26_e4_v3_oracle_isolated_runtime.py /tmp/m26-e4-v3-binding.json \
+            "$ORACLE_VM_USER@$ORACLE_VM_HOST:/tmp/"
+          ssh -i ~/.ssh/m26_e4_v3_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "python3 /tmp/m26_e4_v3_oracle_isolated_runtime.py --binding-json /tmp/m26-e4-v3-binding.json --host-port $HOST_PORT --candidate-container $CANDIDATE_CONTAINER" \
+            | tee /tmp/m26-e4-v3-oracle-isolated-runtime-receipt.log
+          grep -q 'M26_E4_V3_ORACLE_ISOLATED_RUNTIME_PASS' /tmp/m26-e4-v3-oracle-isolated-runtime-receipt.log
+
+      - name: Upload E4 V3 isolated runtime receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-e4-v3-oracle-isolated-runtime
+          path: |
+            /tmp/m26-e4-v3-binding.json
+            /tmp/m26-e4-v3-binding/m26-e4-runtime-bundle-offline-receipt.json
+            /tmp/m26-e4-v3-oracle-isolated-runtime-receipt.log
+          if-no-files-found: warn
+          retention-days: 14
