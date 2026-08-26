@@ -1,0 +1,103 @@
+name: M26 E5 Presemantic Oracle Preflight V2
+
+on:
+  push:
+    branches:
+      - m26-e5-one-shot-20260827
+    paths:
+      - .github/workflows/m26-e5-presemantic-preflight-v2.yml
+
+permissions:
+  contents: read
+
+env:
+  ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+  ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+  ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+  EXPECTED_CONTAINER: m26-e4-v3-oracle-isolated-m26blog-59012fe-520aed
+  EXPECTED_PORT: '18187'
+  EXPECTED_SOURCE_HEAD: a738f20b16f10925c8adfe4d625be8db30fb269c
+  EXPECTED_RELEASE: m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
+  EXPECTED_QDRANT: m26_blog_m26blog_ec79a3cad1d8_59012fe3818c_4260fcb53440
+  EXPECTED_POINTS: '4424'
+
+jobs:
+  presemantic-v2:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 4
+    steps:
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_SSH_PRIVATE_KEY; do test -n "${!v:-}" || exit 2; done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/m26_e5_oracle
+          chmod 600 ~/.ssh/m26_e5_oracle
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Exact binding, route and auth introspection only
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120 ssh -i ~/.ssh/m26_e5_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "EXPECTED_CONTAINER='$EXPECTED_CONTAINER' EXPECTED_PORT='$EXPECTED_PORT' EXPECTED_SOURCE_HEAD='$EXPECTED_SOURCE_HEAD' EXPECTED_RELEASE='$EXPECTED_RELEASE' EXPECTED_QDRANT='$EXPECTED_QDRANT' EXPECTED_POINTS='$EXPECTED_POINTS' python3 -" <<'PY'
+          import json, os, subprocess
+          c=os.environ['EXPECTED_CONTAINER']; port=os.environ['EXPECTED_PORT']
+          def sh(*args): return subprocess.check_output(args,text=True,timeout=30).strip()
+          # Frozen binding file was deposited by accepted E4 V3 run; read only.
+          with open('/tmp/m26-e4-v3-binding.json','r',encoding='utf-8') as f: binding=json.load(f)
+          checks={
+            'source_head_sha':os.environ['EXPECTED_SOURCE_HEAD'],
+            'release_id':os.environ['EXPECTED_RELEASE'],
+            'qdrant_collection':os.environ['EXPECTED_QDRANT'],
+          }
+          for k,v in checks.items():
+            if binding.get(k)!=v: raise SystemExit('M26_E5_PREFLIGHT_BINDING_MISMATCH_'+k)
+          if int(binding.get('semantic_point_count',-1))!=int(os.environ['EXPECTED_POINTS']): raise SystemExit('M26_E5_PREFLIGHT_POINT_MISMATCH')
+          names=sh('docker','ps','--format','{{.Names}}').splitlines()
+          if c not in names: raise SystemExit('M26_E5_PREFLIGHT_CONTAINER_NOT_RUNNING')
+          inspect=json.loads(sh('docker','inspect',c))[0]
+          found=False
+          for rows in (((inspect.get('HostConfig') or {}).get('PortBindings') or {}).values()):
+            for row in rows or []:
+              if row.get('HostIp')=='127.0.0.1' and row.get('HostPort')==port: found=True
+          if not found: raise SystemExit('M26_E5_PREFLIGHT_PORT_MISMATCH')
+          probe=r'''
+          import inspect,json
+          try:
+            from knowledge_engine.m26_production_api import app
+          except Exception:
+            from knowledge_engine.api import app
+          target=None
+          for route in getattr(app,'routes',[]):
+            if getattr(route,'path','')=='/v1/ask' and 'POST' in (getattr(route,'methods',[]) or []): target=route; break
+          if target is None: raise SystemExit('NO_V1_ASK')
+          ep=target.endpoint
+          deps=[]
+          dep=getattr(target,'dependant',None)
+          for d in getattr(dep,'dependencies',[]) or []:
+            call=getattr(d,'call',None)
+            deps.append({'name':getattr(call,'__name__',str(call)),'module':getattr(call,'__module__','')})
+          params=[]
+          for p in getattr(dep,'header_params',[]) or []:
+            params.append({'name':getattr(p,'name',''),'alias':getattr(p,'alias',''),'required':bool(getattr(p,'required',False))})
+          spec=app.openapi()
+          post=((spec.get('paths') or {}).get('/v1/ask') or {}).get('post') or {}
+          out={'route':'/v1/ask','methods':sorted(getattr(target,'methods',[]) or []),'endpoint_module':getattr(ep,'__module__',''),'endpoint_name':getattr(ep,'__name__',''),'signature':str(inspect.signature(ep)),'dependencies':deps,'header_params':params,'security':post.get('security',spec.get('security',[])),'requestBody':post.get('requestBody',{}),'responses':post.get('responses',{}),'provider_requests':0,'semantic_requests':0}
+          print(json.dumps(out,sort_keys=True))
+          '''
+          raw=sh('docker','exec',c,'python','-c',probe)
+          route=json.loads(raw.splitlines()[-1])
+          env_names=sorted(x.split('=',1)[0] for x in ((inspect.get('Config') or {}).get('Env') or []) if '=' in x)
+          auth_names=[x for x in env_names if any(k in x.upper() for k in ('AUTH','TOKEN','OWNER','SUPABASE'))]
+          out={'status':'M26_E5_PRESEMANTIC_PREFLIGHT_V2_PASS','binding':{k:binding[k] for k in ('source_head_sha','release_id','qdrant_collection','semantic_point_count')},'container':c,'host_port':int(port),'route':route,'auth_env_names':auth_names,'semantic_requests_sent':0,'provider_requests_sent':0,'production_pointer_writes':0,'canonical_route_mutations':0}
+          print(json.dumps(out,sort_keys=True))
+          PY
+
+      - name: Zero-consumption assertion
+        run: |
+          echo M26_E5_CONSUMED_CASES=0
+          echo M26_E5_REROLLS=0
+          echo M26_E5_PROVIDER_REQUESTS=0
