@@ -181,8 +181,8 @@ jobs:
       - name: Start Oracle isolated runtime candidate
         run: |
           set -euo pipefail
-          HOST_PORT='${{ github.event.inputs.host_port || '18187' }}'
-          CANDIDATE_CONTAINER='${{ github.event.inputs.candidate_container || 'm26-e4-v3-oracle-isolated-m26blog-59012fe-520aed' }}'
+          HOST_PORT='${{ inputs.host_port }}'
+          CANDIDATE_CONTAINER='${{ inputs.candidate_container }}'
           if [ "$HOST_PORT" = '18087' ]; then
             echo 'host_port 18087 is production and forbidden for E4_V3 isolated runtime'
             exit 2
