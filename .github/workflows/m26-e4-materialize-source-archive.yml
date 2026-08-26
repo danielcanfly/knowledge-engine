@@ -1,6 +1,7 @@
 name: M26 E4 Materialize Source Archive
 
 on:
+  workflow_dispatch:
   repository_dispatch:
     types:
       - m26_e4_source_archive_materialize
@@ -37,6 +38,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_AI_TOKEN || secrets.CF_API_TOKEN }}
       QDRANT_URL: ${{ vars.QDRANT_URL || secrets.QDRANT_URL || vars.QDRANT_ENDPOINT || secrets.QDRANT_ENDPOINT }}
       QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY || secrets.QDRANT_WRITE_API_KEY || secrets.QDRANT_API_KEY_WRITE }}
+      KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN || secrets.KNOWLEDGE_SOURCE_TOKEN || secrets.SOURCE_REPO_READ_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -52,8 +54,24 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from __future__ import annotations
+          import json
           import os
-          required = ['R2_ENDPOINT_URL','R2_BUCKET','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','CLOUDFLARE_ACCOUNT_ID','CLOUDFLARE_API_TOKEN','QDRANT_URL','QDRANT_API_KEY']
+
+          required = [
+              'R2_ENDPOINT_URL',
+              'R2_BUCKET',
+              'R2_ACCESS_KEY_ID',
+              'R2_SECRET_ACCESS_KEY',
+              'CLOUDFLARE_ACCOUNT_ID',
+              'CLOUDFLARE_API_TOKEN',
+              'QDRANT_URL',
+              'QDRANT_API_KEY',
+          ]
+          event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
+          payload = event.get('client_payload') or {}
+          archive_url = payload.get('archive_url')
+          if not archive_url:
+              required.append('KNOWLEDGE_SOURCE_READ_TOKEN')
           missing = [name for name in required if not os.environ.get(name)]
           if missing:
               raise SystemExit('missing required materializer environment values: ' + ','.join(missing))
@@ -64,18 +82,23 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from __future__ import annotations
-          import json, os
+          import json
+          import os
           event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
           payload = event.get('client_payload') or {}
-          archive_url = payload.get('archive_url')
-          if not isinstance(archive_url, str) or not archive_url:
-              raise SystemExit('missing archive_url')
+          archive_url = payload.get('archive_url') or (
+              'https://api.github.com/repos/danielcanfly/knowledge-source/zipball/'
+              + os.environ['EXPECTED_SOURCE_HEAD_SHA']
+          )
           print(f'::add-mask::{archive_url}')
-          if payload.get('source_head_sha') != os.environ['EXPECTED_SOURCE_HEAD_SHA']:
+          source_head_sha = payload.get('source_head_sha') or os.environ['EXPECTED_SOURCE_HEAD_SHA']
+          release_id = payload.get('release_id') or os.environ['EXPECTED_RELEASE_ID']
+          mode = payload.get('mode') or 'materialize'
+          if source_head_sha != os.environ['EXPECTED_SOURCE_HEAD_SHA']:
               raise SystemExit('source_head_sha mismatch')
-          if payload.get('release_id') != os.environ['EXPECTED_RELEASE_ID']:
+          if release_id != os.environ['EXPECTED_RELEASE_ID']:
               raise SystemExit('release_id mismatch')
-          if payload.get('mode') != 'materialize':
+          if mode != 'materialize':
               raise SystemExit('materializer requires mode=materialize')
           print('M26_E4_MATERIALIZER_PAYLOAD_ACCEPTED')
           PY
@@ -84,13 +107,37 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from __future__ import annotations
-          import hashlib, json, os, pathlib, urllib.request, zipfile
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import urllib.error
+          import urllib.request
+          import zipfile
+
           event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
-          archive_url = event['client_payload']['archive_url']
+          payload = event.get('client_payload') or {}
+          archive_url = payload.get('archive_url') or (
+              'https://api.github.com/repos/danielcanfly/knowledge-source/zipball/'
+              + os.environ['EXPECTED_SOURCE_HEAD_SHA']
+          )
           print(f'::add-mask::{archive_url}')
-          req = urllib.request.Request(archive_url, headers={'User-Agent': 'm26-e4-materializer'})
-          with urllib.request.urlopen(req, timeout=180) as response:
-              data = response.read()
+          token = os.environ.get('KNOWLEDGE_SOURCE_READ_TOKEN')
+          headers = {
+              'User-Agent': 'm26-e4-materializer',
+              'Accept': 'application/vnd.github+json',
+          }
+          if token:
+              print(f'::add-mask::{token}')
+              headers['Authorization'] = f'Bearer {token}'
+          elif 'api.github.com/repos/danielcanfly/knowledge-source/' in archive_url:
+              raise SystemExit('missing KNOWLEDGE_SOURCE_READ_TOKEN for private source archive API')
+          req = urllib.request.Request(archive_url, headers=headers)
+          try:
+              with urllib.request.urlopen(req, timeout=180) as response:
+                  data = response.read()
+          except urllib.error.HTTPError as exc:
+              raise SystemExit(f'source archive download failed: HTTP {exc.code}') from exc
           zpath = pathlib.Path('/tmp/m26-e4-source.zip')
           zpath.write_bytes(data)
           archive_sha = hashlib.sha256(data).hexdigest()
