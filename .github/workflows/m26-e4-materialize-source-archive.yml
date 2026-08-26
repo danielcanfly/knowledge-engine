@@ -1,0 +1,132 @@
+name: M26 E4 Materialize Source Archive
+
+on:
+  repository_dispatch:
+    types:
+      - m26_e4_source_archive_materialize
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-e4-isolated-materialization-a738f20
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      EXPECTED_SOURCE_HEAD_SHA: a738f20b16f10925c8adfe4d625be8db30fb269c
+      EXPECTED_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
+      EXPECTED_SEMANTIC_INPUTS_SHA256: 0982aaa55893bb2f95a8c0e0571cf5bef8beffb56346c9edf05c5a2e83597012
+      EXPECTED_LEXICAL_DOCUMENTS_SHA256: 1ee4e01ff7b08ef6f54b445112db25565eb8f72b932ec89473947fb7ba4dc3bf
+      EXPECTED_PROVENANCE_SHA256: 60642a49269864271f4a90a133c5f9140edc3abf5195c88b2ea23f20d4bf40f0
+      EXPECTED_NODES_SHA256: 58540242ab29e3c884ef1c421f4d25f37c55df4657c045c19762c7b2435ce9a8
+      EXPECTED_EDGES_SHA256: 5e7951e70d6fd144ca0f7c7ff32fdb94ce95fb912ab036b5bcb53d29746679cb
+      EXPECTED_SOURCE_INDEX_SHA256: 3b63e70b99b25cc0e83a2ceb56bf8b515402f92774af0a839839abd6cb0b864f
+      OBJECT_STORE_BACKEND: r2
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+      R2_BUCKET: ${{ vars.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_AI_TOKEN }}
+      QDRANT_URL: ${{ secrets.QDRANT_URL || vars.QDRANT_URL }}
+      QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install runtime dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Validate materialization payload and mask archive URL
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+          import json, os
+          event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
+          payload = event.get('client_payload') or {}
+          archive_url = payload.get('archive_url')
+          if not isinstance(archive_url, str) or not archive_url:
+              raise SystemExit('missing archive_url')
+          print(f'::add-mask::{archive_url}')
+          if payload.get('source_head_sha') != os.environ['EXPECTED_SOURCE_HEAD_SHA']:
+              raise SystemExit('source_head_sha mismatch')
+          if payload.get('release_id') != os.environ['EXPECTED_RELEASE_ID']:
+              raise SystemExit('release_id mismatch')
+          if payload.get('mode') != 'materialize':
+              raise SystemExit('materializer requires mode=materialize')
+          print('M26_E4_MATERIALIZER_PAYLOAD_ACCEPTED')
+          PY
+      - name: Download exact source archive and fail closed on identity
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+          import hashlib, json, os, pathlib, urllib.request, zipfile
+          event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
+          archive_url = event['client_payload']['archive_url']
+          print(f'::add-mask::{archive_url}')
+          req = urllib.request.Request(archive_url, headers={'User-Agent': 'm26-e4-materializer'})
+          with urllib.request.urlopen(req, timeout=180) as response:
+              data = response.read()
+          zpath = pathlib.Path('/tmp/m26-e4-source.zip')
+          zpath.write_bytes(data)
+          archive_sha = hashlib.sha256(data).hexdigest()
+          extract = pathlib.Path('/tmp/m26-e4-source')
+          if extract.exists():
+              import shutil; shutil.rmtree(extract)
+          with zipfile.ZipFile(zpath) as zf:
+              bad = zf.testzip()
+              if bad:
+                  raise SystemExit(f'zip integrity failure at {bad}')
+              zf.extractall(extract)
+          roots = [p for p in extract.iterdir() if p.is_dir()]
+          if len(roots) != 1:
+              raise SystemExit(f'unexpected root count {len(roots)}')
+          pack = roots[0] / 'documents' / 'daniel-blog-en-180-f5e20062'
+          cand = pack / 'candidate-release'
+          files = {
+              'semantic_inputs': cand / 'semantic-inputs.jsonl',
+              'lexical_documents': cand / 'lexical-documents.jsonl',
+              'provenance': cand / 'provenance.jsonl',
+              'nodes': pack / 'candidate-nodes.jsonl',
+              'edges': pack / 'candidate-edges.jsonl',
+              'source_index': cand / 'source-index.json',
+          }
+          for key, path in files.items():
+              if not path.is_file():
+                  raise SystemExit(f'missing {key}')
+              observed = hashlib.sha256(path.read_bytes()).hexdigest()
+              expected = os.environ['EXPECTED_' + key.upper() + '_SHA256']
+              if observed != expected:
+                  raise SystemExit(f'{key} sha mismatch')
+          release = json.loads((cand / 'release-manifest.json').read_text(encoding='utf-8'))
+          if release.get('release_id') != os.environ['EXPECTED_RELEASE_ID']:
+              raise SystemExit('release_id mismatch')
+          if release.get('candidate_only') is not True or release.get('production_pointer_authorized') is not False:
+              raise SystemExit('source release authority mismatch')
+          print('M26_E4_MATERIALIZER_SOURCE_IDENTITY_PASS')
+          print(json.dumps({'archive_sha256': archive_sha, 'archive_bytes': len(data)}, sort_keys=True))
+          PY
+      - name: Materialize isolated R2 bundle and Qdrant collection
+        run: |
+          set -euo pipefail
+          python scripts/m26_e4_materialize_runtime_successor.py \
+            --source-extract /tmp/m26-e4-source \
+            --output-dir /tmp/m26-e4-materialization \
+            --repo-root .
+      - name: Upload materialization receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-e4-isolated-materialization
+          path: /tmp/m26-e4-materialization/m26-e4-isolated-materialization-receipt.json
+          if-no-files-found: error
+          retention-days: 14
