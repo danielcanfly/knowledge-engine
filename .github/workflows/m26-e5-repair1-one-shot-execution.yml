@@ -22,15 +22,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Static parser and frozen fixture audit
+      - name: Static parser and frozen fixture audits
         run: |
           set -euo pipefail
-          rm -rf /tmp/m26-e5-repair1-static
+          rm -rf /tmp/m26-e5-repair1-static-js /tmp/m26-e5-repair1-static-py
           node scripts/m26-e5-one-shot-oracle-runner.mjs \
             --fixture=fixtures/03_EXACT_SIX_CASE_FREEZE.json \
-            --output-dir=/tmp/m26-e5-repair1-static
-          test -f /tmp/m26-e5-repair1-static/zero_consumption_static_audit.json
-          grep -q 'M26_E5_REPAIR1_ZERO_CONSUMPTION_STATIC_AUDIT_PASS' /tmp/m26-e5-repair1-static/zero_consumption_static_audit.json
+            --output-dir=/tmp/m26-e5-repair1-static-js
+          test -f /tmp/m26-e5-repair1-static-js/zero_consumption_static_audit.json
+          grep -q 'M26_E5_REPAIR1_ZERO_CONSUMPTION_STATIC_AUDIT_PASS' /tmp/m26-e5-repair1-static-js/zero_consumption_static_audit.json
+          python scripts/m26_e5_one_shot_oracle_runner.py \
+            --fixture=fixtures/03_EXACT_SIX_CASE_FREEZE.json \
+            --output-dir=/tmp/m26-e5-repair1-static-py
+          test -f /tmp/m26-e5-repair1-static-py/zero_consumption_python_static_audit.json
+          grep -q 'M26_E5_REPAIR1_ZERO_CONSUMPTION_PYTHON_STATIC_AUDIT_PASS' /tmp/m26-e5-repair1-static-py/zero_consumption_python_static_audit.json
 
       - name: Configure accepted Oracle SSH lane
         run: |
@@ -49,11 +54,11 @@ jobs:
           set -euo pipefail
           set +x
           scp -i ~/.ssh/m26_e5_repair1_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            scripts/m26-e5-one-shot-oracle-runner.mjs fixtures/03_EXACT_SIX_CASE_FREEZE.json \
+            scripts/m26_e5_one_shot_oracle_runner.py fixtures/03_EXACT_SIX_CASE_FREEZE.json \
             "$ORACLE_VM_USER@$ORACLE_VM_HOST:/tmp/"
           ssh -i ~/.ssh/m26_e5_repair1_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
-            "set -euo pipefail; set +x; rm -rf /tmp/m26-e5-repair1-hard-gate; node /tmp/m26-e5-one-shot-oracle-runner.mjs --preflight-only --fixture=/tmp/03_EXACT_SIX_CASE_FREEZE.json --output-dir=/tmp/m26-e5-repair1-hard-gate; grep -q 'M26_E5_REPAIR1_PRE_C1_HARD_GATE_PASS' /tmp/m26-e5-repair1-hard-gate/pre_c1_runtime_preflight.json; grep -q 'C1_STATUS=UNCONSUMED' /tmp/m26-e5-repair1-hard-gate/07_PRE_C1_HARD_GATE.md; grep -q 'E5_CONSUMED=0' /tmp/m26-e5-repair1-hard-gate/07_PRE_C1_HARD_GATE.md; tar -C /tmp -czf /tmp/m26-e5-repair1-hard-gate.tgz m26-e5-repair1-hard-gate"
+            "set -euo pipefail; set +x; rm -rf /tmp/m26-e5-repair1-hard-gate; python3 /tmp/m26_e5_one_shot_oracle_runner.py --preflight-only --fixture=/tmp/03_EXACT_SIX_CASE_FREEZE.json --output-dir=/tmp/m26-e5-repair1-hard-gate; grep -q 'M26_E5_REPAIR1_PRE_C1_HARD_GATE_PASS' /tmp/m26-e5-repair1-hard-gate/pre_c1_runtime_preflight.json; grep -q 'C1_STATUS=UNCONSUMED' /tmp/m26-e5-repair1-hard-gate/07_PRE_C1_HARD_GATE.md; grep -q 'E5_CONSUMED=0' /tmp/m26-e5-repair1-hard-gate/07_PRE_C1_HARD_GATE.md; tar -C /tmp -czf /tmp/m26-e5-repair1-hard-gate.tgz m26-e5-repair1-hard-gate"
           scp -i ~/.ssh/m26_e5_repair1_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$ORACLE_VM_USER@$ORACLE_VM_HOST:/tmp/m26-e5-repair1-hard-gate.tgz" /tmp/
           mkdir -p /tmp/m26-e5-repair1-hard-gate-artifact
@@ -74,9 +79,10 @@ jobs:
           assert receipt['c1_status']=='UNCONSUMED'
           assert receipt['semantic_posts']==0
           assert receipt['production_mutations']==0
-          required=['E5_CONSUMED=0','REROLLS=0','C1_STATUS=UNCONSUMED','ATTEMPT_CONSUMPTION_AMBIGUITY=false','PRODUCTION_MUTATION=0']
+          assert receipt['attempt_consumption_ambiguity'] is False
+          required=['E5_CONSUMED=0','REROLLS=0','C1_STATUS=UNCONSUMED','ATTEMPT_CONSUMPTION_AMBIGUITY=false','PRODUCTION_MUTATION=0','CANDIDATE_AUTH_MEMORY_ONLY=true','PRE_C1_GATE=PASS']
           for token in required: assert token in gate, token
-          fail_lines=[line for line in gate.splitlines() if 'FAIL' in line.upper() and not line.lstrip().startswith('#')]
+          fail_lines=[line for line in gate.splitlines() if '=FAIL' in line.upper()]
           assert not fail_lines, fail_lines
           print('M26_E5_REPAIR1_07_PRE_C1_HARD_GATE_ALL_PASS')
           PY
@@ -86,7 +92,8 @@ jobs:
         with:
           name: m26-e5-repair1-pre-c1-hard-gate
           path: |
-            /tmp/m26-e5-repair1-static
+            /tmp/m26-e5-repair1-static-js
+            /tmp/m26-e5-repair1-static-py
             /tmp/m26-e5-repair1-hard-gate-artifact/m26-e5-repair1-hard-gate
           if-no-files-found: error
           retention-days: 14
@@ -115,12 +122,12 @@ jobs:
           set -euo pipefail
           set +x
           scp -i ~/.ssh/m26_e5_repair1_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            scripts/m26-e5-one-shot-oracle-runner.mjs fixtures/03_EXACT_SIX_CASE_FREEZE.json \
+            scripts/m26_e5_one_shot_oracle_runner.py fixtures/03_EXACT_SIX_CASE_FREEZE.json \
             "$ORACLE_VM_USER@$ORACLE_VM_HOST:/tmp/"
           set +e
           ssh -i ~/.ssh/m26_e5_repair1_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
-            "set -euo pipefail; set +x; rm -rf /tmp/m26-e5-repair1-execute; node /tmp/m26-e5-one-shot-oracle-runner.mjs --execute --fixture=/tmp/03_EXACT_SIX_CASE_FREEZE.json --output-dir=/tmp/m26-e5-repair1-execute" \
+            "set -euo pipefail; set +x; rm -rf /tmp/m26-e5-repair1-execute; python3 /tmp/m26_e5_one_shot_oracle_runner.py --execute --fixture=/tmp/03_EXACT_SIX_CASE_FREEZE.json --output-dir=/tmp/m26-e5-repair1-execute" \
             > /tmp/m26-e5-repair1-execute.log 2>&1
           rc=$?
           set -e
