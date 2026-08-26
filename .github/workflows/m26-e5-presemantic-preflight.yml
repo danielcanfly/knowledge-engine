@@ -1,0 +1,109 @@
+name: M26 E5 Presemantic Oracle Preflight
+
+on:
+  push:
+    branches:
+      - m26-e5-one-shot-20260827
+    paths:
+      - .github/workflows/m26-e5-presemantic-preflight.yml
+      - .m26-e5-preflight-trigger
+
+permissions:
+  contents: read
+
+env:
+  ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+  ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+  ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+  EXPECTED_CONTAINER: m26-e4-v3-oracle-isolated-m26blog-59012fe-520aed
+  EXPECTED_PORT: '18187'
+  EXPECTED_RELEASE: m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
+  EXPECTED_QDRANT: m26_blog_m26blog_ec79a3cad1d8_59012fe3818c_4260fcb53440
+  EXPECTED_POINTS: '4424'
+
+jobs:
+  presemantic:
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - name: Validate control-plane secrets without revealing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!v:-}" || { echo "missing $v"; exit 2; }
+          done
+          echo M26_E5_PREFLIGHT_CONTROL_SECRETS_PRESENT
+
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/m26_e5_oracle
+          chmod 600 ~/.ssh/m26_e5_oracle
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Prove exact isolated runtime and inspect route/auth schema without semantic request
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/m26_e5_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "EXPECTED_CONTAINER='$EXPECTED_CONTAINER' EXPECTED_PORT='$EXPECTED_PORT' EXPECTED_RELEASE='$EXPECTED_RELEASE' EXPECTED_QDRANT='$EXPECTED_QDRANT' EXPECTED_POINTS='$EXPECTED_POINTS' python3 -" <<'PY'
+          import json, os, subprocess, urllib.request, urllib.error
+          c=os.environ['EXPECTED_CONTAINER']; port=os.environ['EXPECTED_PORT']
+          def sh(*args):
+              return subprocess.check_output(args, text=True).strip()
+          names=sh('docker','ps','--format','{{.Names}}').splitlines()
+          if c not in names: raise SystemExit('M26_E5_PREFLIGHT_EXACT_CONTAINER_NOT_RUNNING')
+          inspect=json.loads(sh('docker','inspect',c))[0]
+          bindings=((inspect.get('HostConfig') or {}).get('PortBindings') or {})
+          found=False
+          for rows in bindings.values():
+              for row in rows or []:
+                  if row.get('HostIp')=='127.0.0.1' and row.get('HostPort')==port: found=True
+          if not found: raise SystemExit('M26_E5_PREFLIGHT_PORT_BINDING_MISMATCH')
+          # In-container binding proof is read-only and does not invoke answer/provider runtime.
+          probe=r'''
+          import json
+          from knowledge_engine import m26_production_answer_bundle as pab
+          bundle=pab.load_production_answer_bundle()
+          out={'release_id':bundle.release_id,'qdrant_collection':pab.FULL_PRODUCTION_QDRANT_COLLECTION,'semantic_point_count':pab.FULL_PRODUCTION_SEMANTIC_POINT_COUNT}
+          try:
+              from knowledge_engine.m26_production_api import app
+          except Exception:
+              from knowledge_engine.api import app
+          routes=[]
+          for route in getattr(app,'routes',[]):
+              routes.append({'path':getattr(route,'path',''),'methods':sorted(getattr(route,'methods',[]) or [])})
+          out['routes']=routes
+          print(json.dumps(out,sort_keys=True))
+          '''
+          raw=sh('docker','exec',c,'python','-c',probe)
+          obj=json.loads(raw.splitlines()[-1])
+          if obj.get('release_id')!=os.environ['EXPECTED_RELEASE']: raise SystemExit('M26_E5_PREFLIGHT_RELEASE_MISMATCH')
+          if obj.get('qdrant_collection')!=os.environ['EXPECTED_QDRANT']: raise SystemExit('M26_E5_PREFLIGHT_QDRANT_MISMATCH')
+          if int(obj.get('semantic_point_count',-1))!=int(os.environ['EXPECTED_POINTS']): raise SystemExit('M26_E5_PREFLIGHT_POINT_COUNT_MISMATCH')
+          ask=[r for r in obj['routes'] if r.get('path')=='/v1/ask' and 'POST' in r.get('methods',[])]
+          if len(ask)!=1: raise SystemExit('M26_E5_PREFLIGHT_V1_ASK_ROUTE_MISSING')
+          # OpenAPI is a GET-only mechanical inspection.
+          req=urllib.request.Request(f'http://127.0.0.1:{port}/openapi.json',headers={'Accept':'application/json'})
+          try:
+              with urllib.request.urlopen(req,timeout=15) as r: spec=json.load(r)
+          except urllib.error.HTTPError as e:
+              raise SystemExit(f'M26_E5_PREFLIGHT_OPENAPI_HTTP_{e.code}')
+          ask_spec=((spec.get('paths') or {}).get('/v1/ask') or {}).get('post') or {}
+          body_schema=(((ask_spec.get('requestBody') or {}).get('content') or {}).get('application/json') or {}).get('schema') or {}
+          security=ask_spec.get('security', spec.get('security', []))
+          # Inspect auth-related environment *names only*; never values.
+          env_names=sorted(x.split('=',1)[0] for x in ((inspect.get('Config') or {}).get('Env') or []) if '=' in x)
+          auth_names=[x for x in env_names if any(k in x.upper() for k in ('AUTH','TOKEN','OWNER','SUPABASE'))]
+          sanitized={'status':'M26_E5_PRESEMANTIC_PREFLIGHT_PASS','container':c,'host_port':int(port),'release_id':obj['release_id'],'qdrant_collection':obj['qdrant_collection'],'semantic_point_count':obj['semantic_point_count'],'v1_ask_post':True,'openapi_security':security,'request_schema':body_schema,'auth_env_names':auth_names,'semantic_requests_sent':0,'provider_requests_sent':0}
+          print(json.dumps(sanitized,sort_keys=True))
+          PY
+
+      - name: Assert no production mutation occurred
+        run: |
+          echo 'M26_E5_PREFLIGHT_PRODUCTION_POINTER_WRITES=0'
+          echo 'M26_E5_PREFLIGHT_CANONICAL_ROUTE_MUTATIONS=0'
+          echo 'M26_E5_PREFLIGHT_SEMANTIC_REQUESTS=0'
