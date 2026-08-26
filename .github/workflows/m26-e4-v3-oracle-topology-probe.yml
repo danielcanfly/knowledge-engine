@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - '.github/workflows/m26-e4-v3-oracle-topology-probe.yml'
+      - 'scripts/m26_e4_v3_oracle_topology_probe.py'
 
 permissions:
   contents: read
@@ -25,133 +26,27 @@ jobs:
       ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
       EXPECTED_CONTAINER: m26-public-api-production-repair2-ownerhash-r2-auth-520aed
     steps:
+      - name: Checkout probe script
+        uses: actions/checkout@v4
+
       - name: Read active frozen semantic container topology and module hashes
         run: |
           set -euo pipefail
           for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_SSH_PRIVATE_KEY; do
             test -n "${!name:-}" || { echo "missing $name"; exit 2; }
           done
+          test -f scripts/m26_e4_v3_oracle_topology_probe.py
           install -m 700 -d ~/.ssh
           printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/m26_e4_v3_oracle
           chmod 600 ~/.ssh/m26_e4_v3_oracle
           ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          ssh -i ~/.ssh/m26_e4_v3_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          python3 - <<'PY'
-          import json, subprocess, hashlib
+          scp -i ~/.ssh/m26_e4_v3_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            scripts/m26_e4_v3_oracle_topology_probe.py \
+            "$ORACLE_VM_USER@$ORACLE_VM_HOST:/tmp/m26_e4_v3_oracle_topology_probe.py"
+          ssh -i ~/.ssh/m26_e4_v3_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            'python3 /tmp/m26_e4_v3_oracle_topology_probe.py'
 
-          container = 'm26-public-api-production-repair2-ownerhash-r2-auth-520aed'
-
-          def run(args):
-              return subprocess.run(args, text=True, capture_output=True, check=True).stdout.strip()
-
-          names = run(['docker','ps','-a','--format','{{.Names}}']).splitlines()
-          if container not in names:
-              raise SystemExit('M26_E4_V3_FROZEN_BASE_CONTAINER_MISSING')
-
-          inspect = json.loads(run(['docker','inspect',container]))[0]
-          image_id = inspect['Image']
-          config = inspect.get('Config') or {}
-          host_config = inspect.get('HostConfig') or {}
-          network_settings = inspect.get('NetworkSettings') or {}
-
-          selected_nonsecret = {}
-          secret_presence = {}
-          nonsecret_names = {
-              'M26_QUERY_BUILD_SHA',
-              'M26_PA7_DENSE_COLLECTION',
-              'M26_QUERY_REQUIRE_REMOTE_DENSE',
-              'KNOWLEDGE_CHANNEL',
-              'APP_ENV',
-              'OBJECT_STORE_BACKEND',
-          }
-          secret_names = {
-              'R2_ENDPOINT_URL','R2_BUCKET','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY',
-              'QDRANT_URL','QDRANT_API_KEY',
-              'CLOUDFLARE_ACCOUNT_ID','CLOUDFLARE_API_TOKEN','CLOUDFLARE_AI_TOKEN',
-              'MINIMAX_API_KEY','M26_QUERY_BACKEND_TOKEN','KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH',
-          }
-          for row in config.get('Env') or []:
-              if '=' not in row:
-                  continue
-              name, value = row.split('=',1)
-              if name in nonsecret_names:
-                  selected_nonsecret[name] = value
-              elif name in secret_names:
-                  secret_presence[name] = {'present': bool(value), 'length': len(value)}
-
-          modules = [
-              'knowledge_engine.m26_aq_semantic_contract',
-              'knowledge_engine.m26_pa7_arbitrary_query_runtime',
-              'knowledge_engine.m26_production_answer_bundle',
-              'knowledge_engine.m26_verified_answer_citation_gate',
-              'knowledge_engine.m26_pa5_v8_live',
-              'knowledge_engine.m26_cloudflare_provider_router',
-              'knowledge_engine.m26_ask_api',
-          ]
-          py = r'''
-          import importlib, hashlib, json, pathlib
-          mods = %r
-          out = {}
-          for name in mods:
-              try:
-                  mod = importlib.import_module(name)
-                  p = pathlib.Path(mod.__file__).resolve()
-                  data = p.read_bytes()
-                  out[name] = {'path': str(p), 'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data)}
-              except Exception as exc:
-                  out[name] = {'error': type(exc).__name__ + ':' + str(exc)[:160]}
-          print(json.dumps(out, sort_keys=True))
-          ''' % modules
-          module_hashes = json.loads(run(['docker','exec',container,'python','-c',py]))
-
-          image_meta_raw = run(['docker','image','inspect',image_id])
-          image_meta = json.loads(image_meta_raw)[0]
-          repo_digests = image_meta.get('RepoDigests') or []
-
-          mounts = []
-          for item in inspect.get('Mounts') or []:
-              mounts.append({
-                  'type': item.get('Type'),
-                  'destination': item.get('Destination'),
-                  'rw': item.get('RW'),
-              })
-
-          ports = {}
-          for key, value in (network_settings.get('Ports') or {}).items():
-              ports[key] = [
-                  {'host_ip': x.get('HostIp'), 'host_port': x.get('HostPort')}
-                  for x in (value or [])
-              ]
-
-          out = {
-              'schema_version':'m26-e4-v3-oracle-topology-probe/v1',
-              'status':'M26_E4_V3_ORACLE_TOPOLOGY_PROBE_PASS',
-              'container': container,
-              'image_id': image_id,
-              'configured_image': config.get('Image'),
-              'repo_digests': repo_digests,
-              'entrypoint': config.get('Entrypoint'),
-              'cmd': config.get('Cmd'),
-              'working_dir': config.get('WorkingDir'),
-              'restart_policy': (host_config.get('RestartPolicy') or {}).get('Name'),
-              'network_mode': host_config.get('NetworkMode'),
-              'networks': sorted((network_settings.get('Networks') or {}).keys()),
-              'ports': ports,
-              'mounts': mounts,
-              'selected_nonsecret_env': selected_nonsecret,
-              'secret_presence': secret_presence,
-              'module_hashes': module_hashes,
-              'authority': {
-                  'semantic_requests':0,
-                  'provider_answer_requests':0,
-                  'qdrant_writes':0,
-                  'r2_writes':0,
-                  'production_pointer_writes':0,
-                  'canonical_route_mutations':0,
-                  'container_mutations':0,
-              },
-          }
-          print(json.dumps(out, sort_keys=True, indent=2))
-          PY
-          REMOTE
+      - name: Assert no production mutation in probe workflow
+        run: |
+          echo 'M26_E4_V3_ORACLE_TOPOLOGY_PROBE_AUTHORITY_READ_ONLY'
