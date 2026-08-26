@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -81,6 +82,48 @@ def assert_host_port_free(port: int) -> None:
             raise SystemExit(f"M26_E4_V3_HOST_PORT_ALREADY_IN_USE:{port}")
 
 
+def isolated_digest(label: str, binding: dict[str, Any]) -> str:
+    material = {
+        "label": label,
+        "release_id": require_binding(binding, "release_id"),
+        "manifest_sha256": require_binding(binding, "manifest_sha256"),
+        "qdrant_collection": require_binding(binding, "qdrant_collection"),
+        "source_head_sha": require_binding(binding, "source_head_sha"),
+        "purpose": "m26-e4-v3-localhost-health-only",
+    }
+    data = json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(data).hexdigest()
+
+
+def ensure_isolated_health_auth(env: dict[str, str], binding: dict[str, Any]) -> dict[str, Any]:
+    """Ensure isolated localhost health can authenticate without requiring production secrets.
+
+    The active frozen base container may omit the backend token because production
+    ingress supplies auth elsewhere. E4_V3 only needs localhost /api/m26/health
+    to prove the isolated candidate is alive and bound. If a backend token or
+    owner hash is missing, inject deterministic isolated-only values into the
+    candidate env file. This does not modify the base container, production
+    pointer, canonical route, R2, Qdrant, provider, or source repo.
+    """
+
+    token_source = "base_env"
+    owner_hash_source = "base_env"
+    if not env.get("M26_QUERY_BACKEND_TOKEN"):
+        env["M26_QUERY_BACKEND_TOKEN"] = "m26-e4-v3-isolated-health-" + isolated_digest("backend-token", binding)
+        token_source = "isolated_synthetic_localhost_only"
+    if not env.get("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"):
+        env["KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"] = isolated_digest("owner-subject-hash", binding)
+        owner_hash_source = "isolated_synthetic_localhost_only"
+    return {
+        "backend_token_source": token_source,
+        "owner_subject_hash_source": owner_hash_source,
+        "secret_values_exposed": False,
+        "base_container_env_mutated": False,
+        "candidate_env_only": True,
+        "localhost_only": True,
+    }
+
+
 def build_sitecustomize(binding: dict[str, Any]) -> str:
     release_id = str(require_binding(binding, "release_id"))
     qdrant_collection = str(require_binding(binding, "qdrant_collection"))
@@ -127,9 +170,9 @@ def request_health(port: int, env: dict[str, str]) -> dict[str, Any]:
     token = env.get("M26_QUERY_BACKEND_TOKEN", "")
     owner_hash = env.get("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", "")
     if not token:
-        raise SystemExit("M26_E4_V3_MISSING_BACKEND_TOKEN_IN_BASE_ENV")
+        raise SystemExit("M26_E4_V3_MISSING_BACKEND_TOKEN_IN_CANDIDATE_ENV")
     if not owner_hash:
-        raise SystemExit("M26_E4_V3_MISSING_OWNER_HASH_IN_BASE_ENV")
+        raise SystemExit("M26_E4_V3_MISSING_OWNER_HASH_IN_CANDIDATE_ENV")
     req = urllib.request.Request(
         f"http://127.0.0.1:{port}/api/m26/health",
         headers={
@@ -172,6 +215,12 @@ def main() -> int:
     image_id = inspected["Image"]
     env = parse_env(container_env_rows(args.base_container))
     container_port = choose_container_port(inspected, env, args.container_port or None)
+
+    # Clear a previous failed/superseded isolated candidate before checking the
+    # localhost port. This is restricted to the candidate container name and does
+    # not touch the production base container.
+    remove_previous = run(["docker", "rm", "-f", args.candidate_container], check=False)
+    previous_candidate_removed = remove_previous.returncode == 0
     assert_host_port_free(args.host_port)
 
     work_dir = pathlib.Path(args.work_dir)
@@ -185,10 +234,10 @@ def main() -> int:
     env["M26_E4_V3_ISOLATED_RUNTIME"] = "true"
     env["M26_PA7_DENSE_COLLECTION"] = qdrant_collection
     env["PYTHONPATH"] = f"/tmp/m26_e4_v3_sitecustomize:{env.get('PYTHONPATH','')}".rstrip(":")
+    auth_bootstrap = ensure_isolated_health_auth(env, binding)
     env_file = work_dir / "candidate.env"
     write_env_file(env_file, env)
 
-    run(["docker", "rm", "-f", args.candidate_container], check=False)
     docker_args = [
         "docker", "run", "-d",
         "--name", args.candidate_container,
@@ -225,6 +274,8 @@ def main() -> int:
         "candidate_container": args.candidate_container,
         "candidate_container_id": container_id,
         "base_image_id": image_id,
+        "previous_candidate_removed": previous_candidate_removed,
+        "auth_bootstrap": auth_bootstrap,
         "endpoint": {
             "host": "127.0.0.1",
             "host_port": args.host_port,
