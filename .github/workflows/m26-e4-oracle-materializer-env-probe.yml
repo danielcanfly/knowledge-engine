@@ -1,0 +1,87 @@
+name: M26 E4 Oracle Materializer Env Probe
+
+on:
+  repository_dispatch:
+    types:
+      - m26_e4_oracle_env_probe
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/m26-e4-oracle-materializer-env-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-e4-oracle-env-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+      EXPECTED_CONTAINER: m26-public-api-production-repair2-ownerhash-r2-auth-520aed
+    steps:
+      - name: SSH redacted environment census
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_HOST"
+          test -n "$ORACLE_VM_USER"
+          test -n "$ORACLE_VM_SSH_PRIVATE_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/m26_e4_oracle
+          chmod 600 ~/.ssh/m26_e4_oracle
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/m26_e4_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          OUT=/tmp/m26-e4-oracle-env-probe.json
+          python3 - <<'PY' > "$OUT"
+          import json, os, subprocess, pathlib
+          container = 'm26-public-api-production-repair2-ownerhash-r2-auth-520aed'
+          names = [
+              'R2_ENDPOINT_URL','R2_BUCKET','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_REGION',
+              'CLOUDFLARE_ACCOUNT_ID','CLOUDFLARE_API_TOKEN','CLOUDFLARE_AI_TOKEN','CF_ACCOUNT_ID','CF_API_TOKEN',
+              'QDRANT_URL','QDRANT_API_KEY','QDRANT_WRITE_API_KEY','QDRANT_API_KEY_WRITE','QDRANT_READ_ONLY_API_KEY','QDRANT_API_KEY_READ',
+              'M26_PA7_DENSE_COLLECTION','M26_ACCEPTED_RUNTIME_CANDIDATE'
+          ]
+          def env_present_from_lines(lines):
+              found = {}
+              for name in names:
+                  prefix = name + '='
+                  vals = [line[len(prefix):] for line in lines if line.startswith(prefix)]
+                  found[name] = {'present': bool(vals), 'length': len(vals[0]) if vals else 0}
+              return found
+          host_files = ['/home/ubuntu/.env.oracle-e2', '/home/ubuntu/.env', '/opt/knowledge-engine/.env', '/app/.env']
+          host = {}
+          for fp in host_files:
+              p = pathlib.Path(fp)
+              if p.is_file():
+                  lines = [line.strip() for line in p.read_text(errors='ignore').splitlines() if '=' in line and not line.lstrip().startswith('#')]
+                  host[fp] = env_present_from_lines(lines)
+          docker_available = subprocess.run(['bash','-lc','command -v docker >/dev/null'], capture_output=True).returncode == 0
+          container_found = False
+          container_env = {}
+          if docker_available:
+              res = subprocess.run(['docker','inspect',container,'--format','{{range .Config.Env}}{{println .}}{{end}}'], text=True, capture_output=True)
+              container_found = (res.returncode == 0)
+              if container_found:
+                  lines = res.stdout.splitlines()
+                  container_env = env_present_from_lines(lines)
+          out = {
+              'schema_version':'m26-e4-oracle-env-census/v1',
+              'status':'M26_E4_ORACLE_ENV_CENSUS_COMPLETE',
+              'docker_available': docker_available,
+              'container_found': container_found,
+              'container_env': container_env,
+              'host_files': host,
+              'authority': {'semantic_requests':0,'provider_requests':0,'qdrant_writes':0,'r2_writes':0,'production_pointer_writes':0,'canonical_route_mutations':0}
+          }
+          print(json.dumps(out, sort_keys=True, indent=2))
+          PY
+          cat "$OUT"
+REMOTE
