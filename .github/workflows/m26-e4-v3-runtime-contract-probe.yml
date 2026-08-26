@@ -1,0 +1,62 @@
+name: M26 E4 V3 Runtime Contract Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/m26-e4-v3-runtime-contract-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - name: Read frozen semantic fingerprint routes and binding constants
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/m26_e4_v3_oracle
+          chmod 600 ~/.ssh/m26_e4_v3_oracle
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/m26_e4_v3_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          C=m26-public-api-production-repair2-ownerhash-r2-auth-520aed
+          docker exec "$C" python - <<'PY'
+          import json
+          from knowledge_engine.m26_aq_semantic_contract import semantic_contract_fingerprint
+          import knowledge_engine.m26_production_answer_bundle as b
+          from knowledge_engine.m26_production_api import app
+          constants = {}
+          for name in [
+              'FULL_PRODUCTION_RELEASE_ID','FULL_PRODUCTION_MANIFEST_KEY',
+              'FULL_PRODUCTION_PROMOTION_MANIFEST_KEY','FULL_PRODUCTION_PROMOTION_MANIFEST_SHA256',
+              'FULL_PRODUCTION_GRAPH_V2_SHA256','FULL_PRODUCTION_POINTER_KEY',
+              'FULL_PRODUCTION_POINTER_SHA256','FULL_PRODUCTION_QDRANT_COLLECTION',
+              'FULL_PRODUCTION_NODE_COUNT','FULL_PRODUCTION_EDGE_COUNT',
+              'FULL_PRODUCTION_SEMANTIC_POINT_COUNT','FULL_PRODUCTION_SOURCE_SHA',
+              'FULL_PRODUCTION_ADMISSION_SHA256'
+          ]:
+              constants[name] = getattr(b, name, None)
+          routes = sorted({getattr(r, 'path', '') for r in app.routes if getattr(r, 'path', '')})
+          print(json.dumps({
+              'schema_version':'m26-e4-v3-runtime-contract-probe/v1',
+              'status':'M26_E4_V3_RUNTIME_CONTRACT_PROBE_PASS',
+              'semantic_contract_fingerprint':semantic_contract_fingerprint(),
+              'routes':routes,
+              'binding_constants':constants,
+              'authority':{
+                  'semantic_requests':0,'provider_answer_requests':0,'qdrant_writes':0,
+                  'r2_writes':0,'production_pointer_writes':0,'canonical_route_mutations':0
+              }
+          }, sort_keys=True, indent=2))
+          PY
+          REMOTE
