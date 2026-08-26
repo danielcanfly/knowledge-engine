@@ -2,7 +2,7 @@
 
 ## Status
 
-`M26_E4_V3_ORACLE_ISOLATED_RUNTIME_READY_FOR_MANUAL_RUN_REPAIR2`
+`M26_E4_V3_ORACLE_ISOLATED_RUNTIME_READY_FOR_MANUAL_RUN_REPAIR3`
 
 This note is a bounded operator handoff for M26 E4 V3. It does not authorize production pointer mutation, canonical route mutation, E5 execution, homepage promotion, P4/P5 formal qualification, or any rerun of already accepted source work.
 
@@ -34,13 +34,27 @@ Run `32988874205` / job `98241453629` reached source identity PASS and binding c
 M26_E4_V3_HEALTH_HTTP_404:{"detail":"Not Found"}
 ```
 
-Repair2 updates the isolated launcher and verifier to use the canonical production container liveness route from the Dockerfile:
+Repair2 split HTTP liveness from M26 binding proof and verified M26 binding separately through an in-container, no-answer, no-provider probe.
+
+### Repair3 context
+
+Run `32989417579` / job `98243188563` reached source identity PASS and binding config PASS, then proved the container was running and responding HTTP, but the frozen 520aed image still returned 404 for `/v1/health`:
 
 ```text
-/v1/health
+M26_E4_V3_LIVENESS_NOT_OK:M26_E4_V3_LIVENESS_HTTP_404:{"detail":"Not Found"}
 ```
 
-M26 binding is now verified separately through an in-container, no-answer, no-provider probe:
+Repair3 stops treating any specific HTTP route as a hard liveness law because the frozen runtime image route surface can differ from current `main`. E4_V3 now uses:
+
+```text
+1. container running check;
+2. route-independent HTTP server reachability check, where a 2xx/3xx/4xx response proves the ASGI server is alive;
+3. docker exec route inventory to record the actual frozen app route surface;
+4. docker exec binding probe to verify M26 release / manifest / Qdrant / graph compatibility;
+5. zero answer endpoint/provider/E5 consumption.
+```
+
+The binding probe remains the authoritative E4_V3 identity gate:
 
 ```text
 docker exec <candidate_container> python -c 'load_production_answer_bundle() + build_production_answer_compatibility_report(...)'
@@ -135,6 +149,7 @@ Do not do any of the following during E4 or E4 V3:
 - Do not run E5 before E4 and E4 V3 both pass.
 - Do not rerun failed jobs from earlier failed runs because that reuses the old commit. Start a fresh manual workflow run from latest main instead.
 - Do not call /v1/ask or /v1/ask/stream during E4 V3.
+- Do not treat /v1/health or /api/m26/health as required routes for frozen 520aed liveness.
 - Do not rerun Source G7, 156→180 construction, 142 rewrites, frontend/API wiring, old runtime archaeology, offline adapter rebuild, or zero-reembed judgment.
 - Do not rebuild the frozen semantic runtime image.
 - Do not change source PR #24.
@@ -155,9 +170,13 @@ receipt.binding.node_count=4457
 receipt.binding.edge_count=8995
 receipt.endpoint.host=127.0.0.1
 receipt.endpoint.host_port != 18087
-receipt.endpoint.health_path=/v1/health
-receipt.endpoint.query_path=/v1/ask
-receipt.liveness.status in {healthy, starting}
+receipt.endpoint.answer_endpoint_invoked=false
+receipt.liveness.status=http_reachable
+receipt.liveness.http_status >= 200
+receipt.liveness.http_status < 500
+receipt.route_inventory.status=M26_E4_V3_ROUTE_INVENTORY_PASS
+receipt.route_inventory.route_count > 0
+receipt.route_inventory.answer_endpoint_invoked=false
 receipt.binding_probe.status=M26_E4_V3_BINDING_PROBE_PASS
 receipt.binding_probe.release_id=m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
 receipt.binding_probe.qdrant_collection=m26_blog_m26blog_ec79a3cad1d8_59012fe3818c_4260fcb53440
