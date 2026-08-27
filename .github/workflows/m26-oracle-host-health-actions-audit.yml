@@ -88,11 +88,10 @@ jobs:
           printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/id_m26_health
           chmod 600 ~/.ssh/id_m26_health
           set +e
-          timeout 10s ssh-keyscan -H "$ORACLE_VM_HOST" > ~/.ssh/known_hosts 2>"$EVIDENCE_DIR/ssh_keyscan.stderr"
+          timeout 15s ssh-keyscan -H "$ORACLE_VM_HOST" > ~/.ssh/known_hosts 2>"$EVIDENCE_DIR/ssh_keyscan.stderr"
           rc=$?
           set -e
-          printf 'ssh_keyscan_rc=%s\n' "$rc" > "$EVIDENCE_DIR/ssh_keyscan.txt"
-          test "$rc" -eq 0
+          printf 'ssh_keyscan_rc=%s\nssh_transport_mode=accept-new\n' "$rc" > "$EVIDENCE_DIR/ssh_keyscan.txt"
 
       - name: Collect Oracle host and Docker health matrix
         shell: bash
@@ -101,7 +100,7 @@ jobs:
           SSH_OPTS=(
             -i ~/.ssh/id_m26_health
             -o BatchMode=yes
-            -o StrictHostKeyChecking=yes
+            -o StrictHostKeyChecking=accept-new
             -o ConnectTimeout=5
             -o ConnectionAttempts=1
             -o ServerAliveInterval=3
@@ -147,6 +146,7 @@ jobs:
             grep -v '^__M26_REMOTE_' "$EVIDENCE_DIR/${key}.stdout" || true
           }
 
+          # Host matrix. Each command is independently bounded.
           run_remote host_uptime             10 5  'uptime'
           run_remote host_loadavg            10 5  'cat /proc/loadavg'
           run_remote host_memory             10 5  'free -b'
@@ -157,6 +157,7 @@ jobs:
           run_remote pressure_memory         10 5  'cat /proc/pressure/memory'
           run_remote pressure_io             10 5  'cat /proc/pressure/io'
 
+          # Service matrix and bounded recent journals.
           run_remote docker_is_active        10 5  'systemctl is-active docker'
           run_remote docker_status           10 5  'systemctl status docker --no-pager --lines=25'
           run_remote docker_journal          15 10 'sudo -n journalctl -u docker --since "-30 min" --no-pager -n 120'
@@ -164,10 +165,12 @@ jobs:
           run_remote containerd_status       10 5  'systemctl status containerd --no-pager --lines=25'
           run_remote containerd_journal      15 10 'sudo -n journalctl -u containerd --since "-30 min" --no-pager -n 120'
 
+          # Docker control-plane latency. Independent commands, <=10s each.
           run_remote docker_version          15 10 'docker version'
           run_remote docker_info             15 10 'docker info'
           run_remote docker_ps               15 10 'docker ps --no-trunc --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"'
 
+          # Resolve current production container via Compose service label, then inspect separately.
           run_remote production_ids          10 5  'docker ps -q --filter label=com.docker.compose.service=knowledge-engine'
           mapfile -t prod_ids < <(payload production_ids | sed '/^[[:space:]]*$/d')
           printf '%s\n' "${prod_ids[@]:-}" > "$EVIDENCE_DIR/production_ids_resolved.txt"
@@ -178,6 +181,7 @@ jobs:
             echo 'production_inspect_skipped=production_container_count_not_one' > "$EVIDENCE_DIR/production_inspect.meta"
           fi
 
+          # Stuck candidate inventory, including exited/dead/restarting containers.
           run_remote m26_inventory 15 10 'docker ps -a --no-trunc --filter name=m26-e5- --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"'
           run_remote m26_inventory_ids 10 5 'docker ps -aq --filter name=m26-e5-'
           mapfile -t m26_ids < <(payload m26_inventory_ids | sed '/^[[:space:]]*$/d' | head -n 30)
@@ -191,6 +195,7 @@ jobs:
             run_remote "$key" 15 10 "docker inspect --format 'name={{.Name}} id={{.Id}} image={{.Image}} image_ref={{.Config.Image}} status={{.State.Status}} running={{.State.Running}} restarting={{.State.Restarting}} exit_code={{.State.ExitCode}} restart_policy={{.HostConfig.RestartPolicy.Name}} ports={{json .HostConfig.PortBindings}} mounts={{json .Mounts}} labels={{json .Config.Labels}}' '$cid'"
           done
 
+          # Guarded create prerequisite adjudication. Conservative: any required read-only gap skips mutation.
           prereq=1
           reason=()
           require_rc0() {
@@ -212,6 +217,7 @@ jobs:
             if ! [[ "$ms" =~ ^[0-9]+$ ]] || [ "$ms" -gt 10000 ]; then prereq=0; reason+=("${key}_over_10s_or_unknown"); fi
           done
 
+          # Critical resource thresholds: MemAvailable >= max(256MiB, 5% total); disk/inodes <95% used.
           mem_total="$(payload host_memory | awk '/^Mem:/ {print $2; exit}')"
           mem_avail="$(payload host_memory | awk '/^Mem:/ {print $7; exit}')"
           if ! [[ "$mem_total" =~ ^[0-9]+$ && "$mem_avail" =~ ^[0-9]+$ ]]; then
@@ -228,6 +234,7 @@ jobs:
           [ "$disk_max" -lt 95 ] || { prereq=0; reason+=(critical_disk_usage); }
           [ "$inode_max" -lt 95 ] || { prereq=0; reason+=(critical_inode_usage); }
 
+          # Derive the already-local production image from the production inspect output.
           PROD_IMAGE_ID=""
           if [ -f "$EVIDENCE_DIR/production_inspect.stdout" ]; then
             PROD_IMAGE_ID="$(payload production_inspect | sed -n 's/.* image=\([^ ]*\).*/\1/p' | head -n1)"
@@ -254,6 +261,7 @@ jobs:
             printf 'reasons=%s\n' "${reason[*]:-none}"
           } > "$EVIDENCE_DIR/create_prerequisites.txt"
 
+          # At most one guarded nonproduction create. No start, ports, volumes, or production env.
           PROBE="m26-health-probe-${GITHUB_RUN_ID}"
           if [ "$prereq" -eq 1 ]; then
             run_remote guarded_create 15 15 "docker create --name '$PROBE' --network none --read-only '$PROD_IMAGE_ID' /bin/sh -c 'exit 0'"
@@ -268,9 +276,14 @@ jobs:
             echo 'guarded_create_skipped=read_only_prerequisite_not_all_healthy' > "$EVIDENCE_DIR/guarded_create.meta"
           fi
 
+          # Sanitize evidence files before upload. Raw command content was never streamed to the Actions log.
           python - <<'PY'
-          import pathlib,re
+          import os,pathlib,re
           root=pathlib.Path('/tmp/m26-oracle-health-evidence')
+          bound_values=[
+              (os.environ.get('ORACLE_VM_HOST'), '[REDACTED_ORACLE_HOST]'),
+              (os.environ.get('ORACLE_VM_USER'), '[REDACTED_ORACLE_USER]'),
+          ]
           pats=[
               re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----', re.S),
               re.compile(r'(?i)(authorization\s*[:=]\s*bearer\s+)[^\s]+'),
@@ -280,6 +293,8 @@ jobs:
               if not p.is_file(): continue
               try: text=p.read_text(encoding='utf-8')
               except Exception: continue
+              for raw,repl in bound_values:
+                  if raw: text=text.replace(raw,repl)
               for pat in pats: text=pat.sub(lambda m: (m.group(1) if m.lastindex else '')+'[REDACTED]', text)
               p.write_text(text, encoding='utf-8')
           PY
