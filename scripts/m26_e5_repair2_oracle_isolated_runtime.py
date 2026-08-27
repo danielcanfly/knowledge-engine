@@ -202,12 +202,13 @@ def main() -> int:
     cid = out([
         "docker", "create", "--name", a.candidate_container, "--env-file", str(envfile),
         "-v", f"{overlay}:/tmp/m26_e5_r2_sitecustomize:ro", "-p", f"127.0.0.1:{a.host_port}:8080", image,
-    ], timeout=60)
+    ], timeout=300)
+    trace(f"M26_E5_R2_TRACE_DOCKER_CREATE_CANDIDATE_PASS:{cid[:12]}")
 
     trace("M26_E5_R2_TRACE_DOCKER_CP_STORAGE_BEGIN")
-    run(["docker", "cp", a.storage_py, f"{a.candidate_container}:{storage_target}"], timeout=60)
+    run(["docker", "cp", a.storage_py, f"{a.candidate_container}:{storage_target}"], timeout=180)
     trace("M26_E5_R2_TRACE_DOCKER_START_CANDIDATE_BEGIN")
-    run(["docker", "start", a.candidate_container], timeout=60)
+    run(["docker", "start", a.candidate_container], timeout=180)
     trace("M26_E5_R2_TRACE_WAIT_HEALTH_BEGIN")
     health = wait_health(a.host_port, token)
 
