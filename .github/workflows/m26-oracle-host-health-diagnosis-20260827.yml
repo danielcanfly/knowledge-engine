@@ -20,7 +20,7 @@ jobs:
     if: github.ref == 'refs/heads/m26-e5-oracle-health-actions-audit-20260827'
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 10
+    timeout-minutes: 8
     env:
       BASE_HEAD: 5b5d680597bc63fbf92995bb20c8f7d1b7019e03
       ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
@@ -41,7 +41,7 @@ jobs:
           echo "workflow=${GITHUB_WORKFLOW}"
           echo "run_id=${GITHUB_RUN_ID}"
           echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
-          echo "policy=individual remote host/docker commands use 5-15s remote timeouts; guarded create skipped unless readonly prerequisites pass"
+          echo "transport_policy=single bounded SSH session; every remote host/docker command is independently wrapped with 5-15s timeout"
           echo "forbidden_actions_not_performed=restart-docker,reboot,stop-restart-production,deploy,pointer-route-mutation,resume-repair2,e5-six-queries,provider-answer-request"
 
       - name: SSH setup
@@ -54,79 +54,91 @@ jobs:
           chmod 600 "$keyfile"
           {
             echo "ORACLE_KEY=${keyfile}"
-            echo "SSH_BASE_OPTS=-i ${keyfile} -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=1 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+            echo "SSH_BASE_OPTS=-i ${keyfile} -o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=5 -o ServerAliveCountMax=1 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
           } >> "$GITHUB_ENV"
 
-      - name: Oracle host-health evidence matrix
+      - name: Oracle host-health evidence matrix and guarded create probe
         shell: bash
         run: |
           set -u
+          remote_script=$(cat <<'REMOTE'
+          set -u
+          READONLY_FAILS=""
           echo "evidence_started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          run_remote() {
-            local label="$1"; local hard="$2"; shift 2
-            local cmd="$*"
+          echo "remote_command_timeout_policy=each host/docker command below has independent timeout 5-15s"
+          run_cmd() {
+            label="$1"; hard="$2"; required="$3"; shift 3
+            cmd="$*"
             echo "::group::${label}"
             echo "label=${label}"
             echo "remote_timeout_seconds=${hard}"
             echo "command_started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             set +e
-            timeout "$((hard + 5))s" ssh ${SSH_BASE_OPTS} "${ORACLE_VM_USER}@${ORACLE_VM_HOST}" "timeout ${hard}s bash -lc $(printf '%q' "$cmd")"
-            local rc=$?
-            set -e
+            timeout "${hard}s" bash -lc "$cmd"
+            rc=$?
+            set -u
             echo "exit_status=${rc}"
             echo "command_finished_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ "$required" = "required" ] && [ "$rc" -ne 0 ]; then
+              READONLY_FAILS="${READONLY_FAILS} ${label}:${rc}"
+            fi
             echo "::endgroup::"
             return 0
           }
 
-          run_remote "host_identity" 5 'hostname; uname -a; date -u +%Y-%m-%dT%H:%M:%SZ'
-          run_remote "uptime_load" 5 'uptime; cat /proc/loadavg'
-          run_remote "memory_swap" 5 'free -m; grep -E "MemTotal|MemAvailable|SwapTotal|SwapFree|Dirty|Writeback" /proc/meminfo'
-          run_remote "disk_blocks" 5 'df -hT / /var /var/lib/docker 2>/dev/null || df -hT'
-          run_remote "disk_inodes" 5 'df -ih / /var /var/lib/docker 2>/dev/null || df -ih'
-          run_remote "pressure_cpu" 5 'cat /proc/pressure/cpu 2>/dev/null || true'
-          run_remote "pressure_memory" 5 'cat /proc/pressure/memory 2>/dev/null || true'
-          run_remote "pressure_io" 5 'cat /proc/pressure/io 2>/dev/null || true'
-          run_remote "docker_service_status" 10 'systemctl is-active docker; systemctl is-failed docker; systemctl --no-pager --full status docker | sed -n "1,80p"'
-          run_remote "containerd_service_status" 10 'systemctl is-active containerd; systemctl is-failed containerd; systemctl --no-pager --full status containerd | sed -n "1,80p"'
-          run_remote "docker_journal_recent" 10 'journalctl -u docker --no-pager -n 120 --since "-2 hours" 2>&1 | tail -n 120'
-          run_remote "containerd_journal_recent" 10 'journalctl -u containerd --no-pager -n 120 --since "-2 hours" 2>&1 | tail -n 120'
-          run_remote "docker_version_latency" 10 '/usr/bin/time -f "elapsed_seconds=%e" docker version'
-          run_remote "docker_info_latency" 15 '/usr/bin/time -f "elapsed_seconds=%e" docker info'
-          run_remote "docker_ps_latency" 10 '/usr/bin/time -f "elapsed_seconds=%e" docker ps --no-trunc --format "table {{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.RunningFor}}"'
-          run_remote "production_container_identity_candidates" 10 'docker ps --no-trunc --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Labels}}" | grep -Ei "prod|production|knowledge|engine|m26|answers|test_page|selfcheck" || docker ps --no-trunc --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Labels}}"'
-          run_remote "production_inspect_latency_candidates" 15 'set -e; docker ps -q --no-trunc | head -20 | while read -r id; do [ -n "$id" ] || continue; echo "INSPECT_BEGIN $id"; /usr/bin/time -f "inspect_elapsed_seconds=%e" timeout 10s docker inspect --format "id={{.Id}} name={{.Name}} image={{.Config.Image}} state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restart={{.RestartCount}} started={{.State.StartedAt}}" "$id"; rc=$?; echo "INSPECT_EXIT $id $rc"; done'
-          run_remote "stuck_m26_e5_inventory" 10 'docker ps -a --no-trunc --filter "name=m26-e5-" --format "table {{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.CreatedAt}}"'
-          echo "evidence_finished_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          run_cmd "host_identity" 5 required 'hostname; uname -a; date -u +%Y-%m-%dT%H:%M:%SZ'
+          run_cmd "uptime_load" 5 required 'uptime; cat /proc/loadavg'
+          run_cmd "memory_swap" 5 required 'free -m; grep -E "MemTotal|MemAvailable|SwapTotal|SwapFree|Dirty|Writeback" /proc/meminfo'
+          run_cmd "disk_blocks" 5 required 'df -hT / /var /var/lib/docker 2>/dev/null || df -hT'
+          run_cmd "disk_inodes" 5 required 'df -ih / /var /var/lib/docker 2>/dev/null || df -ih'
+          run_cmd "pressure_cpu" 5 required 'cat /proc/pressure/cpu 2>/dev/null || echo pressure_cpu_unavailable'
+          run_cmd "pressure_memory" 5 required 'cat /proc/pressure/memory 2>/dev/null || echo pressure_memory_unavailable'
+          run_cmd "pressure_io" 5 required 'cat /proc/pressure/io 2>/dev/null || echo pressure_io_unavailable'
+          run_cmd "docker_service_status" 10 required 'systemctl is-active docker; systemctl is-failed docker; systemctl --no-pager --full status docker | sed -n "1,80p"'
+          run_cmd "containerd_service_status" 10 required 'systemctl is-active containerd; systemctl is-failed containerd; systemctl --no-pager --full status containerd | sed -n "1,80p"'
+          run_cmd "docker_journal_recent" 10 optional 'sudo -n journalctl -u docker --no-pager -n 120 --since "-2 hours" 2>&1 || journalctl -u docker --no-pager -n 120 --since "-2 hours" 2>&1 || true'
+          run_cmd "containerd_journal_recent" 10 optional 'sudo -n journalctl -u containerd --no-pager -n 120 --since "-2 hours" 2>&1 || journalctl -u containerd --no-pager -n 120 --since "-2 hours" 2>&1 || true'
+          run_cmd "docker_version_latency" 10 required '/usr/bin/time -f "elapsed_seconds=%e" docker version'
+          run_cmd "docker_info_latency" 15 required '/usr/bin/time -f "elapsed_seconds=%e" docker info'
+          run_cmd "docker_ps_latency" 10 required '/usr/bin/time -f "elapsed_seconds=%e" docker ps --no-trunc --format "table {{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.RunningFor}}"'
+          run_cmd "production_container_identity_candidates" 10 required 'docker ps --no-trunc --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Labels}}" | grep -Ei "prod|production|knowledge|engine|m26|answers|test_page|selfcheck" || docker ps --no-trunc --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Labels}}"'
+          run_cmd "production_inspect_latency_candidates" 15 required 'docker ps -q --no-trunc | head -20 | while read -r id; do [ -n "$id" ] || continue; echo "INSPECT_BEGIN $id"; /usr/bin/time -f "inspect_elapsed_seconds=%e" timeout 10s docker inspect --format "id={{.Id}} name={{.Name}} image={{.Config.Image}} state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restart={{.RestartCount}} started={{.State.StartedAt}}" "$id"; rc=$?; echo "INSPECT_EXIT $id $rc"; done'
+          run_cmd "stuck_m26_e5_inventory" 10 required 'docker ps -a --no-trunc --filter "name=m26-e5-" --format "table {{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.CreatedAt}}"'
 
-      - name: Guarded docker create probe
-        shell: bash
-        run: |
-          set -u
           echo "::group::guarded_create_probe"
-          echo "probe_name=${PROBE_NAME}"
-          echo "policy=skip unless readonly prerequisites PASS: docker/containerd active and docker version/info/ps all exit 0 within fail-fast limits; no image pull"
-          remote_script=$(cat <<'REMOTE'
-          set -u
-          probe_name="${M26_PROBE_NAME:?missing_probe_name}"
+          echo "probe_name=${M26_PROBE_NAME:?missing_probe_name}"
+          echo "policy=max_one_create; skip unless all required read-only commands passed and docker/containerd/docker-version/info/ps prerequisites pass; no pull; no start; no ports; no volumes; no env flags"
+          if [ -n "$READONLY_FAILS" ]; then
+            echo "CREATE_PROBE_SKIPPED readonly_failures=${READONLY_FAILS}"
+            echo "::endgroup::"
+            echo "evidence_finished_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            exit 0
+          fi
+
           prereq_fail=0
-          c() {
-            label="$1"; shift
-            echo "PREREQ_BEGIN ${label}"
-            timeout 10s "$@"
+          prereq() {
+            label="$1"; hard="$2"; shift 2
+            cmd="$*"
+            echo "PREREQ_BEGIN ${label} timeout=${hard}"
+            set +e
+            timeout "${hard}s" bash -lc "$cmd"
             rc=$?
+            set -u
             echo "PREREQ_EXIT ${label} ${rc}"
             [ "$rc" -eq 0 ] || prereq_fail=1
           }
-          c systemctl-active-docker systemctl is-active docker
-          c systemctl-active-containerd systemctl is-active containerd
-          c docker-version docker version
-          c docker-info docker info
-          c docker-ps docker ps --format "{{.ID}}"
+          prereq systemctl-active-docker 10 'test "$(systemctl is-active docker)" = active'
+          prereq systemctl-active-containerd 10 'test "$(systemctl is-active containerd)" = active'
+          prereq docker-version 10 'docker version >/dev/null'
+          prereq docker-info 15 'docker info >/dev/null'
+          prereq docker-ps 10 'docker ps --format "{{.ID}}" >/dev/null'
           if [ "$prereq_fail" -ne 0 ]; then
             echo "CREATE_PROBE_SKIPPED prereq_fail=${prereq_fail}"
+            echo "::endgroup::"
+            echo "evidence_finished_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             exit 0
           fi
+
           probe_image=""
           for img in hello-world:latest busybox:latest alpine:latest; do
             if timeout 5s docker image inspect "$img" >/tmp/m26_probe_image.json 2>/dev/null; then
@@ -141,26 +153,33 @@ jobs:
           done
           if [ -z "$probe_image" ]; then
             echo "CREATE_PROBE_SKIPPED no_benign_local_image_no_pull"
+            echo "::endgroup::"
+            echo "evidence_finished_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             exit 0
           fi
-          echo "CREATE_PROBE_ATTEMPT name=${probe_name} image=${probe_image}"
-          timeout 15s docker create --name "$probe_name" --label m26.oracle-health-probe=20260827 --network none "$probe_image" true >/tmp/m26_probe_cid
+          echo "CREATE_PROBE_ATTEMPT name=${M26_PROBE_NAME} image=${probe_image}"
+          set +e
+          timeout 15s docker create --name "$M26_PROBE_NAME" --label m26.oracle-health-probe=20260827 --network none "$probe_image" true >/tmp/m26_probe_cid
           create_rc=$?
+          set -u
           echo "CREATE_PROBE_EXIT ${create_rc}"
-          if timeout 10s docker ps -a --filter "name=^/${probe_name}$" --format "{{.Names}}" | grep -Fxq "$probe_name"; then
-            echo "CREATE_PROBE_OBJECT_PRESENT name=${probe_name}"
-            timeout 10s docker rm "$probe_name"
+          if timeout 10s docker ps -a --filter "name=^/${M26_PROBE_NAME}$" --format "{{.Names}}" | grep -Fxq "$M26_PROBE_NAME"; then
+            echo "CREATE_PROBE_OBJECT_PRESENT name=${M26_PROBE_NAME}"
+            timeout 10s docker rm "$M26_PROBE_NAME"
             echo "CREATE_PROBE_RM_EXIT $?"
           else
-            echo "CREATE_PROBE_OBJECT_ABSENT name=${probe_name}"
+            echo "CREATE_PROBE_OBJECT_ABSENT name=${M26_PROBE_NAME}"
           fi
+          echo "::endgroup::"
+          echo "evidence_finished_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           exit 0
           REMOTE
           )
           quoted_probe=$(printf '%q' "$PROBE_NAME")
+          echo "local_transport_timeout_seconds=360"
+          echo "remote_session_timeout_seconds=300"
           set +e
-          timeout 20s ssh ${SSH_BASE_OPTS} "${ORACLE_VM_USER}@${ORACLE_VM_HOST}" "M26_PROBE_NAME=${quoted_probe} timeout 15s bash -lc $(printf '%q' "$remote_script")"
+          timeout 360s ssh ${SSH_BASE_OPTS} "${ORACLE_VM_USER}@${ORACLE_VM_HOST}" "M26_PROBE_NAME=${quoted_probe} timeout 300s bash -s" <<< "$remote_script"
           rc=$?
           set -e
-          echo "guarded_create_probe_ssh_exit=${rc}"
-          echo "::endgroup::"
+          echo "oracle_session_exit=${rc}"
