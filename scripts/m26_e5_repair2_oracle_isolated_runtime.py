@@ -63,6 +63,42 @@ def port_free(port: int) -> None:
             raise SystemExit(f"M26_E5_R2_HOST_PORT_IN_USE:{port}")
 
 
+def discover_storage_target(container: str) -> str:
+    script = r'''
+set -eu
+for p in \
+  /app/src/knowledge_engine/storage.py \
+  /app/knowledge_engine/storage.py \
+  /workspace/src/knowledge_engine/storage.py \
+  /usr/local/lib/python3.13/site-packages/knowledge_engine/storage.py \
+  /usr/local/lib/python3.12/site-packages/knowledge_engine/storage.py \
+  /usr/local/lib/python3.11/site-packages/knowledge_engine/storage.py \
+  /usr/local/lib/python3.10/site-packages/knowledge_engine/storage.py \
+  /opt/venv/lib/python3.13/site-packages/knowledge_engine/storage.py \
+  /opt/venv/lib/python3.12/site-packages/knowledge_engine/storage.py \
+  /opt/venv/lib/python3.11/site-packages/knowledge_engine/storage.py \
+  /opt/venv/lib/python3.10/site-packages/knowledge_engine/storage.py
+ do
+  if [ -f "$p" ]; then
+    printf '%s\n' "$p"
+    exit 0
+  fi
+done
+find /app /workspace /usr/local/lib /opt/venv -path '*/knowledge_engine/storage.py' -type f -print -quit 2>/dev/null || true
+'''
+    cp = run(["docker", "exec", container, "sh", "-lc", script], check=False, timeout=90)
+    if cp.returncode != 0:
+        detail = (cp.stdout + cp.stderr)[-3000:]
+        raise SystemExit(f"M26_E5_R2_STORAGE_TARGET_DISCOVERY_SHELL_FAILED:{detail}")
+    candidates = [line.strip() for line in cp.stdout.splitlines() if line.strip()]
+    if not candidates:
+        raise SystemExit("M26_E5_R2_STORAGE_TARGET_NOT_FOUND")
+    target = candidates[0]
+    if not target.endswith("/knowledge_engine/storage.py"):
+        raise SystemExit(f"M26_E5_R2_STORAGE_TARGET_INVALID:{target}")
+    return target
+
+
 def py(container: str, code: str) -> dict[str, Any]:
     trace("M26_E5_R2_TRACE_DOCKER_EXEC_PROBE")
     cp = run(["docker", "exec", container, "python", "-c", code], check=False, timeout=180)
@@ -158,11 +194,9 @@ def main() -> int:
     run(["docker", "rm", "-f", a.candidate_container], check=False, timeout=60)
     port_free(a.host_port)
 
-    trace("M26_E5_R2_TRACE_STORAGE_TARGET_DISCOVERY_BASE_EXEC_BEGIN")
-    storage_target = out([
-        "docker", "exec", a.base_container, "python",
-        "-c", "import inspect, knowledge_engine.storage as s; print(inspect.getsourcefile(s))",
-    ], timeout=90)
+    trace("M26_E5_R2_TRACE_STORAGE_TARGET_DISCOVERY_SHELL_BEGIN")
+    storage_target = discover_storage_target(a.base_container)
+    trace(f"M26_E5_R2_TRACE_STORAGE_TARGET_DISCOVERY_SHELL_PASS:{storage_target}")
 
     trace("M26_E5_R2_TRACE_DOCKER_CREATE_CANDIDATE_BEGIN")
     cid = out([
