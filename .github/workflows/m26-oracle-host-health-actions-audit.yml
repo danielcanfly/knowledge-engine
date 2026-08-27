@@ -1,0 +1,325 @@
+name: M26 Oracle Host Health Actions Audit
+
+on:
+  push:
+    branches:
+      - m26-e5-oracle-health-actions-audit-20260827
+
+permissions:
+  contents: read
+
+jobs:
+  oracle-health-audit:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 12
+    env:
+      ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+      EVIDENCE_DIR: /tmp/m26-oracle-health-evidence
+    steps:
+      - name: Checkout exact diagnosis branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bind diagnosis identity and guard scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          head="$(git rev-parse HEAD)"
+          branch="${GITHUB_REF_NAME}"
+          base="5b5d680597bc63fbf92995bb20c8f7d1b7019e03"
+          git merge-base --is-ancestor "$base" "$head"
+          test "$branch" = "m26-e5-oracle-health-actions-audit-20260827"
+          cat > "$EVIDENCE_DIR/git_binding.txt" <<EOF
+          repo=${GITHUB_REPOSITORY}
+          branch=${branch}
+          head=${head}
+          base_head=${base}
+          workflow=${GITHUB_WORKFLOW}
+          run_id=${GITHUB_RUN_ID}
+          run_attempt=${GITHUB_RUN_ATTEMPT}
+          job=${GITHUB_JOB}
+          event=${GITHUB_EVENT_NAME}
+          EOF
+          cat > "$EVIDENCE_DIR/hard_zero.txt" <<'EOF'
+          SEMANTIC_REQUESTS_DURING_DIAGNOSIS=0
+          E5_EPOCH2_CONSUMED=0
+          PRODUCTION_POINTER_WRITES=0
+          CANONICAL_ROUTE_MUTATIONS=0
+          PRODUCTION_DEPLOYS=0
+          DOCKER_DAEMON_RESTARTS=0
+          VM_REBOOTS=0
+          PRODUCTION_CONTAINER_RESTARTS=0
+          EOF
+
+      - name: Public endpoint receipts only
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt() {
+            local key="$1" timeout_s="$2" url="$3"
+            local out="$EVIDENCE_DIR/public_${key}.txt"
+            set +e
+            curl --silent --show-error --location --output /dev/null \
+              --connect-timeout 5 --max-time "$timeout_s" \
+              --write-out 'url=%{url_effective}\nhttp_code=%{http_code}\ntime_total_s=%{time_total}\nremote_ip=%{remote_ip}\n' \
+              "$url" >"$out" 2>"$out.stderr"
+            rc=$?
+            set -e
+            printf 'curl_rc=%s\n' "$rc" >> "$out"
+            printf 'public_receipt=%s rc=%s\n' "$key" "$rc"
+          }
+          receipt test_page 10 https://danielcanfly.com/test_page/
+          receipt canonical_prod_health 15 https://api.danielcanfly.com/v1/answers/health
+          receipt canonical_staging_health 15 https://api-staging.danielcanfly.com/v1/answers/health
+
+      - name: Configure bounded SSH transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_HOST"
+          test -n "$ORACLE_VM_USER"
+          test -n "$ORACLE_VM_SSH_PRIVATE_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/id_m26_health
+          chmod 600 ~/.ssh/id_m26_health
+          set +e
+          timeout 10s ssh-keyscan -H "$ORACLE_VM_HOST" > ~/.ssh/known_hosts 2>"$EVIDENCE_DIR/ssh_keyscan.stderr"
+          rc=$?
+          set -e
+          printf 'ssh_keyscan_rc=%s\n' "$rc" > "$EVIDENCE_DIR/ssh_keyscan.txt"
+          test "$rc" -eq 0
+
+      - name: Collect Oracle host and Docker health matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH_OPTS=(
+            -i ~/.ssh/id_m26_health
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+            -o ConnectTimeout=5
+            -o ConnectionAttempts=1
+            -o ServerAliveInterval=3
+            -o ServerAliveCountMax=2
+          )
+
+          run_remote() {
+            local key="$1" outer_s="$2" inner_s="$3" cmd="$4"
+            local stdout="$EVIDENCE_DIR/${key}.stdout"
+            local stderr="$EVIDENCE_DIR/${key}.stderr"
+            local meta="$EVIDENCE_DIR/${key}.meta"
+            local encoded start end rc
+            encoded="$(printf '%s' "$cmd" | base64 -w0)"
+            start="$(date +%s%3N)"
+            set +e
+            timeout "${outer_s}s" ssh "${SSH_OPTS[@]}" "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+              "start=\$(date +%s%3N); set +e; timeout ${inner_s}s bash -c \"\$(printf '%s' '${encoded}' | base64 -d)\"; rc=\$?; end=\$(date +%s%3N); printf '\\n__M26_REMOTE_RC=%s\\n__M26_REMOTE_ELAPSED_MS=%s\\n' \"\$rc\" \"\$((end-start))\"; exit \"\$rc\"" \
+              >"$stdout" 2>"$stderr"
+            rc=$?
+            set -e
+            end="$(date +%s%3N)"
+            {
+              echo "key=$key"
+              echo "outer_timeout_s=$outer_s"
+              echo "inner_timeout_s=$inner_s"
+              echo "ssh_rc=$rc"
+              echo "runner_elapsed_ms=$((end-start))"
+            } > "$meta"
+            printf 'diag=%s rc=%s elapsed_ms=%s\n' "$key" "$rc" "$((end-start))"
+            return 0
+          }
+
+          remote_rc() {
+            local key="$1"
+            grep '^__M26_REMOTE_RC=' "$EVIDENCE_DIR/${key}.stdout" | tail -n1 | cut -d= -f2 || true
+          }
+          remote_ms() {
+            local key="$1"
+            grep '^__M26_REMOTE_ELAPSED_MS=' "$EVIDENCE_DIR/${key}.stdout" | tail -n1 | cut -d= -f2 || true
+          }
+          payload() {
+            local key="$1"
+            grep -v '^__M26_REMOTE_' "$EVIDENCE_DIR/${key}.stdout" || true
+          }
+
+          run_remote host_uptime             10 5  'uptime'
+          run_remote host_loadavg            10 5  'cat /proc/loadavg'
+          run_remote host_memory             10 5  'free -b'
+          run_remote host_swap               10 5  'swapon --show --bytes --noheadings || cat /proc/swaps'
+          run_remote host_disk               10 5  'df -P -B1 / /var/lib/docker 2>&1'
+          run_remote host_inodes             10 5  'df -Pi / /var/lib/docker 2>&1'
+          run_remote pressure_cpu            10 5  'cat /proc/pressure/cpu'
+          run_remote pressure_memory         10 5  'cat /proc/pressure/memory'
+          run_remote pressure_io             10 5  'cat /proc/pressure/io'
+
+          run_remote docker_is_active        10 5  'systemctl is-active docker'
+          run_remote docker_status           10 5  'systemctl status docker --no-pager --lines=25'
+          run_remote docker_journal          15 10 'sudo -n journalctl -u docker --since "-30 min" --no-pager -n 120'
+          run_remote containerd_is_active    10 5  'systemctl is-active containerd'
+          run_remote containerd_status       10 5  'systemctl status containerd --no-pager --lines=25'
+          run_remote containerd_journal      15 10 'sudo -n journalctl -u containerd --since "-30 min" --no-pager -n 120'
+
+          run_remote docker_version          15 10 'docker version'
+          run_remote docker_info             15 10 'docker info'
+          run_remote docker_ps               15 10 'docker ps --no-trunc --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"'
+
+          run_remote production_ids          10 5  'docker ps -q --filter label=com.docker.compose.service=knowledge-engine'
+          mapfile -t prod_ids < <(payload production_ids | sed '/^[[:space:]]*$/d')
+          printf '%s\n' "${prod_ids[@]:-}" > "$EVIDENCE_DIR/production_ids_resolved.txt"
+          if [ "${#prod_ids[@]}" -eq 1 ] && [ -n "${prod_ids[0]:-}" ]; then
+            PROD_ID="${prod_ids[0]}"
+            run_remote production_inspect 15 10 "docker inspect --format 'name={{.Name}} id={{.Id}} image={{.Image}} image_ref={{.Config.Image}} created={{.Created}} status={{.State.Status}} running={{.State.Running}} restarting={{.State.Restarting}} exit_code={{.State.ExitCode}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restart_policy={{.HostConfig.RestartPolicy.Name}} ports={{json .HostConfig.PortBindings}} mounts={{json .Mounts}} labels={{json .Config.Labels}}' '$PROD_ID'"
+          else
+            echo 'production_inspect_skipped=production_container_count_not_one' > "$EVIDENCE_DIR/production_inspect.meta"
+          fi
+
+          run_remote m26_inventory 15 10 'docker ps -a --no-trunc --filter name=m26-e5- --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"'
+          run_remote m26_inventory_ids 10 5 'docker ps -aq --filter name=m26-e5-'
+          mapfile -t m26_ids < <(payload m26_inventory_ids | sed '/^[[:space:]]*$/d' | head -n 30)
+          : > "$EVIDENCE_DIR/m26_inventory_inspect_index.txt"
+          idx=0
+          for cid in "${m26_ids[@]:-}"; do
+            [ -n "$cid" ] || continue
+            idx=$((idx+1))
+            key="m26_candidate_inspect_${idx}"
+            echo "$key=$cid" >> "$EVIDENCE_DIR/m26_inventory_inspect_index.txt"
+            run_remote "$key" 15 10 "docker inspect --format 'name={{.Name}} id={{.Id}} image={{.Image}} image_ref={{.Config.Image}} status={{.State.Status}} running={{.State.Running}} restarting={{.State.Restarting}} exit_code={{.State.ExitCode}} restart_policy={{.HostConfig.RestartPolicy.Name}} ports={{json .HostConfig.PortBindings}} mounts={{json .Mounts}} labels={{json .Config.Labels}}' '$cid'"
+          done
+
+          prereq=1
+          reason=()
+          require_rc0() {
+            local key="$1" rc ms
+            rc="$(remote_rc "$key")"; ms="$(remote_ms "$key")"
+            if [ "$rc" != "0" ] || [ -z "$ms" ]; then prereq=0; reason+=("${key}_failed"); fi
+          }
+          for key in host_uptime host_loadavg host_memory host_swap host_disk host_inodes pressure_cpu pressure_memory pressure_io docker_is_active docker_status docker_journal containerd_is_active containerd_status containerd_journal docker_version docker_info docker_ps production_ids production_inspect m26_inventory; do
+            if [ -f "$EVIDENCE_DIR/${key}.stdout" ]; then require_rc0 "$key"; else prereq=0; reason+=("${key}_missing"); fi
+          done
+
+          docker_active="$(payload docker_is_active | tr -d '[:space:]')"
+          containerd_active="$(payload containerd_is_active | tr -d '[:space:]')"
+          [ "$docker_active" = active ] || { prereq=0; reason+=(docker_not_active); }
+          [ "$containerd_active" = active ] || { prereq=0; reason+=(containerd_not_active); }
+
+          for key in docker_version docker_info docker_ps production_inspect; do
+            ms="$(remote_ms "$key")"
+            if ! [[ "$ms" =~ ^[0-9]+$ ]] || [ "$ms" -gt 10000 ]; then prereq=0; reason+=("${key}_over_10s_or_unknown"); fi
+          done
+
+          mem_total="$(payload host_memory | awk '/^Mem:/ {print $2; exit}')"
+          mem_avail="$(payload host_memory | awk '/^Mem:/ {print $7; exit}')"
+          if ! [[ "$mem_total" =~ ^[0-9]+$ && "$mem_avail" =~ ^[0-9]+$ ]]; then
+            prereq=0; reason+=(memory_parse_failed)
+          else
+            min_by_ratio=$((mem_total / 20))
+            min_abs=$((256 * 1024 * 1024))
+            min_mem=$min_by_ratio; [ "$min_abs" -gt "$min_mem" ] && min_mem=$min_abs
+            [ "$mem_avail" -ge "$min_mem" ] || { prereq=0; reason+=(critical_memory_available); }
+          fi
+
+          disk_max="$(payload host_disk | awk 'NR>1 && $5 ~ /%$/ {gsub(/%/,"",$5); if ($5+0>m) m=$5+0} END{print m+0}')"
+          inode_max="$(payload host_inodes | awk 'NR>1 && $5 ~ /%$/ {gsub(/%/,"",$5); if ($5+0>m) m=$5+0} END{print m+0}')"
+          [ "$disk_max" -lt 95 ] || { prereq=0; reason+=(critical_disk_usage); }
+          [ "$inode_max" -lt 95 ] || { prereq=0; reason+=(critical_inode_usage); }
+
+          PROD_IMAGE_ID=""
+          if [ -f "$EVIDENCE_DIR/production_inspect.stdout" ]; then
+            PROD_IMAGE_ID="$(payload production_inspect | sed -n 's/.* image=\([^ ]*\).*/\1/p' | head -n1)"
+          fi
+          if [ -z "$PROD_IMAGE_ID" ]; then
+            prereq=0; reason+=(production_image_unresolved)
+          else
+            run_remote production_image_inspect 15 10 "docker image inspect --format 'id={{.Id}} volumes={{json .Config.Volumes}} exposed_ports={{json .Config.ExposedPorts}} entrypoint={{json .Config.Entrypoint}} cmd={{json .Config.Cmd}}' '$PROD_IMAGE_ID'"
+            require_rc0 production_image_inspect
+            volumes="$(payload production_image_inspect | sed -n 's/.* volumes=\([^ ]*\).*/\1/p' | head -n1)"
+            if [ -z "$volumes" ] || { [ "$volumes" != '<nil>' ] && [ "$volumes" != 'null' ]; }; then
+              prereq=0; reason+=(production_image_declares_volumes_or_unknown)
+            fi
+          fi
+
+          {
+            echo "guarded_create_prerequisites_pass=$prereq"
+            echo "docker_active=$docker_active"
+            echo "containerd_active=$containerd_active"
+            echo "disk_max_used_pct=$disk_max"
+            echo "inode_max_used_pct=$inode_max"
+            echo "mem_total_bytes=${mem_total:-unknown}"
+            echo "mem_available_bytes=${mem_avail:-unknown}"
+            printf 'reasons=%s\n' "${reason[*]:-none}"
+          } > "$EVIDENCE_DIR/create_prerequisites.txt"
+
+          PROBE="m26-health-probe-${GITHUB_RUN_ID}"
+          if [ "$prereq" -eq 1 ]; then
+            run_remote guarded_create 15 15 "docker create --name '$PROBE' --network none --read-only '$PROD_IMAGE_ID' /bin/sh -c 'exit 0'"
+            create_rc="$(remote_rc guarded_create)"
+            if [ "$create_rc" = 0 ]; then
+              run_remote guarded_probe_remove 12 10 "docker rm '$PROBE'"
+              run_remote guarded_probe_postcheck 10 5 "docker ps -a -q --filter name=^/${PROBE}$"
+            else
+              echo 'guarded_probe_remove_skipped=create_failed_or_timed_out' > "$EVIDENCE_DIR/guarded_probe_remove.meta"
+            fi
+          else
+            echo 'guarded_create_skipped=read_only_prerequisite_not_all_healthy' > "$EVIDENCE_DIR/guarded_create.meta"
+          fi
+
+          python - <<'PY'
+          import pathlib,re
+          root=pathlib.Path('/tmp/m26-oracle-health-evidence')
+          pats=[
+              re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----', re.S),
+              re.compile(r'(?i)(authorization\s*[:=]\s*bearer\s+)[^\s]+'),
+              re.compile(r'(?i)((?:token|secret|password|passwd|private[_-]?key)\s*[:=]\s*)[^\s]+'),
+          ]
+          for p in root.glob('*'):
+              if not p.is_file(): continue
+              try: text=p.read_text(encoding='utf-8')
+              except Exception: continue
+              for pat in pats: text=pat.sub(lambda m: (m.group(1) if m.lastindex else '')+'[REDACTED]', text)
+              p.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Build evidence manifest and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,pathlib,os
+          root=pathlib.Path('/tmp/m26-oracle-health-evidence')
+          entries=[]
+          for p in sorted(root.iterdir()):
+              if p.is_file() and p.name not in {'MANIFEST.json','SHA256SUMS.txt'}:
+                  data=p.read_bytes(); entries.append({'path':p.name,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
+          manifest={
+              'package':'M26_ORACLE_HOST_HEALTH_RAW_EVIDENCE',
+              'repo':os.environ.get('GITHUB_REPOSITORY'),
+              'branch':os.environ.get('GITHUB_REF_NAME'),
+              'head':os.environ.get('GITHUB_SHA'),
+              'run_id':os.environ.get('GITHUB_RUN_ID'),
+              'run_attempt':os.environ.get('GITHUB_RUN_ATTEMPT'),
+              'job':os.environ.get('GITHUB_JOB'),
+              'hard_zero_expected':True,
+              'entries':entries,
+          }
+          (root/'MANIFEST.json').write_text(json.dumps(manifest,indent=2,sort_keys=True)+'\n')
+          lines=[]
+          for p in sorted(root.iterdir()):
+              if p.is_file() and p.name!='SHA256SUMS.txt':
+                  lines.append(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}")
+          (root/'SHA256SUMS.txt').write_text('\n'.join(lines)+'\n')
+          PY
+          (cd "$EVIDENCE_DIR" && sha256sum -c SHA256SUMS.txt)
+
+      - name: Upload raw Oracle health evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-oracle-host-health-raw-${{ github.run_id }}
+          path: /tmp/m26-oracle-health-evidence/
+          if-no-files-found: error
+          retention-days: 14
