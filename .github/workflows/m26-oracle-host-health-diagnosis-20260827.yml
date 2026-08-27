@@ -1,0 +1,166 @@
+name: M26 Oracle Host Health Diagnosis 20260827
+
+on:
+  push:
+    branches:
+      - m26-e5-oracle-health-actions-audit-20260827
+    paths:
+      - .github/workflows/m26-oracle-host-health-diagnosis-20260827.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-oracle-host-health-diagnosis-20260827-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  oracle-host-health:
+    if: github.ref == 'refs/heads/m26-e5-oracle-health-actions-audit-20260827'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      BASE_HEAD: 5b5d680597bc63fbf92995bb20c8f7d1b7019e03
+      ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+      PROBE_NAME: m26-e5-health-create-probe-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Metadata and guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${ORACLE_VM_HOST:-}" ] || { echo "secret_missing=ORACLE_VM_HOST"; exit 2; }
+          [ -n "${ORACLE_VM_USER:-}" ] || { echo "secret_missing=ORACLE_VM_USER"; exit 2; }
+          [ -n "${ORACLE_VM_SSH_PRIVATE_KEY:-}" ] || { echo "secret_missing=ORACLE_VM_SSH_PRIVATE_KEY"; exit 2; }
+          echo "terminal_scope=diagnosis-only"
+          echo "base_head=${BASE_HEAD}"
+          echo "branch=${GITHUB_REF_NAME}"
+          echo "workflow=${GITHUB_WORKFLOW}"
+          echo "run_id=${GITHUB_RUN_ID}"
+          echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+          echo "policy=individual remote host/docker commands use 5-15s remote timeouts; guarded create skipped unless readonly prerequisites pass"
+          echo "forbidden_actions_not_performed=restart-docker,reboot,stop-restart-production,deploy,pointer-route-mutation,resume-repair2,e5-six-queries,provider-answer-request"
+
+      - name: SSH setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          keyfile="${RUNNER_TEMP}/oracle_m26_key"
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > "$keyfile"
+          chmod 600 "$keyfile"
+          {
+            echo "ORACLE_KEY=${keyfile}"
+            echo "SSH_BASE_OPTS=-i ${keyfile} -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=1 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+          } >> "$GITHUB_ENV"
+
+      - name: Oracle host-health evidence matrix
+        shell: bash
+        run: |
+          set -u
+          echo "evidence_started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          run_remote() {
+            local label="$1"; local hard="$2"; shift 2
+            local cmd="$*"
+            echo "::group::${label}"
+            echo "label=${label}"
+            echo "remote_timeout_seconds=${hard}"
+            echo "command_started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            set +e
+            timeout "$((hard + 5))s" ssh ${SSH_BASE_OPTS} "${ORACLE_VM_USER}@${ORACLE_VM_HOST}" "timeout ${hard}s bash -lc $(printf '%q' "$cmd")"
+            local rc=$?
+            set -e
+            echo "exit_status=${rc}"
+            echo "command_finished_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "::endgroup::"
+            return 0
+          }
+
+          run_remote "host_identity" 5 'hostname; uname -a; date -u +%Y-%m-%dT%H:%M:%SZ'
+          run_remote "uptime_load" 5 'uptime; cat /proc/loadavg'
+          run_remote "memory_swap" 5 'free -m; grep -E "MemTotal|MemAvailable|SwapTotal|SwapFree|Dirty|Writeback" /proc/meminfo'
+          run_remote "disk_blocks" 5 'df -hT / /var /var/lib/docker 2>/dev/null || df -hT'
+          run_remote "disk_inodes" 5 'df -ih / /var /var/lib/docker 2>/dev/null || df -ih'
+          run_remote "pressure_cpu" 5 'cat /proc/pressure/cpu 2>/dev/null || true'
+          run_remote "pressure_memory" 5 'cat /proc/pressure/memory 2>/dev/null || true'
+          run_remote "pressure_io" 5 'cat /proc/pressure/io 2>/dev/null || true'
+          run_remote "docker_service_status" 10 'systemctl is-active docker; systemctl is-failed docker; systemctl --no-pager --full status docker | sed -n "1,80p"'
+          run_remote "containerd_service_status" 10 'systemctl is-active containerd; systemctl is-failed containerd; systemctl --no-pager --full status containerd | sed -n "1,80p"'
+          run_remote "docker_journal_recent" 10 'journalctl -u docker --no-pager -n 120 --since "-2 hours" 2>&1 | tail -n 120'
+          run_remote "containerd_journal_recent" 10 'journalctl -u containerd --no-pager -n 120 --since "-2 hours" 2>&1 | tail -n 120'
+          run_remote "docker_version_latency" 10 '/usr/bin/time -f "elapsed_seconds=%e" docker version'
+          run_remote "docker_info_latency" 15 '/usr/bin/time -f "elapsed_seconds=%e" docker info'
+          run_remote "docker_ps_latency" 10 '/usr/bin/time -f "elapsed_seconds=%e" docker ps --no-trunc --format "table {{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.RunningFor}}"'
+          run_remote "production_container_identity_candidates" 10 'docker ps --no-trunc --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Labels}}" | grep -Ei "prod|production|knowledge|engine|m26|answers|test_page|selfcheck" || docker ps --no-trunc --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Labels}}"'
+          run_remote "production_inspect_latency_candidates" 15 'set -e; docker ps -q --no-trunc | head -20 | while read -r id; do [ -n "$id" ] || continue; echo "INSPECT_BEGIN $id"; /usr/bin/time -f "inspect_elapsed_seconds=%e" timeout 10s docker inspect --format "id={{.Id}} name={{.Name}} image={{.Config.Image}} state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restart={{.RestartCount}} started={{.State.StartedAt}}" "$id"; rc=$?; echo "INSPECT_EXIT $id $rc"; done'
+          run_remote "stuck_m26_e5_inventory" 10 'docker ps -a --no-trunc --filter "name=m26-e5-" --format "table {{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.CreatedAt}}"'
+          echo "evidence_finished_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Guarded docker create probe
+        shell: bash
+        run: |
+          set -u
+          echo "::group::guarded_create_probe"
+          echo "probe_name=${PROBE_NAME}"
+          echo "policy=skip unless readonly prerequisites PASS: docker/containerd active and docker version/info/ps all exit 0 within fail-fast limits; no image pull"
+          remote_script=$(cat <<'REMOTE'
+          set -u
+          probe_name="${M26_PROBE_NAME:?missing_probe_name}"
+          prereq_fail=0
+          c() {
+            label="$1"; shift
+            echo "PREREQ_BEGIN ${label}"
+            timeout 10s "$@"
+            rc=$?
+            echo "PREREQ_EXIT ${label} ${rc}"
+            [ "$rc" -eq 0 ] || prereq_fail=1
+          }
+          c systemctl-active-docker systemctl is-active docker
+          c systemctl-active-containerd systemctl is-active containerd
+          c docker-version docker version
+          c docker-info docker info
+          c docker-ps docker ps --format "{{.ID}}"
+          if [ "$prereq_fail" -ne 0 ]; then
+            echo "CREATE_PROBE_SKIPPED prereq_fail=${prereq_fail}"
+            exit 0
+          fi
+          probe_image=""
+          for img in hello-world:latest busybox:latest alpine:latest; do
+            if timeout 5s docker image inspect "$img" >/tmp/m26_probe_image.json 2>/dev/null; then
+              vols="$(timeout 5s docker image inspect --format "{{json .Config.Volumes}}" "$img" 2>/dev/null || true)"
+              envs="$(timeout 5s docker image inspect --format "{{json .Config.Env}}" "$img" 2>/dev/null || true)"
+              echo "PROBE_IMAGE_CANDIDATE ${img} volumes=${vols} env_checked"
+              if { [ "$vols" = "null" ] || [ "$vols" = "<no value>" ] || [ -z "$vols" ]; } && ! printf "%s" "$envs" | grep -Eiq "SECRET|TOKEN|ORACLE|PROD|PRODUCTION|DATABASE|PASSWORD|KEY"; then
+                probe_image="$img"
+                break
+              fi
+            fi
+          done
+          if [ -z "$probe_image" ]; then
+            echo "CREATE_PROBE_SKIPPED no_benign_local_image_no_pull"
+            exit 0
+          fi
+          echo "CREATE_PROBE_ATTEMPT name=${probe_name} image=${probe_image}"
+          timeout 15s docker create --name "$probe_name" --label m26.oracle-health-probe=20260827 --network none "$probe_image" true >/tmp/m26_probe_cid
+          create_rc=$?
+          echo "CREATE_PROBE_EXIT ${create_rc}"
+          if timeout 10s docker ps -a --filter "name=^/${probe_name}$" --format "{{.Names}}" | grep -Fxq "$probe_name"; then
+            echo "CREATE_PROBE_OBJECT_PRESENT name=${probe_name}"
+            timeout 10s docker rm "$probe_name"
+            echo "CREATE_PROBE_RM_EXIT $?"
+          else
+            echo "CREATE_PROBE_OBJECT_ABSENT name=${probe_name}"
+          fi
+          exit 0
+          REMOTE
+          )
+          quoted_probe=$(printf '%q' "$PROBE_NAME")
+          set +e
+          timeout 20s ssh ${SSH_BASE_OPTS} "${ORACLE_VM_USER}@${ORACLE_VM_HOST}" "M26_PROBE_NAME=${quoted_probe} timeout 15s bash -lc $(printf '%q' "$remote_script")"
+          rc=$?
+          set -e
+          echo "guarded_create_probe_ssh_exit=${rc}"
+          echo "::endgroup::"
