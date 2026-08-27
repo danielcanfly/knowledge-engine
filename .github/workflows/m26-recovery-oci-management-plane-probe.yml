@@ -26,54 +26,66 @@ jobs:
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
       ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
     steps:
-      - name: Secret-safe production environment OCI presence matrix
+      - name: Secret-safe production environment management-plane matrix
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY2'
-          import json, os
-          names = [
-              'OCI_CLI_USER','OCI_CLI_TENANCY','OCI_CLI_FINGERPRINT','OCI_CLI_KEY_CONTENT','OCI_CLI_REGION','OCI_COMPARTMENT_OCID',
-              'ORACLE_VM_HOST','ORACLE_VM_USER','ORACLE_VM_DEPLOY_PATH','ORACLE_VM_SSH_PRIVATE_KEY',
-          ]
-          result = {name: bool(os.environ.get(name)) for name in names}
-          classic = all(result[name] for name in ['OCI_CLI_USER','OCI_CLI_TENANCY','OCI_CLI_FINGERPRINT','OCI_CLI_KEY_CONTENT','OCI_CLI_REGION'])
-          result['OCI_CLASSIC_SIGNING_CREDENTIAL_SET_PRESENT'] = classic
-          result['OCI_READ_CREATE_REPLACEMENT_VM_PATH_USABLE_BY_ENV_ONLY'] = classic and bool(os.environ.get('OCI_COMPARTMENT_OCID'))
-          print(json.dumps(result, sort_keys=True, indent=2))
-          PY2
+          present() { local n="$1"; if [ -n "${!n:-}" ]; then printf true; else printf false; fi; }
+          classic=false
+          if [ -n "${OCI_CLI_USER:-}" ] && [ -n "${OCI_CLI_TENANCY:-}" ] && [ -n "${OCI_CLI_FINGERPRINT:-}" ] && [ -n "${OCI_CLI_KEY_CONTENT:-}" ] && [ -n "${OCI_CLI_REGION:-}" ]; then classic=true; fi
+          usable=false
+          if [ "$classic" = true ] && [ -n "${OCI_COMPARTMENT_OCID:-}" ]; then usable=true; fi
+          printf '{
+'
+          for n in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_KEY_CONTENT OCI_CLI_REGION OCI_COMPARTMENT_OCID ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY; do
+            printf '  "%s_present": ' "$n"; present "$n"; printf ',
+'
+          done
+          printf '  "OCI_CLASSIC_SIGNING_CREDENTIAL_SET_PRESENT": %s,
+' "$classic"
+          printf '  "OCI_READ_CREATE_REPLACEMENT_VM_PATH_USABLE_BY_ENV_ONLY": %s
+' "$usable"
+          printf '}
+'
       - name: OCI CLI read-only probe if full signing credentials exist
         shell: bash
         run: |
           set -euo pipefail
+          if [ -z "${OCI_CLI_USER:-}" ] || [ -z "${OCI_CLI_TENANCY:-}" ] || [ -z "${OCI_CLI_FINGERPRINT:-}" ] || [ -z "${OCI_CLI_KEY_CONTENT:-}" ] || [ -z "${OCI_CLI_REGION:-}" ]; then
+            echo OCI_CLI_READONLY_PROBE_SKIPPED_NO_FULL_SIGNING_CREDENTIAL_SET
+            exit 0
+          fi
+          python3 -m pip install --quiet oci-cli
+          oci --version
+          install -m 700 -d "$HOME/.oci"
+          printf '%s
+' "$OCI_CLI_KEY_CONTENT" > "$HOME/.oci/oci_api_key.pem"
+          chmod 600 "$HOME/.oci/oci_api_key.pem"
+          {
+            echo '[DEFAULT]'
+            echo 'user=<redacted-placeholder>'
+          } >/dev/null
           python3 - <<'PY2'
-          import os, pathlib, subprocess, sys, json
-          classic = all(os.environ.get(name) for name in ['OCI_CLI_USER','OCI_CLI_TENANCY','OCI_CLI_FINGERPRINT','OCI_CLI_KEY_CONTENT','OCI_CLI_REGION'])
-          if not classic:
-              print('OCI_CLI_READONLY_PROBE_SKIPPED_NO_FULL_SIGNING_CREDENTIAL_SET')
-              sys.exit(0)
-          home = pathlib.Path.home()
-          oci_dir = home / '.oci'
-          oci_dir.mkdir(mode=0o700, exist_ok=True)
-          key_path = oci_dir / 'oci_api_key.pem'
-          key_path.write_text(os.environ['OCI_CLI_KEY_CONTENT'])
-          key_path.chmod(0o600)
-          config_path = oci_dir / 'config'
+          import os, pathlib
+          key_path = pathlib.Path.home() / '.oci' / 'oci_api_key.pem'
+          config_path = pathlib.Path.home() / '.oci' / 'config'
           config_path.write_text('
 '.join([
               '[DEFAULT]',
-              f'user={os.environ["OCI_CLI_USER"]}',
-              f'fingerprint={os.environ["OCI_CLI_FINGERPRINT"]}',
-              f'tenancy={os.environ["OCI_CLI_TENANCY"]}',
-              f'region={os.environ["OCI_CLI_REGION"]}',
-              f'key_file={key_path}',
+              'user=' + os.environ['OCI_CLI_USER'],
+              'fingerprint=' + os.environ['OCI_CLI_FINGERPRINT'],
+              'tenancy=' + os.environ['OCI_CLI_TENANCY'],
+              'region=' + os.environ['OCI_CLI_REGION'],
+              'key_file=' + str(key_path),
               '',
           ]))
           config_path.chmod(0o600)
-          subprocess.run([sys.executable, '-m', 'pip', 'install', '--quiet', 'oci-cli'], check=True)
-          subprocess.run(['oci', '--version'], check=False)
-          res = subprocess.run(['oci', 'iam', 'region-subscription', 'list', '--output', 'json'], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-          print(json.dumps({'oci_region_subscription_read_exit_code': res.returncode, 'stdout_nonempty': bool(res.stdout.strip()), 'stderr_nonempty': bool(res.stderr.strip())}, sort_keys=True))
-          if res.returncode != 0:
-              sys.exit(0)
           PY2
+          set +e
+          oci iam region-subscription list --output json >/tmp/oci-regions.json 2>/tmp/oci-regions.err
+          code=$?
+          set -e
+          if [ -s /tmp/oci-regions.json ]; then out=true; else out=false; fi
+          if [ -s /tmp/oci-regions.err ]; then err=true; else err=false; fi
+          printf '{"oci_region_subscription_read_exit_code":%s,"stdout_nonempty":%s,"stderr_nonempty":%s}
+' "$code" "$out" "$err"
