@@ -127,12 +127,34 @@ jobs:
             echo "M26_E5_R2_ORACLE_SSH_KEYSCAN_NONFATAL_RC=$keyscan_rc" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
             SSH_STRICT_MODE=(-o StrictHostKeyChecking=accept-new)
           fi
+          echo "M26_E5_R2_ORACLE_UPLOAD_TARBALL_BEGIN" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
+          rm -rf /tmp/m26-e5-r2-oracle-upload
+          install -m 700 -d /tmp/m26-e5-r2-oracle-upload
+          cp scripts/m26_e5_repair2_oracle_isolated_runtime.py /tmp/m26-e5-r2-oracle-upload/m26_e5_repair2_oracle_isolated_runtime.py
+          cp src/knowledge_engine/storage.py /tmp/m26-e5-r2-oracle-upload/storage.py
+          cp /tmp/m26-e5-r2-binding.json /tmp/m26-e5-r2-oracle-upload/m26-e5-r2-binding.json
+          tar -C /tmp/m26-e5-r2-oracle-upload -czf /tmp/m26-e5-r2-oracle-upload.tgz .
+          echo "M26_E5_R2_ORACLE_UPLOAD_TARBALL_SHA256=$(sha256sum /tmp/m26-e5-r2-oracle-upload.tgz | awk '{print $1}')" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
           echo "M26_E5_R2_ORACLE_SCP_BEGIN" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
-          timeout 300s scp -i ~/.ssh/key -o BatchMode=yes "${SSH_STRICT_MODE[@]}" -o ConnectTimeout=60 scripts/m26_e5_repair2_oracle_isolated_runtime.py src/knowledge_engine/storage.py /tmp/m26-e5-r2-binding.json "$ORACLE_VM_USER@$ORACLE_VM_HOST:/tmp/"
+          scp_rc=255
+          set +e
+          for attempt in 1 2 3; do
+            echo "M26_E5_R2_ORACLE_SCP_ATTEMPT_$attempt" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
+            timeout 240s scp -O -i ~/.ssh/key -o BatchMode=yes "${SSH_STRICT_MODE[@]}" -o ConnectTimeout=60 /tmp/m26-e5-r2-oracle-upload.tgz "$ORACLE_VM_USER@$ORACLE_VM_HOST:/tmp/m26-e5-r2-oracle-upload.tgz"
+            scp_rc=$?
+            if [ "$scp_rc" -eq 0 ]; then
+              echo "M26_E5_R2_ORACLE_SCP_ATTEMPT_${attempt}_PASS" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
+              break
+            fi
+            echo "M26_E5_R2_ORACLE_SCP_ATTEMPT_${attempt}_RC=$scp_rc" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
+            sleep $((attempt * 15))
+          done
+          set -e
+          test "$scp_rc" -eq 0
           echo "M26_E5_R2_ORACLE_SCP_PASS" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
           echo "M26_E5_R2_ORACLE_REMOTE_BEGIN" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
           TOKEN_B64="$(printf '%s' "$M26_QUERY_BACKEND_TOKEN" | base64 -w0)"
-          REMOTE_CMD="M26_QUERY_BACKEND_TOKEN=\$(printf '%s' '$TOKEN_B64' | base64 -d) python3 /tmp/m26_e5_repair2_oracle_isolated_runtime.py --binding-json /tmp/m26-e5-r2-binding.json --storage-py /tmp/storage.py --host-port $HOST_PORT --candidate-container $CANDIDATE"
+          REMOTE_CMD="rm -rf /tmp/m26-e5-r2-oracle-upload && mkdir -p /tmp/m26-e5-r2-oracle-upload && echo M26_E5_R2_ORACLE_REMOTE_UNPACK_BEGIN && tar -xzf /tmp/m26-e5-r2-oracle-upload.tgz -C /tmp/m26-e5-r2-oracle-upload && cp /tmp/m26-e5-r2-oracle-upload/m26_e5_repair2_oracle_isolated_runtime.py /tmp/m26_e5_repair2_oracle_isolated_runtime.py && cp /tmp/m26-e5-r2-oracle-upload/storage.py /tmp/storage.py && cp /tmp/m26-e5-r2-oracle-upload/m26-e5-r2-binding.json /tmp/m26-e5-r2-binding.json && echo M26_E5_R2_ORACLE_REMOTE_UNPACK_PASS && M26_QUERY_BACKEND_TOKEN=\$(printf '%s' '$TOKEN_B64' | base64 -d) python3 /tmp/m26_e5_repair2_oracle_isolated_runtime.py --binding-json /tmp/m26-e5-r2-binding.json --storage-py /tmp/storage.py --host-port $HOST_PORT --candidate-container $CANDIDATE"
           remote_rc=255
           set +e
           for attempt in 1 2 3; do
