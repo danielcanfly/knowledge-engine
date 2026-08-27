@@ -158,9 +158,9 @@ def main() -> int:
     run(["docker", "rm", "-f", a.candidate_container], check=False, timeout=60)
     port_free(a.host_port)
 
-    trace("M26_E5_R2_TRACE_STORAGE_TARGET_DISCOVERY_BEGIN")
+    trace("M26_E5_R2_TRACE_STORAGE_TARGET_DISCOVERY_BASE_EXEC_BEGIN")
     storage_target = out([
-        "docker", "run", "--rm", "--entrypoint", "python", image,
+        "docker", "exec", a.base_container, "python",
         "-c", "import inspect, knowledge_engine.storage as s; print(inspect.getsourcefile(s))",
     ], timeout=90)
 
