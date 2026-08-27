@@ -30,6 +30,7 @@ env:
   ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
   ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
   KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN || secrets.KNOWLEDGE_SOURCE_TOKEN || secrets.SOURCE_REPO_READ_TOKEN }}
+  M26_QUERY_BACKEND_TOKEN: ${{ secrets.M26_QUERY_BACKEND_TOKEN || secrets.M26_E5_ORACLE_BACKEND_TOKEN || secrets.QUERY_BACKEND_TOKEN }}
 
 jobs:
   repair2:
@@ -91,13 +92,14 @@ jobs:
       - name: Start repaired Oracle and prove no-shim load
         run: |
           set -euo pipefail
+          test -n "$M26_QUERY_BACKEND_TOKEN"
           HOST_PORT=18188
           CANDIDATE=m26-e5-r2-oracle-isolated-m26blog-59012fe-520aed
           install -m 700 -d ~/.ssh
           printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/key && chmod 600 ~/.ssh/key
           ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           scp -i ~/.ssh/key -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/m26_e5_repair2_oracle_isolated_runtime.py src/knowledge_engine/storage.py /tmp/m26-e5-r2-binding.json "$ORACLE_VM_USER@$ORACLE_VM_HOST:/tmp/"
-          ssh -i ~/.ssh/key -o BatchMode=yes -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" "python3 /tmp/m26_e5_repair2_oracle_isolated_runtime.py --binding-json /tmp/m26-e5-r2-binding.json --storage-py /tmp/storage.py --host-port $HOST_PORT --candidate-container $CANDIDATE" | tee /tmp/m26-e5-r2-return/oracle_receipt.log
+          ssh -i ~/.ssh/key -o BatchMode=yes -o StrictHostKeyChecking=yes "$ORACLE_VM_USER@$ORACLE_VM_HOST" "M26_QUERY_BACKEND_TOKEN=\"$M26_QUERY_BACKEND_TOKEN\" python3 /tmp/m26_e5_repair2_oracle_isolated_runtime.py --binding-json /tmp/m26-e5-r2-binding.json --storage-py /tmp/storage.py --host-port $HOST_PORT --candidate-container $CANDIDATE" | tee /tmp/m26-e5-r2-return/oracle_receipt.log
           grep -q M26_E5_R2_ORACLE_ISOLATED_RUNTIME_PASS /tmp/m26-e5-r2-return/oracle_receipt.log
       - name: Completion hard gate and package
         run: |

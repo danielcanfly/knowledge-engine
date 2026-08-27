@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import socket
 import subprocess
@@ -110,8 +111,12 @@ def main() -> int:
     names = out(["docker", "ps", "-a", "--format", "{{.Names}}"]).splitlines()
     if a.base_container not in names: raise SystemExit("M26_E5_R2_BASE_CONTAINER_MISSING")
     image = json.loads(out(["docker", "inspect", a.base_container]))[0]["Image"]
-    env = env_map(env_rows(a.base_container)); token = env.get("M26_QUERY_BACKEND_TOKEN")
+    env = env_map(env_rows(a.base_container))
+    inherited_token = env.get("M26_QUERY_BACKEND_TOKEN")
+    injected_token = os.environ.get("M26_QUERY_BACKEND_TOKEN")
+    token = injected_token or inherited_token
     if not token: raise SystemExit("M26_E5_R2_AUTH_MISSING")
+    env["M26_QUERY_BACKEND_TOKEN"] = token
     env["M26_QUERY_BUILD_SHA"] = "m26-e5-r2-isolated-" + REL
     env["M26_PA7_DENSE_COLLECTION"] = QDRANT
     env["M26_E5_REPAIR2_ISOLATED_RUNTIME"] = "true"
