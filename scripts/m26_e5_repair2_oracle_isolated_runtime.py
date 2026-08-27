@@ -164,11 +164,12 @@ def main() -> int:
 
     trace("M26_E5_R2_TRACE_DOCKER_PS_SKIPPED_DIRECT_INSPECT")
     trace("M26_E5_R2_TRACE_DOCKER_INSPECT_BASE_BEGIN")
-    inspect_base = run(["docker", "inspect", a.base_container], check=False, timeout=60)
+    inspect_base = run(["docker", "inspect", a.base_container], check=False, timeout=300)
     if inspect_base.returncode != 0:
         detail = (inspect_base.stdout + inspect_base.stderr)[-1200:]
         raise SystemExit(f"M26_E5_R2_BASE_CONTAINER_MISSING_OR_DOCKER_UNHEALTHY:{a.base_container}:{detail}")
     base_meta = json.loads(inspect_base.stdout)[0]
+    trace("M26_E5_R2_TRACE_DOCKER_INSPECT_BASE_PASS")
     image = base_meta["Image"]
     env = env_map([x for x in (base_meta.get("Config", {}).get("Env") or []) if "=" in x])
 
@@ -191,7 +192,7 @@ def main() -> int:
     write_env(envfile, env)
 
     trace("M26_E5_R2_TRACE_DOCKER_RM_CANDIDATE_BEGIN")
-    run(["docker", "rm", "-f", a.candidate_container], check=False, timeout=60)
+    run(["docker", "rm", "-f", a.candidate_container], check=False, timeout=180)
     port_free(a.host_port)
 
     trace("M26_E5_R2_TRACE_STORAGE_TARGET_DISCOVERY_SHELL_BEGIN")
