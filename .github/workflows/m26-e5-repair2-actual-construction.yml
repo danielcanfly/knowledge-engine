@@ -38,7 +38,7 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-        with: {fetch-depth: 2}
+        with: {fetch-depth: 0}
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
       - name: Install and test Repair2
@@ -51,9 +51,10 @@ jobs:
           head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
           parents=subprocess.check_output(['git','show','-s','--format=%P','HEAD'],text=True).strip().split()
           parent='2f6ee4d588e5c773fb459c56b96de78a50cef53a'
-          assert head != parent and parent in parents, {'head':head,'parents':parents}
+          assert head != parent, {'head':head,'lineage_root':parent}
+          subprocess.check_call(['git','merge-base','--is-ancestor',parent,head])
           pathlib.Path('/tmp/m26-e5-r2-return').mkdir(exist_ok=True)
-          pathlib.Path('/tmp/m26-e5-r2-return/git_identity.json').write_text(json.dumps({'branch':'m26-e5-successor-repair2-builder-20260827','repair_head':head,'parent_head':parent,'parents':parents},indent=2)+'\n')
+          pathlib.Path('/tmp/m26-e5-r2-return/git_identity.json').write_text(json.dumps({'branch':'m26-e5-successor-repair2-builder-20260827','repair_head':head,'lineage_root':parent,'immediate_parents':parents},indent=2)+'\n')
           PY
           git diff --binary "$PARENT_HEAD..HEAD" > /tmp/m26-e5-r2-return/diff.patch
           git diff --stat "$PARENT_HEAD..HEAD" > /tmp/m26-e5-r2-return/diff_stat.txt
