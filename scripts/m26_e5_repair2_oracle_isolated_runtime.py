@@ -41,13 +41,14 @@ def sha(path: pathlib.Path) -> str:
 
 
 def env_rows(container: str) -> list[str]:
-    return [x for x in out(["docker", "inspect", container, "--format", "{{range .Config.Env}}{{println .}}{{end}}" ], timeout=60).splitlines() if "=" in x]
+    return [x for x in out(["docker", "inspect", container, "--format", "{{range .Config.Env}}{{println .}}{{end}}"], timeout=60).splitlines() if "=" in x]
 
 
 def env_map(rows: list[str]) -> dict[str, str]:
     d: dict[str, str] = {}
     for row in rows:
-        k, v = row.split("=", 1); d[k] = v
+        k, v = row.split("=", 1)
+        d[k] = v
     return d
 
 
@@ -73,7 +74,10 @@ def py(container: str, code: str) -> dict[str, Any]:
 def wait_health(port: int, token: str) -> dict[str, Any]:
     for _ in range(40):
         time.sleep(2)
-        req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/answers/health", headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/v1/answers/health",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        )
         try:
             with urllib.request.urlopen(req, timeout=10) as r:
                 return {"http_status": r.status, "body_sha256": hashlib.sha256(r.read()).hexdigest()}
@@ -113,40 +117,66 @@ if pab is not None:
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--binding-json", required=True); p.add_argument("--storage-py", required=True)
-    p.add_argument("--host-port", type=int, default=18188); p.add_argument("--candidate-container", default=CAND)
-    p.add_argument("--base-container", default=BASE); p.add_argument("--work-dir", default="/tmp/m26-e5-r2-oracle")
-    a = p.parse_args(); binding = json.loads(pathlib.Path(a.binding_json).read_text())
-    trace("M26_E5_R2_TRACE_DOCKER_PS_BEGIN")
-    names = out(["docker", "ps", "-a", "--format", "{{.Names}}"], timeout=30).splitlines()
-    if a.base_container not in names: raise SystemExit("M26_E5_R2_BASE_CONTAINER_MISSING")
+    p.add_argument("--binding-json", required=True)
+    p.add_argument("--storage-py", required=True)
+    p.add_argument("--host-port", type=int, default=18188)
+    p.add_argument("--candidate-container", default=CAND)
+    p.add_argument("--base-container", default=BASE)
+    p.add_argument("--work-dir", default="/tmp/m26-e5-r2-oracle")
+    a = p.parse_args()
+    binding = json.loads(pathlib.Path(a.binding_json).read_text())
+
+    trace("M26_E5_R2_TRACE_DOCKER_PS_SKIPPED_DIRECT_INSPECT")
     trace("M26_E5_R2_TRACE_DOCKER_INSPECT_BASE_BEGIN")
-    image = json.loads(out(["docker", "inspect", a.base_container], timeout=60))[0]["Image"]
-    env = env_map(env_rows(a.base_container))
+    inspect_base = run(["docker", "inspect", a.base_container], check=False, timeout=60)
+    if inspect_base.returncode != 0:
+        detail = (inspect_base.stdout + inspect_base.stderr)[-1200:]
+        raise SystemExit(f"M26_E5_R2_BASE_CONTAINER_MISSING_OR_DOCKER_UNHEALTHY:{a.base_container}:{detail}")
+    base_meta = json.loads(inspect_base.stdout)[0]
+    image = base_meta["Image"]
+    env = env_map([x for x in (base_meta.get("Config", {}).get("Env") or []) if "=" in x])
+
     inherited_token = env.get("M26_QUERY_BACKEND_TOKEN")
     injected_token = os.environ.get("M26_QUERY_BACKEND_TOKEN")
     token = injected_token or inherited_token
-    if not token: raise SystemExit("M26_E5_R2_AUTH_MISSING")
+    if not token:
+        raise SystemExit("M26_E5_R2_AUTH_MISSING")
     env["M26_QUERY_BACKEND_TOKEN"] = token
     env["M26_QUERY_BUILD_SHA"] = "m26-e5-r2-isolated-" + REL
     env["M26_PA7_DENSE_COLLECTION"] = QDRANT
     env["M26_E5_REPAIR2_ISOLATED_RUNTIME"] = "true"
-    work = pathlib.Path(a.work_dir); overlay = work / "sitecustomize"; overlay.mkdir(parents=True, exist_ok=True)
+
+    work = pathlib.Path(a.work_dir)
+    overlay = work / "sitecustomize"
+    overlay.mkdir(parents=True, exist_ok=True)
     (overlay / "sitecustomize.py").write_text(sitecustomize(binding), encoding="utf-8")
     env["PYTHONPATH"] = "/tmp/m26_e5_r2_sitecustomize:" + env.get("PYTHONPATH", "")
-    envfile = work / "candidate.env"; write_env(envfile, env)
+    envfile = work / "candidate.env"
+    write_env(envfile, env)
+
     trace("M26_E5_R2_TRACE_DOCKER_RM_CANDIDATE_BEGIN")
-    run(["docker", "rm", "-f", a.candidate_container], check=False, timeout=60); port_free(a.host_port)
+    run(["docker", "rm", "-f", a.candidate_container], check=False, timeout=60)
+    port_free(a.host_port)
+
     trace("M26_E5_R2_TRACE_STORAGE_TARGET_DISCOVERY_BEGIN")
-    storage_target = out(["docker", "run", "--rm", "--entrypoint", "python", image, "-c", "import inspect, knowledge_engine.storage as s; print(inspect.getsourcefile(s))"], timeout=90)
+    storage_target = out([
+        "docker", "run", "--rm", "--entrypoint", "python", image,
+        "-c", "import inspect, knowledge_engine.storage as s; print(inspect.getsourcefile(s))",
+    ], timeout=90)
+
     trace("M26_E5_R2_TRACE_DOCKER_CREATE_CANDIDATE_BEGIN")
-    cid = out(["docker", "create", "--name", a.candidate_container, "--env-file", str(envfile), "-v", f"{overlay}:/tmp/m26_e5_r2_sitecustomize:ro", "-p", f"127.0.0.1:{a.host_port}:8080", image], timeout=60)
+    cid = out([
+        "docker", "create", "--name", a.candidate_container, "--env-file", str(envfile),
+        "-v", f"{overlay}:/tmp/m26_e5_r2_sitecustomize:ro", "-p", f"127.0.0.1:{a.host_port}:8080", image,
+    ], timeout=60)
+
     trace("M26_E5_R2_TRACE_DOCKER_CP_STORAGE_BEGIN")
     run(["docker", "cp", a.storage_py, f"{a.candidate_container}:{storage_target}"], timeout=60)
     trace("M26_E5_R2_TRACE_DOCKER_START_CANDIDATE_BEGIN")
     run(["docker", "start", a.candidate_container], timeout=60)
     trace("M26_E5_R2_TRACE_WAIT_HEALTH_BEGIN")
     health = wait_health(a.host_port, token)
+
     trace("M26_E5_R2_TRACE_NORMAL_LOADER_PROBE_BEGIN")
     probe = py(a.candidate_container, r'''
 import hashlib, inspect, json
@@ -164,10 +194,43 @@ path = inspect.getsourcefile(st) or inspect.getfile(st)
 out = {"status":"M26_E5_R2_NORMAL_LOADER_NO_SHIM_PROBE_PASS" if report.get("status")=="compatible" and all(before.values()) and all(after.values()) else "FAIL", "release_id":bundle.release_id, "storage_path":path, "storage_sha256":hashlib.sha256(open(path,"rb").read()).hexdigest(), "optional_missing_before":before, "optional_missing_after":after, "normal_loader_call":"load_production_answer_bundle()", "store_argument_used":False, "read_through_store_shim_used":False, "exception_normalization_loader_shim_used":False, "compatibility_status":report.get("status"), "mismatch_counts":report.get("mismatch_counts"), "authority":{"r2_writes":0,"qdrant_writes":0,"production_pointer_writes":0,"canonical_route_mutations":0,"provider_answer_requests":0,"semantic_requests":0,"e5_epoch2_consumed":0}}
 print(json.dumps(out, sort_keys=True))
 ''')
-    if probe.get("status") != "M26_E5_R2_NORMAL_LOADER_NO_SHIM_PROBE_PASS": raise SystemExit(json.dumps(probe, sort_keys=True))
-    receipt = {"schema_version":"m26-e5-repair2-oracle-receipt/v1", "status":"M26_E5_R2_ORACLE_ISOLATED_RUNTIME_PASS", "candidate_container":a.candidate_container, "candidate_container_id":cid, "host":"127.0.0.1", "host_port":a.host_port, "base_container":a.base_container, "base_image_id":image, "storage_overlay_sha256":sha(pathlib.Path(a.storage_py)), "health":health, "binding":{"release_id":REL,"qdrant_collection":QDRANT,"semantic_point_count":POINTS,"node_count":NODES,"edge_count":EDGES, **{k: binding[k] for k in ("manifest_sha256","graph_v2_sha256","source_head_sha","source_commit_sha","admission_sha256")}}, "normal_loader_no_shim_probe":probe, "authority":{"r2_writes":0,"qdrant_writes":0,"production_pointer_writes":0,"canonical_route_mutations":0,"provider_answer_requests":0,"semantic_requests":0,"e5_epoch2_consumed":0}}
+    if probe.get("status") != "M26_E5_R2_NORMAL_LOADER_NO_SHIM_PROBE_PASS":
+        raise SystemExit(json.dumps(probe, sort_keys=True))
+
+    receipt = {
+        "schema_version": "m26-e5-repair2-oracle-receipt/v1",
+        "status": "M26_E5_R2_ORACLE_ISOLATED_RUNTIME_PASS",
+        "candidate_container": a.candidate_container,
+        "candidate_container_id": cid,
+        "host": "127.0.0.1",
+        "host_port": a.host_port,
+        "base_container": a.base_container,
+        "base_image_id": image,
+        "storage_overlay_sha256": sha(pathlib.Path(a.storage_py)),
+        "health": health,
+        "binding": {
+            "release_id": REL,
+            "qdrant_collection": QDRANT,
+            "semantic_point_count": POINTS,
+            "node_count": NODES,
+            "edge_count": EDGES,
+            **{k: binding[k] for k in ("manifest_sha256", "graph_v2_sha256", "source_head_sha", "source_commit_sha", "admission_sha256")},
+        },
+        "normal_loader_no_shim_probe": probe,
+        "authority": {
+            "r2_writes": 0,
+            "qdrant_writes": 0,
+            "production_pointer_writes": 0,
+            "canonical_route_mutations": 0,
+            "provider_answer_requests": 0,
+            "semantic_requests": 0,
+            "e5_epoch2_consumed": 0,
+        },
+    }
     print("M26_E5_R2_ORACLE_ISOLATED_RUNTIME_PASS")
     print(json.dumps(receipt, indent=2, sort_keys=True))
     return 0
+
+
 if __name__ == "__main__":
     raise SystemExit(main())
