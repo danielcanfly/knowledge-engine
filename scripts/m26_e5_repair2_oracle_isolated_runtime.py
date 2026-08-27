@@ -86,7 +86,7 @@ for p in \
 done
 find /app /workspace /usr/local/lib /opt/venv -path '*/knowledge_engine/storage.py' -type f -print -quit 2>/dev/null || true
 '''
-    cp = run(["docker", "exec", container, "sh", "-lc", script], check=False, timeout=90)
+    cp = run(["docker", "exec", container, "sh", "-lc", script], check=False, timeout=300)
     if cp.returncode != 0:
         detail = (cp.stdout + cp.stderr)[-3000:]
         raise SystemExit(f"M26_E5_R2_STORAGE_TARGET_DISCOVERY_SHELL_FAILED:{detail}")
