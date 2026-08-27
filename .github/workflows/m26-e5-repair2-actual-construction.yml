@@ -128,7 +128,8 @@ jobs:
             SSH_STRICT_MODE=(-o StrictHostKeyChecking=accept-new)
           fi
           echo "M26_E5_R2_ORACLE_SCP_BEGIN" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
-          timeout 90s scp -i ~/.ssh/key -o BatchMode=yes "${SSH_STRICT_MODE[@]}" -o ConnectTimeout=30 scripts/m26_e5_repair2_oracle_isolated_runtime.py src/knowledge_engine/storage.py /tmp/m26-e5-r2-binding.json "$ORACLE_VM_USER@$ORACLE_VM_HOST:/tmp/"
+          timeout 300s scp -i ~/.ssh/key -o BatchMode=yes "${SSH_STRICT_MODE[@]}" -o ConnectTimeout=30 scripts/m26_e5_repair2_oracle_isolated_runtime.py src/knowledge_engine/storage.py /tmp/m26-e5-r2-binding.json "$ORACLE_VM_USER@$ORACLE_VM_HOST:/tmp/"
+          echo "M26_E5_R2_ORACLE_SCP_PASS" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
           echo "M26_E5_R2_ORACLE_REMOTE_BEGIN" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
           TOKEN_B64="$(printf '%s' "$M26_QUERY_BACKEND_TOKEN" | base64 -w0)"
           timeout 900s ssh -i ~/.ssh/key -o BatchMode=yes "${SSH_STRICT_MODE[@]}" -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "$ORACLE_VM_USER@$ORACLE_VM_HOST" "M26_QUERY_BACKEND_TOKEN=\$(printf '%s' '$TOKEN_B64' | base64 -d) python3 /tmp/m26_e5_repair2_oracle_isolated_runtime.py --binding-json /tmp/m26-e5-r2-binding.json --storage-py /tmp/storage.py --host-port $HOST_PORT --candidate-container $CANDIDATE" | tee /tmp/m26-e5-r2-return/oracle_receipt.log
