@@ -1,0 +1,111 @@
+name: M26 Oracle Production Health Evidence Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SEMANTIC_REQUESTS_DURING_DIAGNOSIS: "0"
+  E5_EPOCH2_CONSUMED: "0"
+  PRODUCTION_POINTER_WRITES: "0"
+  CANONICAL_ROUTE_MUTATIONS: "0"
+  PRODUCTION_DEPLOYS: "0"
+  DOCKER_DAEMON_RESTARTS: "0"
+  VM_REBOOTS: "0"
+  ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+  ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+  ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+
+jobs:
+  evidence-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Public route smoke, read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/m26-oracle-health-evidence
+          {
+            echo "M26_PUBLIC_TEST_PAGE_SMOKE_BEGIN=$(date -u +%FT%TZ)"
+            curl --connect-timeout 5 --max-time 20 -sS -L -o /dev/null \
+              -w 'url=%{url_effective}\nhttp_code=%{http_code}\ncontent_type=%{content_type}\ntime_starttransfer=%{time_starttransfer}\ntime_total=%{time_total}\nsize_download=%{size_download}\nredirects=%{num_redirects}\n' \
+              https://danielcanfly.com/test_page/ || true
+            echo "M26_CANONICAL_ANSWERS_HEALTH_SMOKE_BEGIN=$(date -u +%FT%TZ)"
+            curl --connect-timeout 5 --max-time 20 -sS -L -D - -o /dev/null \
+              -w '\nurl=%{url_effective}\nhttp_code=%{http_code}\ncontent_type=%{content_type}\ntime_starttransfer=%{time_starttransfer}\ntime_total=%{time_total}\nsize_download=%{size_download}\nredirects=%{num_redirects}\n' \
+              https://api.danielcanfly.com/v1/answers/health || true
+          } | tee /tmp/m26-oracle-health-evidence/public_smoke.log
+
+      - name: Oracle bounded host-health matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/key
+          chmod 600 ~/.ssh/key
+          ssh-keyscan -T 8 -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/tmp/m26-oracle-health-evidence/ssh_keyscan.err || true
+          remote='
+            set -u
+            run() {
+              label="$1"; shift
+              echo "### ${label}"
+              timeout 20s "$@" 2>&1 || echo "RC=$?"
+            }
+            echo "M26_ORACLE_HOST_HEALTH_BEGIN=$(date -u +%FT%TZ)"
+            run uname uname -a
+            run uptime uptime
+            run memory free -h
+            run swap swapon --show
+            run disk df -hT
+            run inodes df -ih
+            run pressure sh -lc "cat /proc/pressure/cpu /proc/pressure/memory /proc/pressure/io"
+            run io sh -lc "iostat -xz 1 2 || true"
+            run docker_version docker version
+            run docker_info docker info
+            run docker_ps docker ps --no-trunc --format "{{.ID}} {{.Names}} {{.Image}} {{.Status}} {{.Ports}}"
+            run production_identity docker inspect \
+              --format "id={{.Id}}\nname={{.Name}}\nimage={{.Image}}\nstatus={{.State.Status}}\nstarted_at={{.State.StartedAt}}\nrestart_count={{.RestartCount}}\nports={{json .NetworkSettings.Ports}}\nlabels={{json .Config.Labels}}" \
+              m26-public-api-production-repair2-ownerhash-r2-auth-520aed
+            run candidate_list sh -lc "docker ps -a --no-trunc --filter name=m26-e5- --format \"{{.ID}} {{.Names}} {{.Image}} {{.Status}} {{.Ports}}\""
+            run service_status systemctl status docker containerd --no-pager
+            echo "### docker_create_latency"
+            prod=m26-public-api-production-repair2-ownerhash-r2-auth-520aed
+            base_image=$(timeout 20s docker inspect -f "{{.Image}}" "$prod" 2>/tmp/m26-e5-health-audit-image.err || true)
+            t0=$(date +%s)
+            if [ -n "$base_image" ]; then
+              timeout 30s docker create --name m26-e5-health-audit-create-probe-$$ "$base_image" true >/tmp/m26-e5-health-audit-create-probe.out 2>&1
+            else
+              echo "base_image_unavailable" >/tmp/m26-e5-health-audit-create-probe.out
+              cat /tmp/m26-e5-health-audit-image.err >>/tmp/m26-e5-health-audit-create-probe.out
+              false
+            fi
+            rc=$?
+            t1=$(date +%s)
+            cat /tmp/m26-e5-health-audit-create-probe.out
+            echo "docker_create_probe_rc=$rc elapsed_seconds=$((t1-t0))"
+            timeout 20s docker rm m26-e5-health-audit-create-probe-$$ >/dev/null 2>&1 || true
+            echo "M26_ORACLE_HOST_HEALTH_END=$(date -u +%FT%TZ)"
+          '
+          set +e
+          timeout 150s ssh -i ~/.ssh/key -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 -o ConnectionAttempts=1 -o ServerAliveInterval=5 -o ServerAliveCountMax=2 \
+            "$ORACLE_VM_USER@$ORACLE_VM_HOST" "$remote" \
+            | tee /tmp/m26-oracle-health-evidence/oracle_host_health_matrix.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "ssh_matrix_rc=$rc" | tee /tmp/m26-oracle-health-evidence/oracle_host_health_matrix.status
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m26-oracle-production-health-evidence-audit
+          path: /tmp/m26-oracle-health-evidence
+          if-no-files-found: warn
+          retention-days: 14
