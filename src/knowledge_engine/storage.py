@@ -27,6 +27,34 @@ def _etag_for_if_match(etag: str) -> str:
     return value
 
 
+def _client_error_code(exc: ClientError) -> str:
+    return str((exc.response.get("Error") or {}).get("Code") or "")
+
+
+def _client_error_status(exc: ClientError) -> int | None:
+    status = (exc.response.get("ResponseMetadata") or {}).get("HTTPStatusCode")
+    return int(status) if isinstance(status, int) else None
+
+
+def _is_missing_object_error(exc: ClientError) -> bool:
+    """Return True only for R2/S3 missing-object responses.
+
+    R2 mirrors S3's not-found surfaces inconsistently across calls: a missing
+    GetObject can arrive as Error.Code=NoSuchKey, Code=404, Code=NotFound, or
+    only HTTPStatusCode=404. The local FileObjectStore already exposes missing
+    keys as FileNotFoundError, and production-answer optional pointer/promotion
+    loading depends on that read contract. Non-missing ClientError values such as
+    AccessDenied, throttling, network/authentication failures, and 5xx responses
+    intentionally remain fail-closed by propagating unchanged.
+    """
+
+    return _client_error_status(exc) == 404 or _client_error_code(exc) in {
+        "404",
+        "NoSuchKey",
+        "NotFound",
+    }
+
+
 @dataclass(frozen=True)
 class ObjectMetadata:
     key: str
@@ -165,9 +193,7 @@ class R2ObjectStore:
         try:
             response = self.client.head_object(Bucket=self.bucket, Key=key)
         except ClientError as exc:
-            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
-            code = exc.response.get("Error", {}).get("Code")
-            if status == 404 or code in {"404", "NoSuchKey", "NotFound"}:
+            if _is_missing_object_error(exc):
                 return None
             raise
         metadata = response.get("Metadata", {})
@@ -219,7 +245,12 @@ class R2ObjectStore:
         return metadata
 
     def get(self, key: str) -> bytes:
-        response = self.client.get_object(Bucket=self.bucket, Key=key)
+        try:
+            response = self.client.get_object(Bucket=self.bucket, Key=key)
+        except ClientError as exc:
+            if _is_missing_object_error(exc):
+                raise FileNotFoundError(key) from exc
+            raise
         return response["Body"].read()
 
     def delete(self, key: str) -> None:
