@@ -93,12 +93,31 @@ jobs:
       - name: Start repaired Oracle and prove no-shim load
         run: |
           set -euo pipefail
-          HOST_PORT=18188
-          CANDIDATE=m26-e5-r2-oracle-isolated-m26blog-59012fe-520aed
+          LEGACY_CANDIDATE=m26-e5-r2-oracle-isolated-m26blog-59012fe-520aed
+          HOST_PORT_INPUT="${{ github.event.inputs.host_port || '' }}"
+          CANDIDATE_INPUT="${{ github.event.inputs.candidate_container || '' }}"
+          if [ -n "$HOST_PORT_INPUT" ] && [ "$HOST_PORT_INPUT" != "18188" ]; then
+            HOST_PORT="$HOST_PORT_INPUT"
+          else
+            HOST_PORT=$((18188 + GITHUB_RUN_NUMBER))
+          fi
+          if [ -n "$CANDIDATE_INPUT" ] && [ "$CANDIDATE_INPUT" != "$LEGACY_CANDIDATE" ]; then
+            CANDIDATE="$CANDIDATE_INPUT"
+          else
+            CANDIDATE="${LEGACY_CANDIDATE}-run-${GITHUB_RUN_ID}"
+          fi
+          {
+            echo "ORACLE_CANDIDATE=$CANDIDATE"
+            echo "ORACLE_HOST_PORT=$HOST_PORT"
+            echo "ORACLE_LEGACY_CANDIDATE=$LEGACY_CANDIDATE"
+            echo "ORACLE_RUN_SCOPED_CANDIDATE=true"
+          } > /tmp/m26-e5-r2-return/oracle_runtime_identity.env
           install -m 700 -d ~/.ssh
           printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/key && chmod 600 ~/.ssh/key
           test -n "$M26_QUERY_BACKEND_TOKEN"
           echo "M26_E5_R2_ORACLE_STEP_BEGIN=$(date -u +%FT%TZ)" | tee /tmp/m26-e5-r2-return/oracle_step_status.log
+          echo "M26_E5_R2_ORACLE_CANDIDATE=$CANDIDATE" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
+          echo "M26_E5_R2_ORACLE_HOST_PORT=$HOST_PORT" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
           echo "M26_E5_R2_ORACLE_SSH_KEYSCAN_BEGIN" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
           timeout 30s ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           echo "M26_E5_R2_ORACLE_SCP_BEGIN" | tee -a /tmp/m26-e5-r2-return/oracle_step_status.log
@@ -116,7 +135,11 @@ jobs:
           d=pathlib.Path('/tmp/m26-e5-r2-return'); head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
           oracle=(d/'oracle_receipt.log').read_text()
           assert 'read_through_store_shim_used' in oracle and 'false' in oracle.lower()
-          gate={'terminal':'M26_E5_SUCCESSOR_REPAIR2_BUILDER_COMPLETE_RETURN_FOR_FRESH_AUDIT','repair_head':head,'parent_head':os.environ['PARENT_HEAD'],'epoch1_consumed':1,'e5_epoch2_consumed':0,'semantic_requests':0,'provider_answer_requests':0,'r2_writes':0,'qdrant_writes':0,'pointer_writes':0,'canonical_writes':0,'normal_loader_no_shim_proof':True,'oracle_candidate':'m26-e5-r2-oracle-isolated-m26blog-59012fe-520aed','oracle_host_port':18188}
+          idx=oracle.find('{')
+          assert idx >= 0, 'oracle receipt JSON missing'
+          receipt=json.loads(oracle[idx:])
+          assert receipt.get('status') == 'M26_E5_R2_ORACLE_ISOLATED_RUNTIME_PASS', receipt.get('status')
+          gate={'terminal':'M26_E5_SUCCESSOR_REPAIR2_BUILDER_COMPLETE_RETURN_FOR_FRESH_AUDIT','repair_head':head,'parent_head':os.environ['PARENT_HEAD'],'epoch1_consumed':1,'e5_epoch2_consumed':0,'semantic_requests':0,'provider_answer_requests':0,'r2_writes':0,'qdrant_writes':0,'pointer_writes':0,'canonical_writes':0,'normal_loader_no_shim_proof':True,'oracle_candidate':receipt['candidate_container'],'oracle_host_port':receipt['host_port']}
           (d/'07_COMPLETION_HARD_GATE.json').write_text(json.dumps(gate,indent=2,sort_keys=True)+'\n')
           (d/'07_COMPLETION_HARD_GATE.md').write_text('\n'.join(f'{k}={v}' for k,v in gate.items())+'\n')
           (d/'terminal.txt').write_text(gate['terminal']+'\n')
