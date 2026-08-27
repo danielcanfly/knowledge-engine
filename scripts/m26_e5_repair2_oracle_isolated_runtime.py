@@ -20,12 +20,20 @@ QDRANT = "m26_blog_m26blog_ec79a3cad1d8_59012fe3818c_4260fcb53440"
 POINTS, NODES, EDGES = 4424, 4457, 8995
 
 
-def run(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(args, text=True, capture_output=True, check=check)
+def trace(message: str) -> None:
+    print(message, flush=True)
 
 
-def out(args: list[str]) -> str:
-    return run(args).stdout.strip()
+def run(args: list[str], *, check: bool = True, timeout: int = 120) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(args, text=True, capture_output=True, check=check, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        head = " ".join(args[:4])
+        raise SystemExit(f"M26_E5_R2_SUBPROCESS_TIMEOUT:{head}:{timeout}s") from exc
+
+
+def out(args: list[str], *, timeout: int = 120) -> str:
+    return run(args, timeout=timeout).stdout.strip()
 
 
 def sha(path: pathlib.Path) -> str:
@@ -33,7 +41,7 @@ def sha(path: pathlib.Path) -> str:
 
 
 def env_rows(container: str) -> list[str]:
-    return [x for x in out(["docker", "inspect", container, "--format", "{{range .Config.Env}}{{println .}}{{end}}" ]).splitlines() if "=" in x]
+    return [x for x in out(["docker", "inspect", container, "--format", "{{range .Config.Env}}{{println .}}{{end}}" ], timeout=60).splitlines() if "=" in x]
 
 
 def env_map(rows: list[str]) -> dict[str, str]:
@@ -55,7 +63,8 @@ def port_free(port: int) -> None:
 
 
 def py(container: str, code: str) -> dict[str, Any]:
-    cp = run(["docker", "exec", container, "python", "-c", code], check=False)
+    trace("M26_E5_R2_TRACE_DOCKER_EXEC_PROBE")
+    cp = run(["docker", "exec", container, "python", "-c", code], check=False, timeout=180)
     if cp.returncode != 0:
         raise SystemExit((cp.stdout + cp.stderr)[-3000:])
     return json.loads(cp.stdout.strip().splitlines()[-1])
@@ -108,9 +117,11 @@ def main() -> int:
     p.add_argument("--host-port", type=int, default=18188); p.add_argument("--candidate-container", default=CAND)
     p.add_argument("--base-container", default=BASE); p.add_argument("--work-dir", default="/tmp/m26-e5-r2-oracle")
     a = p.parse_args(); binding = json.loads(pathlib.Path(a.binding_json).read_text())
-    names = out(["docker", "ps", "-a", "--format", "{{.Names}}"]).splitlines()
+    trace("M26_E5_R2_TRACE_DOCKER_PS_BEGIN")
+    names = out(["docker", "ps", "-a", "--format", "{{.Names}}"], timeout=30).splitlines()
     if a.base_container not in names: raise SystemExit("M26_E5_R2_BASE_CONTAINER_MISSING")
-    image = json.loads(out(["docker", "inspect", a.base_container]))[0]["Image"]
+    trace("M26_E5_R2_TRACE_DOCKER_INSPECT_BASE_BEGIN")
+    image = json.loads(out(["docker", "inspect", a.base_container], timeout=60))[0]["Image"]
     env = env_map(env_rows(a.base_container))
     inherited_token = env.get("M26_QUERY_BACKEND_TOKEN")
     injected_token = os.environ.get("M26_QUERY_BACKEND_TOKEN")
@@ -124,12 +135,19 @@ def main() -> int:
     (overlay / "sitecustomize.py").write_text(sitecustomize(binding), encoding="utf-8")
     env["PYTHONPATH"] = "/tmp/m26_e5_r2_sitecustomize:" + env.get("PYTHONPATH", "")
     envfile = work / "candidate.env"; write_env(envfile, env)
-    run(["docker", "rm", "-f", a.candidate_container], check=False); port_free(a.host_port)
-    storage_target = out(["docker", "run", "--rm", "--entrypoint", "python", image, "-c", "import inspect, knowledge_engine.storage as s; print(inspect.getsourcefile(s))"])
-    cid = out(["docker", "create", "--name", a.candidate_container, "--env-file", str(envfile), "-v", f"{overlay}:/tmp/m26_e5_r2_sitecustomize:ro", "-p", f"127.0.0.1:{a.host_port}:8080", image])
-    run(["docker", "cp", a.storage_py, f"{a.candidate_container}:{storage_target}"])
-    run(["docker", "start", a.candidate_container])
+    trace("M26_E5_R2_TRACE_DOCKER_RM_CANDIDATE_BEGIN")
+    run(["docker", "rm", "-f", a.candidate_container], check=False, timeout=60); port_free(a.host_port)
+    trace("M26_E5_R2_TRACE_STORAGE_TARGET_DISCOVERY_BEGIN")
+    storage_target = out(["docker", "run", "--rm", "--entrypoint", "python", image, "-c", "import inspect, knowledge_engine.storage as s; print(inspect.getsourcefile(s))"], timeout=90)
+    trace("M26_E5_R2_TRACE_DOCKER_CREATE_CANDIDATE_BEGIN")
+    cid = out(["docker", "create", "--name", a.candidate_container, "--env-file", str(envfile), "-v", f"{overlay}:/tmp/m26_e5_r2_sitecustomize:ro", "-p", f"127.0.0.1:{a.host_port}:8080", image], timeout=60)
+    trace("M26_E5_R2_TRACE_DOCKER_CP_STORAGE_BEGIN")
+    run(["docker", "cp", a.storage_py, f"{a.candidate_container}:{storage_target}"], timeout=60)
+    trace("M26_E5_R2_TRACE_DOCKER_START_CANDIDATE_BEGIN")
+    run(["docker", "start", a.candidate_container], timeout=60)
+    trace("M26_E5_R2_TRACE_WAIT_HEALTH_BEGIN")
     health = wait_health(a.host_port, token)
+    trace("M26_E5_R2_TRACE_NORMAL_LOADER_PROBE_BEGIN")
     probe = py(a.candidate_container, r'''
 import hashlib, inspect, json
 from knowledge_engine import storage as st
