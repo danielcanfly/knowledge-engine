@@ -1,0 +1,79 @@
+name: M26 Recovery OCI Management Plane Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - m26-production-recovery-oci-probe-20260827-131401
+
+permissions:
+  contents: read
+
+jobs:
+  production-oci-management-plane-probe:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER || secrets.OCI_USER_OCID || secrets.ORACLE_USER_OCID }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY || secrets.OCI_TENANCY_OCID || secrets.ORACLE_TENANCY_OCID }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT || secrets.OCI_FINGERPRINT || secrets.ORACLE_FINGERPRINT }}
+      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT || secrets.OCI_PRIVATE_KEY || secrets.ORACLE_PRIVATE_KEY || secrets.ORACLE_CLI_KEY_CONTENT }}
+      OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION || secrets.OCI_REGION || secrets.ORACLE_REGION }}
+      OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID || secrets.ORACLE_COMPARTMENT_OCID }}
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - name: Secret-safe production environment OCI presence matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY2'
+          import json, os
+          names = [
+              'OCI_CLI_USER','OCI_CLI_TENANCY','OCI_CLI_FINGERPRINT','OCI_CLI_KEY_CONTENT','OCI_CLI_REGION','OCI_COMPARTMENT_OCID',
+              'ORACLE_VM_HOST','ORACLE_VM_USER','ORACLE_VM_DEPLOY_PATH','ORACLE_VM_SSH_PRIVATE_KEY',
+          ]
+          result = {name: bool(os.environ.get(name)) for name in names}
+          classic = all(result[name] for name in ['OCI_CLI_USER','OCI_CLI_TENANCY','OCI_CLI_FINGERPRINT','OCI_CLI_KEY_CONTENT','OCI_CLI_REGION'])
+          result['OCI_CLASSIC_SIGNING_CREDENTIAL_SET_PRESENT'] = classic
+          result['OCI_READ_CREATE_REPLACEMENT_VM_PATH_USABLE_BY_ENV_ONLY'] = classic and bool(os.environ.get('OCI_COMPARTMENT_OCID'))
+          print(json.dumps(result, sort_keys=True, indent=2))
+          PY2
+      - name: OCI CLI read-only probe if full signing credentials exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY2'
+          import os, pathlib, subprocess, sys, json
+          classic = all(os.environ.get(name) for name in ['OCI_CLI_USER','OCI_CLI_TENANCY','OCI_CLI_FINGERPRINT','OCI_CLI_KEY_CONTENT','OCI_CLI_REGION'])
+          if not classic:
+              print('OCI_CLI_READONLY_PROBE_SKIPPED_NO_FULL_SIGNING_CREDENTIAL_SET')
+              sys.exit(0)
+          home = pathlib.Path.home()
+          oci_dir = home / '.oci'
+          oci_dir.mkdir(mode=0o700, exist_ok=True)
+          key_path = oci_dir / 'oci_api_key.pem'
+          key_path.write_text(os.environ['OCI_CLI_KEY_CONTENT'])
+          key_path.chmod(0o600)
+          config_path = oci_dir / 'config'
+          config_path.write_text('
+'.join([
+              '[DEFAULT]',
+              f'user={os.environ["OCI_CLI_USER"]}',
+              f'fingerprint={os.environ["OCI_CLI_FINGERPRINT"]}',
+              f'tenancy={os.environ["OCI_CLI_TENANCY"]}',
+              f'region={os.environ["OCI_CLI_REGION"]}',
+              f'key_file={key_path}',
+              '',
+          ]))
+          config_path.chmod(0o600)
+          subprocess.run([sys.executable, '-m', 'pip', 'install', '--quiet', 'oci-cli'], check=True)
+          subprocess.run(['oci', '--version'], check=False)
+          res = subprocess.run(['oci', 'iam', 'region-subscription', 'list', '--output', 'json'], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+          print(json.dumps({'oci_region_subscription_read_exit_code': res.returncode, 'stdout_nonempty': bool(res.stdout.strip()), 'stderr_nonempty': bool(res.stderr.strip())}, sort_keys=True))
+          if res.returncode != 0:
+              sys.exit(0)
+          PY2
