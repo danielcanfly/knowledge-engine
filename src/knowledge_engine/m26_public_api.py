@@ -51,7 +51,9 @@ FALLBACK_DAILY_LIMIT = 10
 PUBLIC_REQUEST_SCHEMA = "danielcanfly-answers-request/v1"
 PUBLIC_HEALTH_SCHEMA = "danielcanfly-answers-health/v1"
 
-ALLOWED_FIELDS = {"question"}
+PUBLIC_QUESTION_FIELDS = ("question", "query")
+PUBLIC_LANGUAGE_FIELDS = {"lang"}
+ALLOWED_FIELDS = set(PUBLIC_QUESTION_FIELDS) | PUBLIC_LANGUAGE_FIELDS
 FORBIDDEN_SELECTION_FIELDS = {"provider", "model"}
 DEFAULT_ALLOWED_ORIGINS = (
     "https://danielcanfly.com",
@@ -350,6 +352,10 @@ def create_app(
             headers=_response_headers(origin=_request_origin(request)),
         )
 
+    @app.get("/v1/answers/health")
+    async def answers_health(request: Request) -> JSONResponse:
+        return await health(request)
+
     @app.options("/v1/answers")
     async def answers_options(request: Request) -> Response:
         origin = _request_origin(request)
@@ -465,31 +471,56 @@ def _parse_public_request(body: bytes) -> tuple[dict[str, str] | None, Problem |
             status.HTTP_400_BAD_REQUEST,
             "UNSUPPORTED_FIELD",
             "Unsupported request field",
-            "The public API accepts only the question field.",
+            "The public API accepts only question, query, and lang fields.",
         )
-    if "question" not in value:
+    questions: dict[str, str] = {}
+    for field in PUBLIC_QUESTION_FIELDS:
+        if field not in value:
+            continue
+        field_question = value.get(field)
+        if not isinstance(field_question, str):
+            return None, Problem(
+                status.HTTP_400_BAD_REQUEST,
+                "QUESTION_MISSING",
+                "Question is missing",
+                "The request body must include a question string.",
+            )
+        normalized_field_question = " ".join(field_question.strip().split())
+        if normalized_field_question:
+            questions[field] = normalized_field_question
+        else:
+            questions[field] = ""
+    if not questions:
         return None, Problem(
             status.HTTP_400_BAD_REQUEST,
             "QUESTION_MISSING",
             "Question is missing",
             "The request body must include a question string.",
         )
-    question = value.get("question")
-    if not isinstance(question, str):
-        return None, Problem(
-            status.HTTP_400_BAD_REQUEST,
-            "QUESTION_MISSING",
-            "Question is missing",
-            "The request body must include a question string.",
-        )
-    normalized = " ".join(question.strip().split())
-    if not normalized:
+    normalized_values = set(questions.values())
+    if "" in normalized_values:
         return None, Problem(
             status.HTTP_400_BAD_REQUEST,
             "QUESTION_EMPTY",
             "Question is empty",
             "Please enter an English question.",
         )
+    if len(normalized_values) > 1:
+        return None, Problem(
+            status.HTTP_400_BAD_REQUEST,
+            "QUESTION_CONFLICT",
+            "Question fields conflict",
+            "The question and query fields must not disagree.",
+        )
+    lang = value.get("lang")
+    if lang is not None and _normalize_public_lang(lang) is None:
+        return None, Problem(
+            status.HTTP_400_BAD_REQUEST,
+            "LANGUAGE_FIELD_UNSUPPORTED",
+            "Language field is unsupported",
+            "The lang field must be a supported public language hint.",
+        )
+    normalized = next(iter(normalized_values))
     if len(normalized) > MAX_QUERY_CHARS:
         return None, Problem(
             status.HTTP_413_CONTENT_TOO_LARGE,
@@ -498,6 +529,15 @@ def _parse_public_request(body: bytes) -> tuple[dict[str, str] | None, Problem |
             "The question exceeds the public API character limit.",
         )
     return {"question": normalized}, None
+
+
+def _normalize_public_lang(lang: Any) -> str | None:
+    if not isinstance(lang, str):
+        return None
+    normalized = lang.strip().lower().replace("_", "-")
+    if normalized in {"", "en", "zh", "zh-tw", "zh-hant", "mixed"}:
+        return normalized
+    return None
 
 
 def _language_problem(question: str) -> Problem | None:
