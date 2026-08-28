@@ -100,8 +100,17 @@ def _owner_graph_runtime() -> Runtime:
 
 def _preload_query_runtime() -> None:
     """Materialize durable query dependencies before the service becomes ready."""
-    load_production_answer_bundle()
-    prepare_minimax_http_client()
+    last_error: Exception | None = None
+    for attempt in range(1, 11):
+        try:
+            load_production_answer_bundle()
+            prepare_minimax_http_client()
+            return
+        except Exception as exc:  # pragma: no cover - startup resilience
+            last_error = exc
+            time.sleep(min(2.0 * attempt, 10.0))
+    if last_error is not None:
+        raise last_error
 
 
 def validate_query_request(payload: Any, *, max_chars: int = MAX_QUERY_CHARS) -> str:

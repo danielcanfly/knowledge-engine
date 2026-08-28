@@ -1,15 +1,22 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import os
 import threading
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import StreamingResponse
 
+from .auth import Authenticator
+from .config import Settings
+from .errors import AuthorizationError, ConfigurationError
 from .m26_ask_api import (
     BACKEND_TOKEN_HEADER,
     DEFAULT_GATE_PATH,
@@ -24,6 +31,7 @@ from .m26_google_translation_provider import (
     TranslationProviderConfig,
     TranslationProviderError,
 )
+from .m26_retrieval_envelope import sha256_value
 from .m26_translation_gateway import (
     TRANSLATION_GATEWAY_SCHEMA,
     TranslationGatewayError,
@@ -81,6 +89,15 @@ def create_app(
     app.state.translation_provider = translation_provider
     app.state.translation_provider_factory = provider_factory or _default_provider_factory
     app.state.translation_provider_lock = threading.Lock()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_allowed_origins(),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Accept", "Authorization", OWNER_HASH_HEADER],
+        expose_headers=["X-Request-Id"],
+        max_age=600,
+    )
 
     @app.get("/v1/translation-gateway/health")
     async def health() -> dict[str, Any]:
@@ -135,10 +152,351 @@ def create_app(
         except TranslationGatewayError as exc:
             raise _translation_gateway_http_error(exc.failure) from exc
 
+    @app.get("/v1/answers/health")
+    async def public_health(request: Request) -> dict[str, Any]:
+        return _public_health_payload(base_url=_origin_base_url(request))
+
+    @app.post("/v1/answers")
+    async def public_answers(request: Request) -> StreamingResponse:
+        _authenticate_staging_qualification(request)
+        body = await request.body()
+        if len(body) > MAX_BODY_BYTES:
+            raise _http_error(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "M26_TG_BODY_TOO_LARGE")
+        try:
+            payload = await request.json()
+        except Exception as exc:
+            raise _http_error(status.HTTP_400_BAD_REQUEST, "M26_TG_INVALID_JSON") from exc
+        if not isinstance(payload, dict):
+            raise _http_error(status.HTTP_400_BAD_REQUEST, "M26_TG_REQUEST_NOT_JSON_OBJECT")
+        unknown = set(payload) - ALLOWED_FIELDS
+        if unknown:
+            raise _http_error(status.HTTP_400_BAD_REQUEST, "M26_TG_REQUEST_FIELD_DENIED")
+        validate_query_request(payload)
+        correlation_id = str(uuid.uuid4())
+        base_url = _origin_base_url(request)
+        stream = _answer_event_stream(
+            app=app,
+            base_url=base_url,
+            payload=payload,
+            correlation_id=correlation_id,
+        )
+        return StreamingResponse(
+            stream,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     return app
+def _allowed_origins() -> list[str]:
+    configured = os.environ.get("M26_PUBLIC_ALLOWED_ORIGINS", "").strip()
+    if not configured:
+        return [
+            "https://staging.danielcanfly.com",
+            "https://www.danielcanfly.com",
+            "https://danielcanfly.com",
+            "http://localhost:4321",
+            "http://127.0.0.1:4321",
+        ]
+    origins = [origin.strip() for origin in configured.split(",") if origin.strip()]
+    return origins or [
+        "https://staging.danielcanfly.com",
+        "https://www.danielcanfly.com",
+        "https://danielcanfly.com",
+        "http://localhost:4321",
+        "http://127.0.0.1:4321",
+    ]
 
 
-app = create_app()
+def _origin_base_url(request: Request) -> str:
+    return str(request.base_url).rstrip("/")
+
+
+def _public_health_payload(*, base_url: str) -> dict[str, Any]:
+    return {
+        "schema_version": TRANSLATION_GATEWAY_SCHEMA,
+        "ok": True,
+        "status": "ok",
+        "surface": {
+            "canonical_answers_url": f"{base_url}/v1/answers",
+            "canonical_health_url": f"{base_url}/v1/answers/health",
+            "future_production_answers_url": "https://api.danielcanfly.com/v1/answers",
+            "internal_owner_backend_url": "https://m24-internal.danielcanfly.com",
+            "legacy_translation_gateway_url": f"{base_url}/v1/translation-gateway/query",
+            "legacy_translation_gateway_health_url": f"{base_url}/v1/translation-gateway/health",
+            "legacy_api_rag_surface_canonical": False,
+        },
+        "contract": {
+            "answer_language": "en",
+            "phase": "translation-in-with-sse",
+            "semantic_qualification_status": "external_heldout_required",
+            "legacy_api_rag_surface": {
+                "canonical": False,
+                "retired": True,
+            },
+        },
+    }
+
+
+def _server_side_owner_hash() -> str:
+    for name in (
+        "STAGING_M26_OWNER_SUBJECT_HASH",
+        "KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH",
+        "M26_OWNER_SUBJECT_HASH",
+    ):
+        value = os.environ.get(name, "").strip().lower()
+        if value:
+            return value
+    raise _http_error(status.HTTP_503_SERVICE_UNAVAILABLE, "M26_PUBLIC_OWNER_HASH_UNCONFIGURED")
+
+
+async def _answer_event_stream(
+    *,
+    app: FastAPI,
+    base_url: str,
+    payload: dict[str, Any],
+    correlation_id: str,
+):
+    question = validate_query_request(payload)
+    question_sha256 = sha256_value(question)
+    owner_hash = _server_side_owner_hash()
+    meta = {
+        "schema_version": "m26-answers-sse-meta/v1",
+        "status": "accepted",
+        "route": "/v1/answers",
+        "correlation_id": correlation_id,
+        "question_sha256": question_sha256,
+        "surface": {
+            "canonical_answers_url": f"{base_url}/v1/answers",
+            "canonical_health_url": f"{base_url}/v1/answers/health",
+            "future_production_answers_url": "https://api.danielcanfly.com/v1/answers",
+            "internal_owner_backend_url": "https://m24-internal.danielcanfly.com",
+            "legacy_api_rag_surface_canonical": False,
+        },
+    }
+    yield _sse_event("meta", meta)
+    seen: list[str] = ["translation_in"]
+    yield _sse_event("progress", {"stage": "translation_in", "stages": list(seen)})
+
+    event_queue: asyncio.Queue[Mapping[str, Any] | object] = asyncio.Queue()
+    done = object()
+    loop = asyncio.get_running_loop()
+
+    def sink(event: Mapping[str, Any]) -> None:
+        loop.call_soon_threadsafe(event_queue.put_nowait, dict(event))
+
+    async def worker() -> None:
+        try:
+            result = await asyncio.to_thread(
+                _resolve_answer,
+                app=app,
+                payload={"question": question},
+                owner_hash=owner_hash,
+                correlation_id=correlation_id,
+                event_sink=sink,
+            )
+            await event_queue.put({"type": "_result", "result": result})
+        except HTTPException as exc:
+            await event_queue.put({"type": "_http_error", "error": exc})
+        except Exception as exc:
+            await event_queue.put({"type": "_error", "error": exc})
+        finally:
+            await event_queue.put(done)
+
+    task = asyncio.create_task(worker())
+    result: dict[str, Any] | None = None
+    try:
+        while True:
+            item = await event_queue.get()
+            if item is done:
+                break
+            if not isinstance(item, Mapping):
+                continue
+            item_type = str(item.get("type", ""))
+            if item_type == "_result":
+                candidate = item.get("result")
+                result = dict(candidate) if isinstance(candidate, Mapping) else {}
+                continue
+            if item_type == "_http_error":
+                error = item.get("error")
+                detail = (
+                    error.detail
+                    if isinstance(error, HTTPException) and isinstance(error.detail, dict)
+                    else {"message": str(error)}
+                )
+                yield _sse_event(
+                    "error",
+                    {
+                        "status": "error",
+                        "detail": detail,
+                        "correlation_id": correlation_id,
+                    },
+                )
+                return
+            if item_type == "_error":
+                yield _sse_event(
+                    "error",
+                    {
+                        "status": "error",
+                        "detail": {"message": str(item.get("error"))},
+                        "correlation_id": correlation_id,
+                    },
+                )
+                return
+            yield _sse_event(item_type or "progress", item)
+    finally:
+        if not task.done():
+            task.cancel()
+
+    if result is None:
+        yield _sse_event(
+            "error",
+            {
+                "status": "error",
+                "detail": {"message": "The answer stream ended before a result was produced."},
+                "correlation_id": correlation_id,
+            },
+        )
+        return
+
+    stages = _sse_stages_for_response(result)
+    for stage in stages:
+        if stage and stage not in seen:
+            seen.append(stage)
+            yield _sse_event(
+                "progress",
+                {
+                    "stage": stage,
+                    "stages": list(seen),
+                    "provider": _infer_provider(result),
+                },
+            )
+    yield _sse_event("answer", result)
+    yield _sse_event("done", {"status": "ok", "correlation_id": correlation_id})
+
+
+def _sse_event(event: str, payload: Mapping[str, Any]) -> str:
+    data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    lines = [f"event: {event}"]
+    for line in data.splitlines() or ["{}"]:
+        lines.append(f"data: {line}")
+    return "\n".join(lines) + "\n\n"
+
+
+def _sse_stages_for_response(response: Mapping[str, Any]) -> list[str]:
+    stages: list[str] = []
+    translation = response.get("translation_gateway")
+    if isinstance(translation, Mapping):
+        if translation.get("translation_applied") is True:
+            stages.append("translation_in")
+        if translation.get("invariant_check_result") == "pass":
+            stages.append("translation_verified")
+    runtime = response.get("runtime_observability")
+    if isinstance(runtime, Mapping):
+        for stage in runtime.get("stage_timings", []):
+            if not isinstance(stage, Mapping):
+                continue
+            value = str(stage.get("stage", stage.get("name", ""))).strip()
+            if not value:
+                continue
+            normalized = value.lower()
+            if "retrieval" in normalized:
+                stages.append("retrieval")
+            elif "parent" in normalized or "compress" in normalized or "reorder" in normalized:
+                stages.append("organizing")
+            elif "synthesis" in normalized or "generate" in normalized or "answer" in normalized:
+                stages.append("synthesis")
+            elif "citation" in normalized or "verify" in normalized or "check" in normalized:
+                stages.append("citation_check")
+            elif "retry" in normalized or "repair" in normalized:
+                stages.append("reflect_retry")
+            else:
+                stages.append(value)
+    if not stages:
+        stages.append("synthesis")
+    return stages
+
+
+def _infer_provider(response: Mapping[str, Any]) -> str | None:
+    candidates = [
+        response.get("provider_identity"),
+        response.get("model_identity"),
+        response.get("answer_source"),
+    ]
+    translation = response.get("translation_gateway")
+    if isinstance(translation, Mapping):
+        candidates.extend(
+            [
+                translation.get("provider"),
+                translation.get("model_resource"),
+            ]
+        )
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            continue
+        normalized = candidate.strip().lower()
+        if not normalized:
+            continue
+        if "minimax" in normalized or normalized == "mini" or "m3" in normalized:
+            return "minimax"
+        if "cloud" in normalized:
+            return "cloudflare"
+    return None
+
+
+def _resolve_answer(
+    *,
+    app: FastAPI,
+    payload: dict[str, Any],
+    owner_hash: str,
+    correlation_id: str,
+    event_sink: Callable[[Mapping[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    try:
+        return run_owner_translation_gateway_for_web(
+            root=app.state.root,
+            gate_path=app.state.gate_path,
+            request_payload=payload,
+            owner_subject_hash=owner_hash,
+            public_request=False,
+            correlation_id=correlation_id,
+            event_sink=event_sink,
+        )
+    except TranslationGatewayError as exc:
+        raise _translation_gateway_http_error(exc.failure) from exc
+
+
+def _authenticate_staging_qualification(request: Request) -> None:
+    try:
+        settings = Settings.from_env()
+    except ConfigurationError as exc:
+        raise _http_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "M26_STAGING_QUALIFICATION_UNCONFIGURED",
+        ) from exc
+    if settings.app_env != "staging":
+        return
+    if settings.auth_mode != "supabase_jwt":
+        raise _http_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "M26_STAGING_QUALIFICATION_AUTH_UNCONFIGURED",
+        )
+    authorization = request.headers.get("authorization")
+    if not authorization or not authorization.strip():
+        raise _http_error(
+            status.HTTP_401_UNAUTHORIZED,
+            "M26_STAGING_QUALIFICATION_MISSING",
+        )
+    try:
+        Authenticator(settings).authenticate(authorization)
+    except AuthorizationError as exc:
+        raise _http_error(
+            status.HTTP_403_FORBIDDEN,
+            "M26_STAGING_QUALIFICATION_DENIED",
+        ) from exc
 
 
 def _translation_gateway_http_error(failure: TranslationGatewayFailure) -> HTTPException:
@@ -150,6 +508,9 @@ def _translation_gateway_http_error(failure: TranslationGatewayFailure) -> HTTPE
             "observability": failure.observability,
         },
     )
+
+
+app = create_app()
 
 
 __all__ = [

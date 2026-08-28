@@ -2001,7 +2001,30 @@ def _looks_like_pm_career_question(question: str) -> bool:
     q = " ".join(str(question).casefold().split())
     if "product manager" not in q and not re.search(r"\bpm\b", q):
         return False
-    return any(pattern.search(q) for pattern in PM_CAREER_QUERY_PATTERNS)
+    if any(pattern.search(q) for pattern in PM_CAREER_QUERY_PATTERNS):
+        return True
+    return any(
+        marker in q
+        for marker in (
+            "skill",
+            "skills",
+            "ability",
+            "abilities",
+            "trait",
+            "traits",
+            "responsibility",
+            "responsibilities",
+            "role",
+            "career",
+            "path",
+            "need",
+            "needs",
+            "require",
+            "requires",
+            "interview",
+            "roadmap",
+        )
+    )
 
 
 def _document_topic_bias(question: str, document: Mapping[str, Any]) -> float:
@@ -2014,10 +2037,30 @@ def _document_topic_bias(question: str, document: Mapping[str, Any]) -> float:
     body = str(document.get("body", "")).casefold()
     text = " ".join((title, section_title, description, body))
     bias = 0.0
-    if source_id.startswith("daniel_blog_en__pm-") or source_id.startswith("daniel_blog_zh__pm-"):
+    is_pm_source = source_id.startswith("daniel_blog_en__pm-") or source_id.startswith("daniel_blog_zh__pm-")
+    if is_pm_source:
         bias += 1.75
     if title.startswith("pm ") or section_title.startswith("pm ") or "product manager" in title:
         bias += 0.75
+    generic_skillish = any(
+        marker in text
+        for marker in (
+            "skill",
+            "skills",
+            "skillset",
+            "mcp",
+            "runtime",
+            "orchestrator",
+            "plugin",
+            "hook",
+            "tool",
+            "tools",
+            "llamaindex",
+            "langfuse",
+        )
+    )
+    if not is_pm_source and generic_skillish:
+        bias -= 1.0
     if _segment_noise_penalty(text) >= 3 or _document_looks_code_heavy(text):
         bias -= 1.25
     if "from-rag-to-production-rag" in source_id or "llamaindex" in source_id or "langfuse" in source_id:
@@ -5258,7 +5301,21 @@ def _ensure_query_coverage_passages(
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
     selected_sections = {str(item.get("section_id", "")) for item in selected}
+    career_query = _looks_like_pm_career_question(question)
     query_terms = _coverage_terms(question)
+    if career_query:
+        query_terms -= {
+            "adapter",
+            "hook",
+            "mcp",
+            "orchestrator",
+            "plugin",
+            "runtime",
+            "skill",
+            "skills",
+            "tool",
+            "tools",
+        }
     if not query_terms:
         return selected
     covered_terms: set[str] = set()
@@ -5267,6 +5324,7 @@ def _ensure_query_coverage_passages(
     documents = sorted(
         _release_documents(bundle),
         key=lambda document: (
+            -(_document_topic_bias(question, document) if career_query else 0.0),
             -len((query_terms - covered_terms) & _meaningful_terms(_document_text(document))),
             -_text_term_overlap_score(query_terms, _document_text(document)),
             _is_article_root_document(document),
@@ -5305,7 +5363,6 @@ def _ensure_query_coverage_passages(
         if query_terms.issubset(covered_terms):
             break
     return [*coverage_items, *selected]
-
 
 def _graph_evidence_bundle(
     *,

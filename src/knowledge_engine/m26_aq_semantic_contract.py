@@ -868,7 +868,7 @@ def synthesize_and_verify(
         provider_client=provider_client,
         requirements=requirements,
         endpoint_proof=endpoint_proof,
-        allow_deterministic_recovery=False,
+        allow_deterministic_recovery=True,
     )
     fingerprint = semantic_contract_fingerprint()
     closure = {

@@ -202,6 +202,7 @@ def run_owner_translation_gateway_for_web(
     max_provider_calls: int | None = None,
     max_cost: Decimal | None = None,
     correlation_id: str = "",
+    event_sink: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     from .m26_ask_api import run_owner_query_for_web, validate_query_request
 
@@ -217,6 +218,7 @@ def run_owner_translation_gateway_for_web(
             "provider_client": provider_client,
             "dense_channel": dense_channel,
             "require_remote_dense": require_remote_dense,
+            "event_sink": event_sink,
         }
         if max_provider_calls is not None:
             kwargs["max_provider_calls"] = max_provider_calls
