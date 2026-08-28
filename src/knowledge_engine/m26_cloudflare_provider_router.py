@@ -100,6 +100,14 @@ def _mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
+def _first_env(*names: str) -> str:
+    for name in names:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
 @dataclass
 class CloudflareRouterState:
     soft_limit: Decimal = DEFAULT_CLOUDFLARE_NEURON_SOFT_LIMIT
@@ -483,6 +491,11 @@ def build_provider_routing_client(
     state: CloudflareRouterState | None = None,
 ) -> ProviderRoutingClient:
     router_state = state or default_router_state()
+    cloudflare_api_key = _first_env(
+        "CLOUDFLARE_WORKER_AI_RESTFUL_API_KEY",
+        "CLOUDFLARE_AI_TOKEN",
+        "CLOUDFLARE_API_TOKEN",
+    )
     fallback = MiniMaxClient(
         os.environ.get("MINIMAX_API_KEY", ""),
         max_calls=max_provider_calls,
@@ -496,7 +509,7 @@ def build_provider_routing_client(
     cloudflare: CloudflareWorkersAIClient | None = None
     try:
         cloudflare = CloudflareWorkersAIClient(
-            api_key=os.environ.get("CLOUDFLARE_WORKER_AI_RESTFUL_API_KEY", ""),
+            api_key=cloudflare_api_key,
             account_id=os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""),
             state=router_state,
             max_calls=max_provider_calls,

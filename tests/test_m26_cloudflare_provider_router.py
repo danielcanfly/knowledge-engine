@@ -25,6 +25,7 @@ from knowledge_engine.m26_cloudflare_provider_router import (
     CloudflareRouterState,
     ProviderRoutingClient,
     cloudflare_gpt_oss_120b_neurons,
+    build_provider_routing_client,
     provider_status_dto,
 )
 
@@ -203,6 +204,24 @@ def test_provider_status_is_cached_observability_only() -> None:
     assert status["semantic_reviewer"] == "minimax-m3"
     assert status["live_model_request"] is False
     assert "api" not in json.dumps(status).casefold()
+
+
+def test_build_provider_routing_client_accepts_cloudflare_api_token_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MINIMAX_API_KEY", "test-minimax-key")
+    monkeypatch.delenv("CLOUDFLARE_WORKER_AI_RESTFUL_API_KEY", raising=False)
+    monkeypatch.delenv("CLOUDFLARE_AI_TOKEN", raising=False)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "test-cloudflare-key")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "test-cloudflare-account")
+
+    router = build_provider_routing_client(
+        max_provider_calls=1,
+        max_cost=Decimal("0.10"),
+        state=CloudflareRouterState(),
+    )
+
+    assert router.cloudflare is not None
 
 
 def test_web_dto_exposes_sanitized_provider_routing() -> None:

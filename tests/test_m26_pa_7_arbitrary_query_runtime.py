@@ -2750,3 +2750,31 @@ def test_code_like_segments_are_skipped_when_extracting_fallback_quotes() -> Non
 
     assert "LlamaIndexCallbackHandler" not in quote
     assert "plain language" in quote
+
+
+def test_career_query_provider_payload_strips_code_like_passage_text() -> None:
+    item = {
+        "evidence_id": "ev_1",
+        "evidence_type": "passage",
+        "locator_id": "loc_1",
+        "source_id": "daniel_blog_en__from-rag-to-production-rag-part-5",
+        "section_id": "section_1",
+        "concept_id": "concept_1",
+        "artifact_key": "artifact",
+        "artifact_sha256": "sha",
+        "release_id": "rel",
+        "passage_text": (
+            "```python\nfrom llama_index.core import Settings\nfrom langfuse.llama_index import "
+            "LlamaIndexCallbackHandler\n```\nThe article explains how a PM should think about "
+            "production readiness in plain language."
+        ),
+        "channels": ["lexical"],
+    }
+
+    payload = runtime_module._provider_evidence_item(
+        item,
+        question="how to become a product manager",
+    )
+
+    assert "LlamaIndexCallbackHandler" not in payload["text"]
+    assert "plain language" in payload["text"]

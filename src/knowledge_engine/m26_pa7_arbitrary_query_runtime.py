@@ -2113,7 +2113,9 @@ def _build_multi_evidence_provider_payload(
 ) -> dict[str, Any]:
     provider = _object(policy.get("provider"), "policy provider")
     budget = _object(policy.get("budget"), "policy budget")
-    evidence_payload = [_provider_evidence_item(item) for item in evidence]
+    evidence_payload = [
+        _provider_evidence_item(item, question=question) for item in evidence
+    ]
     question_contract = _question_contract(question=question, intent_class=intent_class)
     repair_directive = _repair_directive(previous_reason_codes or [], intent_class=intent_class)
     output_contract: dict[str, Any] = {
@@ -2290,7 +2292,14 @@ def _build_multi_evidence_provider_payload(
     }
 
 
-def _provider_evidence_item(item: Mapping[str, Any]) -> dict[str, Any]:
+def _provider_evidence_item(
+    item: Mapping[str, Any],
+    *,
+    question: str = "",
+) -> dict[str, Any]:
+    text = str(item.get("passage_text", ""))
+    if _looks_like_pm_career_question(question) and str(item.get("evidence_type", "")) == "passage":
+        text = _career_query_passage_text(text)
     return {
         "evidence_id": str(item["evidence_id"]),
         "evidence_type": str(item.get("evidence_type", "passage")),
@@ -2303,7 +2312,7 @@ def _provider_evidence_item(item: Mapping[str, Any]) -> dict[str, Any]:
         "artifact_sha256": str(item.get("artifact_sha256", "")),
         "release_id": str(item.get("release_id", "")),
         "text_sha256": str(item.get("passage_text_sha256", "")),
-        "text": str(item.get("passage_text", "")),
+        "text": text,
         "text_role": _evidence_text_role(item),
         "section_granularity": _section_granularity(item),
         "edge_id": str(item.get("edge_id", "")),
@@ -2317,6 +2326,23 @@ def _provider_evidence_item(item: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(item.get("retrieval_metadata"), Mapping)
         else {},
     }
+
+
+def _career_query_passage_text(text: str) -> str:
+    cleaned = re.sub(r"```.*?```", " ", str(text), flags=re.DOTALL)
+    cleaned = re.sub(
+        r"(?m)^\s*(?:from|import|def|class|return|lambda|print)\b.*$",
+        " ",
+        cleaned,
+    )
+    segments = [
+        segment
+        for segment in _exact_quote_segments(cleaned)
+        if not _segment_looks_like_code(segment)
+    ]
+    if segments:
+        cleaned = " ".join(segments)
+    return _bounded_text(cleaned)
 
 
 def _question_contract(*, question: str, intent_class: str) -> dict[str, Any]:
