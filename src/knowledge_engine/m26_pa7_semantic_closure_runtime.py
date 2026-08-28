@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from . import m26_pa7_arbitrary_query_runtime as legacy
+from . import m26_sealed_kernel_trace as sealed_trace
 from .m14_retrieval import retrieve_wiki_first
 from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
 from .m26_production_answer_bundle import (
@@ -364,6 +365,14 @@ def _synthesize_and_verify(
     endpoint_proof: Mapping[str, Any],
     allow_deterministic_recovery: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    sealed_trace.trace(
+        "synthesize_entry",
+        trace_id=trace_id,
+        question_sha256=canonical_sha256(question),
+        intent_class=intent_class,
+        evidence=sealed_trace.evidence_summary(evidence),
+        requirement_ids=[item.requirement_id for item in requirements],
+    )
     failures: list[str] = []
     calls: list[dict[str, Any]] = []
     repair_attempted = False
@@ -378,7 +387,29 @@ def _synthesize_and_verify(
             repair=attempt == 2,
             previous_failures=failures,
         )
+        sealed_trace.trace(
+            "compact_provider_payload_ready",
+            attempt=attempt,
+            purpose=(
+                "aq_semantic_closure_repair"
+                if attempt == 2
+                else "aq_semantic_closure"
+            ),
+            payload=sealed_trace.payload_fingerprint(compact_payload),
+            label_count=len(label_map),
+            snippet_count=len(snippet_map),
+        )
         try:
+            sealed_trace.trace(
+                "provider_call_before",
+                attempt=attempt,
+                purpose=(
+                    "aq_semantic_closure_repair"
+                    if attempt == 2
+                    else "aq_semantic_closure"
+                ),
+                payload=sealed_trace.payload_fingerprint(compact_payload),
+            )
             raw = provider_client.call(
                 compact_payload,
                 (
@@ -386,6 +417,16 @@ def _synthesize_and_verify(
                     if attempt == 2
                     else "aq_semantic_closure"
                 ),
+            )
+            sealed_trace.trace(
+                "provider_call_after",
+                attempt=attempt,
+                purpose=(
+                    "aq_semantic_closure_repair"
+                    if attempt == 2
+                    else "aq_semantic_closure"
+                ),
+                response=sealed_trace.response_fingerprint(raw),
             )
             try:
                 stop_reason = str(
@@ -395,6 +436,12 @@ def _synthesize_and_verify(
                     str(raw.get("text", raw.get("provider_text", "")))
                 )
             except ValueError:
+                sealed_trace.trace(
+                    "provider_parse_failure",
+                    attempt=attempt,
+                    stop_reason=stop_reason,
+                    response=sealed_trace.response_fingerprint(raw),
+                )
                 calls.append(_compact_call_telemetry(raw, parse_ok=False))
                 if stop_reason == "max_tokens":
                     failures.append(COMPACT_PROVIDER_TRUNCATED)
@@ -402,13 +449,38 @@ def _synthesize_and_verify(
                     failures.append(COMPACT_PROVIDER_PARSE_FAILED)
                 if attempt == 1:
                     repair_attempted = True
+                    sealed_trace.trace(
+                        "repair_transition",
+                        attempt=attempt,
+                        failures=list(failures),
+                    )
                     continue
                 break
+            sealed_trace.trace(
+                "provider_parse_success",
+                attempt=attempt,
+                parsed_status=str(parsed["status"]),
+                segment_count=len(
+                    parsed.get("segments", [])
+                    if isinstance(parsed.get("segments"), list)
+                    else []
+                ),
+            )
             calls.append(_compact_call_telemetry(raw, parse_ok=True))
             if parsed["status"] == "abstain":
                 failures.append("PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE")
+                sealed_trace.trace(
+                    "provider_abstain_observed",
+                    attempt=attempt,
+                    failures=list(failures),
+                )
                 if attempt == 1:
                     repair_attempted = True
+                    sealed_trace.trace(
+                        "repair_transition",
+                        attempt=attempt,
+                        failures=list(failures),
+                    )
                     continue
                 break
 
@@ -435,12 +507,54 @@ def _synthesize_and_verify(
             candidate, bounded_support_ref_limit = _bounded_publication_candidate(
                 candidate
             )
-            semantic_review, review_raw = _call_semantic_entailment_review(
-                provider_client=provider_client,
-                question=question,
-                intent_class=intent_class,
-                candidate=candidate,
-                evidence=evidence,
+            sealed_trace.trace(
+                "candidate_constructed",
+                attempt=attempt,
+                candidate=sealed_trace.candidate_summary(candidate),
+                bounded_publication_support_ref_limit=bounded_support_ref_limit,
+            )
+            sealed_trace.trace(
+                "material_requirement_coverage_decision",
+                attempt=attempt,
+                decision_result="deferred_to_semantic_review_visible_coverage",
+                requirement_count=len(requirements),
+                candidate=sealed_trace.candidate_summary(candidate),
+            )
+            sealed_trace.trace(
+                "partial_material_gap_decision",
+                attempt=attempt,
+                parsed_status=provider_status,
+                unanswered_dimension_count=len(unanswered_dimensions),
+            )
+            sealed_trace.trace(
+                "semantic_review_before",
+                attempt=attempt,
+                purpose=SEMANTIC_REVIEW_CALL_CLASS,
+                candidate=sealed_trace.candidate_summary(candidate),
+            )
+            review_started_ns = time.monotonic_ns()
+            try:
+                semantic_review, review_raw = _call_semantic_entailment_review(
+                    provider_client=provider_client,
+                    question=question,
+                    intent_class=intent_class,
+                    candidate=candidate,
+                    evidence=evidence,
+                )
+            except (LiveGateError, httpx.HTTPError) as exc:
+                sealed_trace.trace(
+                    "semantic_review_failure_observed",
+                    attempt=attempt,
+                    purpose=SEMANTIC_REVIEW_CALL_CLASS,
+                    **sealed_trace.exception_summary(exc, started_ns=review_started_ns),
+                )
+                raise
+            sealed_trace.trace(
+                "semantic_review_after",
+                attempt=attempt,
+                purpose=SEMANTIC_REVIEW_CALL_CLASS,
+                response=sealed_trace.response_fingerprint(review_raw),
+                review=sealed_trace.review_summary(semantic_review),
             )
             claim_by_id = _candidate_claim_by_id(candidate)
             semantic_review = _canonicalize_semantic_review_evidence_refs(
@@ -452,16 +566,41 @@ def _synthesize_and_verify(
                 semantic_review,
                 claim_by_id,
             ):
+                sealed_trace.trace(
+                    "out_of_local_evidence_decision",
+                    attempt=attempt,
+                    out_of_local_evidence=True,
+                )
                 failures.append("M26-PA7-ME-065")
                 if attempt == 1:
                     repair_attempted = True
+                    sealed_trace.trace(
+                        "repair_transition",
+                        attempt=attempt,
+                        failures=list(failures),
+                    )
                     continue
                 break
+            sealed_trace.trace(
+                "out_of_local_evidence_decision",
+                attempt=attempt,
+                out_of_local_evidence=False,
+            )
             review_failures = _semantic_review_blocking_failures(semantic_review)
+            sealed_trace.trace(
+                "semantic_review_blocking_failures",
+                attempt=attempt,
+                failures=list(review_failures),
+            )
             if review_failures:
                 failures.extend(review_failures)
                 if attempt == 1:
                     repair_attempted = True
+                    sealed_trace.trace(
+                        "repair_transition",
+                        attempt=attempt,
+                        failures=list(failures),
+                    )
                     continue
                 partial = _verified_supported_review_partial(
                     trace_id=trace_id,
@@ -478,6 +617,12 @@ def _synthesize_and_verify(
                     final_support_proof=final_support_proof,
                 )
                 if partial is not None:
+                    sealed_trace.trace(
+                        "synthesize_return",
+                        attempt=attempt,
+                        terminal_classification="verified_partial_after_review_block",
+                        failures=list(failures),
+                    )
                     return partial
                 break
             try:
@@ -495,8 +640,19 @@ def _synthesize_and_verify(
                 )
             except legacy.VerifiedAnswerGateError as exc:
                 failures.append(exc.code)
+                sealed_trace.trace(
+                    "verified_answer_gate_error",
+                    attempt=attempt,
+                    code=str(exc.code),
+                    failures=list(failures),
+                )
                 if attempt == 1:
                     repair_attempted = True
+                    sealed_trace.trace(
+                        "repair_transition",
+                        attempt=attempt,
+                        failures=list(failures),
+                    )
                     continue
                 partial = _verified_supported_review_partial(
                     trace_id=trace_id,
@@ -513,7 +669,20 @@ def _synthesize_and_verify(
                     final_support_proof=final_support_proof,
                 )
                 if partial is not None:
+                    sealed_trace.trace(
+                        "synthesize_return",
+                        attempt=attempt,
+                        terminal_classification="verified_partial_after_gate_error",
+                        failures=list(failures),
+                    )
                     return partial
+                sealed_trace.trace(
+                    "synthesize_exception",
+                    attempt=attempt,
+                    terminal_classification="verified_answer_gate_error",
+                    exception_code=str(exc.code),
+                    failures=list(failures),
+                )
                 raise
             final_answer = legacy._verified_multi_evidence_answer(
                 intent_class=intent_class,
@@ -565,15 +734,42 @@ def _synthesize_and_verify(
                 closure["pre_partial_failures"] = sorted(set(failures))
                 closure["partial_answer"] = True
                 closure["unanswered_dimensions"] = unanswered_dimensions
+            sealed_trace.trace(
+                "synthesize_return",
+                attempt=attempt,
+                terminal_classification=(
+                    "verified_partial" if partial_answer else "verified"
+                ),
+                failures=list(failures),
+            )
             return final_answer, closure
         except (legacy.VerifiedAnswerGateError, ValueError, KeyError) as exc:
             code = getattr(exc, "code", type(exc).__name__)
             failures.append(str(code))
+            sealed_trace.trace(
+                "synthesize_exception_observed",
+                attempt=attempt,
+                exception_class=type(exc).__name__,
+                exception_code=str(code),
+                failures=list(failures),
+            )
             if attempt == 1:
                 repair_attempted = True
+                sealed_trace.trace(
+                    "repair_transition",
+                    attempt=attempt,
+                    failures=list(failures),
+                )
                 continue
         except (LiveGateError, httpx.HTTPError) as exc:
             failures.append(type(exc).__name__)
+            sealed_trace.trace(
+                "synthesize_exception_observed",
+                attempt=attempt,
+                exception_class=type(exc).__name__,
+                exception_code=type(exc).__name__,
+                failures=list(failures),
+            )
             break
 
     if allow_deterministic_recovery:
@@ -602,6 +798,11 @@ def _synthesize_and_verify(
                 "provider_contract": "compact_runtime_bound_semantic_closure/v1",
                 "broad_deterministic_fallback_used": True,
             }
+            sealed_trace.trace(
+                "synthesize_return",
+                terminal_classification="deterministic_recovery",
+                failures=list(failures),
+            )
             return deterministic, closure
 
     final_failures = sorted({*failures, "SEMANTIC_CLOSURE_FAILED"})
@@ -624,6 +825,11 @@ def _synthesize_and_verify(
         "provider_contract": "compact_runtime_bound_semantic_closure/v1",
         "broad_deterministic_fallback_used": False,
     }
+    sealed_trace.trace(
+        "synthesize_return",
+        terminal_classification="safe_abstention",
+        failures=final_failures,
+    )
     return abstention, closure
 
 

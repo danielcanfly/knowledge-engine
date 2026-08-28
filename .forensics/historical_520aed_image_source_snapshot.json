@@ -1,0 +1,61 @@
+{
+  "branch": "forensics/m26-image-520aed-pre-wrapper-20260829-014152",
+  "candidate": "historical_520aed",
+  "container": "3c5b31fa49daa9fbcfe3a438261801035a2be6538770f3950b52f11ced802bad",
+  "image_id": "sha256:7b2bdc32a3ed769f068b885e171fe31da10f33f1335b778b8bfb89ccb1523919",
+  "parent": "origin/main",
+  "parent_strategy": "IMAGE_SOURCE_SNAPSHOT_NO_EXACT_GIT_PARENT",
+  "similarity": [
+    {
+      "candidate_parent": "github_main",
+      "comparable_files": 334,
+      "exact_hash_matches": 331,
+      "exact_match_ratio_over_comparable": 0.991,
+      "exact_match_ratio_over_snapshot": 0.9881,
+      "files_in_image_snapshot": 335,
+      "missing_in_parent": 1,
+      "ref": "origin/main"
+    },
+    {
+      "candidate_parent": "vm_base_54db",
+      "comparable_files": 334,
+      "exact_hash_matches": 327,
+      "exact_match_ratio_over_comparable": 0.979,
+      "exact_match_ratio_over_snapshot": 0.9761,
+      "files_in_image_snapshot": 335,
+      "missing_in_parent": 1,
+      "ref": "54db45fc61745d89a5b2010a9479b2aa0f7698c7"
+    },
+    {
+      "candidate_parent": "backend_local_base_37b",
+      "comparable_files": 315,
+      "exact_hash_matches": 304,
+      "exact_match_ratio_over_comparable": 0.9651,
+      "exact_match_ratio_over_snapshot": 0.9075,
+      "files_in_image_snapshot": 335,
+      "missing_in_parent": 20,
+      "ref": "37b49ccff32d6e90d0ad39ea887dffc85e366859"
+    },
+    {
+      "candidate_parent": "backend_forensic_snapshot_817",
+      "comparable_files": 319,
+      "exact_hash_matches": 303,
+      "exact_match_ratio_over_comparable": 0.9498,
+      "exact_match_ratio_over_snapshot": 0.9045,
+      "files_in_image_snapshot": 335,
+      "missing_in_parent": 16,
+      "ref": "817ce42c31d739fb71843139247efe1ba12c8503"
+    },
+    {
+      "candidate_parent": "vm_forensic_snapshot_038",
+      "comparable_files": 334,
+      "exact_hash_matches": 324,
+      "exact_match_ratio_over_comparable": 0.9701,
+      "exact_match_ratio_over_snapshot": 0.9672,
+      "files_in_image_snapshot": 335,
+      "missing_in_parent": 1,
+      "ref": "038cc9d0b7ca4b876d6062732279440154911993"
+    }
+  ],
+  "source_scope": "/app selected source/test/config tree only; .env/key/cache/pycache excluded"
+}
