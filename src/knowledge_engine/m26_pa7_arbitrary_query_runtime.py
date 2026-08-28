@@ -2037,30 +2037,10 @@ def _document_topic_bias(question: str, document: Mapping[str, Any]) -> float:
     body = str(document.get("body", "")).casefold()
     text = " ".join((title, section_title, description, body))
     bias = 0.0
-    is_pm_source = source_id.startswith("daniel_blog_en__pm-") or source_id.startswith("daniel_blog_zh__pm-")
-    if is_pm_source:
+    if source_id.startswith("daniel_blog_en__pm-") or source_id.startswith("daniel_blog_zh__pm-"):
         bias += 1.75
     if title.startswith("pm ") or section_title.startswith("pm ") or "product manager" in title:
         bias += 0.75
-    generic_skillish = any(
-        marker in text
-        for marker in (
-            "skill",
-            "skills",
-            "skillset",
-            "mcp",
-            "runtime",
-            "orchestrator",
-            "plugin",
-            "hook",
-            "tool",
-            "tools",
-            "llamaindex",
-            "langfuse",
-        )
-    )
-    if not is_pm_source and generic_skillish:
-        bias -= 1.0
     if _segment_noise_penalty(text) >= 3 or _document_looks_code_heavy(text):
         bias -= 1.25
     if "from-rag-to-production-rag" in source_id or "llamaindex" in source_id or "langfuse" in source_id:
