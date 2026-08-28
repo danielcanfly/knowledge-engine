@@ -36,6 +36,7 @@ RESPONSE_SCHEMA = legacy.RESPONSE_SCHEMA
 MAX_PROVIDER_EVIDENCE = 10
 MAX_PROVIDER_SNIPPET_CHARS = 420
 MAX_PROVIDER_ANSWER_CHARS = 1800
+RUNTIME_OBSERVABILITY_SCHEMA = "m26-pa7-runtime-observability/v1"
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,214 @@ class SemanticRequirement:
     evidence_terms: tuple[str, ...]
     visible_patterns: tuple[str, ...]
     exact_phrase: str = ""
+
+
+def _new_runtime_observability() -> dict[str, Any]:
+    return {
+        "schema_version": RUNTIME_OBSERVABILITY_SCHEMA,
+        "stage_timings": [],
+        "provider_call_timings": [],
+        "counts": {},
+    }
+
+
+def _elapsed_ms(started: float) -> int:
+    return max(0, int((time.monotonic() - started) * 1000))
+
+
+def _safe_observability_value(value: Any) -> Any:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else value
+    if isinstance(value, str):
+        return value[:120]
+    return None
+
+
+def _observe_count(observability: dict[str, Any] | None, **counts: Any) -> None:
+    if observability is None:
+        return
+    target = observability.setdefault("counts", {})
+    if not isinstance(target, dict):
+        return
+    for key, value in counts.items():
+        safe = _safe_observability_value(value)
+        if safe is not None:
+            target[key] = safe
+
+
+def _observe_stage(
+    observability: dict[str, Any] | None,
+    stage: str,
+    started: float,
+    **metadata: Any,
+) -> None:
+    if observability is None:
+        return
+    record: dict[str, Any] = {
+        "stage": stage,
+        "elapsed_ms": _elapsed_ms(started),
+    }
+    for key, value in metadata.items():
+        safe = _safe_observability_value(value)
+        if safe is not None:
+            record[key] = safe
+    stages = observability.setdefault("stage_timings", [])
+    if isinstance(stages, list):
+        stages.append(record)
+
+
+def _payload_size_bytes(value: Any) -> int:
+    try:
+        return len(
+            json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode(
+                "utf-8"
+            )
+        )
+    except (TypeError, ValueError):
+        return 0
+
+
+def _observe_provider_call(
+    observability: dict[str, Any] | None,
+    *,
+    call_class: str,
+    payload: Mapping[str, Any],
+    started: float,
+    result: Mapping[str, Any] | None = None,
+    error_type: str = "",
+) -> None:
+    if observability is None:
+        return
+    target = observability.setdefault("provider_call_timings", [])
+    if not isinstance(target, list):
+        return
+    usage = result.get("usage") if isinstance(result, Mapping) else {}
+    usage = usage if isinstance(usage, Mapping) else {}
+    input_tokens = int(usage.get("input_tokens", usage.get("prompt_tokens", 0)))
+    output_tokens = int(usage.get("output_tokens", usage.get("completion_tokens", 0)))
+    record: dict[str, Any] = {
+        "attempt": len(target) + 1,
+        "call_class": str(call_class),
+        "elapsed_ms": _elapsed_ms(started),
+        "payload_bytes": _payload_size_bytes(payload),
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": int(usage.get("total_tokens", input_tokens + output_tokens)),
+    }
+    if isinstance(result, Mapping):
+        record["provider_latency_ms"] = int(result.get("latency_ms", 0))
+        record["provider_text_char_count"] = len(
+            str(result.get("text", result.get("provider_text", "")))
+        )
+        record["stop_reason"] = str(
+            result.get("stop_reason") or result.get("finish_reason") or ""
+        )
+    if error_type:
+        record["error_type"] = error_type
+    target.append(record)
+
+
+def _provider_call_timing_from_telemetry(
+    call: Mapping[str, Any], *, attempt: int
+) -> dict[str, Any]:
+    usage = call.get("usage") if isinstance(call.get("usage"), Mapping) else {}
+    parse = (
+        call.get("parse_telemetry")
+        if isinstance(call.get("parse_telemetry"), Mapping)
+        else {}
+    )
+    return {
+        "attempt": attempt,
+        "call_class": str(call.get("call_class", "")),
+        "latency_ms": int(call.get("latency_ms", 0)),
+        "provider_text_char_count": int(call.get("provider_text_char_count", 0)),
+        "input_tokens": int(usage.get("input_tokens", 0)),
+        "output_tokens": int(usage.get("output_tokens", 0)),
+        "total_tokens": int(usage.get("total_tokens", 0)),
+        "parse_ok": bool(parse.get("parse_ok", False)),
+        "parse_subtype": str(parse.get("parse_subtype", "")),
+    }
+
+
+def _add_provider_call_observability(
+    observability: dict[str, Any] | None,
+    verification: Mapping[str, Any],
+) -> None:
+    if observability is None:
+        return
+    mve = (
+        verification.get("multi_evidence_verification")
+        if isinstance(verification.get("multi_evidence_verification"), Mapping)
+        else {}
+    )
+    calls = mve.get("provider_attempt_telemetry", []) if isinstance(mve, Mapping) else []
+    if not isinstance(calls, list):
+        return
+    target = observability.setdefault("provider_call_timings", [])
+    if not isinstance(target, list):
+        return
+    existing = len(target)
+    for index, call in enumerate(calls, start=1):
+        if isinstance(call, Mapping):
+            timing = _provider_call_timing_from_telemetry(
+                call, attempt=existing + index
+            )
+            target_index = index - 1
+            if target_index < existing:
+                parse_keys = ("parse_ok", "parse_subtype")
+                target[target_index].update(
+                    {key: timing[key] for key in parse_keys if key in timing}
+                )
+            else:
+                target.append(timing)
+
+
+def _attach_runtime_observability(
+    response: dict[str, Any],
+    observability: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if observability is None:
+        return response
+    stages = [
+        dict(item)
+        for item in observability.get("stage_timings", [])
+        if isinstance(item, Mapping)
+    ]
+    provider_calls = [
+        dict(item)
+        for item in observability.get("provider_call_timings", [])
+        if isinstance(item, Mapping)
+    ]
+    counts = (
+        dict(observability.get("counts", {}))
+        if isinstance(observability.get("counts"), Mapping)
+        else {}
+    )
+    response["runtime_observability"] = {
+        "schema_version": RUNTIME_OBSERVABILITY_SCHEMA,
+        "stage_timings": stages,
+        "provider_call_timings": provider_calls,
+        "counts": {
+            **counts,
+            "stage_count": len(stages),
+            "provider_call_count": len(provider_calls),
+        },
+        "totals": {
+            "stage_elapsed_ms_sum": sum(int(item.get("elapsed_ms", 0)) for item in stages),
+            "provider_latency_ms_sum": sum(
+                int(item.get("provider_latency_ms", item.get("latency_ms", 0)))
+                for item in provider_calls
+            ),
+            "provider_wall_elapsed_ms_sum": sum(
+                int(item.get("elapsed_ms", 0)) for item in provider_calls
+            ),
+        },
+    }
+    return response
 
 
 def run_owner_arbitrary_query(
@@ -276,7 +485,9 @@ def _response_from_verification(
     started: float,
     intent_class: str,
     semantic_closure: Mapping[str, Any],
+    observability: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    response_stage_started = time.monotonic()
     response = {
         **legacy._base_response(
             gate=gate,
@@ -333,7 +544,16 @@ def _response_from_verification(
         int(response.get("latency_ms", 0)),
         int((time.monotonic() - started) * 1000),
     )
-    return response
+    _observe_stage(
+        observability,
+        "response_dto_build",
+        response_stage_started,
+        selected_evidence_count=len(evidence),
+        has_retrieval_fields=bundle is not None
+        and dense_result is not None
+        and lexical_result is not None,
+    )
+    return _attach_runtime_observability(response, observability)
 
 
 def _synthesize_and_verify(
@@ -480,6 +700,33 @@ def _synthesize_and_verify(
         except (LiveGateError, httpx.HTTPError) as exc:
             failures.append(type(exc).__name__)
             break
+
+    deterministic = legacy._deterministic_evidence_synthesis(
+        trace_id=trace_id,
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+        calls=calls,
+        repair_attempted=True,
+        trigger_reason_codes=[*failures, "SEMANTIC_CLOSURE_FAILED"],
+        allow_after_repair_failure=True,
+    )
+    if deterministic is not None:
+        deterministic["multi_evidence_verification"] = {
+            **dict(deterministic.get("multi_evidence_verification", {})),
+            "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+        }
+        closure = {
+            "schema_version": "m26-aq-semantic-closure/v1",
+            "requirements": [_requirement_public(item) for item in requirements],
+            "support_proof": final_support_proof,
+            "endpoint_proof": dict(endpoint_proof),
+            "failures": [],
+            "pre_recovery_failures": sorted(set(failures)),
+            "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+            "broad_deterministic_fallback_used": True,
+        }
+        return deterministic, closure
 
     abstention = legacy._verified_abstention(
         reason_codes=[*failures, "SEMANTIC_CLOSURE_FAILED"],

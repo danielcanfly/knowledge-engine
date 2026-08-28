@@ -59,6 +59,7 @@ from .m19_graph_api import (
     ReadOnlyGraphService,
 )
 from .m26_ask_api import register_m26_ask_routes
+from .m26_translation_gateway_public_api import register_public_answers_routes
 from .runtime import Runtime
 from .storage import create_object_store
 
@@ -219,6 +220,7 @@ def _execute_with_public_controls(
 app = FastAPI(title="Knowledge Engine", version="0.7.0")
 app.add_middleware(PublicEdgeSecurityMiddleware, settings_provider=get_settings)
 register_m26_ask_routes(app)
+register_public_answers_routes(app)
 
 
 @app.get("/v1/health")
@@ -239,6 +241,11 @@ def health() -> dict:
         "manifest_sha256": active.manifest_sha256,
         "channel": runtime.channel,
     }
+
+
+@app.get("/health")
+def legacy_health() -> dict:
+    return health()
 
 
 @app.get("/v1/releases/current")

@@ -120,6 +120,7 @@ def run_owner_query_for_web(
     require_remote_dense: bool = False,
     max_provider_calls: int = 2,
     max_cost: Decimal = Decimal("0.10"),
+    progress_callback: Any = None,
 ) -> dict[str, Any]:
     question = validate_query_request(request_payload)
     runtime_response = run_owner_arbitrary_query(
@@ -133,6 +134,7 @@ def run_owner_query_for_web(
         require_remote_dense=require_remote_dense,
         max_provider_calls=max_provider_calls,
         max_cost=max_cost,
+        progress_callback=progress_callback,
     )
     return build_web_query_dto(runtime_response)
 
@@ -186,6 +188,11 @@ def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
         "graph_observability": dict(
             runtime_response.get("graph_observability", {})
             if isinstance(runtime_response.get("graph_observability"), Mapping)
+            else {}
+        ),
+        "runtime_observability": dict(
+            runtime_response.get("runtime_observability", {})
+            if isinstance(runtime_response.get("runtime_observability"), Mapping)
             else {}
         ),
         "identities": {

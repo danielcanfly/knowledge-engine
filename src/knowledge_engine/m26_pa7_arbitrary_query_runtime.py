@@ -6,7 +6,7 @@ import os
 import re
 import time
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -242,6 +242,9 @@ class ProviderClient(Protocol):
     def call(self, payload: Mapping[str, Any], call_class: str) -> dict[str, Any]: ...
 
 
+ProgressCallback = Callable[[str, Mapping[str, Any]], None]
+
+
 @dataclass(frozen=True)
 class RemoteDenseConfig:
     cloudflare_account_id: str
@@ -451,6 +454,16 @@ def dense_channel_from_env(*, require_remote: bool = False) -> DenseChannel:
     return LocalDenseProjectionChannel()
 
 
+def _emit_progress_event(
+    callback: ProgressCallback | None,
+    event_name: str,
+    payload: Mapping[str, Any],
+) -> None:
+    if callback is None:
+        return
+    callback(str(event_name), dict(payload))
+
+
 def run_owner_arbitrary_query(
     *,
     root: Path,
@@ -464,6 +477,7 @@ def run_owner_arbitrary_query(
     max_provider_calls: int = 2,
     max_cost: Decimal = Decimal("0.10"),
     answer_bundle: ProductionAnswerBundle | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     normalized_question = _normalize_request_question(question)
@@ -568,6 +582,11 @@ def run_owner_arbitrary_query(
             "PA7_PRODUCTION_BUNDLE_RELEASE_MISMATCH",
             "answer runtime is not bound to the accepted full production release",
         )
+    _emit_progress_event(
+        progress_callback,
+        "stage_started",
+        {"stage": "retrieval", "role": "retrieval"},
+    )
     dense = (dense_channel or dense_channel_from_env(require_remote=require_remote_dense)).search(
         question=normalized_question,
         bundle=bundle,
@@ -584,6 +603,20 @@ def run_owner_arbitrary_query(
         semantic_index=None,
         limit=8,
     )
+    _emit_progress_event(
+        progress_callback,
+        "stage_completed",
+        {
+            "stage": "retrieval",
+            "role": "retrieval",
+            "candidate_count": len(_list(dense.get("candidates"), "dense candidates")),
+        },
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_started",
+        {"stage": "organize", "role": "organize"},
+    )
     evidence = _select_evidence(
         bundle=bundle,
         lexical_result=lexical,
@@ -593,6 +626,25 @@ def run_owner_arbitrary_query(
         intent_class=intent_class,
     )
     if not evidence or not _has_meaningful_overlap(normalized_question, evidence):
+        _emit_progress_event(
+            progress_callback,
+            "stage_completed",
+            {
+                "stage": "organize",
+                "role": "organize",
+                "selected_evidence_count": len(evidence),
+            },
+        )
+        _emit_progress_event(
+            progress_callback,
+            "stage_started",
+            {"stage": "validation", "role": "semantic_reviewer"},
+        )
+        _emit_progress_event(
+            progress_callback,
+            "stage_completed",
+            {"stage": "validation", "role": "semantic_reviewer"},
+        )
         return {
             **_base_response(
                 gate=validated_gate,
@@ -614,6 +666,20 @@ def run_owner_arbitrary_query(
                 intent_class=intent_class,
             ),
         }
+    _emit_progress_event(
+        progress_callback,
+        "stage_completed",
+        {
+            "stage": "organize",
+            "role": "organize",
+            "selected_evidence_count": len(evidence),
+        },
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_started",
+        {"stage": "synthesis", "role": "closure"},
+    )
 
     verification = _synthesize_and_verify(
         root=root,
@@ -622,6 +688,17 @@ def run_owner_arbitrary_query(
         intent_class=intent_class,
         evidence=evidence,
         provider_client=provider,
+        progress_callback=progress_callback,
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_completed",
+        {"stage": "synthesis", "role": "closure"},
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_started",
+        {"stage": "validation", "role": "semantic_reviewer"},
     )
     response = {
         **_base_response(
@@ -660,6 +737,11 @@ def run_owner_arbitrary_query(
     response["latency_ms"] = max(
         int(response["latency_ms"]),
         int((time.monotonic() - started) * 1000),
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_completed",
+        {"stage": "validation", "role": "semantic_reviewer"},
     )
     return response
 
@@ -944,6 +1026,7 @@ def _synthesize_and_verify(
     intent_class: str,
     evidence: Sequence[Mapping[str, Any]],
     provider_client: ProviderClient,
+    progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     policy = load_pa7_json(root / PA4_POLICY_PATH)
     calls: list[dict[str, Any]] = []
@@ -958,6 +1041,16 @@ def _synthesize_and_verify(
             evidence=evidence,
             repair=attempt == 2,
             previous_reason_codes=failures,
+        )
+        _emit_progress_event(
+            progress_callback,
+            "model_started",
+            {
+                "stage": "synthesis",
+                "role": "closure",
+                "attempt": attempt,
+                "provider": "MiniMax",
+            },
         )
         try:
             result = provider_client.call(
@@ -986,7 +1079,29 @@ def _synthesize_and_verify(
                     allow_after_repair_failure=False,
                 )
                 if deterministic is not None:
+                    _emit_progress_event(
+                        progress_callback,
+                        "model_completed",
+                        {
+                            "stage": "synthesis",
+                            "role": "closure",
+                            "attempt": attempt,
+                            "provider": "MiniMax",
+                            "outcome": "deterministic_fallback",
+                        },
+                    )
                     return deterministic
+                _emit_progress_event(
+                    progress_callback,
+                    "model_completed",
+                    {
+                        "stage": "synthesis",
+                        "role": "closure",
+                        "attempt": attempt,
+                        "provider": "MiniMax",
+                        "outcome": "verified_abstention",
+                    },
+                )
                 return _verified_abstention(
                     reason_codes=verified["reason_codes"],
                     calls=calls,
@@ -1007,6 +1122,17 @@ def _synthesize_and_verify(
                 "repair_result": "verified" if repair_attempted else "not_needed",
                 "deterministic_evidence_synthesis_used": False,
             }
+            _emit_progress_event(
+                progress_callback,
+                "model_completed",
+                {
+                    "stage": "synthesis",
+                    "role": "closure",
+                    "attempt": attempt,
+                    "provider": "MiniMax",
+                    "outcome": "verified_answer",
+                },
+            )
             return answer
         except VerifiedAnswerGateError as exc:
             failures.append(exc.code)
@@ -1024,13 +1150,46 @@ def _synthesize_and_verify(
                 allow_after_repair_failure=True,
             )
             if deterministic is not None:
+                _emit_progress_event(
+                    progress_callback,
+                    "model_completed",
+                    {
+                        "stage": "synthesis",
+                        "role": "closure",
+                        "attempt": attempt,
+                        "provider": "MiniMax",
+                        "outcome": "deterministic_fallback",
+                    },
+                )
                 return deterministic
+            _emit_progress_event(
+                progress_callback,
+                "model_completed",
+                {
+                    "stage": "synthesis",
+                    "role": "closure",
+                    "attempt": attempt,
+                    "provider": "MiniMax",
+                    "outcome": "verified_abstention",
+                },
+            )
             return _verified_abstention(
                 reason_codes=[*failures, "BOUNDED_REPAIR_EXHAUSTED"],
                 calls=calls,
                 repair_attempted=True,
             )
         except (LiveGateError, httpx.HTTPError, KeyError, ValueError) as exc:
+            _emit_progress_event(
+                progress_callback,
+                "model_completed",
+                {
+                    "stage": "synthesis",
+                    "role": "closure",
+                    "attempt": attempt,
+                    "provider": "MiniMax",
+                    "outcome": "provider_error",
+                },
+            )
             return _verified_abstention(
                 reason_codes=[type(exc).__name__, "PROVIDER_CALL_FAILED"],
                 calls=calls,
@@ -1372,22 +1531,37 @@ def _best_evidence_for_direct_facet(
     facet_terms = _facet_terms(facet)
     if not facet_terms:
         return _single_responsive_fallback_passage(question=question, evidence=passages)
-    ranked = sorted(
-        passages,
-        key=lambda item: (
-            -len(facet_terms & _coverage_terms(str(item.get("passage_text", "")))),
-            -_text_term_overlap_score(facet_terms, str(item.get("passage_text", ""))),
-            _is_article_root_evidence(item),
-            str(item.get("section_id", "")),
-        ),
+    ranked: list[tuple[int, float, bool, bool, str, Mapping[str, Any]]] = []
+    for item in passages:
+        text = str(item.get("passage_text", ""))
+        overlap_count = len(facet_terms & _coverage_terms(text))
+        if overlap_count <= 0:
+            continue
+        ranked.append(
+            (
+                overlap_count,
+                _text_term_overlap_score(facet_terms, text),
+                not _is_article_root_evidence(item),
+                not (_article_title_like(text) or _thin_heading(text)),
+                str(item.get("section_id", "")),
+                item,
+            )
+        )
+    if not ranked:
+        return None
+    ranked.sort(
+        key=lambda entry: (
+            -entry[0],
+            -entry[1],
+            not entry[2],
+            not entry[3],
+            entry[4],
+        )
     )
-    best = ranked[0]
-    return (
-        best
-        if len(facet_terms & _coverage_terms(str(best.get("passage_text", ""))))
-        >= 1
-        else None
-    )
+    best = ranked[0][5]
+    best_overlap = ranked[0][0]
+    required_overlap = 2 if len(facet_terms) >= 2 else 1
+    return best if best_overlap >= required_overlap else None
 
 
 def _deterministic_relation_surface_text(
@@ -2450,7 +2624,10 @@ def _direct_facet_signal_met(
             visible_terms | support_terms | evidence_terms
         )
     if facet_id == "direct_answer":
-        return bool(visible_terms & (support_terms | evidence_terms))
+        visible_overlap = visible_terms & facet_terms
+        grounded_overlap = (support_terms | evidence_terms) & facet_terms
+        needed = 2 if len(facet_terms) >= 2 else 1
+        return len(visible_overlap | grounded_overlap) >= needed
     if not facet_terms:
         return bool(visible_terms & (support_terms | evidence_terms))
     visible_overlap = visible_terms & facet_terms
@@ -4695,8 +4872,7 @@ def _has_meaningful_overlap(question: str, evidence: Sequence[Mapping[str, Any]]
         return len(overlap) >= 2 and any(
             term in overlap and _looks_like_random_identifier(term) for term in query_terms
         )
-    required_overlap = 1
-    return len(overlap) >= required_overlap
+    return bool(overlap)
 
 
 def _requires_precise_overlap(query_terms: set[str]) -> bool:

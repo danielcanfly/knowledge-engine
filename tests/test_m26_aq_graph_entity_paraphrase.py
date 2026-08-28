@@ -34,7 +34,10 @@ def test_graph_fact_wrapper_is_not_entity_identity() -> None:
     ]
     normalized = patch._normalize_graph_entity_requirements(
         Runtime,
-        "A true graph fact says Harness Theory Part 1 precedes Part 2. Does that fact by itself prove that Part 1 depends on Part 2?",
+        (
+            "A true graph fact says Harness Theory Part 1 precedes Part 2. "
+            "Does that fact by itself prove that Part 1 depends on Part 2?"
+        ),
         requirements,
     )
     exacts = [item.exact_phrase for item in normalized if item.requirement_id.startswith("entity_")]
@@ -48,7 +51,13 @@ def test_graph_fact_wrapper_is_not_entity_identity() -> None:
 
 
 def test_relation_paraphrases_map_to_precedes_semantics() -> None:
-    for phrase in ("comes before", "is before", "as preceding"):
+    for phrase in (
+        "comes before",
+        "is before",
+        "comes earlier than",
+        "is earlier than",
+        "as preceding",
+    ):
         question = f"Harness Theory Part 1 {phrase} Part 2 in the relation graph."
         normalized = patch._normalize_graph_entity_requirements(
             Runtime,

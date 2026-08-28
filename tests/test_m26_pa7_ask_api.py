@@ -222,6 +222,27 @@ def _dto_runtime_fixture(**_: Any) -> dict[str, Any]:
         "selected_evidence": [],
         "evidence_utilization_trace": {},
         "graph_observability": {},
+        "runtime_observability": {
+            "schema_version": "m26-pa7-runtime-observability/v1",
+            "stage_timings": [
+                {"stage": "dense_retrieval", "elapsed_ms": 2, "candidate_count": 4}
+            ],
+            "provider_call_timings": [
+                {
+                    "attempt": 1,
+                    "call_class": "aq_semantic_closure",
+                    "latency_ms": 5,
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                    "total_tokens": 120,
+                    "provider_text_char_count": 200,
+                    "parse_ok": True,
+                    "parse_subtype": "compact_semantic_closure_json",
+                }
+            ],
+            "counts": {"stage_count": 1, "provider_call_count": 1},
+            "totals": {"stage_elapsed_ms_sum": 2, "provider_latency_ms_sum": 5},
+        },
         "production_release_id": "release_test",
         "production_manifest_sha256": "31" * 32,
         "production_pointer_digest": "32" * 32,
@@ -266,8 +287,16 @@ def test_web_dto_wraps_canonical_runtime_without_raw_question(
     assert len(dto["citations"]) >= 2
     assert len(dto["sources"]) >= 2
     assert dto["multi_evidence_verification"]["support_precision"] == 1.0
+    assert dto["runtime_observability"]["schema_version"] == (
+        "m26-pa7-runtime-observability/v1"
+    )
+    assert dto["runtime_observability"]["stage_timings"][0]["stage"] == "dense_retrieval"
+    assert dto["runtime_observability"]["provider_call_timings"][0][
+        "call_class"
+    ] == "aq_semantic_closure"
     assert dto["mutations"]["canonical_writes"] == 0
     assert dto["privacy"]["raw_query_persisted"] is False
+    assert '"provider_text":' not in encoded
     assert question not in encoded
 
 

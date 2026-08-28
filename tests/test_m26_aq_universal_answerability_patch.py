@@ -68,6 +68,56 @@ def test_semantic_admission_allows_nonlexical_semantic_evidence() -> None:
     )
 
 
+def test_runtime_overlap_allows_nonlexical_semantic_evidence() -> None:
+    evidence = [
+        _evidence(
+            "ev1",
+            (
+                "Customers may recognize the problem but still avoid adoption when "
+                "switching cost, trust, timing, and incentives are unresolved."
+            ),
+            source="source-a",
+            channels=["dense"],
+        ),
+        _evidence(
+            "ev2",
+            (
+                "A useful market signal is not only pain, but willingness to change "
+                "behavior under real constraints."
+            ),
+            source="source-b",
+            channels=["semantic_requirement_recovery"],
+        ),
+    ]
+
+    assert legacy._has_meaningful_overlap(
+        "為什麼大家承認問題存在卻仍然不願意採用？",
+        evidence,
+    )
+
+
+def test_runtime_overlap_rejects_dense_without_semantic_metadata_signal() -> None:
+    evidence = [
+        _evidence(
+            "ev1",
+            "This passage is only a dense candidate with no positive semantic metadata.",
+            source="source-a",
+            channels=["dense"],
+        ),
+        _evidence(
+            "ev2",
+            "This second passage is also dense-only and has no admission proof.",
+            source="source-b",
+            channels=["dense"],
+        ),
+    ]
+
+    assert not legacy._has_meaningful_overlap(
+        "完全不同語言的問題沒有字面重疊時不能靠空白語義訊號放行",
+        evidence,
+    )
+
+
 def test_semantic_admission_keeps_precise_identifier_questions_strict() -> None:
     evidence = [
         _evidence(

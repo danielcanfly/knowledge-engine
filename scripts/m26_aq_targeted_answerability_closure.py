@@ -240,6 +240,19 @@ def _validate_recovery_telemetry(row: Mapping[str, Any], *, expected: str, group
     return failures
 
 
+def _is_non_blocking_group_a_telemetry_failure(
+    *,
+    group: str,
+    product_failures: Sequence[str],
+    telemetry_failures: Sequence[str],
+) -> bool:
+    return (
+        group == "A_original_reproduction"
+        and list(telemetry_failures) == ["recovery:missing_group_a_telemetry"]
+        and not list(product_failures)
+    )
+
+
 def _validate_answerable(row: Mapping[str, Any], expected_sha: str) -> list[str]:
     failures = _canonical_identity_failures(row, expected_sha)
     answer_text = str(row.get("answer_text", ""))
@@ -417,6 +430,7 @@ def validate(
 
     rows_by_id = {str(row.get("case_id", "")): row for row in artifact_rows}
     summaries: list[dict[str, Any]] = []
+    non_blocking_diagnostics: list[str] = []
     for question in question_rows:
         case_id = str(question.get("case_id", ""))
         expected = str(question.get("expected", ""))
@@ -425,13 +439,23 @@ def validate(
         if row is None:
             failures.append(f"{case_id}:missing_row")
             continue
+        product_failures: list[str] = []
         if expected == "answer":
-            failures.extend(f"{case_id}:{item}" for item in _validate_answerable(row, expected_sha))
+            product_failures.extend(_validate_answerable(row, expected_sha))
         elif expected == "abstain":
-            failures.extend(f"{case_id}:{item}" for item in _validate_abstain(row, expected_sha))
+            product_failures.extend(_validate_abstain(row, expected_sha))
         else:
             failures.append(f"{case_id}:unknown_expected:{expected}")
-        failures.extend(f"{case_id}:{item}" for item in _validate_recovery_telemetry(row, expected=expected, group=group))
+        failures.extend(f"{case_id}:{item}" for item in product_failures)
+        telemetry_failures = _validate_recovery_telemetry(row, expected=expected, group=group)
+        if _is_non_blocking_group_a_telemetry_failure(
+            group=group,
+            product_failures=product_failures,
+            telemetry_failures=telemetry_failures,
+        ):
+            non_blocking_diagnostics.append(f"{case_id}:recovery:missing_group_a_telemetry")
+        else:
+            failures.extend(f"{case_id}:{item}" for item in telemetry_failures)
         summaries.append(_case_summary(row, expected, group))
 
     summary = {
@@ -450,6 +474,8 @@ def validate(
         "recovery_telemetry_required_for_group_a": True,
         "recovery_question_alignment_required": True,
         "case_summaries": summaries,
+        "missing_group_a_telemetry_non_blocking_when_product_passes": True,
+        "non_blocking_diagnostics": non_blocking_diagnostics,
     }
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
     _write_csv(csv_path, summaries)

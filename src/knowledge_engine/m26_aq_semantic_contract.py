@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from . import m26_pa7_arbitrary_query_runtime as legacy
 from . import m26_pa7_semantic_closure_runtime as runtime
@@ -26,6 +26,37 @@ CANONICAL_RUNTIME_ENTRYPOINT = (
 DenseChannel = legacy.DenseChannel
 ProviderClient = legacy.ProviderClient
 SemanticRequirement = runtime.SemanticRequirement
+ProgressCallback = Callable[[str, Mapping[str, Any]], None]
+
+
+class _ObservedProviderClient:
+    def __init__(self, provider_client: Any, observability: dict[str, Any]) -> None:
+        self._provider_client = provider_client
+        self._observability = observability
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        import time
+
+        started = time.monotonic()
+        try:
+            result = self._provider_client.call(payload, call_class)
+        except Exception as exc:
+            runtime._observe_provider_call(
+                self._observability,
+                call_class=call_class,
+                payload=payload,
+                started=started,
+                error_type=type(exc).__name__,
+            )
+            raise
+        runtime._observe_provider_call(
+            self._observability,
+            call_class=call_class,
+            payload=payload,
+            started=started,
+            result=result,
+        )
+        return result
 
 
 @dataclass(frozen=True)
@@ -794,6 +825,16 @@ def _response_with_contract(response: dict[str, Any]) -> dict[str, Any]:
     return response
 
 
+def _emit_progress_event(
+    progress_callback: ProgressCallback | None,
+    event_name: str,
+    payload: Mapping[str, Any],
+) -> None:
+    if progress_callback is None:
+        return
+    progress_callback(str(event_name), dict(payload))
+
+
 def run_owner_arbitrary_query(
     *,
     root: Path,
@@ -807,10 +848,12 @@ def run_owner_arbitrary_query(
     max_provider_calls: int = 2,
     max_cost: Decimal = Decimal("0.10"),
     answer_bundle: ProductionAnswerBundle | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     import time
 
     started = time.monotonic()
+    observability = runtime._new_runtime_observability()
     normalized_question = legacy._normalize_request_question(question)
     question_sha = canonical_sha256(normalized_question)
     intent_class = legacy._intent_class(normalized_question)
@@ -834,41 +877,71 @@ def run_owner_arbitrary_query(
             "owner_subject_hash": owner_subject_hash,
         }
     )[:32]
+    runtime._observe_stage(
+        observability,
+        "request_admission",
+        started,
+        admitted=bool(admission["admitted"]),
+        intent_class=intent_class,
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_started",
+        {"stage": "request_admission", "role": "translation"},
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_completed",
+        {
+            "stage": "request_admission",
+            "role": "translation",
+            "admitted": bool(admission["admitted"]),
+        },
+    )
 
     if not admission["admitted"]:
         return _response_with_contract(
-            legacy._base_response(
-                gate=validated_gate,
-                trace_id=trace_id,
-                question_sha=question_sha,
-                started=started,
-                status="denied_non_owner_or_public_request",
-                terminal_status="denied_before_retrieval",
-                reason_codes=admission["reason_codes"],
+            runtime._attach_runtime_observability(
+                legacy._base_response(
+                    gate=validated_gate,
+                    trace_id=trace_id,
+                    question_sha=question_sha,
+                    started=started,
+                    status="denied_non_owner_or_public_request",
+                    terminal_status="denied_before_retrieval",
+                    reason_codes=admission["reason_codes"],
+                ),
+                observability,
             )
         )
     if legacy._looks_like_prompt_injection(normalized_question):
         return _response_with_contract(
-            legacy._base_response(
-                gate=validated_gate,
-                trace_id=trace_id,
-                question_sha=question_sha,
-                started=started,
-                status="owner_only_safe_abstention",
-                terminal_status="safe_abstention",
-                reason_codes=["PROMPT_INJECTION_OR_PRIVACY_RISK"],
+            runtime._attach_runtime_observability(
+                legacy._base_response(
+                    gate=validated_gate,
+                    trace_id=trace_id,
+                    question_sha=question_sha,
+                    started=started,
+                    status="owner_only_safe_abstention",
+                    terminal_status="safe_abstention",
+                    reason_codes=["PROMPT_INJECTION_OR_PRIVACY_RISK"],
+                ),
+                observability,
             )
         )
     if legacy._looks_like_underspecified_workflow_question(normalized_question):
         return _response_with_contract(
-            legacy._base_response(
-                gate=validated_gate,
-                trace_id=trace_id,
-                question_sha=question_sha,
-                started=started,
-                status="owner_only_safe_abstention",
-                terminal_status="safe_abstention",
-                reason_codes=["QUESTION_UNDERSPECIFIED_CLARIFICATION_REQUIRED"],
+            runtime._attach_runtime_observability(
+                legacy._base_response(
+                    gate=validated_gate,
+                    trace_id=trace_id,
+                    question_sha=question_sha,
+                    started=started,
+                    status="owner_only_safe_abstention",
+                    terminal_status="safe_abstention",
+                    reason_codes=["QUESTION_UNDERSPECIFIED_CLARIFICATION_REQUIRED"],
+                ),
+                observability,
             )
         )
 
@@ -904,14 +977,70 @@ def run_owner_arbitrary_query(
                         "failures": [],
                         "semantic_contract": _semantic_contract_public(),
                     },
+                    observability=observability,
                 )
             )
 
+    provider = _ObservedProviderClient(provider, observability)
+    _emit_progress_event(
+        progress_callback,
+        "stage_started",
+        {"stage": "production_bundle_load_and_gate", "role": "retrieval"},
+    )
+    stage_started = time.monotonic()
     bundle = answer_bundle or load_production_answer_bundle()
     runtime._assert_full_production_graph(bundle)
+    runtime._observe_stage(
+        observability,
+        "production_bundle_load_and_gate",
+        stage_started,
+        graph_node_count=len(bundle.graph_v2.get("nodes", [])),
+        graph_edge_count=len(bundle.graph_v2.get("edges", [])),
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_completed",
+        {
+            "stage": "production_bundle_load_and_gate",
+            "role": "retrieval",
+            "provider": "Cloudflare",
+        },
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_started",
+        {"stage": "retrieval", "role": "retrieval", "provider": "Cloudflare"},
+    )
+    stage_started = time.monotonic()
     dense = (
         dense_channel or legacy.dense_channel_from_env(require_remote=require_remote_dense)
     ).search(question=normalized_question, bundle=bundle, top_k=8)
+    runtime._observe_stage(
+        observability,
+        "dense_retrieval",
+        stage_started,
+        candidate_count=len(dense.get("candidates", []))
+        if isinstance(dense, Mapping)
+        else 0,
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_completed",
+        {
+            "stage": "retrieval",
+            "role": "retrieval",
+            "provider": "Cloudflare",
+            "candidate_count": len(dense.get("candidates", []))
+            if isinstance(dense, Mapping)
+            else 0,
+        },
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_started",
+        {"stage": "lexical_retrieval", "role": "retrieval"},
+    )
+    stage_started = time.monotonic()
     lexical = retrieve_wiki_first(
         query=normalized_question,
         allowed_audiences={"public", "internal"},
@@ -923,6 +1052,31 @@ def run_owner_arbitrary_query(
         semantic_index=None,
         limit=8,
     )
+    runtime._observe_stage(
+        observability,
+        "lexical_retrieval",
+        stage_started,
+        candidate_count=len(lexical.get("candidates", []))
+        if isinstance(lexical, Mapping)
+        else 0,
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_completed",
+        {
+            "stage": "lexical_retrieval",
+            "role": "retrieval",
+            "candidate_count": len(lexical.get("candidates", []))
+            if isinstance(lexical, Mapping)
+            else 0,
+        },
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_started",
+        {"stage": "evidence_selection", "role": "organize"},
+    )
+    stage_started = time.monotonic()
     evidence = legacy._select_evidence(
         bundle=bundle,
         lexical_result=lexical,
@@ -931,7 +1085,49 @@ def run_owner_arbitrary_query(
         question=normalized_question,
         intent_class=intent_class,
     )
+    runtime._observe_stage(
+        observability,
+        "evidence_selection",
+        stage_started,
+        selected_evidence_count=len(evidence),
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_completed",
+        {
+            "stage": "evidence_selection",
+            "role": "organize",
+            "selected_evidence_count": len(evidence),
+        },
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_started",
+        {"stage": "semantic_requirement_derivation", "role": "organize"},
+    )
+    stage_started = time.monotonic()
     requirements = derive_semantic_requirements(normalized_question, intent_class)
+    runtime._observe_stage(
+        observability,
+        "semantic_requirement_derivation",
+        stage_started,
+        requirement_count=len(requirements),
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_completed",
+        {
+            "stage": "semantic_requirement_derivation",
+            "role": "organize",
+            "requirement_count": len(requirements),
+        },
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_started",
+        {"stage": "semantic_evidence_strengthening", "role": "organize"},
+    )
+    stage_started = time.monotonic()
     evidence, endpoint_proof = runtime._strengthen_evidence(
         bundle=bundle,
         evidence=evidence,
@@ -940,6 +1136,30 @@ def run_owner_arbitrary_query(
         question=normalized_question,
         intent_class=intent_class,
         requirements=requirements,
+    )
+    runtime._observe_stage(
+        observability,
+        "semantic_evidence_strengthening",
+        stage_started,
+        selected_evidence_count=len(evidence),
+        endpoint_required=bool(endpoint_proof.get("required", False)),
+        endpoint_matched=bool(endpoint_proof.get("matched", False)),
+    )
+    _emit_progress_event(
+        progress_callback,
+        "stage_completed",
+        {
+            "stage": "semantic_evidence_strengthening",
+            "role": "organize",
+            "selected_evidence_count": len(evidence),
+            "endpoint_required": bool(endpoint_proof.get("required", False)),
+            "endpoint_matched": bool(endpoint_proof.get("matched", False)),
+        },
+    )
+    runtime._observe_count(
+        observability,
+        requirement_count=len(requirements),
+        selected_evidence_count=len(evidence),
     )
 
     if not evidence or not legacy._has_meaningful_overlap(normalized_question, evidence):
@@ -965,15 +1185,24 @@ def run_owner_arbitrary_query(
                 started=started,
                 intent_class=intent_class,
                 semantic_closure={
-                    "requirements": [runtime._requirement_public(item) for item in requirements],
+                    "requirements": [
+                        runtime._requirement_public(item) for item in requirements
+                    ],
                     "support_proof": [],
                     "endpoint_proof": endpoint_proof,
                     "failures": ["LOW_RETRIEVAL_SUPPORT"],
                     "semantic_contract": _semantic_contract_public(),
                 },
+                observability=observability,
             )
         )
 
+    stage_started = time.monotonic()
+    _emit_progress_event(
+        progress_callback,
+        "model_started",
+        {"stage": "semantic_synthesis_and_verification", "role": "closure", "provider": "MiniMax"},
+    )
     verification, closure = synthesize_and_verify(
         question=normalized_question,
         trace_id=trace_id,
@@ -983,6 +1212,25 @@ def run_owner_arbitrary_query(
         requirements=requirements,
         endpoint_proof=endpoint_proof,
     )
+    runtime._observe_stage(
+        observability,
+        "semantic_synthesis_and_verification",
+        stage_started,
+        provider_call_count=int(verification.get("provider_call_count", 0)),
+        safe_abstention=bool(verification.get("safe_abstention", True)),
+    )
+    _emit_progress_event(
+        progress_callback,
+        "model_completed",
+        {
+            "stage": "semantic_synthesis_and_verification",
+            "role": "closure",
+            "provider": "MiniMax",
+            "provider_call_count": int(verification.get("provider_call_count", 0)),
+            "safe_abstention": bool(verification.get("safe_abstention", True)),
+        },
+    )
+    runtime._add_provider_call_observability(observability, verification)
     return _response_with_contract(
         runtime._response_from_verification(
             gate=validated_gate,
@@ -996,5 +1244,6 @@ def run_owner_arbitrary_query(
             started=started,
             intent_class=intent_class,
             semantic_closure=closure,
+            observability=observability,
         )
     )
