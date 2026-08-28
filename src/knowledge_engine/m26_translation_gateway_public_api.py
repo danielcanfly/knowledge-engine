@@ -14,6 +14,9 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import StreamingResponse
 
+from .auth import Authenticator
+from .config import Settings
+from .errors import AuthorizationError, ConfigurationError
 from .m26_ask_api import (
     BACKEND_TOKEN_HEADER,
     DEFAULT_GATE_PATH,
@@ -155,6 +158,7 @@ def create_app(
 
     @app.post("/v1/answers")
     async def public_answers(request: Request) -> StreamingResponse:
+        _authenticate_staging_qualification(request)
         body = await request.body()
         if len(body) > MAX_BODY_BYTES:
             raise _http_error(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "M26_TG_BODY_TOO_LARGE")
@@ -403,11 +407,41 @@ def _resolve_answer(
             gate_path=app.state.gate_path,
             request_payload=payload,
             owner_subject_hash=owner_hash,
-            public_request=True,
+            public_request=False,
             correlation_id=correlation_id,
         )
     except TranslationGatewayError as exc:
         raise _translation_gateway_http_error(exc.failure) from exc
+
+
+def _authenticate_staging_qualification(request: Request) -> None:
+    try:
+        settings = Settings.from_env()
+    except ConfigurationError as exc:
+        raise _http_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "M26_STAGING_QUALIFICATION_UNCONFIGURED",
+        ) from exc
+    if settings.app_env != "staging":
+        return
+    if settings.auth_mode != "supabase_jwt":
+        raise _http_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "M26_STAGING_QUALIFICATION_AUTH_UNCONFIGURED",
+        )
+    authorization = request.headers.get("authorization")
+    if not authorization or not authorization.strip():
+        raise _http_error(
+            status.HTTP_401_UNAUTHORIZED,
+            "M26_STAGING_QUALIFICATION_MISSING",
+        )
+    try:
+        Authenticator(settings).authenticate(authorization)
+    except AuthorizationError as exc:
+        raise _http_error(
+            status.HTTP_403_FORBIDDEN,
+            "M26_STAGING_QUALIFICATION_DENIED",
+        ) from exc
 
 
 def _translation_gateway_http_error(failure: TranslationGatewayFailure) -> HTTPException:
