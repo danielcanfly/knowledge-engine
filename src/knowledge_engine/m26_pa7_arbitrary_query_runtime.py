@@ -1531,37 +1531,22 @@ def _best_evidence_for_direct_facet(
     facet_terms = _facet_terms(facet)
     if not facet_terms:
         return _single_responsive_fallback_passage(question=question, evidence=passages)
-    ranked: list[tuple[int, float, bool, bool, str, Mapping[str, Any]]] = []
-    for item in passages:
-        text = str(item.get("passage_text", ""))
-        overlap_count = len(facet_terms & _coverage_terms(text))
-        if overlap_count <= 0:
-            continue
-        ranked.append(
-            (
-                overlap_count,
-                _text_term_overlap_score(facet_terms, text),
-                not _is_article_root_evidence(item),
-                not (_article_title_like(text) or _thin_heading(text)),
-                str(item.get("section_id", "")),
-                item,
-            )
-        )
-    if not ranked:
-        return None
-    ranked.sort(
-        key=lambda entry: (
-            -entry[0],
-            -entry[1],
-            not entry[2],
-            not entry[3],
-            entry[4],
-        )
+    ranked = sorted(
+        passages,
+        key=lambda item: (
+            -len(facet_terms & _coverage_terms(str(item.get("passage_text", "")))),
+            -_text_term_overlap_score(facet_terms, str(item.get("passage_text", ""))),
+            _is_article_root_evidence(item),
+            str(item.get("section_id", "")),
+        ),
     )
-    best = ranked[0][5]
-    best_overlap = ranked[0][0]
-    required_overlap = 2 if len(facet_terms) >= 2 else 1
-    return best if best_overlap >= required_overlap else None
+    best = ranked[0]
+    return (
+        best
+        if len(facet_terms & _coverage_terms(str(best.get("passage_text", ""))))
+        >= 1
+        else None
+    )
 
 
 def _deterministic_relation_surface_text(
@@ -2624,10 +2609,7 @@ def _direct_facet_signal_met(
             visible_terms | support_terms | evidence_terms
         )
     if facet_id == "direct_answer":
-        visible_overlap = visible_terms & facet_terms
-        grounded_overlap = (support_terms | evidence_terms) & facet_terms
-        needed = 2 if len(facet_terms) >= 2 else 1
-        return len(visible_overlap | grounded_overlap) >= needed
+        return bool(visible_terms & (support_terms | evidence_terms))
     if not facet_terms:
         return bool(visible_terms & (support_terms | evidence_terms))
     visible_overlap = visible_terms & facet_terms
@@ -4872,7 +4854,69 @@ def _has_meaningful_overlap(question: str, evidence: Sequence[Mapping[str, Any]]
         return len(overlap) >= 2 and any(
             term in overlap and _looks_like_random_identifier(term) for term in query_terms
         )
-    return bool(overlap)
+    if overlap:
+        return True
+    return _has_semantic_admission_signal(evidence)
+
+
+def _has_semantic_admission_signal(evidence: Sequence[Mapping[str, Any]]) -> bool:
+    passages = [
+        item for item in evidence if str(item.get("evidence_type", "passage")) == "passage"
+    ]
+    if len(passages) < 2:
+        return False
+    semantic_channels = {
+        "query_coverage",
+        "required_facet_coverage",
+        "release_distinct_source",
+        "semantic_requirement_recovery",
+    }
+    has_signal = False
+    for item in passages:
+        channels = {str(channel) for channel in item.get("channels", [])}
+        if channels & semantic_channels or any(channel.startswith("graph_") for channel in channels):
+            has_signal = True
+            break
+        metadata = item.get("retrieval_metadata", {})
+        if isinstance(metadata, Mapping) and _metadata_has_semantic_admission_signal(
+            metadata, dense_channel_present="dense" in channels
+        ):
+            has_signal = True
+            break
+    if not has_signal:
+        return False
+    if len({_source_identity(item) for item in passages}) < 2 and len(passages) < 3:
+        return False
+    return sum(_passage_text_quality(str(item.get("passage_text", ""))) for item in passages) > 0
+
+
+def _metadata_has_semantic_admission_signal(
+    metadata: Mapping[str, Any], *, dense_channel_present: bool
+) -> bool:
+    for key in ("semantic_requirement_score", "query_overlap_score", "rerank_score"):
+        if key not in metadata:
+            continue
+        try:
+            if float(metadata.get(key, 0.0)) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    graph_scores = metadata.get("graph_relevance_scores")
+    if isinstance(graph_scores, Sequence) and not isinstance(graph_scores, (str, bytes)):
+        for score in graph_scores:
+            try:
+                if float(score) > 0:
+                    return True
+            except (TypeError, ValueError):
+                continue
+    coverage_terms = metadata.get("coverage_terms")
+    if (
+        isinstance(coverage_terms, Sequence)
+        and not isinstance(coverage_terms, (str, bytes))
+        and any(str(item).strip() for item in coverage_terms)
+    ):
+        return True
+    return dense_channel_present and "rerank_score" in metadata
 
 
 def _requires_precise_overlap(query_terms: set[str]) -> bool:
