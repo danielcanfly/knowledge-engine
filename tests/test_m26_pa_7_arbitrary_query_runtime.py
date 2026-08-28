@@ -2697,3 +2697,56 @@ def test_tesc_semantic_review_missing_or_malformed_claim_ids_fail_closed() -> No
         )
 
     assert exc.value.code == "M26-PA7-ME-066"
+
+
+def test_pm_career_questions_prefer_pm_sources_over_technical_snippets() -> None:
+    question = "how to become a product manager"
+    documents = {
+        "pm_section": {
+            "section_id": "pm_section",
+            "concept_id": "pm_concept",
+            "source_id": "daniel_blog_en__pm-user-research-fieldwork-01",
+            "title": "PM User Research and Fieldwork 01",
+            "section_title": "PM User Research and Fieldwork 01",
+            "description": "How PMs recover context behind the metrics.",
+            "body": "Product managers need fieldwork and user research to understand context.",
+        },
+        "tech_section": {
+            "section_id": "tech_section",
+            "concept_id": "tech_concept",
+            "source_id": "daniel_blog_en__from-rag-to-production-rag-part-5",
+            "title": "From RAG to Production RAG Part 5",
+            "section_title": "From RAG to Production RAG Part 5",
+            "description": "Production tracing and observability for RAG systems.",
+            "body": "```python\nfrom llama_index.core import Settings\nfrom langfuse.llama_index import LlamaIndexCallbackHandler\n```",
+        },
+    }
+    bundle = type("Bundle", (), {"graph_v2": {"edges": []}})()
+    candidates = runtime_module._build_candidate_pool(
+        bundle=bundle,
+        documents=documents,
+        lexical_results=[
+            {"section_id": "tech_section", "score": 1.0},
+            {"section_id": "pm_section", "score": 1.0},
+        ],
+        dense_candidates=[],
+        question=question,
+        intent_class="direct_grounded_knowledge",
+    )
+
+    assert candidates[0]["section_id"] == "pm_section"
+    assert runtime_module._looks_like_pm_career_question(question) is True
+    assert candidates[0]["score"] > candidates[1]["score"]
+
+
+def test_code_like_segments_are_skipped_when_extracting_fallback_quotes() -> None:
+    quote = runtime_module._first_exact_evidence_quote(
+        (
+            "from llama_index.core import Settings and from langfuse.llama_index import "
+            "LlamaIndexCallbackHandler are implementation details. "
+            "This passage explains the production workflow in plain language for PM readers."
+        )
+    )
+
+    assert "LlamaIndexCallbackHandler" not in quote
+    assert "plain language" in quote

@@ -127,6 +127,24 @@ ORDER_QUERY_TERMS = {
     "temporal",
     "version",
 }
+PM_CAREER_QUERY_PATTERNS = (
+    re.compile(r"\bhow\s+to\s+(?:become|be)\s+(?:a\s+)?(?:product\s+manager|pm)\b", re.I),
+    re.compile(
+        r"\b(?:what|which)\s+(?:skills?|abilities|traits|responsibilities|career|role|path)"
+        r"\s+(?:does|do|should|can)\s+(?:a\s+)?(?:product\s+manager|pm)\s+"
+        r"(?:need|have|require|own|do)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:product\s+manager|pm)\s+(?:skills?|skillset|role|career|path|responsibilities|roadmap|interview|interviewing)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:skills?|role|career|path|responsibilities|roadmap|day\s+to\s+day)\s+of\s+"
+        r"(?:a\s+)?(?:product\s+manager|pm)\b",
+        re.I,
+    ),
+)
 GENERIC_RELATIONAL_TERMS = {
     "compare",
     "comparison",
@@ -1960,6 +1978,7 @@ def _single_responsive_fallback_passage(
     evidence: Sequence[Mapping[str, Any]],
 ) -> Mapping[str, Any] | None:
     query_terms = _coverage_terms(question)
+    career_query = _looks_like_pm_career_question(question)
     best: Mapping[str, Any] | None = None
     best_score = 0.0
     for item in evidence:
@@ -1968,12 +1987,54 @@ def _single_responsive_fallback_passage(
         if _is_article_root_evidence(item) and _article_title_like(str(item.get("passage_text", ""))):
             continue
         score = _text_term_overlap_score(query_terms, str(item.get("passage_text", "")))
+        if career_query:
+            score += _document_topic_bias(question, item)
         if score > best_score:
             best = item
             best_score = score
     if best is None or best_score < 0.2:
         return None
     return best
+
+
+def _looks_like_pm_career_question(question: str) -> bool:
+    q = " ".join(str(question).casefold().split())
+    if "product manager" not in q and not re.search(r"\bpm\b", q):
+        return False
+    return any(pattern.search(q) for pattern in PM_CAREER_QUERY_PATTERNS)
+
+
+def _document_topic_bias(question: str, document: Mapping[str, Any]) -> float:
+    if not _looks_like_pm_career_question(question):
+        return 0.0
+    source_id = str(document.get("source_id", "")).casefold()
+    title = str(document.get("title", "")).casefold()
+    section_title = str(document.get("section_title", "")).casefold()
+    description = str(document.get("description", "")).casefold()
+    body = str(document.get("body", "")).casefold()
+    text = " ".join((title, section_title, description, body))
+    bias = 0.0
+    if source_id.startswith("daniel_blog_en__pm-") or source_id.startswith("daniel_blog_zh__pm-"):
+        bias += 1.75
+    if title.startswith("pm ") or section_title.startswith("pm ") or "product manager" in title:
+        bias += 0.75
+    if _segment_noise_penalty(text) >= 3 or _document_looks_code_heavy(text):
+        bias -= 1.25
+    if "from-rag-to-production-rag" in source_id or "llamaindex" in source_id or "langfuse" in source_id:
+        bias -= 0.5
+    return bias
+
+
+def _document_looks_code_heavy(text: str) -> bool:
+    segment = str(text)
+    if "```" in segment:
+        return True
+    keyword_hits = len(re.findall(r"\b(?:from|import|def|class|return|lambda|print)\b", segment))
+    if keyword_hits >= 2:
+        return True
+    if len(re.findall(r"[(){}\[\]=]", segment)) >= 8 and len(segment) <= 400:
+        return True
+    return False
 
 
 def _first_distinct_source_items(
@@ -4479,6 +4540,7 @@ def _build_candidate_pool(
     intent_class: str,
 ) -> list[dict[str, Any]]:
     candidates: dict[str, dict[str, Any]] = {}
+    career_query = _looks_like_pm_career_question(question)
     for rank, item in enumerate(lexical_results, start=1):
         section_id = str(item.get("section_id", ""))
         if section_id not in documents:
@@ -4497,6 +4559,12 @@ def _build_candidate_pool(
         candidate["score"] += float(item.get("score", 0.0)) + 0.5 / rank
         candidate["dense"] = dict(item)
         candidate["seed_rank"] = min(int(candidate.get("seed_rank", 999)), rank)
+    if career_query:
+        for candidate in candidates.values():
+            document = documents.get(str(candidate.get("section_id", "")))
+            if not document:
+                continue
+            candidate["score"] += _document_topic_bias(question, document)
     _add_graph_expanded_candidates(
         bundle=bundle,
         documents=documents,
@@ -5945,14 +6013,42 @@ def _first_exact_evidence_quote(text: str, *, max_chars: int = 760) -> str:
             if len(segment) >= 48
             and not _thin_heading(segment)
             and not _article_title_like(segment)
+            and not _segment_looks_like_code(segment)
         ),
         "",
     )
     if not quote:
-        quote = segments[0] if segments else normalized
+        quote = next(
+            (
+                segment
+                for segment in segments
+                if not _segment_looks_like_code(segment)
+                and not _thin_heading(segment)
+            ),
+            segments[0] if segments else normalized,
+        )
     if len(quote) <= max_chars:
         return quote
     return quote[:max_chars].rsplit(" ", 1)[0].rstrip()
+
+
+def _segment_looks_like_code(segment: str) -> bool:
+    text = str(segment).strip()
+    if not text:
+        return False
+    if "```" in text:
+        return True
+    keyword_hits = len(re.findall(r"\b(?:from|import|def|class|return|lambda|print)\b", text))
+    if keyword_hits >= 2:
+        return True
+    if re.search(
+        r"\b[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*\b",
+        text,
+    ):
+        return True
+    if len(re.findall(r"[(){}\[\]=]", text)) >= 8 and len(text) <= 360:
+        return True
+    return False
 
 
 def _exact_quote_segments(text: str) -> list[str]:

@@ -350,6 +350,10 @@ def create_app(
             headers=_response_headers(origin=_request_origin(request)),
         )
 
+    @app.get("/v1/answers/health")
+    async def answers_health(request: Request) -> JSONResponse:
+        return await health(request)
+
     @app.options("/v1/answers")
     async def answers_options(request: Request) -> Response:
         origin = _request_origin(request)
