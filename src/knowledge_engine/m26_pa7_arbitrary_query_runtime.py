@@ -4522,6 +4522,7 @@ def _build_candidate_pool(
     )
     for candidate in candidates.values():
         document = documents.get(str(candidate.get("section_id", "")), {})
+        candidate["intent_class"] = intent_class
         signal = _query_context_signal(
             question=question,
             text=_candidate_context_text(candidate, document),
@@ -4831,8 +4832,20 @@ def _candidate_public_metadata(candidate: Mapping[str, Any]) -> dict[str, Any]:
         "query_context_phrase_matches": list(
             candidate.get("query_context_phrase_matches", [])
         )[:8],
+        "query_context_anchor_phrases": list(
+            candidate.get("query_context_anchor_phrases", [])
+        )[:8],
+        "query_context_acronym_matches": list(
+            candidate.get("query_context_acronym_matches", [])
+        )[:8],
+        "query_context_anchor_component_matches": list(
+            candidate.get("query_context_anchor_component_matches", [])
+        )[:8],
         "query_context_score": round(float(candidate.get("query_context_score") or 0.0), 6),
-        "relevance_qualified": _context_relevance_record(candidate).get("qualified", False),
+        "relevance_qualified": _context_relevance_record(
+            candidate,
+            intent_class=str(candidate.get("intent_class", "")),
+        ).get("qualified", False),
     }
 
 
@@ -4853,7 +4866,10 @@ def _candidate_structural_relation_penalty(candidate: Mapping[str, Any]) -> floa
 
 
 def _candidate_weak_query_context_penalty(candidate: Mapping[str, Any]) -> float:
-    record = _context_relevance_record(candidate)
+    record = _context_relevance_record(
+        candidate,
+        intent_class=str(candidate.get("intent_class", "")),
+    )
     if record.get("qualified", True):
         return 0.0
     graph_hop = int(candidate.get("graph_hop") or 0)
@@ -4863,10 +4879,21 @@ def _candidate_weak_query_context_penalty(candidate: Mapping[str, Any]) -> float
 def _context_relevance_qualified_candidates(
     candidates: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    records = [_context_relevance_record(candidate) for candidate in candidates]
+    records = [
+        _context_relevance_record(
+            candidate,
+            intent_class=str(candidate.get("intent_class", "")),
+        )
+        for candidate in candidates
+    ]
     if not records:
         return []
-    if not any(record["has_strong_context"] for record in records):
+    anchor_floor = any(
+        str(candidate.get("intent_class", "")) == "direct_grounded_knowledge"
+        and bool(candidate.get("query_context_anchor_phrases"))
+        for candidate in candidates
+    )
+    if not any(record["has_strong_context"] for record in records) and not anchor_floor:
         return [dict(candidate) for candidate in candidates]
     qualified = [
         dict(candidate)
@@ -4876,11 +4903,21 @@ def _context_relevance_qualified_candidates(
     return qualified or [dict(candidates[0])]
 
 
-def _context_relevance_record(candidate: Mapping[str, Any]) -> dict[str, Any]:
+def _context_relevance_record(
+    candidate: Mapping[str, Any],
+    *,
+    intent_class: str = "",
+) -> dict[str, Any]:
     term_count = int(candidate.get("query_context_term_count") or 0)
     coverage_count = int(candidate.get("query_context_coverage_count") or 0)
     coverage_ratio = float(candidate.get("query_context_coverage_ratio") or 0.0)
     phrase_count = int(candidate.get("query_context_phrase_match_count") or 0)
+    anchor_count = len(candidate.get("query_context_anchor_phrases", []) or [])
+    anchor_match_count = int(candidate.get("query_context_anchor_match_count") or phrase_count)
+    acronym_match_count = int(candidate.get("query_context_acronym_match_count") or 0)
+    anchor_component_match_count = int(
+        candidate.get("query_context_anchor_component_match_count") or 0
+    )
     context_score = float(candidate.get("query_context_score") or 0.0)
     if term_count <= 0:
         return {
@@ -4894,6 +4931,20 @@ def _context_relevance_record(candidate: Mapping[str, Any]) -> dict[str, Any]:
             "has_strong_context": coverage_count > 0 or context_score > 0,
             "context_score": context_score,
         }
+    if intent_class == "direct_grounded_knowledge" and anchor_count > 0:
+        coherent_anchor = anchor_match_count > 0 or acronym_match_count > 0
+        whole_query_with_anchor = (
+            coverage_count >= term_count
+            and coverage_ratio >= 0.8
+            and anchor_component_match_count > 0
+        )
+        qualified = coherent_anchor or whole_query_with_anchor
+        return {
+            "qualified": qualified,
+            "has_strong_context": qualified,
+            "context_score": context_score,
+        }
+
     strong = (
         phrase_count > 0 and coverage_count >= 2
     ) or coverage_count >= max(2, math.ceil(term_count * 0.5))
@@ -4990,6 +5041,7 @@ def _augment_evidence_for_intent(
             evidence=evidence,
             question=question,
             limit=budget,
+            intent_class=intent_class,
         )
     return evidence
 
@@ -6384,7 +6436,18 @@ def _meaningful_terms(text: str) -> set[str]:
 
 def _query_context_terms(text: str) -> set[str]:
     terms = _coverage_terms(text) - QUERY_CONTEXT_UTILITY_TERMS
-    return terms or _coverage_terms(text)
+    if not terms:
+        terms = _coverage_terms(text)
+    return {
+        term
+        for term in terms
+        if not (
+            len(term) > 4
+            and term.endswith("s")
+            and not term.endswith("ss")
+            and term[:-1] in terms
+        )
+    }
 
 
 def _query_context_token_sequence(text: str) -> list[str]:
@@ -6404,17 +6467,83 @@ def _query_context_token_sequence(text: str) -> list[str]:
     return sequence
 
 
-def _query_context_phrases(text: str) -> list[str]:
-    sequence = _query_context_token_sequence(text)
+def _query_context_anchor_phrases(text: str) -> list[str]:
+    terms = _query_context_terms(text)
     phrases: list[str] = []
     seen: set[str] = set()
-    for size in (4, 3, 2):
-        for index in range(0, max(len(sequence) - size + 1, 0)):
-            phrase = " ".join(sequence[index : index + size])
-            if phrase and phrase not in seen:
-                phrases.append(phrase)
-                seen.add(phrase)
-    return phrases
+    run: list[str] = []
+
+    def flush() -> None:
+        if len(run) < 2:
+            return
+        for size in (4, 3, 2):
+            if len(run) < size:
+                continue
+            for index in range(0, len(run) - size + 1):
+                phrase = " ".join(run[index : index + size])
+                if phrase not in seen:
+                    phrases.append(phrase)
+                    seen.add(phrase)
+
+    for token in TOKEN_RE.findall(text):
+        normalized = token.casefold()
+        term = normalized
+        if (
+            len(term) > 4
+            and term.endswith("s")
+            and not term.endswith("ss")
+            and term[:-1] in terms
+        ):
+            term = term[:-1]
+        if term in terms:
+            run.append(term)
+            continue
+        flush()
+        run = []
+    flush()
+    return phrases[:12]
+
+
+def _query_context_acronym_aliases(anchor_phrases: Sequence[str]) -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    for phrase in anchor_phrases:
+        tokens = phrase.split()
+        if len(tokens) < 2 or len(tokens) > 5:
+            continue
+        if not all(token.isalpha() for token in tokens):
+            continue
+        alias = "".join(token[0] for token in tokens)
+        if 2 <= len(alias) <= 5:
+            aliases.setdefault(phrase, alias)
+    return aliases
+
+
+def _normalized_context_tokens(text: str) -> list[str]:
+    return [token.casefold() for token in TOKEN_RE.findall(text)]
+
+
+def _anchor_phrase_matches(anchor: str, normalized_text: str) -> bool:
+    tokens = anchor.split()
+    if len(tokens) < 2:
+        return False
+    variants = [anchor]
+    last = tokens[-1]
+    if len(last) > 1 and not last.endswith("s"):
+        variants.append(" ".join([*tokens[:-1], f"{last}s"]))
+    elif len(last) > 4 and last.endswith("s") and not last.endswith("ss"):
+        variants.append(" ".join([*tokens[:-1], last[:-1]]))
+    padded = f" {normalized_text} "
+    return any(f" {variant} " in padded for variant in variants)
+
+
+def _acronym_alias_matches(alias: str, normalized_tokens: Sequence[str]) -> bool:
+    if not alias:
+        return False
+    return any(token == alias or token == f"{alias}s" for token in normalized_tokens)
+
+
+def _query_context_phrases(text: str) -> list[str]:
+    return _query_context_anchor_phrases(text)
 
 
 def _normalized_context_text(text: str) -> str:
@@ -6481,13 +6610,25 @@ def _query_context_signal(*, question: str, text: str) -> dict[str, Any]:
     text_terms = _meaningful_terms(text)
     coverage_terms = sorted(query_terms & text_terms)
     normalized_text = _normalized_context_text(text)
+    normalized_tokens = _normalized_context_tokens(text)
+    anchor_phrases = _query_context_anchor_phrases(question)
     phrase_matches = [
-        phrase for phrase in _query_context_phrases(question) if phrase in normalized_text
+        phrase for phrase in anchor_phrases if _anchor_phrase_matches(phrase, normalized_text)
+    ]
+    acronym_aliases = _query_context_acronym_aliases(anchor_phrases)
+    acronym_matches = [
+        {"anchor": anchor, "alias": alias}
+        for anchor, alias in acronym_aliases.items()
+        if _acronym_alias_matches(alias, normalized_tokens)
+    ]
+    anchor_component_matches = [
+        anchor for anchor in anchor_phrases if set(anchor.split()).issubset(text_terms)
     ]
     coverage_count = len(coverage_terms)
     coverage_ratio = coverage_count / max(len(query_terms), 1)
     score = coverage_ratio * 10.0 + min(coverage_count, 5) * 1.0
     score += min(len(phrase_matches), 4) * 4.0
+    score += min(len(acronym_matches), 4) * 4.0
     if coverage_count <= 0:
         score -= 3.0
     elif len(query_terms) >= 3 and coverage_count == 1 and not phrase_matches:
@@ -6500,6 +6641,12 @@ def _query_context_signal(*, question: str, text: str) -> dict[str, Any]:
         "query_context_coverage_ratio": coverage_ratio,
         "query_context_phrase_matches": phrase_matches,
         "query_context_phrase_match_count": len(phrase_matches),
+        "query_context_anchor_phrases": anchor_phrases,
+        "query_context_anchor_match_count": len(phrase_matches),
+        "query_context_acronym_matches": acronym_matches,
+        "query_context_acronym_match_count": len(acronym_matches),
+        "query_context_anchor_component_matches": anchor_component_matches,
+        "query_context_anchor_component_match_count": len(anchor_component_matches),
         "query_context_score": score,
     }
 
@@ -6508,31 +6655,10 @@ def _evidence_context_relevance_record(
     item: Mapping[str, Any],
     *,
     question: str,
+    intent_class: str = "",
 ) -> dict[str, Any]:
-    metadata = item.get("retrieval_metadata", {})
-    if isinstance(metadata, Mapping) and metadata.get("relevance_qualified") is True:
-        return {
-            "qualified": True,
-            "has_strong_context": True,
-            "context_score": float(metadata.get("query_context_score") or 0.0),
-        }
-    if isinstance(metadata, Mapping) and "query_context_score" in metadata:
-        signal = {
-            "query_context_term_count": len(metadata.get("query_context_terms", [])),
-            "query_context_coverage_count": len(metadata.get("query_context_coverage_terms", [])),
-            "query_context_coverage_ratio": float(
-                metadata.get("query_context_coverage_ratio")
-                or metadata.get("query_overlap_score")
-                or 0.0
-            ),
-            "query_context_phrase_match_count": len(
-                metadata.get("query_context_phrase_matches", [])
-            ),
-            "query_context_score": float(metadata.get("query_context_score") or 0.0),
-        }
-    else:
-        signal = _query_context_signal(question=question, text=_evidence_context_text(item))
-    return _context_relevance_record(signal)
+    signal = _query_context_signal(question=question, text=_evidence_context_text(item))
+    return _context_relevance_record(signal, intent_class=intent_class)
 
 
 def _apply_final_context_relevance_floor(
@@ -6540,25 +6666,31 @@ def _apply_final_context_relevance_floor(
     evidence: Sequence[Mapping[str, Any]],
     question: str,
     limit: int,
+    intent_class: str = "",
 ) -> list[dict[str, Any]]:
     passage_items = [item for item in evidence if item.get("evidence_type") == "passage"]
     records = [
-        _evidence_context_relevance_record(item, question=question)
+        _evidence_context_relevance_record(
+            item,
+            question=question,
+            intent_class=intent_class,
+        )
         for item in passage_items
     ]
-    if not records or not any(record["has_strong_context"] for record in records):
+    anchor_floor = (
+        intent_class == "direct_grounded_knowledge"
+        and bool(_query_context_anchor_phrases(question))
+    )
+    if not records or (not any(record["has_strong_context"] for record in records) and not anchor_floor):
         return [dict(item) for item in evidence][:limit]
-    retained_sections = {
-        str(item.get("section_id", ""))
-        for item, record in zip(passage_items, records, strict=True)
-        if record["qualified"]
-    }
     retained: list[dict[str, Any]] = []
+    passage_records = iter(records)
     for item in evidence:
         if item.get("evidence_type") != "passage":
             retained.append(dict(item))
             continue
-        if str(item.get("section_id", "")) in retained_sections:
+        record = next(passage_records)
+        if record["qualified"]:
             retained.append(dict(item))
     return retained[:limit]
 
