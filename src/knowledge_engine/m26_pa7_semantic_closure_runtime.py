@@ -1371,7 +1371,10 @@ def _compact_provider_payload(
         "model_explanation segments include claim_id, claim_type MODEL_EXPLANATION, "
         "evidence_labels [], and covers. Evidence labels such as e1 or e2 belong only in "
         "evidence_labels and must not appear in visible text. Address every must_state item "
-        "explicitly. If support is insufficient, abstain."
+        "explicitly. If evidence directly supports only a bounded subset of a broad "
+        "question, prefer status partial with only those supported parts and list the "
+        "unsupported dimensions. Abstain when no responsive material claim can be "
+        "grounded. Never invent missing categories."
     )
     max_tokens = _compact_provider_output_tokens(
         question=question,
@@ -3398,23 +3401,133 @@ def _provider_evidence_order(
     qterms = legacy._meaningful_terms(question)
     return sorted(
         evidence,
-        key=lambda item: (
-            -max(
-                [
-                    _requirement_evidence_score(req, item)
-                    for req in requirements
-                ]
-                or [0.0]
-            ),
-            -legacy._text_term_overlap_score(
-                qterms,
-                str(item.get("passage_text", "")),
-            ),
-            0 if item.get("evidence_type") == "graph_edge" else 1,
-            legacy._is_article_root_evidence(item),
-            str(item.get("evidence_id", "")),
+        key=lambda item: _provider_evidence_order_key(
+            item=item,
+            requirements=requirements,
+            question=question,
+            qterms=qterms,
         ),
     )
+
+
+def _provider_evidence_order_key(
+    *,
+    item: Mapping[str, Any],
+    requirements: Sequence[SemanticRequirement],
+    question: str,
+    qterms: set[str],
+) -> tuple[Any, ...]:
+    context_text = legacy._evidence_context_text(item)
+    signal = legacy._query_context_signal(question=question, text=context_text)
+    requirement_score = max(
+        [_requirement_evidence_score(req, item) for req in requirements] or [0.0]
+    )
+    return (
+        -int(signal["query_context_phrase_match_count"] > 0),
+        -int(signal["query_context_phrase_match_count"]),
+        -int(signal["query_context_acronym_match_count"] > 0),
+        -int(signal["query_context_acronym_match_count"]),
+        -requirement_score,
+        -float(signal["query_context_score"]),
+        -int(signal["query_context_coverage_count"]),
+        -legacy._text_term_overlap_score(
+            qterms,
+            str(item.get("passage_text", "")),
+        ),
+        0 if item.get("evidence_type") == "graph_edge" else 1,
+        legacy._is_article_root_evidence(item),
+        str(item.get("evidence_id", "")),
+    )
+
+
+def _provider_anchor_phrase_pattern(anchor: str) -> re.Pattern[str] | None:
+    tokens = anchor.split()
+    if len(tokens) < 2:
+        return None
+    parts = [re.escape(token) for token in tokens[:-1]]
+    last = tokens[-1]
+    if len(last) > 1 and not last.endswith("s"):
+        parts.append(rf"{re.escape(last)}s?")
+    elif len(last) > 4 and last.endswith("s") and not last.endswith("ss"):
+        parts.append(rf"{re.escape(last[:-1])}s?")
+    else:
+        parts.append(re.escape(last))
+    return re.compile(r"\b" + r"\s+".join(parts) + r"\b", re.I)
+
+
+def _provider_anchor_match_spans(
+    text: str,
+    question: str,
+) -> list[tuple[int, int, int]]:
+    anchor_phrases = legacy._query_context_phrases(question)
+    spans: list[tuple[int, int, int]] = []
+    seen: set[tuple[int, int, int]] = set()
+    for phrase in anchor_phrases:
+        pattern = _provider_anchor_phrase_pattern(phrase)
+        if pattern is None:
+            continue
+        for match in pattern.finditer(text):
+            span = (match.start(), match.end(), 0)
+            if span not in seen:
+                spans.append(span)
+                seen.add(span)
+    for alias in legacy._query_context_acronym_aliases(anchor_phrases).values():
+        pattern = re.compile(rf"\b{re.escape(alias)}s?\b", re.I)
+        for match in pattern.finditer(text):
+            span = (match.start(), match.end(), 1)
+            if span not in seen:
+                spans.append(span)
+                seen.add(span)
+    return spans
+
+
+def _provider_sentence_start(text: str, index: int) -> int:
+    boundaries = (
+        text.rfind("\n", 0, index),
+        text.rfind(". ", 0, index),
+        text.rfind("? ", 0, index),
+        text.rfind("! ", 0, index),
+    )
+    start = max(boundaries)
+    if start < 0:
+        return 0
+    if text[start] == "\n":
+        return start + 1
+    return start + 2
+
+
+def _provider_sentence_end(text: str, index: int) -> int:
+    boundaries = (
+        text.find("\n", index),
+        text.find(". ", index),
+        text.find("? ", index),
+        text.find("! ", index),
+    )
+    ends = [boundary for boundary in boundaries if boundary >= 0]
+    if not ends:
+        return len(text)
+    end = min(ends)
+    if text[end] == "\n":
+        return end
+    return end + 2
+
+
+def _provider_anchor_window(text: str, start: int, end: int) -> str:
+    start = max(0, start)
+    end = max(start + 1, end)
+    window_start = _provider_sentence_start(text, max(0, start - 120))
+    window_end = _provider_sentence_end(text, min(len(text), end + 120))
+    if window_end - window_start > MAX_PROVIDER_SNIPPET_CHARS:
+        slack = MAX_PROVIDER_SNIPPET_CHARS - (end - start)
+        left = max(0, start - max(24, slack // 2))
+        right = min(len(text), left + MAX_PROVIDER_SNIPPET_CHARS)
+        if right < end:
+            right = min(len(text), end + max(24, slack // 2))
+            left = max(0, right - MAX_PROVIDER_SNIPPET_CHARS)
+        window_start, window_end = left, right
+    if window_end - window_start > MAX_PROVIDER_SNIPPET_CHARS:
+        window_end = min(len(text), window_start + MAX_PROVIDER_SNIPPET_CHARS)
+    return text[window_start:window_end].strip()
 
 
 def _provider_snippet(
@@ -3432,6 +3545,29 @@ def _provider_snippet(
         target_terms |= legacy._meaningful_terms(
             " ".join(requirement.evidence_terms)
         )
+    anchored_windows = [
+        (
+            kind,
+            _provider_anchor_window(text, start, end),
+        )
+        for start, end, kind in _provider_anchor_match_spans(text, question)
+    ]
+    anchored_windows = [candidate for candidate in anchored_windows if candidate[1]]
+    if anchored_windows:
+        selected = sorted(
+            anchored_windows,
+            key=lambda candidate: (
+                candidate[0],
+                -legacy._text_term_overlap_score(target_terms, candidate[1]),
+                legacy._segment_noise_penalty(candidate[1]),
+                legacy._thin_heading(candidate[1]),
+                legacy._article_title_like(candidate[1]),
+                -len(candidate[1]),
+            ),
+        )[0][1]
+        if len(selected) <= MAX_PROVIDER_SNIPPET_CHARS:
+            return selected
+        return selected[:MAX_PROVIDER_SNIPPET_CHARS].rsplit(" ", 1)[0].rstrip()
     segments = legacy._exact_quote_segments(text)
     ranked = sorted(
         segments,

@@ -333,6 +333,103 @@ def _rich_passage(evidence_id: str, text: str, source: str) -> dict[str, Any]:
     }
 
 
+def test_provider_order_prefers_anchor_aware_role_evidence_over_scattered_overlap() -> None:
+    question = "What kind of skill does a Product Manager need?"
+    harness = _rich_passage(
+        "ev_harness",
+        (
+            "The AI harness defines a Skill Library, Plugin Manager, and Tool Registry "
+            "for products in an internal capability system."
+        ),
+        "capability-system",
+    )
+    pm_research = _rich_passage(
+        "ev_pm_research",
+        (
+            "PMs need user research judgment. Analytics should help recover meaning, "
+            "context, and decision logic."
+        ),
+        "role-research",
+    )
+
+    ordered = closure_runtime._provider_evidence_order(
+        [harness, pm_research],
+        [],
+        question,
+    )
+
+    assert ordered[0]["evidence_id"] == "ev_pm_research"
+    assert ordered[1]["evidence_id"] == "ev_harness"
+
+
+def test_provider_snippet_projects_contiguous_anchor_window_with_answer_prose() -> None:
+    question = "What kind of skill does a Product Manager need?"
+    text = (
+        "A PM should not read dashboards as isolated truth. Analytics should help "
+        "notice anomalies and tradeoffs. Research should help you recover meaning, "
+        "context, and decision logic. Feed the findings back into roadmap choices."
+    )
+    item = _rich_passage("ev_pm_user_research", text, "role-research")
+
+    snippet = closure_runtime._provider_snippet(item, question, [])
+
+    assert snippet in text
+    assert "A PM should" in snippet
+    assert "Research should help you recover meaning, context, and decision logic" in snippet
+    assert len(snippet) <= closure_runtime.MAX_PROVIDER_SNIPPET_CHARS
+
+
+def test_provider_projection_preserves_agent_architecture_and_user_research_controls() -> None:
+    q2 = "What is a skill in an AI agent architecture?"
+    q2_item = _rich_passage(
+        "ev_agent_architecture",
+        "In an agent architecture, a skill is task methodology above lower-level tools.",
+        "agent-method",
+    )
+    q3 = "What is the role of user research in product management?"
+    q3_item = _rich_passage(
+        "ev_user_research",
+        (
+            "User research helps product management recover context behind metrics "
+            "and turn customer evidence into better decisions."
+        ),
+        "research-method",
+    )
+
+    assert closure_runtime._provider_evidence_order([q2_item], [], q2)[0] == q2_item
+    assert "agent architecture" in closure_runtime._provider_snippet(q2_item, q2, [])
+    assert closure_runtime._provider_evidence_order([q3_item], [], q3)[0] == q3_item
+    assert "User research helps product management" in closure_runtime._provider_snippet(
+        q3_item,
+        q3,
+        [],
+    )
+
+
+def test_compact_provider_prompt_allows_bounded_partial_without_inventing_taxonomy() -> None:
+    payload, _label_map, _snippet_map = _compact_provider_payload(
+        question="What operating skills matter for running a trustworthy system?",
+        intent_class="direct_grounded_knowledge",
+        evidence=[
+            _rich_passage(
+                "ev_ops",
+                "Incident response practice supports reliable system operation.",
+                "ops-note",
+            )
+        ],
+        requirements=[],
+        repair=False,
+        previous_failures=[],
+    )
+
+    system = payload["system"]
+    assert "bounded subset" in system
+    assert "prefer status partial" in system
+    assert "Abstain when no responsive material claim can be grounded" in system
+    assert "Never invent missing categories" in system
+    assert "Product Manager" not in system
+
+
 def _graph_edge(
     evidence_id: str,
     source: str,
