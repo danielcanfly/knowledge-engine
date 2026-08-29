@@ -24,6 +24,7 @@ from knowledge_engine.m26_cloudflare_provider_router import (
     CloudflareFallbackRequired,
     CloudflareRouterState,
     ProviderRoutingClient,
+    build_provider_routing_client,
     cloudflare_gpt_oss_120b_neurons,
     provider_status_dto,
 )
@@ -203,6 +204,83 @@ def test_provider_status_is_cached_observability_only() -> None:
     assert status["semantic_reviewer"] == "minimax-m3"
     assert status["live_model_request"] is False
     assert "api" not in json.dumps(status).casefold()
+
+
+def test_closure_uses_explicit_worker_key_before_ai_token_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MINIMAX_API_KEY", "test-minimax-key")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "test-account")
+    monkeypatch.setenv("CLOUDFLARE_WORKER_AI_RESTFUL_API_KEY", "explicit-worker-key")
+    monkeypatch.setenv("CLOUDFLARE_AI_TOKEN", "ai-token-alias")
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "generic-api-token")
+
+    router = build_provider_routing_client(max_provider_calls=1, max_cost=Decimal("1"))
+
+    assert router.cloudflare is not None
+    assert router.cloudflare.api_key == "explicit-worker-key"
+    assert "explicit-worker-key" not in json.dumps(router.telemetry())
+    assert "ai-token-alias" not in json.dumps(router.telemetry())
+    assert "generic-api-token" not in json.dumps(router.telemetry())
+
+
+def test_closure_accepts_ai_token_alias_without_generic_api_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MINIMAX_API_KEY", "test-minimax-key")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "test-account")
+    monkeypatch.delenv("CLOUDFLARE_WORKER_AI_RESTFUL_API_KEY", raising=False)
+    monkeypatch.setenv("CLOUDFLARE_AI_TOKEN", "ai-token-alias")
+    monkeypatch.delenv("CLOUDFLARE_API_TOKEN", raising=False)
+
+    router = build_provider_routing_client(max_provider_calls=1, max_cost=Decimal("1"))
+
+    assert router.cloudflare is not None
+    assert router.cloudflare.api_key == "ai-token-alias"
+    assert router.state.snapshot()["cloudflare_state"] == STATE_AVAILABLE
+    assert "ai-token-alias" not in json.dumps(router.telemetry())
+
+
+def test_generic_cloudflare_api_token_does_not_enable_closure_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MINIMAX_API_KEY", "test-minimax-key")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "test-account")
+    monkeypatch.delenv("CLOUDFLARE_WORKER_AI_RESTFUL_API_KEY", raising=False)
+    monkeypatch.delenv("CLOUDFLARE_AI_TOKEN", raising=False)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "generic-api-token")
+    state = CloudflareRouterState()
+
+    router = build_provider_routing_client(
+        max_provider_calls=1,
+        max_cost=Decimal("1"),
+        state=state,
+    )
+
+    assert router.cloudflare is None
+    status = state.snapshot()
+    assert status["cloudflare_state"] == "DISABLED_CONFIGURATION"
+    assert "generic-api-token" not in json.dumps(status)
+
+
+def test_cloudflare_account_id_remains_required_for_ai_token_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MINIMAX_API_KEY", "test-minimax-key")
+    monkeypatch.delenv("CLOUDFLARE_ACCOUNT_ID", raising=False)
+    monkeypatch.delenv("CLOUDFLARE_WORKER_AI_RESTFUL_API_KEY", raising=False)
+    monkeypatch.setenv("CLOUDFLARE_AI_TOKEN", "ai-token-alias")
+    state = CloudflareRouterState()
+
+    router = build_provider_routing_client(
+        max_provider_calls=1,
+        max_cost=Decimal("1"),
+        state=state,
+    )
+
+    assert router.cloudflare is None
+    assert state.snapshot()["cloudflare_state"] == "DISABLED_CONFIGURATION"
+    assert "ai-token-alias" not in json.dumps(state.snapshot())
 
 
 def test_web_dto_exposes_sanitized_provider_routing() -> None:

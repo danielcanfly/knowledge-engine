@@ -496,7 +496,7 @@ def build_provider_routing_client(
     cloudflare: CloudflareWorkersAIClient | None = None
     try:
         cloudflare = CloudflareWorkersAIClient(
-            api_key=os.environ.get("CLOUDFLARE_WORKER_AI_RESTFUL_API_KEY", ""),
+            api_key=_cloudflare_inference_api_key_from_env(),
             account_id=os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""),
             state=router_state,
             max_calls=max_provider_calls,
@@ -508,6 +508,12 @@ def build_provider_routing_client(
         fallback=fallback,
         reviewer=reviewer,
         state=router_state,
+    )
+
+
+def _cloudflare_inference_api_key_from_env() -> str:
+    return os.environ.get("CLOUDFLARE_WORKER_AI_RESTFUL_API_KEY") or os.environ.get(
+        "CLOUDFLARE_AI_TOKEN", ""
     )
 
 

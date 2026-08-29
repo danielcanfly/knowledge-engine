@@ -112,5 +112,5 @@ def test_r0_current_regressions_are_not_reintroduced() -> None:
     assert not hasattr(m26_pa7_arbitrary_query_runtime, "_career_query_passage_text")
     assert "question" not in provider_evidence_signature.parameters
     assert "CLOUDFLARE_WORKER_AI_RESTFUL_API_KEY" in router_source
+    assert "CLOUDFLARE_AI_TOKEN" in router_source
     assert "CLOUDFLARE_API_TOKEN" not in router_source
-    assert "CLOUDFLARE_AI_TOKEN" not in router_source
