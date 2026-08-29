@@ -63,6 +63,23 @@ def test_final_floor_rejects_founder_style_surface_overlap_without_role_anchor()
     assert "A PM should use user research" in retained_text
 
 
+def test_final_floor_rejects_harness_style_scattered_anchor_components() -> None:
+    question = "What kind of skill does a Product Manager need?"
+    harness = _evidence(
+        "The AI harness uses a Skill Library, Plugin Manager, and Tool Registry "
+        "to define its own internal capability system for products."
+    )
+
+    retained = runtime._apply_final_context_relevance_floor(
+        evidence=[harness],
+        question=question,
+        limit=5,
+        intent_class="direct_grounded_knowledge",
+    )
+
+    assert retained == []
+
+
 def test_inherited_relevance_flag_is_not_authoritative_for_final_passage() -> None:
     item = _evidence(
         "A venture founder may connect product, business, and operations as a skill.",
@@ -84,6 +101,16 @@ def test_inherited_relevance_flag_is_not_authoritative_for_final_passage() -> No
     assert record["has_strong_context"] is False
 
 
+def test_exact_product_manager_phrase_still_qualifies() -> None:
+    record = _record(
+        "What kind of skill does a Product Manager need?",
+        "Product Manager skill judgment should connect customer evidence to decisions.",
+    )
+
+    assert record["qualified"] is True
+    assert record["has_strong_context"] is True
+
+
 def test_generic_acronym_alias_keeps_sre_evidence_and_rejects_scattered_terms() -> None:
     question = "What skills does a Site Reliability Engineer need?"
 
@@ -94,8 +121,8 @@ def test_generic_acronym_alias_keeps_sre_evidence_and_rejects_scattered_terms() 
     )["qualified"]
     assert not _record(
         question,
-        "The site has a skill catalog for operators, but it never establishes the "
-        "role being asked about.",
+        "The site has a skill catalog for reliability tooling, and a different "
+        "paragraph mentions an engineer, but it never establishes the role being asked about.",
     )["qualified"]
 
 

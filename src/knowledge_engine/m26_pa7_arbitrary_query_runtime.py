@@ -4915,9 +4915,6 @@ def _context_relevance_record(
     anchor_count = len(candidate.get("query_context_anchor_phrases", []) or [])
     anchor_match_count = int(candidate.get("query_context_anchor_match_count") or phrase_count)
     acronym_match_count = int(candidate.get("query_context_acronym_match_count") or 0)
-    anchor_component_match_count = int(
-        candidate.get("query_context_anchor_component_match_count") or 0
-    )
     context_score = float(candidate.get("query_context_score") or 0.0)
     if term_count <= 0:
         return {
@@ -4931,14 +4928,12 @@ def _context_relevance_record(
             "has_strong_context": coverage_count > 0 or context_score > 0,
             "context_score": context_score,
         }
-    if intent_class == "direct_grounded_knowledge" and anchor_count > 0:
-        coherent_anchor = anchor_match_count > 0 or acronym_match_count > 0
-        whole_query_with_anchor = (
-            coverage_count >= term_count
-            and coverage_ratio >= 0.8
-            and anchor_component_match_count > 0
-        )
-        qualified = coherent_anchor or whole_query_with_anchor
+    if (
+        intent_class == "direct_grounded_knowledge"
+        and anchor_count > 0
+        and _has_meaningful_multi_token_anchor(candidate)
+    ):
+        qualified = anchor_match_count > 0 or acronym_match_count > 0
         return {
             "qualified": qualified,
             "has_strong_context": qualified,
@@ -4964,6 +4959,77 @@ def _context_relevance_record(
         "has_strong_context": strong,
         "context_score": context_score,
     }
+
+
+def _has_meaningful_multi_token_anchor(candidate: Mapping[str, Any]) -> bool:
+    anchor_phrases = candidate.get("query_context_anchor_phrases", []) or []
+    if not anchor_phrases:
+        return False
+    non_anchor_terms = {
+        "be",
+        "define",
+        "defined",
+        "defines",
+        "dependencie",
+        "dependencies",
+        "dependency",
+        "do",
+        "does",
+        "done",
+        "explain",
+        "explained",
+        "explains",
+        "help",
+        "helped",
+        "helps",
+        "how",
+        "make",
+        "made",
+        "makes",
+        "mean",
+        "means",
+        "need",
+        "needed",
+        "needs",
+        "nice",
+        "not",
+        "observe",
+        "observed",
+        "observes",
+        "process",
+        "processes",
+        "relate",
+        "related",
+        "relates",
+        "support",
+        "supported",
+        "supports",
+        "use",
+        "used",
+        "uses",
+        "using",
+        "what",
+        "when",
+        "where",
+        "which",
+        "why",
+        "kind",
+        "join",
+        "joins",
+        "model",
+        "models",
+        "role",
+        "should",
+        "structure",
+    }
+    for phrase in anchor_phrases:
+        tokens = phrase.split()
+        if len(tokens) < 2:
+            continue
+        if any(token in non_anchor_terms for token in tokens):
+            continue
+        return True
+    return False
 
 
 def _augment_evidence_for_intent(
@@ -6658,6 +6724,39 @@ def _evidence_context_relevance_record(
     intent_class: str = "",
 ) -> dict[str, Any]:
     signal = _query_context_signal(question=question, text=_evidence_context_text(item))
+    metadata = item.get("retrieval_metadata", {})
+    if intent_class != "direct_grounded_knowledge" and isinstance(metadata, Mapping):
+        for key in (
+            "query_context_terms",
+            "query_context_term_count",
+            "query_context_coverage_terms",
+            "query_context_coverage_count",
+            "query_context_coverage_ratio",
+            "query_context_phrase_matches",
+            "query_context_phrase_match_count",
+            "query_context_anchor_phrases",
+            "query_context_anchor_match_count",
+            "query_context_acronym_matches",
+            "query_context_acronym_match_count",
+            "query_context_anchor_component_matches",
+            "query_context_anchor_component_match_count",
+            "query_context_score",
+        ):
+            if key in metadata:
+                signal[key] = metadata[key]
+        if "query_context_terms" in metadata and "query_context_term_count" not in metadata:
+            signal["query_context_term_count"] = len(metadata.get("query_context_terms") or [])
+        if (
+            "query_context_coverage_terms" in metadata
+            and "query_context_coverage_count" not in metadata
+        ):
+            signal["query_context_coverage_count"] = len(
+                metadata.get("query_context_coverage_terms") or []
+            )
+        if "query_context_phrase_matches" in metadata:
+            signal["query_context_phrase_match_count"] = len(
+                metadata.get("query_context_phrase_matches") or []
+            )
     return _context_relevance_record(signal, intent_class=intent_class)
 
 
