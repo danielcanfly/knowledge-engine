@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import subprocess
@@ -2697,3 +2698,280 @@ def test_tesc_semantic_review_missing_or_malformed_claim_ids_fail_closed() -> No
         )
 
     assert exc.value.code == "M26-PA7-ME-066"
+
+
+def test_repair1_high_raw_score_cannot_retain_severe_context_mismatch() -> None:
+    candidates = [
+        {
+            "section_id": "weak",
+            "channels": {"lexical"},
+            "score": 500.0,
+            "query_context_term_count": 4,
+            "query_context_coverage_count": 0,
+            "query_context_coverage_ratio": 0.0,
+            "query_context_phrase_match_count": 0,
+            "query_context_score": -3.0,
+        },
+        {
+            "section_id": "strong",
+            "channels": {"lexical"},
+            "score": 1.0,
+            "query_context_term_count": 4,
+            "query_context_coverage_count": 3,
+            "query_context_coverage_ratio": 0.75,
+            "query_context_phrase_match_count": 1,
+            "query_context_score": 14.5,
+        },
+    ]
+
+    selected = runtime_module._select_diverse_candidates(candidates, budget=2)
+
+    assert [item["section_id"] for item in selected] == ["strong"]
+
+
+def test_repair1_diversity_cannot_promote_unqualified_candidate() -> None:
+    candidates = [
+        {
+            "section_id": "a1",
+            "source_key": "same-source",
+            "concept_key": "a1",
+            "channels": {"lexical"},
+            "query_context_term_count": 4,
+            "query_context_coverage_count": 3,
+            "query_context_coverage_ratio": 0.75,
+            "query_context_phrase_match_count": 0,
+            "query_context_score": 10.5,
+        },
+        {
+            "section_id": "b1",
+            "source_key": "different-source",
+            "concept_key": "b1",
+            "channels": {"graph_1hop"},
+            "graph_hop": 1,
+            "query_context_term_count": 4,
+            "query_context_coverage_count": 1,
+            "query_context_coverage_ratio": 0.25,
+            "query_context_phrase_match_count": 0,
+            "query_context_score": 1.5,
+        },
+    ]
+
+    selected = runtime_module._select_diverse_candidates(candidates, budget=2)
+
+    assert [item["section_id"] for item in selected] == ["a1"]
+
+
+def test_repair1_final_evidence_may_be_fewer_than_budget() -> None:
+    evidence = [
+        _repair1_evidence(
+            "strong",
+            score=14.5,
+            term_count=4,
+            coverage_count=3,
+            coverage_ratio=0.75,
+            phrase_count=1,
+        ),
+        _repair1_evidence(
+            "weak",
+            score=-3.0,
+            term_count=4,
+            coverage_count=0,
+            coverage_ratio=0.0,
+            phrase_count=0,
+        ),
+    ]
+
+    filtered = runtime_module._apply_final_context_relevance_floor(
+        evidence=evidence,
+        question="alpha beta gamma delta",
+        limit=5,
+    )
+
+    assert [item["section_id"] for item in filtered] == ["strong"]
+
+
+def test_repair1_phrase_match_establishes_strong_context() -> None:
+    signal = runtime_module._query_context_signal(
+        question="How should alpha beta relate to gamma?",
+        text="The alpha beta boundary is explained with gamma evidence.",
+    )
+    record = runtime_module._context_relevance_record(signal)
+
+    assert signal["query_context_phrase_matches"]
+    assert record["qualified"] is True
+    assert record["has_strong_context"] is True
+
+
+def test_repair1_multi_term_coverage_without_phrase_establishes_context() -> None:
+    signal = runtime_module._query_context_signal(
+        question="How should alpha beta relate to gamma?",
+        text="Gamma decisions depend on alpha evidence before beta appears later.",
+    )
+    record = runtime_module._context_relevance_record(signal)
+
+    assert signal["query_context_phrase_matches"] == []
+    assert signal["query_context_coverage_count"] >= 3
+    assert record["qualified"] is True
+
+
+def test_repair1_short_query_does_not_over_prune() -> None:
+    candidates = [
+        {
+            "section_id": "short",
+            "channels": {"lexical"},
+            "query_context_term_count": 1,
+            "query_context_coverage_count": 1,
+            "query_context_coverage_ratio": 1.0,
+            "query_context_phrase_match_count": 0,
+            "query_context_score": 5.0,
+        }
+    ]
+
+    assert runtime_module._select_diverse_candidates(candidates, budget=3)
+
+
+def test_repair1_graph_only_weak_context_is_suppressed() -> None:
+    candidates = [
+        {
+            "section_id": "direct",
+            "channels": {"lexical"},
+            "query_context_term_count": 4,
+            "query_context_coverage_count": 3,
+            "query_context_coverage_ratio": 0.75,
+            "query_context_phrase_match_count": 0,
+            "query_context_score": 10.5,
+        },
+        {
+            "section_id": "weak_graph",
+            "channels": {"graph_1hop"},
+            "graph_hop": 1,
+            "query_context_term_count": 4,
+            "query_context_coverage_count": 1,
+            "query_context_coverage_ratio": 0.25,
+            "query_context_phrase_match_count": 0,
+            "query_context_score": 1.5,
+        },
+    ]
+
+    assert [item["section_id"] for item in runtime_module._select_diverse_candidates(candidates, budget=2)] == [
+        "direct"
+    ]
+
+
+def test_repair1_graph_bridge_with_multiple_channels_is_preserved() -> None:
+    candidate = {
+        "section_id": "bridge",
+        "channels": {"lexical", "graph_1hop"},
+        "graph_hop": 1,
+        "query_context_term_count": 4,
+        "query_context_coverage_count": 1,
+        "query_context_coverage_ratio": 0.25,
+        "query_context_phrase_match_count": 0,
+        "query_context_score": 1.5,
+    }
+
+    assert runtime_module._context_relevance_record(candidate)["qualified"] is True
+
+
+def test_repair1_final_augmentation_cannot_reintroduce_pruned_weak_context() -> None:
+    strong = _repair1_evidence(
+        "strong",
+        score=14.5,
+        term_count=4,
+        coverage_count=3,
+        coverage_ratio=0.75,
+        phrase_count=1,
+    )
+    supplement = _repair1_evidence(
+        "supplement",
+        channels=["query_coverage"],
+        score=1.5,
+        term_count=4,
+        coverage_count=1,
+        coverage_ratio=0.25,
+        phrase_count=0,
+    )
+
+    filtered = runtime_module._apply_final_context_relevance_floor(
+        evidence=[strong, supplement],
+        question="alpha beta gamma delta",
+        limit=5,
+    )
+
+    assert [item["section_id"] for item in filtered] == ["strong"]
+
+
+def test_repair1_evidence_text_remains_unchanged() -> None:
+    bundle = synthetic_full_production_answer_bundle()
+    document = runtime_module._release_documents(bundle)[0]
+
+    item = runtime_module._evidence_item(
+        bundle=bundle,
+        document=document,
+        lexical_result={},
+        trace_id="repair1-text",
+        ordinal=1,
+        channels=["lexical"],
+    )
+
+    assert item["passage_text"] == runtime_module._bounded_text(document["body"])
+
+
+def test_repair1_runtime_repair_has_no_forbidden_topic_or_source_literal() -> None:
+    source = "\n".join(
+        inspect.getsource(item)
+        for item in (
+            runtime_module._query_context_signal,
+            runtime_module._query_context_terms,
+            runtime_module._context_relevance_record,
+            runtime_module._context_relevance_qualified_candidates,
+            runtime_module._apply_final_context_relevance_floor,
+            runtime_module._ensure_query_coverage_passages,
+        )
+    ).casefold()
+
+    for forbidden in (
+        "product manager",
+        "pm-specific",
+        "user-research",
+        "building-ai-skills",
+        "daniel_blog_en",
+        "source_id ==",
+        "section_id ==",
+        "concept_id ==",
+    ):
+        assert forbidden not in source
+
+
+def _repair1_evidence(
+    section_id: str,
+    *,
+    score: float,
+    term_count: int,
+    coverage_count: int,
+    coverage_ratio: float,
+    phrase_count: int,
+    channels: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "evidence_type": "passage",
+        "section_id": section_id,
+        "source_id": section_id,
+        "source_identity": section_id,
+        "concept_id": section_id,
+        "title": section_id,
+        "section_title": "Overview",
+        "passage_text": f"{section_id} original passage text",
+        "channels": channels or ["lexical"],
+        "retrieval_metadata": {
+            "query_context_terms": [f"term{index}" for index in range(term_count)],
+            "query_context_coverage_terms": [
+                f"term{index}" for index in range(coverage_count)
+            ],
+            "query_context_coverage_ratio": coverage_ratio,
+            "query_context_phrase_matches": [
+                f"phrase{index}" for index in range(phrase_count)
+            ],
+            "query_context_score": score,
+        },
+    }
