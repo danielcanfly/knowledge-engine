@@ -432,30 +432,42 @@ def _synthesize_and_verify(
                 stop_reason = str(
                     raw.get("stop_reason") or raw.get("finish_reason") or ""
                 )
-                parsed = _parse_compact_provider_result(
-                    str(raw.get("text", raw.get("provider_text", "")))
-                )
+                raw_text = str(raw.get("text", raw.get("provider_text", "")))
+                parse_meta: dict[str, Any] = {}
+                parsed = _parse_compact_provider_result(raw_text)
             except ValueError:
-                sealed_trace.trace(
-                    "provider_parse_failure",
-                    attempt=attempt,
-                    stop_reason=stop_reason,
-                    response=sealed_trace.response_fingerprint(raw),
+                salvaged = _salvage_compact_provider_surplus_segments(
+                    raw_text,
+                    label_map=label_map,
                 )
-                calls.append(_compact_call_telemetry(raw, parse_ok=False))
-                if stop_reason == "max_tokens":
-                    failures.append(COMPACT_PROVIDER_TRUNCATED)
-                else:
-                    failures.append(COMPACT_PROVIDER_PARSE_FAILED)
-                if attempt == 1:
-                    repair_attempted = True
+                if salvaged is None:
                     sealed_trace.trace(
-                        "repair_transition",
+                        "provider_parse_failure",
                         attempt=attempt,
-                        failures=list(failures),
+                        stop_reason=stop_reason,
+                        response=sealed_trace.response_fingerprint(raw),
                     )
-                    continue
-                break
+                    calls.append(_compact_call_telemetry(raw, parse_ok=False))
+                    if stop_reason == "max_tokens":
+                        failures.append(COMPACT_PROVIDER_TRUNCATED)
+                    else:
+                        failures.append(COMPACT_PROVIDER_PARSE_FAILED)
+                    if attempt == 1:
+                        repair_attempted = True
+                        sealed_trace.trace(
+                            "repair_transition",
+                            attempt=attempt,
+                            failures=list(failures),
+                        )
+                        continue
+                    break
+                parsed, parse_meta = salvaged
+                sealed_trace.trace(
+                    "provider_parse_salvage_success",
+                    attempt=attempt,
+                    dropped_segment_ids=parse_meta.get("dropped_segment_ids", []),
+                    retained_segment_count=parse_meta.get("retained_segment_count", 0),
+                )
             sealed_trace.trace(
                 "provider_parse_success",
                 attempt=attempt,
@@ -466,7 +478,9 @@ def _synthesize_and_verify(
                     else []
                 ),
             )
-            calls.append(_compact_call_telemetry(raw, parse_ok=True))
+            calls.append(
+                _compact_call_telemetry(raw, parse_ok=True, parse_meta=parse_meta)
+            )
             if parsed["status"] == "abstain":
                 failures.append("PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE")
                 sealed_trace.trace(
@@ -1691,7 +1705,7 @@ def _validate_provider_segments(raw_segments: Sequence[Any]) -> None:
             raise ValueError(f"provider segment {segment_id} covers must be list")
 
 
-def _parse_compact_provider_result(text: str) -> dict[str, Any]:
+def _decode_compact_provider_value(text: str) -> dict[str, Any]:
     stripped = str(text).strip()
     if not stripped:
         raise ValueError("compact provider output is empty")
@@ -1703,6 +1717,11 @@ def _parse_compact_provider_result(text: str) -> dict[str, Any]:
     value, _ = json.JSONDecoder().raw_decode(stripped[start:])
     if not isinstance(value, Mapping):
         raise ValueError("compact provider JSON must be an object")
+    return dict(value)
+
+
+def _parse_compact_provider_result(text: str) -> dict[str, Any]:
+    value = _decode_compact_provider_value(text)
     allowed_keys = {
         "status",
         "schema_version",
@@ -1738,8 +1757,125 @@ def _parse_compact_provider_result(text: str) -> dict[str, Any]:
     return dict(value)
 
 
+def _salvage_compact_provider_surplus_segments(
+    text: str,
+    *,
+    label_map: Mapping[str, Mapping[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    try:
+        value = _decode_compact_provider_value(text)
+    except ValueError:
+        return None
+    allowed_keys = {
+        "status",
+        "schema_version",
+        "segments",
+        "unanswered_dimensions",
+        "abstention_reason",
+    }
+    if set(value) - allowed_keys:
+        return None
+    status = str(value.get("status", ""))
+    if status not in {"answer", "partial", "answer_candidate", "partial_candidate"}:
+        return None
+    if value.get("schema_version") != COMPACT_CLOSURE_SCHEMA_VERSION:
+        return None
+    raw_segments = value.get("segments", [])
+    if raw_segments is None or not isinstance(raw_segments, list) or not raw_segments:
+        return None
+    raw_unanswered = value.get("unanswered_dimensions")
+    if raw_unanswered is not None and not isinstance(raw_unanswered, list):
+        return None
+
+    known_labels = {str(label) for label in label_map}
+    retained_segments: list[dict[str, Any]] = []
+    dropped_segments: list[dict[str, Any]] = []
+    seen_segment_ids: set[str] = set()
+    seen_claim_ids: set[str] = set()
+    seen_texts: set[str] = set()
+    for raw_segment in raw_segments:
+        if not isinstance(raw_segment, Mapping):
+            return None
+        segment = dict(raw_segment)
+        if "surface_text" in segment or "answer_text" in segment:
+            return None
+        segment_id = str(segment.get("segment_id") or "").strip()
+        if not segment_id or segment_id in seen_segment_ids:
+            return None
+        seen_segment_ids.add(segment_id)
+        role = str(segment.get("semantic_role") or "").strip()
+        if role not in SEMANTIC_SEGMENT_ROLES:
+            return None
+        segment_text = str(segment.get("text") or "").strip()
+        if not segment_text or segment_text in seen_texts:
+            return None
+        if legacy.CLAIM_ANCHOR_RE.search(segment_text):
+            return None
+        seen_texts.add(segment_text)
+        claim_id = str(segment.get("claim_id") or "").strip()
+        if not claim_id or claim_id in seen_claim_ids:
+            return None
+        seen_claim_ids.add(claim_id)
+        claim_type = str(segment.get("claim_type") or "").strip()
+        if role == "material_claim":
+            if claim_type not in {"EVIDENCE_FACT", "EVIDENCE_SYNTHESIS"}:
+                return None
+        elif claim_type != "MODEL_EXPLANATION":
+            return None
+        raw_evidence_labels = segment.get("evidence_labels", [])
+        if raw_evidence_labels is None:
+            raw_evidence_labels = []
+        if not isinstance(raw_evidence_labels, list):
+            return None
+        evidence_labels = [
+            str(label).strip() for label in raw_evidence_labels if str(label).strip()
+        ]
+        if role == "model_explanation":
+            if evidence_labels:
+                return None
+        elif not evidence_labels:
+            dropped_segments.append(segment)
+            continue
+        elif any(label not in known_labels for label in evidence_labels):
+            return None
+        raw_covers = segment.get("covers", [])
+        if raw_covers is not None and not isinstance(raw_covers, list):
+            return None
+        retained_segments.append(segment)
+
+    if not dropped_segments:
+        return None
+    if not any(
+        str(segment.get("semantic_role") or "").strip() == "material_claim"
+        for segment in retained_segments
+    ):
+        return None
+    try:
+        _validate_provider_segments(retained_segments)
+    except ValueError:
+        return None
+    answer_text = _visible_answer_from_segments(retained_segments)
+    if not answer_text.strip() or len(answer_text) > MAX_PROVIDER_ANSWER_CHARS:
+        return None
+    return (
+        {**dict(value), "segments": retained_segments},
+        {
+            "deterministic_surplus_pruning_used": True,
+            "dropped_segment_count": len(dropped_segments),
+            "dropped_segment_ids": [
+                str(segment.get("segment_id", "")).strip()
+                for segment in dropped_segments
+            ],
+            "retained_segment_count": len(retained_segments),
+        },
+    )
+
+
 def _compact_call_telemetry(
-    result: Mapping[str, Any], *, parse_ok: bool
+    result: Mapping[str, Any],
+    *,
+    parse_ok: bool,
+    parse_meta: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     usage = result.get("usage") if isinstance(result.get("usage"), Mapping) else {}
     stop_reason = str(result.get("stop_reason") or result.get("finish_reason") or "")
@@ -1759,6 +1895,7 @@ def _compact_call_telemetry(
             "parse_subtype": (
                 "compact_semantic_closure_json" if parse_ok else "invalid"
             ),
+            **dict(parse_meta or {}),
         },
         "usage": {
             "input_tokens": int(usage.get("input_tokens", 0)),
